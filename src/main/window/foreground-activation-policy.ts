@@ -3,11 +3,55 @@ import { app as electronApp, type BrowserWindow } from 'electron'
 /** Automation must not steal OS foreground. Background/sidecar requests override E2E_FOREGROUND; the hosted-Xvfb benchmark may present explicitly after startup (tests/AGENTS.md), while automatic reveals stay suppressed. */
 
 type ActivationPolicyApp = {
-  dock?: { hide: () => void; show?: () => Promise<void> }
+  dock?: { hide: () => void; show?: () => void | Promise<void> }
   setActivationPolicy: (policy: 'accessory' | 'prohibited' | 'regular') => void
 }
 
 type PolicyEnv = Readonly<Record<string, string | undefined>>
+
+/**
+ * A background process stays hidden until the user asks for it (a later desktop
+ * launch or the tray). The flag clears that latch for this process only.
+ */
+let userForegroundAccepted = false
+
+/** Lets this process show and take focus after an explicit user request. */
+export function acceptUserForegroundRequest(
+  options: {
+    app?: ActivationPolicyApp
+    env?: PolicyEnv
+    platform?: NodeJS.Platform
+    warn?: (message: string, error: unknown) => void
+  } = {}
+): void {
+  if (userForegroundAccepted) {
+    return
+  }
+  // Read this before the latch flips, or a windowless macOS process looks normal and keeps its Dock hidden.
+  const restoreMacPolicy =
+    (options.platform ?? process.platform) === 'darwin' &&
+    isWindowlessLaunch(options.env ?? process.env)
+  userForegroundAccepted = true
+  if (!restoreMacPolicy) {
+    return
+  }
+  try {
+    const app = options.app ?? electronApp
+    app.setActivationPolicy('regular')
+    void app.dock?.show()
+  } catch (error) {
+    options.warn?.('[window] Failed to restore regular activation policy', error)
+  }
+}
+
+/** Test isolation: the latch is process-global. */
+export function resetAcceptedUserForegroundForTests(): void {
+  userForegroundAccepted = false
+}
+
+function userForegroundOverrides(env: PolicyEnv): boolean {
+  return userForegroundAccepted && env === process.env
+}
 
 /** orcad's headless browser provider: a serve process on a throwaway profile that no user drives. */
 export function isOrcadSidecarLaunch(env: PolicyEnv = process.env): boolean {
@@ -20,6 +64,9 @@ function isExplicitBackgroundLaunch(env: PolicyEnv): boolean {
 
 /** True when this process must not steal focus, raise windows, or activate the app. */
 export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
+  if (userForegroundOverrides(env)) {
+    return false
+  }
   if (isExplicitBackgroundLaunch(env)) {
     return true
   }
@@ -31,6 +78,9 @@ export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
 
 /** Suppresses automatic presentation on launch; this is not a query of current window visibility. */
 export function isWindowlessLaunch(env: PolicyEnv = process.env): boolean {
+  if (userForegroundOverrides(env)) {
+    return false
+  }
   return (
     isExplicitBackgroundLaunch(env) ||
     (isBackgroundLaunch(env) && env.ORCA_E2E_HEADLESS === '1' && env.ORCA_E2E_HEADFUL !== '1')

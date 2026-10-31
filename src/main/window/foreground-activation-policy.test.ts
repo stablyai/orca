@@ -1,14 +1,18 @@
 import type { BrowserWindow } from 'electron'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('electron', () => ({ app: { dock: { hide: vi.fn() }, setActivationPolicy: vi.fn() } }))
+vi.mock('electron', () => ({
+  app: { dock: { hide: vi.fn(), show: vi.fn() }, setActivationPolicy: vi.fn() }
+}))
 
 const {
+  acceptUserForegroundRequest,
   applyBackgroundActivationPolicy,
   applyServeDesktopWindowActivationPolicy,
   isBackgroundLaunch,
   isOrcadSidecarLaunch,
   isWindowlessLaunch,
+  resetAcceptedUserForegroundForTests,
   showWindowWithoutStealingFocus
 } = await import('./foreground-activation-policy')
 
@@ -63,6 +67,72 @@ describe('isWindowlessLaunch', () => {
         ORCA_E2E_FOREGROUND: '1'
       })
     ).toBe(true)
+  })
+})
+
+describe('acceptUserForegroundRequest', () => {
+  afterEach(() => {
+    resetAcceptedUserForegroundForTests()
+    vi.unstubAllEnvs()
+  })
+
+  it('lets this process present after the user asks, without changing an explicit background env', () => {
+    vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
+    const window = makeWindow()
+    expect(isWindowlessLaunch()).toBe(true)
+    expect(isBackgroundLaunch()).toBe(true)
+    showWindowWithoutStealingFocus(window)
+    expect(window.show).not.toHaveBeenCalled()
+
+    acceptUserForegroundRequest()
+
+    expect(isWindowlessLaunch()).toBe(false)
+    expect(isBackgroundLaunch()).toBe(false)
+    expect(isWindowlessLaunch({ ORCA_BACKGROUND_LAUNCH: '1' })).toBe(true)
+    showWindowWithoutStealingFocus(window)
+    expect(window.show).toHaveBeenCalledOnce()
+  })
+
+  it('restores the macOS Dock only after a windowless process is asked to present', () => {
+    const app = {
+      dock: { hide: vi.fn(() => {}), show: vi.fn(() => {}) },
+      setActivationPolicy: vi.fn((_policy: 'accessory' | 'prohibited' | 'regular') => {})
+    }
+    acceptUserForegroundRequest({
+      app,
+      env: { ORCA_BACKGROUND_LAUNCH: '1' },
+      platform: 'darwin'
+    })
+    expect(app.setActivationPolicy).toHaveBeenCalledWith('regular')
+    expect(app.dock.show).toHaveBeenCalledOnce()
+
+    acceptUserForegroundRequest({
+      app,
+      env: { ORCA_BACKGROUND_LAUNCH: '1' },
+      platform: 'darwin'
+    })
+    expect(app.setActivationPolicy).toHaveBeenCalledOnce()
+
+    resetAcceptedUserForegroundForTests()
+    const visible = {
+      dock: { hide: vi.fn(() => {}), show: vi.fn(() => {}) },
+      setActivationPolicy: vi.fn((_policy: 'accessory' | 'prohibited' | 'regular') => {})
+    }
+    acceptUserForegroundRequest({ app: visible, env: {}, platform: 'darwin' })
+    expect(visible.setActivationPolicy).not.toHaveBeenCalled()
+
+    resetAcceptedUserForegroundForTests()
+    const windows = {
+      dock: { hide: vi.fn(() => {}), show: vi.fn(() => {}) },
+      setActivationPolicy: vi.fn((_policy: 'accessory' | 'prohibited' | 'regular') => {})
+    }
+    acceptUserForegroundRequest({
+      app: windows,
+      env: { ORCA_BACKGROUND_LAUNCH: '1' },
+      platform: 'win32'
+    })
+    expect(windows.setActivationPolicy).not.toHaveBeenCalled()
+    expect(windows.dock.show).not.toHaveBeenCalled()
   })
 })
 

@@ -1,4 +1,5 @@
 import type { App } from 'electron'
+import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { argvRequestsServeMode } from './serve-mode-argv'
 import { writeStartupDiagnosticLine, type StartupDiagnosticSink } from './startup-diagnostics'
 
@@ -15,15 +16,77 @@ export function shouldActivateDesktopForSecondInstance(argv: readonly string[] =
   return !argvRequestsServeMode(argv)
 }
 
-/** Duplicate mains clobber runtime/hook discovery files and leave stale_bootstrap after exit. Acquire after userData overrides so dev/packaged instances lock distinct profile namespaces. */
-export function acquireSingleInstanceLock(
-  app: App,
-  onSecondInstance: (argv: readonly string[]) => void
-): boolean {
-  if (!app.requestSingleInstanceLock()) {
+export const SINGLE_INSTANCE_LAUNCH_USER = 'user'
+export const SINGLE_INSTANCE_LAUNCH_BACKGROUND = 'background'
+
+/** Crosses the single-instance lock. Electron forwards this object, not the new process env. */
+export type SingleInstanceLaunchPayload = {
+  launchKind: typeof SINGLE_INSTANCE_LAUNCH_USER | typeof SINGLE_INSTANCE_LAUNCH_BACKGROUND
+}
+
+export function singleInstanceLaunchPayload(background: boolean): SingleInstanceLaunchPayload {
+  return {
+    launchKind: background ? SINGLE_INSTANCE_LAUNCH_BACKGROUND : SINGLE_INSTANCE_LAUNCH_USER
+  }
+}
+
+/** Missing data is a user launch: dock, Open With, and a desktop double-click must still present. */
+export function incomingLaunchIsBackground(payload: unknown): boolean {
+  if (typeof payload !== 'object' || payload === null || !('launchKind' in payload)) {
     return false
   }
-  app.on('second-instance', (_event, argv) => onSecondInstance(argv))
+  return payload.launchKind === SINGLE_INSTANCE_LAUNCH_BACKGROUND
+}
+
+export type IncomingDesktopLaunchAction = 'ignore' | 'handoff' | 'present'
+
+export function incomingDesktopLaunchAction(options: {
+  argv?: readonly string[]
+  launchPayload?: unknown
+  isSidecar: boolean
+}): IncomingDesktopLaunchAction {
+  if (!shouldActivateDesktopForSecondInstance(options.argv)) {
+    return 'ignore'
+  }
+  // The process that holds the lock is the sidecar, so its window must not become the user's.
+  if (options.isSidecar) {
+    return 'handoff'
+  }
+  if (incomingLaunchIsBackground(options.launchPayload)) {
+    return 'ignore'
+  }
+  return 'present'
+}
+
+/**
+ * Why: Orca writes two canonical discovery files into `<userData>/`:
+ * `orca-runtime.json` (RPC endpoint + authToken for the bundled CLI) and
+ * `agent-hooks/endpoint.env` (hook port + token for cursor-agent/claude/codex
+ * scripts). Without a single-instance lock, every AppImage/.app double-click
+ * boots a fresh Electron main that clobbers both files. When the most recent
+ * instance quits, metadata points at a dead pid and `orca status` reports
+ * `stale_bootstrap` even though the original process is still running.
+ *
+ * This helper centralises the lock gate so it is testable in isolation and
+ * so `src/main/index.ts` has one clean call site rather than two spread-out
+ * Electron calls.
+ *
+ * Electron derives the lock identity from the current `userData` path, so
+ * callers MUST invoke this AFTER `configureDevUserDataPath(is.dev)` — that
+ * way dev (`orca-dev` userData) and packaged (`orca` userData) runs lock in
+ * separate namespaces instead of serialising against each other.
+ */
+export function acquireSingleInstanceLock(
+  app: App,
+  onSecondInstance: (argv: readonly string[], launchPayload: unknown) => void,
+  launchPayload: SingleInstanceLaunchPayload = singleInstanceLaunchPayload(isBackgroundLaunch())
+): boolean {
+  if (!app.requestSingleInstanceLock(launchPayload)) {
+    return false
+  }
+  app.on('second-instance', (_event, argv, _workingDirectory, additionalData) => {
+    onSecondInstance(argv, additionalData)
+  })
   return true
 }
 
