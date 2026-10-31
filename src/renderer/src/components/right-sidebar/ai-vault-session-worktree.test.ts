@@ -183,7 +183,11 @@ describe('resolveAiVaultSessionWorktreeInfo', () => {
 
     expect(
       resolveAiVaultSessionWorktreeInfo({
-        session: { ...baseSession, cwd: '/home/ada/orca/src' },
+        session: {
+          ...baseSession,
+          cwd: '/home/ada/orca/src',
+          filePath: String.raw`\\wsl.localhost\Ubuntu\home\ada\.codex\session.jsonl`
+        },
         worktrees: [worktree],
         activeWorktreeId: null
       })
@@ -192,6 +196,26 @@ describe('resolveAiVaultSessionWorktreeInfo', () => {
       label: 'orca',
       path: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\orca'
     })
+  })
+
+  it.each([
+    { filePath: String.raw`\\wsl.localhost\Ubuntu\home\ada\.codex\session.jsonl`, owner: 'Ubuntu' },
+    { filePath: String.raw`\\wsl.localhost\Debian\home\ada\.codex\session.jsonl`, owner: 'Debian' },
+    { filePath: '/home/ada/.codex/session.jsonl', owner: undefined }
+  ])('requires transcript namespace proof for WSL Linux cwd: $owner', ({ filePath, owner }) => {
+    const worktrees = ['Debian', 'Ubuntu'].map((distro) =>
+      makeWorktree({
+        id: `folder:${distro}`,
+        path: `\\\\wsl.localhost\\${distro}\\home\\ada\\orca`
+      })
+    )
+    const found = resolveAiVaultSessionWorktreeInfo({
+      session: { ...baseSession, cwd: '/home/ada/orca/src', filePath },
+      worktrees,
+      activeWorktreeId: null
+    })
+    expect(found?.worktreeId).toBe(owner ? `folder:${owner}` : undefined)
+    expect(found?.status).toBe(owner ? 'active' : 'unavailable')
   })
 
   it('uses the session host when multiple worktrees share the same path', () => {
@@ -314,7 +338,11 @@ describe('folder workspaces as session owners', () => {
     const wslFolder = makeFolderWorkspace({
       folderPath: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\notes'
     })
-    expect(resolveOwner('/home/ada/notes/src', [wslFolder])?.worktreeId).toBe('folder:folder-1')
+    expect(
+      resolveOwner('/home/ada/notes/src', [wslFolder], {
+        filePath: String.raw`\\wsl.localhost\Ubuntu\home\ada\.codex\session.jsonl`
+      })?.worktreeId
+    ).toBe('folder:folder-1')
   })
 
   it('reports an archived folder as archived, which is not a jump target', () => {

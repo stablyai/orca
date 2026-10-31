@@ -1,7 +1,6 @@
+import { selectedSqliteSessionId } from './session-scanner-selection'
 import { aiVaultScopePathsForWslDistro } from '../../shared/ai-vault-scope-cwd-match'
 import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
-import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
@@ -17,25 +16,11 @@ import {
   openCodeWslClient,
   openCodeWslPath
 } from './session-scanner-opencode-wsl-client'
-import { findForeignSqliteReaderEntry } from '../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
+import { defaultWorkerFactory } from './session-scanner-opencode-sqlite-worker-factory'
 import { runOpenCodeSqliteScanRequest } from './session-scanner-opencode-sqlite-scan-scope'
 import { noteAiVaultScanDatabases, openAiVaultScanSource } from './ai-vault-scan-progress'
 
-export function resolveOpenCodeSqliteWorkerEntryPath(
-  runtimeDir = __dirname,
-  pathExists: (path: string) => boolean = existsSync
-): string {
-  return findForeignSqliteReaderEntry(runtimeDir, pathExists)
-}
-
-function defaultWorkerFactory(): Worker {
-  const workerPath = resolveOpenCodeSqliteWorkerEntryPath()
-  // Fail synchronously for missing bundles rather than waiting for an impossible worker response.
-  if (!existsSync(workerPath)) {
-    throw new Error(`OpenCode SQLite worker entry not found: ${workerPath}`)
-  }
-  return new Worker(workerPath)
-}
+export { resolveOpenCodeSqliteWorkerEntryPath } from './session-scanner-opencode-sqlite-worker-factory'
 
 let sharedClient: OpenCodeSqliteWorkerClient | null = null
 
@@ -181,6 +166,18 @@ async function listCandidatesForHost(
               signal,
               dbPaths: [...paths.keys()],
               scopePaths,
+              selectedSessionId: [...paths].flatMap(([linuxPath, original]) => {
+                const sessionId = selectedSqliteSessionId(
+                  args.selectedSessionId,
+                  args.agent ?? 'opencode',
+                  original
+                )
+                return sessionId
+                  ? [
+                      `local:${args.agent ?? 'opencode'}:${sessionId}:${buildOpenCodeSqliteCandidatePath(linuxPath, sessionId)}`
+                    ]
+                  : []
+              })[0],
               issues
             })
           },

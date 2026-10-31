@@ -33,7 +33,10 @@ import {
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { recordStructuredAgentSessionHostInstallRefusal } from '../../structured-agent-session-host-refusal'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { installCopyingChat } from '../../../ai-vault/structured-session-ownership.test-support'
+import {
+  installCopyingChat,
+  installOwnership
+} from '../../../ai-vault/structured-session-ownership.test-support'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions,
@@ -82,6 +85,7 @@ function makeDispatcher(): RpcDispatcher {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
+    getExistingOrchestrationDb: () => null,
     listAiVaultSessions: vault.list.bind(vault),
     resolveAiVaultSessionTitles: (requests: unknown[], signal?: AbortSignal) =>
       resolveAiVaultSessionTitlesInService(requests, signal)
@@ -371,6 +375,100 @@ describe('aiVault.listSessions handler + shared cache', () => {
     resetAiVaultSessionListCacheForTests()
   })
 
+  it.each([undefined, 'runtime:test-runtime'] as const)(
+    'includes retained records only on opt-in with catalog coverage for %s',
+    async (executionHostId) => {
+      const dispatcher = makeDispatcher()
+      installOwnership({ conversationName: 'Retained conversation' })
+      try {
+        await expect(
+          dispatcher.dispatch(
+            makeRequest('aiVault.listSessions', {
+              includeStructuredSessions: true,
+              executionHostId
+            })
+          )
+        ).resolves.toMatchObject({
+          ok: true,
+          result: {
+            includesStructuredSessions: true,
+            sessions: [
+              expect.objectContaining({
+                source: 'structured-record',
+                title: 'Retained conversation',
+                structuredSession: { sessionId: 'session-alpha', workspaceId: 'workspace-1' }
+              })
+            ]
+          }
+        })
+        const transcriptOnly = await dispatcher.dispatch(
+          makeRequest('aiVault.listSessions', { executionHostId })
+        )
+        expect(transcriptOnly).toMatchObject({ ok: true, result: { sessions: [] } })
+        if (transcriptOnly.ok) {
+          expect(transcriptOnly.result).not.toHaveProperty('includesStructuredSessions')
+        }
+        setStructuredAgentSessionHost(null)
+        const unsupported = await dispatcher.dispatch(
+          makeRequest('aiVault.listSessions', { includeStructuredSessions: true, executionHostId })
+        )
+        expect(unsupported.ok).toBe(true)
+        if (unsupported.ok) {
+          expect(unsupported.result).not.toHaveProperty('includesStructuredSessions')
+        }
+      } finally {
+        setStructuredAgentSessionHost(null)
+      }
+    }
+  )
+
+  it.each([undefined, 'runtime:test-runtime'] as const)(
+    'keeps a selected record after 500 newer rows and separates its cache (%s)',
+    async (executionHostId) => {
+      const selected = {
+        ...makeSession(),
+        id: 'local:claude:old:/old.jsonl',
+        sessionId: 'old',
+        filePath: '/old.jsonl'
+      }
+      const recent = Array.from({ length: 501 }, (_, index) => ({
+        ...makeSession(),
+        id: `local:claude:new-${index}:/new-${index}.jsonl`,
+        sessionId: `new-${index}`,
+        filePath: `/new-${index}.jsonl`
+      }))
+      scanAiVaultSessionsInService.mockResolvedValue({
+        ...makeResult(),
+        sessions: [...recent, selected]
+      })
+      const dispatcher = makeDispatcher()
+      const selectedSessionId = executionHostId
+        ? selected.id.replace('local:', `${executionHostId}:`)
+        : selected.id
+      const response = await dispatcher.dispatch(
+        makeRequest('aiVault.listSessions', {
+          limit: 500,
+          includeStructuredSessions: true,
+          selectedSessionId,
+          executionHostId
+        })
+      )
+      expect(response.ok).toBe(true)
+      if (response.ok) {
+        expect(response.result).toMatchObject({
+          sessions: expect.arrayContaining([expect.objectContaining({ id: selectedSessionId })])
+        })
+        expect(response.result).toHaveProperty('sessions.length', 501)
+      }
+      expect(scanAiVaultSessionsInService.mock.calls.at(-1)?.[0]).toMatchObject({
+        selectedSessionId: selected.id,
+        limit: 500
+      })
+      await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
+      expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
+    }
+  )
+
   it('aborts the host scan when its last RPC caller disconnects', async () => {
     scanAiVaultSessionsInService.mockImplementation(
       (_options, signal) =>
@@ -643,6 +741,8 @@ describe('aiVault.listSessions handler + shared cache', () => {
     })
 
     expect(localResponse.result.sessions[0]?.executionHostId).toBe('local')
+    expect(localResponse.result.scanId).toEqual(expect.any(String))
+    expect(runtimeResponse.result).not.toHaveProperty('scanId')
     expect(runtimeResponse.result.sessions[0]?.executionHostId).toBe('runtime:remote-server')
     expect(runtimeResponse.result.sessions[0]?.id).toBe(
       'runtime:remote-server:claude:sess-1:/tmp/t.jsonl'

@@ -374,3 +374,36 @@ describe('parseOpenCode2SqliteSession', () => {
     expect(session).toBeNull()
   })
 })
+
+it('keeps one selected v2 identity beyond recency while preserving archive exclusions', async () => {
+  const { db, path } = createTempDb()
+  applyOpenCode2Schema(db)
+  insertSession(db, { id: 'old', directory: '/old', timeCreated: 1, timeUpdated: 1 })
+  insertSession(db, { id: 'new', directory: '/new', timeCreated: 2, timeUpdated: 2 })
+  insertSession(db, {
+    id: 'archived',
+    directory: '/old',
+    timeCreated: 1,
+    timeUpdated: 1,
+    timeArchived: 3
+  })
+  db.close()
+  const selectedSessionId = `local:opencode2:old:${buildOpenCodeSqliteCandidatePath(path, 'old')}`
+  const listed = await listOpenCode2SqliteSessions({
+    dbPaths: [path],
+    limit: 1,
+    issues: [],
+    selectedSessionId
+  })
+  expect(listed.map((candidate) => candidate.file.path)).toEqual([
+    buildOpenCodeSqliteCandidatePath(path, 'new'),
+    buildOpenCodeSqliteCandidatePath(path, 'old')
+  ])
+  const archived = await listOpenCode2SqliteSessions({
+    dbPaths: [path],
+    limit: 1,
+    issues: [],
+    selectedSessionId: selectedSessionId.replaceAll('old', 'archived')
+  })
+  expect(archived).toHaveLength(1)
+})

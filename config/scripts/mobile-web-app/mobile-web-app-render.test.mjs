@@ -358,11 +358,11 @@ describeRender('the Route A page in a real browser', () => {
     await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
     await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
     const layout = await opened.page.evaluate(() => {
-      // No-RPC control at root bottom moves furthest if layout collapses.
-      const fab = [...document.querySelectorAll('[role="button"]')].find(
-        (element) => element.getAttribute('aria-label') === 'New workspace'
+      // The host's settings remain reachable even when the host has answered no catalog reads.
+      const control = [...document.querySelectorAll('[role="button"]')].find(
+        (element) => element.getAttribute('aria-label') === 'More options'
       )
-      const box = fab?.getBoundingClientRect() ?? null
+      const box = control?.getBoundingClientRect() ?? null
       const hit =
         box === null
           ? null
@@ -370,17 +370,17 @@ describeRender('the Route A page in a real browser', () => {
       return {
         rootHeight: document.getElementById('root').getBoundingClientRect().height,
         viewportHeight: window.innerHeight,
-        fabTop: box?.top ?? null,
-        fabBottom: box?.bottom ?? null,
-        reachesTheControl: hit !== null && fab.contains(hit)
+        controlTop: box?.top ?? null,
+        controlBottom: box?.bottom ?? null,
+        reachesTheControl: hit !== null && control.contains(hit)
       }
     })
     await opened.page.close()
     expect(opened.errors).toEqual([])
     // Measure height: mounted text/innerText can pass while collapsed root paints blank phone screen.
     expect(layout.rootHeight).toBe(layout.viewportHeight)
-    expect(layout.fabTop).toBeGreaterThan(0)
-    expect(layout.fabBottom).toBeLessThanOrEqual(layout.viewportHeight)
+    expect(layout.controlTop).toBeGreaterThan(0)
+    expect(layout.controlBottom).toBeLessThanOrEqual(layout.viewportHeight)
     // Require reachable tap: clipped scroller rows retain layout rects.
     expect(layout.reachesTheControl).toBe(true)
   }, 60_000)

@@ -44,7 +44,9 @@ export function restampAiVaultListResult(
   result: AiVaultListResult,
   executionHostId: ExecutionHostId
 ): AiVaultListResult {
+  const { scanId: _localScanId, ...remoteResult } = result
   return {
+    ...remoteResult,
     sessions: result.sessions.map((session) =>
       session.executionHostId === executionHostId
         ? session
@@ -54,8 +56,7 @@ export function restampAiVaultListResult(
             id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
           }
     ),
-    issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
-    scannedAt: result.scannedAt
+    issues: result.issues.map((issue) => ({ ...issue, executionHostId }))
   }
 }
 

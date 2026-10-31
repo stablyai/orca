@@ -9,6 +9,7 @@ import {
 } from './session-scanner-opencode-sqlite-open'
 import type { SessionFileCandidate } from './session-scanner-types'
 import type SyncDatabase from '../sqlite/sync-database'
+import { selectedSqliteSessionId } from './session-scanner-selection'
 import { scopedSessionRows } from './session-scanner-sqlite-scope-rows'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
@@ -27,7 +28,12 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   )
 }
 
-function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boolean): string {
+function buildSessionListQuery(
+  db: SyncDatabase,
+  limited: boolean,
+  scoped: boolean,
+  selected = false
+): string {
   const parentIdPredicate = columnExists(db, 'session', 'parent_id') ? 'AND parent_id IS NULL' : ''
   const archivedPredicate = columnExists(db, 'session', 'time_archived')
     ? 'AND time_archived IS NULL'
@@ -37,7 +43,7 @@ function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boole
   const directory = scoped && columnExists(db, 'session', 'directory') ? ', directory' : ''
   return `SELECT id, time_created, time_updated${directory}
           FROM session
-          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
+          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate} ${selected ? 'AND id = ?' : ''}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
           ${limited ? 'LIMIT ?' : ''}`
 }
@@ -109,6 +115,7 @@ export async function listOpenCodeSqliteSessions(args: {
   limit: number
   issues: AiVaultScanIssue[]
   agent?: 'opencode' | 'zcode'
+  selectedSessionId?: string
   /** Lists only sessions whose directory is in scope, newest `limit` of them. */
   scopePaths?: readonly string[]
 }): Promise<SessionFileCandidate[]> {
@@ -118,7 +125,26 @@ export async function listOpenCodeSqliteSessions(args: {
     try {
       const rows = readOpenCodeDatabase({
         dbPath,
-        read: (db) => readSessionRows(db, args.limit, args.scopePaths, dbPath)
+        read: (db) => {
+          const rows = readSessionRows(db, args.limit, args.scopePaths, dbPath)
+          const selected = selectedSqliteSessionId(args.selectedSessionId, agent, dbPath)
+          if (selected && canReadOpenCodeSessions(db) && !rows.some((row) => row.id === selected)) {
+            const row = db.prepare(buildSessionListQuery(db, false, false, true)).get(selected)
+            if (
+              row &&
+              typeof row.id === 'string' &&
+              typeof row.time_created === 'number' &&
+              typeof row.time_updated === 'number'
+            ) {
+              rows.push({
+                id: row.id,
+                time_created: row.time_created,
+                time_updated: row.time_updated
+              })
+            }
+          }
+          return rows
+        }
       })
       for (const row of rows) {
         candidates.push(rowToCandidate(row, dbPath, agent))

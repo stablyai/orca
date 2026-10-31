@@ -18,13 +18,16 @@ import {
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 import type { AiVaultSessionListKeyboard } from './use-ai-vault-session-keyboard-navigation'
 import type { AiVaultResumeHere } from './ai-vault-session-resume-here'
+import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import * as resumeHere from './ai-vault-session-resume-here'
 
 const VIEWPORT_PX = 600
 const ROW_PX = 98
 
 vi.mock('./AiVaultSessionRow', () => ({
-  VaultSessionRow: (props: { session: AiVaultSession }) => <div>{props.session.title}</div>
+  VaultSessionRow: (props: { session: AiVaultSession; detailsExpanded: boolean }) => (
+    <div data-details-expanded={props.detailsExpanded}>{props.session.title}</div>
+  )
 }))
 // The host's side of a resumed chat: it admits the chat, then the launch settles as the test says.
 const launch = vi.hoisted(
@@ -268,6 +271,8 @@ function selectedTitle(): string | null {
 
 beforeEach(() => {
   toastError.mockClear()
+  vi.mocked(activateAiVaultStructuredSession).mockClear()
+  launch.settlement = { kind: 'structured', sessionId: 'new' }
   // Why: happy-dom has no layout; give the virtualizer a bounded viewport and fixed rows.
   vi.stubGlobal('ResizeObserver', NoopResizeObserver)
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
@@ -292,6 +297,127 @@ afterEach(() => {
 })
 
 describe('Session History keyboard selection', () => {
+  it.each(['structured-other-workspace', 'cli-ineligible', 'cli-eligible'] as const)(
+    'keeps the Enter fallback for an unroutable %s row',
+    async (kind) => {
+      const workspaceId = 'folder:notes'
+      const picked: AiVaultSession = {
+        ...session(0),
+        executionHostId: 'ssh:unroutable',
+        ...(kind === 'structured-other-workspace'
+          ? { structuredSession: { sessionId: 'picked', workspaceId: 'folder:elsewhere' } }
+          : {})
+      }
+      useAppStore.setState(useAppStore.getInitialState(), true)
+      useAppStore.setState({ activeWorktreeId: workspaceId })
+      useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {
+        id: 'old',
+        entityId: 'old',
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        agentSessionAgent: 'claude'
+      })
+      main = await drawTabsFromMain(useAppStore)
+      const dismiss = vi.fn()
+      const confirm = vi.fn()
+      const { press, calls } = renderList({
+        groups: [{ key: 'picked', label: null, sessions: [picked] }],
+        eligible: () => kind !== 'cli-ineligible',
+        resumeHere: { tabId: 'old', workspaceId, agent: 'claude', dismiss, confirm }
+      })
+      press('Enter')
+      await act(async () => {
+        await main?.settle()
+      })
+      expect(document.querySelector('[data-details-expanded="true"]') !== null).toBe(
+        kind !== 'cli-eligible'
+      )
+      expect(toastError).toHaveBeenCalledTimes(kind === 'cli-eligible' ? 1 : 0)
+      expect(activateAiVaultStructuredSession).not.toHaveBeenCalled()
+      expect(calls.onResumeInNewChat).not.toHaveBeenCalled()
+      expect(calls.onResume).not.toHaveBeenCalled()
+      expect(dismiss).not.toHaveBeenCalled()
+      expect(confirm).not.toHaveBeenCalled()
+      expect(
+        useAppStore.getState().unifiedTabsByWorktree[workspaceId]?.map((tab) => tab.id)
+      ).toEqual(['old'])
+    }
+  )
+
+  it.each(['structured', 'adopted-here', 'adopted-elsewhere', 'unroutable', 'local'] as const)(
+    'keeps the selected owner when reopening %s from /resume',
+    async (kind) => {
+      const workspaceId = 'folder:notes'
+      const owner = {
+        sessionId: 'picked-owner',
+        workspaceId: kind === 'adopted-elsewhere' ? 'folder:elsewhere' : workspaceId
+      }
+      const picked: AiVaultSession = {
+        ...session(0),
+        executionHostId:
+          kind === 'unroutable'
+            ? 'ssh:unroutable'
+            : kind === 'local'
+              ? 'local'
+              : 'runtime:selected-host',
+        ...(kind === 'structured' || kind === 'unroutable' || kind === 'local'
+          ? { structuredSession: owner }
+          : {})
+      }
+      useAppStore.setState(useAppStore.getInitialState(), true)
+      useAppStore.setState({
+        activeWorktreeId: workspaceId,
+        activeWorkspaceExecutionHostId: picked.executionHostId
+      })
+      useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {
+        id: 'old',
+        entityId: 'old',
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        agentSessionAgent: 'claude'
+      })
+      main = await drawTabsFromMain(useAppStore)
+      launch.settlement = {
+        kind: 'failed',
+        error: Object.assign(new Error('already adopted'), {
+          refusal: {
+            code: 'agent_session_conflict',
+            details: { reason: 'conversationHeldElsewhere', owner }
+          }
+        })
+      }
+      const { press } = renderList({
+        groups: [{ key: 'picked', label: null, sessions: [picked] }],
+        resumeHere: {
+          tabId: 'old',
+          workspaceId,
+          agent: 'claude',
+          dismiss: vi.fn(),
+          confirm: vi.fn()
+        }
+      })
+      press('Enter')
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        await main?.settle()
+      })
+      if (kind === 'unroutable') {
+        expect(activateAiVaultStructuredSession).not.toHaveBeenCalled()
+        expect(toastError).toHaveBeenCalledOnce()
+        expect(
+          useAppStore.getState().unifiedTabsByWorktree[workspaceId]?.some((tab) => tab.id === 'old')
+        ).toBe(true)
+      } else {
+        expect(activateAiVaultStructuredSession).toHaveBeenCalledExactlyOnceWith(
+          { structuredSession: owner },
+          undefined,
+          kind === 'local'
+            ? { kind: 'local' }
+            : { kind: 'environment', environmentId: 'selected-host' }
+        )
+        expect(toastError).not.toHaveBeenCalled()
+      }
+    }
+  )
+
   it('moves over sessions only, clamped, and a listed-twice session does not trap it', () => {
     const { press } = renderList({
       groups: [

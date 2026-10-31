@@ -54,6 +54,7 @@ export type AiVaultScanOptions = {
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number
+  selectedSessionId?: string
   // Include sessions for these workspace paths beyond the recency cap (AI_VAULT_SCOPE_CWD_SOURCES).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
@@ -87,6 +88,7 @@ export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
+  selectedFiles?: FileWithMtime[]
   // Discovered beyond `files`, kept only for a scoped scan's in-scope walk.
   scopeFiles?: FileWithMtime[]
 }

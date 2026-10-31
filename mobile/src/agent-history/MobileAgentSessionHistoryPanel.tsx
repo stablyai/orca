@@ -1,10 +1,11 @@
+import { scopeSegments } from './agent-history-scope-segments'
 import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, CircleAlert, History, RefreshCw, SearchX } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileSegmentedControl, type MobileSegment } from '../components/MobileSegmentedControl'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
@@ -23,7 +24,7 @@ import {
 } from '../session/ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
@@ -36,22 +37,15 @@ import { AgentHistoryStateView } from './AgentHistoryStateView'
 import { AgentHistoryResumeNotice, AgentHistorySkippedNotice } from './AgentHistoryNotices'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
-import type { Translate } from '../i18n/mobile-i18n'
+import { conversationCopy } from '../host-screen/conversation-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
   worktreeId: string
   name?: string
+  conversationId?: string
   origin?: string
-}
-
-function scopeSegments(t: Translate): MobileSegment<AiVaultScope>[] {
-  return [
-    { value: 'workspace', label: t('agentHistory.panel.workspace', 'Workspace') },
-    { value: 'project', label: t('agentHistory.panel.project', 'Project') },
-    { value: 'all', label: t('agentHistory.panel.all', 'All') }
-  ]
 }
 
 export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryPanelProps) {
@@ -62,6 +56,7 @@ function MobileAgentSessionHistoryPanelContent({
   hostId,
   worktreeId,
   name = '',
+  conversationId,
   origin = ''
 }: MobileAgentSessionHistoryPanelProps) {
   useMobileColorScheme()
@@ -79,6 +74,7 @@ function MobileAgentSessionHistoryPanelContent({
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [worktreesLoaded, setWorktreesLoaded] = useState(false)
   const [query, setQuery] = useState('')
+  const effectiveQuery = conversationId ? '' : query
   const [searchBarHeight, setSearchBarHeight] = useState(0)
   const insets = useSafeAreaInsets()
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
@@ -100,7 +96,7 @@ function MobileAgentSessionHistoryPanelContent({
     onSelectScope,
     onRefresh,
     retry
-  } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded })
+  } = useMobileAgentHistoryState({ hostId, worktreeId, conversationId, worktrees, worktreesLoaded })
 
   // Worktree list seeds host-local scopePaths and current-worktree badge.
   useEffect(() => {
@@ -135,7 +131,10 @@ function MobileAgentSessionHistoryPanelContent({
     }
   }, [client, connState])
 
-  const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
+  const sessions = useMemo(() => {
+    const all = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
+    return conversationId ? all.filter((session) => session.id === conversationId) : all
+  }, [screenState, conversationId])
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
@@ -144,13 +143,13 @@ function MobileAgentSessionHistoryPanelContent({
   const sections = useMemo(
     () =>
       buildMobileAgentHistorySections(sessions, {
-        query,
-        scope,
+        query: effectiveQuery,
+        scope: conversationId ? 'all' : scope,
         scopeFilterPaths,
         activeWorktreePath,
         now
       }),
-    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now, t]
+    [sessions, effectiveQuery, conversationId, scope, scopeFilterPaths, activeWorktreePath, now, t]
   )
 
   const resumeHost = useMemo(
@@ -299,7 +298,11 @@ function MobileAgentSessionHistoryPanelContent({
               accessibilityLabel={t('common.back', 'Back')}
             />
           }
-          title={t('agentHistory.panel.title', 'Agent Session History')}
+          title={
+            conversationId
+              ? conversationCopy().history
+              : t('agentHistory.panel.title', 'Agent Session History')
+          }
           subtitle={worktreeLabel}
           trailing={
             <NavBarButton
@@ -309,7 +312,7 @@ function MobileAgentSessionHistoryPanelContent({
             />
           }
           accessory={
-            screenState.kind === 'ready' ? (
+            screenState.kind === 'ready' && !conversationId ? (
               <MobileSegmentedControl
                 segments={scopeSegments(t)}
                 selected={scope}
@@ -353,7 +356,7 @@ function MobileAgentSessionHistoryPanelContent({
             />
           ) : null}
           {sections.length === 0 ? (
-            query ? (
+            effectiveQuery ? (
               <AgentHistoryStateView
                 icon={SearchX}
                 title={t('agentHistory.panel.noMatches', 'No matches')}
@@ -368,32 +371,43 @@ function MobileAgentSessionHistoryPanelContent({
               <AgentHistoryStateView
                 icon={History}
                 title={t('agentHistory.panel.noSessions', 'No agent sessions')}
-                message={t(
-                  'agentHistory.panel.emptyScope',
-                  'No past agent sessions in this scope.'
-                )}
+                message={
+                  conversationId
+                    ? t(
+                        'agentHistory.panel.conversationUnavailable',
+                        "This conversation's history is unavailable on this host."
+                      )
+                    : t('agentHistory.panel.emptyScope', 'No past agent sessions in this scope.')
+                }
                 bottomInset={searchBarHeight}
               />
             )
           ) : (
             <MobileAgentSessionHistoryList
+              key={conversationId ?? 'history'}
               sections={sections}
               sessionsById={sessionsById}
               refreshing={refreshing}
-              showCurrentWorktreeBadges={shouldShowMobileCurrentWorktreeBadge(scope)}
+              showCurrentWorktreeBadges={
+                !conversationId && shouldShowMobileCurrentWorktreeBadge(scope)
+              }
+              initialExpandedId={conversationId}
+              hideSectionHeaders={Boolean(conversationId)}
               resumeActionStateBySessionId={resumeActionStateBySessionId}
               onResume={onResumeSession}
               onRefresh={() => void onRefresh()}
               bottomPadding={searchBarHeight}
             />
           )}
-          <BottomSearchBar
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t('agentHistory.panel.placeholder', 'Search sessions, repo:, path:')}
-            bottomInset={insets.bottom}
-            onCoveredHeightChange={setSearchBarHeight}
-          />
+          {!conversationId && (
+            <BottomSearchBar
+              value={query}
+              onChangeText={setQuery}
+              placeholder={t('agentHistory.panel.placeholder', 'Search sessions, repo:, path:')}
+              bottomInset={insets.bottom}
+              onCoveredHeightChange={setSearchBarHeight}
+            />
+          )}
         </>
       )}
     </View>

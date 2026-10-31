@@ -23,6 +23,7 @@ import {
   updateTimeline
 } from './session-scanner-accumulator'
 import { addSessionContent } from './session-scanner-messages'
+import { extractFullFirstUserPromptText } from './session-scanner-first-user-prompt'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import {
   asRecord,
@@ -43,6 +44,7 @@ export type ClaudeSessionParseState = {
   metaTitle: string | null
   generatedTitle: string | null
   firstUserTitle: string | null
+  conversationContent: NonNullable<AiVaultSession['conversationContent']>
 }
 
 export function createClaudeSessionParseState(
@@ -58,7 +60,8 @@ export function createClaudeSessionParseState(
     }),
     metaTitle: null,
     generatedTitle: null,
-    firstUserTitle: null
+    firstUserTitle: null,
+    conversationContent: 'empty'
   }
 }
 
@@ -72,7 +75,8 @@ export function cloneClaudeSessionParseState(
     },
     metaTitle: state.metaTitle,
     generatedTitle: state.generatedTitle,
-    firstUserTitle: state.firstUserTitle
+    firstUserTitle: state.firstUserTitle,
+    conversationContent: state.conversationContent
   }
 }
 
@@ -80,6 +84,8 @@ export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: s
   const record = parseJsonObject(line)
   if (record) {
     consumeClaudeSessionRecord(state, record)
+  } else if (line.trim() && state.conversationContent !== 'present') {
+    state.conversationContent = 'unknown'
   }
 }
 
@@ -108,8 +114,14 @@ export function consumeClaudeSessionRecord(
     return
   }
 
-  if (record.type === 'agent-name' && !state.generatedTitle) {
-    state.metaTitle ??= normalizeTitleText(extractString(record.agentName) ?? '')
+  if (record.type === 'agent-name') {
+    if (!state.generatedTitle) {
+      state.metaTitle ??= normalizeTitleText(extractString(record.agentName) ?? '')
+    }
+    return
+  }
+
+  if (record.type === 'mode' || record.type === 'permission-mode') {
     return
   }
 
@@ -127,6 +139,7 @@ export function consumeClaudeSessionRecord(
     const prompt = normalizePromptField(record.lastPrompt)
     if (prompt) {
       accumulator.lastUserPrompt = prompt
+      state.conversationContent = 'present'
     }
     return
   }
@@ -140,17 +153,16 @@ export function consumeClaudeSessionRecord(
     addSessionContent(accumulator, 'user', asRecord(record.message)?.content, record.timestamp, {
       seedFirstUserPrompt: !isMetaUserTurn
     })
-    if (title) {
-      if (isMetaUserTurn) {
-        state.metaTitle ??= title
-      } else {
-        state.firstUserTitle ??= title
-      }
+    if (!isMetaUserTurn) {
+      state.conversationContent = 'present'
+      const prompt = extractFullFirstUserPromptText(asRecord(record.message)?.content)
+      state.firstUserTitle ??= prompt ? normalizeTitleText(prompt) : null
     }
     return
   }
 
   if (record.type === 'assistant') {
+    state.conversationContent = 'present'
     accumulator.messageCount++
     const message = asRecord(record.message)
     addSessionContent(accumulator, 'assistant', message?.content, record.timestamp)
@@ -159,6 +171,10 @@ export function consumeClaudeSessionRecord(
       accumulator.model = model
     }
     accumulator.totalTokens += claudeUsageTotal(message?.usage)
+    return
+  }
+  if (state.conversationContent !== 'present') {
+    state.conversationContent = 'unknown'
   }
 }
 
@@ -169,7 +185,7 @@ export async function finalizeClaudeSessionParseState(
 ): Promise<AiVaultSession | null> {
   // Detach previews so later appends cannot mutate a published session.
   const snapshot = cloneClaudeSessionParseState(state)
-  // Explicit custom titles win, then generated names, real prompts and injected-context fallbacks.
+  // Explicit custom titles win, then generated names, real prompts and agent names.
   snapshot.accumulator.fallbackTitle =
     snapshot.generatedTitle ?? snapshot.firstUserTitle ?? snapshot.metaTitle
   // Count only on the transcript-owning host; runtime hosts stamp identity after parsing, while SSH walks supply counts.
@@ -180,7 +196,16 @@ export async function finalizeClaudeSessionParseState(
       snapshot.accumulator.filePath
     )
   }
-  return finalizeSession(snapshot.accumulator, platform, options)
+  const session = finalizeSession(snapshot.accumulator, platform, options)
+  return session
+    ? {
+        ...session,
+        conversationContent:
+          session.queuedMessageCount > 0 || session.subagentTranscriptCount > 0
+            ? 'present'
+            : snapshot.conversationContent
+      }
+    : null
 }
 
 export function createClaudeSessionResumeState(

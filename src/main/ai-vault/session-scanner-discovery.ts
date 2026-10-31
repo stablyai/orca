@@ -1,17 +1,22 @@
 import type { Dirent } from 'node:fs'
 import { extname, join } from 'node:path'
+import { isSelectedSessionFile } from './session-scanner-selection'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import {
+  observeSessionFile,
+  isMissingSidecarError,
+  type SessionFileObservation
+} from './session-file-observation'
+import { errorMessage } from './session-scanner-values'
 import { SessionNewestFiles } from './session-newest-files'
-import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
-import { errorMessage } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import {
   noteAiVaultScanFileFound,
@@ -22,10 +27,6 @@ import {
 const NATIVE_DISCOVERY_CONCURRENCY = 4
 const NATIVE_DISCOVERY_BATCH_SIZE = 16
 const nativeDiscoverySlots = new PrioritySemaphore(8)
-
-type SessionFileObservation =
-  | { file: Omit<FileWithMtime, 'modifiedAt'>; sidecarPath?: string }
-  | { issue: Omit<AiVaultScanIssue, 'agent' | 'kind' | 'executionHostId'> }
 
 async function withNativeDiscoverySlot<T>(read: () => Promise<T>): Promise<T> {
   const release = await nativeDiscoverySlots.acquire(0)
@@ -47,9 +48,12 @@ export async function discoverFiles(args: {
   directoryPredicate?: (name: string, depth: number) => boolean
   // A scoped scan walks every file this agent has, not only the newest `limit`.
   keepScopeFiles?: boolean
+  selectedSessionId?: string
+  executionHostId?: string
   signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
   const files = new SessionNewestFiles(args.limit)
+  const selectedFiles: FileWithMtime[] = []
   const scopeFiles: FileWithMtime[] | undefined = args.keepScopeFiles ? [] : undefined
   let refusedSidecar = false
   let paths: string[] = []
@@ -79,6 +83,17 @@ export async function discoverFiles(args: {
       }
       try {
         const modifiedAt = new Date(observation.file.mtimeMs)
+        if (
+          selectedFiles.length === 0 &&
+          isSelectedSessionFile(
+            args.selectedSessionId,
+            args.agent,
+            observation.file.path,
+            args.executionHostId
+          )
+        ) {
+          selectedFiles.push({ ...observation.file, modifiedAt: modifiedAt.toISOString() })
+        }
         if (
           Number.isNaN(modifiedAt.getTime()) ||
           files.wouldRetain(observation.file.mtimeMs) ||
@@ -194,64 +209,13 @@ export async function discoverFiles(args: {
   } finally {
     source.close()
   }
-  return { agent: args.agent, rootDir: args.rootDir, files: files.newest(), scopeFiles }
-}
-
-async function observeSessionFile(
-  path: string,
-  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>,
-  signal?: AbortSignal
-): Promise<SessionFileObservation> {
-  try {
-    const fileStat = await wslGatedStat(path, 'scan', signal)
-    const sidecarPath = contentDependencyPath ? await contentDependencyPath(path) : undefined
-    const sidecar = sidecarPath ? await observeSessionSidecar(sidecarPath, signal) : 'none'
-    return {
-      file: {
-        path,
-        mtimeMs: fileStat.mtimeMs,
-        sizeBytes: fileStat.size,
-        sidecar,
-        dev: fileStat.dev,
-        ino: fileStat.ino,
-        nlink: fileStat.nlink
-      },
-      sidecarPath
-    }
-  } catch (err) {
-    return { issue: { path, ...scanIssueTextFromError(err) } }
+  return {
+    agent: args.agent,
+    rootDir: args.rootDir,
+    files: files.newest(),
+    scopeFiles,
+    selectedFiles
   }
-}
-
-/** Only missing sidecars are none; other stat failures stay unknown so cached enrichment can retry. */
-async function observeSessionSidecar(
-  filePath: string | undefined,
-  signal?: AbortSignal
-): Promise<SessionSidecarObservation> {
-  if (!filePath) {
-    return 'none'
-  }
-  try {
-    const fileStat = await wslGatedStat(filePath, 'scan', signal)
-    return {
-      path: filePath,
-      mtimeMs: fileStat.mtimeMs,
-      sizeBytes: fileStat.size
-    }
-  } catch (error) {
-    return isMissingSidecarError(error) ? 'none' : 'unknown'
-  }
-}
-
-function isMissingSidecarError(error: unknown): boolean {
-  if (error instanceof WslTranscriptFsError) {
-    return false
-  }
-  const code =
-    error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-      ? error.code
-      : null
-  return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
 export type SessionFileWalkOptions = {
