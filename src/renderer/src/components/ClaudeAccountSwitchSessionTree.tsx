@@ -5,7 +5,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import type { ClaudeAccountSwitchPromptSessions } from '@/lib/claude-account-switch-sessions'
 import {
-  isClaudePaneMidTurn,
+  isClaudePaneBusyForRestart,
   type ClaudeSessionCantMoveReason,
   type ClaudeSessionMoveCandidate
 } from '@/lib/claude-session-account-move'
@@ -271,7 +271,7 @@ function SessionRow({
     return tab?.customTitle || tab?.title || ''
   })
   const lastPrompt = useAppStore((store) => store.agentStatusByPaneKey[paneKey]?.prompt?.trim())
-  const busy = useAppStore((store) => isClaudePaneMidTurn(store, paneKey))
+  const busy = useAppStore((store) => isClaudePaneBusyForRestart(store, paneKey))
   const title =
     lastPrompt || tabTitle || translate('accounts.claude.switchSessions.session', 'Claude session')
   return (

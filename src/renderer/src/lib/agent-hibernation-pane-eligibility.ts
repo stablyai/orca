@@ -53,6 +53,16 @@ const hasUnsettledOrUnknownDispatch = ({ orchestration }: AgentStatusEntry): boo
     ? !['completed', 'failed', 'circuit_broken'].includes(orchestration.dispatchStatus ?? '')
     : false
 
+/** A turn that ended cleanly with nothing running behind it: the only time stopping the agent loses no work. */
+export function agentTurnSettledForStop(entry: AgentStatusEntry): boolean {
+  return (
+    entry.state === 'done' &&
+    !agentTurnEndedUncleanly(entry) &&
+    !entry.subagents?.length &&
+    !hasUnsettledOrUnknownDispatch(entry)
+  )
+}
+
 export function getEligiblePane(args: {
   entry: AgentStatusEntry
   tab: TerminalTab
@@ -86,13 +96,7 @@ export function getEligiblePane(args: {
     sleepingRecord,
     tab.worktreeId
   )
-  if (
-    entry.state !== 'done' ||
-    agentTurnEndedUncleanly(entry) ||
-    Boolean(entry.subagents?.length) ||
-    hasUnsettledOrUnknownDispatch(entry) ||
-    (sleepingRecord && !hasOnlyLiveResumeAnchor)
-  ) {
+  if (!agentTurnSettledForStop(entry) || (sleepingRecord && !hasOnlyLiveResumeAnchor)) {
     return null
   }
   if (

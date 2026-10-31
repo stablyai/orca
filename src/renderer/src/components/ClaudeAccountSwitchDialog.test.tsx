@@ -16,7 +16,7 @@ vi.mock('@/lib/claude-session-account-move', async (importOriginal) => ({
   ...(await importOriginal<typeof AccountMove>()),
   findClaudeSwitchSessions: vi.fn(),
   findQueuedClaudeRestartsOnAccount: () => [],
-  isClaudePaneMidTurn: () => false
+  isClaudePaneBusyForRestart: () => false
 }))
 
 const LEAF = (n: number): string => `0195f2ce-1111-4000-8000-00000000000${n}`
