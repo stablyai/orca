@@ -106,6 +106,7 @@ import {
   toHostSessionTabId
 } from '../../../../shared/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/remote-runtime-session-tabs-inflight'
+import { hasRetirementProofForSurface } from '../../../../shared/terminal-retirement-proof-ledger'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
 import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
@@ -843,6 +844,7 @@ export function createRemoteRuntimePtyTransport(
     let pollMs = HOST_SESSION_ATTACH_POLL_MS
     let nextRequest: 'activate' | 'list' = 'list'
     let activationOutcomeUnknown = false
+    let siblingOnlyAbsenceSeen = false
     while (isCurrent()) {
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
       if (remainingMs <= 0) {
@@ -897,17 +899,36 @@ export function createRemoteRuntimePtyTransport(
         continue
       }
       if (!hasHostSessionTerminalSurface(snapshot, hostTabId)) {
+        // Why: host-attested retirement outranks every inference below, including the empty-tab republish guard.
+        if (
+          leafId &&
+          hasRetirementProofForSurface(snapshot.retiredTerminalSurfaces, {
+            parentTabId: hostTabId,
+            leafId
+          })
+        ) {
+          return false
+        }
         const siblingStillExists =
           getHostSessionTerminalSurfaces(snapshot, hostTabId, {
             matchRequestedLeaf: false
           }).length > 0
         if (siblingStillExists) {
-          return false
+          // Why: a split still publishing, or a sibling's stale listing joined late, reads exactly like a
+          // retired leaf; one listing proves nothing, so confirm on a second (#20917).
+          if (siblingOnlyAbsenceSeen) {
+            return false
+          }
+          siblingOnlyAbsenceSeen = true
+          nextRequest = 'list'
+          continue
         }
         // Sibling-present inventory can prove this leaf absent; missing tab surfaces during republish remain unknown and use bounded polling.
         nextRequest = 'list'
         continue
       }
+      // Why: a live sighting retracts the pending absence proof, as it does for orphan reconciliation.
+      siblingOnlyAbsenceSeen = false
       // Why: a host relaunch republishes the surface unmaterialized, and only activation can mint its PTY — list-only polling waits forever.
       nextRequest = activationOutcomeUnknown ? 'list' : 'activate'
     }
