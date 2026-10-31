@@ -5801,7 +5801,12 @@
         },
         "SidebarHeader": {
           "92154beb7e": "Nuevo espacio de trabajo",
-          "addProject": "Agregar proyecto"
+          "addProject": "Agregar proyecto",
+          "collapseAll": "Contraer todo",
+          "expandAll": "Expandir todo",
+          "activeProjects": "Activos",
+          "idleProjects": "Inactivos",
+          "activeProjectsFirst": "Proyectos activos primero"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",
@@ -5881,6 +5886,7 @@
           "af9249c505": "Actividad más reciente en el espacio de trabajo",
           "b451c8b162": "Reciente",
           "6664282a7b": "Arrastra proyectos para organizarlos",
+          "ed82ad03f8": "Orden alfabético por nombre de proyecto",
           "7b316bdd51": "Manual",
           "7153d07485": "Arrastra los espacios de trabajo para organizarlos dentro de cada grupo.",
           "2170d553cf": "Proyecto",

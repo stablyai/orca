@@ -112,7 +112,7 @@ export function getManualOrderAnchorRepo<R extends ProjectSectionRepo>(
   return anchor
 }
 
-/** Order headers by canonical repo order or newest visible workspace activity; inactive projects trail, then manual rank and label break ties. */
+/** Order headers by canonical repo order or newest visible workspace activity; inactive projects trail, then manual rank and label break ties. Name sorts by label alone. */
 export function sortProjectEntries<
   T extends readonly [string, ProjectSectionEntry<ActivityItem, ProjectSectionRepo>]
 >(
@@ -138,6 +138,11 @@ export function sortProjectEntries<
       return compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
     })
   }
+  if (projectOrderBy === 'name') {
+    return [...entries].sort(
+      (a, b) => compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
+    )
+  }
   if (!repoOrder) {
     return entries
   }
@@ -151,6 +156,18 @@ export function sortProjectEntries<
   })
 }
 
+export function partitionRunningFirst<T>(
+  entries: readonly T[],
+  isRunning: (entry: T) => boolean
+): T[] {
+  const running: T[] = []
+  const rest: T[] = []
+  for (const entry of entries) {
+    ;(isRunning(entry) ? running : rest).push(entry)
+  }
+  return [...running, ...rest]
+}
+
 /** Anchor headers on the leading manual repo so dragging/actions and row sorting share the persisted ordering source. */
 export function orderProjectSections<
   R extends ProjectSectionRepo,
@@ -159,13 +176,18 @@ export function orderProjectSections<
   sections: ReadonlyMap<string, E>,
   repoMap: ReadonlyMap<string, R>,
   repoOrder: ReadonlyMap<string, number> | undefined,
-  projectOrderBy: ProjectOrderBy
+  projectOrderBy: ProjectOrderBy,
+  /** Set to lift running projects above idle ones, each keeping the chosen order. */
+  isRunningSection?: (section: E) => boolean
 ): [string, E][] {
   for (const section of sections.values()) {
     section.repo = getManualOrderAnchorRepo(section, repoMap, repoOrder)
   }
   // Project header order is independent of workspace sortBy.
-  return sortProjectEntries(Array.from(sections.entries()), projectOrderBy, repoOrder)
+  const sorted = sortProjectEntries(Array.from(sections.entries()), projectOrderBy, repoOrder)
+  return isRunningSection
+    ? partitionRunningFirst(sorted, ([, section]) => isRunningSection(section))
+    : sorted
 }
 
 /** Each repo id's rank in catalog order; the first occurrence wins across hosts. */

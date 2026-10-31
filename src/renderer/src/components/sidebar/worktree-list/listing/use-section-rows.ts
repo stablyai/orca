@@ -13,6 +13,7 @@ import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-sett
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/sidebar-feed-index'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
+import { parseRunningWorktreeIdsKey, selectRunningWorktreeIdsKey } from '../../running-worktree-ids'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { SectionRowsArgs } from './sidebar-list-model'
@@ -135,6 +136,13 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [hostOptions, selectHostLabels]
   )
 
+  const runningProjectsFirst = useAppStore((s) => s.runningProjectsFirst)
+  const runningWorktreeIdsKey = useAppStore(selectRunningWorktreeIdsKey)
+  const runningWorktreeIds = useMemo(
+    () => parseRunningWorktreeIdsKey(runningWorktreeIdsKey),
+    [runningWorktreeIdsKey]
+  )
+
   const hostScopedGroups =
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
   // Same-id registrations on two hosts: each row and project header needs its own host's.
@@ -163,7 +171,9 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         hostLabelById,
         defaultHostId,
         pinnedDisplayPolicy: args.pinnedDisplayPolicy,
-        filterRepoIds: args.filterRepoIds
+        filterRepoIds: args.filterRepoIds,
+        runningWorktreeIds,
+        runningProjectsFirst
       }),
     [
       args.groupBy,
@@ -186,7 +196,9 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       pendingCreations,
       hostLabelById,
       args.pinnedDisplayPolicy,
-      args.filterRepoIds
+      args.filterRepoIds,
+      runningWorktreeIds,
+      runningProjectsFirst
     ]
   )
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({

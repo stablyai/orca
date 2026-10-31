@@ -51,6 +51,8 @@ export type PersistedUIState = {
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Project-header order in repo grouping, independent of workspace sort: manual permits drag, recent follows visible activity. */
   projectOrderBy: ProjectOrderBy
+  /** Lift projects with a running terminal above idle ones. */
+  runningProjectsFirst?: boolean
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
