@@ -93,7 +93,7 @@
 1 test-no-polling-loop:src/main/daemon/daemon-stream-backpressure-socket.test.ts
 1 test-no-polling-loop:src/main/daemon/headless-emulator-snapshot-cost.bench.test.ts
 1 test-no-polling-loop:src/main/daemon/node-pty-conout-worker-errors.test.ts
-2 test-no-polling-loop:src/main/daemon/repro-12101-mouse-tracking-survives-agent-death.test.ts
+1 test-no-polling-loop:src/main/daemon/repro-12101-mouse-tracking-survives-agent-death.test.ts
 2 test-no-polling-loop:src/main/git/repo-ref-maintenance-real-git.test.ts
 1 test-no-polling-loop:src/main/git/worktree-removal-large-tree.bench.test.ts
 1 test-no-polling-loop:src/main/ipc/folder-repo-git-upgrade.test.ts
@@ -312,7 +312,7 @@
 4 test-no-real-time-wait:src/main/daemon/node-pty-windows-input-error.win32.test.ts
 1 test-no-real-time-wait:src/main/daemon/node-pty-windows-output-error.win32.test.ts
 11 test-no-real-time-wait:src/main/daemon/reattach-snapshot.test.ts
-2 test-no-real-time-wait:src/main/daemon/repro-12101-mouse-tracking-survives-agent-death.test.ts
+1 test-no-real-time-wait:src/main/daemon/repro-12101-mouse-tracking-survives-agent-death.test.ts
 6 test-no-real-time-wait:src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts
 4 test-no-real-time-wait:src/main/daemon/session-shell-recovery.test.ts
 1 test-no-real-time-wait:src/main/daemon/session.test.ts
@@ -956,7 +956,7 @@
 2 test-no-wall-clock:src/main/rate-limits/service-cursor-usage.test.ts
 12 test-no-wall-clock:src/main/rate-limits/service-minimax-usage.test.ts
 38 test-no-wall-clock:src/main/rate-limits/service-refresh-orchestration.test.ts
-6 test-no-wall-clock:src/main/rate-limits/service-zcode-usage.test.ts
+4 test-no-wall-clock:src/main/rate-limits/service-zcode-usage.test.ts
 1 test-no-wall-clock:src/main/runtime/agent-session/ownership/agent-session-process-identity-probe.test.ts
 1 test-no-wall-clock:src/main/runtime/agent-state-rules/agent-state-rules-engine.test.ts
 1 test-no-wall-clock:src/main/runtime/antigravity-readiness-transcripts.test.ts
@@ -979,7 +979,6 @@
 6 test-no-wall-clock:src/main/runtime/orchestration/worker-output-archive.test.ts
 1 test-no-wall-clock:src/main/runtime/owned-session-teardown-policy.test.ts
 2 test-no-wall-clock:src/main/runtime/project-removal-structured-sessions.test.ts
-2 test-no-wall-clock:src/main/runtime/pty-shell-ownership-mirror.test.ts
 1 test-no-wall-clock:src/main/runtime/push/push-device-registration-persistence.test.ts
 1 test-no-wall-clock:src/main/runtime/push/push-registration-rpc.test.ts
 1 test-no-wall-clock:src/main/runtime/push/push-unpair-persistence.test.ts
@@ -1062,7 +1061,7 @@
 2 test-no-wall-clock:src/main/terminal-history-fish-session.node-pty.test.ts
 2 test-no-wall-clock:src/main/terminal-history-gc-fs-call-count.test.ts
 2 test-no-wall-clock:src/main/updater-sqlite-profile-downgrade.test.ts
-6 test-no-wall-clock:src/main/updater/serve-supervisor-install-park.test.ts
+4 test-no-wall-clock:src/main/updater/serve-supervisor-install-park.test.ts
 4 test-no-wall-clock:src/main/windows-live-tree-kill.win32.test.ts
 2 test-no-wall-clock:src/main/windows/windows-host-job.win32.test.ts
 3 test-no-wall-clock:src/main/windows/windows-msys-job.win32.test.ts
@@ -1102,11 +1101,9 @@
 4 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.compact-hover.test.tsx
 13 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.pr-display.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCard.single-reference-details.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeCardAgents.send-target.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeList.lineage-agent-expansion-coupling.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeList.lineage-child-real-card.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/sidebar/use-workspace-reference-details.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/status-bar/RuntimeHostStatusRow.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/status-bar/inline-usage-bars.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/status-bar/provider-segment-balance.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
@@ -1126,8 +1123,6 @@
 2 test-no-wall-clock:src/renderer/src/components/terminal-workspace-surface-ids.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/terminal/initial-terminal-structured-launch.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-removal.agent-stop.test.tsx
-6 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/workspace-cleanup-confirm-remove.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/worktree-creation/WorktreeCreationPanel.test.tsx
 2 test-no-wall-clock:src/renderer/src/hooks/ipc-events/agent-status-terminal-title-tab-write.test.ts
 3 test-no-wall-clock:src/renderer/src/hooks/useAutomationDispatchEvents.test.ts
 1 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-agent-status-hook-titles.test.ts
@@ -1165,7 +1160,6 @@
 1 test-no-wall-clock:src/renderer/src/store/slices/store-sleep-agent-status-retention.test.ts
 2 test-no-wall-clock:src/renderer/src/store/slices/store-sleep-exact-runtime-stop.test.ts
 7 test-no-wall-clock:src/renderer/src/store/slices/tabs-unread-and-focus.test.ts
-1 test-no-wall-clock:src/renderer/src/store/slices/terminal-helpers.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/ui-hydration-view-layout.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/ui-hydration-workspace-cleanup-browse.test.ts
 2 test-no-wall-clock:src/renderer/src/store/slices/workspace-cleanup-agent-stop-preflight.test.ts
@@ -1320,7 +1314,7 @@
 2 test-timeout-needs-reason:src/main/providers/local-pty-child-process-verdict.test.ts
 3 test-timeout-needs-reason:src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
 2 test-timeout-needs-reason:src/main/providers/startup-line-typed-length.live-shell.test.ts
-7 test-timeout-needs-reason:src/main/pty/node-pty-master-fd-retirement.test.ts
+5 test-timeout-needs-reason:src/main/pty/node-pty-master-fd-retirement.test.ts
 2 test-timeout-needs-reason:src/main/runtime/cline-screen-readiness-transcripts.test.ts
 4 test-timeout-needs-reason:src/main/runtime/codex-header-readiness-transcripts.test.ts
 1 test-timeout-needs-reason:src/main/runtime/codex-quiet-ready-screen.test.ts
@@ -1363,9 +1357,7 @@
 4 test-timeout-needs-reason:src/packages/process-host/src/run-process.test.ts
 5 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCard.compact-hover.test.tsx
 2 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCard.host-badge-toggle.test.tsx
-4 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCard.pinned-repo-icon.test.tsx
 7 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCard.pr-display.test.tsx
-1 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCardAgents.send-target.test.tsx
 1 test-timeout-needs-reason:src/renderer/src/components/sidebar/WorktreeCardAgents.test.tsx
 1 test-timeout-needs-reason:src/renderer/src/components/tab-bar/BrowserTab.test.tsx
 1 test-timeout-needs-reason:src/renderer/src/components/tab-bar/TabBar.windows-shell-launch.test.ts

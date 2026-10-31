@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import {
   isPlausiblePluginIconSvg,
-  parsePluginIconThemeArtifact
+  parsePluginIconThemeArtifact,
+  pluginIconThemeIconRefs
 } from '../artifacts/plugin-icon-theme-artifact'
 import { parsePluginLanguagePackArtifact } from '../artifacts/plugin-language-pack-artifact'
 import type { EnglishSourceLookup } from '../languages/plugin-translation-string-policy'
@@ -35,11 +36,7 @@ function iconSvgErrors(read: PluginArtifactTextReader, themeText: string | null)
   } catch {
     return []
   }
-  const paths = new Set([
-    ...Object.values(artifact.icons),
-    ...Object.values(artifact.fileNames),
-    ...Object.values(artifact.fileExtensions)
-  ])
+  const paths = new Set(pluginIconThemeIconRefs(artifact))
   return [...paths].flatMap((path) => {
     const svg = read(path)
     if (svg === null) {
