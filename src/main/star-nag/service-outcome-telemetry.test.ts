@@ -162,6 +162,33 @@ describe('StarNagService', () => {
     expect(openedRepoOutcomes).toHaveLength(1)
   })
 
+  it('persists opting out and suppresses prompts after a service restart', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const first = createHarness()
+    first.service.registerIpcHandlers()
+    await getIpcHandler('star-nag:onboardingCompleted')()
+    getIpcHandler('star-nag:disable')()
+    expect(first.store.updateUI).toHaveBeenCalledWith({
+      starNagCompleted: true,
+      starNagDeferredUntil: null
+    })
+
+    ipcMainHandleMock.mockClear()
+    window.webContents.send.mockClear()
+    checkOrcaStarredMock.mockClear()
+    const restarted = createHarness(first.ui)
+    restarted.service.registerIpcHandlers()
+    restarted.service.start()
+    await getIpcHandler('star-nag:onboardingCompleted')()
+    restarted.emitAgentStarted(1000)
+    expect(await getIpcHandler('star-nag:agentValueMoment')()).toEqual({ status: 'skipped' })
+    await flushAsyncWork()
+    expect(window.webContents.send).not.toHaveBeenCalled()
+    expect(checkOrcaStarredMock).not.toHaveBeenCalled()
+    restarted.service.stop()
+  })
+
   it('emits later cooldown outcome without completing', () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
