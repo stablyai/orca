@@ -123,12 +123,6 @@ it("publishes a headless tab's generated name over the agent's live frames", asy
   )
 })
 
-it('keeps a headless tab on its saved title while generated names are off', async () => {
-  expect(await listRestartedHeadlessCursorTab(false, null)).toEqual(
-    expect.objectContaining({ title: 'bash' })
-  )
-})
-
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 

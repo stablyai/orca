@@ -1,10 +1,11 @@
+import { resolveWorkerLineageFacts } from '../db/dispatch-context/worker-follow-up-plan'
 import {
-  resolveWorkerLineageFacts,
-  selectWorkerFollowUpPlan
-} from '../db/dispatch-context/worker-follow-up-plan'
-import { selectExistingWorkerStartRun } from '../../rpc/methods/orchestration/worker/worker-start-run-authority'
-import { OrchestrationError } from '../orchestration-error'
-import { isSelfCreatedDispatch } from '../db/dispatch-depth'
+  createWorkerFollowUpQualification,
+  planSemanticWorkerFollowUp,
+  workerFollowUpArguments
+} from '../../rpc/methods/orchestration/worker/worker-follow-up-admission'
+import type { createCrewFollowUpAuthorityInputs } from './crew-follow-up-authority-inputs'
+import type { DispatchCreator } from '../db/dispatch-depth'
 import {
   prepareCrewDispatchRecipients,
   crewDispatchRecipientAvailable
@@ -41,6 +42,7 @@ type MailboxSelectionInputs = {
   >
   prepareFollowUps: (selected: DispatchInput[]) => void
   boundRuns: (key: Key) => CrewRecipientRun[]
+  authorityInputs: ReturnType<typeof createCrewFollowUpAuthorityInputs>
 }
 
 export function createCrewRecipientMailboxSelection({
@@ -58,7 +60,8 @@ export function createCrewRecipientMailboxSelection({
   namedRuns,
   followUpNodes,
   prepareFollowUps,
-  boundRuns
+  boundRuns,
+  authorityInputs
 }: MailboxSelectionInputs) {
   const followUpNode = (id: string) => {
     if (!followUpNodes.has(id)) {
@@ -68,7 +71,8 @@ export function createCrewRecipientMailboxSelection({
   }
   const followUpPlan = (row: DispatchInput) =>
     followUpNodes.has(row.id)
-      ? selectWorkerFollowUpPlan(
+      ? planSemanticWorkerFollowUp(
+          row.id,
           row,
           () =>
             resolveWorkerLineageFacts(
@@ -190,7 +194,27 @@ export function createCrewRecipientMailboxSelection({
     }
     return nested
   }
-  const explicit = (address: string, caller: Key, nested: ReadonlyMap<string, Key>): boolean => {
+  const qualification = (caller: Key, projection: () => DispatchCreator, maxDepth: () => number) =>
+    createWorkerFollowUpQualification<
+      { id: string; legacy: number },
+      NonNullable<ReturnType<typeof authorityInputs.dispatch>>
+    >({
+      ...authorityInputs,
+      coordinated: () => currentRun(caller),
+      named: (id) => boundRuns(caller).find((run) => run.id === id),
+      run: (id) => {
+        const coveredRun = namedRuns.get(id) ?? [...boundRuns(caller)].find((run) => run.id === id)
+        return coveredRun ?? authorityInputs.run(id)
+      },
+      caller: () => authorityInputs.caller(projection()),
+      maxDepth
+    })
+  const explicit = (
+    address: string,
+    caller: Key,
+    nested: ReadonlyMap<string, Key>,
+    qualify: ReturnType<typeof qualification>
+  ): boolean => {
     if (!covered.has(sourceKey(caller))) {
       throw new Error('Crew caller inputs are incomplete')
     }
@@ -223,29 +247,7 @@ export function createCrewRecipientMailboxSelection({
     }
     const plan = followUpPlan(dispatch)
     if (plan?.kind === 'start') {
-      try {
-        return Boolean(
-          selectExistingWorkerStartRun<{ id: string; legacy: number }, DispatchInput>(
-            currentRun(caller),
-            plan.latest.run_id,
-            () => boundRuns(caller).find((run) => run.id === plan.latest.run_id),
-            () => {
-              const creator = candidates(caller, true)[0]
-              if (!creator || isSelfCreatedDispatch(creator)) {
-                return undefined
-              }
-              return creator.sender_run_id === creator.run_id && creator.sender_run_legacy !== null
-                ? { creator, run: { id: creator.run_id, legacy: creator.sender_run_legacy } }
-                : undefined
-            }
-          )
-        )
-      } catch (error) {
-        if (error instanceof OrchestrationError && error.code === 'consumer_fenced') {
-          return false
-        }
-        throw error
-      }
+      return qualify(plan.latest.run_id, workerFollowUpArguments(plan)).kind === 'admitted'
     }
     const target = effective(dispatch)
     if (!target) {
@@ -254,5 +256,5 @@ export function createCrewRecipientMailboxSelection({
     const key = nested.get(target.id)
     return crewDispatchRecipientAvailable(target, key ? currentRun(key) : undefined)
   }
-  return { finish, prepareExplicit, explicit }
+  return { finish, prepareExplicit, explicit, qualification }
 }

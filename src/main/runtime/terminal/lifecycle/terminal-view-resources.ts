@@ -51,8 +51,12 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     inputs?: TerminalIdentityRawInputs
   ): TerminalIdentityReadContext
 
+  abstract getNestedWorkerMaxDepth(): number
+
   protected crewRuntimeReaders(): CrewRuntimeReaders {
     return {
+      getNestedWorkerMaxDepth: this.getNestedWorkerMaxDepth.bind(this),
+      getOrchestrationDispatchAuthority: this.getOrchestrationDispatchAuthority.bind(this),
       getLiveTerminalPaneKey: this.getLiveTerminalPaneKey.bind(this),
       getTerminalWorktreeIdForHandle: this.getTerminalWorktreeIdForHandle.bind(this),
       getTerminalProcessIncarnation: this.getTerminalProcessIncarnation.bind(this),

@@ -18,6 +18,13 @@ export function fixture() {
     hostKey: 'test-host',
     records: null,
     statuses: [],
+    maxDepth: () => 10,
+    callerProjection: (handle) => ({
+      kind: 'terminal',
+      handle,
+      paneKey: handles.get(handle),
+      processIncarnation: handles.has(handle) ? `process:${handle}` : undefined
+    }),
     liveHandle: (handle) => handles.has(handle),
     handleForPane: (pane) => [...handles].find(([, value]) => value === pane)?.[0] ?? null,
     paneForHandle: (handle) => handles.get(handle) ?? null,

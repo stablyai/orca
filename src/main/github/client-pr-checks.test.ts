@@ -253,6 +253,24 @@ describe('getPRChecks', () => {
     _resetOwnerRepoCache()
   })
 
+  it('starts an explicit checks read beside a pending one, which later reads then join', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    const response = graphQLChecksResponse()
+    const pending = Promise.withResolvers<typeof response>()
+    const explicit = Promise.withResolvers<typeof response>()
+    ghExecFileAsyncMock.mockReturnValueOnce(pending.promise).mockReturnValueOnce(explicit.promise)
+    const uncached = { noCache: true }
+    const before = getPRChecks('/repo', 12, 'head-a', undefined, uncached)
+    await vi.waitFor(() => expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1))
+    const click = getPRChecks('/repo', 12, 'head-a', undefined, { ...uncached, userRefresh: true })
+    await vi.waitFor(() => expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2))
+    const later = getPRChecks('/repo', 12, 'head-a', undefined, uncached)
+    explicit.resolve(response)
+    pending.resolve(response)
+    await Promise.all([before, click, later])
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
   it('queries GitHub rollup details with one cached GraphQL call', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({

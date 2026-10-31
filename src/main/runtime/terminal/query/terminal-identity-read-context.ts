@@ -1,6 +1,7 @@
+import { createTerminalIdentityProjectionInputs } from './terminal-identity-projection-inputs'
+import type { DispatchCreator } from '../../orchestration/db/dispatch-depth'
 import type { AgentSessionRecordReader } from '../../orchestration/structured-session-lineage'
 import {
-  captureAgentSessionRecordInputs,
   captureStructuredWorkerReadInputs,
   createStructuredWorkerReadContext,
   type StructuredWorkerReadContext
@@ -40,17 +41,10 @@ function ordered(keys: OrderedKeys | undefined): string[] {
 
 /** Lazy immutable candidate facts, shared only within the existing observed input generation. */
 export class TerminalIdentityRawInputs {
+  private readonly projections = createTerminalIdentityProjectionInputs()
+  captureCallerProjection = this.projections.caller
+  captureProjectionRecords = this.projections.records
   private structuredInputs: ReturnType<typeof captureStructuredWorkerReadInputs> | undefined
-  private projectionRecords: AgentSessionRecordReader | null | undefined
-
-  captureProjectionRecords(
-    read: () => AgentSessionRecordReader | null
-  ): AgentSessionRecordReader | null {
-    if (this.projectionRecords === undefined) {
-      this.projectionRecords = captureAgentSessionRecordInputs(read())
-    }
-    return this.projectionRecords
-  }
 
   openStructured(): StructuredWorkerReadContext {
     this.structuredInputs ??= captureStructuredWorkerReadInputs()
@@ -188,6 +182,8 @@ export class TerminalIdentityReadContext {
     return (this.structuredContext ??= this.inputs.openStructured())
   }
 
+  captureCallerProjection = (handle: string, read: () => DispatchCreator) =>
+    this.inputs.captureCallerProjection(handle, read)
   paneOf = (pty: PtyPaneSource): PtyPane => this.inputs.paneOf(pty)
   captureProjectionRecords = (read: () => AgentSessionRecordReader | null) =>
     this.inputs.captureProjectionRecords(read)

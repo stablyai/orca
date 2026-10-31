@@ -1,3 +1,4 @@
+import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { mainTerminalSourceInputs } from '../../terminal/surface/pty-pane-query'
 import { runtimeLayoutLoadContext } from '../../workspace-layout-projection'
@@ -63,6 +64,9 @@ export function watchCrewRuntimeSources(
       }
     }) ?? (() => {}),
     deps.store?.onSettingsChanged?.((updates) => {
+      if ('nestedWorkerMaxDepth' in updates) {
+        wake(new Set(['topology']))
+      }
       if ('tabAutoGenerateTitle' in updates) {
         wake(new Set(['names']))
       }
@@ -80,6 +84,11 @@ export function watchCrewRuntimeSources(
 }
 
 export type CrewRuntimeReaders = {
+  getNestedWorkerMaxDepth(): number
+  getOrchestrationDispatchAuthority(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): Pick<OrchestrationCompatibilityTerminalAuthority, 'paneKey' | 'processIncarnation'> | null
   getLiveTerminalPaneKey?(handle: string, context?: TerminalIdentityReadContext): string | null
   getTerminalWorktreeIdForHandle(
     handle: string,
@@ -114,10 +123,21 @@ export function readCrewRuntimeInputs(
       const raw = runtime.createTerminalIdentityRawInputs()
       return () => runtime.createTerminalIdentityReadContext(raw)
     })()
+  let capturedMaxDepth: number | undefined
   const name = runtime.orchestrationSenderNames.captureCrewInputs()
   const openIdentityRead = () => {
     const context = openContext()
     return {
+      callerProjection: (handle: string) =>
+        context.captureCallerProjection(handle, () => {
+          const authority = runtime.getOrchestrationDispatchAuthority(handle, context)
+          return {
+            kind: 'terminal',
+            handle,
+            paneKey: authority?.paneKey ?? runtime.getTerminalPaneKey(handle, context) ?? undefined,
+            processIncarnation: authority?.processIncarnation ?? undefined
+          }
+        }),
       callerPaneForHandle: (handle: string) => runtime.getTerminalPaneKey(handle, context),
       livePaneForHandle: (handle: string) =>
         runtime.getLiveTerminalPaneKey?.(handle, context) ?? null,
@@ -132,6 +152,8 @@ export function readCrewRuntimeInputs(
   }
   return {
     db,
+    maxDepth:
+      previous?.maxDepth ?? (() => (capturedMaxDepth ??= runtime.getNestedWorkerMaxDepth())),
     openIdentityRead,
     openRuntimeIdentityRead: openContext,
     retainedDbExists,

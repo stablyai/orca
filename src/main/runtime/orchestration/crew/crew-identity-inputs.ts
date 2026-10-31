@@ -15,9 +15,12 @@ export function captureCrewIdentityInputs(deps: CrewReadDependencies): CrewReadD
       return facts.get(key)!
     }
   }
+  let maximum: number | undefined
   return {
     ...sources,
     statuses: structuredClone(statuses),
+    maxDepth: deps.maxDepth ? () => (maximum ??= deps.maxDepth!()) : undefined,
+    callerProjection: deps.callerProjection ? capture(deps.callerProjection) : undefined,
     liveHandle: capture(deps.liveHandle),
     handleForPane: capture(deps.handleForPane),
     paneForHandle: capture(deps.paneForHandle),

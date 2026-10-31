@@ -75,6 +75,28 @@ export function crewRecipientAvailability(
       (candidate.preferred.startsWith('dispatch:') || candidate.preferred.startsWith('run:')) &&
       admitted(candidate.preferred)
   )
+  const qualify = inputs.qualification(
+    caller,
+    () => {
+      if (!caller.terminalHandle && caller.orcaSessionId) {
+        return { kind: 'session', orcaSessionId: caller.orcaSessionId }
+      }
+      const projection = (deps.openIdentityRead?.() ?? deps).callerProjection
+      if (!projection || !caller.terminalHandle) {
+        throw new Error('Crew attested caller is unavailable')
+      }
+      const captured = projection(caller.terminalHandle)
+      return captured.kind === 'terminal' && caller.orcaSessionId
+        ? { ...captured, orcaSessionId: caller.orcaSessionId }
+        : captured
+    },
+    () => {
+      if (!deps.maxDepth) {
+        throw new Error('Crew depth setting is unavailable')
+      }
+      return deps.maxDepth()
+    }
+  )
   const nested = inputs.prepareExplicit(
     explicit.flatMap((candidate) => (candidate.preferred ? [candidate.preferred] : [])),
     terminal
@@ -84,7 +106,7 @@ export function crewRecipientAvailability(
   for (const candidate of candidates) {
     const preferred = candidate.preferred
     if (preferred && explicitCandidates.has(candidate)) {
-      if (inputs.explicit(preferred, caller, nested)) {
+      if (inputs.explicit(preferred, caller, nested, qualify)) {
         result.set(candidate, preferred)
         continue
       }
