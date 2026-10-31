@@ -12,11 +12,15 @@ import { matchesGuestTabShortcut } from './browser-guest-tab-shortcut'
 
 export type ShouldForwardDictationShortcut = () => boolean
 export type IsMobileEmulatorEnabled = () => boolean
-export type GuestShortcutInput = WindowShortcutInput & { isAutoRepeat?: boolean }
+export type GuestShortcutInput = WindowShortcutInput & {
+  isAutoRepeat?: boolean
+  isComposing?: boolean
+}
 
 export type GuestShortcutForwardContext = {
   browserTabId: string
   resolveRenderer: ResolveRenderer
+  isLocalRenderer?: (renderer: Electron.WebContents) => boolean
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
   isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
@@ -34,6 +38,7 @@ export function forwardGuestShortcutInput(
   const {
     browserTabId,
     resolveRenderer,
+    isLocalRenderer,
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
@@ -46,10 +51,22 @@ export function forwardGuestShortcutInput(
     forwardBrowserPageZoom(event, action.direction)
     return true
   }
+  const matchesPlugins =
+    !input.isComposing &&
+    input.key !== 'Dead' &&
+    input.key !== 'Process' &&
+    keybindingMatchesAction('view.plugins', input, process.platform, keybindings, {
+      context: 'app'
+    }) &&
+    (() => {
+      const renderer = resolveRenderer(browserTabId)
+      return renderer !== null && isLocalRenderer?.(renderer) === true
+    })()
   if (input.isAutoRepeat) {
     if (
       (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
       action?.type === 'deleteCurrentWorkspace' ||
+      matchesPlugins ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
@@ -165,6 +182,7 @@ export function forwardGuestShortcutInput(
     }
     renderer.send('ui:dictationKeyDown')
   } else if (
+    matchesPlugins ||
     matchesGuestTabShortcut(
       input,
       process.platform,
