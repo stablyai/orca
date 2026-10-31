@@ -53,7 +53,7 @@ export const CLIENT_EVENT_METHODS = [
           subscriptionId,
           snapshot: {
             sshStates,
-            nativeChatFollowUpBehavior: runtime.getClientSettings().nativeChatFollowUpBehavior
+            nativeChatQueueFollowUps: runtime.getClientSettings().nativeChatQueueFollowUps
           }
         })
       })

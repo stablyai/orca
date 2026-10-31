@@ -21113,11 +21113,11 @@
         }
       },
       "nativeChat": {
-        "followUpBehaviorTitle": "Enquanto o agente trabalha, Enter",
+        "followUpBehaviorTitle": "Colocar mensagens de acompanhamento na fila",
         "inlineVisualsTitle": "Visualizações nas respostas",
         "inlineVisualsCopy": "Permitir que o agente mostre gráficos, diagramas e mockups nas respostas. Aplica-se a novos chats.",
         "inlineVisualsToggleLabel": "Ativar ou desativar visualizações nas respostas",
-        "followUpBehaviorCopy": "Colocar na fila: sua mensagem aguarda como um cartão e é enviada quando o agente termina. Orientar: ela entra no turno em andamento. Cmd/Ctrl+Enter faz o contrário.",
+        "followUpBehaviorCopy": "Mensagens enviadas enquanto o agente trabalha aguardam como cartões até o turno terminar. Cmd/Ctrl+Enter envia uma ao turno em andamento.",
         "followUpSteer": "Orientar",
         "followUpQueue": "Colocar na fila",
         "behaviorTitle": "Comportamento",

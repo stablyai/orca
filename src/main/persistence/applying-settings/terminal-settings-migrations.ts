@@ -81,8 +81,6 @@ type RetiredGlobalSettings = {
   orchestrationHeartbeatIntervalMinutes?: unknown
   // Full-access plugins now need only their own approval.
   pluginFullAccessEnabled?: unknown
-  // Retired: saved true by default while queueing was dark; Steer is the default.
-  nativeChatQueueFollowUps?: unknown
 }
 
 export function stripRetiredGlobalSettings(
@@ -101,7 +99,6 @@ export function stripRetiredGlobalSettings(
     orchestrationHeartbeatsEnabled: _retiredHeartbeatsEnabled,
     orchestrationHeartbeatIntervalMinutes: _retiredHeartbeatInterval,
     pluginFullAccessEnabled: _retiredPluginFullAccessSwitch,
-    nativeChatQueueFollowUps: _retiredQueueFollowUps,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
   void _retiredChatPermissionCopies
@@ -116,7 +113,6 @@ export function stripRetiredGlobalSettings(
   void _retiredHeartbeatsEnabled
   void _retiredHeartbeatInterval
   void _retiredPluginFullAccessSwitch
-  void _retiredQueueFollowUps
   return rest
 }
 

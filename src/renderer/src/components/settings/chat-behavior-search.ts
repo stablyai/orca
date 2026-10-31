@@ -24,13 +24,10 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
   },
   queueFollowUps: {
     targetSectionId: 'chat-queue-follow-ups',
-    title: translate(
-      'components.settings.nativeChat.followUpBehaviorTitle',
-      'While the agent works, Enter'
-    ),
+    title: translate('components.settings.nativeChat.followUpBehaviorTitle', 'Queue follow-ups'),
     description: translate(
       'components.settings.nativeChat.followUpBehaviorCopy',
-      'Queue: your message waits as a card and sends when the turn ends. Steer: it goes into the running turn. Cmd/Ctrl+Enter does the other.'
+      'Messages sent while the agent works wait as cards until the turn ends. Cmd/Ctrl+Enter sends one into the running turn.'
     ),
     keywords: [
       translate('components.settings.nativeChat.queueSearchQueue', 'queue'),

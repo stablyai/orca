@@ -20105,11 +20105,11 @@
         }
       },
       "nativeChat": {
-        "followUpBehaviorTitle": "Während der Agent arbeitet, Enter",
+        "followUpBehaviorTitle": "Folgenachrichten einreihen",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
-        "followUpBehaviorCopy": "Einreihen: Deine Nachricht wartet als Karte und wird gesendet, sobald der Agent fertig ist. Steuern: Sie geht direkt in den laufenden Durchgang. Cmd/Strg+Enter macht jeweils das andere.",
+        "followUpBehaviorCopy": "Nachrichten während der Arbeit des Agenten warten als Karten, bis der Durchgang endet. Cmd/Strg+Enter sendet eine Nachricht in den laufenden Durchgang.",
         "followUpSteer": "Steuern",
         "followUpQueue": "Einreihen",
         "behaviorTitle": "Verhalten",

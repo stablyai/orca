@@ -10,12 +10,8 @@ import { Card, CardContent } from '../ui/card'
 import { ChatPermissionSetting } from './ChatPermissionSetting'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { SearchableSetting } from './SearchableSetting'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import {
-  nativeChatFollowUpBehavior,
-  nativeChatFollowUpBehaviorUpdate
-} from '../../../../shared/native-chat-follow-up-behavior'
-import { SettingsRow, SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
+import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { getChatBehaviorEntriesByKey, getChatBehaviorTitle } from './chat-behavior-search'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
 import { matchesSettingsSearch } from './settings-search'
@@ -52,7 +48,7 @@ export function ChatBehaviorSetting({
     return null
   }
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
-  const followUpBehavior = nativeChatFollowUpBehavior(settings)
+  const queueFollowUps = nativeChatQueueFollowUps(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   return (
     <section id="chat-behavior" className="space-y-3">
@@ -91,31 +87,12 @@ export function ChatBehaviorSetting({
                 forceVisible={forceVisible}
                 className="max-w-none"
               >
-                <SettingsRow
+                <SettingsSwitchRow
                   label={entries.queueFollowUps.title}
                   description={entries.queueFollowUps.description}
-                  control={
-                    <Select
-                      value={followUpBehavior}
-                      onValueChange={(value) =>
-                        updateSettings(
-                          nativeChatFollowUpBehaviorUpdate(value === 'queue' ? 'queue' : 'steer')
-                        )
-                      }
-                    >
-                      <SelectTrigger className="h-7 w-28" aria-label={entries.queueFollowUps.title}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="steer">
-                          {translate('components.settings.nativeChat.followUpSteer', 'Steer')}
-                        </SelectItem>
-                        <SelectItem value="queue">
-                          {translate('components.settings.nativeChat.followUpQueue', 'Queue')}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  }
+                  checked={queueFollowUps}
+                  ariaLabel={entries.queueFollowUps.title}
+                  onChange={() => updateSettings({ nativeChatQueueFollowUps: !queueFollowUps })}
                 />
               </SearchableSetting>
             ) : null}

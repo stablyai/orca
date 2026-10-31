@@ -19543,8 +19543,8 @@
         }
       },
       "nativeChat": {
-        "followUpBehaviorTitle": "智能体工作时按 Enter",
-        "followUpBehaviorCopy": "加入队列：消息以卡片形式等待，智能体完成后再发送。立即发送：消息直接进入正在进行的回合。Cmd/Ctrl+Enter 执行另一种。",
+        "followUpBehaviorTitle": "将后续消息加入队列",
+        "followUpBehaviorCopy": "智能体工作时发送的消息会以卡片形式等待，直到回合结束。Cmd/Ctrl+Enter 会将一条消息发送到正在进行的回合。",
         "followUpSteer": "立即发送",
         "followUpQueue": "加入队列",
         "inlineVisualsTitle": "内联可视化",

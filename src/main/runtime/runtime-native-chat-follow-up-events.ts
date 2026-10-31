@@ -1,4 +1,4 @@
-import { nativeChatFollowUpBehavior } from '../../shared/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../shared/native-chat-follow-up-behavior'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -9,12 +9,12 @@ export function publishNativeChatFollowUpChanges(
   if (!store?.getSettings || !store.onSettingsChanged) {
     return
   }
-  let previous = nativeChatFollowUpBehavior(store.getSettings())
+  let previous = nativeChatQueueFollowUps(store.getSettings())
   store.onSettingsChanged((_updates, settings) => {
-    const behavior = nativeChatFollowUpBehavior(settings)
-    if (behavior !== previous) {
-      previous = behavior
-      emit({ type: 'nativeChatFollowUpBehaviorChanged', behavior })
+    const queueFollowUps = nativeChatQueueFollowUps(settings)
+    if (queueFollowUps !== previous) {
+      previous = queueFollowUps
+      emit({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps })
     }
   })
 }

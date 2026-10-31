@@ -19542,8 +19542,8 @@
         }
       },
       "nativeChat": {
-        "followUpBehaviorTitle": "Agent 작업 중 Enter 키",
-        "followUpBehaviorCopy": "대기열에 추가: 메시지가 카드로 대기하다가 Agent 작업이 끝나면 전송됩니다. 지금 보내기: 진행 중인 턴에 바로 들어갑니다. Cmd/Ctrl+Enter는 다른 쪽 동작을 합니다.",
+        "followUpBehaviorTitle": "후속 메시지를 대기열에 추가",
+        "followUpBehaviorCopy": "Agent가 작업하는 동안 보낸 메시지는 턴이 끝날 때까지 카드로 대기합니다. Cmd/Ctrl+Enter를 누르면 메시지 하나를 진행 중인 턴에 보냅니다.",
         "followUpSteer": "지금 보내기",
         "followUpQueue": "대기열에 추가",
         "inlineVisualsTitle": "인라인 시각 자료",

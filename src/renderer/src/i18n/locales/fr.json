@@ -20346,8 +20346,8 @@
         }
       },
       "nativeChat": {
-        "followUpBehaviorTitle": "Pendant que l’agent travaille, Entrée",
-        "followUpBehaviorCopy": "Mettre en file d’attente : votre message attend sous forme de carte et part quand l’agent a fini. Envoyer maintenant : il rejoint le tour en cours. Cmd/Ctrl+Entrée fait l’inverse.",
+        "followUpBehaviorTitle": "Mettre les messages suivants en file d’attente",
+        "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour. Cmd/Ctrl+Entrée en envoie un dans le tour en cours.",
         "followUpSteer": "Envoyer maintenant",
         "followUpQueue": "Mettre en file d’attente",
         "inlineVisualsTitle": "Visuels intégrés",

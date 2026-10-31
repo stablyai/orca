@@ -1,6 +1,6 @@
-import { nativeChatFollowUpBehaviorRead } from '../transport/settings-read-operations'
+import { nativeChatQueueFollowUpsRead } from '../transport/settings-read-operations'
 import type { RpcClient } from '../transport/rpc-client'
-import type { NativeChatFollowUpBehavior } from '../../../src/shared/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat-follow-up-behavior'
 
 const projections = new WeakMap<RpcClient, MobileNativeChatFollowUpPreference>()
 
@@ -17,18 +17,16 @@ export function mobileNativeChatFollowUpPreference(
 }
 
 class MobileNativeChatFollowUpPreference {
-  private value: NativeChatFollowUpBehavior = 'steer'
+  private value = nativeChatQueueFollowUps(null)
   private readonly listeners = new Set<() => void>()
   private stopState?: () => void
   private stopStream?: () => void
-  private generation = 0
   private readVersion = 0
   private connectionVersion = 0
 
   constructor(private readonly client: RpcClient) {}
 
-  getSnapshot = (): boolean =>
-    this.generation === (this.client.getGeneration?.() ?? 0) && this.value === 'queue'
+  getSnapshot = (): boolean => this.value
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
@@ -49,7 +47,7 @@ class MobileNativeChatFollowUpPreference {
     }
   }
 
-  private publish(value: NativeChatFollowUpBehavior): void {
+  private publish(value: boolean): void {
     if (value !== this.value) {
       this.value = value
       for (const listener of this.listeners) {
@@ -64,10 +62,6 @@ class MobileNativeChatFollowUpPreference {
     this.stopStream?.()
     this.stopStream = undefined
     const generation = this.client.getGeneration?.() ?? 0
-    if (generation !== this.generation) {
-      this.generation = generation
-      this.publish('steer')
-    }
     if (this.client.getState() !== 'connected') {
       return
     }
@@ -76,10 +70,10 @@ class MobileNativeChatFollowUpPreference {
       generation === (this.client.getGeneration?.() ?? 0)
     const read = (): void => {
       const version = ++this.readVersion
-      void nativeChatFollowUpBehaviorRead
+      void nativeChatQueueFollowUpsRead
         .request(this.client)
         .then((response) => {
-          const preference = nativeChatFollowUpBehaviorRead.interpret(response)
+          const preference = nativeChatQueueFollowUpsRead.interpret(response)
           if (current() && version === this.readVersion && preference.accepted) {
             this.publish(preference.value)
           }
@@ -93,14 +87,14 @@ class MobileNativeChatFollowUpPreference {
       if (!current() || !payload || typeof payload !== 'object') {
         return
       }
-      const event: { type?: unknown; behavior?: unknown; snapshot?: unknown } = payload
-      let behavior: unknown
-      if (event.type === 'nativeChatFollowUpBehaviorChanged') {
-        behavior = event.behavior
+      const event: { type?: unknown; queueFollowUps?: unknown; snapshot?: unknown } = payload
+      let queueFollowUps: unknown
+      if (event.type === 'nativeChatQueueFollowUpsChanged') {
+        queueFollowUps = event.queueFollowUps
       } else if (event.type === 'ready') {
         const snapshot = event.snapshot
-        if (snapshot && typeof snapshot === 'object' && 'nativeChatFollowUpBehavior' in snapshot) {
-          behavior = snapshot.nativeChatFollowUpBehavior
+        if (snapshot && typeof snapshot === 'object' && 'nativeChatQueueFollowUps' in snapshot) {
+          queueFollowUps = snapshot.nativeChatQueueFollowUps
         } else {
           read()
           return
@@ -108,9 +102,9 @@ class MobileNativeChatFollowUpPreference {
       } else {
         return
       }
-      if (behavior === 'queue' || behavior === 'steer') {
+      if (typeof queueFollowUps === 'boolean') {
         this.readVersion += 1
-        this.publish(behavior)
+        this.publish(queueFollowUps)
       }
     })
   }
