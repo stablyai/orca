@@ -2471,6 +2471,18 @@ html.native-shell .app-layout {
   background-color: var(--code-editor-background);
 }
 
+/* Why: Orca's line tints sit on the editor's background, which app tokens may not contrast. */
+:root[data-code-editor-theme]
+  .monaco-editor
+  :is(
+    .orca-diff-comment-range-highlight,
+    .orca-diff-comment-range-margin,
+    .orca-conflict-base-line
+  ) {
+  --ring: var(--code-editor-muted-foreground);
+  --muted-foreground: var(--code-editor-muted-foreground);
+}
+
 /* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */
 .ipynb-code-surface .monaco-editor,
 .ipynb-code-surface .monaco-editor-background,
