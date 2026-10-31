@@ -60,6 +60,7 @@ type SubmitFolderWorkspaceCreateParams = {
   linkedWorkItem: LinkedWorkItemSummary | null
   linkedTaskSourceContext?: TaskSourceContext | null
   note: string
+  agentPrompt?: string
   quickAgent: TuiAgent | null
   launchChoice?: AgentLaunchChoice
   autoRenameBranchFromWork: boolean | undefined
@@ -82,6 +83,7 @@ export async function submitFolderWorkspaceCreate({
   linkedWorkItem,
   linkedTaskSourceContext,
   note,
+  agentPrompt = '',
   quickAgent,
   launchChoice,
   autoRenameBranchFromWork,
@@ -133,6 +135,9 @@ export async function submitFolderWorkspaceCreate({
         agentLaunchChoices: preferences?.agentLaunchChoices ?? settings.agentLaunchChoices
       }
     : settings
+  // Why: folder workspaces have always launched the note as the agent's first
+  // message; a typed prompt takes over that role when the user writes one.
+  const launchPrompt = agentPrompt.trim() || note
   const startupPlan =
     quickAgent && launchPlatform && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
@@ -140,6 +145,7 @@ export async function submitFolderWorkspaceCreate({
           settings: effectiveSettings,
           linkedWorkItem,
           note,
+          agentPrompt,
           agentCmdOverrides,
           agentArgs,
           agentEnv,
@@ -158,13 +164,15 @@ export async function submitFolderWorkspaceCreate({
               isRemote: launchIsRemote
             }),
             ...(agentEnv ? { agentEnv } : {}),
-            prompt: note,
+            prompt: launchPrompt,
             allowEmptyPromptLaunch: true
           })
         : null
   // Argv prefill embeds the draft in launchCommand, so draftPrompt alone cannot detect it.
   const launchDraftPrompt =
-    quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
+    quickAgent && linkedWorkItem
+      ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note, agentPrompt)
+      : null
   const launchRequest = quickAgent
     ? {
         requestId: newAgentLaunchRequestId(),
@@ -174,7 +182,7 @@ export async function submitFolderWorkspaceCreate({
           runtimeEnvironmentId,
           executionHostId: getNewWorkspaceProjectGroupHostId(projectGroup)
         },
-        prompt: launchDraftPrompt ?? note,
+        prompt: launchDraftPrompt ?? launchPrompt,
         promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)
       }
     : null
@@ -195,7 +203,7 @@ export async function submitFolderWorkspaceCreate({
     !name.trim() &&
     !linkedWorkItem &&
     Boolean(quickAgent) &&
-    note.trim().length > 0
+    launchPrompt.trim().length > 0
 
   const workspace = await createFolderWorkspace({
     projectGroupId: projectGroup.id,

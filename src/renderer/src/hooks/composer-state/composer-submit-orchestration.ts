@@ -15,6 +15,7 @@ export function useComposerSubmitOrchestration(
   source: ComposerSourceState
 ): ComposerSubmitState {
   const folderSubmitOrchestration = useFolderSubmitOrchestration({
+    agentPrompt: target.sourceContextState.agentPrompt,
     clearNewWorkspaceDraft: target.composerTargetStore.clearNewWorkspaceDraft,
     createFolderWorkspace: target.composerTargetStore.createFolderWorkspace,
     decisions: target.composerTargetStore.decisions,
@@ -92,6 +93,7 @@ export function useComposerSubmitOrchestration(
     smartNameMode: target.workspaceIdentityState.smartNameMode
   })
   const quickCreationExecution = useQuickCreationExecution({
+    agentPrompt: target.sourceContextState.agentPrompt,
     clearNewWorkspaceDraft: target.composerTargetStore.clearNewWorkspaceDraft,
     createMultiple: target.asyncComposerState.createMultiple,
     effectivePresetId: target.derivedComposerState.effectivePresetId,
@@ -124,10 +126,8 @@ export function useComposerSubmitOrchestration(
   const quickSubmitAction = useQuickSubmitAction({
     effectiveLinkedPR: target.derivedComposerState.effectiveLinkedPR,
     executeQuickCreation: quickCreationExecution.executeQuickCreation,
-    fallbackCreatureName: target.derivedComposerState.fallbackCreatureName,
     isProjectGroupTarget: target.runtimeTargetSelection.isProjectGroupTarget,
     isSubmissionCancelled: target.composerTargetStore.isSubmissionCancelled,
-    linkedPR: target.workspaceIdentityState.linkedPR,
     linkedWorkItem: target.sourceContextState.linkedWorkItem,
     name: target.sourceContextState.name,
     onCreated: target.composerTargetStore.onCreated,
@@ -147,7 +147,8 @@ export function useComposerSubmitOrchestration(
     sparseError: target.derivedComposerState.sparseError,
     submitFolderTarget: folderSubmitOrchestration.submitFolderTarget,
     taskSourceContext: target.sourceContextState.taskSourceContext,
-    telemetrySource: target.composerTargetStore.telemetrySource
+    telemetrySource: target.composerTargetStore.telemetrySource,
+    workspaceSeedName: target.derivedComposerState.workspaceSeedName
   })
   return {
     folderSubmitOrchestration,
