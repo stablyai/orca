@@ -145,7 +145,8 @@ export type FrameStoppedSwitchSourceRow = {
 
 /**
  * Main's fact on a row of a frame this window applied; its notice only wakes. Main repeats the
- * fact on every frame while it stands, so the one already held for that process costs nothing.
+ * fact on every frame while it stands, so the one already held for that process costs nothing and
+ * is kept: its held screen arrives only in the stream's first frame naming the process.
  */
 export function noteFrameStoppedSwitchSource(
   worktreeId: string,

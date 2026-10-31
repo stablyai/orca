@@ -10,9 +10,10 @@ import type { AiVaultAgent } from '../../../shared/ai-vault-types'
 import type { StoppedSwitchSourceScreen } from '../../../shared/stopped-switch-source'
 import { withTimeout } from '../runtime-async-boundaries'
 
-// Every frame naming the stopped pane carries its screen, so one is bounded in time and size.
+// Each stream and the window notice carry the screen once, still bounded in time and in the bytes
+// it takes on the wire (JSON escapes each control byte to six).
 const HELD_SCREEN_TIMEOUT_MS = 1_000
-const HELD_SCREEN_MAX_CHARS = 256 * 1024
+const HELD_SCREEN_MAX_BYTES = 256 * 1024
 
 export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRuntimeWithExplicitTerminalTabClose {
   /** Whether a handle names a process a switch stopped and left: an attach is answered exited. */
@@ -41,7 +42,7 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
     if (!data || !cols || !rows || !same()) {
       return undefined
     }
-    if (data.length + (scrollbackAnsi?.length ?? 0) > HELD_SCREEN_MAX_CHARS) {
+    if (Buffer.byteLength(JSON.stringify([data, scrollbackAnsi ?? ''])) > HELD_SCREEN_MAX_BYTES) {
       return undefined
     }
     return {

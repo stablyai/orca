@@ -19,6 +19,7 @@ import {
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
+import { createSessionTabsStoppedScreenOnce } from './session-tabs-stopped-screen-once'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
@@ -174,6 +175,7 @@ export const SESSION_TAB_METHODS = [
       }
       let currentSnapshot: Awaited<ReturnType<typeof runtime.listMobileSessionTabs>> | undefined
       const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
+      const withScreenOnce = createSessionTabsStoppedScreenOnce()
       const tabDelta = createSessionTabsTabDeltaEncoder(clientCapabilities)
       const project = (
         snapshot: NonNullable<typeof currentSnapshot>,
@@ -185,7 +187,10 @@ export const SESSION_TAB_METHODS = [
             const projected = project(currentSnapshot)
             // The last frame was projected with the previous set; a change it ignores sends nothing.
             if (!isDeepStrictEqual(projected, project(currentSnapshot, previous))) {
-              emit({ type: 'updated', ...tabDelta.update(withProofDelta(projected)) })
+              emit({
+                type: 'updated',
+                ...tabDelta.update(withProofDelta(withScreenOnce(projected)))
+              })
             }
           }
         }) ?? (() => {})
@@ -218,7 +223,7 @@ export const SESSION_TAB_METHODS = [
         currentSnapshot = initial
         emit({
           type: 'snapshot',
-          ...tabDelta.full(withProofDelta(project(initial)))
+          ...tabDelta.full(withProofDelta(withScreenOnce(project(initial))))
         })
         if (released) {
           return
@@ -248,7 +253,7 @@ export const SESSION_TAB_METHODS = [
             currentSnapshot = retained
             emit({
               type: 'updated',
-              ...tabDelta.update(withProofDelta(project(streamSnapshot)))
+              ...tabDelta.update(withProofDelta(withScreenOnce(project(streamSnapshot))))
             })
           }
         }, pairedDeviceId)

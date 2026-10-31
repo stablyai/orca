@@ -8,6 +8,8 @@ import { toMirroredPaneKey } from './agent-status-primitives'
 
 type Conversations = NonNullable<WebSessionTabsSyncState['agentConversationsByPaneKey']>
 
+// The held screen is not compared: a stream carries it only in its first frame naming the process,
+// so a later frame's fact without it is the same fact, and the copy already held (with it) stays.
 const sameFact = (a?: StoppedSwitchSourceFact, b?: StoppedSwitchSourceFact): boolean =>
   a === b ||
   (!!a &&

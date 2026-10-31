@@ -73,6 +73,31 @@ it('carries main’s fact into the pane’s conversation through every frame, un
   expect({ ...shown, ...closed }.agentConversationsByPaneKey?.[paneKey]).toBeUndefined()
 })
 
+it('keeps the held screen from the first frame when later frames carry the fact without it', () => {
+  const screen = { data: 'HELD-FRAME', cols: 100, rows: 30 }
+  const first = {
+    ...makeState(),
+    ...applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([{ ...stopped, stoppedSwitchSource: { ...fact, screen } }], {
+        snapshotVersion: 1
+      }),
+      ENV,
+      NOW
+    )
+  }
+  const later = {
+    ...first,
+    ...applyWebSessionTabsSnapshot(
+      first,
+      makeSnapshot([{ ...stopped, title: 'Codex (stopped)' }], { snapshotVersion: 2 }),
+      ENV,
+      NOW
+    )
+  }
+  expect(later.agentConversationsByPaneKey?.[paneKey]?.stoppedSwitchSource?.screen).toEqual(screen)
+})
+
 it('costs a frame nothing it can see when no fact changed, and sweeps retracted tabs in one pass', () => {
   const surfaces = (count: number, withStopped: boolean): Terminal[] => [
     ...(withStopped ? [stopped] : []),
