@@ -17,10 +17,34 @@ const FAILED_SCAN_RETRY_MS = 3_000
 const MAX_SCAN_CACHE_ENTRIES = 32
 
 const scanCache = new Map<string, GiteaPullRequestScanEntry>()
-const inFlightScans = new Map<string, Promise<RawGiteaPullRequest[]>>()
+const inFlightScans = new Map<string, Promise<RawGiteaPullRequest[] | null>>()
 // Fence in-flight scans so invalidation cannot recache pre-create listings.
 const scanGenerations = new Map<string, number>()
 const activeScanCounts = new Map<string, number>()
+
+// Forgejo 16+ filters /pulls by `head=`; Gitea and older Forgejo silently
+// ignore the parameter. Remember the rejection per API base URL so such hosts
+// pay one probe per TTL instead of one wasted request per lookup. Only the
+// negative verdict is memoised: a positive is re-proven by matchesBranch on
+// every fast lookup, and an empty page is unambiguous on both server kinds.
+const HEAD_FILTER_UNSUPPORTED_TTL_MS = 6 * 60 * 60 * 1000
+const headFilterUnsupportedUntil = new Map<string, number>()
+
+export function rememberGiteaHeadFilterUnsupported(apiBaseUrl: string): void {
+  headFilterUnsupportedUntil.set(apiBaseUrl, Date.now() + HEAD_FILTER_UNSUPPORTED_TTL_MS)
+}
+
+export function isGiteaHeadFilterUnsupported(apiBaseUrl: string): boolean {
+  const until = headFilterUnsupportedUntil.get(apiBaseUrl)
+  if (until === undefined) {
+    return false
+  }
+  if (Date.now() >= until) {
+    headFilterUnsupportedUntil.delete(apiBaseUrl)
+    return false
+  }
+  return true
+}
 
 function removeScanCacheEntry(repoKey: string, expected?: GiteaPullRequestScanEntry): void {
   const entry = scanCache.get(repoKey)
@@ -70,13 +94,18 @@ function reusableScanCacheEntry(repoKey: string): GiteaPullRequestScanEntry | nu
   return entry
 }
 
-/** Gitea/Forgejo lacks head-branch filtering; share pagination so card bursts cannot overload self-hosted servers. */
-export async function scanGiteaPullRequests(
+type GiteaPullRequestScanRun = () => Promise<{
+  pullRequests: RawGiteaPullRequest[]
+  completed: boolean
+} | null>
+
+// Shared per-key cache core: TTL, in-flight coalescing and the invalidation
+// generation fence. A null run outcome is not cached — the caller falls back
+// to another scan path for that lookup.
+async function cachedGiteaPullRequestScan(
   repoKey: string,
-  fetchPage: GiteaPullRequestPageFetcher,
-  pageLimit: number,
-  maxPages: number
-): Promise<RawGiteaPullRequest[]> {
+  run: GiteaPullRequestScanRun
+): Promise<RawGiteaPullRequest[] | null> {
   const cached = reusableScanCacheEntry(repoKey)
   if (cached) {
     noteProviderCacheAnswer()
@@ -90,23 +119,18 @@ export async function scanGiteaPullRequests(
   const generation = scanGenerations.get(repoKey) ?? 0
   activeScanCounts.set(repoKey, (activeScanCounts.get(repoKey) ?? 0) + 1)
   const scan = (async () => {
-    const pullRequests: RawGiteaPullRequest[] = []
-    let completed = true
-    for (let page = 1; page <= maxPages; page++) {
-      const list = await fetchPage(page)
-      if (!list) {
-        completed = false
-        break
-      }
-      pullRequests.push(...list)
-      if (list.length < pageLimit) {
-        break
-      }
+    const outcome = await run()
+    if (!outcome) {
+      return null
     }
     if ((scanGenerations.get(repoKey) ?? 0) === generation) {
-      rememberScanCacheEntry(repoKey, pullRequests, completed ? SCAN_TTL_MS : FAILED_SCAN_RETRY_MS)
+      rememberScanCacheEntry(
+        repoKey,
+        outcome.pullRequests,
+        outcome.completed ? SCAN_TTL_MS : FAILED_SCAN_RETRY_MS
+      )
     }
-    return pullRequests
+    return outcome.pullRequests
   })()
   inFlightScans.set(repoKey, scan)
   try {
@@ -125,14 +149,85 @@ export async function scanGiteaPullRequests(
   }
 }
 
+/** Paged listing fallback shared by card bursts so self-hosted servers are not flooded. */
+export async function scanGiteaPullRequests(
+  repoKey: string,
+  fetchPage: GiteaPullRequestPageFetcher,
+  pageLimit: number,
+  maxPages: number
+): Promise<RawGiteaPullRequest[]> {
+  const pullRequests = await cachedGiteaPullRequestScan(repoKey, async () => {
+    const listed: RawGiteaPullRequest[] = []
+    let completed = true
+    for (let page = 1; page <= maxPages; page++) {
+      const list = await fetchPage(page)
+      if (!list) {
+        completed = false
+        break
+      }
+      listed.push(...list)
+      if (list.length < pageLimit) {
+        break
+      }
+    }
+    return { pullRequests: listed, completed }
+  })
+  return pullRequests ?? []
+}
+
+/**
+ * One-shot probe cache for the Forgejo `head=` fast path. Entries only ever
+ * hold a verified match or an unambiguous empty page, so the strict and
+ * lenient lookups can share one key without inheriting a failed scan. A probe
+ * failure is likewise never shared as a rejection: the shared promise resolves
+ * to a miss and each caller falls back to its own bounded scan, whose
+ * throwOnFailure mode decides the final outcome (absence for lenient, a thrown
+ * error for strict).
+ */
+export async function cachedGiteaHeadFilteredScan(
+  repoKey: string,
+  probe: () => Promise<RawGiteaPullRequest[] | null>
+): Promise<RawGiteaPullRequest[] | null> {
+  return cachedGiteaPullRequestScan(repoKey, async () => {
+    let pullRequests: RawGiteaPullRequest[] | null
+    try {
+      pullRequests = await probe()
+    } catch {
+      // The fast path is an optimisation: its failure says nothing about the
+      // answer, and the probe key is shared by strict and lenient lookups, so
+      // a rejection here would leak into whichever caller joined second.
+      return null
+    }
+    return pullRequests === null ? null : { pullRequests, completed: true }
+  })
+}
+
 /** Invalidate after mutations to prevent stale missing-review results. */
-export function invalidateGiteaPullRequestScan(repoKey: string): void {
+function invalidateGiteaPullRequestScan(repoKey: string): void {
   removeScanCacheEntry(repoKey)
   inFlightScans.delete(repoKey)
   if ((activeScanCounts.get(repoKey) ?? 0) > 0) {
     scanGenerations.set(repoKey, (scanGenerations.get(repoKey) ?? 0) + 1)
   } else {
     scanGenerations.delete(repoKey)
+  }
+}
+
+/** Invalidate every scan variant cached for a repository (base, strict, head-filtered). */
+export function invalidateGiteaPullRequestScanTree(repoKey: string): void {
+  const affected = new Set<string>()
+  for (const key of scanCache.keys()) {
+    if (key === repoKey || key.startsWith(`${repoKey}::`)) {
+      affected.add(key)
+    }
+  }
+  for (const key of inFlightScans.keys()) {
+    if (key === repoKey || key.startsWith(`${repoKey}::`)) {
+      affected.add(key)
+    }
+  }
+  for (const key of affected) {
+    invalidateGiteaPullRequestScan(key)
   }
 }
 
@@ -143,6 +238,7 @@ export function _resetGiteaPullRequestScanCache(): void {
   inFlightScans.clear()
   scanGenerations.clear()
   activeScanCounts.clear()
+  headFilterUnsupportedUntil.clear()
 }
 
 export function _getGiteaPullRequestScanCacheSize(): number {

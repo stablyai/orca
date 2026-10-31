@@ -173,8 +173,9 @@ describe('Gitea client', () => {
     expect(listUrl.pathname).toBe('/api/v1/repos/team/repo/pulls')
     expect(listUrl.searchParams.get('state')).toBe('all')
     expect(listUrl.searchParams.get('sort')).toBe('recentupdate')
-    expect(listUrl.searchParams.get('page')).toBe('1')
-    expect(listUrl.searchParams.get('limit')).toBe('50')
+    expect(listUrl.searchParams.get('head')).toBe('feature/gitea')
+    expect(listUrl.searchParams.get('limit')).toBe('5')
+    expect(listUrl.searchParams.has('page')).toBe(false)
   })
 
   it('shares one /pulls scan across concurrent branch lookups (#8807)', async () => {
@@ -198,7 +199,13 @@ describe('Gitea client', () => {
     expect(a?.number).toBe(7)
     expect(b?.number).toBe(8)
     expect(missing).toBeNull()
-    expect(listCalls).toBe(1)
+    // Three unfiltered head= probes (one per branch, servers that ignore the
+    // filter) plus the one full scan they fall back to, shared across all three.
+    expect(listCalls).toBe(4)
+
+    // The memoised verdict skips further probes and the scan cache holds.
+    await getGiteaPullRequestForBranch('/repo', 'feature/none')
+    expect(listCalls).toBe(4)
   })
 
   it('reuses the cached /pulls scan for lookups inside the TTL', async () => {
@@ -217,7 +224,205 @@ describe('Gitea client', () => {
     await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
     await getGiteaPullRequestForBranch('/repo', 'no-pr-branch')
 
-    expect(listCalls).toBe(1)
+    // One head= probe answers the first branch and its cache serves the
+    // repeat; the second branch's probe sees a mismatching entry, memoises
+    // the unsupported verdict, and falls back to one shared full scan.
+    expect(listCalls).toBe(3)
+  })
+
+  it('uses the Forgejo head filter as a fast path before any full scan (#35292)', async () => {
+    const listQueries: URLSearchParams[] = []
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const parsed = new URL(String(url))
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      if (!parsed.pathname.endsWith('/pulls')) {
+        return Response.json([])
+      }
+      listQueries.push(parsed.searchParams)
+      // A Forgejo 16+ server filters server-side: only matching PRs come back.
+      return parsed.searchParams.get('head') === 'feature/gitea'
+        ? Response.json([giteaPr(7, 'feature/gitea')])
+        : Response.json([])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+      number: 7
+    })
+
+    // Fast path: exactly one list request, carrying the head filter, no paged scan.
+    expect(listQueries).toHaveLength(1)
+    const probe = listQueries[0]
+    expect(probe.get('state')).toBe('all')
+    expect(probe.get('sort')).toBe('recentupdate')
+    expect(probe.get('head')).toBe('feature/gitea')
+    expect(probe.get('limit')).toBe('5')
+    expect(probe.has('page')).toBe(false)
+  })
+
+  it('trusts the first entry when the filtered page is full of matches for the branch', async () => {
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const parsed = new URL(String(url))
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      if (!parsed.pathname.endsWith('/pulls')) {
+        return Response.json([])
+      }
+      // Without the head filter the server sends an unfiltered page (no match
+      // for this branch); only a filtered request fills the page with matches.
+      if (parsed.searchParams.get('head') !== 'feature/gitea') {
+        return Response.json([giteaPr(1, 'feature/other')])
+      }
+      // A reused branch name fills the small page with matches; the most
+      // recently updated one is what today's find() would return too.
+      return Response.json([
+        giteaPr(11, 'feature/gitea'),
+        giteaPr(12, 'feature/gitea'),
+        giteaPr(13, 'feature/gitea'),
+        giteaPr(14, 'feature/gitea'),
+        giteaPr(15, 'feature/gitea')
+      ])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+      number: 11
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2) // list probe + commit status
+  })
+
+  it('treats an empty filtered response as a definitive miss without a full scan (#35292)', async () => {
+    const listQueries: URLSearchParams[] = []
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const parsed = new URL(String(url))
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      if (!parsed.pathname.endsWith('/pulls')) {
+        return Response.json([])
+      }
+      listQueries.push(parsed.searchParams)
+      return Response.json([])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
+    // Empty is unambiguous on both server kinds: a Gitea repo with no PRs and
+    // a Forgejo repo with no matching PR both answer [], so no scan follows.
+    expect(listQueries).toHaveLength(1)
+    expect(listQueries[0].has('head')).toBe(true)
+  })
+
+  it('falls back to the exact legacy scan when the server ignores the head filter (#35292)', async () => {
+    const listRequests: { head: string | null; page: string | null }[] = []
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const parsed = new URL(String(url))
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      if (!parsed.pathname.endsWith('/pulls')) {
+        return Response.json([])
+      }
+      const head = parsed.searchParams.get('head')
+      const page = parsed.searchParams.get('page')
+      listRequests.push({ head, page })
+      // Gitea ignores `head` and paginates unfiltered; the branch PR lives on
+      // page 2, so page 1 must be full for the scan to reach it.
+      return Response.json(
+        page === '2'
+          ? [giteaPr(99, 'feature/gitea')]
+          : Array.from({ length: 50 }, (_, index) => giteaPr(index + 1, `feature/other-${index}`))
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+      number: 99
+    })
+    // One ignored head= probe, then exactly today's scan: page 1 then page 2.
+    expect(listRequests.map((request) => [request.head, request.page])).toEqual([
+      ['feature/gitea', null],
+      [null, '1'],
+      [null, '2']
+    ])
+  })
+
+  it('stops probing after a server proves it ignores the head filter, and re-probes after hours', async () => {
+    vi.useFakeTimers()
+    try {
+      let probeCalls = 0
+      let scanCalls = 0
+      const fetchMock = vi.fn(async (url: string | URL) => {
+        const parsed = new URL(String(url))
+        if (parsed.pathname.endsWith('/status')) {
+          return Response.json({ state: 'success' })
+        }
+        if (!parsed.pathname.endsWith('/pulls')) {
+          return Response.json([])
+        }
+        if (parsed.searchParams.has('head')) {
+          probeCalls++
+          // The server ignores head=: an unfiltered list with other branches.
+          return Response.json([giteaPr(1, 'feature/other')])
+        }
+        scanCalls++
+        return Response.json([giteaPr(7, 'feature/gitea')])
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+        number: 7
+      })
+      expect(probeCalls).toBe(1)
+      expect(scanCalls).toBe(1)
+
+      // The negative verdict is memoised per host: no further probe inside its TTL.
+      await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+      expect(probeCalls).toBe(1)
+      expect(scanCalls).toBe(1)
+
+      // A long TTL later the probe retries, so an upgrade to Forgejo 16 is noticed.
+      await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000 + 1)
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+        number: 7
+      })
+      expect(probeCalls).toBe(2)
+      expect(scanCalls).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the head-filter verdict per API base URL', async () => {
+    let probesForOtherHost = 0
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const parsed = new URL(String(url))
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      if (!parsed.pathname.endsWith('/pulls')) {
+        return Response.json([])
+      }
+      if (parsed.searchParams.has('head')) {
+        probesForOtherHost++
+      }
+      // Both hosts ignore the filter here.
+      return Response.json([giteaPr(1, 'feature/other')])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+    // A different host on the same repo path has its own verdict. No cache
+    // reset in between: this only passes if the first host's verdict did not
+    // leak into the second host.
+    process.env.ORCA_GITEA_API_BASE_URL = 'https://other.example.com'
+    _resetGiteaRepoRefCache()
+    await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+
+    expect(probesForOtherHost).toBe(2)
   })
 
   it('retries a failed /pulls scan after only the short failure cooldown', async () => {
@@ -230,21 +435,25 @@ describe('Gitea client', () => {
           return Response.json({ state: 'success' })
         }
         listCalls++
-        return listCalls === 1
+        // The first lookup pays one ignored probe and one failed scan.
+        return listCalls <= 3
           ? Response.json({ message: 'temporary failure' }, { status: 503 })
           : Response.json([giteaPr()])
       })
       vi.stubGlobal('fetch', fetchMock)
 
       await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
+      expect(listCalls).toBe(2)
+      // The retrying probe still fails; the failed scan's short cooldown keeps
+      // the fallback from repeating the paged scan.
       await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
-      expect(listCalls).toBe(1)
+      expect(listCalls).toBe(3)
 
       await vi.advanceTimersByTimeAsync(3_001)
       await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
         number: 7
       })
-      expect(listCalls).toBe(2)
+      expect(listCalls).toBe(4)
     } finally {
       vi.useRealTimers()
     }
@@ -259,6 +468,46 @@ describe('Gitea client', () => {
     await expect(getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')).rejects.toThrow(
       /Gitea request failed/
     )
+  })
+
+  it('keeps a failed in-flight head= probe from rejecting lenient lookups that join it (#36049)', async () => {
+    let releaseProbe!: () => void
+    const probeGate = new Promise<void>((resolve) => {
+      releaseProbe = resolve
+    })
+    let probeStarted!: () => void
+    const probeInFlight = new Promise<void>((resolve) => {
+      probeStarted = resolve
+    })
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const parsed = new URL(String(url))
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      if (parsed.searchParams.has('head')) {
+        // The strict lookup starts the probe; the lenient one joins it in flight.
+        probeStarted()
+        await probeGate
+      }
+      return Response.json({ message: 'temporary failure' }, { status: 503 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const strict = getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')
+    await probeInFlight
+    const lenient = getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+    releaseProbe()
+
+    // The lenient contract reads transport failure as absence, never a throw,
+    // even when the shared probe was started by a strict lookup.
+    await expect(lenient).resolves.toBeNull()
+    // The strict lookup still surfaces the failure itself.
+    await expect(strict).rejects.toThrow(/Gitea request failed/)
+    // The lenient lookup joined the gated in-flight probe instead of re-issuing
+    // it after release: exactly one head= request for both callers.
+    expect(
+      fetchMock.mock.calls.filter(([url]) => new URL(String(url)).searchParams.has('head'))
+    ).toHaveLength(1)
   })
 
   it('treats a 404 on the linked PR as "no PR" rather than a lookup failure', async () => {
@@ -362,7 +611,8 @@ describe('Gitea client', () => {
     await expect(getGiteaPullRequestForBranch('/repo', 'feature/new')).resolves.toMatchObject({
       number: 8
     })
-    expect(listCalls).toBe(2)
+    // The stale probe, the new branch's ignored probe and the fallback scan.
+    expect(listCalls).toBe(3)
   })
 
   it('uses an API base URL override for subpath or non-standard deployments', async () => {
