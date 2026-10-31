@@ -23,6 +23,7 @@ import {
   NATIVE_CHAT_ADVANCE_BUFFER_MS
 } from './native-chat-runtime-send'
 import { NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT } from './native-chat-input-clear'
+import { buildAgentTuiClearInputForText } from '../../../../shared/agent-tui-input-clear'
 import {
   NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   sendNativeChatMessageWithImageAttachments
@@ -288,6 +289,21 @@ describe('typeNativeChatCommand', () => {
       'a',
       't',
       'u',
+      's',
+      NATIVE_CHAT_SUBMIT
+    ])
+  })
+
+  it('empties a seeded multi-line draft before typing the command', async () => {
+    const clearInput = buildAgentTuiClearInputForText('alpha\nbeta\ngamma')
+    const handle = sendNativeChatTypedCommand(PTY, '/s', clearInput)
+    await vi.runAllTimersAsync()
+    await handle.settled
+
+    expectWriteOrder(sendRuntimePtyInputVerified.mock.calls, [
+      clearInput,
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      '/',
       's',
       NATIVE_CHAT_SUBMIT
     ])

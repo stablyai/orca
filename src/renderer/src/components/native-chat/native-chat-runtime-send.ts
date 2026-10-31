@@ -142,7 +142,12 @@ export async function typeNativeChatCommand(
   return outcome === 'accepted'
 }
 
-export function sendNativeChatTypedCommand(ptyId: string, command: string): NativeChatSendHandle {
+export function sendNativeChatTypedCommand(
+  ptyId: string,
+  command: string,
+  /** Written first to empty a seeded multi-line draft; the command's own Ctrl+U reaches one line. */
+  clearInput?: string
+): NativeChatSendHandle {
   const controller = new AbortController()
   return enqueueNativeChatPtySend(
     ptyId,
@@ -154,18 +159,19 @@ export function sendNativeChatTypedCommand(ptyId: string, command: string): Nati
         }
         markSubmitted()
       }
-      void typeAgentTuiCommand({
-        command,
-        signal: controller.signal,
-        write: async (key) => {
-          if (isCancelled()) {
-            return 'rejected'
-          }
-          return (await sendRuntimePtyInputVerified(ptyId, key, 'driving'))
-            ? 'accepted'
-            : 'rejected'
+      const write = async (key: string): Promise<'accepted' | 'rejected'> => {
+        if (isCancelled()) {
+          return 'rejected'
         }
-      }).then(finish, () => finish('rejected'))
+        return (await sendRuntimePtyInputVerified(ptyId, key, 'driving')) ? 'accepted' : 'rejected'
+      }
+      void (clearInput ? write(clearInput) : Promise.resolve('accepted' as const))
+        .then((cleared) =>
+          cleared === 'accepted'
+            ? typeAgentTuiCommand({ command, signal: controller.signal, write })
+            : cleared
+        )
+        .then(finish, () => finish('rejected'))
     },
     {
       onCancelUnsubmitted: () => {

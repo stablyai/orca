@@ -103,7 +103,7 @@ export function useNativeChatPtyComposerSend(args: {
     if (classification !== 'chat' && imagePaths.length === 0) {
       pendingHandle =
         args.agent === 'codex' && isSlashCommandDraft(text)
-          ? sendNativeChatTypedCommand(target.ptyId, text)
+          ? sendNativeChatTypedCommand(target.ptyId, text, launchSendOptions?.clearInput)
           : sendNativeChatMessage(target.ptyId, text, sendOptions)
     } else if (imagePaths.length > 0) {
       pendingHandle = sendNativeChatMessageWithImageAttachments(
