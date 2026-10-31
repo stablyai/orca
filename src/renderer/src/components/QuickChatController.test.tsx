@@ -10,6 +10,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -142,7 +143,7 @@ beforeEach(() => {
     settings: settings(),
     worktreesByRepo: { [repo.id]: [worktree] },
     localDetectedAgentIdsByContext: { host: ['codex'] },
-    fetchWorktrees: async () => true
+    fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockResolvedValue(true)
   })
   setLocalRuntimeCapabilitiesForTests([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
 })
@@ -239,7 +240,7 @@ it.each([false, true])(
   'uses local native/WSL inventory and preferences before activation despite a same-ID remote twin (warm=%s)',
   async (warm) => {
     const foreign = { ...repo, executionHostId: 'runtime:peer' }
-    const remoteWorktree = { ...worktree, hostId: 'runtime:peer' }
+    const remoteWorktree = { ...worktree, hostId: 'runtime:peer' as const }
     useAppStore.setState({
       repos: [repo, foreign],
       worktreesByRepo: { [repo.id]: [worktree, remoteWorktree] },
@@ -416,10 +417,11 @@ it.each(['add', 'fetch'])(
       })
     } else {
       useAppStore.setState({
-        fetchWorktrees: () =>
-          new Promise((resolve) => {
+        fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockReturnValue(
+          new Promise<boolean>((resolve) => {
             release = () => resolve(true)
           })
+        )
       })
     }
     mount()
@@ -429,7 +431,9 @@ it.each(['add', 'fetch'])(
       release()
     })
     expect(mocks.launch).not.toHaveBeenCalled()
-    useAppStore.setState({ fetchWorktrees: async () => true })
+    useAppStore.setState({
+      fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockResolvedValue(true)
+    })
     await act(async () => requestQuickChatFromShortcut())
     await waitFor(() => expect(mocks.launch).toHaveBeenCalledOnce())
   }
@@ -636,7 +640,11 @@ it('runs the production renderer dispatcher from floating xterm focus before tha
       open: true,
       visibleTabCount: 1,
       openMaximized: vi.fn(),
-      setOpenWithFocus: vi.fn()
+      setOpenWithFocus: vi.fn(),
+      cancelReturnFocusFrame: vi.fn(),
+      shouldMountPanel: true,
+      showToggleButton: true,
+      tourInteractionSnapshotRef: { current: null }
     } as Parameters<typeof useGlobalKeybindings>[0]['floatingWorkspace']
     useGlobalKeybindings({ layout, floatingWorkspace })
     return (
@@ -681,16 +689,19 @@ it('retires removed in-flight preparation and allows a new identity before the s
   }
   useAppStore.setState({
     addRepoPath,
-    fetchWorktrees: () =>
-      new Promise((resolve) => {
+    fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockReturnValue(
+      new Promise<boolean>((resolve) => {
         release = () => resolve(true)
       })
+    )
   })
   mount()
   await act(async () => requestQuickChatFromShortcut())
   await act(async () => useAppStore.setState({ repos: [], worktreesByRepo: {} }))
   mocks.ensure.mockResolvedValue({ path: repo.path, repoId: fresh.id })
-  useAppStore.setState({ fetchWorktrees: async () => true })
+  useAppStore.setState({
+    fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockResolvedValue(true)
+  })
   await act(async () => requestQuickChatFromShortcut())
   expect(mocks.launch).toHaveBeenCalledOnce()
   expect(mocks.launch.mock.calls[0][0].worktreeId).toBe(freshWorktree.id)

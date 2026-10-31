@@ -33,7 +33,7 @@ it.each([10, 100])(
       ...locals[0],
       id: `foreign${index}`,
       path: `/foreign/${index}`,
-      executionHostId: 'runtime:peer'
+      executionHostId: 'runtime:peer' as const
     }))
     vi.mocked(realpath).mockClear()
     expect(await ensureQuickChatFolder(root, [...locals, ...foreign])).toEqual({

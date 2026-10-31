@@ -485,6 +485,9 @@ it('opens a relative chat-created file from the ordinary Chats repository folder
     'local'
   )
   expect(directory).toBe(path)
+  if (directory === null) {
+    throw new Error('Expected the ordinary Chats workspace directory')
+  }
   render(
     <Transcript
       markdown="[result](./result.html)"
