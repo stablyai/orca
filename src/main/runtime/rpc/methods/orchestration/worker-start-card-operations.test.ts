@@ -31,7 +31,7 @@ it.each([10, 100])(
     const { runtime, db } = h.setup(
       false,
       partialRuntimeStore({
-        getSettings: () => ({ experimentalNativeChat: false }),
+        getSettings: () => ({ agentDefaultSurface: 'terminal' }),
         getWorkspaceSession: () => session
       })
     )

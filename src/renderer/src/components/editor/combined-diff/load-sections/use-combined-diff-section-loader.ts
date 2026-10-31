@@ -16,6 +16,7 @@ import { getDiffSectionLoadErrorMessage } from './combined-diff-section-load-tim
 import { getInitialCombinedDiffSectionLoadIndices } from './combined-diff-initial-section-load'
 import { isUnchangedDiffSectionReload } from './combined-diff-section-load-state'
 import type { CombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
+import { acquireCombinedDiffSectionOperation } from './combined-diff-section-connection'
 import type { CombinedDiffLoadRequest } from './combined-diff-load-scheduler'
 
 export function useCombinedDiffSectionLoader({
@@ -90,17 +91,22 @@ export function useCombinedDiffSectionLoader({
       }
 
       let result: GitDiffResult
+      let operation: ReturnType<typeof acquireCombinedDiffSectionOperation> | undefined
       let error: string | undefined
       try {
-        result = await fetchCombinedDiffSection({
+        operation = acquireCombinedDiffSectionOperation(file, entry.path)
+        const loaded = await fetchCombinedDiffSection({
           branchCompare,
           commitCompare,
           entry,
           file,
           isAllMode,
           isBranchMode,
-          isCommitMode
+          isCommitMode,
+          operation
         })
+        result = loaded.result
+        operation = loaded.operation
       } catch (err) {
         error = getDiffSectionLoadErrorMessage(err)
         result = {
@@ -117,6 +123,11 @@ export function useCombinedDiffSectionLoader({
         return
       }
       loadingIndicesRef.current.delete(index)
+      try {
+        operation?.assertCurrent()
+      } catch {
+        return
+      }
       const invalidatedMidFlight = (sectionLoadTokensRef.current.get(index) ?? 0) !== loadToken
       if (invalidatedMidFlight && !supersededLoadIndicesRef.current.has(index)) {
         // Refetch once at settlement after mid-flight invalidation rather than racing a duplicate load.
@@ -158,19 +169,38 @@ export function useCombinedDiffSectionLoader({
           modifiedContent: storedContent.modifiedContent
         })
       ) {
-        // Persist the newly loaded index even when the body and its model stay unchanged.
-        setSections((prev) => [...prev])
+        const provenanceChanged =
+          JSON.stringify(current.operation?.provenance) !== JSON.stringify(operation?.provenance)
+        // Persist the loaded index while retaining unchanged bodies and their models.
+        setSections((prev) => {
+          try {
+            operation?.assertCurrent()
+          } catch {
+            return prev
+          }
+          return provenanceChanged
+            ? prev.map((section, i) =>
+                i === index && !section.dirty ? { ...section, operation } : section
+              )
+            : [...prev]
+        })
         return
       }
       if (wasShowingContent) {
         setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       }
       setSections((prev) => {
+        try {
+          operation?.assertCurrent()
+        } catch {
+          return prev
+        }
         return prev.map((s, i) =>
           i === index && !s.dirty
             ? {
                 ...s,
                 diffResult: storedResult,
+                operation,
                 originalContent: storedContent.originalContent,
                 modifiedContent: storedContent.modifiedContent,
                 loading: false,

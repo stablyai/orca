@@ -15,7 +15,7 @@ export const mobileTasksDiffCommentStyles = themedStyleSheet(() => ({
   fileDiff: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   diffLineBlock: {
@@ -86,7 +86,7 @@ export const mobileTasksDiffCommentStyles = themedStyleSheet(() => ({
     gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm
@@ -122,7 +122,7 @@ export const mobileTasksDiffCommentStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2
   },
@@ -154,8 +154,8 @@ export const mobileTasksDiffCommentStyles = themedStyleSheet(() => ({
     marginHorizontal: spacing.md
   },
   setupPromptBox: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     padding: spacing.md,

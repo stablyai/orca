@@ -1,3 +1,4 @@
+import { withGitHubRepoExecution } from '../../github-repository-identity'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
 import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-items-query-bounds'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/task-query'
@@ -114,99 +115,101 @@ export async function countWorkItems(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<number> {
-  const trimmedQuery = query?.trim() ?? ''
-  if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
-    return 0
-  }
-  const [issueResolved, prResolved] = await Promise.all([
-    resolveIssueGitHubApiRepositorySource(repoPath, preference, connectionId, localGitOptions),
-    resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
-  ])
-  const issueOwnerRepo = issueResolved.source
-  const prOwnerRepo = prResolved.source
-  const ownerRepo = prOwnerRepo ?? issueOwnerRepo
-  if (!ownerRepo) {
-    return 0
-  }
-
-  const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
-  const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
-  const ghOptions = {
-    ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
-    ...githubHostExecOptions(ownerRepo)
-  }
-
-  // Decorative counts must stop at the search budget floor.
-  if (spendsSharedGitHubComQuota(ownerRepo, ghOptions)) {
-    await getRateLimit()
-  }
-  if (
-    !usesGraphqlWorkItemSearch(ownerRepo, ghOptions) &&
-    repositoryRateLimitGuard(ownerRepo, 'search', ghOptions).blocked
-  ) {
-    return 0
-  }
-
-  await acquire()
-  try {
-    if (sameOwnerRepo(issueOwnerRepo, prOwnerRepo)) {
-      return await countWorkItemsForQuery(
-        repoPath,
-        ownerRepo,
-        effectiveQuery,
-        connectionId,
-        localGitOptions
-      )
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    const trimmedQuery = query?.trim() ?? ''
+    if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
+      return 0
+    }
+    const [issueResolved, prResolved] = await Promise.all([
+      resolveIssueGitHubApiRepositorySource(repoPath, preference, connectionId, localGitOptions),
+      resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
+    ])
+    const issueOwnerRepo = issueResolved.source
+    const prOwnerRepo = prResolved.source
+    const ownerRepo = prOwnerRepo ?? issueOwnerRepo
+    if (!ownerRepo) {
+      return 0
     }
 
-    const counts: Promise<number>[] = []
-    // PR-only filters cannot match issues; avoid spending a search call on that half.
-    const hasPrOnlyFilter =
-      effectiveQuery.draft ||
-      effectiveQuery.reviewRequested !== null ||
-      effectiveQuery.reviewedBy !== null
+    const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
+    const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
+    const ghOptions = {
+      ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
+      ...githubHostExecOptions(ownerRepo)
+    }
+
+    // Decorative counts must stop at the search budget floor.
+    if (spendsSharedGitHubComQuota(ownerRepo, ghOptions)) {
+      await getRateLimit()
+    }
     if (
-      effectiveQuery.scope !== 'pr' &&
-      effectiveQuery.state !== 'merged' &&
-      !hasPrOnlyFilter &&
-      issueOwnerRepo
+      !usesGraphqlWorkItemSearch(ownerRepo, ghOptions) &&
+      repositoryRateLimitGuard(ownerRepo, 'search', ghOptions).blocked
     ) {
-      counts.push(
-        countWorkItemsForQuery(
+      return 0
+    }
+
+    await acquire()
+    try {
+      if (sameOwnerRepo(issueOwnerRepo, prOwnerRepo)) {
+        return await countWorkItemsForQuery(
           repoPath,
-          issueOwnerRepo,
-          { ...effectiveQuery, scope: 'issue' },
+          ownerRepo,
+          effectiveQuery,
           connectionId,
           localGitOptions
         )
-      )
-    }
-    if (effectiveQuery.scope !== 'issue' && prOwnerRepo) {
-      counts.push(
-        countWorkItemsForQuery(
-          repoPath,
-          prOwnerRepo,
-          { ...effectiveQuery, scope: 'pr' },
-          connectionId,
-          localGitOptions
-        )
-      )
-    }
-    // Preserve counts from successful sources when another search fails.
-    const results = await Promise.allSettled(counts)
-    let total = 0
-    for (const r of results) {
-      if (r.status === 'fulfilled') {
-        total += r.value
-      } else {
-        console.warn('countWorkItems partial failure:', r.reason)
       }
+
+      const counts: Promise<number>[] = []
+      // PR-only filters cannot match issues; avoid spending a search call on that half.
+      const hasPrOnlyFilter =
+        effectiveQuery.draft ||
+        effectiveQuery.reviewRequested !== null ||
+        effectiveQuery.reviewedBy !== null
+      if (
+        effectiveQuery.scope !== 'pr' &&
+        effectiveQuery.state !== 'merged' &&
+        !hasPrOnlyFilter &&
+        issueOwnerRepo
+      ) {
+        counts.push(
+          countWorkItemsForQuery(
+            repoPath,
+            issueOwnerRepo,
+            { ...effectiveQuery, scope: 'issue' },
+            connectionId,
+            localGitOptions
+          )
+        )
+      }
+      if (effectiveQuery.scope !== 'issue' && prOwnerRepo) {
+        counts.push(
+          countWorkItemsForQuery(
+            repoPath,
+            prOwnerRepo,
+            { ...effectiveQuery, scope: 'pr' },
+            connectionId,
+            localGitOptions
+          )
+        )
+      }
+      // Preserve counts from successful sources when another search fails.
+      const results = await Promise.allSettled(counts)
+      let total = 0
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          total += r.value
+        } else {
+          console.warn('countWorkItems partial failure:', r.reason)
+        }
+      }
+      return total
+    } catch (err) {
+      console.warn('countWorkItems failed:', err)
+      return 0
+    } finally {
+      release()
     }
-    return total
-  } catch (err) {
-    console.warn('countWorkItems failed:', err)
-    return 0
-  } finally {
-    release()
-  }
+  })
 }

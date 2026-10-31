@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 const KEY_HEIGHT = 32
-const KEY_RADIUS = 9
+const KEY_RADIUS = radii.control
 
 const key = {
   height: KEY_HEIGHT,
@@ -117,7 +117,7 @@ export const terminalDockStyles = themedStyleSheet(() => ({
   arrowPad: {
     width: 66,
     height: KEY_HEIGHT,
-    borderRadius: KEY_HEIGHT / 2,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   arrowPadDragging: {
@@ -178,6 +178,9 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     fontWeight: '600',
     letterSpacing: 0.4,
     textTransform: 'uppercase'
+  },
+  sheetKey: {
+    backgroundColor: colors.sheetGroup
   },
   sheetGrid: {
     flexDirection: 'row',

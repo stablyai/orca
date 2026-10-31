@@ -16,6 +16,7 @@ const transport = vi.hoisted(
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   BackHandler: { addEventListener: () => ({ remove: () => {} }) },
   Image: 'Image',
   Platform: { OS: 'ios' },
@@ -39,6 +40,7 @@ vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
 vi.mock('./MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
 }))
+vi.mock('../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: () => null }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 // No shell client initially: the screen must settle on waiting.
 vi.mock('../transport/host-client-hooks', () => ({

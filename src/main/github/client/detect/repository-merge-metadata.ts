@@ -154,10 +154,7 @@ async function readRepositoryMergeMetadata(
       args.push('-f', `branch=${branchName}`)
       args.push('-f', `qualified=refs/heads/${branchName}`)
     }
-    const { stdout } = await ghExecFileAsync(args, {
-      ...ghOptions,
-      ...githubHostExecOptions(ownerRepo)
-    })
+    const { stdout } = await ghExecFileAsync(args, ghOptions)
     const parsed = JSON.parse(stdout) as {
       data?: {
         repository?: {

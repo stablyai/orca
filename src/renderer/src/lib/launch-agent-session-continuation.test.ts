@@ -5,7 +5,7 @@ const writeClipboardText = vi.hoisted(() => vi.fn(async () => undefined))
 const ensureDetectedAgentsForWorktree = vi.hoisted(() => vi.fn())
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }))
 const store: {
-  settings: { disabledTuiAgents: string[]; experimentalNativeChat?: boolean }
+  settings: { disabledTuiAgents: string[]; nativeChatProviders?: Readonly<Record<string, boolean>> }
   getKnownWorktreeById: () => undefined
 } = vi.hoisted(() => ({
   settings: { disabledTuiAgents: [] },
@@ -216,7 +216,7 @@ it('retains the accepted route across detection, and explicit chat declines with
         requestedSurface
       }
     })
-    store.settings.experimentalNativeChat = false
+    store.settings.nativeChatProviders = {}
     detected.resolve(['claude'])
     await pending
     const args = launchAgentInNewTab.mock.calls.at(-1)?.[0]

@@ -1,7 +1,7 @@
 import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
@@ -166,8 +166,8 @@ const styles = themedStyleSheet(() => ({
     marginTop: 2
   },
   actionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   separator: {
@@ -186,7 +186,7 @@ const styles = themedStyleSheet(() => ({
     opacity: 0.58
   },
   actionPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   actionTextBlock: {
     flex: 1,

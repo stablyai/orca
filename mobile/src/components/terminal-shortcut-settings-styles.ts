@@ -22,7 +22,7 @@ export const styles = themedStyleSheet(() => ({
   },
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   sectionTopGap: {
@@ -64,7 +64,7 @@ export const styles = themedStyleSheet(() => ({
     minWidth: 62,
     alignItems: 'center',
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
@@ -91,7 +91,7 @@ export const styles = themedStyleSheet(() => ({
   deleteButton: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(239, 68, 68, 0.1)'

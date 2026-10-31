@@ -63,7 +63,7 @@ it.each([
     ).toMatchObject({ ok: true })
     const { runtime, db } = h.setup(
       false,
-      partialRuntimeStore({ getSettings: () => ({ experimentalNativeChat: false }) })
+      partialRuntimeStore({ getSettings: () => ({ agentDefaultSurface: 'terminal' }) })
     )
     if (federated) {
       vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
