@@ -253,31 +253,32 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
     ) => {
       const session = await context.lifetime.conversation(sessionId)
       const transcript = { ...source, agent: source.agent ?? session.params.agent }
-      if (transcript.agent === 'codex') {
-        await catchUpStructuredSessionAtRest({
-          journal: session.journal,
-          threadId: source.sessionId,
-          filePath: source.filePath,
-          fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
-          deadline,
-          stoppedTurnId: stopped?.turnId,
-          stoppedUserItemKey: stopped?.userItemKey,
-          settleAbandoned,
-          check
-        })
-      }
-      await catchUpSwitchedCliTranscript({
-        journal: session.journal,
-        source: transcript,
-        resumeCursor: agentSessionProviderHandleChainHead(
-          context.deps.store.getRecord(sessionId)?.providerHandleChain ?? []
-        )?.handle.resumeCursor,
-        fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
-        deadline,
-        stopped,
-        settleAbandoned,
-        check
-      })
+      // Codex's turns and rows have one writer, the resting importer; the shared import would only
+      // parse the whole transcript again and write nothing.
+      await (transcript.agent === 'codex'
+        ? catchUpStructuredSessionAtRest({
+            journal: session.journal,
+            threadId: source.sessionId,
+            filePath: source.filePath,
+            fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
+            deadline,
+            stoppedTurnId: stopped?.turnId,
+            stoppedUserItemKey: stopped?.userItemKey,
+            settleAbandoned,
+            check
+          })
+        : catchUpSwitchedCliTranscript({
+            journal: session.journal,
+            source: transcript,
+            resumeCursor: agentSessionProviderHandleChainHead(
+              context.deps.store.getRecord(sessionId)?.providerHandleChain ?? []
+            )?.handle.resumeCursor,
+            fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
+            deadline,
+            stopped,
+            settleAbandoned,
+            check
+          }))
       context.subscribers.publish(sessionId, session.journal)
     }
   }

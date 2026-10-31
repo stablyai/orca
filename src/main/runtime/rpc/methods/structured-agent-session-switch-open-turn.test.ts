@@ -22,6 +22,12 @@ import {
   PTY_A
 } from '../../main-owned-workspace-runtime-fixture'
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
+import * as legacyImport from '../../../native-chat/agent-session-journal/journal-legacy-import'
+
+vi.mock('../../../native-chat/agent-session-journal/journal-legacy-import', async (load) => {
+  const actual = await load<typeof legacyImport>()
+  return { ...actual, prepareLegacyTranscriptImport: vi.fn(actual.prepareLegacyTranscriptImport) }
+})
 
 // A terminal whose CLI turn never recorded its end (killed, crashed, or stopped before the write):
 // once the census proves no CLI writer is left and the chat's own owner is at rest, the chat
@@ -123,11 +129,15 @@ it('settles a CLI turn left open once no writer is left, after the census', asyn
     .spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited')
     .mockImplementation(async () => void order.push('census'))
   const refresh = rig.host.refreshSwitchTranscript
+  let legacyParses = 0
   const refreshed = vi
     .spyOn(rig.host, 'refreshSwitchTranscript')
     .mockImplementation(async (...args) => {
       order.push('import')
-      return refresh(...args)
+      const before = vi.mocked(legacyImport.prepareLegacyTranscriptImport).mock.calls.length
+      await refresh(...args)
+      legacyParses +=
+        vi.mocked(legacyImport.prepareLegacyTranscriptImport).mock.calls.length - before
     })
   const answer = await executeStructuredSessionSwitch(
     {
@@ -149,6 +159,8 @@ it('settles a CLI turn left open once no writer is left, after the census', asyn
   expect(written).not.toHaveBeenCalled()
   expect(census).toHaveBeenCalledWith('codex', expect.any(String), expect.anything())
   expect(refreshed.mock.calls[0]?.[5]).toBe(true)
+  // Codex's resting importer is its one reader: no second, unused parse of the whole transcript.
+  expect(legacyParses).toBe(0)
   const { journal } = await rig.host.collaboratorsForTests().lifetime.conversation(id)
   const turns = journal
     .snapshot()
