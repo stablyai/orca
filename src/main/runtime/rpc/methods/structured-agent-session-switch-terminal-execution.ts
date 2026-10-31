@@ -32,7 +32,8 @@ export async function executeStructuredSessionTerminalSwitch(
   const workCurrent = await host.stopForSwitch(
     sessionId,
     { callerKey: 'trusted-local:session-switch' },
-    deadline
+    deadline,
+    execution?.consented
   )
   host.guardSwitchWork(sessionId, workCurrent)
   const check = () => {

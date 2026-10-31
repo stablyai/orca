@@ -119,3 +119,21 @@ it.each([false, true])(
     ).toBe(replying)
   }
 )
+
+it('refuses a replying chat, stopping nothing, when the client left consent to the host', async () => {
+  await foundRestTestChat(rig)
+  rig.adapter.acquire.mock.calls
+    .at(-1)![0]
+    .events.appendItem(
+      { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'turn', ordinal: 50 },
+      { kind: 'turn', turnId: 'turn', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  await rig.host.flushStreamedEvents(id)
+  const cancel = vi.spyOn(rig.host, 'cancel')
+  await expect(rig.host.stopForSwitch(id, caller, deadline, false)).rejects.toMatchObject({
+    refusal: { details: { reason: 'turnActive' } }
+  })
+  expect(cancel).not.toHaveBeenCalled()
+  expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+})

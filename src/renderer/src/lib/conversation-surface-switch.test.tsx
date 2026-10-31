@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
   return {
     target: makeTarget(),
     support: vi.fn(),
+    consent: vi.fn(async () => false),
     rpc: vi.fn(),
     capture: vi.fn(),
     prepare: vi.fn(),
@@ -35,6 +36,9 @@ vi.mock('sonner', () => ({ toast: { error: mocks.error, info: mocks.info } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   supportsInPlaceSwitch: mocks.support,
   callStructuredAgentSession: mocks.call
+}))
+vi.mock('@/runtime/structured-agent-session-switch-consent', () => ({
+  supportsSwitchConsent: mocks.consent
 }))
 vi.mock('@/runtime/structured-agent-session-owner', async (original) => ({
   ...(await original<typeof SessionOwner>()),
@@ -100,6 +104,7 @@ beforeEach(() => {
   })
   mocks.reader.mockReturnValue(undefined)
   mocks.support.mockResolvedValue(true)
+  mocks.consent.mockResolvedValue(false)
   mocks.call.mockResolvedValue({ status: 'completed', sessionId: subject.sessionId })
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
@@ -194,3 +199,38 @@ it.each([false, true])(
     )
   }
 )
+
+it.each([
+  ['confirms', true],
+  ['cancels', false]
+])(
+  'asks only when a host that decides consent refuses a replying agent, and the user %s',
+  async (_name, confirmed) => {
+    mocks.consent.mockResolvedValue(true)
+    const confirm = vi.fn(async () => confirmed)
+    mocks.call
+      .mockResolvedValueOnce({
+        status: 'refused',
+        sessionId: subject.sessionId,
+        refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
+      })
+      .mockResolvedValueOnce({ status: 'completed', sessionId: subject.sessionId })
+    await expect(runConversationSwitch({ ...subject, confirm })).resolves.toBe(confirmed)
+    expect(confirm).toHaveBeenCalledOnce()
+    const executions = mocks.call.mock.calls.map(([, , params]) => params.execution)
+    expect(executions[0]).toMatchObject({ consented: false })
+    if (confirmed) {
+      // A yes is a fresh switch, never a replay of the refused invocation.
+      expect(executions[1]).toMatchObject({ consented: true })
+      expect(executions[1].invocationId).not.toBe(executions[0].invocationId)
+    } else {
+      expect(mocks.call).toHaveBeenCalledOnce()
+    }
+    expect(mocks.error).not.toHaveBeenCalled()
+  }
+)
+
+it('sends no consent field to a host that does not decide consent (its strict schema)', async () => {
+  await expect(runConversationSwitch(subject)).resolves.toBe(true)
+  expect(mocks.call.mock.calls[0]![2].execution).not.toHaveProperty('consented')
+})

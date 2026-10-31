@@ -17,6 +17,7 @@ import {
   callStructuredAgentSession,
   supportsInPlaceSwitch
 } from '@/runtime/structured-agent-session-client'
+import { supportsSwitchConsent } from '@/runtime/structured-agent-session-switch-consent'
 import { createStructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
 import { createBrowserUuid } from './browser-uuid'
 import { captureSourceTerminal } from '@/components/tab-bar/cli-chat-resume-terminal-capture'
@@ -97,8 +98,8 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
       feedback(conversationSwitchUnsupportedText(args.agent), 'error')
       return false
     }
-    if (conversationSwitchReplying(args)) {
-      const confirmed = await args.confirm?.({
+    const confirmStop = async (): Promise<boolean> =>
+      (await args.confirm?.({
         title: translate(
           'components.tab.bar.switch.stopAndSwitchTitle',
           '{{agent}} is replying. Stop it and switch?',
@@ -108,10 +109,12 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
         cancelLabel: translate('common.cancel', 'Cancel'),
         compact: true,
         ignoresOpeningGesture: true
-      })
-      if (!confirmed) {
-        return false
-      }
+      })) === true
+    // A host that decides consent refuses a replying agent itself; this client's copy of the
+    // agent's status is never permission to stop it, nor a reason to ask.
+    const hostConsents = supported && (await withinSwitchBudget(supportsSwitchConsent(target)))
+    if (!hostConsents && conversationSwitchReplying(args) && !(await confirmStop())) {
+      return false
     }
     consented = true
     // An agent or host without the in-place switch keeps the earlier chat resume.
@@ -119,25 +122,54 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
       await runLegacyConversationSwitch(args, target)
       return false
     }
-    // Time spent answering the consent dialog is not the switch's budget.
-    const deadline = agentSessionSwitchDeadline(Date.now, AGENT_SESSION_SWITCH_CLIENT_MS)
-    disposeDeadline = deadline.dispose
-    const { sessionId, execution } = await switchRequest(args, hostId, deadline)
-    const answer = await deadline.wait(
-      callStructuredAgentSession<AgentSessionSwitchResult>(
-        target,
-        args.direction === 'chat' ? 'agentSession.switchToChat' : 'agentSession.switchToTerminal',
-        { sessionId, execution },
-        {
-          signal: deadline.signal,
-          dispatchObservation: deadline.delegateSend,
-          beforeSend: (sentAt) => {
-            deadline.beforeSend(sentAt)
-            sent = true
+    let consent = hostConsents ? false : undefined
+    let request: Awaited<ReturnType<typeof switchRequest>> | undefined
+    let answer: AgentSessionSwitchResult
+    for (;;) {
+      // Time spent answering the consent dialog is not the switch's budget.
+      const deadline = agentSessionSwitchDeadline(Date.now, AGENT_SESSION_SWITCH_CLIENT_MS)
+      disposeDeadline = deadline.dispose
+      request ??= await switchRequest(args, hostId, deadline)
+      answer = await deadline.wait(
+        callStructuredAgentSession<AgentSessionSwitchResult>(
+          target,
+          args.direction === 'chat' ? 'agentSession.switchToChat' : 'agentSession.switchToTerminal',
+          {
+            sessionId: request.sessionId,
+            execution: {
+              ...request.execution,
+              ...(consent === undefined ? {} : { consented: consent })
+            }
+          },
+          {
+            signal: deadline.signal,
+            dispatchObservation: deadline.delegateSend,
+            beforeSend: (sentAt) => {
+              deadline.beforeSend(sentAt)
+              sent = true
+            }
           }
-        }
+        )
       )
-    )
+      deadline.dispose()
+      const needsConsent =
+        consent === false &&
+        answer.status === 'refused' &&
+        answer.refusal.details?.reason === 'turnActive'
+      if (!needsConsent) {
+        break
+      }
+      // The host stopped nothing. A yes is a new switch under its own invocation, never a replay.
+      if (!(await confirmStop())) {
+        return false
+      }
+      consent = true
+      sent = false
+      request = {
+        ...request,
+        execution: { ...request.execution, invocationId: createBrowserUuid() }
+      }
+    }
     if (answer.status !== 'completed') {
       feedback(
         conversationSwitchFailureText(new AgentSessionRefusalError(answer.refusal), args),

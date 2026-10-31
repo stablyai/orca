@@ -9,6 +9,7 @@ import type { AgentSessionSwitchDeadline } from '../../../../shared/agent-sessio
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { interruptWorkingAgent } from '../../terminal-agent-interrupt'
+import { mainAgentState } from '../../../../shared/main-agent-status'
 import type { captureStructuredSwitchTerminalSource } from './structured-agent-session-switch-source'
 
 /**
@@ -26,8 +27,20 @@ export async function stopStructuredSwitchTerminalSource(input: {
   destination: string | undefined
   boundary?: { source: SwitchTranscriptSource; stopped: SwitchStoppedCliTurn }
   keepSource: (settle: (replacedBy: string | undefined) => void) => void
+  /** False: the client left consent to this host, so a replying agent is refused, not stopped. */
+  consented?: boolean
 }): Promise<void> {
   const { ctx, host, sessionId, close, deadline } = input
+  // Checked where the stop is admitted (before the Escape, at its write, and before the exit), so
+  // a turn the user started while the switch prepared is never stopped without their yes.
+  const requireConsent = (): void => {
+    const row =
+      input.consented === false ? ctx.runtime.agentTransitions.latestRow(input.paneKey) : null
+    if (row && mainAgentState(row) === 'working') {
+      throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'turnActive' })
+    }
+  }
+  requireConsent()
   const awaitBoundary = input.boundary
     ? await armSwitchTurnBoundaryWait(
         input.boundary.source,
@@ -40,7 +53,13 @@ export async function stopStructuredSwitchTerminalSource(input: {
     ctx.runtime,
     (key) => ctx.runtime.agentTransitions.latestRow(key),
     input.paneKey,
-    { signal: deadline.signal, beforeWrite: async () => deadline.check() }
+    {
+      signal: deadline.signal,
+      beforeWrite: async () => {
+        deadline.check()
+        requireConsent()
+      }
+    }
   )
   if (interrupted.outcome === 'accepted') {
     await awaitBoundary?.()
@@ -51,6 +70,7 @@ export async function stopStructuredSwitchTerminalSource(input: {
     input.destination !== undefined &&
     worktreeIdsEqual(close.source.worktreeId, input.destination) &&
     close.wholeTab()
+  requireConsent()
   // Shutdown already accepted must finish even when the observing request expires.
   try {
     await host.trackSwitchPhysical(sessionId, close.stop(replacing))

@@ -50,7 +50,9 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
     stopForSwitch: async (
       sessionId: string,
       caller: HostTypes.StructuredAgentSessionCaller,
-      deadline: AgentSessionSwitchDeadline
+      deadline: AgentSessionSwitchDeadline,
+      /** False: the client left consent to this host, so a replying chat is refused, not stopped. */
+      consented?: boolean
     ) => {
       deadline.check()
       const conversation = await context.lifetime.conversation(sessionId)
@@ -71,6 +73,17 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
           reason: 'recordMissing'
         })
       }
+      // A Stop with no turn running and nothing queued stops nothing (the common pattern makes it a
+      // no-op, so no Stop note is written); the process stop below still ends the agent with proof.
+      const work = context.currentWork(sessionId, conversation.journal)
+      const stops =
+        work === undefined ||
+        work.working() ||
+        conversation.journal.submissions().some(isQueuedAgentJournalSubmission)
+      // Before any effect; later sends are fenced by the admitted-send count above.
+      if (consented === false && stops) {
+        throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'turnActive' })
+      }
       let settleWorker: ((proven: boolean) => void) | undefined
       try {
         settleWorker = context.deps.captureSessionSwitchStop?.(sessionId)
@@ -80,13 +93,6 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
           sessionId
         })
       }
-      // A Stop with no turn running and nothing queued stops nothing (the common pattern makes it a
-      // no-op, so no Stop note is written); the process stop below still ends the agent with proof.
-      const work = context.currentWork(sessionId, conversation.journal)
-      const stops =
-        work === undefined ||
-        work.working() ||
-        conversation.journal.submissions().some(isQueuedAgentJournalSubmission)
       let proven = false
       try {
         const answer = !stops

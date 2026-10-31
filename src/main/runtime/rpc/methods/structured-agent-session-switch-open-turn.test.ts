@@ -156,3 +156,64 @@ it('settles a CLI turn left open once no writer is left, after the census', asyn
   expect(turns).toEqual([expect.objectContaining({ state: 'interrupted' })])
   expect(turns[0]).not.toHaveProperty('outcome')
 })
+
+it('refuses, stopping nothing, when the terminal agent starts replying while the switch prepares', async () => {
+  await openCliTurn()
+  const { runtime } = setupMainOwnedWorkspace()
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
+  if (!source.presentation) {
+    throw new Error('missing captured source')
+  }
+  const written = vi.fn(() => true)
+  const stopped = vi.fn(async () => true)
+  runtime.setPtyController({
+    write: written,
+    kill: () => false,
+    stopAndWait: stopped,
+    getForegroundProcess: async () => 'codex'
+  })
+  // Idle when the request arrives; replying by the time the stop would be admitted.
+  let replying = false
+  vi.spyOn(runtime.agentTransitions, 'latestRow').mockImplementation((paneKey) =>
+    replying
+      ? {
+          state: 'working',
+          prompt: '',
+          paneKey,
+          connectionId: null,
+          receivedAt: 0,
+          stateStartedAt: 0
+        }
+      : null
+  )
+  const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
+  const readable = prepare.getMockImplementation()!
+  prepare.mockImplementation(async (...args) => {
+    replying = true
+    return readable(...args)
+  })
+  const answer = await executeStructuredSessionSwitch(
+    {
+      sessionId: id,
+      execution: {
+        invocationId: 'consent-left-to-host',
+        consented: false,
+        source: {
+          terminal: source.handle,
+          expectedIncarnationId: incarnationId,
+          originalPresentation: source.presentation
+        }
+      }
+    },
+    { runtime },
+    'chat'
+  )
+  expect(answer).toMatchObject({
+    status: 'refused',
+    refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
+  })
+  expect(written).not.toHaveBeenCalled()
+  expect(stopped).not.toHaveBeenCalled()
+})

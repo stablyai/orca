@@ -186,7 +186,8 @@ async function switchToChat(
         host.deps.store.getRecord(sessionId)?.location.workspaceId ??
         create?.worktree.replace(/^id:/, ''),
       boundary: before && stopped ? { source: before, stopped } : undefined,
-      keepSource: (settle) => keepSource(() => settle(replacedBy))
+      keepSource: (settle) => keepSource(() => settle(replacedBy)),
+      consented: execution.consented
     })
   }
   deadline.check()
