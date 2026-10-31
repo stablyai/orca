@@ -266,8 +266,10 @@ export function piOptionRefreshContract(
     }
     await view.replace(2)
     const afterReplacement = host.hostReads
+    const beforeReplacement = view.snapshot()
     await flush(() => host.finish(0))
-    expect(host.hostReads).toBe(afterReplacement)
+    expect(host.hostReads).toBe(afterReplacement + 1)
+    expect(view.snapshot()).toEqual(beforeReplacement)
     await view.replace(3)
     const beforeOldChild = view.snapshot()
     await flush(() => host.finish(1))
@@ -278,7 +280,7 @@ export function piOptionRefreshContract(
     const afterHostChange = host.hostReads
     const beforeOldHost = view.snapshot()
     await flush(() => host.finish(2))
-    expect(host.hostReads).toBe(afterHostChange)
+    expect(host.hostReads).toBe(afterHostChange + 1)
     expect(view.snapshot()).toEqual(beforeOldHost)
     await flush(() => host.finish(3))
     // A new host's catalog completion can supersede its first options read once.

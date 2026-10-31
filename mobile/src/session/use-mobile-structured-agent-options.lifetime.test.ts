@@ -35,7 +35,7 @@ it('keeps actual phone operations and correlated acceptance through a stable-cli
   const stale = deferred<AgentSessionOptionsResult>()
   let oldReads = 0
   const physical = optionsClient(() =>
-    ++oldReads === 1 ? Promise.resolve(OPTIONS) : stale.promise
+    ++oldReads === 1 ? Promise.resolve({ ...OPTIONS, acceptsImages: true }) : stale.promise
   )
   const currentReads: ReturnType<typeof deferred<AgentSessionOptionsResult>>[] = []
   const next = optionsClient(() => {
@@ -77,8 +77,11 @@ it('keeps actual phone operations and correlated acceptance through a stable-cli
     await client.migrateTo(next.client, 'relay')
   })
   await settle()
-  await act(async () => stale.resolve({ ...OPTIONS, conversationCommands: ['compact'] }))
+  await act(async () =>
+    stale.resolve({ ...OPTIONS, acceptsImages: false, conversationCommands: ['compact'] })
+  )
   expect(view.current().conversationCommands).toEqual([])
+  expect(view.current().acceptsImages).toBe(true)
   expect(currentValueOf(view.current().optionSnapshot, 'model')).toBe('gpt-fast')
   expect(view.current().sendSelection()).toMatchObject({ selection: { model: 'gpt-fast' } })
   await act(async () =>

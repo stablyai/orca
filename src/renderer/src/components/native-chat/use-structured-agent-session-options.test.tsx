@@ -60,7 +60,7 @@ describe('useStructuredAgentSessionOptions', () => {
       })),
       current: { model, ...(effort ? { effort } : {}) }
     })
-    const initial = menu('family')
+    const initial = { ...menu('family'), acceptsImages: true }
     const older = Promise.withResolvers<AgentSessionOptionsResult>()
     const latest = Promise.withResolvers<AgentSessionOptionsResult>()
     let reads = 0
@@ -87,13 +87,16 @@ describe('useStructuredAgentSessionOptions', () => {
     })
     expect(descriptor(result.current.optionSnapshot, 'model')?.settable).toBe(true)
     expect(descriptor(result.current.optionSnapshot, 'effort')).toBeUndefined()
-    // Returning to the view starts a current reader while the superseded response is still in flight.
+    // Returning to the view queues one current read behind the superseded response.
     rerender({ ...REOPENED, agent: 'antigravity', hidden: true })
     rerender({ ...REOPENED, agent: 'antigravity' })
+    expect(reads).toBe(2)
+    await act(async () => older.resolve({ ...menu('family', 'low'), acceptsImages: false }))
+    expect(result.current.acceptsImages).toBe(true)
+    expect(currentValue(result.current.optionSnapshot, 'model')).toBe('newer')
     await waitFor(() => expect(reads).toBe(3))
-    await act(async () => latest.resolve(menu('newer', 'high')))
+    await act(async () => latest.resolve({ ...menu('newer', 'high'), acceptsImages: true }))
     await waitFor(() => expect(currentValue(result.current.optionSnapshot, 'effort')).toBe('high'))
-    await act(async () => older.resolve(menu('family', 'low')))
     expect(currentValue(result.current.optionSnapshot, 'model')).toBe('newer')
     expect(descriptor(result.current.optionSnapshot, 'effort')).toMatchObject({
       settable: true,
