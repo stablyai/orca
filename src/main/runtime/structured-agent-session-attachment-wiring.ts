@@ -25,22 +25,21 @@ let journalSweeper: JournalOutcomeSweeper | null = null
 export function installAgentSessionAttachments(deps: {
   stateDirectory: string
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'isSessionUnreadable'>
-  journalDatabase: Pick<JournalHostDatabase, 'readOnly' | 'isClosed' | 'db' | 'writeAutocommit'>
-  journalSweep?: { database: JournalHostDatabase }
+  journalDatabase: Pick<
+    JournalHostDatabase,
+    'readOnly' | 'isClosed' | 'db' | 'writeAutocommit' | 'transaction'
+  >
   logger: StructuredAgentSessionLogger
 }): void {
   stopAgentSessionAttachments()
-  if (deps.journalSweep) {
-    const { database } = deps.journalSweep
-    journalSweeper = new JournalOutcomeSweeper({
-      database: () => database,
-      onError: (error) =>
-        deps.logger.warn('retired chat records could not be deleted', {
-          scope: 'journal-outcome-sweep',
-          error
-        })
-    }).start()
-  }
+  journalSweeper = new JournalOutcomeSweeper({
+    database: () => deps.journalDatabase,
+    onError: (error) =>
+      deps.logger.warn('retired chat records could not be deleted', {
+        scope: 'journal-outcome-sweep',
+        error
+      })
+  }).start()
   const root = agentSessionAttachmentStoreRoot(deps.stateDirectory)
   // Before any Claude starts: Claude drops an added directory that does not exist yet, for good.
   try {

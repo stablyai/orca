@@ -7,10 +7,13 @@ import type Database from '../../sqlite/sync-database'
 const FIRST_PASS_MS = 60_000
 const PASS_INTERVAL_MS = 6 * 60 * 60_000
 const sweepPositions = new WeakMap<Database.Database, number>()
+type SweptDatabase = Pick<JournalHostDatabase, 'transaction' | 'isClosed' | 'readOnly'>
 
 /** A retired epoch's records go with it, as main deletes a retired epoch's rows: every generation
  * the chat's current epoch no longer names is swept, one bounded page per transaction. */
-export function sweepJournalOutcomePage(database: JournalHostDatabase): boolean {
+export function sweepJournalOutcomePage(
+  database: Pick<JournalHostDatabase, 'transaction'>
+): boolean {
   return database.transaction((db) => {
     const after = sweepPositions.get(db) ?? 0
     const candidates = db
@@ -80,7 +83,7 @@ export class JournalOutcomeSweeper {
 
   constructor(
     private readonly deps: {
-      database: () => JournalHostDatabase | null
+      database: () => SweptDatabase | null
       now?: () => number
       delay?: (ms: number) => Promise<void>
       onError?: (error: unknown) => void
@@ -136,7 +139,7 @@ export class JournalOutcomeSweeper {
     this.timer = null
   }
 
-  private current(): JournalHostDatabase | null {
+  private current(): SweptDatabase | null {
     const database = this.deps.database()
     return this.stopped || !database || database.isClosed || database.readOnly ? null : database
   }
