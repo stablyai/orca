@@ -106,11 +106,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       })
       expect(provider.ended).toBe(true)
       expect(provider.connection.closed).toBe(true)
-      expect(await row(id)).toMatchObject({
-        dispatchState: 'rejected',
-        rejection: { kind: 'cancelled' },
-        recovered: true
-      })
+      expect(await row(id)).toMatchObject({ dispatchState: 'unknown' })
     }
     if (failure === 'stop' || failure === 'exit' || failure === 'crash') {
       const compiling = Promise.withResolvers<unknown>()
@@ -176,7 +172,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     const writes = await Promise.allSettled(persisted.mock.results.map((result) => result.value))
     expect(writes.filter((result) => result.status === 'rejected')).toEqual([])
     await vi.waitFor(async () =>
-      expect((await row(id))?.dispatchState).toBe(uncertain ? 'unknown' : 'rejected')
+      expect((await row(id))?.dispatchState).toBe(written ? 'unknown' : 'rejected')
     )
     if (failure === 'unproven-exit') {
       expect((await row(id))?.rejection).toMatchObject({
@@ -622,8 +618,6 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     const id = await permissionSend('same original input', { personality: 'friendly' })
     const waiting = host.waitForSendSettlement(SESSION, id)
     const originalBody = hostTestMessage('same original input')
-    // Ready replacement-child exit proof settles before lease release; terminal rows keep that fence.
-    const settlesAtChildFence = ['readiness', 'rebind'].includes(boundary)
     let boundFence = journal.submission(id)!.fence
     let stopping: Promise<unknown> = Promise.resolve()
     try {
@@ -735,7 +729,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       expect(journal.submission(id)).toMatchObject({
         clientMessageId: id,
         dispatchState: 'rejected',
-        fence: settlesAtChildFence ? boundFence : current().conversationFence(),
+        fence: current().conversationFence(),
         rejection: { kind: 'cancelled' },
         options: { personality: 'friendly' }
       })

@@ -19536,7 +19536,6 @@
       "dismissDeliveryNotice": "Kapat",
       "addSelectionToChat": "Sohbete ekle",
       "messageNotSent": "Mesaj gönderilmedi",
-      "deliveryUnconfirmed": "İletim doğrulanamadı — tekrar denemeden önce sohbeti kontrol edin",
       "messageSending": "Gönderiliyor…",
       "userMessage": {
         "showFull": "Mesajın tamamını göster",
@@ -19605,8 +19604,7 @@
       "interruptedContinue": {
         "continue": "Devam et",
         "failed": "Bu sohbete devam edilemedi. Yeniden deneyin veya bir mesaj gönderin.",
-        "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder.",
-        "unconfirmed": "{{agent}} ajanının Devam et isteğini alıp almadığı doğrulanamadı. Yeniden denemeden önce sohbeti kontrol edin."
+        "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder."
       },
       "antigravitySignIn": {
         "sentence": "Antigravity'de oturum açılmamış. <settings>Ayarlar → Hesaplar → Antigravity</settings> bölümünden oturum açın. Ardından mesajınızı yeniden gönderin."

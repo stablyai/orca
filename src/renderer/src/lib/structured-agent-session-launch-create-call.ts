@@ -1,3 +1,4 @@
+import { structuredAgentSessionSettledSends } from '../../../shared/structured-agent-session-send-settlement'
 import { AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
 import type {
   AgentSessionAttachResult,
@@ -190,11 +191,17 @@ export async function launchStructuredAgentSession(
     throw new StructuredAgentSessionCreateRefusalError(message, code, refusal)
   }
   const firstMessage = intent.params.firstMessage
-    ? (result.value.firstMessage ??
-      result.value.page.submissions.find(
-        (submission) => submission.clientMessageId === intent.params.firstMessage?.clientMessageId
-      ))
+    ? structuredAgentSessionSettledSends(
+        [
+          ...(result.value.firstMessage ? [result.value.firstMessage] : []),
+          ...result.value.page.submissions
+        ],
+        []
+      ).recorded.get(intent.params.firstMessage.clientMessageId)
     : undefined
+  if (intent.createMessageSupport === true) {
+    publishStructuredAgentSessionCreateHydration(intent, result.value.page, result.value.fence)
+  }
   if (
     intent.params.firstMessage &&
     firstMessage?.clientMessageId !== intent.params.firstMessage.clientMessageId
@@ -203,9 +210,6 @@ export async function launchStructuredAgentSession(
       'The created chat did not confirm its first message.',
       'agent_session_operation_unknown'
     )
-  }
-  if (intent.createMessageSupport === true) {
-    publishStructuredAgentSessionCreateHydration(intent, result.value.page, result.value.fence)
   }
   return {
     sessionId: result.value.sessionId,

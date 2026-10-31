@@ -13,10 +13,12 @@ export type StructuredAgentSessionPendingSend = {
   selection?: Readonly<Record<string, string>>
   options?: Readonly<Record<string, string>>
   usageLimitContinuationOfTurnItemId?: string
-  /** Sending blocks new sends; recorded releases the slot but retains its echo until host rows/cards arrive. */
-  phase: 'sending' | 'recorded'
+  /** Only sending is live work; settled content stays until the host records it or the chat closes. */
+  phase: 'sending' | 'recorded' | 'unconfirmed'
   /** A read past this acknowledgement supersedes the echo even when its row is off-page. */
   recordedCursor?: AgentJournalCursor
+  /** Captured placement only, never evidence that the host received this input. */
+  afterSequence?: number
   /** Its request went out, so it may have reached the host. */
   issued: boolean
   /** A sender outside the chat keeps its own copy, so nothing goes to the chat's composer. */

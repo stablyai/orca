@@ -46,7 +46,7 @@ const DESKTOP = {
   clientCapabilities: [...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]
 }
 
-it('withholds image cards from a reader that predates them, on history and the stream', async () => {
+it('keeps exact image controls and pause for older readers, on history and the stream', async () => {
   const queue = {
     queuedMessages: [IMAGE, TEXT],
     queuePause: { reason: 'stopped' as const },
@@ -91,22 +91,42 @@ it('withholds image cards from a reader that predates them, on history and the s
   for (const client of [STRUCTURED_CLIENT, STRUCTURED_MOBILE_CLIENT]) {
     const [history, stream] = await read(client)
     // Positions, the pause over a card it sees, and the next card's id stay as the host published.
-    const withheld = { ...queue, queuedMessages: [TEXT] }
+    const withheld = {
+      ...queue,
+      queuedMessages: [
+        {
+          ...IMAGE,
+          body: {
+            ...IMAGE.body,
+            command: { name: 'compact' },
+            blocks: [{ type: 'text', text: 'image\n/tmp/shot.png' }]
+          }
+        },
+        TEXT
+      ]
+    }
     expect(history).toMatchObject({ result: { page: withheld } })
     expect(stream).toMatchObject({ result: withheld })
   }
 
-  // With no card left to show, no pause either: its Resume would send only what it cannot see.
+  // Image-only queues keep their visible controls and real pause.
   hostCalls.history.mockReturnValue({
     ok: true,
     page: { items: [], ...queue, queuedMessages: [IMAGE] }
   })
   expect(
     await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, STRUCTURED_CLIENT)
-  ).toMatchObject({ result: { page: { queuedMessages: [], queuePause: null } } })
+  ).toMatchObject({
+    result: {
+      page: {
+        queuedMessages: [expect.objectContaining({ messageId: 'image' })],
+        queuePause: queue.queuePause
+      }
+    }
+  })
 })
 
-it('publishes phone text behind hidden images before bounding, and deduplicates the canonical queue', async () => {
+it('compacts old image controls before bounding to retain the head and following text, and deduplicates the canonical queue', async () => {
   const images = Array.from({ length: 3 }, (_, index) => {
     const image = card(`image-${index}`, index + 1, true)
     image.body.blocks.unshift({ type: 'text', text: 'x'.repeat(200 * 1024) })
@@ -142,5 +162,17 @@ it('publishes phone text behind hidden images before bounding, and deduplicates 
   })
   expect(
     await call('agentSession.subscribe', { sessionId: SESSION }, STRUCTURED_MOBILE_CLIENT)
-  ).toMatchObject({ result: { queuedMessages: [text] } })
+  ).toMatchObject({
+    result: {
+      queuedMessages: [
+        ...images.map((image) =>
+          expect.objectContaining({
+            messageId: image.messageId,
+            body: expect.objectContaining({ command: { name: 'compact' } })
+          })
+        ),
+        text
+      ]
+    }
+  })
 })

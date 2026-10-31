@@ -29,3 +29,9 @@ export function queuedHandOffOutcome(
   }
   return agentJournalSubmissionProvenUnwritten(rejected) ? 'waiting' : 'inDoubt'
 }
+
+export function queuedHandOffInDoubt(submission: AgentJournalSubmission): boolean {
+  return submission.dispatchState === 'rejected'
+    ? queuedHandOffOutcome(submission) === 'inDoubt'
+    : journalDispatchRowApplies(submission) && !agentJournalSubmissionProvenUnwritten(submission)
+}

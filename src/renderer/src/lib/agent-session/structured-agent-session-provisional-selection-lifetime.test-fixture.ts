@@ -78,7 +78,7 @@ export async function assertProvisionalSelectionLifetime({
     expect(operation.outcome).toBeUndefined()
     expect(controller.isCurrent()).toBe(true)
     expect(controller.pending()).toEqual([operation])
-    expect(controller.isPending('model')).toBe(true)
+    expect(controller.isPending('model')).toBe(false)
     expect(controller.pendingId()).toBe('model')
     expect(controller.overlay()).toEqual({ model: 'picked' })
     expect(optionAnswered).toBe(false)
@@ -129,6 +129,7 @@ export async function assertProvisionalSelectionLifetime({
     expect(controller.pending()).toEqual([operation])
     expect(controller.overlay()).toEqual({ model: 'picked' })
     expect(operation.transmitted).toBe(true)
+    expect(controller.isPending('model')).toBe(true)
     expect(operation.outcome).toBeUndefined()
     const request = operation.request
     if (!request) {

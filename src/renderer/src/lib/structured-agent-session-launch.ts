@@ -19,6 +19,9 @@ import {
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import {
   addStructuredLaunchCaller,
+  launchPromptText,
+  joinLaunchDelivery,
+  promptOwner,
   createStructuredLaunchCallerGroup,
   releaseStructuredLaunchCallerAfterUnknownOutcome,
   type StructuredAgentLaunchOptions,
@@ -45,6 +48,7 @@ import {
   trackLaunchSettlement
 } from './agent-session/launch/structured-agent-session-launch-outcome-tracking'
 import {
+  boundedStructuredLaunchResult,
   trackStructuredLaunchPromptOutcome,
   trackStructuredLaunchConfirmationDeadline
 } from './agent-session/launch/structured-agent-session-launch-prompt-outcome'
@@ -88,21 +92,6 @@ export type StructuredAgentLaunchResult = {
   releaseCallerAfterUnknownOutcome: () => boolean
 }
 
-/** What the launch sends: a draft goes to the composer seed instead. */
-function launchPromptText(options: StructuredAgentLaunchOptions): string {
-  return options.promptDelivery === 'draft' ? '' : (options.prompt?.trim() ?? '')
-}
-
-function joinLaunchDelivery(
-  options: StructuredAgentLaunchOptions,
-  established: StructuredAgentLaunchOptions['promptDelivery']
-): StructuredAgentLaunchOptions {
-  // First caller fixes mode; without one, default submit would send a joiner’s draft without consent.
-  const mode = established ?? options.promptDelivery
-  const { promptDelivery: _joinerMode, ...rest } = options
-  return mode ? { ...rest, promptDelivery: mode } : rest
-}
-
 /** Every sender waits on the launch promise, so picks held during launch reach the host first. */
 function publishWithHeldOptions(
   state: StructuredLaunchState,
@@ -110,7 +99,12 @@ function publishWithHeldOptions(
 ): Promise<StructuredAgentLaunchReceipt> {
   state.intent.prepareCreate = (hostTakesExplicitOptions) =>
     prepareStructuredLaunchCreateMessage(state, hostTakesExplicitOptions)
-  return created.then((receipt) => publishStructuredLaunchCreateOptions(state, receipt))
+  const publishing: Promise<StructuredAgentLaunchReceipt> = created.then((receipt) =>
+    state.promise === publishing
+      ? publishStructuredLaunchCreateOptions(state, receipt)
+      : state.promise
+  )
+  return publishing
 }
 
 /** Each attempt's probe names the seed the paired server's create will use; the picker shows it. */
@@ -163,34 +157,32 @@ function restartStructuredLaunchState(state: StructuredLaunchState): void {
   notifyStructuredLaunchListeners()
 }
 
-function promptOwner(options: StructuredAgentLaunchOptions): { callerKeepsText?: true } {
-  return options.promptKeptByCaller ? { callerKeepsText: true } : {}
-}
-
 function joinStructuredLaunchState(
   existing: StructuredLaunchState,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult | undefined {
   // A re-delivery of the same action shares the text it staged, so it is sent once.
   const repeat = repeatedStructuredLaunchAttempt(existing.callers.attempt, options.requestId)
-  const retrying = existing.visibilityUnknown
+  const retrying = existing.visibilityUnknown && !existing.intent.params.firstMessage
+  const retained = existing.visibilityUnknown && !!existing.intent.params.firstMessage
   const joined = joinLaunchDelivery(options, existing.promptDelivery)
   // Unconfirmed launches retain text; rechecks must not stage/send a second copy.
-  const text = retrying || repeat ? '' : launchPromptText(joined)
+  const text = retrying || retained || repeat ? '' : launchPromptText(joined)
   const stagedPrompt = text
     ? stageStructuredLaunchPrompt(existing.intent.sessionId, text, promptOwner(options))
     : (repeat?.stagedPrompt ?? null)
   if (retrying) {
     restartStructuredLaunchState(existing)
-  } else if (!options.resumeFrom?.cliSource) {
+  } else if (!retained && !options.resumeFrom?.cliSource) {
     releaseStructuredLaunchSource(existing)
   }
-  if (!retrying && !repeat) {
+  if (!retrying && !retained && !repeat) {
     launchDraft.seedStructuredAgentLaunchDraft(existing, joined)
   }
   // A re-delivery waits on the text its action staged, if any, and never stages its own.
   const { prompt: _retryPrompt, ...joinedWithoutPrompt } = joined
-  const callerOptions = retrying || (repeat && !repeat.stagedPrompt) ? joinedWithoutPrompt : joined
+  const callerOptions =
+    retrying || retained || (repeat && !repeat.stagedPrompt) ? joinedWithoutPrompt : joined
   const caller = addStructuredLaunchCaller({
     group: existing.callers,
     launchResult: existing.promise,
@@ -293,7 +285,7 @@ export function startStructuredAgentLaunch(
     joined,
     sessionId: state.intent.sessionId,
     executionHostId: state.intent.executionHostId,
-    launchResult: state.promise,
+    launchResult: boundedStructuredLaunchResult(state, caller),
     ...(caller.promptDeliveryResult ? { promptDeliveryResult: caller.promptDeliveryResult } : {}),
     isVisibilityUnknown: () => state.visibilityUnknown,
     releaseCallerAfterUnknownOutcome: () =>
@@ -307,6 +299,7 @@ export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId:
     restorePersistedStructuredLaunchState(worktreeId, sessionId)
   if (
     state?.intent.worktreeId !== worktreeId ||
+    (state.visibilityUnknown && !!state.intent.params.firstMessage) ||
     (!state.visibilityUnknown && state.callers.outcome !== 'failed')
   ) {
     return false

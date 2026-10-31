@@ -149,6 +149,15 @@ describe('ChatBehaviorSetting shell environment', () => {
 describe('ChatBehaviorSetting queue follow-ups', () => {
   const QUEUE_TOGGLE = '[aria-label="Toggle queue follow-ups"]'
 
+  it('shows image-queue copy and saves the toggle when the host queues messages', () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+    const updateSettings = vi.fn()
+    const { container } = renderSetting({}, updateSettings)
+    expect(container.textContent).toContain('Messages with images wait as cards too.')
+    fireEvent.click(container.querySelector(QUEUE_TOGGLE)!)
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: false })
+  })
+
   it('hides the switch until the host answers, then shows it', async () => {
     setLocalRuntimeCapabilitiesForTests(null)
     let answer: (status: { capabilities: string[] }) => void = () => {}

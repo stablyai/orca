@@ -145,6 +145,7 @@ export type NativeChatLaunchSeed = {
 }
 
 export type NativeChatComposerHandle = {
+  resend?: (text: string, imagePaths?: string[]) => boolean
   isComposing?: () => boolean
   focus: () => boolean
   insertTypedText: (text: string) => boolean

@@ -18965,7 +18965,6 @@
       "dismissDeliveryNotice": "閉じる",
       "addSelectionToChat": "チャットに追加",
       "messageNotSent": "メッセージは送信されませんでした",
-      "deliveryUnconfirmed": "配信を確認できません — 再試行する前にチャットを確認してください",
       "messageSending": "送信中…",
       "userMessage": {
         "showFull": "メッセージ全体を表示",
@@ -19027,8 +19026,7 @@
       "interruptedContinue": {
         "continue": "続行",
         "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
-        "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。",
-        "unconfirmed": "{{agent}} が続行を受信したかどうかを確認できませんでした。もう一度試す前にチャットを確認してください。"
+        "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。"
       },
       "rewind": {
         "unsupported": "このチャットは以前のメッセージに戻れません。",

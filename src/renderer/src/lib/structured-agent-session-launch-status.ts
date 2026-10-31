@@ -3,6 +3,7 @@ import { structuredLaunchesHoldingIdentity } from './agent-session/launch/struct
 import {
   structuredLaunchIdentity,
   structuredLaunchStates,
+  structuredAgentSessionLaunchHasRetainedInput,
   type StructuredAgentLaunchStatus
 } from './agent-session/launch/structured-agent-session-launch-registry'
 
@@ -16,6 +17,10 @@ export function getStructuredAgentLaunchStatus(
   const identity = structuredLaunchIdentity(worktreeId, agent)
   const states = structuredLaunchesHoldingIdentity(
     (candidate) => candidate === identity || candidate.startsWith(`${identity}:resume:`)
+  ).filter(
+    (state) =>
+      !state.operationEnded &&
+      !structuredAgentSessionLaunchHasRetainedInput(worktreeId, state.intent.sessionId)
   )
   if (states.length === 0) {
     return 'idle'

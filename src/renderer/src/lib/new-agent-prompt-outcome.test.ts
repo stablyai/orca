@@ -276,11 +276,6 @@ describe('notes sent to a new agent', () => {
 describe('why notes sent to a new agent did not go', () => {
   it.each([
     [
-      'nobody could confirm it',
-      { delivered: false, failureNotified: false, unconfirmed: true as const },
-      { status: 'unconfirmed', code: 'runtime-unverifiable' }
-    ],
-    [
       "the chat's one send was taken",
       { delivered: false, failureNotified: false, busy: true as const },
       { status: 'not-ready', code: 'session-send-refused' }
@@ -295,6 +290,14 @@ describe('why notes sent to a new agent did not go', () => {
       delivered: false,
       failure
     })
+  })
+
+  it('keeps unknown notes on the shelf without another failure or delivery claim', async () => {
+    await expect(
+      newAgentPromptOutcome({
+        delivery: Promise.resolve({ delivered: false, failureNotified: false, unconfirmed: true })
+      })
+    ).resolves.toEqual({ delivered: false })
   })
 
   it('leaves a failure the new chat already shows to that chat', async () => {

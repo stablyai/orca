@@ -1,10 +1,14 @@
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { runningTurnLifecycleRevisions } from './structured-agent-session-stale-turn-verdict'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
-import { withdrawCodexSendsNoTurnOpenedFor } from './structured-agent-session-unopened-send-withdrawal'
 
-/** Settle the accepted Stop’s still-bound turn once, or withdraw its send if no turn opened.
- * Streamed ends are already folded; settlement failures cannot change the accepted Stop. */
+/**
+ * Settles the turn the provider says the Stop took: a turn with records that still reads running
+ * ends interrupted, once, while the Stop still binds it; the provider's stream lands as it arrives,
+ * so the fold already holds any end it sent. With no record, delivery stays in doubt.
+ * Returns whether the turn had opened.
+ * Bookkeeping: a failure is reported, never the Stop's.
+ */
 export async function settleTakenStop(
   ctx: AgentSessionTurnContext,
   turnId: string
@@ -16,7 +20,6 @@ export async function settleTakenStop(
       .items.filter((item) => readAgentJournalTurn(item.body)?.turnId === turnId)
     opened = records.length > 0
     if (!opened) {
-      await withdrawCodexSendsNoTurnOpenedFor(ctx.journal, ctx.fence)
       return false
     }
     const mutations = runningTurnLifecycleRevisions(records, {

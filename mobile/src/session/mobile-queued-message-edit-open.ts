@@ -48,7 +48,7 @@ export function createMobileQueuedEdit(
     destination: args.composerScopeKey
       ? mobileNativeChatDraftDestination(args.composerScopeKey)
       : null,
-    handBackText: args.appendComposerText,
+    handBackText: args.appendComposerText?.captureOrigin?.() ?? args.appendComposerText,
     messageId,
     body: message.body,
     text,

@@ -4,6 +4,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from './structured-agent-session-send-evidence'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { selectAgentSessionCurrentRequests } from './agent-session-current-requests'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
@@ -29,6 +30,9 @@ export type StructuredAgentSessionOptimisticMessage = {
   body: AgentJournalMessageItem
   queuedAt: number
   recordedCursor?: AgentJournalCursor
+  /** In-memory placement captured at Send, independent of any acknowledgement. */
+  afterSequence?: number
+  options?: Readonly<Record<string, string>>
   /** Sent while the chat read Stopping: drawn after the turn being stopped. */
   sentWhileStopping?: true
 }
@@ -178,7 +182,11 @@ export function projectStructuredAgentSessionMessages(
       .filter(
         (entry) =>
           !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)) &&
-          !submissions.some((submission) => submission.clientMessageId === entry.clientMessageId)
+          !submissions.some(
+            (submission) =>
+              submission.clientMessageId === entry.clientMessageId &&
+              submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
+          )
       )
       .map((entry): NativeChatMessage => ({
         id: agentJournalSubmissionKey(entry.clientMessageId),
@@ -186,6 +194,9 @@ export function projectStructuredAgentSessionMessages(
         source: 'transcript',
         timestamp: entry.queuedAt,
         blocks: entry.body.blocks,
+        ...(entry.afterSequence !== undefined
+          ? { journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt } }
+          : {}),
         ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
       }))
   ]

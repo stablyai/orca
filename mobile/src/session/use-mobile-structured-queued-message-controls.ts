@@ -89,27 +89,31 @@ export function useMobileStructuredQueuedMessageControls(args: {
   })
   const orderedMessages = composerActions.messages
   const agentWorking = args.agentWorking === true
-  const cards = useMemo(
-    () =>
-      mobileQueuedMessageCards(orderedMessages, submissions, {
-        agentWorking,
-        queuePaused: queuePause !== null,
-        agentName: args.agentName,
-        statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
-          ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
-          : []
-      }),
-    [
+  const cards = useMemo(() => {
+    const visibleCards = mobileQueuedMessageCards(queuedMessages, submissions, {
       agentWorking,
-      args.agentName,
-      args.journalItems,
-      orderedMessages,
-      queuePause,
-      queuedMessages,
-      submissions,
-      t
-    ]
-  )
+      queuePaused: queuePause !== null,
+      agentName: args.agentName,
+      statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
+        ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
+        : []
+    })
+    // Preview changes display order; published membership and current handoff visibility stay intact.
+    const visibleById = new Map(visibleCards.map((card) => [card.messageId, card]))
+    return (orderedMessages ?? []).flatMap((message) => {
+      const card = visibleById.get(message.messageId)
+      return card ? [card] : []
+    })
+  }, [
+    agentWorking,
+    args.agentName,
+    args.journalItems,
+    orderedMessages,
+    queuePause,
+    queuedMessages,
+    submissions,
+    t
+  ])
   const { begin: beginInlineEdit, editor } = useMobileStructuredQueuedEdit({
     ...args,
     enabled: args.enabled && args.editCapable === true,

@@ -6,6 +6,7 @@ import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import { resetMobileNativeChatStaleInputForTests } from './native-chat/mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from './native-chat/mobile-native-chat-terminal-write-lock'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
+import { resetMobileNativeChatDraftStoreForTests } from './native-chat/composer/mobile-native-chat-draft-store'
 
 vi.mock('../platform/media-picker', () => ({
   useMediaPicker: () => ({
@@ -69,6 +70,7 @@ describe('useMobileSessionImageAttachments', () => {
   beforeEach(() => {
     resetMobileNativeChatDraftInputsForTests()
     vi.useFakeTimers()
+    resetMobileNativeChatDraftStoreForTests()
     resetMobileNativeChatStaleInputForTests()
     resetMobileNativeChatTerminalWritesForTests()
   })
@@ -101,24 +103,31 @@ describe('useMobileSessionImageAttachments', () => {
     return accepted
   }
 
-  it('sends structured session images without a terminal input lease', async () => {
-    const args = baseArgs({ activeHandle: null, activeHandleRef: { current: null } })
-    await renderWithImage(args)
-    const image = hook.nativeChatImages.attachments[0]
+  it.each(['accepted', 'queued', 'unknown', 'rejected'] as const)(
+    'sends structured session images without a terminal lease and clears captured chips unless refused: %s',
+    async (outcome) => {
+      const args = baseArgs({
+        activeHandle: null,
+        activeHandleRef: { current: null },
+        nativeChatBaseSend: vi.fn().mockResolvedValue(outcome)
+      })
+      await renderWithImage(args)
+      const image = hook.nativeChatImages.attachments[0]
 
-    expect(await send()).toBe(true)
-    expect(args.nativeChatBaseSend).toHaveBeenCalledWith(
-      'look',
-      ['file:///a.jpg'],
-      expect.any(Number),
-      [image]
-    )
-    expect(args.client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'clipboard.startImageUpload',
-      'clipboard.saveImageAsTempFile'
-    ])
-    expect(hook.nativeChatImages.attachments).toEqual([])
-  })
+      expect(await send()).toBe(outcome !== 'rejected')
+      expect(args.nativeChatBaseSend).toHaveBeenCalledWith(
+        'look',
+        ['file:///a.jpg'],
+        expect.any(Number),
+        [image]
+      )
+      expect(args.client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+        'clipboard.startImageUpload',
+        'clipboard.saveImageAsTempFile'
+      ])
+      expect(hook.nativeChatImages.attachments).toEqual(outcome === 'rejected' ? [image] : [])
+    }
+  )
 
   it.each([false, true])('gates terminal image delivery on input lease %s', async (leaseReady) => {
     const args = baseArgs({

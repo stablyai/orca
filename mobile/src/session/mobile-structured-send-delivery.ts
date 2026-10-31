@@ -2,6 +2,7 @@ import type { AgentSessionSendResult } from '../../../src/shared/agent-session-w
 import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../src/shared/structured-agent-session-send-evidence'
 import { translate } from '../i18n/mobile-i18n'
 
 export type MobileStructuredSendDelivery = {
@@ -32,7 +33,7 @@ export function mobileStructuredSendDelivery(
       : { outcome: 'queued', error: null }
   }
   const submission = 'submission' in result.value ? result.value.submission : undefined
-  if (!submission || submission.dispatchState === 'unknown') {
+  if (!submission || submission.reason === STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING) {
     return { outcome: 'unknown', error: null }
   }
   if (submission.queuedMessageId === result.value.clientMessageId) {

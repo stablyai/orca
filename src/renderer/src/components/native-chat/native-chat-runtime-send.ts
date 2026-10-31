@@ -1,3 +1,8 @@
+import type { NativeChatPtySubmissionOutcome } from './native-chat-pty-send-queue'
+// Runtime send for native chat: clear any unsubmitted TUI line, write the framed
+// body, then Enter as a SEPARATE delayed pty write. Kept apart from the pure
+// byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
+
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
@@ -38,6 +43,7 @@ export type NativeChatSendHandle = {
   settleAfterMs: number
   /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
   settled?: Promise<void>
+  outcome?: Promise<NativeChatPtySubmissionOutcome>
 }
 
 /** Serialize clear/body/delayed Enter per PTY; a CR sharing the paste write can be swallowed. */
@@ -59,7 +65,7 @@ export function sendNativeChatMessage(
   return enqueueNativeChatPtySend(
     ptyId,
     NATIVE_CHAT_SUBMIT_DELAY_MS + clearConfirmDurationMs(options),
-    ({ isCancelled, delay, markSubmitted }) => {
+    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
       if (isCancelled()) {
         return
       }
@@ -67,6 +73,7 @@ export function sendNativeChatMessage(
         if (isCancelled()) {
           return
         }
+        markWriteStarted()
         sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
         // Measure the Enter delay from the actual body write so renderer stalls cannot collapse the gap.
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {

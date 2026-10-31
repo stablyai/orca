@@ -101,7 +101,7 @@ function writeDraft(
   drafts.set(draftKey, {
     text: next,
     editGeneration: (current?.editGeneration ?? 0) + 1,
-    ...(skillOrigin ? { skillOrigin } : {})
+    skillOrigin
   })
   if (next === text) {
     return
@@ -184,4 +184,8 @@ export function resetMobileNativeChatDraftStoreForTests(): void {
   resetMobileNativeChatDraftInputsForTests()
   drafts.clear()
   mobileNativeChatLaunchDraftSeeds.clear()
+}
+
+export type MobileComposerWriter = ((text: string) => boolean) & {
+  captureOrigin?: () => (text: string) => boolean
 }

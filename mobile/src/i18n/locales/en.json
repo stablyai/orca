@@ -2401,7 +2401,8 @@
       "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
       "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
       "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
-      "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again."
+      "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
+      "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent."
     },
     "writeNotice": {
       "notDoneReadHistory": "This chat's history couldn't be loaded.",

@@ -19722,7 +19722,6 @@
       "dismissDeliveryNotice": "Ignorer",
       "addSelectionToChat": "Ajouter au chat",
       "messageNotSent": "Message non envoyé",
-      "deliveryUnconfirmed": "Livraison non confirmée — vérifiez le chat avant de réessayer",
       "messageSending": "Envoi…",
       "userMessage": {
         "showFull": "Afficher le message complet",
@@ -19785,8 +19784,7 @@
       "interruptedContinue": {
         "continue": "Continuer",
         "failed": "Impossible de poursuivre cette conversation. Réessayez ou envoyez un message.",
-        "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée.",
-        "unconfirmed": "Impossible de confirmer si {{agent}} a reçu Continuer. Vérifiez le chat avant de réessayer."
+        "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée."
       },
       "rewind": {
         "unsupported": "Ce chat ne peut pas revenir à un message antérieur.",

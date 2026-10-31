@@ -90,7 +90,7 @@ async function settleStartedStructuredAgentLaunch(
       return { kind: 'failed', error }
     }
     if (launch.isVisibilityUnknown()) {
-      // Unknown state retains badge/retry even though this caller is finished.
+      // Correlation and ordinary input outlive this caller, without retaining its live operation.
       launch.releaseCallerAfterUnknownOutcome()
       return { kind: 'visibility-unknown', sessionId: launch.sessionId }
     }

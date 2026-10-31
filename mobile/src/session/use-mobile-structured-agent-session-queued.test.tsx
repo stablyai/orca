@@ -377,6 +377,7 @@ describe('mobile structured queued messages', () => {
           text: 'text of draft-1',
           line: 'text of draft-1',
           state: 'waiting',
+          resumeEligible: true,
           hold: 'turn',
           needsAttention: false,
           caption: null,

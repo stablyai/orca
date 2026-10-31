@@ -170,13 +170,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         ? !hasPty || !onStop
         : sendHeld || (draft.trim() === '' && imageAttachments.length === 0)
 
-    const {
-      pickAttachments,
-      attachExternalPaths,
-      captureExternalPaths,
-      captureCopiedFiles,
-      resolveAttachmentOwner
-    } = useNativeChatFileDrops({
+    const fileDrops = useNativeChatFileDrops({
       paneKey,
       draftScopeKey,
       targetPtyId,
@@ -194,6 +188,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const root = useRef<HTMLDivElement>(null)
     useNotificationCardComposerClearance(root, editSession === undefined)
     const handlePasteEvent = useNativeChatComposerHandle(localHandle, {
+      resend: (text, imagePaths) => !structuredTransport && sendPty({ text, imagePaths }),
       attachmentScopeKey: draftScopeKey,
       textareaRef,
       isComposing: imeEnterGesture.isComposing,
@@ -210,11 +205,11 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       ]),
       agent,
       disabled,
-      resolveAttachmentOwner,
+      resolveAttachmentOwner: fileDrops.resolveAttachmentOwner,
       attachResolvedPaths,
-      attachCopiedFiles: attachExternalPaths,
-      captureCopiedFiles,
-      captureExternalPaths,
+      attachCopiedFiles: fileDrops.attachExternalPaths,
+      captureCopiedFiles: fileDrops.captureCopiedFiles,
+      captureExternalPaths: fileDrops.captureExternalPaths,
       beginPendingImageAttachment: attachments.beginPendingImageAttachment,
       // Settles into the scope cache, which outlives a composer a prompt card unmounted.
       resolvePendingImageAttachment: attachments.pendingChips.resolve,
@@ -401,7 +396,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           onRetrySkills={picker.retrySkills}
           onChooseMentionFile={completeMention}
           onRemoveImageAttachment={(id) => removeImageAttachment(id)}
-          onAttach={pickAttachments}
+          onAttach={fileDrops.pickAttachments}
           onDictationToggle={dictation.toggleDictation}
           onDictationHoldStart={dictation.startHoldDictation}
           onDictationHoldEnd={dictation.stopHoldDictation}

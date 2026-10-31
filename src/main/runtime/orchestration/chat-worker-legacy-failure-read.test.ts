@@ -123,24 +123,15 @@ it.each([100, 1000])(
     ])
     await tick()
     const ordinary = structuredClone(ops.counts)
-    expect(ordinary).toEqual({
-      publication: {
-        displays: 1,
-        cardVisits: n,
-        itemCopies: 1,
-        itemEntries: n + 3,
-        submissionCopies: 1,
-        submissionEntries: n + 1
-      },
-      failure: {
-        displays: 0,
-        cardVisits: 0,
-        itemCopies: 0,
-        itemEntries: 0,
-        submissionCopies: 0,
-        submissionEntries: 0
-      }
-    })
+    const noLegacyReads = {
+      displays: 0,
+      cardVisits: 0,
+      itemCopies: 0,
+      itemEntries: 0,
+      submissionCopies: 0,
+      submissionEntries: 0
+    }
+    expect(ordinary).toEqual({ publication: noLegacyReads, failure: noLegacyReads })
     expect(r.mail()).toHaveLength(0)
     ops.reset()
     await batch(journal, 'eligible-failure', [
@@ -155,25 +146,7 @@ it.each([100, 1000])(
     ])
     await tick()
     const failure = structuredClone(ops.counts)
-    const oneDisplay = {
-      displays: 1,
-      cardVisits: n,
-      itemCopies: 1,
-      itemEntries: n + 4,
-      submissionCopies: 1,
-      submissionEntries: n + 1
-    }
-    expect(failure).toEqual({
-      publication: oneDisplay,
-      failure: {
-        displays: 1,
-        cardVisits: 0,
-        itemCopies: 0,
-        itemEntries: 0,
-        submissionCopies: 0,
-        submissionEntries: 0
-      }
-    })
+    expect(failure).toEqual({ publication: noLegacyReads, failure: noLegacyReads })
     expect(r.mail()).toHaveLength(1)
     expect(r.mail()[0]?.body).toBe(
       [

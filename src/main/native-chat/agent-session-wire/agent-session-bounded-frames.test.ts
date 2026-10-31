@@ -1,4 +1,10 @@
-// Exercise worst-case serialized frames against the phone bridge limit.
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
+import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
+import type { HistoryReader } from './agent-session-history-page-bounds'
+// The bounded-frame invariant: no frame the host emits to a `boundedFrames` subscriber is larger
+// than a phone's bridge frame, whatever the chat holds. Each case below is a worst case for one
+// thing a frame can carry; the last puts them all in one chat.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -144,6 +150,97 @@ describe('a bounded row', () => {
 })
 
 describe('frames to a bounded-frame subscriber', () => {
+  it('uses one reader source before paging, hydration, replay and reset without changing other readers', async () => {
+    const first = identity()
+    const secret = identity()
+    await journal.appendItem(first, message('visible source'), {
+      fence: 1,
+      turnScope: { kind: 'thread' }
+    })
+    await journal.appendItem(secret, message('hidden source'), {
+      fence: 1,
+      turnScope: { kind: 'thread' }
+    })
+    const hidden = agentJournalItemKey(secret)
+    const reader: HistoryReader = {
+      ...CLIENT_HISTORY_READER,
+      snapshot: (source) => {
+        const snapshot = source.snapshot()
+        return { ...snapshot, items: snapshot.items.filter((row) => row.itemId !== hidden) }
+      }
+    }
+    const request = { sessionId: SESSION, direction: 'tail' as const, limit: 1 }
+    expect(
+      readStructuredAgentSessionHistoryResult({
+        journal,
+        record: null,
+        request,
+        reader
+      }).page.items.map((row) => row.itemId)
+    ).toEqual([agentJournalItemKey(first)])
+    expect(readAgentSessionHistory(journal, request).page.items.map((row) => row.itemId)).toEqual([
+      hidden
+    ])
+    expect(
+      readAgentSessionHistory(
+        journal,
+        { ...request, direction: 'before', cursor: journal.cursor() },
+        { reader }
+      ).page.items.map((row) => row.itemId)
+    ).toEqual([agentJournalItemKey(first)])
+    const projected: AgentSessionSubscribeEvent[] = []
+    const canonical: AgentSessionSubscribeEvent[] = []
+    const subscribers = new AgentSessionSubscribers()
+    subscribers.open({
+      id: 'projected',
+      sessionId: SESSION,
+      journal,
+      fence: 1,
+      boundedFrames: true,
+      readHistorySnapshot: reader.snapshot,
+      emit: (event) => projected.push(event)
+    })
+    subscribers.open({
+      id: 'canonical',
+      sessionId: SESSION,
+      journal,
+      fence: 1,
+      boundedFrames: true,
+      emit: (event) => canonical.push(event)
+    })
+    const initial = projected[0]
+    expect(initial?.type === 'snapshot' && initial.page.items.map((row) => row.itemId)).toEqual([
+      agentJournalItemKey(first)
+    ])
+    await journal.appendItem(secret, message('changed hidden source'), {
+      fence: 1,
+      turnScope: { kind: 'thread' }
+    })
+    subscribers.publish(SESSION, journal)
+    const update = projected.at(-1)
+    expect(update?.type === 'batch' && update.batch.removedItemIds).toContain(hidden)
+    const ordinary = canonical.at(-1)
+    expect(ordinary?.type === 'batch' && ordinary.batch.items.map((row) => row.itemId)).toContain(
+      hidden
+    )
+    subscribers.snapshot(SESSION, journal, 1)
+    const reset = projected.at(-1)
+    const current = canonical.at(-1)
+    expect(
+      reset?.type === 'snapshot' && reset.page.items.some((row) => row.itemId === hidden)
+    ).toBe(false)
+    expect(
+      current?.type === 'snapshot' && current.page.items.some((row) => row.itemId === hidden)
+    ).toBe(true)
+    const stale = readAgentSessionHistory(
+      journal,
+      { ...request, cursor: { epoch: 'old', sequence: 0 }, direction: 'after' },
+      { reader }
+    )
+    expect(stale.ok).toBe(false)
+    expect(stale.page.items.some((row) => row.itemId === hidden)).toBe(false)
+  })
+
   it('delivers every effective send within the byte budget on open, replay and no-row changes', async () => {
     const cursor = journal.cursor()
     const ids = Array.from({ length: 255 }, (_, index) => `unconfirmed-${index}`)

@@ -1,4 +1,10 @@
-// Replay live epochs without rewriting history; damage/newer rows fail load and remain on disk.
+// Loading a journal: the session projection names the live epoch, and that
+// epoch's rows are folded through the reducer in sequence order.
+//
+// Context boundaries stay in this ordered range beside canonical input. A row
+// this build cannot parse, a gap, or a first row that is not the epoch's is
+// damage, and a row a newer Orca wrote is one this build cannot place: the load
+// names either and the open fails on it. Nothing is deleted.
 
 import type Database from '../../sqlite/sync-database'
 import {
@@ -13,6 +19,7 @@ import {
 } from './journal-row-table'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
 
+/** The physical anchor is sequence 1; later epoch rows are context boundaries. */
 const FIRST_JOURNAL_SEQUENCE = 1
 
 export type JournalDamage = {

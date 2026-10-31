@@ -26,8 +26,22 @@ import { useNativeChatRowNavigation } from './use-native-chat-row-navigation'
 
 /** Unconfirmed sending status or a failed-delivery notice with an optional dismissal. */
 export type NativeChatDeliveryNotice =
-  | { sending: true; text?: never; onDismiss?: never; detail?: never }
-  | { sending?: never; text: string; onDismiss?: () => void; detail?: string }
+  | {
+      sending: true
+      text?: never
+      onDismiss?: never
+      onEdit?: never
+      onSend?: never
+      detail?: never
+    }
+  | {
+      sending?: never
+      text: string
+      detail?: string
+      onDismiss?: () => void
+      onEdit?: () => void
+      onSend?: () => void
+    }
 
 export type MessageRowProps = {
   message: NativeChatMessage

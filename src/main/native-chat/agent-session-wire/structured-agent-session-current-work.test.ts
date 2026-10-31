@@ -126,7 +126,7 @@ async function deadGenerationWithFailedSettlement(location?: typeof FOLDER) {
     ...(location ? { location } : {})
   })
   const current = rig
-  await current.workingSend()
+  await current.settleAccepted(await current.workingSend(), 'received')
   await leaveUnfinishedWork(current, { prompt: true })
   const view = watch(current)
   const exited = await exitWhileSettlementFails(current)
@@ -173,7 +173,7 @@ describe('a close Orca asked for, its settlement refused', () => {
   it('tells a watching client the turn and prompt are over, with no row to carry it', async () => {
     rig = await createQueuedMessageTestRig({ restartable: true })
     const current = rig
-    await current.workingSend()
+    await current.settleAccepted(await current.workingSend(), 'received')
     await leaveUnfinishedWork(current, { prompt: true })
     const view = watch(current)
     await vi.waitFor(() => expect(view.answerable()).toBe(true))
@@ -215,7 +215,7 @@ describe('a waiting card when the generation ahead of it ends', () => {
   ])('drains after %s, with no journal write in between', async (_name, cause) => {
     rig = await createQueuedMessageTestRig({ restartable: true })
     const current = rig
-    await current.workingSend()
+    await current.settleAccepted(await current.workingSend(), 'received')
     await leaveUnfinishedWork(current)
     const queued = await sendText(current, 'behind the turn').result
     expect(queued).toMatchObject({ ok: true, value: { queued: expect.anything() } })
@@ -256,7 +256,7 @@ describe('a live owner', () => {
   it('publishes its running turn and its prompt exactly as before', async () => {
     rig = await createQueuedMessageTestRig({ restartable: true })
     const current = rig
-    await current.workingSend()
+    await current.settleAccepted(await current.workingSend(), 'received')
     await leaveUnfinishedWork(current, { prompt: true })
     const view = watch(current)
 

@@ -16,16 +16,8 @@ import { publishStructuredAgentSessionSends } from '@/components/native-chat/str
 import { agentSessionWriteNoticeText } from '@/components/native-chat/agent-session-write-notice-text'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
-export type StructuredPromptDeliveryResult = {
-  delivered: boolean
-  failureNotified: boolean
-  /** Not sent, and waiting in the new chat's composer, which now owns the text. */
-  inComposer?: true
-  /** Nobody could confirm it went: the host may hold it. */
-  unconfirmed?: true
-  /** Another send of the chat held its one slot, so this one never went. */
-  busy?: true
-}
+import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
+export type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
 
 type StagedDelivery = Omit<StructuredPromptDeliveryResult, 'inComposer' | 'failureNotified'> & {
   inComposer: boolean
@@ -91,7 +83,7 @@ export function stageStructuredLaunchPrompt(
   void prompt.slot?.outcome.then((outcome) => {
     const result: StagedDelivery = {
       delivered: outcome === 'recorded',
-      inComposer: !prompt.callerKeepsText && (outcome === 'returned' || outcome === 'unconfirmed'),
+      inComposer: !prompt.callerKeepsText && outcome === 'returned',
       ...(outcome === 'unconfirmed' ? { unconfirmed: true } : {})
     }
     if (!prompt.delivery) {
@@ -165,8 +157,7 @@ export function prepareStructuredLaunchPromptForCreate(
         unstage(prompt)
         return {
           delivered: outcome === 'recorded',
-          inComposer:
-            !prompt.callerKeepsText && (outcome === 'returned' || outcome === 'unconfirmed'),
+          inComposer: !prompt.callerKeepsText && outcome === 'returned',
           ...(outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
         }
       })
@@ -176,6 +167,12 @@ export function prepareStructuredLaunchPromptForCreate(
       })
   void prompt.delivery.then(prompt.settleCreate)
   return sent?.message
+}
+
+/** Final create admission marks issue only while the original send operation still exists. */
+export function issueStructuredLaunchPromptForCreate(sessionId: string): boolean {
+  const prompt = [...(staged.get(sessionId) ?? [])].find((candidate) => candidate.createOwned)
+  return prompt?.createSend?.issue() ?? false
 }
 
 export function hasStagedStructuredLaunchPrompt(sessionId: string): boolean {
@@ -225,8 +222,7 @@ function sendStagedPrompt(
       const outcome = await sent.outcome
       return {
         delivered: outcome === 'recorded',
-        inComposer:
-          !prompt.callerKeepsText && (outcome === 'returned' || outcome === 'unconfirmed'),
+        inComposer: !prompt.callerKeepsText && outcome === 'returned',
         ...(outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
       }
     } finally {
@@ -294,6 +290,11 @@ export function settleStructuredAgentLaunchPrompt(args: {
             ? { kind: 'refused', failure: agentSessionThrownFailure(error, error.code) }
             : { kind: 'unconfirmed' }
         )
+        return prompt.whenCreateSettled.then(({ inComposer, ...outcome }) => ({
+          ...outcome,
+          failureNotified: error instanceof StructuredAgentSessionCreateRefusalError,
+          ...(inComposer ? { inComposer: true as const } : {})
+        }))
       }
       // The launch did not submit: its text waits in the chat's composer for the person's own Send.
       if (prompt && !prompt.discarded && !prompt.delivery) {

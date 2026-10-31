@@ -51,7 +51,8 @@ function stillRunsStoppedTurn(
   return stoppedTurnId === null || work.activeTurnId() === stoppedTurnId
 }
 
-/** A refusal that may still open a turn is unconfirmed, never proof that nothing ran. */
+/** The row for a Stop the provider declined, in its words when it gave any. One that could not
+ *  reach a turn still able to open says the Stop is unconfirmed, never that nothing ran. */
 function stopRefusedNote(
   ctx: Pick<AgentSessionTurnContext, 'failureTextContext'>,
   refusal: AgentSessionCancelOutcome['refusal']

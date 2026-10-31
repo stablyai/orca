@@ -1,10 +1,7 @@
 import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
-import type {
-  StagedStructuredLaunchPrompt,
-  StructuredPromptDeliveryResult
-} from '@/lib/structured-agent-session-launch-prompt'
+import type { StagedStructuredLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -122,9 +119,35 @@ export function releaseStructuredLaunchCallerAfterUnknownOutcome(
 export function structuredLaunchCallersHavePendingWork(
   group: StructuredLaunchCallerGroup
 ): boolean {
-  return (
-    group.outcome === 'pending' ||
-    group.outcome === 'unknown' ||
-    group.promptDeliveryResults.size > 0
-  )
+  return group.outcome === 'pending' || group.promptDeliveryResults.size > 0
+}
+
+export type StructuredPromptDeliveryResult = {
+  delivered: boolean
+  failureNotified: boolean
+  /** Not sent, and waiting in the new chat's composer, which now owns the text. */
+  inComposer?: true
+  /** Nobody could confirm it went: the host may hold it. */
+  unconfirmed?: true
+  /** Another send of the chat held its one slot, so this one never went. */
+  busy?: true
+}
+
+/** What the launch sends: a draft goes to the composer seed instead. */
+export function launchPromptText(options: StructuredAgentLaunchOptions): string {
+  return options.promptDelivery === 'draft' ? '' : (options.prompt?.trim() ?? '')
+}
+
+export function joinLaunchDelivery(
+  options: StructuredAgentLaunchOptions,
+  established: StructuredAgentLaunchOptions['promptDelivery']
+): StructuredAgentLaunchOptions {
+  // First caller fixes mode; without one, default submit would send a joiner’s draft without consent.
+  const mode = established ?? options.promptDelivery
+  const { promptDelivery: _joinerMode, ...rest } = options
+  return mode ? { ...rest, promptDelivery: mode } : rest
+}
+
+export function promptOwner(options: StructuredAgentLaunchOptions): { callerKeepsText?: true } {
+  return options.promptKeptByCaller ? { callerKeepsText: true } : {}
 }

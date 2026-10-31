@@ -32,10 +32,10 @@ import { structuredAgentSessionConversationFence } from './structured-agent-sess
 import { structuredAgentSessionAttachPermission } from './structured-agent-session-launch-permission'
 import { isStructuredAgentSessionStartupExpired } from './structured-agent-session-startup-attempt-contract'
 import {
+  type AgentSessionCreatePhaseRecorder,
   addAgentSessionCreatePhaseAttributes,
   withAgentSessionCreatePhase,
-  withAgentSessionSpan,
-  type AgentSessionCreatePhaseRecorder
+  withAgentSessionSpan
 } from '../../observability/agent-session-instrumentation'
 import {
   heldStructuredAgentSessionAttachLock,
@@ -188,7 +188,6 @@ async function runAttachUnderAbort(
       location: params.location
     })
   }
-  const { startupAttempts } = context.runtimeState
   try {
     const attached = await performAttach({
       models: priorRecord ? undefined : options.catalogModels,
@@ -228,7 +227,7 @@ async function runAttachUnderAbort(
           attempt.catalogSource?.bind?.(record)
         }
         attempt.startup = startup
-        return startupAttempts.track(sessionId, startup)
+        return context.runtimeState.startupAttempts.track(sessionId, startup)
       },
       ...(options.startupOptions ? { startupOptions: options.startupOptions } : {}),
       launchPermissionMode: structuredAgentSessionAttachPermission(context, options, lock),
@@ -303,7 +302,7 @@ async function runAttachUnderAbort(
       attempt.catalogSource?.release?.()
       attemptSink.close()
       if (attempt.startup) {
-        startupAttempts.abandon(sessionId, attempt.startup.attemptId)
+        context.runtimeState.startupAttempts.abandon(sessionId, attempt.startup.attemptId)
       }
     }
   }

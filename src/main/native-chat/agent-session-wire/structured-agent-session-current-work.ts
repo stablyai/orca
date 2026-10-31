@@ -1,10 +1,15 @@
+import type {
+  StructuredAgentSessionWorkEvidence,
+  StructuredAgentSessionSeenEnd,
+  StructuredAgentSessionReplacedEnd
+} from './structured-agent-session-work-evidence'
+export type { StructuredAgentSessionWorkEvidence } from './structured-agent-session-work-evidence'
 import {
   reusePromptProjection,
   type PromptProjection
 } from './structured-agent-session-actionable-prompts'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isHistoricalProviderTimelineItem } from '../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
 // Derive operational work from lease, first-hand exit, replaced-runtime and journal evidence.
@@ -34,24 +39,6 @@ export type StructuredAgentSessionCurrentWorkJournal = Pick<
   'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
 > &
   Partial<Pick<AgentSessionJournal, 'readSince'>>
-
-export type StructuredAgentSessionWorkEvidence = {
-  record: Pick<AgentSessionConversationView, 'ownerObservation' | 'currentFence'> | null
-  ended?: StructuredAgentSessionSeenEnd
-  revision?: number
-  replaced?: StructuredAgentSessionReplacedEnd | undefined
-  /** Absent means the host has no child observation. */
-  child?: { fence: number; heldSends?: () => ReadonlySet<string> | undefined } | null
-}
-
-/** Replaced runtimes granted all fences through this boundary. */
-type StructuredAgentSessionReplacedEnd = { fence: number }
-
-type StructuredAgentSessionSeenEnd = {
-  fence: number
-  rootGone?: boolean
-  cause?: string
-}
 
 /** Missing records retain legacy fence-0 behavior; released/ended generations have no live fence. */
 export function structuredAgentSessionLiveFence(
@@ -137,7 +124,26 @@ export class StructuredAgentSessionCurrentWork {
     private readonly heldSends?: () => ReadonlySet<string> | undefined
   ) {}
 
-  /** Compare effective generation/view, not repeated end-signal revisions that may change nothing. */
+  allowsObservation(): boolean {
+    return !this.ownerUnverifiable
+  }
+
+  generationEnded(submission: AgentJournalSubmission): boolean {
+    if (this.ownerUnverifiable) {
+      return false
+    }
+    const fence = submission.fence
+    return (
+      (this.liveFence !== null && fence < this.liveFence) ||
+      this.liveFence === null ||
+      (this.replaced !== undefined && fence <= this.replaced.fence) ||
+      (this.ended?.rootGone === true && fence === this.ended.fence)
+    )
+  }
+
+  /** What a reader that published this answer compares to learn it changed with no row: the live
+   *  generation, since every answer here is the journal read through it. Not the revision, which
+   *  moves on every generation-end signal: an end that changed nothing is published once. */
   viewKey(): string {
     return `${this.liveFence}${this.ownerUnverifiable ? ':unverifiable' : ''}`
   }
@@ -150,7 +156,8 @@ export class StructuredAgentSessionCurrentWork {
     return `${this.viewKey()}|${this.working() ? 1 : 0}|${sends.join(',')}`
   }
 
-  /** Unanswered sends the child no longer holds read uncertain until their later echo/refusal. */
+  /** A send as clients are told it. One handed to the live child that it no longer holds, with no
+   *  answer, reads in doubt: no client counts it as work, and its echo or refusal still settles it. */
   publishedSubmission = (submission: AgentJournalSubmission): AgentJournalSubmission =>
     this.unanswered(submission) && !this.holds(submission)
       ? {
@@ -202,7 +209,7 @@ export class StructuredAgentSessionCurrentWork {
     return provenance === undefined || provenance >= this.liveFence
   }
 
-  /** Hand over only this process’s accepted sends; earlier-process sends recover as cards first. */
+  /** Hand over only this process’s accepted sends; earlier-process sends remain ordinary history. */
   handsOver(submission: AgentJournalSubmission): boolean {
     return structuredAgentSessionHandsOver(this.journal, submission)
   }

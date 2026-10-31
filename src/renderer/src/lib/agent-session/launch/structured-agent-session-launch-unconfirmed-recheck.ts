@@ -1,10 +1,12 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { useAppStore } from '@/store/index'
+import { confirmStructuredLaunchFirstMessagePublication } from './structured-agent-session-launch-publication-confirmation'
 import { retryStructuredAgentSessionLaunch } from '../../structured-agent-session-launch'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredAgentSessionLaunchOwner,
-  structuredLaunchStates
+  structuredLaunchStates,
+  structuredAgentSessionLaunchHasRetainedInput
 } from './structured-agent-session-launch-registry'
 
 /** On host inventory reconnect, recheck its unconfirmed launches as Retry does. Settle published/failed; still-unknown waits for the next return, and cancellation skips. */
@@ -29,7 +31,11 @@ export function recheckUnconfirmedStructuredAgentLaunches(executionHostId: Execu
       continue
     }
     try {
-      retryStructuredAgentSessionLaunch(worktreeId, sessionId)
+      if (structuredAgentSessionLaunchHasRetainedInput(worktreeId, sessionId)) {
+        confirmStructuredLaunchFirstMessagePublication(worktreeId, sessionId)
+      } else {
+        retryStructuredAgentSessionLaunch(worktreeId, sessionId)
+      }
     } catch (error) {
       // Recovery bookkeeping must not break the inventory that announced reconnection.
       console.warn('[structured-agent-launch] unconfirmed launch re-check failed', error)

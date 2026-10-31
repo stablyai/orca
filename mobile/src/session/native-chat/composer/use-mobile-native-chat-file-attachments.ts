@@ -36,7 +36,7 @@ export function useMobileNativeChatFileAttachments(args: {
   const { client, sessionId, scopeKey, enabled, showToast } = args
 
   const picker = useMediaPicker()
-  const files = useMobileNativeChatDraftInputs(scopeKey).files
+  const files = useMobileNativeChatDraftInputs(scopeKey, 'files')
 
   const updateScope = useCallback(
     (

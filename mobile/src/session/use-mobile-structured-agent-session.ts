@@ -197,7 +197,7 @@ export function useMobileStructuredAgentSession(
     stateRef,
     stopping,
     accept: sends.accept,
-    hold: sends.hold,
+    reject: sends.reject,
     commandPending: commandPendingRef,
     sendsOut,
     controller: sendController,

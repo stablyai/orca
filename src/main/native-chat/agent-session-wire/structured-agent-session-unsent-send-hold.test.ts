@@ -611,7 +611,9 @@ describe("the reopen's mark", () => {
       await observationClock.observe(100)
       expect(await rig.handoff(queued.id)).toBeUndefined()
       expect(dispatchedTexts()).toEqual(['work on this'])
-      void working
+      expect(await rig.deleteQueued(`recovery:${working}`)).toMatchObject({
+        value: { deleted: false }
+      })
 
       const next = rig.send('after the reopen')
       await next.result

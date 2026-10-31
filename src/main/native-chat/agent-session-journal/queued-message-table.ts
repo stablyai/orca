@@ -35,7 +35,9 @@ export type QueuedMessageRow = {
   returnedRejection: UnreadAgentSessionFailureFact | null
   /** Host-only handoff link; clear on proven withdrawal, retain on return. Clients use queuedMessageId. */
   consumedAs: string | null
-  /** Legacy null predates any Stop; otherwise compare enqueue cursor against the pause. */
+  recovers?: string
+  /** Where the journal stood when it was queued: a Stop's pause holds only cards queued before
+   *  it. Null on cards from builds before it was recorded, which read as queued before any Stop. */
   queuedAt: AgentJournalCursor | null
   options?: AgentSessionExecutionOptions
 }

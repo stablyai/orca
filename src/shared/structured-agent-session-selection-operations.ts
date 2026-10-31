@@ -46,6 +46,7 @@ export function createStructuredSessionSelectionController(
   const remembered = new Map<string, number>()
   const terminal = new Set<number>()
   let terminalRevision = 0
+  // Local untransmitted choices can be replaced; only live requests hold admission.
   const pendingCounts = new Map<string, number>()
   let pendingTail: SelectionOperation | undefined
   const currentOperations = () => [...latest.values()].flatMap((id) => operations.get(id) ?? [])
@@ -64,7 +65,9 @@ export function createStructuredSessionSelectionController(
       outcome = { kind: 'superseded' }
     }
     operation.outcome = outcome
-    pendingCounts.set(operation.key, (pendingCounts.get(operation.key) ?? 1) - 1)
+    if (operation.transmitted) {
+      pendingCounts.set(operation.key, (pendingCounts.get(operation.key) ?? 1) - 1)
+    }
     if (operation.previousPending) {
       operation.previousPending.nextPending = operation.nextPending
     }
@@ -123,6 +126,7 @@ export function createStructuredSessionSelectionController(
       return operation.request ?? operation.result
     }
     operation.transmitted = true
+    pendingCounts.set(operation.key, (pendingCounts.get(operation.key) ?? 0) + 1)
     inFlight.add(operation.result)
     void operation.result.then(() => inFlight.delete(operation.result))
     const request = (async () => send(operation))()
@@ -186,7 +190,6 @@ export function createStructuredSessionSelectionController(
         pendingTail.nextPending = operation
       }
       pendingTail = operation
-      pendingCounts.set(key, (pendingCounts.get(key) ?? 0) + 1)
       operations.set(operation.identity, operation)
       latest.set(key, operation.identity)
       notify()
@@ -215,6 +218,9 @@ export function createStructuredSessionSelectionController(
       for (const op of replaced) {
         if (!op.outcome && operations.get(op.identity) === op) {
           if (latest.get(op.key) === op.identity) {
+            if (op.transmitted) {
+              pendingCounts.set(op.key, (pendingCounts.get(op.key) ?? 1) - 1)
+            }
             op.transmitted = false
           } else {
             settle(op, { kind: 'superseded' })
@@ -224,6 +230,7 @@ export function createStructuredSessionSelectionController(
       const frozen = currentOperations().filter((op) => !op.transmitted && !op.outcome)
       for (const op of frozen) {
         op.transmitted = true
+        pendingCounts.set(op.key, (pendingCounts.get(op.key) ?? 0) + 1)
       }
       return frozen
     },

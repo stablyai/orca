@@ -1,3 +1,4 @@
+import { structuredAgentSessionSettledSends } from '../../../../../shared/structured-agent-session-send-settlement'
 import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session-write-failure'
 import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session-wire'
 import type {
@@ -8,7 +9,10 @@ import {
   launchStructuredAgentSession,
   type StructuredLaunchHostSeedListener
 } from '@/lib/structured-agent-session-launch-create-call'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+import {
+  StructuredAgentSessionCreateRefusalError,
+  StructuredAgentSessionCreateUnknownOutcomeError
+} from '@/lib/structured-agent-session-launch-errors'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readStructuredSessionTabInventory } from '@/runtime/structured-session-tab-inventory'
@@ -74,13 +78,18 @@ export async function recoverPublishedSessionReceipt(
     throw new Error('structured session fence publication unavailable')
   }
   const firstMessage = state.intent.params.firstMessage
-    ? history.page.submissions.find(
-        (submission) =>
-          submission.clientMessageId === state.intent.params.firstMessage?.clientMessageId
+    ? structuredAgentSessionSettledSends(history.page.submissions, []).recorded.get(
+        state.intent.params.firstMessage.clientMessageId
       )
     : undefined
   if (state.intent.params.firstMessage && !firstMessage) {
-    return launchStructuredAgentSession(state.intent, state.onHostSeed, true, () => state.cancelled)
+    if (state.intent.createMessageSupport === true) {
+      publishStructuredAgentSessionCreateHydration(state.intent, history.page, fence)
+    }
+    throw new StructuredAgentSessionCreateUnknownOutcomeError(
+      'The history page did not confirm the opening message.',
+      'agent_session_operation_unknown'
+    )
   }
   if (state.intent.createMessageSupport === true) {
     publishStructuredAgentSessionCreateHydration(state.intent, history.page, fence)
@@ -150,6 +159,11 @@ export async function launchAndReconcile(
     try {
       return await recoverPublishedSessionReceipt(state)
     } catch {
+      if (state.intent.params.firstMessage) {
+        state.visibilityUnknown = true
+        state.onVisibilityChanged?.()
+        throw error
+      }
       return retrySameIntent(state, error)
     }
   }
@@ -161,6 +175,9 @@ export async function reconcileUnknownLaunch(
   state: StructuredLaunchRecoveryState
 ): Promise<StructuredAgentLaunchReceipt> {
   throwIfLaunchCancelled(state)
+  if (state.intent.params.firstMessage) {
+    return recoverPublishedSessionReceipt(state)
+  }
   state.visibilityUnknown = false
   state.onVisibilityChanged?.()
   try {

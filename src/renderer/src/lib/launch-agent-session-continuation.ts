@@ -168,7 +168,7 @@ export async function launchAgentSessionContinuation({
   if (result.promptDeliveryResult) {
     void result.promptDeliveryResult
       .then((delivery) => {
-        if (!delivery.delivered && !delivery.failureNotified) {
+        if (!delivery.delivered && !delivery.failureNotified && !delivery.unconfirmed) {
           notifyDeliveryFailed(label, prompt)
         }
       })

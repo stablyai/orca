@@ -6,7 +6,9 @@ import type { StructuredAgentId } from '../../../src/shared/agent-session-provid
 import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import {
+  editMobileNativeChatDraft,
   recordMobileNativeChatSkillPick,
+  readMobileNativeChatPickedSkills,
   resetMobileNativeChatDraftStoreForTests
 } from './native-chat/composer/mobile-native-chat-draft-store'
 
@@ -70,8 +72,8 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     ])
   })
 
-  // Accepted messages remain host-owned; keep the composer cleared.
-  it.each(['accepted', 'unknown', 'queued'] as const)(
+  // The structured session draws, or holds, what the host took; the composer stays cleared.
+  it.each(['accepted', 'queued'] as const)(
     'leaves a %s send of a command the active agent owns to the structured session',
     async (outcome) => {
       sendStructured.mockResolvedValue(outcome)
@@ -85,16 +87,31 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     }
   )
 
-  it('keeps an unknown provider command with the Codex session', async () => {
-    sendStructured.mockResolvedValue('unknown')
+  it('retains transport-unknown input in the transcript without restoring the draft', async () => {
+    recordMobileNativeChatSkillPick(ORIGIN.draftKey, {
+      token: '$review',
+      path: '/skills/review/SKILL.md'
+    })
+    sendStructured.mockImplementation(async () => {
+      editMobileNativeChatDraft(ORIGIN.draftKey, '$newer work')
+      recordMobileNativeChatSkillPick(ORIGIN.draftKey, {
+        token: '$newer',
+        path: '/skills/newer/SKILL.md'
+      })
+      return 'unknown'
+    })
     mount('codex')
 
     await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
 
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
+    expect(onSendError).not.toHaveBeenCalled()
+    expect(readMobileNativeChatPickedSkills(ORIGIN.draftKey).map((skill) => skill.name)).toEqual([
+      'newer'
+    ])
   })
 
-  it("reads another agent's sends by that agent's commands, never Codex's", async () => {
+  it('does not restore unknown text for another agent', async () => {
     sendStructured.mockResolvedValue('unknown')
     mount('grok')
 

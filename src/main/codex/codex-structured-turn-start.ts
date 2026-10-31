@@ -24,11 +24,7 @@ import {
   codexRunningOrOpeningTurn,
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
-import {
-  codexAnsweredTurn,
-  codexDispatchRejection,
-  codexTurnEndRejection
-} from './codex-structured-turn-end-settlement'
+import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
 
 /** Allowlist turn overrides so saved options cannot replace the thread's permission policy. */
 const CODEX_TURN_OPTION_KEYS = new Set(['model', 'effort', 'personality', 'serviceTier'])
@@ -94,6 +90,13 @@ async function steerCodexTurn(
 ): Promise<{ turnId: string; via: 'steer' } | null> {
   try {
     checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
+    host.dispatchEchoes.expect(
+      input.clientMessageId,
+      host.threadId,
+      'steer',
+      turnInputFor(host, input.body),
+      expectedTurnId
+    )
     const answer = await host.connection.request(
       'turn/steer',
       {
@@ -178,6 +181,12 @@ export async function startCodexTurn(
     host.appliedTurnOptions = known
     discardSettingsAttempt = host.appliedSettings?.attempt(requested)
     enqueued = true
+    host.dispatchEchoes.expect(
+      input.clientMessageId,
+      host.threadId,
+      'start',
+      turnInputFor(host, body)
+    )
     return {
       kind: 'sent' as const,
       response: host.connection
@@ -299,26 +308,14 @@ export async function dispatchCodexTurn(
       answeredAt ?? session.dispatchEchoes.tick()
     )
   }
-  const endedFirst = answer.turnId
-    ? session.dispatchEchoes.bindTurn(
-        input.clientMessageId,
-        session.threadId,
-        answer.turnId,
-        answer.via,
-        answeredAt
-      )
-    : null
-  const rejection = endedFirst ? codexTurnEndRejection(endedFirst, session.account) : null
-  return rejection && answer.turnId
-    ? {
-        state: 'rejected',
-        ...codexAnsweredTurn(session, input.sessionId, answer.turnId, answer.via),
-        ...rejection
-      }
-    : { state: 'admitted', ranOptions: codexRanOptions(session) }
-}
-
-/** Steers retain running-turn options; starts use request overrides over thread defaults. */
-function codexRanOptions(session: CodexTurnHost): Record<string, string> {
-  return { ...session.appliedTurnOptions }
+  if (answer.turnId) {
+    session.dispatchEchoes.bindTurn(
+      input.clientMessageId,
+      session.threadId,
+      answer.turnId,
+      answer.via,
+      answeredAt
+    )
+  }
+  return { state: 'admitted', ranOptions: { ...session.appliedTurnOptions } }
 }

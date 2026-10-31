@@ -187,7 +187,7 @@ describe('rewind behind a clear boundary', () => {
     expect(rewind).not.toHaveBeenCalled()
   })
 
-  it('rewrites only the suffix, retires its aliases, and keeps prefix bytes and epoch', async () => {
+  it('rewrites only suffix presentation, retaining canonical facts, aliases, prefix bytes and context', async () => {
     const { old, target, floor, prefix, raw, params } = await seed()
     rewind.mockImplementationOnce(async () => {
       const prepared = rig.store.getRecord(SESSION)!.rewind!
@@ -220,12 +220,32 @@ describe('rewind behind a clear boundary', () => {
       journal()
         .snapshot()
         .submissions.map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
-    ).toEqual([old])
-    expect(
-      journal().canonicalItemId(rig.store.getRecord(SESSION)!.rewind!.providerItemId!)
-    ).not.toBe(target)
+    ).toContain(old)
+    expect(journal().canonicalItemId(rig.store.getRecord(SESSION)!.rewind!.providerItemId!)).toBe(
+      target
+    )
     const reopened = await replayedJournal()
     expect(reopened.snapshot()).toEqual(journal().snapshot())
+  })
+
+  it('keeps an explicitly rewound suffix hidden while retaining immutable original proof', async () => {
+    const { target, params } = await seed()
+    const id = target.slice('orca:'.length)
+    const original = journal().submission(id)!
+    const body = journal().submissionBody(id)
+    const proof = journal().receiptFor(id)
+    expect(proof).not.toBeNull()
+    expect(await rig.host.rewind(CALLER, params)).toMatchObject({ ok: true })
+    expect(journal().itemBody(target)).toBeNull()
+    expect(journal().submissionBody(id)).toEqual(body)
+    expect(journal().receiptFor(id)).toEqual(proof)
+    expect(journal().queuedMessages.get(`recovery:${id}`)).toBeNull()
+    await rig.restartHostProcess()
+    await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(journal().itemBody(target)).toBeNull()
+    expect(journal().submissionBody(id)).toEqual(body)
+    expect(journal().submission(id)?.payloadFingerprint).toBe(original.payloadFingerprint)
+    expect(journal().receiptFor(id)).toEqual(proof)
   })
 
   it('rolls suffix changes and success back together, then recovers once without provider retry', async () => {

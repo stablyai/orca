@@ -128,7 +128,7 @@ export async function recoverLegacyStructuredAgentSessionOutbox(args: {
           ? ['sendOutcomeLost']
           : agentSessionWriteNotDoneParts('composer-send')
     }
-    if (notice) {
+    if (notice && !notice.includes('sendOutcomeLost')) {
       setStructuredAgentSessionSendNotice(sessionId, agentSessionWriteNoticeText(notice))
     }
     if (durable) {

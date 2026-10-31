@@ -9,9 +9,13 @@ import {
   SendParams
 } from '../../../shared/rpc-contract/structured-agent-session-params'
 
+import type { Tab } from '../../../shared/tab-types'
 import type { HostCreateSupport } from './structured-agent-session-host-admission'
 
 type CreateMessageFixtureMocks = {
+  rpc: Mock
+  hostBusy: boolean
+  tabs: Tab[]
   call: Mock<(target: unknown, method: string, params: unknown) => Promise<unknown>>
   supports: Mock<() => Promise<boolean>>
   supportsMode: Mock<() => Promise<boolean>>
@@ -24,6 +28,9 @@ type CreateMessageFixtureMocks = {
 const mocks: CreateMessageFixtureMocks = vi.hoisted(() => {
   const settings: Record<string, unknown> = {}
   return {
+    rpc: vi.fn(async () => ({})),
+    hostBusy: false,
+    tabs: [],
     call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
     supports: vi.fn<() => Promise<boolean>>(),
     supportsMode: vi.fn<() => Promise<boolean>>(),
@@ -40,7 +47,18 @@ vi.mock('../../../shared/layout-owner-switch', () => ({
   }
 }))
 // This machine's host closes the chat's tab when asked.
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn(async () => ({})) }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('@/runtime/structured-agent-session-status-feed', () => {
+  const idle = { status: 'idle', hostExecutionPhase: 'idle' }
+  const working = { status: 'working', hostExecutionPhase: 'idle' }
+  const feed = {
+    activate: () => () => {},
+    subscribe: () => () => {},
+    getSnapshot: () => ({ get: () => (mocks.hostBusy ? working : idle) }),
+    getSessionObservation: () => 'live'
+  }
+  return { getStructuredAgentSessionStatusFeed: () => feed }
+})
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionCreateOptionsMode: mocks.supportsMode,
@@ -53,20 +71,24 @@ vi.mock('./structured-agent-session-host-admission', () => ({
 vi.mock('@/runtime/structured-session-tab-inventory', () => ({
   readStructuredSessionTabInventory: mocks.inventory
 }))
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => ({
-      runtimeEnvironmentCatalogHydrated: true,
-      runtimeStatusByEnvironmentId: new Map(),
-      settings: mocks.settings,
-      unifiedTabsByWorktree: {},
-      groupsByWorktree: {},
-      seedNativeChatLaunchDraft: vi.fn(),
-      clearNativeChatLaunchDraft: vi.fn()
-    }),
-    subscribe: () => () => {}
+vi.mock('@/store', () => {
+  const getState = () => ({
+    runtimeEnvironmentCatalogHydrated: true,
+    settings: mocks.settings,
+    unifiedTabsByWorktree: { 'workspace-1': mocks.tabs },
+    agentStatusByPaneKey: {},
+    runtimeStatusByEnvironmentId: new Map(),
+    groupsByWorktree: {},
+    seedNativeChatLaunchDraft: vi.fn(),
+    clearNativeChatLaunchDraft: vi.fn()
+  })
+  return {
+    useAppStore: Object.assign(
+      (selector: (state: ReturnType<typeof getState>) => unknown) => selector(getState()),
+      { getState, subscribe: () => () => {} }
+    )
   }
-}))
+})
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/structured-chat-host-permission', () => ({
   readStructuredChatHostPermissionVerdict: async () => ({ kind: 'allowed' })
@@ -96,6 +118,8 @@ export function resetCreateMessageFixture() {
   vi.useFakeTimers()
   vi.clearAllMocks()
   layoutOwner.isMain = false
+  mocks.hostBusy = false
+  mocks.tabs = []
   localStorage.clear()
   resetStructuredAgentLaunchRegistryForTests()
   resetStructuredAgentLaunchPersistenceForTests()
@@ -140,8 +164,7 @@ function submission(clientMessageId: string): AgentJournalSubmission {
     resolvedAt: null
   }
 }
-function created() {
-  const params = createParams()
+function created(params = createParams()) {
   const rows = params.firstMessage ? [submission(params.firstMessage.clientMessageId)] : []
   const cursor = { epoch: 'epoch-1', sequence: rows.length }
   const page: AgentSessionHistoryPage = {

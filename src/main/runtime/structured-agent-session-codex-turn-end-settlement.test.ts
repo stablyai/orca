@@ -1,4 +1,9 @@
-// Drive real host/journal/adapter with Codex 0.157 turn bookkeeping: Stop settles held sends when their target turn ends, including before turn/started.
+// A Codex send without an exact receipt stays in doubt after Stop; execution still ends. A send made while that turn runs, a
+// queued card's Send-now included, goes in as `turn/steer` naming it. A Stop made before Codex
+// opens that turn interrupts it at once; refused before Codex's thread runs it, the Stop waits
+// for it to open and interrupts once more. A send made then waits for it to open.
+// Driven through the shipped host, journal and Codex adapter; only the Codex child is fake,
+// keeping Codex 0.157's turn bookkeeping.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,7 +22,6 @@ import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wai
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
 import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
-import { owesStructuredAgentSessionWork } from '../../shared/structured-agent-session-owed-work'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
 import {
@@ -87,6 +91,7 @@ let steers: number
 let interrupts: number
 let childCloses: number
 let connections: number
+let closedConnections: number[]
 /** Closes that fail before one goes through, as a kill that times out. */
 let failingCloses: number
 /** Codex fails every interrupt it is sent, as one it could not submit (-32603). */
@@ -172,7 +177,8 @@ async function settled(): Promise<{
   const snapshot = await host.journalSnapshot(SESSION)
   return {
     submissions: snapshot.submissions,
-    owesWork: owesStructuredAgentSessionWork(snapshot.items, snapshot.submissions, fence)
+    // The shared rule every surface reads "working" from.
+    owesWork: host.currentWork(SESSION)?.working() ?? false
   }
 }
 
@@ -180,6 +186,21 @@ async function statusRows(): Promise<string[]> {
   return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
     item.body.kind === 'status' ? [item.body.text] : []
   )
+}
+
+async function expectUnconfirmedOriginal(id: string, text: string): Promise<void> {
+  const snapshot = await host.journalSnapshot(SESSION)
+  const source = snapshot.submissions.find((entry) => entry.clientMessageId === id)
+  expect(source).toMatchObject({
+    dispatchState: 'unknown',
+    providerItemId: null,
+    origin: 'host',
+    options: { model: MODEL.model }
+  })
+  const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  expect(journal.submissionBody(id)).toEqual(hostTestMessage(text))
+  expect(host.currentWork(SESSION)?.working()).toBe(false)
+  expect(journal.queuedMessages.get(`recovery:${id}`)).toBeNull()
 }
 
 function verdictOf(submissions: readonly AgentJournalSubmission[], clientMessageId: string) {
@@ -199,6 +220,7 @@ beforeEach(async () => {
   interrupts = 0
   childCloses = 0
   connections = 0
+  closedConnections = []
   failingCloses = 0
   interruptsFail = false
   interruptEndHeld = false
@@ -212,6 +234,7 @@ beforeEach(async () => {
   ) => {
     handlers = connectionHandlers
     connections += 1
+    const connectionId = connections
     let closed = false
     const connection: CodexAppServerConnection = {
       pid: 4321,
@@ -227,6 +250,9 @@ beforeEach(async () => {
         }
         if (method === 'thread/start' || method === 'thread/resume') {
           return { thread: { id: THREAD } }
+        }
+        if (method === 'thread/turns/list') {
+          return { data: [], nextCursor: null }
         }
         if (method === 'model/list') {
           return { data: [MODEL], nextCursor: null }
@@ -267,6 +293,7 @@ beforeEach(async () => {
           failingCloses -= 1
           throw new Error('the kill timed out')
         }
+        closedConnections.push(connectionId)
         childCloses += 1
         closed = true
         return true
@@ -314,30 +341,26 @@ async function runningTurn(): Promise<string> {
 }
 
 describe('a Codex send its turn ended without taking it', () => {
-  it('is withdrawn by a Stop before any echo, and nothing reads as working after', async () => {
+  it('stays pending after a Stop before any echo, and nothing reads as working after', async () => {
     const sent = await send('look around')
     await vi.waitFor(() => expect(answers).toBe(1))
     turns.start()
 
     await stop('turn-1')
 
-    await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, sent)).not.toBe('pending')
-    )
-    const after = await settled()
-    expect(verdictOf(after.submissions, sent)).toBe('withdrawn')
-    expect(after.owesWork).toBe(false)
+    await vi.waitFor(async () => expect((await settled()).owesWork).toBe(false))
+    await expectUnconfirmedOriginal(sent, 'look around')
 
-    // Codex echoing it late changes nothing: a settled answer stands.
+    // Only the exact late receipt confirms this send.
     await host.settleLateDispatch({
       sessionId: SESSION,
       clientMessageId: sent,
       providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
     })
-    expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
+    expect(verdictOf((await settled()).submissions, sent)).toBe('accepted')
   })
 
-  it('withdraws a follow-up Codex steered into the turn a Stop ends, with no working latch', async () => {
+  it('keeps doubt for a follow-up Codex steered into the turn a Stop ends, with no working latch', async () => {
     const opening = await runningTurn()
     const followUp = await send('and check the tests')
     await vi.waitFor(() => expect(steers).toBe(1))
@@ -345,79 +368,10 @@ describe('a Codex send its turn ended without taking it', () => {
 
     await stop('turn-1')
 
-    await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, followUp)).not.toBe('pending')
-    )
+    await vi.waitFor(async () => expect((await settled()).owesWork).toBe(false))
     const after = await settled()
     expect(verdictOf(after.submissions, opening)).toBe('accepted')
-    expect(verdictOf(after.submissions, followUp)).toBe('withdrawn')
-    expect(after.owesWork).toBe(false)
-  })
-})
-
-describe('the turn a withdrawn Codex send was answered into', () => {
-  async function answeredInto(clientMessageId: string) {
-    await host.flushStreamedEvents(SESSION)
-    const snapshot = await host.journalSnapshot(SESSION)
-    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
-    const onPage = page.ok
-      ? page.page.submissions.find((entry) => entry.clientMessageId === clientMessageId)
-      : undefined
-    return {
-      turnRecords: snapshot.items.flatMap((item) =>
-        item.body.kind === 'turn' ? [item.itemId] : []
-      ),
-      named: snapshot.submissions.find((entry) => entry.clientMessageId === clientMessageId)
-        ?.answeredInTurn,
-      onPage: onPage?.answeredInTurn
-    }
-  }
-
-  it('keeps the turn identity of a steering send after the opening message is identified', async () => {
-    const opening = await runningTurn()
-    const steered = await send('and check the tests')
-    await vi.waitFor(() => expect(steers).toBe(1))
-
-    await stop('turn-1')
-    await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, steered)).toBe('withdrawn')
-    )
-
-    const { turnRecords } = await answeredInto(opening)
-    expect(turnRecords).toHaveLength(1)
-    const steeredIn = { turnItemId: turnRecords[0], via: 'steer' }
-    expect(await answeredInto(steered)).toEqual({
-      turnRecords,
-      named: steeredIn,
-      onPage: steeredIn
-    })
-  })
-
-  it('is not named on a send the turn took', async () => {
-    const opening = await runningTurn()
-
-    await stop('turn-1')
-    await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, opening)).toBe('accepted')
-    )
-
-    expect(await answeredInto(opening)).toMatchObject({ named: undefined, onPage: undefined })
-  })
-
-  it('is named when the answer is read after that turn ended', async () => {
-    const release = turns.holdNextAnswer()
-    const sent = await send('look around')
-    await vi.waitFor(() => expect(turns.turnId).toBe('turn-1'))
-    turns.start()
-    turns.end('interrupted')
-    release()
-
-    await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
-    )
-    const { turnRecords, named } = await answeredInto(sent)
-    expect(turnRecords).toHaveLength(1)
-    expect(named).toEqual({ turnItemId: turnRecords[0], via: 'start' })
+    await expectUnconfirmedOriginal(followUp, 'and check the tests')
   })
 })
 
@@ -474,11 +428,25 @@ describe('a queued card sent now into the turn a Stop ends', () => {
     }
     expect(steers + answers).toBe(2)
     expect(await sends(cardId)).toEqual([{ verdict: 'unknown' }])
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(journal.submissionBody(steered.clientMessageId)).toEqual(
+      hostTestMessage('and check the tests')
+    )
+    expect(
+      (await settled()).submissions.find(
+        (entry) => entry.clientMessageId === steered.clientMessageId
+      )?.providerItemId
+    ).toBeNull()
+    expect((await queue()).cards).toEqual([])
+    expect(journal.queuedMessages.get(`recovery:${steered.clientMessageId}`)).toBeNull()
+    expect(journal.itemBody(`orca:${steered.clientMessageId}`)).toEqual(
+      hostTestMessage('and check the tests')
+    )
   }, 20_000)
 })
 
 describe('a Codex before 0.148, which names a steered start falsely', () => {
-  it('withdraws a send made while a turn runs when a Stop ends it, and then takes /compact', async () => {
+  it('keeps doubt for a send made while a turn runs when a Stop ends it, and then takes /compact', async () => {
     turns = codexTurnLifecycleFake(
       THREAD,
       () => (method, params) => handlers?.onNotification?.(method, params),
@@ -490,12 +458,8 @@ describe('a Codex before 0.148, which names a steered start falsely', () => {
 
     await stop()
 
-    await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, followUp)).not.toBe('pending')
-    )
-    const after = await settled()
-    expect(verdictOf(after.submissions, followUp)).toBe('withdrawn')
-    expect(after.owesWork).toBe(false)
+    await vi.waitFor(async () => expect((await settled()).owesWork).toBe(false))
+    await expectUnconfirmedOriginal(followUp, 'and check the tests')
     expect(await compact()).toMatchObject({ ok: true })
     expect(steers).toBe(1)
   })
@@ -538,11 +502,21 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
       expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
     )
     expect(steers).toBe(1)
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(journal.submissionBody(sent)).toEqual(hostTestMessage('and check the tests'))
+    expect(journal.submissions().find((entry) => entry.clientMessageId === sent)).toMatchObject({
+      dispatchState: 'unknown',
+      providerItemId: null,
+      options: { model: MODEL.model }
+    })
+    expect(journal.queuedMessages.get(`recovery:${sent}`)).toBeNull()
+    expect(journal.itemBody(`orca:${sent}`)).toEqual(hostTestMessage('and check the tests'))
+    expect((await settled()).owesWork).toBe(false)
   })
 })
 
 describe('a second send made after Codex answered the first, before it opened that turn', () => {
-  it('waits for the native turn to open before steering, keeps echo acceptance separate, and withdraws on Stop', async () => {
+  it('waits for the native turn to open before steering, keeps echo acceptance separate, and leaves Stop delivery in doubt', async () => {
     const opening = await send('look around')
     await vi.waitFor(() => expect(answers).toBe(1))
     const followUp = await send('and check the tests')
@@ -568,18 +542,15 @@ describe('a second send made after Codex answered the first, before it opened th
 
     await stop()
 
-    await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, followUp)).not.toBe('pending')
-    )
+    await vi.waitFor(async () => expect((await settled()).owesWork).toBe(false))
     const after = await settled()
     expect(verdictOf(after.submissions, opening)).toBe('accepted')
-    expect(verdictOf(after.submissions, followUp)).toBe('withdrawn')
-    expect(after.owesWork).toBe(false)
+    await expectUnconfirmedOriginal(followUp, 'and check the tests')
   })
 })
 
 describe('a Stop sent after Codex answered a cold send, before it opened the turn', () => {
-  it('refused before the thread runs it, waits for the turn to open, then stops it and withdraws the send', async () => {
+  it('refused before the thread runs it, waits for the turn to open, then stops it without deciding delivery', async () => {
     const sent = await send('look around')
     await vi.waitFor(() => expect(answers).toBe(1))
 
@@ -601,9 +572,11 @@ describe('a Stop sent after Codex answered a cold send, before it opened the tur
     expect(interrupts).toBe(2)
     await vi.waitFor(() => expect(turns.turnId).toBeNull())
     await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
+      expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
     )
     expect((await settled()).owesWork).toBe(false)
+    await expectUnconfirmedOriginal(sent, 'look around')
+    expect(answers).toBe(1)
   })
 })
 
@@ -631,11 +604,13 @@ describe('a Stop in that window that the turn never opens for', () => {
 
     expect(interrupts).toBe(1)
     expect(childCloses).toBe(1)
-    // The request stays visible; the withdrawn send has its own stopped result.
+    // The request stays visible; the handed original remains unconfirmed.
     await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
+      expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
     )
     expect(await statusRows()).toEqual(['Cancellation requested.'])
+    await expectUnconfirmedOriginal(sent, 'look around')
+    expect(answers).toBe(1)
   })
 
   it('lets a chat closed behind it close within its bound and one eviction', async () => {
@@ -653,7 +628,9 @@ describe('a Stop in that window that the turn never opens for', () => {
     expect(await settledWithin(stopping, 0)).not.toBe('held')
     expect(childCloses).toBe(1)
     expect(interrupts).toBe(1)
-    expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
+    // Its wait ran out with the turn still able to open, so the Stop ended the child and took the
+    // send into doubt.
+    expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
   })
 
   it('lets the app quit behind it within the eviction budget, and still close the child', async () => {
@@ -743,7 +720,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     expect(turnRow((await host.journalSnapshot(SESSION)).items)).toBeUndefined()
   })
 
-  // Codex records prompts only at turn start; Stop can withdraw an unopened send without leaving doubt that blocks the queue.
+  // No turn record proves delivery; ending the child clears execution without rejecting the send.
   async function stoppedBeforeItsTurnOpened(): Promise<string> {
     const release = turns.holdNextAnswer()
     const sent = await send('look around')
@@ -763,16 +740,16 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     return next
   }
 
-  it('withdraws the send whose turn never opened, and the next send starts a new child', async () => {
+  it('keeps doubt for the send whose turn never opened, and the next send starts a new child', async () => {
     const sent = await stoppedBeforeItsTurnOpened()
 
     expect(childCloses).toBe(1)
-    expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
+    expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
     await nextSendStartsANewChild()
   })
 
-  // The accepted request remains separate from the previous completed turn.
-  it('keeps the Stop request after taking back a send, without changing the previous turn', async () => {
+  // Nothing it stopped stays in the transcript, so a Stop row would read as stopping the turn before.
+  it('keeps the Stop feedback while the send stays in doubt', async () => {
     const warmUp = await send('warm up')
     await vi.waitFor(() => expect(answers).toBe(1))
     turns.start()
@@ -783,8 +760,11 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     await vi.waitFor(() => expect(answers).toBe(2))
     await stopWhenItsTurnNeverOpens(release)
 
-    expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
+    expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
     expect(await statusRows()).toEqual([AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed])
+    await expectUnconfirmedOriginal(sent, 'look around')
+    expect(answers).toBe(2)
+    expect(childCloses).toBe(1)
     expect(turnRow((await host.journalSnapshot(SESSION)).items)).toMatchObject({
       state: 'completed'
     })
@@ -814,7 +794,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     expect(await statusRows()).toEqual([])
   })
 
-  it('withdraws it too when the child end fails and a later retry lands it', async () => {
+  it('keeps doubt too when the child end fails and a later retry lands it', async () => {
     failingCloses = 1
     const sent = await stoppedBeforeItsTurnOpened()
     expect(childCloses).toBe(0)
@@ -822,7 +802,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     await nextSendStartsANewChild()
 
     expect(childCloses).toBe(1)
-    expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
+    expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
   })
 
   // A turn that opened may hold the send: the child's end leaves it in doubt, as before.
@@ -841,8 +821,16 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
 
   // Handed over once the stopped turn read ended, it started its own turn, however late that
   // turn's own end then arrives; a second Stop finds its turn never opened.
-  it('withdraws a send made after a Stop that started its own turn, which never opened', async () => {
-    await runningTurn()
+  it('keeps doubt for a send made after a Stop that started its own turn, which never opened', async () => {
+    const original = await runningTurn()
+    const accepted = (await settled()).submissions.find(
+      (entry) => entry.clientMessageId === original
+    )
+    expect(accepted).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: expect.any(String),
+      fence: 1
+    })
     interruptEndHeld = true
     await stop()
     interruptEndHeld = false
@@ -854,7 +842,26 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     await stopWhenItsTurnNeverOpens()
 
     expect(childCloses).toBe(2)
-    expect(verdictOf((await settled()).submissions, next)).toBe('withdrawn')
+    expect(connections).toBe(2)
+    expect(closedConnections).toEqual([1, 2])
+    expect(answers).toBe(2)
+    expect(steers).toBe(0)
+    expect(interrupts).toBe(2)
+    expect(await statusRows()).toEqual([
+      'Cancellation requested.',
+      AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed
+    ])
+    await expectUnconfirmedOriginal(next, 'run this after the stop')
+    const after = await settled()
+    expect(after.submissions.find((entry) => entry.clientMessageId === original)).toEqual(accepted)
+    expect(after.submissions.find((entry) => entry.clientMessageId === next)).toMatchObject({
+      dispatchState: 'unknown',
+      fence: 3,
+      handoverRecorded: true
+    })
+    expect(
+      host.collaboratorsForTests().sessions.get(SESSION)!.journal.submissionBody(original)
+    ).toEqual(hostTestMessage('look around'))
   })
 
   // Codex drains a steer into the running turn, so it may hold one it never echoed.
@@ -879,7 +886,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     handlers?.onExit?.(new Error('codex app-server exited'))
 
     await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, next)).not.toBe('pending')
+      expect(verdictOf((await settled()).submissions, next)).toBe('unknown')
     )
     expect(verdictOf((await settled()).submissions, next)).toBe('unknown')
   })

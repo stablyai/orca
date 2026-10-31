@@ -1,3 +1,10 @@
+import { journalContextCursor } from './journal-context-cursor'
+import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import {
+  createJournalInputObligations,
+  foldJournalInputObligations,
+  journalInputPresentationMember
+} from './journal-input-obligations'
 import { journalItemDeclaresEcho } from './journal-item-echo'
 // Live append and replay share this fold. Revisions change content, preserving creation position
 // and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
@@ -44,6 +51,7 @@ export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 export type JournalReducerState = {
   sessionId: string
   epoch: string
+  contextBoundary: number
   lastSequence: number
   lastActivityAt: number
   /** Earliest individually replayable sequence. */
@@ -59,6 +67,7 @@ export type JournalReducerState = {
   tombstones: Map<string, number>
   /** Rewound turns remain ended even after their visible records disappear. */
   removedTurnIds: Set<string>
+  inputs: ReturnType<typeof createJournalInputObligations>
   submissions: Map<string, AgentJournalSubmission>
   receipts: Map<string, AgentJournalAcceptanceReceipt>
   /** Alias provider echoes to existing optimistic submissions to prevent duplicate bubbles. */
@@ -86,6 +95,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
   return {
     sessionId,
     epoch,
+    contextBoundary: 1,
     lastSequence: 0,
     lastActivityAt: 0,
     oldestSequence: 1,
@@ -96,6 +106,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     providerActivityAt: new Map(),
     tombstones: new Map(),
     removedTurnIds: new Set(),
+    inputs: createJournalInputObligations(),
     submissions: new Map(),
     receipts: new Map(),
     aliases: new Map(),
@@ -117,14 +128,19 @@ export function applyJournalRow(
   row: JournalRow,
   savedAt = row.ts
 ): void {
+  const dispatchApplies =
+    row.kind !== 'dispatch' || journalDispatchRowApplies(state.submissions.get(row.clientMessageId))
   applyJournalRowFacts(state, row, savedAt)
   foldJournalQueueRow(state, row)
+  foldJournalInputObligations(state, row, dispatchApplies)
 }
 
 function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, savedAt: number): void {
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
+    state.contextBoundary = row.seq
+    state.derivedTurnScope = new JournalDerivedTurnScope()
     state.historyOrigin = journalHistoryOrigin(row)
     return
   }
@@ -275,7 +291,8 @@ export function journalEchoClaimant(
         candidate.dispatchState !== 'rejected' &&
         !isWriteFailureSubmission(candidate) &&
         candidate.payloadFingerprint === fingerprint &&
-        state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
+        !state.inputs.echoes.has(agentJournalSubmissionKey(candidate.clientMessageId)) &&
+        state.items.has(agentJournalSubmissionKey(candidate.clientMessageId))
     )
   return submission ? agentJournalSubmissionKey(submission.clientMessageId) : null
 }
@@ -287,11 +304,12 @@ function resolveItemId(state: JournalReducerState, itemId: string): string {
 export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
   // Map insertion order changes on recreation; journal position alone orders the timeline.
   const items = [...state.items.values()]
+    .filter((item) => journalInputPresentationMember(state, item.itemId))
     .map((item) => projectJournalStopNote(item, state.items))
     .sort(compareAgentJournalItems)
   return {
     sessionId: state.sessionId,
-    cursor: { epoch: state.epoch, sequence: state.lastSequence },
+    cursor: journalContextCursor(state),
     items,
     submissions: [...state.submissions.values()].sort((a, b) => a.submittedAt - b.submittedAt)
   }

@@ -1,49 +1,35 @@
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import type { JournalQueueCardChange, JournalQueuedChange } from './journal-queue-events'
+import type { JournalQueuedChange } from './journal-queue-events'
 import type { QueuedMessageRow } from './queued-message-table'
 
-/** Restate waiting/returned cards and unhanded submissions before deleting their epoch; preserve refusals. */
-export function retainedQueueFacts(
-  cards: readonly QueuedMessageRow[],
-  submissions: ReadonlyMap<string, AgentJournalSubmission>
-): JournalQueueCardChange[] {
-  return cards.flatMap((card) => {
-    const handOff = card.consumedAs === null ? undefined : submissions.get(card.consumedAs)
-    const unsent =
-      card.state === 'dispatched' &&
-      handOff !== undefined &&
-      isQueuedAgentJournalSubmission(handOff)
-    if (card.state !== 'waiting' && card.state !== 'returned' && !unsent) {
-      return []
-    }
-    const change: JournalQueuedChange = {
-      ...queuedChangeOf(card),
-      ...(card.state === 'waiting' && card.holdReason !== null
-        ? { holdReason: card.holdReason }
-        : {}),
-      ...(card.state === 'returned'
-        ? {
-            ...(card.consumedAs !== null ? { attempt: card.consumedAs } : {}),
-            returned: {
-              reason: card.returnedReason,
-              ...(card.returnedRejection ? { rejection: card.returnedRejection } : {})
-            }
-          }
-        : {})
-    }
-    return [{ messageId: card.messageId, change }]
-  })
-}
-
+/** A card's own fields as a `queued` change: its text, place, time and options. */
 export function queuedChangeOf(
-  card: Pick<QueuedMessageRow, 'body' | 'position' | 'queuedAt' | 'options'>
+  card: Pick<QueuedMessageRow, 'body' | 'position' | 'queuedAt' | 'options' | 'recovers'>
 ): JournalQueuedChange {
   return {
     op: 'queued',
     body: card.body,
     position: card.position,
     queuedAt: card.queuedAt,
-    ...(card.options ? { options: card.options } : {})
+    ...(card.options ? { options: card.options } : {}),
+    ...(card.recovers ? { recovers: card.recovers } : {})
   }
+}
+
+export function queueNeedsReopen(
+  cards: readonly QueuedMessageRow[],
+  submissions: ReadonlyMap<string, AgentJournalSubmission>
+): boolean {
+  return cards.some((card) => {
+    if (card.state === 'waiting') {
+      return true
+    }
+    const handOff = card.consumedAs ? submissions.get(card.consumedAs) : undefined
+    // A recovered doubt outlived its writer: nothing brings that card back to waiting.
+    return (
+      card.state === 'dispatched' &&
+      (handOff?.dispatchState === 'pending' ||
+        (handOff?.dispatchState === 'unknown' && handOff.recovered !== true))
+    )
+  })
 }

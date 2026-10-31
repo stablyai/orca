@@ -109,7 +109,7 @@ export type CodexStructuredSessionAdapterDeps = {
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
-  /** Settle an admitted send by provider echo or rejection at its answered turn's end. */
+  /** The provider's exact receipt or explicit refusal for a send admitted earlier. */
   onDispatchSettledLate?: (
     input: { sessionId: string; clientMessageId: string } & (
       | { providerIdentity: AgentJournalItemIdentity }
@@ -118,7 +118,7 @@ export type CodexStructuredSessionAdapterDeps = {
           answeredInTurn?: AgentJournalAnsweredTurnIdentity
         } & AgentJournalDispatchRejection)
     )
-  ) => void
+  ) => void | Promise<void>
   /** The sends Codex holds (`CodexDispatchEchoes.heldSends`) changed with no journal row. */
   onHeldSendsChanged?: (input: { sessionId: string }) => void
   openConnection?: typeof openCodexAppServerConnection

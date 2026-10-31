@@ -18965,7 +18965,6 @@
       "dismissDeliveryNotice": "닫기",
       "addSelectionToChat": "채팅에 추가",
       "messageNotSent": "메시지가 전송되지 않음",
-      "deliveryUnconfirmed": "전달 확인 안 됨 — 다시 시도하기 전에 채팅을 확인하세요",
       "messageSending": "전송 중…",
       "userMessage": {
         "showFull": "전체 메시지 표시",
@@ -19027,8 +19026,7 @@
       "interruptedContinue": {
         "continue": "계속",
         "failed": "이 채팅을 계속할 수 없습니다. 다시 시도하거나 메시지를 보내세요.",
-        "explanation": "계속하면 에이전트가 먼저 마지막 단계가 완료되었는지 확인합니다.",
-        "unconfirmed": "{{agent}}에 계속 요청이 전달되었는지 확인할 수 없습니다. 다시 시도하기 전에 채팅을 확인하세요."
+        "explanation": "계속하면 에이전트가 먼저 마지막 단계가 완료되었는지 확인합니다."
       },
       "rewind": {
         "unsupported": "이 채팅은 이전 메시지로 돌아갈 수 없습니다.",

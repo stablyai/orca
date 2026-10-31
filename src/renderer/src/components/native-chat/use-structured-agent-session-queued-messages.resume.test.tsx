@@ -3,9 +3,11 @@
 // Resume uses the shared fenced write path; serialize presses, show one failure toast and keep Resume as the retry.
 
 import { useCallback, useRef } from 'react'
-import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook, render, screen, fireEvent } from '@testing-library/react'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type {
+  AgentSessionHistoryResult,
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
 } from '../../../../shared/agent-session-wire'
@@ -14,7 +16,8 @@ type ResumeParams = { envelope: { clientOperationId: string } }
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn<(target: unknown, method: string, params: ResumeParams) => Promise<unknown>>(),
-  toastError: vi.fn()
+  toastError: vi.fn(),
+  updateSettings: vi.fn()
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
@@ -22,12 +25,49 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
 }))
 
+vi.mock('@/lib/open-agent-message-sender', () => ({ openAgentMessageSender: vi.fn() }))
+vi.mock('@/runtime/structured-conversation-name', () => ({
+  useStructuredChatTabConversationName: () => null
+}))
+vi.mock('../../store', () => {
+  const state = { updateSettings: mocks.updateSettings }
+  const useAppStore = (selector: (value: typeof state) => unknown): unknown => selector(state)
+  useAppStore.getState = () => state
+  return { useAppStore }
+})
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
+import {
+  reduceStructuredAgentSession,
+  EMPTY_STRUCTURED_AGENT_SESSION
+} from '../../../../shared/structured-agent-session-reducer'
+
+// Keep the host fixture's Node imports outside the renderer compiler while executing its real publisher.
+const { createQueuedMessageTestRig } = await vi.importActual<{
+  createQueuedMessageTestRig: (options: { restartable: true }) => Promise<{
+    workingSend: () => Promise<string>
+    send: (text: string, delivery?: 'queue-if-active') => { id: string; result: Promise<unknown> }
+    submission: (id: string) => Promise<{ handedOverAt?: number } | undefined>
+    stop: () => Promise<unknown>
+    dispose: () => Promise<void>
+    host: {
+      history: (request: {
+        sessionId: string
+        direction: 'tail'
+      }) => Promise<AgentSessionHistoryResult>
+    }
+  }>
+}>(
+  '../../../../main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+)
+
 import { useStructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
 import type { QueuedEditTransport } from './use-structured-agent-session-queued-edit'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 const NO_EDIT: QueuedEditTransport = {
   target: { kind: 'local' },
@@ -55,6 +95,9 @@ function card(
 type ControllerInput = {
   queuedMessages?: AgentSessionQueuedMessage[]
   queuePause?: AgentSessionQueuePause | null
+  submissions?: AgentJournalSubmission[]
+  sending?: StructuredAgentSessionPendingSend[]
+  isWorking?: boolean
 }
 
 function renderController(initialProps: ControllerInput = {}) {
@@ -70,9 +113,10 @@ function renderController(initialProps: ControllerInput = {}) {
         enabled: true,
         queuedMessages: input.queuedMessages ?? [card('held')],
         queuePause: input.queuePause === undefined ? { reason: 'stopped' } : input.queuePause,
-        submissions: [],
+        submissions: input.submissions ?? [],
         hasPendingPrompt: false,
-        isWorking: false,
+        isWorking: input.isWorking ?? false,
+        sending: input.sending,
         composerScopeKey: undefined,
         mutate,
         admit,
@@ -107,6 +151,136 @@ describe("the header row's pause", () => {
     ]
     expect(renderController({ queuedMessages }).result.current.pause).toBeNull()
     expect(renderController({ queuePause: null }).result.current.pause).toBeNull()
+  })
+})
+
+describe('published recovery membership through the Resume controller', () => {
+  const stopped = { reason: 'stopped' } as const
+  const recovery = card('R', {
+    state: 'waiting',
+    paused: true
+  })
+  const q = card('Q', { position: 3, state: 'returned' })
+  const w1 = card('W1', { position: 2 })
+  const w2 = card('W2', { position: 4 })
+  const hidden = (id: string): AgentJournalSubmission => ({
+    clientMessageId: `handoff-${id}`,
+    queuedMessageId: id,
+    fence: 1,
+    payloadFingerprint: 'fp',
+    dispatchState: 'pending',
+    providerItemId: null,
+    reason: null,
+    submittedAt: 1,
+    resolvedAt: null
+  })
+
+  it.each([1, 2])(
+    'renders normal Resume beside %i uncertain originals without synthetic actions',
+    async (count) => {
+      const rig = await createQueuedMessageTestRig({ restartable: true })
+      onTestFinished(() => rig.dispose())
+      await rig.workingSend()
+      await rig.send('W1', 'queue-if-active').result
+      await rig.send('W2', 'queue-if-active').result
+      await rig.stop()
+      if (count === 2) {
+        const sent = rig.send('second unknown original')
+        await sent.result
+        await vi.waitFor(async () =>
+          expect((await rig.submission(sent.id))?.handedOverAt).toBeDefined()
+        )
+        await rig.stop()
+      }
+      let state = EMPTY_STRUCTURED_AGENT_SESSION
+      await vi.waitFor(async () => {
+        const result = await rig.host.history({ sessionId: 'session-alpha', direction: 'tail' })
+        if (!result.ok) {
+          throw new Error('history refused')
+        }
+        expect(result.page.queuedMessages).toHaveLength(2)
+        state = reduceStructuredAgentSession(state, { type: 'history-page', page: result.page })
+      })
+      expect(state.queuedMessages?.every((card) => card.state === 'waiting')).toBe(true)
+      mocks.call.mockResolvedValue(RESUMED)
+      const { result } = renderController({
+        queuedMessages: state.queuedMessages ?? [],
+        queuePause: state.queuePause ?? null
+      })
+      render(
+        <TooltipProvider delayDuration={0}>
+          <NativeChatQueuedMessageList chatWorktreeId={null} controller={result.current} />
+        </TooltipProvider>
+      )
+      expect(screen.getAllByRole('listitem')).toHaveLength(2)
+      expect(screen.queryAllByRole('button', { name: 'Send' })).toHaveLength(0)
+      expect(screen.getAllByRole('button', { name: 'Steer' })).toHaveLength(2)
+      expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(2)
+      await act(() => fireEvent.click(screen.getByRole('button', { name: 'Resume' })))
+      expect(mocks.call).toHaveBeenCalledExactlyOnceWith(
+        expect.anything(),
+        'agentSession.queuedMessagesResume',
+        { envelope: expect.anything() }
+      )
+    }
+  )
+
+  it('never offers Resume for a local Sending placeholder with a stale host pause', () => {
+    const { result } = renderController({
+      queuedMessages: [],
+      isWorking: true,
+      sending: [
+        {
+          clientMessageId: 'local',
+          sessionId: 'session-1',
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'on its way' }] },
+          previewUris: [],
+          queuedAt: 1,
+          phase: 'sending',
+          issued: true,
+          delivery: 'queue-if-active'
+        }
+      ]
+    })
+    render(
+      <TooltipProvider delayDuration={0}>
+        <NativeChatQueuedMessageList chatWorktreeId={null} controller={result.current} />
+      </TooltipProvider>
+    )
+    expect(screen.getByText('Sending…')).toBeTruthy()
+    expect(result.current.cards).toMatchObject([{ messageId: 'local', hold: 'sending' }])
+    expect(result.current.pause).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+  })
+
+  it('uses published membership before hiding catch-up handoffs; old-host Q still blocks its suffix', () => {
+    const { result, rerender } = renderController({ queuedMessages: [recovery, w1, q, w2] })
+    expect(result.current.pause).toEqual(stopped)
+    rerender({ queuedMessages: [recovery, w1, q, w2], submissions: [hidden('W1')] })
+    expect(result.current.cards.map((c) => c.messageId)).toEqual(['R', 'Q', 'W2'])
+    expect(result.current.cards.at(-1)?.hold).toBe('behind-returned')
+    expect(result.current.pause).toBeNull()
+    rerender({
+      queuedMessages: [w1, card('W0', { position: 2.5 }), q, w2],
+      submissions: [hidden('W1')]
+    })
+    expect(result.current.pause).toEqual(stopped)
+    for (const queuedMessages of [
+      [q, w2],
+      [recovery],
+      [],
+      [card('P', { paused: true })],
+      [card(recovery.messageId, { ...recovery, state: 'returned', paused: undefined }), w2]
+    ]) {
+      rerender({ queuedMessages })
+      expect(result.current.pause).toBeNull()
+    }
+    rerender({ queuedMessages: [w1], submissions: [hidden('W1')] })
+    expect(result.current.cards).toEqual([])
+    expect(result.current.pause).toBeNull()
+    rerender({ queuedMessages: [w1, { ...recovery, position: 3 }, w2], queuePause: null })
+    expect(result.current.cards.map((c) => c.hold)).toEqual(['turn', 'paused', 'turn'])
+    expect(result.current.pause).toBeNull()
   })
 })
 

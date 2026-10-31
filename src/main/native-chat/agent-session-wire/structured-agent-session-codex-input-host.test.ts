@@ -655,6 +655,7 @@ it.each(['stop', 'local-abort'] as const)(
       delivery.resolve()
       lost.reject(replyLost)
       if (cancellation === 'stop') {
+        frameDelivery.resolve()
         expect(await stopping).toMatchObject({ ok: true })
         await vi.waitFor(() => expect(session.child).toBeNull())
         expect(session.lastEndedChild).toMatchObject({
@@ -666,13 +667,9 @@ it.each(['stop', 'local-abort'] as const)(
         expect(provider.ended).toBe(true)
         expect(provider.connection.closed).toBe(true)
         expect(turns.turnId).toBeNull()
-        expect(frameEnded).toBe(false)
-        expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(true)
-        expect(submission((await waiting)?.value)).toMatchObject({
-          dispatchState: 'rejected',
-          rejection: { kind: 'cancelled' },
-          recovered: true
-        })
+        expect(frameEnded).toBe(true)
+        expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false)
+        expect(submission((await waiting)?.value)).toMatchObject({ dispatchState: 'unknown' })
         expect(
           (await host.journalSnapshot(SESSION)).items.filter(
             (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'

@@ -3,6 +3,8 @@
 import { resolve } from 'node:path'
 import { JournalHostDatabase } from './journal-host-database'
 import { replayJournal, type JournalLoad } from './journal-open'
+import { buildJournalQueueRow, type JournalQueueChange } from './journal-queue-events'
+import { applyJournalRow } from './journal-reducer'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
 import {
   iterateJournalEpochRows,
@@ -152,4 +154,17 @@ export function deleteTestJournalRow(db: Database.Database, sessionId: string, s
     liveEpoch(db, sessionId),
     seq
   )
+}
+
+/** Persist a prior-build queue row verbatim, then replay it through the production fold. */
+export function appendTestJournalQueueRow(
+  db: Database.Database,
+  journal: AgentSessionJournal,
+  messageId: string,
+  change: JournalQueueChange
+): void {
+  const state = journal.queuedMessages.displayState()
+  const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, Date.now())
+  insertTestJournalRow(db, state.sessionId, row)
+  applyJournalRow(state, row)
 }

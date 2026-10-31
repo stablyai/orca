@@ -1,7 +1,6 @@
 import { useCallback } from 'react'
-import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
-import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
+import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
@@ -55,12 +54,11 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
-      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent, sessionCommands)
       const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
       const outcome = await sendStructured(text, images, deadline, attachments, skills)
-      // Accepted messages remain host-owned; restore commands whose reply was lost.
-      if (outcome === 'rejected' || (outcome === 'unknown' && isHostCommand)) {
+      // Only a definite refusal returns input; uncertainty remains ordinary transcript content.
+      if (outcome === 'rejected') {
         restoreRejectedDraft(origin, text)
         restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
       }

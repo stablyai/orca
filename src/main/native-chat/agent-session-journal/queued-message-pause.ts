@@ -35,6 +35,7 @@ export type DerivedQueuePause = {
 }
 
 type QueueCard = {
+  recovers?: string
   messageId?: string
   state: string
   holdReason: string | null
@@ -226,7 +227,7 @@ export function queuePauseHolding(
   return pauses.find((pause) => queuedBefore(pause, card))
 }
 
-/** Preserve queue order: returned, paused or edited cards block later cards; per-card holds are skipped. */
+/** Returned, queue-paused or edited queue cards block later cards. */
 export function nextSendableQueuedCard<T extends QueueCard & { messageId: string }>(
   pauses: readonly DerivedQueuePause[],
   cards: readonly T[],
@@ -243,7 +244,7 @@ export function nextSendableQueuedCard<T extends QueueCard & { messageId: string
   return null
 }
 
-/** Publish only pauses Resume can act on, never those hidden behind a returned card. */
+/** Returned queue cards block Resume for their suffix; own-held waiting cards do not. */
 export function resumableQueuePause(
   pauses: readonly DerivedQueuePause[],
   cards: readonly QueueCard[]
@@ -260,14 +261,21 @@ export function resumableQueuePause(
   return null
 }
 
-/** Hide pauses while a later send awaits acceptance; rejection reveals them again. */
-export function queuePauseLiftOnItsWay(
+/** A turn sent after `pause` began that the agent has not answered yet: its acceptance lifts the
+ *  pause, whoever sent it, so the pause is not shown meanwhile; a refusal shows it again. A send
+ *  made before a Stop lifts nothing, so it never counts. */
+export function queuePauseLiftOnItsWay<
+  Submission extends Pick<AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>
+>(
   pause: DerivedQueuePause,
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>[]
+  submissions: readonly Submission[],
+  owesSend: (submission: Submission) => boolean = () => true
 ): boolean {
   const anchor = pause.since?.sequence ?? 0
   return submissions.some(
     (submission) =>
-      submission.dispatchState === 'pending' && (submission.acceptedSequence ?? 0) > anchor
+      submission.dispatchState === 'pending' &&
+      (submission.acceptedSequence ?? 0) > anchor &&
+      owesSend(submission)
   )
 }

@@ -48,7 +48,7 @@ export function refreshDerivedStopNotes(
         ...(work ? agentSessionPublishedWorkFields(journal, work) : {}),
         hostNow
       },
-      { currentWork: work }
+      { currentWork: work, journal }
     )
     pending = []
     bytes = 0

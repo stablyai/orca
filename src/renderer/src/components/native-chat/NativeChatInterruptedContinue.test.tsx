@@ -111,7 +111,7 @@ type Props = {
   isWorking?: boolean
   target?: RuntimeClientTarget
   transport?: NativeChatStructuredComposerTransport
-  pending?: readonly { phase: 'sending' | 'recorded' }[]
+  pending?: Parameters<typeof useNativeChatInterruptedContinuation>[0]['pending']
 }
 
 function Harness(props: Props): React.JSX.Element {
@@ -457,9 +457,7 @@ it('keeps the draft through Continue admission, refusal, uncertainty and recorde
   await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
   expect(mocks.call.mock.calls[1][2]).not.toHaveProperty('usageLimitContinuationOfTurnItemId')
   await act(async () => answer.reject(new Error('connection lost')))
-  await waitFor(() =>
-    expect(screen.getByTestId('error')).toHaveTextContent('Check the chat before trying again.')
-  )
+  await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('none'))
   expect(screen.getByTestId('error')).not.toHaveTextContent('was not sent')
   expect(readNativeChatComposerDraft(scope)).toMatchObject(draft)
   mocks.capability = 'supported'
@@ -476,8 +474,8 @@ it('keeps the draft through Continue admission, refusal, uncertainty and recorde
       value: { clientMessageId: id, submission: { clientMessageId: id, dispatchState: 'accepted' } }
     })
   )
-  // Accepted before the journal arrives: the recorded sender entry still owns availability.
-  expect(continueButton()).toBeNull()
+  // Completed content is not a live operation; the next action uses actual host state.
+  expect(continueButton()).toBeInTheDocument()
   expect(readNativeChatComposerDraft(scope)).toMatchObject(draft)
   expect(screen.getByText('next.png')).toBeInTheDocument()
   expect(options).toEqual({ model: 'gpt-current', effort: 'high' })

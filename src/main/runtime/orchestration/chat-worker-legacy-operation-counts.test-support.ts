@@ -31,7 +31,6 @@ function countMapCopies<K, V>(map: Map<K, V>, copy: () => void, visit: () => voi
 export function countLegacyFailureDisplay() {
   const counts = { publication: emptyCounts(), failure: emptyCounts() }
   let phase: keyof typeof counts = 'failure'
-  let displaying = false
   const arrays = new WeakSet<readonly unknown[]>()
   const Original = legacy.LegacyQueuedCards
   vi.spyOn(legacy, 'LegacyQueuedCards').mockImplementation(
@@ -41,24 +40,6 @@ export function countLegacyFailureDisplay() {
       }
 
       override cards() {
-        const cards = super.cards()
-        if (!arrays.has(cards)) {
-          arrays.add(cards)
-          cards.forEach((card, index) => {
-            Object.defineProperty(cards, index, {
-              get: () => {
-                if (displaying) {
-                  counts[phase].cardVisits++
-                }
-                return card
-              }
-            })
-          })
-        }
-        return cards
-      }
-
-      override displayState() {
         const measured = counts[phase]
         measured.displays++
         const state = this.source.state()
@@ -72,14 +53,25 @@ export function countLegacyFailureDisplay() {
           () => measured.submissionCopies++,
           () => measured.submissionEntries++
         )
-        displaying = true
+        let cards: ReturnType<InstanceType<typeof Original>['cards']>
         try {
-          return super.displayState()
+          cards = super.cards()
         } finally {
-          displaying = false
           items.mockRestore()
           submissions.mockRestore()
         }
+        if (!arrays.has(cards)) {
+          arrays.add(cards)
+          cards.forEach((card, index) => {
+            Object.defineProperty(cards, index, {
+              get: () => {
+                counts[phase].cardVisits++
+                return card
+              }
+            })
+          })
+        }
+        return cards
       }
     }
   )

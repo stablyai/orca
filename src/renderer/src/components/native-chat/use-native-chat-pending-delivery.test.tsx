@@ -103,16 +103,28 @@ describe('terminal Chat pending delivery', () => {
     act(() => [...result.current.notices.values()][0]?.onDismiss?.())
     expect(result.current.pending).toEqual([])
   })
-  it('reports a lost acknowledgment as unconfirmed only after the hold passes with no row', async () => {
-    const { result } = render()
+  it('keeps lost-ack full input ordinary through pre-deadline Stop and remount without doubtful actions', async () => {
+    const first = render()
     act(() => {
-      result.current.holdUnconfirmed(result.current.record('lost ack'))
+      first.result.current.holdUnconfirmed(first.result.current.record('lost ack', ['/full.png']))
     })
     await tick(NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS - 1)
-    expect(result.current.notices.size).toBe(0)
+    expect(first.result.current.notices.size).toBe(0)
+    act(() => first.result.current.clear())
+    expect(first.result.current.pending[0]).toMatchObject({
+      text: 'lost ack',
+      imagePaths: ['/full.png']
+    })
+    first.unmount()
+    const next = render()
     await tick(1)
-    expect([...result.current.notices.values()][0]?.text).toMatch(/Delivery unconfirmed/)
-    expect(result.current.pending[0]?.text).toBe('lost ack')
+    expect(next.result.current.notices.size).toBe(0)
+    act(() => next.result.current.clear())
+    expect(next.result.current.pending[0]).toMatchObject({
+      text: 'lost ack',
+      imagePaths: ['/full.png'],
+      delivery: 'unconfirmed'
+    })
   })
   it('clears a held send whose echo lands, before or after the hold ends', async () => {
     const { result, rerender } = render()

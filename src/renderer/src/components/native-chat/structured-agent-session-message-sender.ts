@@ -1,14 +1,12 @@
-// Allow one unanswered send per chat in memory; host rows/cards own admitted messages. Never retry a send or retain it past its deadline.
+// Bound live sends independently of ordinary in-memory input; only exact host facts reconcile it.
 
+import { settleStructuredLaunchFirstMessageFromJournal } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type {
   AgentJournalCursor,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionFirstMessage } from '../../../../shared/structured-agent-session-create'
-import {
-  agentSessionUnconfirmedSendParts,
-  agentSessionWriteNotDoneParts
-} from '../../../../shared/agent-session-refusal-notice'
+import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session-refusal-notice'
 import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
 import {
   structuredAgentSessionReadCoversSend,
@@ -39,6 +37,7 @@ import {
   finish,
   handBack,
   refusedSendParts,
+  retainUnconfirmed,
   runtimes,
   settleRecorded,
   STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS,
@@ -79,8 +78,7 @@ async function attempt(entry: StructuredAgentSessionPendingSend): Promise<void> 
   } else if (outcome.evidence.kind === 'not-recorded') {
     handBack(current, refusedSendParts(outcome.evidence.failure))
   } else {
-    // An uncertain request may have landed; return its text with an unconfirmed notice and never resend automatically.
-    handBack(current, agentSessionUnconfirmedSendParts(outcome.thrownRefusal))
+    retainUnconfirmed(current)
   }
 }
 
@@ -114,6 +112,7 @@ export type StructuredAgentSessionReservedSend = {
 
 export type StructuredAgentSessionCreateSend = StructuredAgentSessionSent & {
   message: StructuredAgentSessionFirstMessage
+  issue: () => boolean
   settle: (
     result:
       | { kind: 'recorded'; submission: AgentJournalSubmission; cursor?: AgentJournalCursor }
@@ -173,33 +172,39 @@ export function reserveStructuredAgentSessionSend(
       }
       const sending = beginSend(current, target, remaining)
       const activity = runtimes.get(current.clientMessageId)?.activity
-      activity?.issue()
       void sending.outcome.then(settleReservation)
-      updateStructuredAgentSessionPendingSend(current.sessionId, current.clientMessageId, {
-        issued: true
-      })
       return {
         ...sending,
         message: { clientMessageId: current.clientMessageId, body: current.body },
+        issue: () => {
+          if (!runtimes.has(current.clientMessageId)) {
+            return false
+          }
+          activity?.issue()
+          updateStructuredAgentSessionPendingSend(current.sessionId, current.clientMessageId, {
+            issued: true
+          })
+          return true
+        },
         settle: (result) => {
-          activity?.settle(result.kind === 'unconfirmed')
+          activity?.settle(false)
           const pending = findStructuredAgentSessionPendingSend(
             current.sessionId,
             current.clientMessageId
           )
-          if (!pending || pending.phase === 'recorded' || !runtimes.has(current.clientMessageId)) {
+          if (!pending || pending.phase === 'recorded') {
             return
           }
           if (result.kind === 'recorded') {
             settleRecorded(pending, result.submission, 'reply', result.cursor)
+          } else if (result.kind === 'unconfirmed') {
+            retainUnconfirmed(pending)
           } else {
             handBack(
               pending,
-              result.kind === 'unconfirmed'
-                ? agentSessionUnconfirmedSendParts(undefined)
-                : result.failure
-                  ? refusedSendParts(result.failure)
-                  : agentSessionWriteNotDoneParts('composer-send')
+              result.failure
+                ? refusedSendParts(result.failure)
+                : agentSessionWriteNotDoneParts('composer-send')
             )
           }
         }
@@ -222,10 +227,14 @@ export function settleStructuredAgentSessionSendsFromJournal(
   cursor?: AgentJournalCursor | null
 ): void {
   const entries = getStructuredAgentSessionPendingSends(sessionId)
+  let facts: ReturnType<typeof structuredAgentSessionSettledSends> | undefined
+  const settled = () =>
+    (facts ??= structuredAgentSessionSettledSends(submissions, queuedMessageIds))
+  settleStructuredLaunchFirstMessageFromJournal(sessionId, () => settled().recorded, cursor)
   if (entries.length === 0) {
     return
   }
-  const { cards, recorded } = structuredAgentSessionSettledSends(submissions, queuedMessageIds)
+  const { cards, recorded } = settled()
   for (const entry of entries) {
     const submission = recorded.get(entry.clientMessageId)
     if (
@@ -256,6 +265,7 @@ export function dropStructuredAgentSessionSends(sessionId: string): void {
     const runtime = runtimes.get(entry.clientMessageId)
     runtime?.abort.abort()
     if (runtime) {
+      runtime.activity.settle(false)
       clearTimeout(runtime.deadline)
       runtimes.delete(entry.clientMessageId)
       runtime.resolve('dropped')

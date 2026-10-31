@@ -18,7 +18,13 @@ import { structuredAgentSessionJournalAppendOptions } from './structured-agent-s
 
 export type StructuredAgentSessionTransitionJournal = Pick<
   AgentSessionJournal,
-  'epoch' | 'visitItems' | 'itemBody' | 'item' | 'visitItemsWithLinkage' | 'canonicalItemId'
+  | 'epoch'
+  | 'visitItems'
+  | 'itemBody'
+  | 'item'
+  | 'visitItemsWithLinkage'
+  | 'canonicalItemId'
+  | 'presentationRemoved'
 >
 
 export type StructuredAgentSessionTransitionStep =

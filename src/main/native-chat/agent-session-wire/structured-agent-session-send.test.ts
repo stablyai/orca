@@ -3,10 +3,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  DISPATCH_DOUBT_PROVIDER_EXITED,
-  DISPATCH_DOUBT_SUBMISSION_MISSING
-} from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import {
   accepted,
   attach,
@@ -399,12 +396,16 @@ describe('send', () => {
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
-  it("answers an older build's unknown row a new epoch emptied as recorded, never redelivering", async () => {
+  it("retains an older build's positive original across an epoch despite unknown bookkeeping, never redelivering", async () => {
     await attach()
     const body = hostTestMessage('delivered before epoch recovery')
     const params = { envelope: envelope('agentSession.send', { body }), body }
     await host.send(CALLER, params)
     await delivered(params.envelope.clientOperationId)
+    const original = hostJournal()
+      .submissions()
+      .find((row) => row.clientMessageId === params.envelope.clientOperationId)
+    const receipt = store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
     // Model legacy unknown bookkeeping written before execution.
     await store.recordOperationOutcome({
       callerKey: CALLER.callerKey,
@@ -418,7 +419,13 @@ describe('send', () => {
     })
     const journal = hostJournal()
     await journal.rollEpoch('schema_unreadable', store.getRecord(SESSION)?.lease.runtimeFence ?? 1)
-    expect(journal.submissions()).toHaveLength(0)
+    expect(journal.submissions()).toMatchObject([
+      {
+        clientMessageId: params.envelope.clientOperationId,
+        dispatchState: 'accepted',
+        providerItemId: expect.any(String)
+      }
+    ])
 
     await expect(
       host.send({ callerKey: 'client-after-recovery' }, { ...params, retryUnknown: true })
@@ -427,22 +434,42 @@ describe('send', () => {
       replayed: true,
       value: {
         submission: {
-          dispatchState: 'unknown',
-          reason: DISPATCH_DOUBT_SUBMISSION_MISSING,
-          recovered: true
+          clientMessageId: params.envelope.clientOperationId,
+          dispatchState: 'accepted',
+          providerItemId: expect.any(String),
+          reason: null
         }
       }
     })
+    expect(
+      hostJournal()
+        .submissions()
+        .find((row) => row.clientMessageId === params.envelope.clientOperationId)
+    ).toEqual(original)
+    expect(hostJournal().submissionBody(params.envelope.clientOperationId)).toEqual(body)
+    expect(store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)).toEqual(
+      receipt
+    )
     expect(dispatch).toHaveBeenCalledTimes(1)
-    expect(journal.submissions()).toHaveLength(0)
+    expect(journal.submissions()).toMatchObject([
+      {
+        clientMessageId: params.envelope.clientOperationId,
+        dispatchState: 'accepted',
+        providerItemId: expect.any(String)
+      }
+    ])
   })
 
-  it('answers an accepted send a new epoch dropped as recorded, never by running it again', async () => {
+  it('answers a retained accepted original after a new epoch, never by running it again', async () => {
     await attach()
     const body = hostTestMessage('accepted, then the epoch was replaced')
     const params = { envelope: envelope('agentSession.send', { body }), body }
     await host.send(CALLER, params)
     await delivered(params.envelope.clientOperationId)
+    const original = hostJournal()
+      .submissions()
+      .find((row) => row.clientMessageId === params.envelope.clientOperationId)
+    const receipt = store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
     await hostJournal().rollEpoch(
       'schema_unreadable',
       store.getRecord(SESSION)?.lease.runtimeFence ?? 1
@@ -452,9 +479,23 @@ describe('send', () => {
       ok: true,
       replayed: true,
       value: {
-        submission: { dispatchState: 'unknown', reason: DISPATCH_DOUBT_SUBMISSION_MISSING }
+        submission: {
+          clientMessageId: params.envelope.clientOperationId,
+          dispatchState: 'accepted',
+          providerItemId: expect.any(String),
+          reason: null
+        }
       }
     })
+    expect(
+      hostJournal()
+        .submissions()
+        .find((row) => row.clientMessageId === params.envelope.clientOperationId)
+    ).toEqual(original)
+    expect(hostJournal().submissionBody(params.envelope.clientOperationId)).toEqual(body)
+    expect(store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)).toEqual(
+      receipt
+    )
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 

@@ -137,6 +137,28 @@ describe('launchAgentSessionContinuation', () => {
     )
   })
 
+  it('does not turn an unknown structured opening message into a failure or Copy prompt', async () => {
+    launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-chat', tabId: 'chat-new' },
+      promptDeliveryResult: Promise.resolve({
+        delivered: false,
+        failureNotified: false,
+        unconfirmed: true
+      })
+    })
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+    await launchAgentSessionContinuation({
+      agent: 'codex',
+      prompt: 'continue',
+      worktreeId: 'wt-1',
+      launchSource: 'sidebar'
+    })
+    await Promise.resolve()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.warning).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
   it('hedges instead of claiming success when the paste went out unconfirmed', async () => {
     // Windows may force blind paste; do not report a handoff delivered when its composer was never observed (#22479).
     launchAgentInNewTab.mockImplementation(

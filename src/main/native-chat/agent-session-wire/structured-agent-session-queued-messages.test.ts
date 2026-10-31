@@ -313,7 +313,7 @@ describe('held drafts', () => {
 
 describe('Stop and Delete', () => {
   it('Stop pauses the queue — from ANY client — and the cards stay published; no text rides the answer', async () => {
-    await workingSend()
+    const working = await workingSend()
     const first = await send('first text', 'queue-if-active').result
     const second = await send('second text', 'queue-if-active').result
     if (!first.ok || !('queued' in first.value) || !second.ok || !('queued' in second.value)) {
@@ -329,10 +329,36 @@ describe('Stop and Delete', () => {
       { messageId: second.value.queued.messageId, state: 'waiting' }
     ])
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    await host.collaboratorsForTests().serialize(SESSION, async () => {})
+    const beforeReplay = await host.journalSnapshot(SESSION)
     const replayed = await rig.stop(operationId, { callerKey: 'client-2' })
     expect(replayed).toMatchObject({ ok: true, replayed: true, value: { cancelled: false } })
     expect(replayed.ok && Object.keys(replayed.value).sort()).toEqual(['cancelled'])
-    expect(await drafts()).toHaveLength(2)
+    expect(await drafts()).toEqual([
+      { messageId: first.value.queued.messageId, state: 'waiting' },
+      { messageId: second.value.queued.messageId, state: 'waiting' }
+    ])
+    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    const afterReplay = await host.journalSnapshot(SESSION)
+    expect(afterReplay.items.filter((item) => item.body.kind === 'status')).toEqual(
+      beforeReplay.items.filter((item) => item.body.kind === 'status')
+    )
+    expect(
+      afterReplay.submissions.find((entry) => entry.clientMessageId === working)
+    ).toMatchObject({ dispatchState: 'unknown', providerItemId: null })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(
+      page.ok && page.page.queuedMessages?.map(({ body, state }) => ({ body, state }))
+    ).toEqual([
+      { body: hostTestMessage('first text'), state: 'waiting' },
+      { body: hostTestMessage('second text'), state: 'waiting' }
+    ])
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(journal.submissionBody(working)).toEqual(hostTestMessage('work on this'))
+    expect(journal.queuedMessages.list().map((card) => card.options)).toEqual([{}, {}])
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(await rig.handoff(first.value.queued.messageId)).toBeUndefined()
+    expect(await rig.handoff(second.value.queued.messageId)).toBeUndefined()
   })
 
   /** Hold delivery after draft consumption so intervening Stop can precede provider handover. */

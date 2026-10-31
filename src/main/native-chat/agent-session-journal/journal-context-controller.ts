@@ -1,5 +1,6 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session-provider-context'
+import { journalContextCursor } from './journal-context-cursor'
 import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session-context-clear'
 import { appendJournalContextClear } from './journal-context-clear'
 import { rewindJournalContext } from './journal-context-rewind'
@@ -14,13 +15,14 @@ export class JournalContextController {
       state: () => JournalReducerState
       writer: JournalRowWriter
       cards: JournalQueuedMessages
+      inputReceipt: Parameters<typeof rewindJournalContext>[0]['inputReceipt']
     }
   ) {}
 
   floor(): AgentJournalCursor | null {
     const state = this.deps.state()
     const sequence = latestAgentSessionContextClearSequence(state.items.values())
-    return sequence > 0 ? { epoch: state.epoch, sequence } : null
+    return sequence > 0 ? journalContextCursor(state, sequence) : null
   }
 
   clear(boundary: AgentSessionProviderContextBoundary, receipt: JournalOperationReceipt) {

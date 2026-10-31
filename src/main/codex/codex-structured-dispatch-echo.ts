@@ -1,12 +1,19 @@
+import {
+  createCodexDispatchReceiptCorrelation,
+  MAX_CODEX_PENDING_DISPATCH_ECHOES,
+  MAX_CODEX_RECORDED_TURN_ENDS,
+  type CodexExpectedDispatchReceipt
+} from './codex-dispatch-receipt-correlation'
 import type { ProviderDiagnostic } from '../../shared/agent-session-failure'
 import type {
   AgentJournalItemIdentity,
   AgentJournalTurnJoin
 } from '../../shared/agent-session-journal-types'
 
-export const MAX_CODEX_PENDING_DISPATCH_ECHOES = 256
-// Retain turn outcomes for late answers and turns left unopened by a wait.
-export const MAX_CODEX_RECORDED_TURN_ENDS = 64
+export {
+  MAX_CODEX_PENDING_DISPATCH_ECHOES,
+  MAX_CODEX_RECORDED_TURN_ENDS
+} from './codex-dispatch-receipt-correlation'
 
 export type CodexTurnEnd =
   | { status: 'completed' }
@@ -30,7 +37,18 @@ export type CodexDispatchEchoes = {
   heldSends: () => ReadonlySet<string>
   /** False at capacity preserves older pending sends. */
   arm: (clientMessageId: string, requestedAt?: number) => boolean
-  /** True once per armed send. */
+  expect: (
+    clientMessageId: string,
+    threadId: string,
+    via: AgentJournalTurnJoin,
+    input: readonly Record<string, unknown>[],
+    expectedTurnId?: string
+  ) => void
+  receipt: (
+    identity: Extract<AgentJournalItemIdentity, { provider: 'codex' }>,
+    content: unknown
+  ) => string | null
+  /** True once, for a send this session armed and has not yet settled. */
   settle: (clientMessageId: string) => boolean
   /** Drops an armed send whose write never reached the provider. */
   disarm: (clientMessageId: string) => void
@@ -71,7 +89,10 @@ export type CodexDispatchEchoes = {
   readonly size: number
 }
 
-export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispatchEchoes {
+export function createCodexDispatchEchoes(
+  onHeldChange?: () => void,
+  onReceipt?: (clientMessageId: string, identity: AgentJournalItemIdentity) => void
+): CodexDispatchEchoes {
   const armed = new Map<
     string,
     {
@@ -81,6 +102,7 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
       openedTurn?: { threadId: string; turnId: string }
       answeredAt?: number
       turnEnded?: true
+      expected?: CodexExpectedDispatchReceipt
     }
   >()
   let clock = 0
@@ -107,6 +129,7 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
     }
     return result
   }
+  const receiptCorrelation = createCodexDispatchReceiptCorrelation(armed)
   const endedTurns = new Map<string, CodexTurnEnd>()
   const unopenedTurns = new Set<string>()
   const openedTurns = new Set<string>()
@@ -163,6 +186,8 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
       armed.set(clientMessageId, { requestedAt: requestedAt ?? null, sequence: nextSequence++ })
       return true
     },
+    expect: receiptCorrelation.expect,
+    receipt: receiptCorrelation.receipt,
     settle: (clientMessageId) => reporting(() => armed.delete(clientMessageId)),
     disarm: (clientMessageId) => reporting(() => void armed.delete(clientMessageId)),
     bindTurn: (clientMessageId, threadId, turnId, via, answeredAt) =>
@@ -173,6 +198,11 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
         }
         entry.turn = { threadId, turnId, via }
         entry.answeredAt = answeredAt ?? ++clock
+        const receipt = receiptCorrelation.take(clientMessageId, threadId, turnId)
+        if (receipt) {
+          armed.delete(clientMessageId)
+          onReceipt?.(clientMessageId, receipt)
+        }
         const end = endedTurns.get(turnKey(threadId, turnId)) ?? null
         if (end) {
           entry.turnEnded = true
@@ -255,6 +285,7 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
       status = null
       armed.clear()
       endedTurns.clear()
+      receiptCorrelation.clear()
       unopenedTurns.clear()
       openedTurns.clear()
       nextSequence = 0
@@ -267,12 +298,16 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
 
 export function readCodexDispatchEcho(
   item: { type: string; id: string } & Record<string, unknown>,
-  identity: AgentJournalItemIdentity
+  identity: AgentJournalItemIdentity,
+  echoes?: CodexDispatchEchoes
 ): { clientMessageId: string; providerIdentity: AgentJournalItemIdentity } | null {
   if (item.type !== 'userMessage' || identity.provider !== 'codex') {
     return null
   }
-  const clientMessageId = item.clientId
+  const clientMessageId =
+    typeof item.clientId === 'string' && item.clientId.length > 0
+      ? item.clientId
+      : echoes?.receipt(identity, item.content)
   return typeof clientMessageId === 'string' && clientMessageId.length > 0
     ? { clientMessageId, providerIdentity: identity }
     : null

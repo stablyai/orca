@@ -25,7 +25,8 @@ vi.mock('./structured-agent-session-launch-message', () => ({
   relaunchFailedStructuredAgentSessionWithMessage: mocks.relaunch
 }))
 vi.mock('./agent-session/launch/structured-agent-session-launch-registry', () => ({
-  getStructuredAgentSessionLaunchLifecycle: () => mocks.launch.lifecycle
+  getStructuredAgentSessionLaunchLifecycle: () => mocks.launch.lifecycle,
+  structuredAgentSessionLaunchHasRetainedInput: () => false
 }))
 vi.mock('./active-agent-note-send', () => ({ sendNotesToActiveAgentSession: vi.fn() }))
 vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({

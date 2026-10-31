@@ -286,7 +286,7 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(onOptimisticSend).toHaveBeenCalledWith('hello', [])
+    expect(onOptimisticSend).toHaveBeenCalledWith('hello', [], false)
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
   })
 

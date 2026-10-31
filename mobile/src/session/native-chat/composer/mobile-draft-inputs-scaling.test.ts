@@ -122,7 +122,7 @@ it.each([20, 200])(
         }))
       )
       expect(values[0].files).toEqual(['/saved.txt'])
-      expect(renders[0]).toEqual({ text: 1, input: 3, image: 3, file: 3 })
+      expect(renders[0]).toEqual({ text: 1, input: 3, image: 2, file: 1 })
       expect(upstream[0]).toHaveBeenCalledTimes(3)
       for (let index = 1; index < scopes.length; index++) {
         expect(renders[index]).toEqual({ text: 0, input: 0, image: 0, file: 0 })
@@ -135,7 +135,7 @@ it.each([20, 200])(
     await act(async () =>
       updateMobileNativeChatDraftInputs(own, (current) => ({ ...current, pending: 0 }))
     )
-    expect(renders[0]).toEqual({ text: 1, input: 3, image: 3, file: 3 })
+    expect(renders[0]).toEqual({ text: 1, input: 3, image: 2, file: 1 })
     expect(upstream[0]).toHaveBeenCalledTimes(3)
   }
 )

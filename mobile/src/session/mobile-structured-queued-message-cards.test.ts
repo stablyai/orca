@@ -3,6 +3,9 @@ import { agentSessionFailureFact } from '../../../src/shared/agent-session-failu
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../src/shared/agent-session-wire'
 import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session-wire'
+import { queuedMessagesQueuePause } from '../../../src/shared/structured-agent-session-queued-cards'
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
+import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import { mobileQueuedMessageCards } from './mobile-structured-queued-message-cards'
 
 function returnedAs(fact: Parameters<typeof agentSessionFailureWords>[0]) {
@@ -43,6 +46,28 @@ describe('mobileQueuedMessageCards', () => {
       "Couldn't send — tap Send to retry"
     )
   })
+
+  it('renders nothing without a published list', () => {
+    expect(mobileQueuedMessageCards(null, [])).toEqual([])
+    expect(mobileQueuedMessageCards([], [])).toEqual([])
+  })
+
+  it('captions nothing on a plain waiting draft, as the desktop row', () => {
+    const [card] = mobileQueuedMessageCards([draft({ messageId: 'a' })], [])
+    expect(card).toEqual({
+      messageId: 'a',
+      position: 1,
+      text: 'body of a',
+      line: 'body of a',
+      state: 'waiting',
+      resumeEligible: true,
+      hold: 'turn',
+      needsAttention: false,
+      caption: null,
+      attribution: null
+    })
+  })
+
   it("keeps a card's own failed send beside a plainly queued one", () => {
     const cards = mobileQueuedMessageCards(
       [
@@ -110,4 +135,219 @@ describe('mobileQueuedMessageCards', () => {
     )
     expect(cards.map((card) => card.line)).toEqual(['shot.png', 'Pasted image', '2 images'])
   })
+
+  it.each([
+    ['Claude', 'claude auth login'],
+    ['Codex', 'codex login'],
+    ['Grok', 'grok login'],
+    ['OpenCode', 'opencode auth login'],
+    ['Pi', '/login'],
+    ['OMP', 'Sign in to OMP.']
+  ])('keeps %s identity and its sign-in action on returned cards', (agentName, guidance) => {
+    const [card] = mobileQueuedMessageCards(
+      [draft({ messageId: 'auth', ...returnedAs(agentSessionFailureFact('notSignedIn')) })],
+      [],
+      { agentName }
+    )
+    expect(card?.caption).toContain(agentName)
+    expect(card?.caption).toContain(guidance)
+    expect(card?.caption).not.toContain('send your message again')
+    expect(card?.needsAttention).toBe(true)
+  })
+
+  it.each(['Claude', 'Codex'])(
+    'keeps %s managed guidance unless a row already explains it',
+    (agentName) => {
+      const fact = agentSessionFailureFact('notSignedIn', { account: 'managed' })
+      const drafts = [draft({ messageId: 'auth', ...returnedAs(fact) })]
+      const [card] = mobileQueuedMessageCards(drafts, [], { agentName })
+      expect(card?.caption).toBe(
+        `This ${agentName} account isn't signed in. Sign in again in ${agentName} Accounts settings.`
+      )
+      const [stated] = mobileQueuedMessageCards(drafts, [], {
+        agentName,
+        statedFailures: [fact]
+      })
+      expect(stated?.caption).toBe('Your message was not sent.')
+    }
+  )
+
+  it('marks a /compact card as a command, its text as typed', () => {
+    const [card] = mobileQueuedMessageCards(
+      [
+        draft({
+          messageId: 'c',
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: '/compact' }],
+            command: { name: 'compact' }
+          }
+        })
+      ],
+      []
+    )
+    expect(card).toMatchObject({ text: '/compact', command: true, caption: null })
+    expect(card).not.toHaveProperty('waitsForAgent')
+    expect(mobileQueuedMessageCards([draft({ messageId: 'a' })], [])[0]).not.toHaveProperty(
+      'command'
+    )
+    const compact = draft({
+      messageId: 'c',
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/compact' }],
+        command: { name: 'compact' }
+      }
+    })
+    expect(mobileQueuedMessageCards([compact], [], { agentWorking: true })[0]).toMatchObject({
+      command: true,
+      waitsForAgent: true
+    })
+  })
+
+  it('finds something for Resume to send only in a waiting card with no hold, ahead of a returned one', () => {
+    const resumable = (drafts: AgentSessionQueuedMessage[]) =>
+      queuedMessagesQueuePause(mobileQueuedMessageCards(drafts, []), { reason: 'stopped' }) !== null
+    const returned = draft({
+      messageId: 'r',
+      ...returnedAs(agentSessionFailureFact('hostRestarted'))
+    })
+    const failed = draft({
+      messageId: 'f',
+      paused: true,
+      pausedReason: QUEUED_MESSAGE_PAUSED_SEND_FAILED
+    })
+    const waiting = draft({ messageId: 'w', position: 2 })
+    expect(resumable([returned])).toBe(false)
+    expect(resumable([returned, waiting])).toBe(false)
+    expect(resumable([failed])).toBe(false)
+    expect(resumable([failed, waiting])).toBe(true)
+    expect(resumable([waiting, { ...returned, position: 3 }])).toBe(true)
+  })
+
+  it('hides a waiting card once its hand-off arrived, never a returned one', () => {
+    const cards = mobileQueuedMessageCards(
+      [
+        draft({ messageId: 'returned', ...returnedAs(agentSessionFailureFact('hostRestarted')) }),
+        draft({ messageId: 'drained', position: 2 }),
+        draft({ messageId: 'waiting', position: 3 })
+      ],
+      [handOff('returned', 'rejected'), handOff('drained', 'pending')]
+    )
+    expect(cards.map((card) => card.messageId)).toEqual(['returned', 'waiting'])
+    expect(cards[1]?.caption).toBe('Waiting — a message ahead needs attention')
+  })
+
+  it('shows a draft a Stop requeued beside its rejected hand-off', () => {
+    // Rejected hand-offs stay hidden in history; the requeued card is the only reachable copy of their text.
+    const cards = mobileQueuedMessageCards(
+      [
+        draft({ messageId: 'requeued' }),
+        draft({ messageId: 'sending', position: 2 }),
+        draft({ messageId: 'sent', position: 3 })
+      ],
+      [handOff('requeued', 'rejected'), handOff('sending', 'pending'), handOff('sent', 'accepted')]
+    )
+    expect(cards.map((card) => card.messageId)).toEqual(['requeued'])
+  })
+
+  it('reads a Stop withdrawal from the fact, whatever sentence rides beside it', () => {
+    const [card] = mobileQueuedMessageCards(
+      [
+        draft({
+          messageId: 'a',
+          state: 'returned',
+          returnedReason: 'This message was withdrawn before the agent started it.',
+          returnedRejection: { kind: 'cancelled' }
+        })
+      ],
+      []
+    )
+    expect(card?.caption).toBe('Stopped before it was sent')
+  })
+
+  it('words a host-restart returned card from its fact, as a rejected send', () => {
+    const [card] = mobileQueuedMessageCards(
+      [draft({ messageId: 'a', ...returnedAs(agentSessionFailureFact('hostRestarted')) })],
+      []
+    )
+    expect(card?.caption).toBe('Orca restarted before this message was sent.')
+  })
+
+  it("keeps a provider's log-only detail off the card", () => {
+    const refused = agentSessionFailureFact('providerRejected', {
+      detail: { text: 'stack trace for the log', audience: 'log' }
+    })
+    const [card] = mobileQueuedMessageCards([draft({ messageId: 'a', ...returnedAs(refused) })], [])
+    expect(card?.caption).not.toContain('stack trace')
+  })
+
+  it("words a fact kind this build cannot place with the host's sentence", () => {
+    const [card] = mobileQueuedMessageCards(
+      [
+        draft({
+          messageId: 'a',
+          state: 'returned',
+          returnedReason: 'Words for a kind a newer host added.',
+          returnedRejection: { kind: 'laterKind' }
+        })
+      ],
+      []
+    )
+    expect(card?.caption).toBe('Words for a kind a newer host added.')
+  })
+
+  it("shows the host's sentence for a fact this build cannot read all of, as the desktop card", () => {
+    const reason = "Claude couldn't start. Start a new chat to continue."
+    // As a newer host sends it: a known code with a reason this build doesn't know.
+    const newer = {
+      kind: 'startFailed',
+      refusal: { code: 'agent_session_conflict', details: { reason: 'newerReason' } }
+    }
+    const [card] = mobileQueuedMessageCards(
+      [
+        draft({
+          messageId: 'a',
+          state: 'returned',
+          returnedReason: reason,
+          returnedRejection: newer
+        })
+      ],
+      []
+    )
+    expect(card?.caption).toBe(reason)
+  })
+
+  it('never shows an internal rejection reason verbatim, even from a host that wrote no fact', () => {
+    const [card] = mobileQueuedMessageCards(
+      [
+        draft({
+          messageId: 'a',
+          state: 'returned',
+          returnedReason: DISPATCH_REJECTED_HOST_RESTARTED
+        })
+      ],
+      []
+    )
+    expect(card?.caption).toBe('Your message was not sent.')
+  })
 })
+
+function handOff(
+  queuedMessageId: string,
+  dispatchState: AgentJournalSubmission['dispatchState']
+): AgentJournalSubmission {
+  return {
+    clientMessageId: `${queuedMessageId}-handoff`,
+    queuedMessageId,
+    dispatchState,
+    fence: 1,
+    payloadFingerprint: 'fingerprint',
+    providerItemId: null,
+    reason: null,
+    submittedAt: 1,
+    resolvedAt: null
+  }
+}

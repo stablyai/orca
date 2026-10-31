@@ -23,6 +23,7 @@ describe('history catch-up runner', () => {
       cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
       item: () => null,
       itemBody: () => null,
+      presentationRemoved: () => false,
       canonicalItemId: (key: string) => key,
       visitItems: vi.fn(),
       visitItemsWithLinkage: vi.fn(),

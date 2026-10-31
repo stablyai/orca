@@ -1,3 +1,6 @@
+import { commandReceiptFixture } from '../agent-session-journal/command-receipt-test-support'
+import { insertCommandReceiptIfAbsent } from '../agent-session-journal/command-receipt-table'
+import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -366,22 +369,75 @@ describe('send receipt acceptance', () => {
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
-  it('answers an in-transaction duplicate from the receipt after rolling back the second append', async () => {
+  it('reuses the retained original when a receipt read misses after an epoch change', async () => {
     await attach()
     const params = sendParams('accepted once')
     await host.send(CALLER, params)
     await deliveredOnce()
     const journal = hostJournal()
     await journal.rollEpoch('schema_unreadable', store.getRecord(SESSION)!.lease.runtimeFence)
+    const original = journal.submissions()[0]
+    const receipt = store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)
     const before = journal.cursor()
     vi.spyOn(store, 'readCommandReceipt').mockReturnValueOnce({ verdict: 'absent' })
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: true,
-      replayed: true,
+      replayed: false,
       value: { submission: { clientMessageId: params.envelope.clientOperationId } }
     })
     expect(journal.cursor()).toEqual(before)
-    expect(journal.submissions()).toHaveLength(0)
+    expect(journal.submissions()).toEqual([original])
+    expect(journal.submissionBody(params.envelope.clientOperationId)).toEqual(params.body)
+    expect(store.readCommandReceipt({ kind: 'global' }, params.envelope.clientOperationId)).toEqual(
+      receipt
+    )
+    expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('rolls back a fresh append when an already-spent receipt wins the transaction race', async () => {
+    await attach()
+    const original = sendParams('accepted once')
+    await host.send(CALLER, original)
+    await deliveredOnce()
+    const journal = hostJournal()
+    const before = journal.cursor()
+    const sources = journal.submissions()
+    const racing = sendParams('must not dispatch from a missed receipt read')
+    const receipt = commandReceiptFixture({
+      operationId: racing.envelope.clientOperationId,
+      sessionId: SESSION,
+      callerKey: CALLER.callerKey,
+      fingerprint: racing.envelope.payloadFingerprint,
+      acceptedAt: NOW,
+      result: { kind: 'journal-row', epoch: 'legacy-spent-epoch', sequence: 1 }
+    })
+    expect(
+      openTestJournalHostDatabase(root).transaction((db) =>
+        insertCommandReceiptIfAbsent(db, { kind: 'global' }, receipt)
+      )
+    ).toEqual({ inserted: true })
+    vi.spyOn(store, 'readCommandReceipt').mockReturnValueOnce({ verdict: 'absent' })
+    const append = vi.spyOn(journal, 'appendSubmission')
+    await expect(host.send(CALLER, racing)).resolves.toMatchObject({
+      ok: true,
+      replayed: true,
+      value: {
+        submission: {
+          clientMessageId: racing.envelope.clientOperationId,
+          dispatchState: 'unknown',
+          reason: DISPATCH_DOUBT_SUBMISSION_MISSING
+        }
+      }
+    })
+    expect(append).toHaveBeenCalledTimes(1)
+    await expect(append.mock.results[0].value).rejects.toBeInstanceOf(CommandReceiptExistsError)
+    expect(journal.cursor()).toEqual(before)
+    expect(journal.submissions()).toEqual(sources)
+    expect(journal.submissionBody(racing.envelope.clientOperationId)).toBeNull()
+    expect(journal.submissionBody(original.envelope.clientOperationId)).toEqual(original.body)
+    expect(store.readCommandReceipt({ kind: 'global' }, racing.envelope.clientOperationId)).toEqual(
+      { verdict: 'readable', receipt }
+    )
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 

@@ -34,6 +34,9 @@ function queuedMessageCardCaption(
   switch (card.hold) {
     case 'returned': {
       const notice = queuedMessageReturnedNotice(card, agentName, statedFailures)
+      if (notice === null) {
+        return null
+      }
       return notice === 'withdrawn'
         ? 'Stopped before it was sent'
         : mobileAgentSessionWriteNoticeText(notice)

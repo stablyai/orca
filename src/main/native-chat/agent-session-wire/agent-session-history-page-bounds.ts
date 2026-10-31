@@ -1,18 +1,30 @@
+import type {
+  AgentSessionHistoryDirection,
+  AgentSessionSubagentRosterEntry
+} from '../../../shared/agent-session-wire'
+import {
+  AGENT_SESSION_HISTORY_DEFAULT_LIMIT,
+  AGENT_SESSION_HISTORY_MAX_LIMIT
+} from '../../../shared/agent-session-wire'
 import {
   agentJournalSubmissionKey,
   boundJournalKeyComponent
 } from '../../../shared/agent-session-journal-item-key'
 import type {
+  AgentJournalCursor,
   AgentJournalRenderItem,
+  AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 import { agentSessionHostStatusBody } from '../../../shared/agent-session-host-status-rows'
+import { isSubagentBlock } from '../../../shared/native-chat-types'
 import {
   subagentFoldKey,
   subagentItemBlock
 } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
 
@@ -78,6 +90,13 @@ export function measureHistoryItem(item: AgentJournalRenderItem): HistoryItemFor
 export type HistoryReader = {
   form: (item: AgentJournalRenderItem) => HistoryItemForm
   budgetBytes: number
+  /** Forward reads project touched identities; cold reads include retained sources before bounds. */
+  snapshot?: (
+    journal: AgentSessionJournal,
+    snapshot?: AgentJournalSnapshot,
+    touched?: ReadonlySet<string>
+  ) => AgentJournalSnapshot
+  queueSourceIds?: (journal: AgentSessionJournal, messageId: string) => readonly string[]
 }
 
 export function boundHistoryItemsByBytes(
@@ -178,4 +197,29 @@ export function wholeSubagentGroupsStart(
     }
   }
   return whole
+}
+
+export function resolveHistoryLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) {
+    return AGENT_SESSION_HISTORY_DEFAULT_LIMIT
+  }
+  return Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, Math.max(1, Math.floor(limit)))
+}
+
+export function isSubagentRow(item: AgentJournalRenderItem): boolean {
+  return item.body.kind === 'message' && item.body.blocks.some(isSubagentBlock)
+}
+
+export type HistoryPageInput = {
+  snapshot: AgentJournalSnapshot
+  submissions?: AgentJournalSnapshot['submissions']
+  direction: AgentSessionHistoryDirection
+  items: AgentJournalRenderItem[]
+  removedItemIds?: string[]
+  hasOlder: boolean
+  hasNewer: boolean
+  fallbackCursor: AgentJournalCursor
+  nextCursor: AgentJournalCursor | undefined
+  fence?: number
+  subagentRoster?: AgentSessionSubagentRosterEntry[]
 }

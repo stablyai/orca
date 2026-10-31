@@ -1,3 +1,5 @@
+import { sayMobileAgentSessionFailure } from '../session/agent-session-failure-copy'
+import { agentSessionFailureSentence } from '../../../src/shared/agent-session-failure-words'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const pending = new Map<string, (catalog: Record<string, unknown>) => void>()
@@ -32,6 +34,18 @@ describe('activateMobileUiLocale', () => {
     expect(getMobileUiLocale()).toBe('ja')
     expect(mobileI18n.language).toBe('ja')
     expect(translate('greeting', 'Hello')).toBe('こんにちは')
+  })
+
+  it('reads the existing saved uncertain fact through the current lazy failure translation table', async () => {
+    const sentence = () =>
+      agentSessionFailureSentence({ kind: 'unconfirmed' }, 'row', {}, sayMobileAgentSessionFailure)
+    expect(sentence()).toBe("Couldn't confirm whether this was sent. It hasn't been resent.")
+    const spanish = activateMobileUiLocale('es')
+    pending.get('es')?.({
+      session: { failure: { unconfirmed: 'El resultado sigue siendo desconocido.' } }
+    })
+    await spanish
+    expect(sentence()).toBe('El resultado sigue siendo desconocido.')
   })
 
   it('falls back to English when a catalog cannot load', async () => {

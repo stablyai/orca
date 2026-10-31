@@ -7,7 +7,6 @@ export { resolveHistoryLimit } from './agent-session-history-limit'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import { snapshotLatestTurn } from './agent-session-history-latest-turn'
-import { isSubagentBlock } from '../../../shared/native-chat-types'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem,
@@ -15,18 +14,18 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryDirection,
   type AgentSessionHistoryPage,
   type AgentSessionHistoryRequest,
-  type AgentSessionHistoryResult,
-  type AgentSessionSubagentRosterEntry
+  type AgentSessionHistoryResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import {
   boundHistoryItemsByBytes,
+  isSubagentRow,
   type HistoryReader,
+  type HistoryPageInput,
   measureHistoryItem,
   newestWholeSequenceGroups,
   wholeSubagentGroupsStart,
@@ -60,10 +59,6 @@ function conversationWindow(
   return items.filter((item) => item.sequence >= whole)
 }
 
-function isSubagentRow(item: AgentJournalRenderItem): boolean {
-  return item.body.kind === 'message' && item.body.blocks.some(isSubagentBlock)
-}
-
 export function readAgentSessionHistory(
   journal: AgentSessionJournal,
   request: AgentSessionHistoryRequest,
@@ -91,19 +86,20 @@ export function readAgentSessionHistory(
       request.cursor.sequence <= snapshot.cursor.sequence &&
       view.normalizationKey !== ''
     ) {
-      return historyReset(snapshot, 'cursor_compacted', reader)
+      return historyReset(journal, 'cursor_compacted', reader)
     }
     return readForward(journal, snapshot, request.cursor, limit, reader)
   }
   const cursor = request.direction === 'before' ? request.cursor : undefined
   if (cursor) {
     if (cursor.epoch !== snapshot.cursor.epoch) {
-      return historyReset(snapshot, 'epoch_changed', reader)
+      return historyReset(journal, 'epoch_changed', reader)
     }
     if (cursor.sequence > snapshot.cursor.sequence) {
-      return historyReset(snapshot, 'cursor_ahead', reader)
+      return historyReset(journal, 'cursor_ahead', reader)
     }
   }
+  snapshot = reader.snapshot?.(journal, snapshot) ?? snapshot
   const scoped =
     scope === 'own-agent' ? snapshot.items.filter(isRootAgentJournalItem) : snapshot.items
   const older = cursor ? scoped.filter((item) => item.sequence < cursor.sequence) : scoped
@@ -154,7 +150,7 @@ export function readAgentSessionHydrationPage(
   reader: HistoryReader = CLIENT_HISTORY_READER,
   snapshot: AgentJournalSnapshot = journal.snapshot()
 ): AgentSessionHistoryPage {
-  return buildHydrationPage(snapshot, fence, reader)
+  return buildHydrationPage(reader.snapshot?.(journal, snapshot) ?? snapshot, fence, reader)
 }
 
 function buildHydrationPage(
@@ -186,14 +182,14 @@ function buildHydrationPage(
 }
 
 function historyReset(
-  snapshot: AgentJournalSnapshot,
+  journal: AgentSessionJournal,
   reset: Extract<AgentSessionHistoryResult, { ok: false }>['reset'],
   reader: HistoryReader
 ): AgentSessionHistoryResult {
   return {
     ok: false,
     reset,
-    page: buildHydrationPage(snapshot, undefined, reader)
+    page: readAgentSessionHydrationPage(journal, undefined, reader)
   }
 }
 
@@ -205,16 +201,20 @@ function readForward(
   reader: HistoryReader
 ): AgentSessionHistoryResult {
   if (!cursor) {
-    // Forward paging without a cursor cannot place its rows; force reset.
-    return historyReset(snapshot, 'cursor_ahead', reader)
+    // Why: forward paging replays rows after a position; without one there is
+    // nothing to be after, and silently serving the tail would hand the client
+    // a page it cannot place.
+    return historyReset(journal, 'cursor_ahead', reader)
   }
   // One lookahead determines hasNewer without rereading the whole remaining journal.
   const since = journal.readSince(cursor, limit + 1)
   if (!since.ok) {
-    return historyReset(snapshot, since.reset, reader)
+    return historyReset(journal, since.reset, reader)
   }
-  const submissionBytes = submissionBytesByItemId(snapshot.submissions)
-  // Count submissions and removal IDs too: legacy tombstones can outweigh all item content.
+  let submissionBytes = submissionBytesByItemId(snapshot.submissions)
+  // The page cost is EVERYTHING variable it carries: items with their
+  // submissions AND removal ids — a legal pre-bounding tombstone id can dwarf
+  // every item on the page.
   const pageContentBytes = (
     items: readonly ReturnType<HistoryReader['form']>[],
     removedItemIds: readonly string[]
@@ -234,22 +234,26 @@ function readForward(
       rows: window,
       snapshot,
       afterSequence: cursor.sequence,
-      canonicalItemId: (itemId) => journal.canonicalItemId(itemId)
+      canonicalItemId: (itemId) => journal.canonicalItemId(itemId),
+      queueSourceIds: reader.queueSourceIds?.bind(undefined, journal),
+      readSnapshot: (ids) => reader.snapshot?.(journal, snapshot, ids) ?? snapshot
     })
-    return result.ok
-      ? { ...result, batch: { ...result.batch, items: result.batch.items.map(reader.form) } }
-      : result
+    if (!result.ok) {
+      return result
+    }
+    submissionBytes = submissionBytesByItemId(result.batch.submissions)
+    return { ...result, batch: { ...result.batch, items: result.batch.items.map(reader.form) } }
   }
   let projected = project(rows)
   if (!projected.ok) {
-    return historyReset(snapshot, projected.reset, reader)
+    return historyReset(journal, projected.reset, reader)
   }
   let contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
   while (rows.length > 1 && contentBytes > reader.budgetBytes) {
     rows = rows.slice(0, Math.ceil(rows.length / 2))
     const shrunk = project(rows)
     if (!shrunk.ok) {
-      return historyReset(snapshot, shrunk.reset, reader)
+      return historyReset(journal, shrunk.reset, reader)
     }
     projected = shrunk
     contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
@@ -265,14 +269,19 @@ function readForward(
     contentBytes = pageContentBytes(items, projected.batch.removedItemIds)
   }
   if (contentBytes > reader.budgetBytes) {
-    // Unsplittable removal IDs require whole-state reset; resume at the live cursor past the oversized row.
-    return historyReset(snapshot, 'cursor_compacted', reader)
+    // A single row's semantic payload — in practice a pre-bounding oversized
+    // removal id — can never fit any page, and truncating a removal id would
+    // break the client's keying. A bounded tail replaces the client's state
+    // wholesale, which applies the removal without carrying the id, and the
+    // client resumes from the live cursor past this row.
+    return historyReset(journal, 'cursor_compacted', reader)
   }
   const lastSequence = rows.at(-1)?.seq ?? cursor.sequence
   return {
     ok: true,
     page: buildPage({
       snapshot,
+      submissions: projected.batch.submissions,
       direction: 'after',
       items: items.map(({ item }) => item),
       removedItemIds: projected.batch.removedItemIds,
@@ -284,18 +293,7 @@ function readForward(
   }
 }
 
-function buildPage(input: {
-  snapshot: AgentJournalSnapshot
-  direction: AgentSessionHistoryDirection
-  items: AgentJournalRenderItem[]
-  removedItemIds?: string[]
-  hasOlder: boolean
-  hasNewer: boolean
-  fallbackCursor: AgentJournalCursor
-  nextCursor: AgentJournalCursor | undefined
-  fence?: number
-  subagentRoster?: AgentSessionSubagentRosterEntry[]
-}): AgentSessionHistoryPage {
+function buildPage(input: HistoryPageInput): AgentSessionHistoryPage {
   const epoch = input.snapshot.cursor.epoch
   const pageItemIds = new Set(input.items.map((item) => item.itemId))
   const oldest = input.items[0]
@@ -307,7 +305,7 @@ function buildPage(input: {
     direction: input.direction,
     items: input.items,
     removedItemIds: input.removedItemIds ?? [],
-    submissions: input.snapshot.submissions.filter((submission) =>
+    submissions: (input.submissions ?? input.snapshot.submissions).filter((submission) =>
       pageItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
     ),
     window: {

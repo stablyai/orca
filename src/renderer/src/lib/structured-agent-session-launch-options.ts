@@ -200,10 +200,10 @@ export function holdStructuredLaunchCreatePicks(state: StructuredLaunchState): v
 
 export function settleStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
-  options: Readonly<Record<string, string>>
+  outcome: SelectionOutcome
 ): void {
   for (const operation of createHeld.get(state) ?? []) {
-    selectionController(state).settle(operation, { kind: 'accepted', options })
+    selectionController(state).settle(operation, outcome)
   }
   createHeld.delete(state)
 }

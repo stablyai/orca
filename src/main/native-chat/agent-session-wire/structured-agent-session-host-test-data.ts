@@ -49,7 +49,7 @@ export function hostTestAttachParams(
   overrides: Partial<AgentSessionAttachParams> = {}
 ): AgentSessionAttachParams {
   const params: AgentSessionAttachParams = {
-    envelope: {
+    envelope: overrides.envelope ?? {
       sessionId: HOST_TEST_SESSION,
       clientOperationId: hostTestOperationId(),
       expectedRuntimeFence,

@@ -151,15 +151,17 @@ describe('a chat an older build left messages for', () => {
     expect(mocks.handBack).toHaveBeenCalledTimes(3)
   })
 
-  it('says it could not confirm when the host cannot list the whole chat', async () => {
+  it('retains the full handback without uncertainty advice when history is incomplete', async () => {
     localStorage.setItem(KEY, JSON.stringify([saved('maybe', 'maybe sent')]))
     mocks.outline.mockResolvedValue(outline([], 3))
     await recover({})
-    expect(mocks.handBack).toHaveBeenCalledOnce()
-    expect(mocks.notice).toHaveBeenCalledWith(
+    expect(mocks.handBack).toHaveBeenCalledExactlyOnceWith(
       SESSION,
-      expect.stringContaining("couldn't confirm your message reached the agent")
+      'maybe',
+      saved('maybe', 'maybe sent').body
     )
+    expect(mocks.notice).not.toHaveBeenCalled()
+    expect(localStorage.getItem(KEY)).toBeNull()
   })
 
   it('keeps the copy for the next open when the text could not be saved back', async () => {

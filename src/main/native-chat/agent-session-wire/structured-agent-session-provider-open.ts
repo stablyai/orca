@@ -65,6 +65,7 @@ export async function openStructuredAgentSessionProviderChild(
         )
     }
   } finally {
+    context.publishStatus?.(sessionId)
     attempt.end()
   }
 }

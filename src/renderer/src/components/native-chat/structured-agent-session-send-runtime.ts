@@ -43,7 +43,7 @@ export function finish(
 ): void {
   const runtime = runtimes.get(entry.clientMessageId)
   if (runtime) {
-    runtime.activity.settle(outcome === 'unconfirmed')
+    runtime.activity.settle(false)
     clearTimeout(runtime.deadline)
     runtimes.delete(entry.clientMessageId)
     runtime.resolve(outcome)
@@ -77,15 +77,19 @@ export function handBack(
     const parts: readonly AgentSessionWriteNoticePart[] | null = returnToComposer(entry)
       ? notice
       : [...(notice ?? []), 'messageNotSaved']
-    if (parts) {
+    if (parts?.length) {
       publishStructuredAgentSessionSends(entry.sessionId, {
-        notice: agentSessionWriteNoticeText([...parts])
+        notice: agentSessionWriteNoticeText(parts)
       })
     }
   } finally {
     // Bookkeeping never holds the chat: whatever the hand-back met, the send ends.
-    finish(entry, notice?.includes('sendOutcomeLost') ? 'unconfirmed' : 'returned')
+    finish(entry, 'returned')
   }
+}
+
+export function retainUnconfirmed(entry: StructuredAgentSessionPendingSend): void {
+  finish(entry, 'unconfirmed', { phase: 'unconfirmed' })
 }
 
 /** Settled by the host's answer, from the send's own reply or the journal, whichever comes first. */
@@ -125,13 +129,11 @@ function onDeadline(sessionId: string, clientMessageId: string): void {
     return
   }
   runtimes.get(clientMessageId)?.abort.abort()
-  // One that went out may still land: its row then shows it beside the text given back.
-  handBack(
-    entry,
-    entry.issued
-      ? ['sendOutcomeLost']
-      : ['unreachable', ...agentSessionWriteNotDoneParts('composer-send')]
-  )
+  if (entry.issued) {
+    retainUnconfirmed(entry)
+  } else {
+    handBack(entry, ['unreachable', ...agentSessionWriteNotDoneParts('composer-send')])
+  }
 }
 
 export type StructuredAgentSessionSent = {
@@ -145,9 +147,13 @@ export function beginSend(
   budgetMs = STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS
 ): StructuredAgentSessionSent {
   const { clientMessageId, sessionId } = entry
+  const owner = getStructuredAgentSessionReadOwner(sessionId, target)
+  updateStructuredAgentSessionPendingSend(sessionId, clientMessageId, {
+    afterSequence: owner.getSnapshot().state.cursor?.sequence
+  })
   const outcome = new Promise<StructuredAgentSessionSendOutcome>((resolve) => {
     runtimes.set(clientMessageId, {
-      activity: getStructuredAgentSessionReadOwner(sessionId, target).trackSend(clientMessageId),
+      activity: owner.trackSend(clientMessageId),
       target,
       abort: new AbortController(),
       deadline: setTimeout(() => onDeadline(sessionId, clientMessageId), budgetMs),

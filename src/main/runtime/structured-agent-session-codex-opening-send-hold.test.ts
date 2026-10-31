@@ -511,10 +511,10 @@ describe('a send whose turn Codex answered and never opened', () => {
     turns.failUnopened('invalid turn settings')
 
     await vi.waitFor(async () => expect((await submission(second))?.handedOverAt).toBeDefined())
-    expect(await submission(first)).toMatchObject({ dispatchState: 'rejected' })
-    expect(JSON.stringify(await submission(first))).toContain('invalid turn settings')
+    expect(await submission(first)).toMatchObject({ dispatchState: 'pending' })
+    expect(await submission(first)).not.toHaveProperty('rejection')
     // A turn Codex never opened has no record in the journal to name.
-    expect((await submission(first))?.answeredInTurn).toBeNull()
+    expect((await submission(first))?.answeredInTurn).toBeUndefined()
     await vi.waitFor(() => expect(answers).toBe(2))
     expect(openWaits.turnIds).toEqual([])
   })
@@ -570,7 +570,7 @@ describe('a send in a turn Codex opened, when Codex reports the thread idle', ()
       .map((settlement) => ('state' in settlement ? settlement.state : 'accepted'))
   }
 
-  it('is never doubted for the idle when it was steered in and a Stop takes it back', async () => {
+  it('makes no delivery verdict for an idle notification or a Stop of its steered turn', async () => {
     vi.spyOn(host, 'settleLateDispatch')
     const warmUp = await send('warm up')
     await vi.waitFor(() => expect(answers).toBe(1))
@@ -582,12 +582,24 @@ describe('a send in a turn Codex opened, when Codex reports the thread idle', ()
     await stop()
 
     await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, steered)).toBe('withdrawn')
+      expect(verdictOf((await settled()).submissions, steered)).toBe('unknown')
     )
-    expect(lateSettlements(steered)).toEqual(['rejected'])
+    expect(lateSettlements(steered)).toEqual([])
+    expect(await submission(steered)).toMatchObject({
+      dispatchState: 'unknown',
+      providerItemId: null,
+      origin: 'host',
+      options: { model: MODEL.model }
+    })
+    expect(
+      host.collaboratorsForTests().sessions.get(SESSION)!.journal.submissionBody(steered)
+    ).toEqual(hostTestMessage('and also this'))
+    expect(answers).toBe(1)
+    expect(steers).toBe(1)
+    expect(host.currentWork(SESSION)?.working()).toBe(false)
   })
 
-  it('is never doubted for the idle when it opened the turn and a Stop ends it before the echo', async () => {
+  it('makes no delivery verdict when Stop ends the opener before its receipt', async () => {
     vi.spyOn(host, 'settleLateDispatch')
     const first = await send('look around')
     await vi.waitFor(() => expect(answers).toBe(1))
@@ -596,9 +608,21 @@ describe('a send in a turn Codex opened, when Codex reports the thread idle', ()
     await stop()
 
     await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, first)).toBe('withdrawn')
+      expect(verdictOf((await settled()).submissions, first)).toBe('unknown')
     )
-    expect(lateSettlements(first)).toEqual(['rejected'])
+    expect(lateSettlements(first)).toEqual([])
+    expect(await submission(first)).toMatchObject({
+      dispatchState: 'unknown',
+      providerItemId: null,
+      origin: 'host',
+      options: { model: MODEL.model }
+    })
+    expect(
+      host.collaboratorsForTests().sessions.get(SESSION)!.journal.submissionBody(first)
+    ).toEqual(hostTestMessage('look around'))
+    expect(answers).toBe(1)
+    expect(steers).toBe(0)
+    expect(host.currentWork(SESSION)?.working()).toBe(false)
   })
 
   it('raises no doubt when its turn completes with it echoed', async () => {

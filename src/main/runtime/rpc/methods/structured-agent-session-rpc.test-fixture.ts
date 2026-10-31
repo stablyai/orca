@@ -11,7 +11,8 @@ import {
   type StructuredAgentSessionStatusSubscriber
 } from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { RpcAnyMethodDeclaration, RpcRequest, RpcResponse } from '../core'
+
+import type { RpcAnyMethodDeclaration, RpcRequest, RpcResponse, RpcContext } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -271,12 +272,10 @@ export function dispatcher(
 export async function call(
   method: string,
   params: unknown,
-  client?: {
-    clientId?: string
-    clientKind?: 'mobile' | 'runtime'
-    clientCapabilities?: readonly string[]
-    signal?: AbortSignal
-  },
+  client?: Pick<
+    RpcContext,
+    'clientId' | 'connectionId' | 'clientKind' | 'clientCapabilities' | 'signal'
+  >,
   runtimeOverrides: Record<string, unknown> = {},
   methods?: readonly RpcAnyMethodDeclaration[]
 ): Promise<RpcResponse> {

@@ -25,7 +25,10 @@ export type JournalQueueChange =
       holdReason?: string
       options?: AgentSessionExecutionOptions
       attempt?: string
-      /** Retain refusal facts only when their original handoff rows are gone. */
+      /** The doubtful submission resolved by the person's action on this card. */
+      recovers?: string
+      /** Only where the refusal's own rows are gone (a replaced epoch, an imported card whose hand-off
+       *  is not in this one), so exactly one copy of a refusal exists at any time. */
       returned?: { reason: string | null; rejection?: UnreadAgentSessionFailureFact }
     }
   | { op: 'edited'; body: AgentJournalMessageItem }

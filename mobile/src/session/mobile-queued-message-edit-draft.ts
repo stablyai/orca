@@ -24,7 +24,10 @@ import {
   readMobileNativeChatDraftInputs,
   updateMobileNativeChatDraftInputs
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
-import { setMobileNativeChatDraftText } from './native-chat/composer/mobile-native-chat-draft-store'
+import {
+  setMobileNativeChatDraftText,
+  type MobileComposerWriter
+} from './native-chat/composer/mobile-native-chat-draft-store'
 import { nativeChatTextWithFileReferences } from './native-chat/composer/mobile-native-chat-file-attachment'
 
 export type MobileQueuedMessageInlineEditor = {
@@ -229,7 +232,7 @@ export type MobileStructuredQueuedEditArgs = {
   submissions?: readonly AgentJournalSubmission[]
   cards: readonly MobileQueuedMessageCard[]
   mutate: MobileStructuredAgentMutate
-  appendComposerText: ((text: string) => boolean) | undefined
+  appendComposerText: MobileComposerWriter | undefined
   onQueuedEditNotice?: (text: string) => void
   onSendError: (text: string) => void
   onActionResolved?: () => void

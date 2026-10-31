@@ -12,7 +12,10 @@ import { selectStructuredAgentContextUsage } from '../../shared/structured-agent
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import {
+  createCodexHistoryTranslator,
+  createCodexJournalTranslator
+} from './codex-structured-journal-translation'
 
 const SESSION = 'session-codex-context'
 const THREAD = 'thread-main'
@@ -101,6 +104,11 @@ async function session() {
       })
     return {
       translator,
+      restoreThread: createCodexHistoryTranslator({
+        sink: deferred.sink,
+        sessionId: SESSION,
+        primaryThreadId: () => THREAD
+      }).restoreThread,
       on,
       tokenUsage: (turnId: string, tokenUsage: unknown, threadId = THREAD) =>
         on('thread/tokenUsage/updated', { turnId, tokenUsage }, threadId),
@@ -234,7 +242,7 @@ describe('Codex context usage in the journal', () => {
     on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
 
     const resumed = connect()
-    resumed.translator.restoreThread(THREAD, {
+    resumed.restoreThread(THREAD, {
       turns: [{ id: 'turn-1', status: 'completed', startedAt: 1, completedAt: 2, items: [] }]
     })
     expect(await resumed.turnRecord('turn-1')).toMatchObject({ completedAt: 2_000 })

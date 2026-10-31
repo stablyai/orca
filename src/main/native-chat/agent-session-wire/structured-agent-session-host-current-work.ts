@@ -50,3 +50,20 @@ export function heldStructuredAgentSessionCurrentWork(
     revision: session?.operationalRevision ?? 0
   })
 }
+
+/** Attempt-end observation uses current ownership independently of provider startup presentation. */
+export function bindStructuredAgentSessionInputWork(
+  store: StructuredAgentSessionCurrentWorkHost['store'],
+  sessionId: string,
+  session:
+    | Pick<
+        StructuredAgentSessionHostSession,
+        'journal' | 'child' | 'lastEndedChild' | 'operationalRevision'
+      >
+    | undefined
+): void {
+  if (session) {
+    session.journal.queuedMessages.inputWork = () =>
+      heldStructuredAgentSessionCurrentWork(store, sessionId, session.journal, session)
+  }
+}

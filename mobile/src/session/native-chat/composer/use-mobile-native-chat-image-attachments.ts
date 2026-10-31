@@ -119,8 +119,8 @@ export function useMobileNativeChatImageAttachments({
   onError,
   sleep = defaultSleep
 }: Args): MobileNativeChatImageAttachments {
-  const inputs = useMobileNativeChatDraftInputs(scopeKey)
-  const images = inputs.images
+  const images = useMobileNativeChatDraftInputs(scopeKey, 'images')
+  const pending = useMobileNativeChatDraftInputs(scopeKey, 'pending')
   const attachments = useMemo(() => [...images], [images])
 
   const addUploadedImages = useCallback(
@@ -338,7 +338,7 @@ export function useMobileNativeChatImageAttachments({
 
   return {
     attachments,
-    isAttaching: isAttaching || (inputs.pending ?? 0) > 0,
+    isAttaching: isAttaching || (pending ?? 0) > 0,
     attachImage,
     removeAttachment,
     sendNativeChat

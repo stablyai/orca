@@ -490,7 +490,7 @@ describe('a /compact that waits in line', () => {
     await eventually(() => expect(rig.starts.mock.calls.length).toBeGreaterThan(startsBefore))
     rig.crashRestartHostProcess()
     release()
-    // In-flight commands need a fresh user request after restart.
+    // Only the earlier unconfirmed message is recoverable; the command must be run again.
     expect(await rig.drafts()).toEqual([])
     expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected' })
   })

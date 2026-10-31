@@ -109,7 +109,7 @@ export function ReviewNotesSendMenuContent({
     (
       send: () => Promise<ActiveAgentNotesSendResult>,
       onSent: () => void,
-      options: { explicitTarget?: boolean } = {}
+      options: { explicitTarget?: boolean; structured?: boolean } = {}
     ) => {
       // Settle the loading toast in place: immediate sends can resolve before Sonner mounts, racing a separate dismissal.
       const pending = toast.loading(
@@ -130,6 +130,11 @@ export function ReviewNotesSendMenuContent({
               ),
               { id: pending }
             )
+            return
+          }
+
+          if (options.structured && result.status === 'unconfirmed') {
+            toast.dismiss(pending)
             return
           }
 
@@ -180,7 +185,7 @@ export function ReviewNotesSendMenuContent({
             request_kind: 'followup'
           })
         },
-        { explicitTarget: true }
+        { explicitTarget: true, structured: target.messageTarget.kind === 'structured-session' }
       )
     },
     [hasPrompt, runNotesSend, worktreeId, prompt, onPromptDelivered, launchSource]

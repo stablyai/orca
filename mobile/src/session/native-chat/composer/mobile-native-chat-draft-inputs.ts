@@ -80,12 +80,23 @@ export function subscribeMobileNativeChatDraftInputs(
     }
   }
 }
-export function useMobileNativeChatDraftInputs(scope: string | null): MobileNativeChatDraftInputs {
+export function useMobileNativeChatDraftInputs(scope: string | null): MobileNativeChatDraftInputs
+export function useMobileNativeChatDraftInputs<K extends keyof MobileNativeChatDraftInputs>(
+  scope: string | null,
+  key: K
+): MobileNativeChatDraftInputs[K]
+export function useMobileNativeChatDraftInputs(
+  scope: string | null,
+  key?: keyof MobileNativeChatDraftInputs
+) {
   const subscribe = useCallback(
     (listener: () => void) => subscribeMobileNativeChatDraftInputs(scope, listener),
     [scope]
   )
-  return useSyncExternalStore(subscribe, () => readMobileNativeChatDraftInputs(scope))
+  return useSyncExternalStore(subscribe, () => {
+    const inputs = readMobileNativeChatDraftInputs(scope)
+    return key === undefined ? inputs : inputs[key]
+  })
 }
 export function closeMobileNativeChatEditInputs(
   scope: string,

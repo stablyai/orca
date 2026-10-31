@@ -1,15 +1,16 @@
 // Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
 // Retry failed bulk import on next open; do not loop while the host is running.
 
+import { dispatchWasWithdrawn } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { journalDispatchRowApplies, queuedHandOffOutcome } from './journal-dispatch-settlement'
+import { journalDispatchRowApplies, queuedHandOffInDoubt } from './journal-dispatch-settlement'
 import { journalQueueRowBuilder, type JournalQueuedChange } from './journal-queue-events'
 import { queuedCardFromChange } from './journal-queue-fold'
 import { queuedChangeOf } from './journal-queue-retention'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalOperationReceipt } from './journal-row-writer'
 import type { JournalQueuedMessagesDeps } from './journal-store-contracts'
-import { foldQueuedHandOffInDoubt } from './journal-submission-fold'
+import { placeQueuedHandOffInDoubt } from './journal-submission-fold'
 import {
   QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED,
   type QueuedMessageRow
@@ -39,6 +40,7 @@ export function legacyQueuedChange(
     ...queuedChangeOf(row),
     ...(holdReason !== null ? { holdReason } : {}),
     ...(attempt !== null ? { attempt } : {}),
+    ...(unconfirmed?.recovers ? { recovers: unconfirmed.recovers } : {}),
     ...(row.state === 'returned' && (attempt === null || !state.submissions.has(attempt))
       ? {
           returned: {
@@ -58,11 +60,14 @@ function unconfirmedHandOff(
   state: JournalReducerState,
   row: QueuedMessageRow
 ):
-  | { attempt: string; holdReason?: undefined }
-  | { attempt?: undefined; holdReason: string }
+  | { attempt: string; holdReason?: undefined; recovers?: undefined }
+  | { attempt?: undefined; holdReason: string; recovers?: string }
   | null {
   const attempts = [...state.submissions.values()]
-    .filter((submission) => submission.queuedMessageId === row.messageId)
+    .filter(
+      (submission) =>
+        state.inputs.sources.get(submission.clientMessageId)?.queuedMessageId === row.messageId
+    )
     .sort((a, b) => (a.submittedSequence ?? 0) - (b.submittedSequence ?? 0))
   if (!attempts.some(handOffInDoubt)) {
     return null
@@ -70,11 +75,16 @@ function unconfirmedHandOff(
   const latest = attempts.at(-1)!
   return handOffInDoubt(latest) && latest.payloadFingerprint === row.fingerprint
     ? { attempt: latest.clientMessageId }
-    : { holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED }
+    : {
+        holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED,
+        ...(handOffInDoubt(latest) && (!dispatchWasWithdrawn(latest) || latest.answeredInTurn)
+          ? { recovers: latest.clientMessageId }
+          : {})
+      }
 }
 
 function handOffInDoubt(submission: AgentJournalSubmission): boolean {
-  return submission.dispatchState === 'rejected' && queuedHandOffOutcome(submission) === 'inDoubt'
+  return queuedHandOffInDoubt(submission)
 }
 
 function unanswered(
@@ -91,11 +101,12 @@ function unanswered(
 export class LegacyQueuedCards {
   private revision = 0
   private stored: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
+  private readonly changes = new Map<string, JournalQueuedChange>()
+  private readonly witnesses = new Map<string, { messageId: string; change: JournalQueuedChange }>()
   private viewed: {
     owner: JournalReducerState
     key: string
     cards: readonly QueuedMessageRow[]
-    display?: JournalReducerState
   } | null = null
 
   constructor(private readonly deps: LegacyDeps) {}
@@ -118,7 +129,7 @@ export class LegacyQueuedCards {
     const state = this.deps.state()
     if (this.viewed?.key !== key || this.viewed.owner !== state) {
       const cards = this.rows().flatMap((row) => {
-        const change = legacyQueuedChange(state, row)
+        const change = this.change(row)
         return change ? [queuedCardFromChange(state, row.messageId, change)] : []
       })
       this.viewed = { owner: state, key, cards }
@@ -126,43 +137,28 @@ export class LegacyQueuedCards {
     return this.viewed.cards
   }
 
-  // Failed adoption cannot hide spent sends; derive display changes only on copied state.
-  displayState(): JournalReducerState {
-    const state = this.deps.state()
-    const cards = this.cards()
-    if (this.viewed?.display) {
-      return this.viewed.display
+  /** Derived during the existing import pass; the selected operation persists this witness. */
+  witness(clientMessageId: string): { messageId: string; change: JournalQueuedChange } | undefined {
+    const witness = this.witnesses.get(clientMessageId)
+    return witness && !this.deps.state().queue.cards.has(witness.messageId) ? witness : undefined
+  }
+
+  witnessRows(
+    clientMessageId: string,
+    adopted?: string[]
+  ): ReturnType<typeof journalQueueRowBuilder>[] {
+    const witness = this.witness(clientMessageId)
+    if (!witness || adopted?.includes(witness.messageId)) {
+      return []
     }
-    const handedOff = cards.flatMap((card) => {
-      const submission =
-        card.consumedAs === null ? undefined : state.submissions.get(card.consumedAs)
-      return submission && handOffInDoubt(submission) ? [{ ...submission }] : []
-    })
-    if (handedOff.length === 0) {
-      if (this.viewed) {
-        this.viewed.display = state
-      }
-      return state
-    }
-    const display = {
-      ...state,
-      normalizedHandOffs: new Set(state.normalizedHandOffs),
-      items: new Map(state.items),
-      submissions: new Map(state.submissions)
-    }
-    for (const submission of handedOff) {
-      display.submissions.set(submission.clientMessageId, submission)
-      foldQueuedHandOffInDoubt(display, submission)
-    }
-    if (this.viewed) {
-      this.viewed.display = display
-    }
-    return display
+    const row = journalQueueRowBuilder(this.deps.state, witness.messageId, witness.change)
+    adopted?.push(witness.messageId)
+    return [row]
   }
 
   /** Resolve adoption on the write lane from current disk state; null means no legacy card. */
   adoption(messageId: string): JournalQueuedChange | null {
-    if (this.key() === '') {
+    if (this.deps.state().queue.cards.has(messageId) || this.key() === '') {
       return null
     }
     const { db } = this.deps.database()
@@ -172,7 +168,21 @@ export class LegacyQueuedCards {
       )
       .get(this.deps.sessionId, messageId)
     const card = row === undefined ? null : readStoredQueuedMessageRow(row)
-    return card && legacyQueuedChange(this.deps.state(), card)
+    return card && this.change(card)
+  }
+
+  private change(row: QueuedMessageRow): JournalQueuedChange | null {
+    const state = this.deps.state()
+    if (state.queue.cards.has(row.messageId)) {
+      return null
+    }
+    const cached = this.changes.get(row.messageId)
+    if (cached) {
+      return unanswered(queuedCardFromChange(state, row.messageId, cached), state.submissions)
+        ? cached
+        : null
+    }
+    return legacyQueuedChange(state, row)
   }
 
   /** Delete in the caller's transaction and refresh the view after commit. */
@@ -192,12 +202,20 @@ export class LegacyQueuedCards {
     }
   }
 
-  messageIds(): string[] {
-    return this.rows().map((row) => row.messageId)
-  }
-
-  deletionOfAll(): JournalOperationReceipt {
-    return this.deletion(this.messageIds())
+  cleanup(messageIds: readonly string[]): void {
+    if (!messageIds.length) {
+      return
+    }
+    const receipt = this.deletion(messageIds)
+    try {
+      this.deps.database().transaction((db) => receipt.write(db))
+      receipt.committed()
+    } catch (error) {
+      console.warn('[journal-queue] legacy cleanup skipped:', {
+        sessionId: this.deps.sessionId,
+        error
+      })
+    }
   }
 
   /** Atomically adopt readable unanswered cards and delete legacy rows; failure leaves both unchanged. */
@@ -210,7 +228,27 @@ export class LegacyQueuedCards {
         const rows = this.read()
         const deletion = this.deletion(rows.map((row) => row.messageId))
         const plan = rows.flatMap((row) => {
-          const change = legacyQueuedChange(this.deps.state(), row)
+          const change = this.deps.state().queue.cards.has(row.messageId)
+            ? null
+            : legacyQueuedChange(this.deps.state(), row)
+          if (change) {
+            this.changes.set(row.messageId, change)
+            const state = this.deps.state()
+            for (const send of state.submissions.values()) {
+              if (
+                state.inputs.sources.get(send.clientMessageId)?.queuedMessageId === row.messageId &&
+                journalDispatchRowApplies(send)
+              ) {
+                this.witnesses.set(send.clientMessageId, { messageId: row.messageId, change })
+              }
+            }
+            const selected = change.attempt ?? change.recovers
+            const send = selected && state.submissions.get(selected)
+            if (send) {
+              state.inputs.presentations.set(send.clientMessageId, row)
+              placeQueuedHandOffInDoubt(state, send)
+            }
+          }
           return change ? [journalQueueRowBuilder(this.deps.state, row.messageId, change)] : []
         })
         if (plan.length > 0) {

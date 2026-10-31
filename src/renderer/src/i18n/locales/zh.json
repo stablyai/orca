@@ -18935,7 +18935,6 @@
       "dismissDeliveryNotice": "关闭",
       "addSelectionToChat": "添加到聊天",
       "messageNotSent": "消息未发送",
-      "deliveryUnconfirmed": "无法确认送达 — 重试前请检查聊天",
       "messageSending": "正在发送…",
       "userMessage": {
         "showFull": "显示完整消息",
@@ -18997,8 +18996,7 @@
       "interruptedContinue": {
         "continue": "继续",
         "failed": "无法继续此聊天。请重试，或发送一条消息。",
-        "explanation": "继续后，智能体会先检查其上一步是否已完成。",
-        "unconfirmed": "无法确认 {{agent}} 是否收到“继续”。在重试之前请检查聊天记录。"
+        "explanation": "继续后，智能体会先检查其上一步是否已完成。"
       },
       "rewind": {
         "unsupported": "此聊天无法返回到更早的消息。",

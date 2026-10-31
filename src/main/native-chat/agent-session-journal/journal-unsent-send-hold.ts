@@ -13,6 +13,8 @@ import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalQueueCardChange } from './journal-queue-events'
+import type { JournalReducerState } from './journal-reducer'
+import type { ResolveDispatchInput } from './journal-store-contracts'
 import type { JournalQueuePlan } from './journal-queued-messages'
 
 type QueuedMessagePositionMove = { messageId: string; position: number }
@@ -23,15 +25,17 @@ export type UnsentSendHold =
   /** Restrict settlement when only part of a close completed. */
   | { cause: 'chatClosed'; which?: (submission: AgentJournalSubmission) => boolean }
 
-/** Keep personal text only; existing card handoffs, commands, images and nonpersonal sends retain recovery. */
+/** The body an unsent send is kept with, or null when it is rejected instead:
+ *  - a card's own hand-off: its rejection already returns the card (`queuedHandOffOutcome`);
+ *  - `/compact` and other commands: a command in flight is not resumed, the person re-runs it;
+ *  - a send not from a person: orchestration mail (the mailbox re-sends it), a dispatch preamble
+ *    or a restart continuation (their owners re-derive them), a kind this build does not know, and
+ *    a row with no source that is not a person's (it could be either). */
 export function unsentSendKeptAsCard(
   submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>,
   body: AgentJournalItemBody | null
 ): AgentJournalMessageItem | null {
   if (submission.queuedMessageId !== undefined || body?.kind !== 'message' || body.command) {
-    return null
-  }
-  if (!body.blocks.every((block) => block.type === 'text')) {
     return null
   }
   const { source } = submission
@@ -83,7 +87,7 @@ export async function holdUnsentSends(
   if (unsent.length === 0) {
     return null
   }
-  const { epoch } = journal.cursor()
+  const { epoch } = journal.physicalCursor()
   const kept = unsent.map((submission) => ({
     submission,
     body: unsentSendKeptAsCard(
@@ -175,8 +179,9 @@ function headOfQueuePositions(
   const keptIds = new Set(
     journal.submissions().flatMap((entry) => entry.keptAsQueuedMessageId ?? [])
   )
-  const { epoch } = journal.cursor()
-  // Earlier settlements survive either through explicit links or cards from earlier epochs.
+  const { epoch } = journal.physicalCursor()
+  // Kept by an earlier settlement: its rejection names it, or, past an epoch that dropped that
+  // row, it was queued in an earlier epoch, before anything this one accepted.
   const earlier = cards
     .filter(
       (card) =>
@@ -206,5 +211,46 @@ function headOfQueuePositions(
   return {
     earlier: earlier.map((messageId, index) => ({ messageId, position: first + index })),
     placed: placed.map((move, index) => ({ ...move, position: first + earlier.length + index }))
+  }
+}
+
+/** Failed starts return the person's direct input in the rejection's own transaction. */
+export function keepFailedStartSends(
+  state: JournalReducerState,
+  dispatches: readonly ResolveDispatchInput[]
+): { cards: JournalQueueCardChange[]; dispatches: typeof dispatches } {
+  const cards: JournalQueueCardChange[] = []
+  let position =
+    Math.min(0, ...[...state.queue.cards.values()].map((card) => card.position)) - dispatches.length
+  return {
+    cards,
+    dispatches: dispatches.map((dispatch) => {
+      const send = state.submissions.get(dispatch.clientMessageId)
+      const body =
+        send &&
+        unsentSendKeptAsCard(
+          send,
+          state.items.get(agentJournalSubmissionKey(send.clientMessageId))?.body ?? null
+        )
+      if (
+        !body ||
+        dispatch.state !== 'rejected' ||
+        state.queue.cards.has(dispatch.clientMessageId)
+      ) {
+        return dispatch
+      }
+      cards.push({
+        messageId: dispatch.clientMessageId,
+        change: {
+          op: 'queued',
+          body,
+          position: position++,
+          queuedAt: { epoch: state.epoch, sequence: send?.acceptedSequence ?? 0 },
+          ...(send?.options ? { options: send.options } : {}),
+          returned: { reason: dispatch.reason, rejection: dispatch.rejection }
+        }
+      })
+      return { ...dispatch, keptAsQueuedMessageId: dispatch.clientMessageId }
+    })
   }
 }

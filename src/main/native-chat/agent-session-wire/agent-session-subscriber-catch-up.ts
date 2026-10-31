@@ -36,6 +36,7 @@ export type SubscriberDeliveryPort = {
     event: AgentSessionSubscribeEvent,
     options?: {
       withholdQueued?: boolean
+      journal?: AgentSessionJournal
       currentWork?: AgentSessionPublishedWork
       historyView?: string
     }
@@ -63,7 +64,7 @@ export function deliverToSubscriber(
   }
   const work = port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
   const emit: SubscriberDeliveryPort['emit'] = (target, event, options) =>
-    port.emit(target, event, { ...options, currentWork: work })
+    port.emit(target, event, { ...options, currentWork: work, journal })
   const delivery = { ...port, emit }
   const view = journal.publicRead()
   if (

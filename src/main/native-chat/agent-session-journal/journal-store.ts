@@ -2,12 +2,14 @@
 
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
+import * as journalInput from './journal-input-obligations'
 import { createJournalPublicReader } from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
+  AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission,
@@ -22,7 +24,6 @@ import {
   newestStructuredAgentSessionTurnBySequence,
   runningStructuredAgentSessionTurnItemBySequence
 } from '../../../shared/structured-agent-session-live-turn'
-import { readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader } from './journal-open'
 import {
@@ -55,6 +56,11 @@ import type { JournalOperationReceipt } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
 import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
+import {
+  journalContextCursor,
+  journalContextReceipt,
+  readJournalContextSince
+} from './journal-context-cursor'
 import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal-thread-goal-source'
 
 export { AgentSessionJournalError } from './journal-write-guards'
@@ -132,14 +138,15 @@ export class AgentSessionJournal {
   }
 
   get epoch(): string {
-    return this.state.epoch
+    return journalContextCursor(this.state).epoch
   }
 
   get agent(): AgentSessionJournalIdentity['agent'] {
     return this.identity.agent
   }
 
-  /** Only rows from this handle's opening epoch can predate the open. */
+  /** Whether a row at this sequence was on disk when this handle opened, so an earlier handle
+   *  wrote it. A provider-context boundary does not change that physical provenance. */
   wroteBeforeOpen(sequence: number | undefined): boolean {
     return (
       sequence !== undefined &&
@@ -155,7 +162,7 @@ export class AgentSessionJournal {
 
   async open(): Promise<void> {
     await this.restore()
-    this.openedThrough = this.cursor()
+    this.openedThrough = { epoch: this.state.epoch, sequence: this.state.lastSequence }
   }
 
   /** Refuse future writes and drain admitted ones; the host retains database ownership. */
@@ -176,10 +183,7 @@ export class AgentSessionJournal {
     }
   }
 
-  cursor = (): AgentJournalCursor => ({
-    epoch: this.state.epoch,
-    sequence: this.state.lastSequence
-  })
+  cursor = (): AgentJournalCursor => journalContextCursor(this.state)
 
   snapshot = (): AgentJournalSnapshot => this.publicRead().snapshot
 
@@ -189,30 +193,30 @@ export class AgentSessionJournal {
   /** Visit without allocating/sorting a snapshot. */
   visitItems = (
     visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
-  ): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body)
-    }
-  }
+  ): void => this.visitItemsWithLinkage(visit)
 
-  itemBody = (itemId: string): AgentJournalItemBody | null =>
-    this.state.items.get(itemId)?.body ?? null
+  /** One reduced item's body by its journal key, for a writer revising a row it can name. */
+  itemBody = (itemId: string): AgentJournalItemBody | null => this.item(itemId)?.body ?? null
 
   /** Host-only stopped-history IDs carried by each send. */
   stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
     this.state.stoppedHistoryCarried
 
-  item = (itemId: string): AgentJournalRenderItem | null => this.state.items.get(itemId) ?? null
+  submissionBody = (clientMessageId: string): AgentJournalMessageItem | null =>
+    this.state.inputs.sources.get(clientMessageId)?.body ?? null
+
+  /** One reduced item with its attribution, for a writer that needs the turn a row joined. */
+  item = (itemId: string): AgentJournalRenderItem | null =>
+    journalInput.readJournalInputItem(this.state, itemId)
+
+  /** Visits reduced items with the producer that wrote each, for a producer re-deriving what an
+   *  earlier run of this session left. */
+  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void =>
+    journalInput.visitJournalInputItems(this.state, visit)
 
   /** Remember publication even after a rewind removes the row. */
   hasRecordedItem = (itemId: string): boolean =>
     this.state.items.has(itemId) || this.state.tombstones.has(itemId)
-
-  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body, item)
-    }
-  }
 
   /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
   runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
@@ -253,7 +257,15 @@ export class AgentSessionJournal {
 
   /** Reconnecting clients read durable acceptance instead of resending. */
   receiptFor = (clientMessageId: string): AgentJournalAcceptanceReceipt | null =>
-    this.state.receipts.get(clientMessageId) ?? null
+    journalContextReceipt(this.state, clientMessageId)
+
+  physicalCursor = (): AgentJournalCursor => ({
+    epoch: this.state.epoch,
+    sequence: this.state.lastSequence
+  })
+
+  presentationRemoved = (itemId: string): boolean =>
+    journalInput.journalInputPresentationRemoved(this.state, itemId)
 
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
 
@@ -265,7 +277,7 @@ export class AgentSessionJournal {
   readSince(cursor: AgentJournalCursor, limit?: number): JournalReadSince {
     const { sessionId } = this.identity
     const rowsAfter = journalRowsAfterReader(this.database.db, sessionId, this.state.epoch, limit)
-    return readJournalSince({ state: this.state, rowsAfter }, cursor, () => this.cursor())
+    return readJournalContextSince(this.state, rowsAfter, cursor)
   }
 
   /** Assign revisions here so callers cannot publish reducer-stale upserts. */
@@ -368,14 +380,12 @@ export class AgentSessionJournal {
     which?: (submission: AgentJournalSubmission) => boolean
   ): Promise<string[]> => rejectJournalQueuedSubmissions(this, fence, rejection, which)
 
-  /** Epoch rollover invalidates every client cursor. */
+  /** Reset provider presentation and invalidate public cursors, retaining canonical input. */
   async rollEpoch(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
     return this.epochController.roll(reason, fence)
   }
 
-  replaceEpochItems(
-    ...args: Parameters<typeof this.epochController.replace>
-  ): Promise<AgentJournalCursor> {
+  replaceEpochItems(...args: Parameters<typeof this.epochController.replace>) {
     return this.epochController.replace(...args)
   }
 }

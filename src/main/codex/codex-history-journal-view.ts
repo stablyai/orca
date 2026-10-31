@@ -17,8 +17,11 @@ const TURN_LIFECYCLE_RECORD_PREFIX = 'turn-lifecycle:'
 export type CodexHistoryJournalView = {
   epoch: string
   nativePromptKeys: ReadonlySet<string>
+  unresolvedIds?: ReadonlySet<string>
   /** Provider turns represented by saved rows or native receipts. */
   known: ReadonlySet<string>
+  terminal?: ReadonlySet<string>
+  assistants?: ReadonlySet<string>
   /** Latest represented turn by journal position, including within a batch. */
   latest: string | null
   latestPosition: AgentJournalPosition | null
@@ -34,6 +37,8 @@ export function readCodexHistoryJournalView(
 ): CodexHistoryJournalView {
   const known = new Set<string>()
   const nativePromptKeys = new Set<string>()
+  const lifecycles = new Set<string>()
+  const assistants = new Set<string>()
   let latest: string | null = null
   let latestPosition: AgentJournalPosition | null = null
   let hasRows = false
@@ -64,6 +69,13 @@ export function readCodexHistoryJournalView(
     }
     const turnId = codexTurnIdOfRow(itemId, body, threadId)
     if (turnId) {
+      if (body.kind === 'message' && body.role === 'assistant') {
+        assistants.add(turnId)
+      }
+      const turn = readAgentJournalTurn(body)
+      if (turn && turn.state !== 'running' && turn.state !== 'unverifiable') {
+        lifecycles.add(turnId)
+      }
       note(turnId, agentJournalItemPosition(journal.item(itemId) ?? { sequence }))
     }
   })
@@ -75,17 +87,9 @@ export function readCodexHistoryJournalView(
       ? parseAgentJournalItemKey(submission.providerItemId)
       : null
     if (identity?.provider === 'codex' && identity.threadId === threadId) {
-      known.add(identity.turnId)
       const prompt = journal.item(promptKey)
-      const receipt = journal.receiptFor(submission.clientMessageId)
       if (prompt) {
         note(identity.turnId, agentJournalItemPosition(prompt))
-      } else if (
-        receipt?.cursor.epoch === journal.epoch &&
-        Number.isSafeInteger(receipt.cursor.sequence) &&
-        receipt.cursor.sequence > 0
-      ) {
-        note(identity.turnId, { sequence: receipt.cursor.sequence, index: 0 })
       }
     }
   }
@@ -98,7 +102,15 @@ export function readCodexHistoryJournalView(
   return {
     epoch: journal.epoch,
     nativePromptKeys,
+    unresolvedIds: new Set(
+      journal
+        .submissions()
+        .filter((send) => send.dispatchState === 'unknown' || send.dispatchState === 'pending')
+        .map((send) => send.clientMessageId)
+    ),
     known,
+    terminal: lifecycles,
+    assistants,
     latest,
     latestPosition,
     hasRows,
@@ -138,11 +150,14 @@ export function sameCodexHistoryJournalView(
 ): boolean {
   return (
     a.epoch === b.epoch &&
+    JSON.stringify([...(a.unresolvedIds ?? [])]) === JSON.stringify([...(b.unresolvedIds ?? [])]) &&
     a.unresolvedOrigin === b.unresolvedOrigin &&
     a.importedAt === b.importedAt &&
     a.hasRows === b.hasRows &&
     a.latest === b.latest &&
     JSON.stringify(a.latestPosition) === JSON.stringify(b.latestPosition) &&
+    JSON.stringify([...(a.terminal ?? [])]) === JSON.stringify([...(b.terminal ?? [])]) &&
+    JSON.stringify([...(a.assistants ?? [])]) === JSON.stringify([...(b.assistants ?? [])]) &&
     a.known.size === b.known.size &&
     [...a.known].every((id) => b.known.has(id)) &&
     a.nativePromptKeys.size === b.nativePromptKeys.size &&

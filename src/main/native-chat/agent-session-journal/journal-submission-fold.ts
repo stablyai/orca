@@ -74,8 +74,24 @@ export function placeHandedOverMessage(
   }
 }
 
-/** Uncertain handoffs remain spent at their handover position; derive display without rewriting rejection. */
-export function foldQueuedHandOffInDoubt(
+/**
+ * A queued card's hand-off refused with no proof the agent never got it: it may have run, so its
+ * message reads as sent and is never sent again. With a turn it was answered into, it reads as
+ * that turn's unconfirmed message, where it was handed over, and the turn's own end says Stop; a
+ * withdrawal before any turn opened reads as a person's own send a Stop took back. Derived on
+ * every fold from the stored rejection, which stays as written.
+ */
+export function foldQueuedHandOffInDoubt(submission: AgentJournalSubmission): void {
+  if (dispatchWasWithdrawn(submission) && !submission.answeredInTurn) {
+    return
+  }
+  submission.dispatchState = 'unknown'
+  submission.reason = DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
+  submission.recovered = true
+  delete submission.rejection
+}
+
+export function placeQueuedHandOffInDoubt(
   state: JournalReducerState,
   submission: AgentJournalSubmission
 ): void {
@@ -89,12 +105,7 @@ export function foldQueuedHandOffInDoubt(
   }
   if (dispatchWasWithdrawn(submission) && !submission.answeredInTurn) {
     delete submission.queuedMessageId
-    return
   }
-  submission.dispatchState = 'unknown'
-  submission.reason = DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
-  submission.recovered = true
-  delete submission.rejection
 }
 
 /** Place proven rejections at settlement in thread scope; uncertain deliveries retain their position. */
@@ -126,6 +137,7 @@ export function acceptSubmissionFromProviderItem(
   if (providerItemId === resolvedItemId) {
     return
   }
+  state.inputs.echoes.add(resolvedItemId)
   const submission = [...state.submissions.values()].find(
     (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
   )
@@ -134,6 +146,8 @@ export function acceptSubmissionFromProviderItem(
   }
   submission.fence = row.fence
   submission.dispatchState = 'accepted'
+  state.inputs.candidates.delete(submission.clientMessageId)
+  state.inputs.revision++
   noteTurnAccepted(state, submission)
   submission.providerItemId = providerItemId
   submission.reason = null

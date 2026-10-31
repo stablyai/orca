@@ -1,4 +1,7 @@
-// Publish list/pause/next-card together with stable identity so token frames cannot resend unchanged queues.
+// The published view of a conversation's queue: its whole draft list, the queue's
+// pause and the card it sends next, on the `commands` precedent — read per emit,
+// reference-stable while unchanged, so the subscribers' identity dedup keeps token
+// streams from re-sending it. They ride together: a client never sees one without the others.
 
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
@@ -48,7 +51,8 @@ export function structuredQueueSendGate(
   })
 }
 
-/** Per-card holds are separate from the queue-level Stop pause published beside the list. */
+/** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
+ *  Stop pauses the queue, published once beside it. */
 function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
   const published: AgentSessionQueuedMessage[] = []
   for (const row of journal.queuedMessages.list()) {
@@ -80,19 +84,20 @@ function isPublishedPausedReason(
 }
 
 type ListMemo = { key: string; serialized: string; list: AgentSessionQueuedMessage[] }
-
 /** Stable identity avoids repeated serialization on token frames. */
 const listMemos = new WeakMap<AgentSessionJournal, ListMemo>()
 const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
 
-function readPublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
-  const key = String(journal.queuedMessages.revision())
+export function readPublishedQueuedMessages(
+  journal: AgentSessionJournal
+): AgentSessionQueuedMessage[] {
+  const key = journal.queuedMessages.revision()
   const memo = listMemos.get(journal)
   if (memo && memo.key === key) {
     return memo.list
   }
   const list = computePublishedQueuedMessages(journal)
-  // Equal recomputed content must retain identity for subscriber deduplication.
+  // Belt for the identity dedup: equal recomputed content keeps the previous reference.
   const serialized = JSON.stringify(list)
   if (memo && memo.serialized === serialized) {
     listMemos.set(journal, { key, serialized, list: memo.list })
@@ -131,7 +136,13 @@ export function readQueuePublication(
   const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
   // Avoid scanning submissions when no pause can show.
   const pause =
-    resumable && !queuePauseLiftOnItsWay(resumable, journal.submissions()) ? resumable : null
+    resumable &&
+    !queuePauseLiftOnItsWay(resumable, journal.submissions(), (submission) =>
+      gate(journal).work.owesSend(submission)
+    )
+      ? resumable
+      : null
+  // The test narrows the type.
   const queuePause = pause?.reason === 'stopped' ? { reason: pause.reason } : null
   const nextQueuedMessageId =
     nextStructuredQueuedMessage({ journal, ...gate(journal) })?.messageId ?? null

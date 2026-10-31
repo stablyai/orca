@@ -104,10 +104,19 @@ export class JournalSubmissionWriter {
   /** Resolve late receipts on the write lane; settled sends append nothing. */
   async acceptLate(input: Extract<ResolveDispatchInput, { state: 'accepted' }>): Promise<void> {
     const { rowWriter, state } = this.deps
-    await rowWriter.enqueueRows(() =>
-      journalDispatchRowApplies(state().submissions.get(input.clientMessageId))
-        ? [journalDispatchRowBuilder(state, input)]
-        : []
+    let witness: JournalQueuePlan | undefined
+    await rowWriter.enqueueRows(
+      () => {
+        if (!journalDispatchRowApplies(state().submissions.get(input.clientMessageId))) {
+          return []
+        }
+        witness = this.deps.queuedMessages.proofWitness(input.clientMessageId)
+        return [...witness.rows, journalDispatchRowBuilder(state, input)]
+      },
+      {
+        write: (db) => witness?.receipt.write(db),
+        committed: () => witness?.receipt.committed()
+      }
     )
   }
 }

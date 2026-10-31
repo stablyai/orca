@@ -7,7 +7,10 @@ import type {
   AgentSessionStatusSummary,
   AgentSessionHistoryResult
 } from '../../../../shared/agent-session-wire'
-import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import {
+  getStructuredAgentSessionLaunchLifecycle,
+  structuredAgentSessionLaunchHasRetainedInput
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
@@ -62,7 +65,8 @@ export function admitStructuredAgentSession(
     if (
       (status && status !== 'done') ||
       launch === 'pending' ||
-      launch === 'visibility-unknown' ||
+      (launch === 'visibility-unknown' &&
+        !structuredAgentSessionLaunchHasRetainedInput(workspaceId, tab.entityId)) ||
       getStructuredAgentSessionPendingSends(tab.entityId).some(
         (entry) => entry.phase === 'sending'
       ) ||

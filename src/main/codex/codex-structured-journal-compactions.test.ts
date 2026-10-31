@@ -5,6 +5,7 @@ import type { AgentJournalItemBody } from '../../shared/agent-session-journal-ty
 import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
+  createCodexHistoryTranslator,
   createCodexJournalTranslator,
   MAX_CODEX_GENERIC_TURN_BUCKETS
 } from './codex-structured-journal-translation'
@@ -117,7 +118,7 @@ describe('compaction provider generation compatibility', () => {
     const { rows, sink, translator, send } = setup()
     send('thread/compacted')
     translator.dispose()
-    const restored = createCodexJournalTranslator({ sink })
+    const restored = createCodexHistoryTranslator({ sink })
     expect(
       restored.restoreThread('thread', {
         turns: [{ id: 'turn', items: [{ id: 'renumbered', type: 'contextCompaction' }] }]

@@ -53,15 +53,12 @@ export const TERMINAL_SEND_METHODS = [
       const inputSource = terminalInputSourceForClient(params.client, caller)
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
-      if (params.text) {
-        await assertLegacyAiVaultResumeCommandAllowed(params.text, () =>
-          runtime.ensureStructuredAgentSessionHost()
-        )
-      }
-      if (params.resolvedLaunchDraft?.text) {
-        await assertLegacyAiVaultResumeCommandAllowed(params.resolvedLaunchDraft.text, () =>
-          runtime.ensureStructuredAgentSessionHost()
-        )
+      for (const text of [params.text, params.resolvedLaunchDraft?.text]) {
+        if (text) {
+          await assertLegacyAiVaultResumeCommandAllowed(text, () =>
+            runtime.ensureStructuredAgentSessionHost()
+          )
+        }
       }
       const queryReplyClientId = clientId ?? params.client?.id
       if (

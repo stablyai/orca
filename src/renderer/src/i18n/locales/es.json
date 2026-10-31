@@ -19294,7 +19294,6 @@
       "dismissDeliveryNotice": "Descartar",
       "addSelectionToChat": "Añadir al chat",
       "messageNotSent": "Mensaje no enviado",
-      "deliveryUnconfirmed": "Entrega sin confirmar — revisa el chat antes de reintentar",
       "messageSending": "Enviando…",
       "userMessage": {
         "showFull": "Mostrar mensaje completo",
@@ -19565,8 +19564,7 @@
       "interruptedContinue": {
         "continue": "Continuar",
         "failed": "No se pudo continuar este chat. Inténtalo de nuevo o envía un mensaje.",
-        "explanation": "Continúa y el agente comprobará primero si su último paso terminó.",
-        "unconfirmed": "No se pudo confirmar si {{agent}} recibió Continuar. Revisa el chat antes de volver a intentarlo."
+        "explanation": "Continúa y el agente comprobará primero si su último paso terminó."
       },
       "rewind": {
         "unsupported": "Este chat no puede volver a un mensaje anterior.",
