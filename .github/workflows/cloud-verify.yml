@@ -206,5 +206,15 @@ jobs:
           node-version: 24
           check-latest: true
 
-      - run: pnpm install --frozen-lockfile
+      - id: cloud_install
+        run: pnpm install --frozen-lockfile
       - run: pnpm test
+
+      - name: Verify native SQLite push contracts
+        if: ${{ !cancelled() && steps.cloud_install.outcome == 'success' }}
+        run: |
+          env -u ORCA_PUSH_DURABLE_TEST_POSTGRES_URL -u ORCA_PUSH_TEST_DATABASE_URL \
+            pnpm --filter @orca-cloud/push test \
+            src/push-occurrence-access.test.ts \
+            src/push-occurrence-authority-populations.test.ts \
+            src/push-occurrence-authority-work.test.ts

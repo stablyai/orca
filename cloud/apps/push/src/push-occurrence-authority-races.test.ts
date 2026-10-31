@@ -12,6 +12,7 @@ import {
   required,
   TOKEN
 } from './push-occurrence-authority.test-fixture.js'
+import { drainPopulations } from './push-occurrence-settlement.test-fixture.js'
 import { createPushServer } from './push-server.js'
 import { testPushConfig } from './push-server-harness.test-fixture.js'
 import type { ApnsRequest } from './apns-http2-transport.js'
@@ -94,7 +95,10 @@ it.each(['before-failure', 'after-failure'] as const)(
       ])
       await f.send(f.b, f.alert())
       f.advance(2000)
-      await restarted.worker.runDue()
+      await drainPopulations(
+        { ...f, server: restarted, requests: restartedRequests },
+        `restart/${order}`
+      )
       const tuple = {
         hostFingerprint: f.a.host,
         notificationId: 'subject',

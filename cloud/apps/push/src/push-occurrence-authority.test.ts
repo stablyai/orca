@@ -2,6 +2,7 @@ import { afterEach, expect, it } from 'vitest'
 import nacl from 'tweetnacl'
 import { cleanupDurablePushFixtures } from './durable-push-store.test-fixture.js'
 import { authorityFixture, TOKEN } from './push-occurrence-authority.test-fixture.js'
+import { drainPopulations } from './push-occurrence-settlement.test-fixture.js'
 import { record, ownerCleanup } from './push-owner-integration.test-fixture.js'
 
 afterEach(cleanupDurablePushFixtures)
@@ -80,7 +81,7 @@ it('qualifies a current no-row and late-covered read without borrowing acceptanc
     await f.declare([f.a.host], 1, foreign)
     f.advance(1)
     await f.send(f.a, f.alert(4))
-    await f.settle()
+    await drainPopulations(f, 'current-no-row/foreign-key')
     await f.register(f.a.session)
     await f.send(f.b, { ...f.alert(), notificationSeq: 4 })
     await f.settle()

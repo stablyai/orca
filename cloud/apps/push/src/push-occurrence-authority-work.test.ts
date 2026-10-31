@@ -280,6 +280,81 @@ it('continues saturated indexed orphan cleanup without pruning a real live admis
     expect(await f.rows('push_batch_admissions')).toEqual([])
   } catch (error) {
     primary = { failed: true, error }
+    try {
+      const failure = (value: unknown) => {
+        const details = value && typeof value === 'object' ? value : {}
+        return Object.fromEntries(
+          ['name', 'message', 'code', 'routine'].map((key) => [key, Reflect.get(details, key)])
+        )
+      }
+      const orphans = f.work.flatMap((entry, workIndex) =>
+        entry.sql.startsWith('DELETE FROM push_batch_admissions') &&
+        entry.sql.includes('expires_at <= ? AND NOT EXISTS')
+          ? [{ entry, workIndex }]
+          : []
+      )
+      console.error(
+        'Orphan cleanup failure receipt',
+        JSON.stringify({
+          primary: failure(error),
+          work: Object.fromEntries(
+            ['entered', 'returned', 'error'].map((outcome) => [
+              outcome,
+              f.work.filter((entry) => entry.outcome === outcome).length
+            ])
+          ),
+          orphans: {
+            total: orphans.length,
+            outcomes: Object.fromEntries(
+              ['entered', 'returned', 'error'].map((outcome) => [
+                outcome,
+                orphans.filter(({ entry }) => entry.outcome === outcome).length
+              ])
+            ),
+            returnedChanges: orphans.reduce(
+              (sum, { entry }) => sum + (entry.outcome === 'returned' ? entry.changes : 0),
+              0
+            ),
+            omitted: Math.max(0, orphans.length - 3),
+            last: orphans.slice(-3).map(({ entry, workIndex }, offset) => ({
+              workIndex,
+              ordinal: Math.max(0, orphans.length - 3) + offset + 1,
+              sql: entry.sql,
+              outcome: entry.outcome,
+              binding:
+                entry.params.length === 1 &&
+                typeof entry.params[0] === 'number' &&
+                Number.isSafeInteger(entry.params[0])
+                  ? entry.params[0]
+                  : 'invalid numeric binding',
+              returnedChanges: entry.outcome === 'returned' ? entry.changes : null,
+              error: failure(entry.error)
+            }))
+          },
+          transactions: {
+            outcomes: Object.fromEntries(
+              ['entered', 'committed', 'error'].map((outcome) => [
+                outcome,
+                f.activity.transactions.filter((entry) => entry.outcome === outcome).length
+              ])
+            ),
+            attempts: f.activity.transactions.reduce((sum, entry) => sum + entry.attempts, 0),
+            attemptErrors: f.activity.transactions.reduce(
+              (sum, entry) => sum + entry.errors.length,
+              0
+            )
+          },
+          advisory: Object.fromEntries(
+            ['entered', 'returned', 'error'].map((outcome) => [
+              outcome,
+              f.activity.advisory.filter((entry) => entry.outcome === outcome).length
+            ])
+          )
+        })
+      )
+    } catch {
+      // A diagnostic failure must not replace the primary failure.
+    }
   }
   const cleanup = ownerCleanup(primary)
   await cleanup.run(() => f.close())
