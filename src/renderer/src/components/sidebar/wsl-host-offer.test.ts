@@ -106,7 +106,7 @@ describe('offer actions', () => {
     const calls: string[] = []
     const acceptDeps = {
       readWslHostsSetting: () => false,
-      updateSettings: vi.fn(async (updates: object) => {
+      updateSettings: vi.fn(async (updates: Partial<GlobalSettings>) => {
         calls.push(`settings ${JSON.stringify(updates)}`)
       }),
       addWslHost: vi.fn(async (args: { distro: string; startIfStopped: boolean }) => {
