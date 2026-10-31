@@ -17,6 +17,7 @@ import { CrewPanelContent } from './OrchestrationCrewPanel'
 import { useAppStore } from '@/store'
 import { makeTab, makeUnifiedTab, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
 import * as presentation from '@/lib/program-status/agent-row-presentation'
+import * as selectors from '@/components/sidebar/worktree-agent-row-selectors'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { emptyCrew } from '../../../../shared/orchestration-crew'
@@ -241,6 +242,18 @@ it.each([10, 100])(
       agentStatusByPaneKey: live
     })
     const normalize = vi.spyOn(presentation, 'resolveRowProgramStatus')
+    const selectLive = vi.spyOn(selectors, 'selectLiveAgentStatusEntriesForWorktree')
+    const values = Object.values
+    const enumerations = new Map<object, number[]>()
+    const observeValues = vi.spyOn(Object, 'values').mockImplementation((source) => {
+      const result = values(source)
+      if (typeof source === 'object' && source !== null) {
+        const lengths = enumerations.get(source) ?? []
+        lengths.push(result.length)
+        enumerations.set(source, lengths)
+      }
+      return result
+    })
     const commits = new Map<number, number>()
     const listeners = readStoreListenerCount()
     const mounted = render(
@@ -268,6 +281,7 @@ it.each([10, 100])(
     expect(commits).toEqual(before)
     expect(visits).toBe(0)
     expect(normalize).not.toHaveBeenCalled()
+    selectLive.mockClear()
     act(() =>
       useAppStore.getState().setAgentProgramStatus(other.paneKey, {
         state: 'working',
@@ -275,6 +289,13 @@ it.each([10, 100])(
         observedAt: 2_000_000
       })
     )
+    const remoteMap = useAppStore.getState().agentStatusByPaneKey
+    expect(Object.is(remoteMap, live)).toBe(false)
+    // The handle index and visible-orchestration projection each scan a fresh map once.
+    expect(enumerations.get(remoteMap)).toEqual([n + 1, n + 1])
+    expect(
+      selectLive.mock.calls.filter(([state]) => state.agentStatusByPaneKey === remoteMap)
+    ).toHaveLength(2)
     expect(
       within(screen.getByTestId(`avatar-${n}`)).getByRole('progressbar', { name: 'Working · 20%' })
     ).toBeInTheDocument()
@@ -287,6 +308,7 @@ it.each([10, 100])(
     expect(visits).toBe((n + 1) * 2)
     const afterRemote = new Map(commits)
     normalize.mockClear()
+    selectLive.mockClear()
     act(() =>
       useAppStore.getState().setAgentProgramStatus(status(0).paneKey, {
         state: 'working',
@@ -294,6 +316,13 @@ it.each([10, 100])(
         observedAt: 2_000_000
       })
     )
+    const localMap = useAppStore.getState().agentStatusByPaneKey
+    expect(Object.is(localMap, remoteMap)).toBe(false)
+    expect(enumerations.get(localMap)).toEqual([n + 1, n + 1])
+    expect(enumerations.get(remoteMap)).toEqual([n + 1, n + 1])
+    expect(
+      selectLive.mock.calls.filter(([state]) => state.agentStatusByPaneKey === localMap)
+    ).toHaveLength(2)
     expect(normalize).toHaveBeenCalledTimes(n)
     expect(commits.get(0)).toBe(afterRemote.get(0)! + 1)
     for (let i = 1; i <= n; i++) {
@@ -305,6 +334,7 @@ it.each([10, 100])(
     expect(visits).toBe((n + 1) * 2)
     normalize.mockClear()
     const settled = new Map(commits)
+    selectLive.mockClear()
     act(() =>
       useAppStore.getState().setAgentProgramStatus(status(0).paneKey, {
         state: 'working',
@@ -314,7 +344,12 @@ it.each([10, 100])(
     )
     expect(commits).toEqual(settled)
     expect(normalize).not.toHaveBeenCalled()
+    expect(useAppStore.getState().agentStatusByPaneKey).toBe(localMap)
+    expect(enumerations.get(localMap)).toEqual([n + 1, n + 1])
+    expect(selectLive).not.toHaveBeenCalled()
     mounted.unmount()
     expect(readStoreListenerCount()).toBe(listeners)
+    observeValues.mockRestore()
+    selectLive.mockRestore()
   }
 )

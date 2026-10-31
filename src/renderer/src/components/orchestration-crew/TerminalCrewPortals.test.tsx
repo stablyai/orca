@@ -3,7 +3,12 @@ import '@testing-library/jest-dom/vitest'
 import type { ComponentProps } from 'react'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import {
+  initialStore,
+  resetSenderStore
+} from '../native-chat/native-chat-agent-sender.test-fixture'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -12,10 +17,6 @@ import { TerminalCrewPortals } from './TerminalCrewPortals'
 import { holdPhysicalCloseTasks } from './crew-menu.test-fixture'
 
 const rig = vi.hoisted(() => ({ open: vi.fn(), copy: vi.fn() }))
-vi.mock('@/store', () => ({
-  useAppStore: (select: (state: { terminalLayoutsByTabId: {} }) => unknown) =>
-    select({ terminalLayoutsByTabId: {} })
-}))
 vi.mock('./use-terminal-crew-identity', () => ({
   useTerminalCrewIdentity: (paneKey: string) => ({ target: { kind: 'local' }, party: paneKey })
 }))
@@ -96,6 +97,9 @@ function mount() {
   const view = render(content())
   return { controller, first, second, manager, update: () => view.rerender(content()) }
 }
+beforeEach(() => {
+  resetSenderStore()
+})
 afterEach(() => {
   cleanup()
   for (const transport of transports.splice(0)) {
@@ -107,6 +111,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) {
     root.remove()
   }
+  useAppStore.setState(initialStore, true)
   vi.restoreAllMocks()
   vi.clearAllMocks()
 })
