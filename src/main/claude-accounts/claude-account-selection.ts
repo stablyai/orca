@@ -1,3 +1,4 @@
+import { normalizeClaudeManagedAccountDisplayName } from '../../shared/claude-managed-account-label'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
@@ -134,6 +135,7 @@ export class ClaudeAccountSelection {
       authMethod: account.authMethod ?? 'unknown',
       organizationUuid: account.organizationUuid ?? null,
       organizationName: account.organizationName ?? null,
+      displayName: account.displayName ?? null,
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,
       lastAuthenticatedAt: account.lastAuthenticatedAt
@@ -224,6 +226,23 @@ export class ClaudeAccountSelection {
       throw error
     }
     this.refreshUsage(outgoingAccountId, effectiveTarget)
+    return this.list()
+  }
+
+  updateDisplayName(accountId: string, displayName: string | null): ClaudeRateLimitAccountsState {
+    const account = this.requireAccount(accountId)
+    const nextDisplayName = normalizeClaudeManagedAccountDisplayName(displayName)
+    // Skip no-op renames so listing does not bump updatedAt and reorder the roster.
+    if ((account.displayName ?? null) === nextDisplayName) {
+      return this.list()
+    }
+    const settings = this.store.getSettings()
+    const now = Date.now()
+    this.saveSettings({
+      claudeManagedAccounts: settings.claudeManagedAccounts.map((entry) =>
+        entry.id === accountId ? { ...entry, displayName: nextDisplayName, updatedAt: now } : entry
+      )
+    })
     return this.list()
   }
 

@@ -136,7 +136,13 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
         { accountId },
         ACCOUNT_MUTATION_TIMEOUT_MS
       )
-    }
+    },
+    updateDisplayName: ({ accountId, displayName }) =>
+      callRuntimeResult<ClaudeRateLimitAccountsState>(
+        'accounts.updateClaudeDisplayName',
+        { accountId, displayName },
+        ACCOUNT_MUTATION_TIMEOUT_MS
+      ),
   }
 }
 

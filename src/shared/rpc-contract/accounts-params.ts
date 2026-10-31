@@ -45,6 +45,11 @@ export const RemoveAccountParams = z.object({
   accountId: z.string().min(1, 'Missing accountId')
 })
 
+export const UpdateClaudeDisplayNameParams = z.object({
+  accountId: z.string().min(1, 'Missing accountId'),
+  displayName: z.string().max(200).nullable()
+})
+
 export const CodexResetExpectedScope = z
   .object({
     target: CodexResetTarget,
