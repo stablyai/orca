@@ -207,4 +207,23 @@ describe('mid-turn send keys on a host that queues', () => {
     fireEvent.click(held)
     expect(sends()).toEqual([])
   })
+
+  it('shows no Queue or Steer control in goal mode, where Enter sets the goal', async () => {
+    const setObjective = vi.fn(async () => true)
+    render(
+      <TooltipProvider>
+        <Chat queueFollowUps overrides={{ threadGoal: { setObjective } }} />
+      </TooltipProvider>
+    )
+    await type('/goal')
+    changePrompt(screen.getByRole('textbox'), 'ship the fix')
+    expect(screen.queryByRole('button', { name: /^(Queue|Steer) message$/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Stop the agent' })).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', keyCode: 13 })
+    })
+    expect(setObjective).toHaveBeenCalledExactlyOnceWith('ship the fix')
+    expect(sends()).toEqual([])
+  })
 })

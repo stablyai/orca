@@ -179,9 +179,14 @@ export function NativeChatComposerField({
   agent
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
-  // Mid-turn with something to send, a control beside Stop says what Enter does; never while Stopping.
+  // Mid-turn with something to send, a control beside Stop says what Enter does; never while
+  // Stopping, nor in goal mode, where Enter sets the goal.
   const followUpAction =
-    !editSession && isWorking && !afterStop && (draft.trim() !== '' || imageAttachments.length > 0)
+    !editSession &&
+    !goalMode?.active &&
+    isWorking &&
+    !afterStop &&
+    (draft.trim() !== '' || imageAttachments.length > 0)
       ? sendFollowUp?.action
       : undefined
   const followUpOffersChoice = sendFollowUp?.offersChoice === true
