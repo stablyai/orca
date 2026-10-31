@@ -90,6 +90,7 @@ export function zoomViewAt({
   view,
   nextZoom,
   anchor,
+  target = anchor,
   viewport,
   fitScale,
   content,
@@ -98,30 +99,39 @@ export function zoomViewAt({
   view: PanZoomView
   nextZoom: number
   anchor: PanZoomPoint
+  /** Where the content under `anchor` ends up; a pinch whose fingers moved lands it at their new midpoint. */
+  target?: PanZoomPoint
   viewport: PanZoomSize
   fitScale: number
   content: PanZoomSize
   contain?: boolean
 }): PanZoomView {
   const zoom = clampPanZoom(nextZoom, fitScale)
-  const offset = {
-    x: anchor.x - viewport.width / 2,
-    y: anchor.y - viewport.height / 2
-  }
+  const from = { x: anchor.x - viewport.width / 2, y: anchor.y - viewport.height / 2 }
+  const to = { x: target.x - viewport.width / 2, y: target.y - viewport.height / 2 }
   const scale = fitScale * view.zoom
   const nextScale = fitScale * zoom
   return {
     zoom,
     center: clampPanZoomCenter(
       {
-        x: view.center.x + offset.x / scale - offset.x / nextScale,
-        y: view.center.y + offset.y / scale - offset.y / nextScale
+        x: view.center.x + from.x / scale - to.x / nextScale,
+        y: view.center.y + from.y / scale - to.y / nextScale
       },
       content,
       contain ? viewport : null,
       nextScale
     )
   }
+}
+
+/** Re-applies edge containment after the viewport or fit changed, e.g. on rotation or a pane resize. */
+export function containPanZoomView(
+  view: PanZoomView,
+  { content, viewport, fitScale }: { content: PanZoomSize; viewport: PanZoomSize; fitScale: number }
+): PanZoomView {
+  const scale = fitScale * view.zoom
+  return { zoom: view.zoom, center: clampPanZoomCenter(view.center, content, viewport, scale) }
 }
 
 export function getPanZoomViewOffset(
