@@ -108,7 +108,7 @@ function openSeededUntitledFile(
 export function createPluginNewFileActions(
   _set: EditorSet,
   get: EditorGet
-): Pick<EditorSlice, 'openNewPluginFileInActiveWorkspace' | 'openSampleFileInActiveWorkspace'> {
+): Pick<EditorSlice, 'openNewPluginFileInActiveWorkspace' | 'openBlankFileInActiveWorkspace'> {
   return {
     openNewPluginFileInActiveWorkspace: async (newFile, groupId) => {
       const readTemplate = window.api?.plugins?.readNewFileTemplate
@@ -137,8 +137,8 @@ export function createPluginNewFileActions(
         groupId
       )
     },
-    openSampleFileInActiveWorkspace: async (sample) => {
-      await openSeededUntitledFile(get, sample.extension, async () => sample.content)
+    openBlankFileInActiveWorkspace: async (extension) => {
+      await openSeededUntitledFile(get, extension, async () => '')
     }
   }
 }
