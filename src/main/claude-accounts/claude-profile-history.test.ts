@@ -106,12 +106,14 @@ describe('Claude profile history sharing', () => {
         }
       }
     )
-    const report = await f.share()
+    const report = await f.share().finally(restore)
     expect(fs.readdirSync(join(f.defaultHome, 'todos')).sort()).toEqual(['a.json', 'c.json'])
     expect(report.warnings).toContainEqual(
       expect.objectContaining({ surface: 'todos', code: 'failed' })
     )
-    restore()
+    expect(report.warnings).not.toContainEqual(
+      expect.objectContaining({ surface: 'todos', code: 'retained-conflict' })
+    )
     await f.share()
     expect(fs.readdirSync(join(f.defaultHome, 'todos')).sort()).toEqual([
       'a.json',
@@ -123,18 +125,20 @@ describe('Claude profile history sharing', () => {
     const f = fixture()
     fs.mkdirSync(join(f.profileHome, 'plans'))
     fs.writeFileSync(join(f.profileHome, 'plans/p.md'), 'plan')
-    const restore = observeHistoryFilesystem(loadHistoryFilesystem(), (operation) => {
-      if (operation === 'sameDevice') {
-        throw Object.assign(new Error('cross-device'), { code: 'EXDEV' })
-      }
-    })
-    const report = await f.share()
-    expect(report.warnings).toContainEqual(
-      expect.objectContaining({ surface: 'plans', code: 'cross-filesystem' })
+    // The native answer for directories on different devices.
+    const restore = observeHistoryFilesystem(loadHistoryFilesystem(), (operation) =>
+      operation === 'sameDevice' ? false : undefined
     )
-    expect(fs.lstatSync(join(f.profileHome, 'plans')).isDirectory()).toBe(true)
-    expect(fs.readFileSync(join(f.profileHome, 'plans/p.md'), 'utf8')).toBe('plan')
-    restore()
+    try {
+      const report = await f.share()
+      expect(report.warnings).toContainEqual(
+        expect.objectContaining({ surface: 'plans', code: 'cross-filesystem' })
+      )
+      expect(fs.lstatSync(join(f.profileHome, 'plans')).isDirectory()).toBe(true)
+      expect(fs.readFileSync(join(f.profileHome, 'plans/p.md'), 'utf8')).toBe('plan')
+    } finally {
+      restore()
+    }
   })
   itLinks('retains prompt cursors, drains late appends and repairs a CLI replacement', async () => {
     const f = fixture()

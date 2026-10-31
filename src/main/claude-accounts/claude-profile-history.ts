@@ -77,7 +77,8 @@ export function mergeClaudeProfileDirectory(
           captured.close()
         }
         if (!sameDevice) {
-          restore()
+          // Restore only into an absent H; an occupied H keeps P where it is.
+          retry(() => parent.move(pending, parent, name))
           throw crossFilesystem()
         }
         drainDirectory(parent, pending, target, report, name, pendingPath)
@@ -133,7 +134,8 @@ export function mergeClaudeProfileDirectory(
     try {
       retry(() => parent.link(name, toNamespacedPath(destinationPath)))
     } catch (error) {
-      if (current === 'directory') {
+      // A rival's staged P is its own to restore.
+      if (staged) {
         try {
           restore()
         } catch (restoreError) {

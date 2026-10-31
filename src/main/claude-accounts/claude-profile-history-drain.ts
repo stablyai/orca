@@ -24,9 +24,13 @@ export function retry<T>(operation: () => T): T {
   }
 }
 
-function openOrCreate(parent: HistoryDirectory, name: string): HistoryDirectory {
+function openOrCreate(
+  parent: HistoryDirectory,
+  name: string,
+  like: HistoryDirectory
+): HistoryDirectory {
   try {
-    retry(() => parent.mkdir(name))
+    retry(() => parent.mkdir(name, like))
   } catch (error) {
     if (!hasCode(error, 'EEXIST')) {
       throw error
@@ -47,11 +51,15 @@ function moveHistoryTree(
   for (const name of source.entries()) {
     try {
       if (source.kind(name) === 'directory') {
-        const child = retry(() => source.open(name))
+        const child = openIfPresent(source, name)
+        if (!child) {
+          // Another setup already drained and removed it.
+          continue
+        }
         let target: HistoryDirectory | undefined
         try {
           try {
-            target = openOrCreate(destination, name)
+            target = openOrCreate(destination, name, child)
           } catch (error) {
             if (destination.kind(name) !== 'directory' && destination.kind(name) !== null) {
               result.retained += 1
@@ -71,6 +79,17 @@ function moveHistoryTree(
     } catch (error) {
       result.failed.push(error)
     }
+  }
+}
+
+function openIfPresent(parent: HistoryDirectory, name: string): HistoryDirectory | undefined {
+  try {
+    return retry(() => parent.open(name))
+  } catch (error) {
+    if (hasCode(error, 'ENOENT')) {
+      return undefined
+    }
+    throw error
   }
 }
 
@@ -97,7 +116,10 @@ export function drainDirectory(
   name: string,
   pendingPath: string
 ): void {
-  const source = retry(() => parent.open(pending))
+  const source = openIfPresent(parent, pending)
+  if (!source) {
+    return
+  }
   if (source.same(destination)) {
     source.close()
     return
@@ -109,7 +131,8 @@ export function drainDirectory(
     source.close()
   }
   try {
-    if (!removeEmpty(parent, pending)) {
+    // An entry that failed to move is what keeps P non-empty, not a conflict.
+    if (!removeEmpty(parent, pending) && !result.failed.length) {
       result.retained = Math.max(1, result.retained)
     }
   } catch (error) {

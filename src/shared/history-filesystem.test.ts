@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   linkSync,
   mkdirSync,
@@ -10,11 +11,12 @@ import {
   symlinkSync,
   writeFileSync
 } from 'node:fs'
+import { once } from 'node:events'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess } from '@orca/process-host'
+import { spawnProcess } from '@orca/process-host'
 import { loadHistoryFilesystem } from './history-filesystem'
 
 const roots: string[] = []
@@ -50,6 +52,11 @@ describe('actual history filesystem addon', () => {
       expect(f.from.move('entry', f.to, 'moved')).toBe('moved')
       expect(statSync(join(target, 'moved')).ino).toBe(identity)
       expect(f.from.move('entry', f.to, 'other')).toBe('missing')
+      if (process.platform !== 'win32') {
+        chmodSync(source, 0o700)
+        f.parent.mkdir('recreated', f.from)
+        expect(statSync(join(f.root, 'recreated')).mode & 0o777).toBe(0o700)
+      }
       f.parent.mkdir('occupied')
       expect(f.parent.move('source', f.parent, 'occupied', true)).toBe('collision')
       expect(f.parent.move('source', f.parent, 'pending', true)).toBe('moved')
@@ -102,29 +109,56 @@ describe('actual history filesystem addon', () => {
     const binary = createRequire(__filename).resolve(
       '../../native/history-filesystem/build/Release/history_filesystem.node'
     )
-    const outputs = await Promise.all(
-      [join(f.root, 'source'), other].map((source) =>
-        runProcess({
-          program: process.execPath,
-          args: [
-            '--import',
-            'tsx',
-            resolve('src/shared/history-filesystem-process-fixture.ts'),
-            binary,
-            source,
-            join(f.root, 'destination'),
-            'entry'
-          ],
-          input: 'move\n',
-          timeoutMs: 10_000
-        })
-      )
+    const children = [join(f.root, 'source'), other].map((source) =>
+      spawnProcess({
+        program: process.execPath,
+        args: [
+          '--import',
+          'tsx',
+          resolve('src/shared/history-filesystem-process-fixture.ts'),
+          binary,
+          source,
+          join(f.root, 'destination'),
+          'entry'
+        ],
+        stdio: 'pipe'
+      })
     )
-    expect(outputs.map((output) => output.code)).toEqual([0, 0])
-    expect(outputs.map((output) => output.stdout.trim().split('\n').at(-1)).sort()).toEqual([
-      'collision',
-      'moved'
-    ])
+    try {
+      const outputs = children.map((child) => {
+        let text = ''
+        child.stdout.setEncoding('utf8')
+        const ready = new Promise<void>((resolveReady, reject) => {
+          child.stdout.on('data', (chunk: string) => {
+            text += chunk
+            if (text.includes('ready:')) {
+              resolveReady()
+            }
+          })
+          child.once('close', () => reject(new Error(`fixture exited before ready: ${text}`)))
+        })
+        return { ready, text: () => text }
+      })
+      const closed = children.map((child) =>
+        once(child, 'close', { signal: AbortSignal.timeout(10_000) })
+      )
+      // Both processes hold their opened source and destination before either consumes.
+      await Promise.all(outputs.map((output) => output.ready))
+      for (const child of children) {
+        child.stdin.write('move\n')
+      }
+      expect((await Promise.all(closed)).map(([code]) => code)).toEqual([0, 0])
+      expect(outputs.map((output) => output.text().trim().split('\n').at(-1)).sort()).toEqual([
+        'collision',
+        'moved'
+      ])
+    } finally {
+      for (const child of children) {
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill()
+        }
+      }
+    }
     const variants = [
       join(f.root, 'source', 'entry'),
       join(other, 'entry'),

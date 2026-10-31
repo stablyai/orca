@@ -30,7 +30,6 @@ export async function provisionClaudeAccountProfile(args: {
   installHooks: ((target: { configDir: string }) => AgentHookInstallStatus) | null
   platform?: NodeJS.Platform
 }): Promise<ClaudeProfileSetupReport> {
-  loadHistoryFilesystem()
   const platform = args.platform ?? process.platform
   const report = createClaudeProfileReport()
   const firstSetup = !existsSync(claudeProfileMarkerPath(args.profile))
@@ -75,6 +74,13 @@ export async function provisionClaudeAccountProfile(args: {
     }
     return 'merged'
   })
+  // A missing history binding is a build defect: history failed before mutating anything and the
+  // launch proceeds, but setup stays unmarked so the next launch retries and warns again.
+  try {
+    loadHistoryFilesystem()
+  } catch {
+    return { outcome: 'prepared', ...report }
+  }
   // Mark last so interrupted setup is retried before the next launch.
   markSetUp()
   return { outcome: 'prepared', ...report }

@@ -33,19 +33,23 @@ it('runs account setup in the built worker entry, off the calling thread', async
     logLevel: 'silent'
   })
 
-  await expect(
-    runClaudeProfileSetupInWorker(
-      {
-        dataRoot,
-        profile,
-        userHome,
-        userConfigDir: undefined,
-        hooks: false,
-        claudeVersion: undefined
-      },
-      entry
-    )
-  ).rejects.toThrow('History filesystem build is unavailable')
+  // A missing binding still lets the account launch, but leaves setup unmarked for a retry.
+  const withoutBinding = await runClaudeProfileSetupInWorker(
+    {
+      dataRoot,
+      profile,
+      userHome,
+      userConfigDir: undefined,
+      hooks: false,
+      claudeVersion: undefined
+    },
+    entry
+  )
+  expect(withoutBinding.outcome).toBe('prepared')
+  expect(withoutBinding.warnings).toContainEqual(
+    expect.objectContaining({ detail: expect.stringContaining('History filesystem build') })
+  )
+  expect(existsSync(join(profile.home, 'projects'))).toBe(false)
   expect(existsSync(join(dataRoot, 'claude-profiles', 'a', 'profile.json'))).toBe(false)
   copyFileSync(
     resolve('native/history-filesystem/build/Release/history_filesystem.node'),
