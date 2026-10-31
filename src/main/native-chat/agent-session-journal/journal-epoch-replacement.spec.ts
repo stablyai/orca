@@ -267,6 +267,38 @@ export function registerJournalEpochReplacementTests(): void {
         })
         expect(journal.queuedMessages.get('queue-0')?.state).toBe('dispatched')
         expect(journal.snapshot().items.map((entry) => entry.body)).toEqual([card.body, card.body])
+        const currentCut = journal.snapshot().items.map(({ itemId, body, turnScope }) => ({
+          itemId,
+          body,
+          turnScope
+        }))
+        extraction.mockClear()
+        insertion.mockClear()
+        acquired.mockClear()
+        await journal.replaceEpochItems('legacy_import', 1, [
+          {
+            identity: item(9),
+            body: card.body,
+            ownerFence: 1,
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE
+          }
+        ])
+        expect(
+          journal.snapshot().items.map(({ itemId, body, turnScope }) => ({
+            itemId,
+            body,
+            turnScope
+          }))
+        ).toEqual(currentCut)
+        expect(journal.submission('pending')).toMatchObject({
+          dispatchState: 'pending',
+          handoverRecorded: true,
+          queuedMessageId: 'queue-0'
+        })
+        expect(journal.queuedMessages.get('queue-0')?.state).toBe('dispatched')
+        expect(extraction).toHaveBeenCalledTimes(count + 2)
+        expect(insertion).toHaveBeenCalledTimes(count + 2)
+        expect(acquired).toHaveBeenCalledTimes(count + 2)
         process.stdout.write(
           `pr34654-mixed-epoch-contract ${JSON.stringify({ q: count, i: 1, s: 1, extractions: extraction.mock.calls.length, insertions: insertion.mock.calls.length, acquired: acquired.mock.calls.length })}\n`
         )
@@ -274,6 +306,16 @@ export function registerJournalEpochReplacementTests(): void {
       await journals.closeAll()
       const reopened = await journals.open({ identity: IDENTITY, stateDirectory: root })
       database = openTestJournalHostDatabase(root)
+      if (mode === 'replace') {
+        const card = reopened.queuedMessages.get('queue-0')!
+        expect(reopened.snapshot().items.map((entry) => entry.body)).toEqual([card.body, card.body])
+        expect(reopened.submission('pending')).toMatchObject({
+          dispatchState: 'pending',
+          handoverRecorded: true,
+          queuedMessageId: 'queue-0'
+        })
+        expect(card.state).toBe('dispatched')
+      }
       expect(reopened.queuedMessages.list().map((card) => card.body)).toEqual(
         before.map((card) => card.body)
       )

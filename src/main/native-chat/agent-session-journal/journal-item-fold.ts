@@ -9,7 +9,11 @@ import {
   isRootAgentJournalItem,
   namesAgentJournalProducer
 } from '../../../shared/agent-session-journal-producer'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from '../../../shared/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 
 export function statedOrDerivedTurnScope(
@@ -36,6 +40,22 @@ export function upsertJournalItem(
     return
   }
   state.derivedTurnScope.observe(itemId, isRootAgentJournalItem(next), existing?.body, next.body)
+  const turn = readAgentJournalTurn(next.body)
+  const producer = namesAgentJournalProducer(next) ? next : (existing ?? next)
+  const cancelled =
+    turn &&
+    isRootAgentJournalItem(producer) &&
+    agentTurnVerdict({ state: turn.state, outcome: readAgentJournalTurnOutcome(turn) }) ===
+      'cancellation'
+  if (!cancelled) {
+    state.questionInterruptions.delete(itemId)
+  } else if (!state.questionInterruptions.has(itemId)) {
+    state.questionInterruptions.set(itemId, {
+      id: itemId,
+      at: turn.completedAt ?? next.observedAt,
+      order: [next.sequence, next.sequenceIndex ?? 0]
+    })
+  }
   if (fences.executionOwner !== undefined) {
     state.itemExecutionOwners.set(itemId, fences.executionOwner)
   }
@@ -92,6 +112,7 @@ export function removeJournalItem(
   }
   state.tombstones.set(itemId, revision)
   state.items.delete(itemId)
+  state.questionInterruptions.delete(itemId)
   state.itemFences.delete(itemId)
   state.itemExecutionOwners.delete(itemId)
 }

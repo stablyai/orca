@@ -4,6 +4,7 @@ import { createJournalItemReads } from './journal-item-reads'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { structuredMessageQuestions } from '../message-question-repository'
+import { messageQuestionSourceId } from '../message-question-source'
 import { createJournalPublicReader } from './journal-public-read'
 import type {
   AgentJournalCursor,
@@ -154,10 +155,12 @@ export class AgentSessionJournal {
   }
 
   /** Refuse future writes and drain admitted ones; the host retains database ownership. */
-  close(): Promise<void> {
+  async close(): Promise<void> {
     this.queuedMessages.editLeases.dispose()
     this.queue.markClosed()
-    return this.queue.drain()
+    await this.queue.drain()
+    const { repository, source } = this.messageQuestions()
+    repository.invalidate(messageQuestionSourceId(source))
   }
 
   /** One nonthrowing listener; undefined rows mean adopted history, an empty array means metadata. */
@@ -199,11 +202,19 @@ export class AgentSessionJournal {
   messageQuestions = () => structuredMessageQuestions(this.database, this.identity)
 
   /** Actual item removal and clear facts survive canonical replacement and failed derived writes. */
-  questionSourceFacts = () => ({
-    removed: this.state.tombstones,
-    canonicalItemId: this.canonicalItemId,
-    clearOperationId: this.state.queuePauseMarks.cleared?.operationId
-  })
+  questionSourceFacts = () => {
+    const source = this.state.questionSource
+    if (!source) {
+      throw new Error('journal_question_source_missing')
+    }
+    return {
+      inputs: source.inputs,
+      removed: source.state.tombstones,
+      interruptedTurns: source.state.questionInterruptions,
+      canonicalItemId: source.canonicalItemId,
+      clearOperationId: this.state.queuePauseMarks.cleared?.operationId
+    }
+  }
 
   submissions = this.itemReads.submissions
   historyOrigin = this.itemReads.historyOrigin

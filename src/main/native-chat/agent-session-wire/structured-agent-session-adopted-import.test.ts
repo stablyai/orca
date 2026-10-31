@@ -1,7 +1,9 @@
+import './structured-agent-session-question-import-replay.spec'
+import * as fileVersions from '../transcript-file-version'
 import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session-current-requests-wire'
 import * as sourceFiles from 'node:fs'
 vi.mock('node:fs', async (original) => ({ ...(await original<typeof sourceFiles>()) }))
-import * as transcriptReaders from '../transcript-tail-reader'
+import * as transcriptFormats from '../agent-session-journal/journal-legacy-transcript-format'
 import { MessageQuestionIngest } from '../message-question-ingest'
 import * as lifecycle from '../message-question-lifecycle'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -431,6 +433,8 @@ it.each([
   { mode: 'new', count: 2200, fault: 'none' },
   { mode: 'saved', count: 2200, fault: 'none' },
   { mode: 'saved', count: 22000, fault: 'none' },
+  { mode: 'saved', count: 2200, fault: 'growth' },
+  { mode: 'saved', count: 22000, fault: 'growth' },
   { mode: 'saved', count: 2200, fault: 'unreadable' },
   { mode: 'saved', count: 2200, fault: 'digest' }
 ])(
@@ -556,19 +560,37 @@ it.each([
       }
       return stream
     })
-    const originalDecoder = transcriptReaders.nativeChatLineDecoderForAgent
+    const originalFormat = transcriptFormats.resolveLegacyTranscriptFormat
     const ingestVisits = vi.spyOn(MessageQuestionIngest.prototype, 'append')
     const lifecycleVisits = vi.spyOn(lifecycle, 'reconcileMessageQuestionResolution')
     let decoderVisits = 0
-    vi.spyOn(transcriptReaders, 'nativeChatLineDecoderForAgent').mockImplementation((agent) => {
-      const decode = originalDecoder(agent)
-      return decode
-        ? (line, fallback) => {
-            decoderVisits++
-            return decode(line, fallback)
-          }
-        : null
+    vi.spyOn(transcriptFormats, 'resolveLegacyTranscriptFormat').mockImplementation((agent) => {
+      const format = originalFormat(agent)
+      if (!format || format.transcriptAgent === 'opencode') {
+        return format
+      }
+      return {
+        ...format,
+        decode: (line, fallback) => {
+          decoderVisits++
+          return format.decode(line, fallback)
+        }
+      }
     })
+    let growthAppends = 0
+    if (fault === 'growth') {
+      const fingerprint = fileVersions.boundaryFingerprint
+      vi.spyOn(fileVersions, 'boundaryFingerprint').mockImplementation(async (...args) => {
+        const value = await fingerprint(...args)
+        if (args[0] === transcriptPath) {
+          await appendFile(
+            transcriptPath,
+            `${question(`growth-${growthAppends++}`, 'outside original')}\n`
+          )
+        }
+        return value
+      })
+    }
     if (mode === 'new') {
       expect(await host.create({ callerKey: 'client-1' }, params)).toMatchObject({ ok: true })
     }
@@ -623,7 +645,7 @@ it.each([
       }
     })
     try {
-      if (fault !== 'none') {
+      if (fault === 'unreadable' || fault === 'digest') {
         await vi.waitFor(() => expect(reads.mock.calls.length).toBeGreaterThanOrEqual(2))
         expect(state.requestAuthority).toBeDefined()
         expect(state.asyncQuestionAuthority).toBeUndefined()
@@ -669,6 +691,10 @@ it.each([
         ['stopped-prefix', 'cancelled']
       ])
       expect(state.asyncQuestionAuthority?.version).toBe(state.requestMarker?.version)
+      if (fault === 'growth') {
+        expect(growthAppends).toBeGreaterThan(0)
+        expect(sourcePasses).toBe(1)
+      }
       expect(reads.mock.calls.length).toBeGreaterThan(1)
       const visits = decoderVisits
       const ingests = ingestVisits.mock.calls.length

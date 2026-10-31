@@ -488,6 +488,14 @@ export function registerJournalStoreTests(): void {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
       await earlier.appendSubmission(submission('earlier'))
+      // Output revisions advance the old physical cursor without adding retained source inputs.
+      for (let revision = 0; revision < 8; revision++) {
+        await earlier.appendItem(item(1), body(`output-${revision}`), {
+          fence: 1,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      }
+      const oldOpenCursor = earlier.cursor()
       await earlier.close()
 
       const journal = await open()
@@ -504,7 +512,8 @@ export function registerJournalStoreTests(): void {
       await journal.replaceEpochItems('handle_forked', 1, [])
       await journal.appendSubmission(submission('later'))
       const later = journal.submissions().find((entry) => entry.clientMessageId === 'later')
-      expect(later?.acceptedSequence).toBeLessThanOrEqual(2)
+      expect(journal.cursor().epoch).not.toBe(oldOpenCursor.epoch)
+      expect(later?.acceptedSequence).toBeLessThanOrEqual(oldOpenCursor.sequence)
       expect(journal.wroteBeforeOpen(later?.acceptedSequence)).toBe(false)
     })
   })

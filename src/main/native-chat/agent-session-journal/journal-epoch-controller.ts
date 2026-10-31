@@ -51,11 +51,7 @@ export class JournalEpochController {
 
   /** Serialize rollover with appends and apply the same writable guard as every other journal write. */
   roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
-    return this.deps.serialize(() => {
-      assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
-      this.start(reason, fence)
-      return this.deps.cursor()
-    })
+    return this.replace(reason, fence, [])
   }
 
   replace(

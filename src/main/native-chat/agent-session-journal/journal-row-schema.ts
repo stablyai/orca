@@ -1,3 +1,4 @@
+import { combinedContent, fieldsContent } from './journal-content-verdict'
 import type { JournalItemEcho } from './journal-item-echo'
 // Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
 // New kinds need reader-first rollout or a version bump because older builds may delete them.
@@ -32,6 +33,7 @@ export type JournalRowBase = AgentJournalProducerLinkage & {
   fence: number
   /** Timestamp is observational; seq determines ordering. */
   ts: number
+  replayRole?: 'source-only' | 'materialization-only'
   recovered?: true
   /** Additive base field; absent legacy scopes are derived during replay. */
   turnScope?: AgentJournalTurnScope
@@ -238,6 +240,13 @@ function journalRowContent(record: Record<string, unknown>): AgentJournalContent
   if (!hasJournalRowEnvelope(record)) {
     return 'malformed'
   }
+  if (
+    record.replayRole !== undefined &&
+    record.replayRole !== 'source-only' &&
+    record.replayRole !== 'materialization-only'
+  ) {
+    return 'unreadable'
+  }
   const { kind } = record
   const contentCheck = typeof kind === 'string' ? KNOWN_ROW_KINDS.get(kind) : undefined
   if (contentCheck) {
@@ -248,18 +257,6 @@ function journalRowContent(record: Record<string, unknown>): AgentJournalContent
 
 function isJournalRow(record: Record<string, unknown>): record is JournalRow {
   return journalRowContent(record) === 'readable'
-}
-
-// Future content outranks adjacent corruption so unsupported history is never discarded.
-function combinedContent(...verdicts: AgentJournalContentVerdict[]): AgentJournalContentVerdict {
-  if (verdicts.includes('unreadable')) {
-    return 'unreadable'
-  }
-  return verdicts.includes('malformed') ? 'malformed' : 'readable'
-}
-
-function fieldsContent(hold: boolean): AgentJournalContentVerdict {
-  return hold ? 'readable' : 'malformed'
 }
 
 // Exhaustive kind keys make missing checks a compile error.

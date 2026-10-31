@@ -23,7 +23,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
@@ -119,8 +122,21 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await host.flushAllStreamedEvents()
-  await rm(directory, { recursive: true, force: true })
+  const failures: unknown[] = []
+  for (const cleanup of [
+    () => host.flushAllStreamedEvents(),
+    () => closeTestJournalHostDatabase(directory),
+    () => rm(directory, { recursive: true, force: true })
+  ]) {
+    try {
+      await cleanup()
+    } catch (error) {
+      failures.push(error)
+    }
+  }
+  if (failures.length) {
+    throw new AggregateError(failures, 'rewind fixture cleanup failed')
+  }
 })
 
 function fence(): number {

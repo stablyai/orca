@@ -100,7 +100,8 @@ it('keeps exactly the cancelled call terminal through definition edits, replay a
   })
   expect(repository.current(source).pending.map((row) => row.id)).toEqual([secondCall.id, q2.id])
   const stable = repository.current(source)
-  expect(repository.cancel(source, [q1.id, q1.id], 'desktop-1', 20)).toBe(stable)
+  expect(repository.cancel(source, [q1.id, q1.id], 'desktop-1', 20)).toEqual([stable.records[0]])
+  expect(repository.current(source)).toBe(stable)
 })
 
 it('validates every Cancel target before changing any record, without inventing unknown targets', () => {
@@ -256,4 +257,47 @@ it('retains terminal linkage until explicit history/source or managed-owner dele
   expect(repository.current(source).records).toHaveLength(1)
   repository.deleteSource(source)
   expect(repository.current(source).records).toEqual([])
+})
+
+it('rejects a real target transaction COMMIT failure and leaves its whole displayed set pending', () => {
+  const repository = messageQuestionsFor(database)
+  const records = [occurrence('first', 1), occurrence('second', 2)]
+  repository.reconcile(source, records)
+  const before = repository.current(source)
+  const exec = database.db.exec.bind(database.db)
+  let refused = false
+  const commit = vi.spyOn(database.db, 'exec').mockImplementation((sql) => {
+    if (sql === 'COMMIT' && !refused) {
+      refused = true
+      throw new Error('target commit refused')
+    }
+    return exec(sql)
+  })
+  expect(() =>
+    repository.cancel(
+      source,
+      records.map((record) => record.id),
+      'phone',
+      9
+    )
+  ).toThrow('target commit refused')
+  expect(database.db.isTransaction).toBe(false)
+  expect(repository.current(source)).toBe(before)
+  expect(
+    database.db
+      .prepare('SELECT record_json FROM message_question_occurrences')
+      .all()
+      .map((row) => JSON.parse(String(row.record_json)).resolution.state)
+  ).toEqual(['pending', 'pending'])
+  commit.mockRestore()
+  expect(
+    repository
+      .cancel(
+        source,
+        records.map((record) => record.id),
+        'phone',
+        10
+      )
+      .map((record) => record.resolution.state)
+  ).toEqual(['cancelled', 'cancelled'])
 })

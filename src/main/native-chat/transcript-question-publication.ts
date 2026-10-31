@@ -6,6 +6,11 @@ import {
 } from './agent-session-wire/agent-session-current-requests'
 import type { MessageQuestionIngest } from './message-question-ingest'
 
+export type TranscriptQuestionMaterialization = {
+  materialized: boolean
+  failure?: { error: unknown }
+}
+
 export function createTranscriptQuestionPublication(sourceId: string, sessionId: string) {
   const owner = {}
   const blocking: [] = []
@@ -56,5 +61,22 @@ export function createTranscriptQuestionPublication(sourceId: string, sessionId:
       listeners.forEach((notify) => notify(next))
     }
   }
-  return { publish, unavailable, listeners, current: () => projection }
+  function materialize(
+    ingest: MessageQuestionIngest,
+    contextVerified: boolean,
+    context: string
+  ): TranscriptQuestionMaterialization {
+    try {
+      publish(ingest.current(), context)
+      return { materialized: true }
+    } catch (error) {
+      try {
+        unavailable(contextVerified, context)
+      } catch {
+        // A subscriber failure cannot revoke source admission or a committed target receipt.
+      }
+      return { materialized: false, failure: { error } }
+    }
+  }
+  return { materialize, publish, unavailable, listeners, current: () => projection }
 }

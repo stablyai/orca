@@ -112,7 +112,11 @@ export class StructuredAgentSessionBackgroundTaskChannel {
         this.deps.now?.() ?? Date.now()
       )
     ) {
-      this.subscribers.republishCurrentRequests(request.sessionId, journal)
+      try {
+        this.subscribers.republishCurrentRequests(request.sessionId, journal)
+      } catch {
+        // The committed target receipt survives publication failure; existing reads recover the view.
+      }
     }
   }
 

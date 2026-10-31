@@ -1,4 +1,12 @@
-import { journalItemDeclaresEcho } from './journal-item-echo'
+import { resolveJournalItemId } from './journal-submission-echo'
+export {
+  resolveJournalItemId,
+  isProviderUserMessageEcho,
+  journalEchoClaimant
+} from './journal-submission-echo'
+import type { JournalSourceIdentity } from './journal-source-echoes'
+import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import { JournalQuestionSource } from './journal-question-source'
 // Live append and replay share this fold. Revisions change content, preserving creation position
 // and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
 
@@ -11,11 +19,6 @@ import type {
 import { journalHistoryOrigin, type JournalHistoryOrigin } from './journal-history-origin'
 import { journalBatchMutationProducer, journalRenderItem } from './journal-render-item'
 import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import { removeJournalItem, statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import { journalItemRevisionIsStale } from './journal-item-revision'
@@ -23,11 +26,9 @@ import { observeJournalProviderActivity } from './journal-provider-activity'
 import { isJournalStopOrResumeRow, type JournalRow } from './journal-row-schema'
 import { acceptSubmissionFromProviderItem, applyJournalSubmission } from './journal-submission-fold'
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
-import { isWriteFailureSubmission } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { projectJournalStopNote } from './journal-stop-note-projection'
 import { journalItemExecutionFence } from './journal-item-provenance'
 import { retireRewoundJournalSubmission } from './journal-rewind-submission-retirement'
-import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session-context-clear'
 import {
   createJournalQueuePauseMarks,
   foldJournalQueuePauseMark,
@@ -42,6 +43,8 @@ import {
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
 export type JournalReducerState = {
+  sourceIdentity?: JournalSourceIdentity
+  questionSource?: JournalQuestionSource
   sessionId: string
   epoch: string
   lastSequence: number
@@ -50,6 +53,11 @@ export type JournalReducerState = {
   oldestSequence: number
   highestFence: number
   items: Map<string, AgentJournalRenderItem>
+  /** Canonical cancellation mutation positions, rederived on replay rather than render creation time. */
+  questionInterruptions: Map<
+    string,
+    { id: string; at: number | null; order: readonly [number, number] }
+  >
   /** Creation provenance determines whether an item belongs to current execution. */
   itemFences: Map<string, number>
   /** Later runs may explicitly assume execution of reusable child items. */
@@ -82,8 +90,13 @@ export type JournalReducerState = {
   historyOrigin: JournalHistoryOrigin | null
 }
 
-export function createJournalReducerState(sessionId: string, epoch: string): JournalReducerState {
+export function createJournalReducerState(
+  sessionId: string,
+  epoch: string,
+  source = true
+): JournalReducerState {
   return {
+    ...(source ? { questionSource: new JournalQuestionSource(sessionId, epoch) } : {}),
     sessionId,
     epoch,
     lastSequence: 0,
@@ -91,6 +104,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     oldestSequence: 1,
     highestFence: 0,
     items: new Map(),
+    questionInterruptions: new Map(),
     itemFences: new Map(),
     itemExecutionOwners: new Map(),
     providerActivityAt: new Map(),
@@ -117,11 +131,27 @@ export function applyJournalRow(
   row: JournalRow,
   savedAt = row.ts
 ): void {
-  applyJournalRowFacts(state, row, savedAt)
+  state.lastSequence = Math.max(state.lastSequence, row.seq)
+  state.highestFence = Math.max(state.highestFence, row.fence)
+  if (row.replayRole === 'source-only') {
+    state.questionSource?.observe(row)
+    return
+  }
+  const admit = (input: JournalRow, index = 0) => {
+    if (row.replayRole !== 'materialization-only') {
+      state.questionSource?.observe(input, index)
+    }
+  }
+  applyJournalRowFacts(state, row, savedAt, admit)
   foldJournalQueueRow(state, row)
 }
 
-function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, savedAt: number): void {
+function applyJournalRowFacts(
+  state: JournalReducerState,
+  row: JournalRow,
+  savedAt: number,
+  admit: (row: JournalRow, index?: number) => void
+): void {
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
@@ -144,6 +174,7 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
     if (!state.itemEchoes.has(row.itemId)) {
       acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
     }
+    const before = state.items.get(itemId)
     upsertJournalItem(
       state,
       itemId,
@@ -151,6 +182,9 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
       journalRenderItem(itemId, row.revision, row.body, row, statedOrDerivedTurnScope(state, row)),
       { fence: row.fence, ownerFence: row.ownerFence, executionOwner: row.executionOwner }
     )
+    if (state.items.get(itemId) !== before) {
+      admit(row)
+    }
     const fence = journalItemExecutionFence(state, itemId) ?? row.fence
     observeJournalProviderActivity(state, row, row.itemId, row.body, savedAt, fence)
     return
@@ -160,7 +194,12 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
     return
   }
   if (row.kind === 'tombstone') {
-    removeJournalItem(state, resolveItemId(state, row.itemId), row.revision)
+    const itemId = resolveItemId(state, row.itemId)
+    const before = state.tombstones.get(itemId)
+    removeJournalItem(state, itemId, row.revision)
+    if (state.tombstones.get(itemId) !== before) {
+      admit(row)
+    }
     if (row.retireSubmission === true) {
       retireRewoundJournalSubmission(state, row.itemId)
     }
@@ -187,14 +226,23 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
         const scope = statedOrDerivedTurnScope(state, mutation)
         const item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
         item.observedAt = mutation.observedAt ?? row.ts
+        const before = state.items.get(itemId)
         upsertJournalItem(state, itemId, revision, item, {
           fence: row.fence,
           ownerFence: mutation.ownerFence
         })
+        if (state.items.get(itemId) !== before) {
+          admit({ ...row, mutations: [mutation] }, sequenceIndex)
+        }
         const fence = journalItemExecutionFence(state, itemId) ?? row.fence
         observeJournalProviderActivity(state, row, mutation.itemId, body, savedAt, fence)
       } else {
-        removeJournalItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
+        const itemId = resolveItemId(state, mutation.itemId)
+        const before = state.tombstones.get(itemId)
+        removeJournalItem(state, itemId, mutation.revision)
+        if (state.tombstones.get(itemId) !== before) {
+          admit({ ...row, mutations: [mutation] }, sequenceIndex)
+        }
       }
     }
     rememberAppliedSettlementId(state, row.settlementId)
@@ -202,9 +250,15 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
   }
   if (row.kind === 'submission') {
     applyJournalSubmission(state, row)
+    admit(row)
     return
   }
+  const before = state.submissions.get(row.clientMessageId)
+  const applicable = before && journalDispatchRowApplies(before)
   applyJournalDispatchRow(state, row)
+  if (applicable) {
+    admit(row)
+  }
 }
 
 export function rememberAppliedSettlementId(
@@ -219,65 +273,6 @@ export function rememberAppliedSettlementId(
     }
     state.appliedSettlementIds.delete(oldest)
   }
-}
-
-export function resolveJournalItemId(
-  state: JournalReducerState,
-  itemId: string,
-  body?: AgentJournalRenderItem['body']
-): string {
-  const aliased = state.aliases.get(itemId)
-  if (aliased) {
-    return aliased
-  }
-  const submissionId = journalEchoClaimant(state, itemId, body)
-  if (!submissionId) {
-    return itemId
-  }
-  state.aliases.set(itemId, submissionId)
-  return submissionId
-}
-
-export function isProviderUserMessageEcho(
-  itemId: string,
-  body: AgentJournalRenderItem['body']
-): boolean {
-  const identity = parseAgentJournalItemKey(itemId)
-  return (
-    body.kind === 'message' &&
-    body.role === 'user' &&
-    identity !== null &&
-    identity.provider !== 'orca'
-  )
-}
-
-/** Find an echo's eligible submission without claiming it. */
-export function journalEchoClaimant(
-  state: JournalReducerState,
-  itemId: string,
-  body?: AgentJournalRenderItem['body']
-): string | null {
-  if (
-    !body ||
-    journalItemDeclaresEcho(state.itemEchoes, itemId) ||
-    !isProviderUserMessageEcho(itemId, body)
-  ) {
-    return null
-  }
-  const fingerprint = agentSessionSendBodyFingerprint(state.sessionId, body)
-  const contextSequence = latestAgentSessionContextClearSequence(state.items.values())
-  // Match equal payloads in send order; proven-undelivered legacy rows cannot claim later resend echoes.
-  const submission = [...state.submissions.values()]
-    .sort((left, right) => left.submittedAt - right.submittedAt)
-    .find(
-      (candidate) =>
-        (contextSequence === 0 || (candidate.acceptedSequence ?? 0) > contextSequence) &&
-        candidate.dispatchState !== 'rejected' &&
-        !isWriteFailureSubmission(candidate) &&
-        candidate.payloadFingerprint === fingerprint &&
-        state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
-    )
-  return submission ? agentJournalSubmissionKey(submission.clientMessageId) : null
 }
 
 function resolveItemId(state: JournalReducerState, itemId: string): string {

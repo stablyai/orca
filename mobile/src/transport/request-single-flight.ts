@@ -9,14 +9,21 @@ type Deferred = {
 
 type SingleFlightEntry = {
   current: Promise<RpcResponse>
-  // Keep one trailing read with latest params so mid-flight refreshes do not receive the older response.
-  followUp: {
-    deferred: Deferred
-    params: unknown
-    options?: SingleFlightOptions
-    deadline?: number
-    timeout?: ReturnType<typeof setTimeout>
-  } | null
+  first?: QueuedRequest
+  last?: QueuedRequest
+  polling?: QueuedRequest
+}
+
+type QueuedRequest = {
+  previous?: QueuedRequest
+  next?: QueuedRequest
+  queued: boolean
+  deferred: Deferred
+  params: unknown
+  options?: SingleFlightOptions
+  deadline?: number
+  timeout?: ReturnType<typeof setTimeout>
+  detachAbort?: () => void
 }
 
 type SingleFlightOptions = {
@@ -26,6 +33,24 @@ type SingleFlightOptions = {
 }
 
 const inFlightRequests = new WeakMap<RpcClient, Map<string, Map<string, SingleFlightEntry>>>()
+
+function unlink(entry: SingleFlightEntry, operation: QueuedRequest): void {
+  if (operation.previous) {
+    operation.previous.next = operation.next
+  } else {
+    entry.first = operation.next
+  }
+  if (operation.next) {
+    operation.next.previous = operation.previous
+  } else {
+    entry.last = operation.previous
+  }
+  if (entry.polling === operation) {
+    entry.polling = undefined
+  }
+  operation.queued = false
+  operation.previous = operation.next = undefined
+}
 
 function makeDeferred(): Deferred {
   let resolve!: (value: RpcResponse) => void
@@ -71,39 +96,55 @@ export function sendSingleFlightRequest(
 
   const existing = requestsByKind.get(key)
   if (existing) {
-    // Retired queued views must not donate their expired budget to the next view.
-    if (existing.followUp?.options?.signal?.aborted) {
-      clearTimeout(existing.followUp.timeout)
-      existing.followUp.deferred.reject(existing.followUp.options.signal.reason)
-      existing.followUp = null
+    // Poll triggers want the latest value; scoped immutable pieces each own their params and signal.
+    const polling = options ? undefined : existing.polling
+    if (polling) {
+      polling.params = params
+      return polling.deferred.promise
     }
-    // Coalesce this trigger into one follow-up without extending its original operation budget.
-    if (existing.followUp) {
-      existing.followUp.params = params
-      existing.followUp.options = options
+    const timeoutMs = options?.requestOptions.timeoutMs
+    const followUp: QueuedRequest = {
+      queued: true,
+      previous: existing.last,
+      deferred: makeDeferred(),
+      params,
+      options,
+      ...(timeoutMs === undefined ? {} : { deadline: Date.now() + timeoutMs })
+    }
+    if (existing.last) {
+      existing.last.next = followUp
     } else {
-      const timeoutMs = options?.requestOptions.timeoutMs
-      const followUp: NonNullable<SingleFlightEntry['followUp']> = {
-        deferred: makeDeferred(),
-        params,
-        options,
-        ...(timeoutMs === undefined ? {} : { deadline: Date.now() + timeoutMs })
-      }
-      existing.followUp = followUp
-      if (timeoutMs !== undefined) {
-        followUp.timeout = setTimeout(() => {
-          if (existing.followUp !== followUp) {
-            return
-          }
-          existing.followUp = null
-          followUp.deferred.reject(new Error('Current-request read timed out in queue'))
-        }, timeoutMs)
-      }
+      existing.first = followUp
     }
-    return existing.followUp.deferred.promise
+    existing.last = followUp
+    if (!options) {
+      existing.polling = followUp
+    }
+    const withdraw = (reason: unknown): void => {
+      if (!followUp.queued) {
+        return
+      }
+      unlink(existing, followUp)
+      clearTimeout(followUp.timeout)
+      followUp.detachAbort?.()
+      followUp.deferred.reject(reason)
+    }
+    const signal = options?.signal
+    if (signal) {
+      const abort = () => withdraw(signal.reason)
+      signal.addEventListener('abort', abort, { once: true })
+      followUp.detachAbort = () => signal.removeEventListener('abort', abort)
+    }
+    if (timeoutMs !== undefined) {
+      followUp.timeout = setTimeout(
+        () => withdraw(new Error('Current-request read timed out in queue')),
+        timeoutMs
+      )
+    }
+    return followUp.deferred.promise
   }
 
-  const entry: SingleFlightEntry = { current: send(), followUp: null }
+  const entry: SingleFlightEntry = { current: send() }
   requestsByKind.set(key, entry)
 
   const cleanup = (): void => {
@@ -121,13 +162,14 @@ export function sendSingleFlightRequest(
 
   // Deliver queued fresh results to waiting callers; triggers during a follow-up may queue another.
   const onSettled = (): void => {
-    const followUp = entry.followUp
+    const followUp = entry.first
     if (!followUp) {
       cleanup()
       return
     }
-    entry.followUp = null
+    unlink(entry, followUp)
     clearTimeout(followUp.timeout)
+    followUp.detachAbort?.()
     let next: Promise<RpcResponse>
     try {
       followUp.options?.signal?.throwIfAborted()

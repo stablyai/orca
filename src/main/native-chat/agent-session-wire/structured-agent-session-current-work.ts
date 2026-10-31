@@ -48,6 +48,7 @@ export type StructuredAgentSessionCurrentWorkJournal = Pick<
   | 'wroteBeforeOpen'
   | 'item'
   | 'cursor'
+  | 'readSince'
   | 'messageQuestions'
   | 'questionSourceFacts'
   | 'historyOrigin'

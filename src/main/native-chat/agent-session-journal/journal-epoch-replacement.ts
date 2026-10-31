@@ -1,3 +1,4 @@
+import { carriedJournalQuestionInputs, journalReplacementRole } from './journal-replacement-source'
 import {
   journalItemEchoFields,
   journalItemEchoRestatement,
@@ -106,7 +107,20 @@ export function replaceJournalEpoch(input: {
   }
   const rows: JournalRow[] = [epochRow]
   applyJournalRow(state, epochRow)
-  if (input.previous && input.reason !== 'legacy_import' && input.reason !== 'session_created') {
+  const carried = input.previous
+    ? carriedJournalQuestionInputs(input.previous, epoch, input.fence)
+    : []
+  // An epoch envelope alone is not an admitted source extent to restate.
+  const replacing = (input.previous?.questionSource?.state.lastSequence ?? 0) > 0
+  for (const row of carried) {
+    applyJournalRow(state, row)
+    rows.push(row)
+  }
+  // Accepted-but-unhanded messages must survive provider history replacement.
+  const queued = [...(input.previous?.submissions.values() ?? [])]
+    .filter(isQueuedAgentJournalSubmission)
+    .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
+  if (input.previous && replacing) {
     const previous = input.previous
     const retained = new Set(
       input.items.map((item) => {
@@ -114,46 +128,55 @@ export function replaceJournalEpoch(input: {
         return previous.aliases.get(key) ?? key
       })
     )
+    for (const submission of queued) {
+      retained.add(agentJournalSubmissionKey(submission.clientMessageId))
+    }
     const removed = new Set([...previous.tombstones.keys(), ...previous.items.keys()])
     for (const itemId of removed) {
       if (retained.has(itemId)) {
         continue
       }
-      const tombstone = {
-        ...buildJournalTombstoneRow({
-          state: previous,
-          itemId,
-          seq: state.lastSequence + 1,
-          fence: input.fence,
-          ts: input.now()
-        }),
-        epoch
-      }
+      const tombstone = journalReplacementRole(
+        {
+          ...buildJournalTombstoneRow({
+            state: previous,
+            itemId,
+            seq: state.lastSequence + 1,
+            fence: input.fence,
+            ts: input.now()
+          }),
+          epoch
+        },
+        !previous.items.has(itemId)
+      )
       applyJournalRow(state, tombstone)
       rows.push(tombstone)
     }
   }
   for (const item of input.items) {
-    const row = buildJournalItemRow({
-      state,
-      identity: item.identity,
-      body: item.body,
-      ...journalItemEchoFields(item),
-      ...(input.previous && input.reason !== 'legacy_import' && input.reason !== 'session_created'
-        ? journalItemEchoRestatement(
-            input.previous.itemEchoes,
-            input.previous.aliases.get(agentJournalItemKey(item.identity)) ??
-              agentJournalItemKey(item.identity)
-          )
-        : {}),
-      seq: state.lastSequence + 1,
-      fence: input.fence,
-      ownerFence: item.ownerFence,
-      executionOwner: item.executionOwner,
-      ts: item.observedAt ?? input.now(),
-      linkage: item,
-      turnScope: item.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
-    })
+    const row = journalReplacementRole(
+      buildJournalItemRow({
+        state,
+        identity: item.identity,
+        body: item.body,
+        ...journalItemEchoFields(item),
+        ...(input.previous && replacing
+          ? journalItemEchoRestatement(
+              input.previous.itemEchoes,
+              input.previous.aliases.get(agentJournalItemKey(item.identity)) ??
+                agentJournalItemKey(item.identity)
+            )
+          : {}),
+        seq: state.lastSequence + 1,
+        fence: input.fence,
+        ownerFence: item.ownerFence,
+        executionOwner: item.executionOwner,
+        ts: item.observedAt ?? input.now(),
+        linkage: item,
+        turnScope: item.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
+      }),
+      replacing
+    )
     assertJournalFence(row.fence, state.highestFence)
     applyJournalRow(state, row)
     rows.push(row)
@@ -167,14 +190,11 @@ export function replaceJournalEpoch(input: {
         state.lastSequence + 1,
         input.now()
       )
-      applyJournalRow(state, row)
-      rows.push(row)
+      const materialized = journalReplacementRole(row, replacing)
+      applyJournalRow(state, materialized)
+      rows.push(materialized)
     }
   }
-  // Accepted-but-unhanded messages must survive provider history replacement.
-  const queued = [...(input.previous?.submissions.values() ?? [])]
-    .filter(isQueuedAgentJournalSubmission)
-    .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
   for (const submission of queued) {
     const body = input.previous?.items.get(
       agentJournalSubmissionKey(submission.clientMessageId)
@@ -182,37 +202,46 @@ export function replaceJournalEpoch(input: {
     if (body?.kind !== 'message') {
       throw new Error('journal_queued_submission_body_missing')
     }
-    const row = buildJournalSubmissionRow({
-      ...submission,
-      state,
-      body,
-      providerHandle: agentSessionJournalProviderHandle(input.identity),
-      seq: state.lastSequence + 1,
-      fence: input.fence,
-      ts: submission.submittedAt
-    })
+    const row = journalReplacementRole(
+      buildJournalSubmissionRow({
+        ...submission,
+        state,
+        body,
+        providerHandle: agentSessionJournalProviderHandle(input.identity),
+        seq: state.lastSequence + 1,
+        fence: input.fence,
+        ts: submission.submittedAt
+      }),
+      replacing
+    )
     applyJournalRow(state, row)
     rows.push(row)
   }
   const { lifted, liveStop, reopened } = input.queuePause
   const place = () => ({ state, seq: state.lastSequence + 1, fence: input.fence, ts: input.now() })
   if (lifted) {
-    const row = buildJournalQueueResumeRow(place())
+    const row = journalReplacementRole(buildJournalQueueResumeRow(place()), replacing)
     applyJournalRow(state, row)
     rows.push(row)
   }
   if (liveStop) {
-    const row = buildJournalStopEventRow({ ...place(), event: liveStop })
+    const row = journalReplacementRole(
+      buildJournalStopEventRow({ ...place(), event: liveStop }),
+      replacing
+    )
     applyJournalRow(state, row)
     rows.push(row)
   }
   if (reopened) {
-    const row = buildJournalQueueReopenRow(place())
+    const row = journalReplacementRole(buildJournalQueueReopenRow(place()), replacing)
     applyJournalRow(state, row)
     rows.push(row)
   }
   if (input.queuePause.cleared) {
-    const row = buildJournalQueueClearRow({ ...place(), clear: input.queuePause.cleared })
+    const row = journalReplacementRole(
+      buildJournalQueueClearRow({ ...place(), clear: input.queuePause.cleared }),
+      replacing
+    )
     applyJournalRow(state, row)
     rows.push(row)
   }
@@ -222,13 +251,11 @@ export function replaceJournalEpoch(input: {
   const claimsCommitted: (() => void)[] = []
   input.database.transaction((db) => {
     const retired = readJournalSessionEpoch(db, sessionId)
-    if (retired !== null) {
-      deleteJournalEpochRows(db, sessionId, retired)
-    }
     for (const row of rows) {
       insertJournalRow(db, sessionId, row)
       const body = row.kind === 'item' || row.kind === 'submission' ? row.body : null
       if (
+        row.replayRole !== 'source-only' &&
         body?.kind === 'message' &&
         body.role === 'user' &&
         !(row.kind === 'item' && input.isLiveGoal?.(row.itemId))
@@ -242,6 +269,9 @@ export function replaceJournalEpoch(input: {
     input.queue.receipt.write(db)
     publishJournalSessionEpoch(db, input.identity, epoch)
     receipt?.write(db)
+    if (retired !== null) {
+      deleteJournalEpochRows(db, sessionId, retired)
+    }
   })
   claimsCommitted.forEach((commit) => commit())
   input.queue.receipt.committed()

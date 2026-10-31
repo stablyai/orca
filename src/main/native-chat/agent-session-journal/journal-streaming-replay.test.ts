@@ -77,24 +77,43 @@ describe('streaming journal replay', () => {
     gc()
     const initial = process.memoryUsage().heapUsed
     let peak = initial
-    let applied = 0
+    let physicalApplied = 0
+    let sourceApplied = 0
+    let physicalPageReads = 0
+    const prepare = opened.db.prepare.bind(opened.db)
+    const reads = vi.spyOn(opened.db, 'prepare')
+    reads.mockImplementation((sql) => {
+      reads.mockClear()
+      if (sql.startsWith('SELECT seq, ts, row_json FROM journal_rows')) {
+        physicalPageReads += 1
+      }
+      return prepare(sql)
+    })
     const apply = reducer.applyJournalRow
     const spy = vi.spyOn(reducer, 'applyJournalRow')
-    spy.mockImplementation((state, row) => {
+    spy.mockImplementation((state, row, writtenAt) => {
       // Retaining spy arguments would invalidate the heap measurement.
       spy.mockClear()
-      applied += 1
-      if (row.seq % 256 === 0) {
-        gc()
-        peak = Math.max(peak, process.memoryUsage().heapUsed)
+      if (state.questionSource) {
+        physicalApplied += 1
+        if (row.seq % 256 === 0) {
+          gc()
+          peak = Math.max(peak, process.memoryUsage().heapUsed)
+        }
+      } else {
+        sourceApplied += 1
       }
-      apply(state, row)
+      apply(state, row, writtenAt)
     })
     const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded.state.items.size).toBe(1)
     expect(loaded.state.items.get('message-1')?.revision).toBe(2049)
     expect(loaded.state.lastSequence).toBe(2049)
-    expect(applied).toBe(2049)
+    expect(physicalApplied).toBe(2049)
+    expect(physicalPageReads).toBe(17)
+    expect(sourceApplied).toBe(2048)
+    expect(loaded.state.questionSource?.inputs).toEqual([])
+    expect(loaded.state.questionSource?.rows).toEqual([])
     expect(peak - initial).toBeLessThan(8 * 1024 * 1024)
   })
 
@@ -105,11 +124,11 @@ describe('streaming journal replay', () => {
     }
     const apply = reducer.applyJournalRow
     const checkpoints: { busy: number }[] = []
-    vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row) => {
-      if (row.seq === 2 || row.seq === 200) {
+    vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row, writtenAt) => {
+      if (state.questionSource && (row.seq === 2 || row.seq === 200)) {
         checkpoints.push(...(opened.db.pragma('wal_checkpoint(PASSIVE)') as { busy: number }[]))
       }
-      apply(state, row)
+      apply(state, row, writtenAt)
     })
     const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded.state.lastSequence).toBe(300)

@@ -7,7 +7,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session-journ
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
+import { resolveLegacyTranscriptFormat } from '../agent-session-journal/journal-legacy-transcript-format'
 import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
 import { usableJournalHistoryOrigin } from '../agent-session-journal/journal-history-origin'
 import { createLegacyIdentityTracker } from '../agent-session-journal/journal-legacy-identity'
@@ -18,10 +18,10 @@ import {
 import { createPiTranscriptCollector } from '../agent-session-journal/journal-pi-active-branch'
 import { readPiSessionHeader } from '../../pi/rpc-launch-resolution'
 import { readOpenCodeNativeChatTranscriptFull } from '../transcript-opencode'
-import { nativeChatLineDecoderForAgent } from '../transcript-tail-reader'
 import { splitTranscriptStreamLines } from '../transcript-stream-lines'
 import { transcriptFallbackId } from '../transcript-fallback-id'
-import { readTranscriptFileVersion, transcriptFileVersionChanged } from '../transcript-file-version'
+import { extendTranscriptBoundary, readTranscriptFileVersion } from '../transcript-file-version'
+import { qualifyMessageQuestionTranscript } from '../message-question-transcript-generation'
 import { toHostReadableTranscriptPath } from '../host-readable-transcript-path'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
@@ -30,26 +30,22 @@ export type QuestionImportJournal = Pick<
   'historyOrigin' | 'questionSourceFacts' | 'itemFence'
 >
 
-export function isImportedQuestionRow(
-  journal: QuestionImportJournal,
-  item: AgentJournalRenderItem
-): boolean {
+export type QuestionImportItem = { item: AgentJournalRenderItem; fence?: number }
+
+export function isImportedQuestionRow({ item, fence }: QuestionImportItem): boolean {
   const identity = parseAgentJournalItemKey(item.itemId)
-  return (
-    (identity?.provider === 'legacy' || identity?.provider === 'claude') &&
-    journal.itemFence(item.itemId) === 0
-  )
+  return (identity?.provider === 'legacy' || identity?.provider === 'claude') && fence === 0
 }
 
 export async function reconstructImport(
   journal: QuestionImportJournal,
   record: AgentSessionConversationView,
-  items: readonly AgentJournalRenderItem[],
+  items: readonly QuestionImportItem[],
   workspacePath: (workspaceId: string) => Promise<string>,
   signal: AbortSignal
 ): Promise<Boundary> {
   const origin = usableJournalHistoryOrigin(journal.historyOrigin())
-  const imported = items.filter((item) => isImportedQuestionRow(journal, item))
+  const imported = items.filter(isImportedQuestionRow).map(({ item }) => item)
   const adopted = record.providerHandleChain.find((link) => link.origin === 'adopted')
   if (!origin && !imported.length && !adopted) {
     return { prefix: [], full: new Map() }
@@ -79,19 +75,12 @@ export async function reconstructImport(
         : origin?.providerHandle.kind === 'opaque'
           ? origin.providerHandle.agent
           : null)
-  const transcriptAgent = agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(agent)
+  const format = resolveLegacyTranscriptFormat(agent)
   const importer = agent ? structuredAgentRuntimeMetadata(agent)?.transcriptImport : null
-  const decode = agent ? nativeChatLineDecoderForAgent(agent) : null
-  if (
-    !nativeId ||
-    !agent ||
-    !transcriptAgent ||
-    !importer ||
-    !imported.length ||
-    (transcriptAgent !== 'opencode' && !decode)
-  ) {
+  if (!nativeId || !agent || !format || !importer || !imported.length) {
     throw new Error('Original question import boundary unavailable')
   }
+  const { transcriptAgent, decode } = format
   const homePath = isLegacyAgentSessionAccountHome(record.accountHome)
     ? await toHostReadableTranscriptPath(record.accountHome.path, {
         wslDistro: record.location.wslDistro ?? undefined,
@@ -130,7 +119,8 @@ export async function reconstructImport(
     throw new Error('Original question transcript unavailable')
   }
   signal.throwIfAborted()
-  const version = await readTranscriptFileVersion(filePath, signal)
+  const version =
+    transcriptAgent === 'opencode' ? undefined : await readTranscriptFileVersion(filePath, signal)
   const providerSessionId = importer.handleNamesTranscript
     ? (await readPiSessionHeader(filePath))?.id
     : nativeId
@@ -151,9 +141,11 @@ export async function reconstructImport(
   let lineIndex = 0
   if (transcriptAgent === 'opencode') {
     await validateAdoptedOpenCodeSource(filePath, sourceIdentity)
-    const read = await readOpenCodeNativeChatTranscriptFull(nativeId, {
-      resolveDbPath: async () => filePath
-    })
+    const read = await readOpenCodeNativeChatTranscriptFull(
+      nativeId,
+      { resolveDbPath: async () => filePath },
+      signal
+    )
     if ('error' in read) {
       throw new Error(read.error)
     }
@@ -169,12 +161,26 @@ export async function reconstructImport(
       agent === 'pi'
         ? createPiTranscriptCollector(
             (message, identity) => ({ message, identity }),
-            (line, index) => tracker.identify(line, index)
+            (line, index) => tracker.identify(line, index),
+            new Set(imported.map((item) => item.itemId))
           )
         : null
+    if (!version || version.size === 0) {
+      throw new Error('Original question source empty')
+    }
+    let acquiredBytes = 0
+    let boundary = Buffer.alloc(0)
     try {
-      const stream = createReadStream(filePath, { signal })
-      for await (const row of splitTranscriptStreamLines(stream, 16 * 1024 * 1024)) {
+      const stream = createReadStream(filePath, { signal, start: 0, end: version.size - 1 })
+      async function* acquired() {
+        for await (const chunk of stream) {
+          const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+          acquiredBytes += bytes.length
+          boundary = extendTranscriptBoundary(boundary, bytes)
+          yield bytes
+        }
+      }
+      for await (const row of splitTranscriptStreamLines(acquired(), 16 * 1024 * 1024)) {
         signal.throwIfAborted()
         const line = row.line.endsWith('\r') ? row.line.slice(0, -1) : row.line
         source.observe(line)
@@ -194,17 +200,26 @@ export async function reconstructImport(
         }
       }
       await pi?.project(({ message, identity }) => accept(message, identity, lineIndex++))
+      await source.validate()
+      const qualified = await qualifyMessageQuestionTranscript(
+        filePath,
+        [
+          { ...version, offset: 0, boundary: '' },
+          { ...version, offset: acquiredBytes, boundary: boundary.toString('base64') }
+        ],
+        signal
+      )
+      if (qualified.replaced) {
+        throw new Error('Original question source replaced during reconstruction')
+      }
     } finally {
       pi?.close()
     }
   }
-  if (transcriptAgent !== 'opencode') {
-    await source.validate()
+  if (transcriptAgent === 'opencode') {
+    await validateAdoptedOpenCodeSource(filePath, sourceIdentity)
   }
-  if (
-    !fold.boundaryFound() ||
-    transcriptFileVersionChanged(await readTranscriptFileVersion(filePath, signal), version)
-  ) {
+  if (!fold.boundaryFound()) {
     throw new Error('Original question source changed during reconstruction')
   }
   return fold.result

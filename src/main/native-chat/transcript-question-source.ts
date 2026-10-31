@@ -1,5 +1,12 @@
+import {
+  createTranscriptQuestionRefreshCredit,
+  type RefreshCredit
+} from './transcript-question-refresh-credit'
 import { readTranscriptQuestionCapture } from './transcript-question-acquisition'
-import { createTranscriptQuestionPublication } from './transcript-question-publication'
+import {
+  createTranscriptQuestionPublication,
+  type TranscriptQuestionMaterialization as RefreshResult
+} from './transcript-question-publication'
 import { foldTranscriptQuestionMessages } from './transcript-question-fold'
 import type { MessageQuestionRepository } from './message-question-repository'
 import { MessageQuestionIngest } from './message-question-ingest'
@@ -16,12 +23,6 @@ import {
 } from './transcript-incremental-reader'
 
 type Frontier = NonNullable<MessageQuestionSourceState['file']>
-type RefreshCredit = {
-  promise: Promise<void>
-  resolve: () => void
-  reject: (error: unknown) => void
-}
-
 export function createTranscriptQuestionSource(
   filePath: string,
   agent: string,
@@ -50,22 +51,21 @@ export function createTranscriptQuestionSource(
     | undefined
   let capture: { end: number; frontiers: Frontier[] } | undefined
   let reconstruct = true
-  let pendingRefresh: Promise<void> | undefined
+  let pendingRefresh: Promise<RefreshResult> | undefined
   let captured = false
   let nextRefresh: RefreshCredit | undefined
   let continuation: ReturnType<typeof setTimeout> | undefined
   let knownTail = 0
   const onDispose = new Set<() => void>()
-  const publish = (snapshot: ReturnType<MessageQuestionIngest['current']> | null) =>
-    publication.publish(snapshot, context)
   const unavailable = () => publication.unavailable(contextVerified, context)
+  const materializeCurrent = () => publication.materialize(ingest!, contextVerified, context)
   function quarantine(): void {
     reconstruct = true
     contextVerified = false
     capture = undefined
     knownTail = 0
   }
-  async function refresh(): Promise<void> {
+  async function refresh(materialize: boolean): Promise<RefreshResult> {
     abort.signal.throwIfAborted()
     if (!repository) {
       const prepared = typeof prepare === 'function' ? await prepare() : prepare
@@ -116,8 +116,7 @@ export function createTranscriptQuestionSource(
     }
     const activeIngest = ingest
     if (contextVerified && !capture && !replay && state.offset === evidence.version.size) {
-      publish(activeIngest.current())
-      return
+      return materialize ? materializeCurrent() : { materialized: false }
     }
     const start: Frontier = {
       ...evidence.version,
@@ -157,13 +156,6 @@ export function createTranscriptQuestionSource(
       throw error
     }
     abort.signal.throwIfAborted()
-    if (replay?.replaced && knownTail > state.offset) {
-      // Known reconstruction is unfinished: keep prior/seen until its observed tail is acquired.
-      capture = undefined
-      contextVerified = false
-      unavailable()
-      return
-    }
     if (replay?.replaced) {
       activeIngest.replace(
         replay.before.filter((record) => !replay?.seen.has(record.id)).map((record) => record.id),
@@ -175,9 +167,13 @@ export function createTranscriptQuestionSource(
     // Only admitted folds reach irreversible materialization; failed storage retains the same ingest.
     const progressed =
       previous?.file?.offset !== state.offset || previous?.generation !== generation
-    const snapshot = activeIngest.current(progressed ? (acquired ?? undefined) : undefined)
+    // Admission survives unrelated storage failure; the ingest retains its exact pending writes.
     replay = undefined
-    publish(snapshot)
+    activeIngest.admitSourceState(progressed ? (acquired ?? undefined) : undefined)
+    if (!materialize) {
+      return { materialized: false }
+    }
+    return materializeCurrent()
 
     async function qualifyFrontier(): Promise<void> {
       const end: Frontier = {
@@ -213,23 +209,19 @@ export function createTranscriptQuestionSource(
       })
     }
   }
-  function credit(): RefreshCredit {
+  function credit(materialize: boolean): RefreshCredit {
     if (!nextRefresh) {
-      let resolve!: () => void
-      let reject!: (error: unknown) => void
-      const promise = new Promise<void>((yes, no) => {
-        resolve = yes
-        reject = no
-      })
-      nextRefresh = { promise, resolve, reject }
+      nextRefresh = createTranscriptQuestionRefreshCredit(materialize)
     }
+    nextRefresh.materialize ||= materialize
     return nextRefresh
   }
-  function startRefresh(joined?: RefreshCredit): Promise<void> {
+  function startRefresh(joined?: RefreshCredit, materialize = true): Promise<RefreshResult> {
     let succeeded = false
-    const operation = refresh()
-      .then(() => {
-        succeeded = true
+    const operation = refresh(joined?.materialize ?? materialize)
+      .then((result) => {
+        succeeded = !result.failure
+        return result
       })
       .catch((error: unknown) => {
         if (!abort.signal.aborted) {
@@ -284,16 +276,25 @@ export function createTranscriptQuestionSource(
       if (!contextVerified || !ingest) {
         throw new Error('Current questions unavailable')
       }
-      publish(ingest.cancel(ids, caller, now))
+      ingest.cancel(ids, caller, now)
+      materializeCurrent()
     },
-    refresh: () => {
+    refresh: (materialize = true) => {
       if (abort.signal.aborted) {
         return Promise.reject(abort.signal.reason)
       }
-      if (continuation || (pendingRefresh && captured)) {
-        return credit().promise
-      }
-      return pendingRefresh ?? startRefresh()
+      const operation =
+        continuation || (pendingRefresh && captured)
+          ? credit(materialize).promise
+          : (pendingRefresh ?? startRefresh(undefined, materialize))
+      return operation.then((result) => {
+        if (materialize) {
+          const complete = result.materialized || result.failure ? result : materializeCurrent()
+          if (complete.failure) {
+            throw complete.failure.error
+          }
+        }
+      })
     },
     dispose
   }

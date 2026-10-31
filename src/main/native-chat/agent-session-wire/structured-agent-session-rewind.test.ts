@@ -1,3 +1,4 @@
+import { seedRewindItems } from './structured-agent-session-rewind-seed.test-fixture'
 import {
   expectLargeRetainedPrefixRewind,
   expectSupersededRewindReplay,
@@ -39,7 +40,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
@@ -118,8 +122,21 @@ beforeEach(async () => {
   })
 })
 afterEach(async () => {
-  await host.flushAllStreamedEvents()
-  await rm(directory, { recursive: true, force: true })
+  const failures: unknown[] = []
+  for (const cleanup of [
+    () => host.flushAllStreamedEvents(),
+    () => closeTestJournalHostDatabase(directory),
+    () => rm(directory, { recursive: true, force: true })
+  ]) {
+    try {
+      await cleanup()
+    } catch (error) {
+      failures.push(error)
+    }
+  }
+  if (failures.length) {
+    throw new AggregateError(failures, 'rewind fixture cleanup failed')
+  }
 })
 
 /** Await startup reconciliation; unresolved rewind fails startup in its own stop step. */
@@ -135,57 +152,8 @@ function startedChild() {
   return host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child ?? null
 }
 
-async function seed(acceptedSubmissions = false) {
-  expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
-  const keys = ['kept', 'drop', 'tip'].map((turnId) => ({
-    provider: 'codex' as const,
-    threadId: HOST_TEST_THREAD,
-    turnId,
-    ordinal: 0
-  }))
-  let selectedItemId = agentJournalItemKey(keys[1]!)
-  for (const [i, identity] of keys.entries()) {
-    const body = {
-      ...hostTestMessage(String(i)),
-      role: i === 2 ? ('assistant' as const) : ('user' as const)
-    }
-    if (acceptedSubmissions && i !== 2) {
-      const clientOperationId = hostTestOperationId()
-      vi.mocked(adapter.dispatch).mockResolvedValueOnce({
-        state: 'accepted',
-        providerIdentity: identity
-      })
-      expect(
-        await host.send(caller, {
-          body,
-          envelope: {
-            sessionId: HOST_TEST_SESSION,
-            clientOperationId,
-            expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
-            payloadFingerprint: computeAgentSessionPayloadFingerprint({
-              method: 'agentSession.send',
-              sessionId: HOST_TEST_SESSION,
-              fields: { body }
-            })
-          }
-        })
-      ).toMatchObject({ ok: true })
-      await vi.waitFor(async () =>
-        expect(
-          (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
-            (entry) => entry.clientMessageId === clientOperationId
-          )?.dispatchState
-        ).toBe('accepted')
-      )
-      if (i === 1) {
-        selectedItemId = agentJournalSubmissionKey(clientOperationId)
-      }
-    } else {
-      sink.appendItem(identity, body, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    }
-  }
-  await host.flushStreamedEvents(HOST_TEST_SESSION)
-  return selectedItemId
+function seed(acceptedSubmissions = false) {
+  return seedRewindItems(host, store, adapter, caller, () => sink, acceptedSubmissions)
 }
 async function params(itemId: string, epoch?: string) {
   const expectedEpoch = epoch ?? (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch

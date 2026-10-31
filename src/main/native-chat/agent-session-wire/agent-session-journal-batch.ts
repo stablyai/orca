@@ -37,6 +37,9 @@ export function projectJournalBatch(input: {
   const touchedItemIds = new Set<string>()
   const touchedClientMessageIds = new Set<string>()
   for (const row of input.rows) {
+    if (row.replayRole === 'source-only') {
+      continue
+    }
     if (row.kind === 'lifecycle-batch') {
       for (const mutation of row.mutations) {
         touchedItemIds.add(

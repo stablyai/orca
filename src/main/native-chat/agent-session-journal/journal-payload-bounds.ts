@@ -112,6 +112,17 @@ export function boundToolInput(input: unknown, limits: JournalPayloadLimits): un
     : input
 }
 
+export function isClippedToolInput(value: unknown): value is { truncated: true; digest: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'truncated' in value &&
+    value.truncated === true &&
+    'digest' in value &&
+    typeof value.digest === 'string'
+  )
+}
+
 function clipUtf8(buffer: Buffer, maxBytes: number): string {
   let end = maxBytes
   // Backtrack over continuation bytes to avoid splitting a UTF-8 code point.

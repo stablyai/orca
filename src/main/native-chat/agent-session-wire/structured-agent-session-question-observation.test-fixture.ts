@@ -6,7 +6,10 @@ import {
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 
-export async function observeAsyncQuestions(current: QueuedMessageTestRig, id: string) {
+export async function observeAsyncQuestions(
+  current: Pick<QueuedMessageTestRig, 'host'>,
+  id: string
+) {
   let state = EMPTY_STRUCTURED_AGENT_SESSION
   const host = current.host
   const reader = createAgentSessionCurrentRequestsReader({

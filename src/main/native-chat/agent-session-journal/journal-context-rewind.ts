@@ -1,3 +1,4 @@
+import { journalReplacementRole } from './journal-replacement-source'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import {
   agentJournalItemKey,
@@ -56,17 +57,31 @@ export async function rewindJournalContext(input: {
       }
       // Capture adoption before tombstones retire legacy-card handoffs.
       adoption = input.cards.adoptionOfAll()
+      const retained = new Set(
+        input.items.map(
+          (item) =>
+            state.aliases.get(agentJournalItemKey(item.identity)) ??
+            agentJournalItemKey(item.identity)
+        )
+      )
       const revisions = new Map<string, number>()
-      const plan: ((seq: number, ts: number) => JournalRow)[] = [...adoption.rows]
+      const plan: ((seq: number, ts: number) => JournalRow)[] = adoption.rows.map(
+        (build) => (seq, ts) => journalReplacementRole(build(seq, ts), true)
+      )
       for (const [itemId, retireSubmission] of removed) {
         const row = buildJournalTombstoneRow({ state, itemId, seq: 0, ts: 0, fence: input.fence })
         revisions.set(itemId, row.revision)
-        plan.push((seq, ts) => ({
-          ...row,
-          seq,
-          ts,
-          ...(retireSubmission ? { retireSubmission: true } : {})
-        }))
+        plan.push((seq, ts) =>
+          journalReplacementRole(
+            {
+              ...row,
+              seq,
+              ts,
+              ...(retireSubmission ? { retireSubmission: true } : {})
+            },
+            retained.has(itemId)
+          )
+        )
       }
       for (const item of input.items) {
         const itemId = agentJournalItemKey(item.identity)
@@ -81,21 +96,29 @@ export async function rewindJournalContext(input: {
             existing?.revision ?? 0
           ) + 1
         revisions.set(itemId, revision)
-        plan.push((seq, ts) => ({
-          ...buildJournalItemRow({
-            state,
-            ...item,
-            linkage: item,
-            seq,
-            ts: item.observedAt ?? ts,
-            fence: input.fence,
-            turnScope: item.turnScope ?? { kind: 'thread' }
-          }),
-          revision
-        }))
+        plan.push((seq, ts) =>
+          journalReplacementRole(
+            {
+              ...buildJournalItemRow({
+                state,
+                ...item,
+                linkage: item,
+                seq,
+                ts: item.observedAt ?? ts,
+                fence: input.fence,
+                turnScope: item.turnScope ?? { kind: 'thread' }
+              }),
+              revision
+            },
+            true
+          )
+        )
       }
       plan.push((seq, ts) =>
-        buildJournalQueueClearRow({ state, seq, ts, fence: input.fence, clear: pause })
+        journalReplacementRole(
+          buildJournalQueueClearRow({ state, seq, ts, fence: input.fence, clear: pause }),
+          true
+        )
       )
       receipt = input.receipt({ epoch: state.epoch, sequence: state.lastSequence + plan.length })
       return plan

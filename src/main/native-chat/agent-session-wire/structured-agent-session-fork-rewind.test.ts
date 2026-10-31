@@ -10,7 +10,10 @@ import { agentSessionProviderHandleChainHead } from '../../../shared/agent-sessi
 import type { AgentSessionRewindFork } from '../../../shared/agent-session-rewind'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -140,8 +143,21 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  await host.flushAllStreamedEvents()
-  await rm(directory, { recursive: true, force: true })
+  const failures: unknown[] = []
+  for (const cleanup of [
+    () => host.flushAllStreamedEvents(),
+    () => closeTestJournalHostDatabase(directory),
+    () => rm(directory, { recursive: true, force: true })
+  ]) {
+    try {
+      await cleanup()
+    } catch (error) {
+      failures.push(error)
+    }
+  }
+  if (failures.length) {
+    throw new AggregateError(failures, 'rewind fixture cleanup failed')
+  }
 })
 
 async function rewindSecondPrompt() {

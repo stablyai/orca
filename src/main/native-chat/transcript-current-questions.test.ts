@@ -84,6 +84,81 @@ it.each([10, 100])(
   }
 )
 
+it('fans genuine delivery into native and positional contexts without reusing a revised human ID', async () => {
+  const f = await fixture()
+  const source = {
+    kind: 'transcript' as const,
+    agent: 'codex',
+    sessionId: 'dual-context',
+    filePath: f.path
+  }
+  const query = () =>
+    queryTranscriptCurrentQuestions(
+      f.path,
+      'codex',
+      source.sessionId,
+      decodeCodexTranscriptLine,
+      (projection) => projection,
+      undefined,
+      f.repository
+    )
+  await writeFile(
+    f.path,
+    question('native-before') + question('positional-before', 'A choice', true)
+  )
+  await query()
+  const before = f.repository.current(source).pending
+  expect(before).toHaveLength(2)
+  expect(new Set(before.map((record) => record.context)).size).toBe(2)
+  await appendFile(
+    f.path,
+    output('same-human', 'user') +
+      question('native-after') +
+      question('positional-after', 'A choice', true)
+  )
+  await query()
+  const after = f.repository.current(source).pending
+  expect(after).toHaveLength(2)
+  const delivered = before.map((record) => ({
+    ...record,
+    resolution: {
+      state: 'resolved',
+      reason: 'delivery',
+      factId: 'same-human',
+      resolvedAt: null,
+      resolvedBy: null
+    }
+  }))
+  expect(
+    f.repository
+      .current(source)
+      .records.filter((record) => before.some((old) => old.id === record.id))
+  ).toEqual(delivered)
+  await appendFile(f.path, output('same-human', 'user'))
+  await query()
+  expect(f.repository.current(source).pending).toEqual(after)
+  await appendFile(
+    f.path,
+    `${JSON.stringify({ type: 'event_msg', payload: { id: 'later-stop', type: 'turn_aborted' } })}\n`
+  )
+  await query()
+  const records = f.repository.current(source).records
+  expect(records.filter((record) => before.some((old) => old.id === record.id))).toEqual(delivered)
+  expect(
+    records
+      .filter((record) => after.some((old) => old.id === record.id))
+      .map((record) => record.resolution)
+  ).toEqual(
+    after.map(() => ({
+      state: 'cancelled',
+      reason: 'interruption',
+      factId: 'later-stop',
+      resolvedAt: null,
+      resolvedBy: null
+    }))
+  )
+})
+
 it.each([40, 400])(
   'preserves delivered outcomes for %i already-saved terminal questions before a batched later Stop',
   async (count) => {

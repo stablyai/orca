@@ -286,7 +286,12 @@ it.each([
               blocking: state.requestAuthority,
               origin: journal.historyOrigin(),
               chain: store.getRecord(SESSION)?.providerHandleChain,
-              imported: structuredQuestionImport(journal, journal.snapshot().items),
+              imported: structuredQuestionImport(
+                journal,
+                journal
+                  .snapshot()
+                  .items.map((item) => ({ item, fence: journal.itemFence(item.itemId) }))
+              ),
               rows: journal
                 .snapshot()
                 .items.map((item) => [item.itemId, journal.itemFence(item.itemId), item.body.kind]),

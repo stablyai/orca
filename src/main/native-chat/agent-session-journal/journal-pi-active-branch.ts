@@ -1,3 +1,4 @@
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { performance } from 'node:perf_hooks'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
@@ -16,7 +17,8 @@ function closePiImportDatabase(db: Database.Database | null): void {
 // Spool the full tree until the saved leaf identifies the active branch.
 export function createPiTranscriptCollector<T>(
   toItem: (message: NativeChatMessage, identity: AgentJournalItemIdentity) => T,
-  identify: (line: string, lineIndex: number) => AgentJournalItemIdentity
+  identify: (line: string, lineIndex: number) => AgentJournalItemIdentity,
+  originalLeaf?: string | ReadonlySet<string>
 ): {
   record(line: string, fallbackId: string, lineIndex: number): void
   project(keep: (item: T) => void): Promise<void>
@@ -59,6 +61,7 @@ export function createPiTranscriptCollector<T>(
   let fileIndex = 0
   let version = 1
   let leafId: string | null = null
+  let originalLeafId: string | undefined
   let closed = false
   return {
     record(line, fallbackId, lineIndex) {
@@ -107,6 +110,12 @@ export function createPiTranscriptCollector<T>(
         }
         throw error
       }
+      if (originalLeaf) {
+        const key = agentJournalItemKey(identify(line, lineIndex))
+        if (typeof originalLeaf === 'string' ? key === originalLeaf : originalLeaf.has(key)) {
+          originalLeafId = id
+        }
+      }
       leafId = id
       fileIndex += 1
       if (fileIndex % 1024 === 0) {
@@ -115,6 +124,9 @@ export function createPiTranscriptCollector<T>(
     },
     async project(keep) {
       db.exec('COMMIT')
+      if (originalLeaf && originalLeafId === undefined) {
+        throw new Error('Original Pi branch anchor unavailable')
+      }
       if (leafId === null) {
         return
       }
@@ -122,7 +134,7 @@ export function createPiTranscriptCollector<T>(
         'SELECT parent_id, type, first_kept_id, branch_depth FROM entries WHERE id = ?'
       )
       const mark = db.prepare('UPDATE entries SET branch_depth = ? WHERE id = ?')
-      let currentId: string | null = leafId
+      let currentId: string | null = originalLeafId ?? leafId
       let depth = 0
       let compactionDepth: number | null = null
       let firstKeptId: string | null = null

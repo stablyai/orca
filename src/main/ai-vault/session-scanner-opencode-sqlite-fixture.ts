@@ -66,6 +66,7 @@ export function writeOpenCodeSqliteDatabase(
   mkdirSync(dirname(dbPath), { recursive: true })
   const db = new SyncDatabase(dbPath)
   try {
+    db.exec('BEGIN')
     if (!tableAlreadyThere(db)) {
       db.exec(OPENCODE_SCHEMA)
       db.prepare(
@@ -76,6 +77,7 @@ export function writeOpenCodeSqliteDatabase(
     for (const session of sessions) {
       writeSession(db, session)
     }
+    db.exec('COMMIT')
   } finally {
     db.close()
   }

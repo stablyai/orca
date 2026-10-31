@@ -10,7 +10,7 @@ import {
   isDeliveredNativeChatUserMessage,
   parseAskFromToolInput
 } from '../../../shared/native-chat/input/native-chat-ask'
-import { digestPayload } from '../agent-session-journal/journal-payload-bounds'
+import { digestPayload, isClippedToolInput } from '../agent-session-journal/journal-payload-bounds'
 
 export type Boundary = {
   prefix: { message: NativeChatMessage; order: readonly [number, number] }[]
@@ -22,8 +22,14 @@ export function createQuestionImportFold(
   removed: ReadonlyMap<string, number>,
   signal: AbortSignal
 ) {
-  const retained = new Map(imported.map((item) => [item.itemId, item]))
-  const last = imported.at(-1)!.itemId
+  const retained = new Map<string, AgentJournalRenderItem[]>()
+  for (const item of imported) {
+    const versions = retained.get(item.itemId) ?? []
+    versions.push(item)
+    retained.set(item.itemId, versions)
+  }
+  // Revisions and materialization order cannot identify the last original source record.
+  const unseen = new Set(retained.keys())
   const prefix: Boundary['prefix'] = []
   const full = new Map<string, NativeChatMessage>()
   let seenRetained = false
@@ -38,24 +44,26 @@ export function createQuestionImportFold(
     }
     signal.throwIfAborted()
     const itemId = agentJournalItemKey(identity)
-    const saved = retained.get(itemId)
-    if (saved) {
+    const versions = retained.get(itemId)
+    if (versions) {
       seenRetained = true
-      const calls =
-        saved.body.kind === 'tool-call'
-          ? [{ type: 'tool-call' as const, input: saved.body.input }]
-          : saved.body.kind === 'message'
-            ? saved.body.blocks.filter((block) => block.type === 'tool-call')
-            : []
       const originals = message.blocks.filter((block) => block.type === 'tool-call')
-      for (const [index, call] of calls.entries()) {
-        if (isClippedInput(call.input)) {
-          const original = originals[index]
-          if (
-            !original ||
-            digestPayload(JSON.stringify(original.input) ?? 'null') !== call.input.digest
-          ) {
-            throw new Error('Original question definition does not match saved import')
+      for (const saved of versions) {
+        const calls =
+          saved.body.kind === 'tool-call'
+            ? [{ type: 'tool-call' as const, input: saved.body.input }]
+            : saved.body.kind === 'message'
+              ? saved.body.blocks.filter((block) => block.type === 'tool-call')
+              : []
+        for (const [index, call] of calls.entries()) {
+          if (isClippedToolInput(call.input)) {
+            const original = originals[index]
+            if (
+              !original ||
+              digestPayload(JSON.stringify(original.input) ?? 'null') !== call.input.digest
+            ) {
+              throw new Error('Original question definition does not match saved import')
+            }
           }
         }
       }
@@ -80,22 +88,12 @@ export function createQuestionImportFold(
         })
       }
     }
-    if (itemId === last) {
+    unseen.delete(itemId)
+    if (unseen.size === 0) {
       boundaryFound = true
     }
   }
   return { accept, boundaryFound: () => boundaryFound, result: { prefix, full } }
-}
-
-function isClippedInput(value: unknown): value is { truncated: true; digest: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'truncated' in value &&
-    value.truncated === true &&
-    'digest' in value &&
-    typeof value.digest === 'string'
-  )
 }
 
 /** Only the digest-proven clipped value is replaced; later canonical edits stay authoritative. */
@@ -116,7 +114,7 @@ export function restoreImportedQuestionMessage(
         return block
       }
       const full = calls[index++]
-      return full && isClippedInput(block.input) ? { ...block, input: full.input } : block
+      return full && isClippedToolInput(block.input) ? { ...block, input: full.input } : block
     })
   }
 }

@@ -126,9 +126,14 @@ export function acceptSubmissionFromProviderItem(
   if (providerItemId === resolvedItemId) {
     return
   }
-  const submission = [...state.submissions.values()].find(
-    (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
-  )
+  const clientId = state.sourceIdentity?.submissions.get(resolvedItemId)
+  const submission = state.sourceIdentity
+    ? clientId === undefined
+      ? undefined
+      : state.submissions.get(clientId)
+    : [...state.submissions.values()].find(
+        (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
+      )
   if (!submission || !journalDispatchRowApplies(submission)) {
     return
   }

@@ -299,9 +299,20 @@ it.each([40, 400])(
     )
     io.onNext(undefined)
     const beforeOversized = decode.mock.calls.length
+    const oversizedRanges = io.ranges.length
     await appendFile(f.path, longOutput('oversized', 2 * 1024 * 1024) + output('after-oversized'))
     await q.read()
+    console.log('oversized-source-progress', {
+      count,
+      beforeOversized,
+      decodes: decode.mock.calls.length,
+      ranges: io.ranges,
+      ...io.counts
+    })
     expect(decode).toHaveBeenCalledTimes(beforeOversized + 1)
+    expect(io.ranges.filter((range) => range.start === 0)).toHaveLength(1)
+    expect(io.ranges.slice(oversizedRanges)).toHaveLength(1)
+    expect(io.ranges[oversizedRanges].start).toBe(io.ranges[oversizedRanges - 1].end + 1)
     expect(f.repository.current(q.source).pending).toHaveLength(count)
     const fullOption = '🟦'.repeat(20_000)
     const unterminated = question('split-utf8', fullOption).trimEnd()
@@ -476,3 +487,105 @@ it('retains a short acquisition as unknown, resumes its finite extent and stages
   )
   expect(f.repository.current(q.source).records).toEqual(terminal)
 })
+
+it.each([40, 400])(
+  'publishes each admitted replacement before its growing tail is quiet for %i questions',
+  async (count) => {
+    const f = await fixture()
+    await writeFile(f.path, Array.from({ length: count }, (_, i) => question(`old-${i}`)).join(''))
+    const io = sourceIo(f.path)
+    const decode = vi.fn(decodeWithClear)
+    const q = sourceQuery(f, 'replacement-growth', decode)
+    await q.read()
+    const old = f.repository.current(q.source).pending
+    await cancelTranscriptCurrentQuestions(
+      f.path,
+      'codex',
+      q.source.sessionId,
+      decode,
+      [old[0].id],
+      'phone',
+      1,
+      undefined,
+      f.repository
+    )
+    const baseline = io.ranges.length
+    const originalVersion = fileVersions.readTranscriptFileVersion
+    const replacement =
+      question('old-0') +
+      Array.from({ length: count }, (_, i) =>
+        question(`new-${i}`, 'full option '.repeat(1000))
+      ).join('')
+    await truncate(f.path, 0)
+    await writeFile(f.path, replacement)
+    let growth = 0
+    const changed = new Set<object>()
+    io.onNext(async (range) => {
+      if (!range.chunks || changed.has(range) || growth === 4) {
+        return
+      }
+      changed.add(range)
+      await appendFile(f.path, output(`replacement-tail-${growth++}`))
+    })
+    decode.mockClear()
+    const stringify = JSON.stringify
+    const ops = sourceOperations(f)
+    const admitted = await q.read()
+    expect(
+      admitted.items && !Array.isArray(admitted.items) && admitted.items.asyncQuestions
+    ).toHaveLength(count)
+    expect(growth).toBeGreaterThan(0)
+    expect(growth).toBeLessThan(4)
+    expect(
+      f.repository.current(q.source).records.find((row) => row.id === old[0].id)?.resolution
+    ).toMatchObject({ state: 'cancelled', reason: 'user' })
+    expect(
+      f.repository.current(q.source).records.find((row) => row.id === old[1].id)?.resolution
+    ).toMatchObject({ state: 'cancelled', reason: 'source-replaced' })
+    const displayed = f.repository.current(q.source).pending[0].id
+    // A dispatched exact action joins the finite follow-up, not all later output.
+    await cancelTranscriptCurrentQuestions(
+      f.path,
+      'codex',
+      q.source.sessionId,
+      decode,
+      [displayed],
+      'phone',
+      2,
+      undefined,
+      f.repository
+    )
+    await vi.waitFor(() => expect(growth).toBe(4))
+    await vi.waitFor(() => expect(io.ranges.slice(baseline)).toHaveLength(5))
+    await vi.waitFor(() => expect(decode).toHaveBeenCalledTimes(count + 5))
+    const ranges = io.ranges.slice(baseline)
+    expect(ranges.filter((range) => range.start === 0)).toHaveLength(1)
+    for (let i = 1; i < ranges.length; i++) {
+      expect(ranges[i].start).toBe(ranges[i - 1].end + 1)
+    }
+    expect(decode).toHaveBeenCalledTimes(count + 5)
+    expect(ranges.reduce((sum, range) => sum + range.bytes, 0)).toBe(
+      (await originalVersion(f.path)).size
+    )
+    expect(
+      f.repository.current(q.source).records.find((row) => row.id === displayed)?.resolution.state
+    ).toBe('cancelled')
+    expect(ops.ingest).toHaveBeenCalledTimes(count + 5)
+    const definitionBytes = ops.stringify.mock.calls
+      .filter(
+        ([value]) =>
+          value !== null &&
+          typeof value === 'object' &&
+          ('responseMode' in value || 'asyncQuestions' in value)
+      )
+      .reduce((sum, [value]) => sum + Buffer.byteLength(stringify(value)), 0)
+    console.log('replacement-finite-ranges', {
+      count,
+      ranges,
+      definitionBytes,
+      ...io.counts,
+      ...ops.summary()
+    })
+  },
+  30_000
+)

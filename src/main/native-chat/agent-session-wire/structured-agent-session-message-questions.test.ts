@@ -1,10 +1,9 @@
-import { observeAsyncQuestions } from './structured-agent-session-question-observation.test-fixture'
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
-import { structuredRewindCut } from './structured-rewind-cut'
 import {
-  agentJournalItemKey,
-  agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
+  asyncRows,
+  expectClearFloorQuestionRecovery
+} from './structured-agent-session-clear-floor-questions.test-fixture'
+import { observeAsyncQuestions } from './structured-agent-session-question-observation.test-fixture'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { messageQuestionSourceId } from '../message-question-source'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -30,17 +29,6 @@ afterEach(async () => {
 
 import { asyncQuestionBody } from './structured-agent-session-async-question.test-fixture'
 import { currentWork } from './structured-agent-session-leftover-settlement.test-fixture'
-
-function asyncRows(current: QueuedMessageTestRig) {
-  const payload = currentWork(current).requestProjection(
-    SESSION,
-    'agent-session.current-requests.v2'
-  ).items
-  if (!payload || Array.isArray(payload) || payload.asyncQuestions === null) {
-    throw new Error('expected negotiated v2 payload')
-  }
-  return payload.asyncQuestions
-}
 
 it('requires provider delivery rather than host acceptance, and keeps later questions in a settled replay', async () => {
   rig = await createQueuedMessageTestRig()
@@ -560,173 +548,98 @@ it('keeps canonical rewind successful through failed question settlement, then r
   database.db.exec(
     "CREATE TEMP TRIGGER fail_question_settlement BEFORE UPDATE ON message_question_occurrences BEGIN SELECT RAISE(ABORT, 'question storage failure'); END"
   )
-  const fields = {
-    itemId: agentJournalSubmissionKey(target.id),
-    expectedEpoch: journal.cursor().epoch
-  }
-  expect(
-    await current.host.rewind(QUEUED_RIG_CALLER, {
-      ...fields,
-      envelope: current.envelope(fields, 'agentSession.rewind', hostTestOperationId())
+  let failureInstalled = true
+  let observer: Awaited<ReturnType<typeof observeAsyncQuestions>> | undefined
+  try {
+    const fields = {
+      itemId: agentJournalSubmissionKey(target.id),
+      expectedEpoch: journal.cursor().epoch
+    }
+    expect(
+      await current.host.rewind(QUEUED_RIG_CALLER, {
+        ...fields,
+        envelope: current.envelope(fields, 'agentSession.rewind', hostTestOperationId())
+      })
+    ).toMatchObject({ ok: true })
+    expect(journal.questionSourceFacts().removed.has(removed.itemId)).toBe(true)
+    const failedView = currentWork(current).requestProjection(
+      SESSION,
+      'agent-session.current-requests.v2'
+    ).items
+    if (!failedView || Array.isArray(failedView)) {
+      throw new Error('Expected failed-materialization v2 publication')
+    }
+    expect(failedView.asyncQuestions).toBeNull()
+    expect(failedView.blocking).toEqual(currentWork(current).actionablePrompts())
+    expect(failedView.blocking).toEqual([])
+    expect(
+      owner.repository.current(owner.source).records.find((record) => record.id === keptId)
+        ?.resolution
+    ).toMatchObject({ state: 'cancelled', reason: 'user', factId: keptId, resolvedBy: 'desktop' })
+    observer = await observeAsyncQuestions(current, 'rewind-storage-only-recovery')
+    database.db.exec('DROP TRIGGER fail_question_settlement')
+    failureInstalled = false
+    await vi.waitFor(() => expect(observer!.state().asyncQuestions).toEqual([]), { timeout: 5000 })
+    const recoveredRecords = owner.repository.current(owner.source).records
+    expect(recoveredRecords.find((record) => record.id === pendingId)?.resolution).toMatchObject({
+      state: 'resolved',
+      reason: 'delivery',
+      factId: agentJournalSubmissionKey(target.id)
     })
-  ).toMatchObject({ ok: true })
-  expect(journal.questionSourceFacts().removed.has(removed.itemId)).toBe(true)
-  expect(asyncRows(current)).toEqual([])
-  expect(
-    owner.repository.current(owner.source).records.find((record) => record.id === keptId)
-      ?.resolution.state
-  ).toBe('cancelled')
-  database.db.exec('DROP TRIGGER fail_question_settlement')
-  // Reconstruct from persisted facts with no subscriber or fresh provider event.
-  owner.repository.invalidate(messageQuestionSourceId(owner.source))
-  current.crashRestartHostProcess()
-  await current.host.history({ sessionId: SESSION, direction: 'tail' })
-  const reopened = currentJournal(current)
-  const view = currentWork(current).requestProjection(
-    SESSION,
-    'agent-session.current-requests.v2'
-  ).items
-  if (!view || Array.isArray(view)) {
-    throw new Error('Expected v2 publication')
+    expect(
+      recoveredRecords.find((record) => record.sourceRowId === removed.itemId)?.resolution
+    ).toMatchObject({
+      state: 'cancelled',
+      reason: 'source-replaced',
+      factId: removed.itemId
+    })
+    observer.close()
+    observer = undefined
+    // Reconstruct from persisted facts with no subscriber or fresh provider event.
+    owner.repository.invalidate(messageQuestionSourceId(owner.source))
+    current.crashRestartHostProcess()
+    await current.host.history({ sessionId: SESSION, direction: 'tail' })
+    const reopened = currentJournal(current)
+    const view = currentWork(current).requestProjection(
+      SESSION,
+      'agent-session.current-requests.v2'
+    ).items
+    if (!view || Array.isArray(view)) {
+      throw new Error('Expected v2 publication')
+    }
+    expect(view.asyncQuestions).toEqual([])
+    const saved = reopened.messageQuestions()
+    const records = saved.repository.current(saved.source).records
+    expect(
+      records.find((record) => record.sourceRowId === removed.itemId)?.resolution
+    ).toMatchObject({ state: 'cancelled', reason: 'source-replaced', factId: removed.itemId })
+    expect(records.filter((record) => record.sourceRowId === kept.itemId)).toMatchObject([
+      {
+        id: keptId,
+        resolution: { state: 'cancelled', reason: 'user', factId: keptId, resolvedBy: 'desktop' }
+      }
+    ])
+    expect(records.filter((record) => record.sourceRowId === pending.itemId)).toMatchObject([
+      {
+        id: pendingId,
+        resolution: {
+          state: 'resolved',
+          reason: 'delivery',
+          factId: agentJournalSubmissionKey(target.id)
+        }
+      }
+    ])
+  } finally {
+    observer?.close()
+    if (failureInstalled) {
+      database.db.exec('DROP TRIGGER fail_question_settlement')
+    }
   }
-  expect(view.asyncQuestions).toEqual([])
-  const saved = reopened.messageQuestions()
-  const records = saved.repository.current(saved.source).records
-  expect(records.find((record) => record.sourceRowId === removed.itemId)?.resolution).toMatchObject(
-    { state: 'cancelled', reason: 'source-replaced' }
-  )
-  expect(records.filter((record) => record.sourceRowId === kept.itemId)).toMatchObject([
-    { id: keptId, resolution: { state: 'cancelled' } }
-  ])
-  expect(records.filter((record) => record.sourceRowId === pending.itemId)).toMatchObject([
-    { id: pendingId, resolution: { state: 'resolved' } }
-  ])
 })
 
 it('preserves clear-floor context and retained outcomes through same-epoch rewind, omitted divider replacement and provider tombstones', async () => {
   rig = await createQueuedMessageTestRig({ restartable: true, rewind: async () => ({ ok: true }) })
-  const current = rig
-  const started = await current.workingSend()
-  await current.settleAccepted(started, 'before-clear')
-  const journal = currentJournal(current)
-  const earlier = await journal.appendItem(
-    { provider: 'codex', threadId: THREAD, turnId: 'turn-before-clear', ordinal: 1 },
-    asyncQuestionBody('before-clear-question'),
-    { fence: 1 }
-  )
-  const oldId = asyncRows(current)[0].id
-  const clearFields = { command: 'clear' as const }
-  expect(
-    await current.host.conversationCommand(QUEUED_RIG_CALLER, {
-      ...clearFields,
-      envelope: current.envelope(
-        clearFields,
-        'agentSession.conversationCommand',
-        hostTestOperationId()
-      )
-    })
-  ).toMatchObject({ ok: true })
-  const fence = () => current.store.getRecord(SESSION)!.lease.runtimeFence
-  const floor = journal.context.floor()!
-  const boundary = current.store.getRecord(SESSION)!.providerContextBoundary!.operationId
-  expect(asyncRows(current)).toEqual([])
-  const keptIdentity = {
-    provider: 'codex' as const,
-    threadId: THREAD,
-    turnId: 'turn-kept',
-    ordinal: 1
-  }
-  await journal.appendItem(keptIdentity, asyncQuestionBody('kept-question'), { fence: fence() })
-  const keptId = asyncRows(current)[0].id
-  await current.host.cancelCurrentQuestions({ sessionId: SESSION, ids: [keptId] }, 'phone')
-  const targetId = hostTestOperationId()
-  const targetBody = {
-    kind: 'message' as const,
-    role: 'user' as const,
-    blocks: [{ type: 'text' as const, text: 'remove this answer' }]
-  }
-  const target = {
-    id: targetId,
-    result: current.host.send(QUEUED_RIG_CALLER, {
-      body: targetBody,
-      userSend: true,
-      envelope: {
-        ...current.envelope({ body: targetBody }, 'agentSession.send', targetId),
-        expectedRuntimeFence: fence()
-      }
-    })
-  }
-  expect(await target.result).toMatchObject({ ok: true })
-  await vi.waitFor(async () =>
-    expect((await current.submission(target.id))?.handedOverAt).toBeDefined()
-  )
-  await current.settleAccepted(target.id, 'removed-after-clear')
-  const removedIdentity = {
-    provider: 'codex' as const,
-    threadId: THREAD,
-    turnId: 'turn-removed-after-clear',
-    ordinal: 1
-  }
-  await journal.appendItem(removedIdentity, asyncQuestionBody('removed-question'), {
-    fence: fence()
-  })
-  expect(asyncRows(current)).toHaveLength(1)
-  const cut = structuredRewindCut(journal, {
-    itemId: agentJournalSubmissionKey(target.id),
-    provider: 'codex',
-    nativeId: activeProviderContext(current.store.getRecord(SESSION)!).head!.handle.nativeId
-  })
-  if (!cut) {
-    throw new Error('Expected canonical clear-floor rewind cut')
-  }
-  const fields = { itemId: agentJournalSubmissionKey(target.id), expectedEpoch: floor.epoch }
-  expect(
-    await current.host.rewind(QUEUED_RIG_CALLER, {
-      ...fields,
-      envelope: {
-        ...current.envelope(fields, 'agentSession.rewind', hostTestOperationId()),
-        expectedRuntimeFence: fence()
-      }
-    })
-  ).toMatchObject({ ok: true })
-  expect(journal.cursor().epoch).toBe(floor.epoch)
-  expect(asyncRows(current)).toEqual([])
-  expect(journal.questionSourceFacts().removed.has(agentJournalItemKey(removedIdentity))).toBe(true)
-  // Fork replacement uses the actual cut, which deliberately omits the clear divider.
-  await journal.replaceEpochItems('handle_forked', fence(), cut.kept)
-  expect(journal.context.floor()).toBeNull()
-  expect(journal.questionSourceFacts().clearOperationId).toBe(boundary)
-  expect(asyncRows(current)).toEqual([])
-  const payload = currentWork(current).requestProjection(
-    SESSION,
-    'agent-session.current-requests.v2'
-  ).items
-  if (!payload || Array.isArray(payload)) {
-    throw new Error('Expected v2 payload')
-  }
-  expect(payload.context.boundary).toBe(agentJournalSubmissionKey(`context-clear:${boundary}`))
-  const newIdentity = { ...keptIdentity, ordinal: 2 }
-  const next = await journal.appendItem(newIdentity, asyncQuestionBody('new-call-after-rewind'), {
-    fence: fence()
-  })
-  expect(asyncRows(current).map((record) => record.sourceRowId)).toEqual([next.itemId])
-  await journal.appendTombstone(newIdentity, { fence: fence() })
-  expect(asyncRows(current)).toEqual([])
-  current.crashRestartHostProcess()
-  await current.host.history({ sessionId: SESSION, direction: 'tail' })
-  expect(asyncRows(current)).toEqual([])
-  const owner = currentJournal(current).messageQuestions()
-  const records = owner.repository.current(owner.source).records
-  expect(records.filter((record) => record.sourceRowId === earlier.itemId)).toMatchObject([
-    { id: oldId, resolution: { state: 'cancelled' } }
-  ])
-  expect(
-    records.filter((record) => record.sourceRowId === agentJournalItemKey(keptIdentity))
-  ).toMatchObject([{ id: keptId, resolution: { state: 'cancelled', reason: 'user' } }])
-  expect(records.find((record) => record.sourceRowId === next.itemId)?.resolution).toMatchObject({
-    state: 'cancelled',
-    reason: 'source-replaced'
-  })
+  await expectClearFloorQuestionRecovery(rig)
 })
 
 it.each([10, 100])(

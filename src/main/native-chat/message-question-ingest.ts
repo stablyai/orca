@@ -1,9 +1,7 @@
+import { MessageQuestionRowRevisions } from './message-question-row-revisions'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { isInterruptedStatusMessage } from '../../shared/native-chat-types'
-import {
-  createPendingAskScanner,
-  isDeliveredNativeChatUserMessage
-} from '../../shared/native-chat/input/native-chat-ask'
+import { isDeliveredNativeChatUserMessage } from '../../shared/native-chat/input/native-chat-ask'
 import {
   PENDING_MESSAGE_QUESTION,
   type MessageQuestionOccurrence
@@ -25,6 +23,11 @@ import type {
   MessageQuestionRepository,
   MessageQuestionSnapshot
 } from './message-question-repository'
+import { MessageQuestionContributors } from './message-question-contributors'
+import {
+  messageQuestionAddressIndex,
+  expandMessageQuestionContextFacts
+} from './message-question-address-index'
 
 export type MessageQuestionRow = {
   context: string
@@ -34,9 +37,14 @@ export type MessageQuestionRow = {
 
 /** Source facts are replayable evidence; only the repository owns the saved terminal decisions. */
 export class MessageQuestionIngest {
-  private readonly scan = createPendingAskScanner()
-  private readonly interruptedScans = new Map<string, ReturnType<typeof createPendingAskScanner>>()
+  private readonly rows = new MessageQuestionRowRevisions()
+  private readonly occurrencesByRow = new Map<string, Set<string>>()
+  private readonly rowSlots = new Map<string, Set<string>>()
+  private readonly contributorOrders = new Map<string, readonly [number, number]>()
+  private readonly isolatedTurns = new Set<string>()
+  private readonly active = new MessageQuestionContributors()
   private readonly definitions = new Map<string, MessageQuestionOccurrence>()
+  private readonly deliveredIds = new Set<string>()
   private readonly delivered = new Map<string, MessageQuestionDelivery>()
   private readonly interruptedTurns = new Map<string, MessageQuestionFact>()
   private readonly interruptedContexts = new Map<string, MessageQuestionDelivery>()
@@ -47,8 +55,7 @@ export class MessageQuestionIngest {
   private pendingState: MessageQuestionSourceState | undefined
   private effective: MessageQuestionSnapshot
   private effectiveById: Map<string, MessageQuestionOccurrence>
-  private readonly addresses = new Map<string, MessageQuestionOccurrence>()
-  private readonly contextAliases = new Map<string, string>()
+  private readonly addressIndex: ReturnType<typeof messageQuestionAddressIndex>
 
   constructor(
     readonly repository: MessageQuestionRepository,
@@ -57,97 +64,117 @@ export class MessageQuestionIngest {
   ) {
     this.effective = repository.current(source)
     this.effectiveById = new Map(this.effective.records.map((record) => [record.id, record]))
-    if (canonicalContext) {
-      for (const record of this.effective.records) {
-        const context = canonicalContext(record)
-        this.contextAliases.set(record.context, context)
-        const key = JSON.stringify([context, record.sourceRowId, record.callSlot])
-        const prior = this.addresses.get(key)
-        if (
-          !prior ||
-          (prior.resolution.state === 'pending' && record.resolution.state !== 'pending')
-        ) {
-          this.addresses.set(key, record)
-        }
-      }
-      for (const record of this.effective.records) {
-        const key = JSON.stringify([canonicalContext(record), record.sourceRowId, record.callSlot])
-        if (this.addresses.get(key)?.id !== record.id) {
-          this.replace([record.id], { id: record.sourceRowId, at: null })
-        }
-      }
+    this.addressIndex = messageQuestionAddressIndex(this.effective.records, canonicalContext)
+    for (const record of this.effective.records) {
+      this.indexRow(record.sourceRowId, record.id)
+    }
+    for (const record of this.addressIndex.replaced) {
+      this.replace([record.id], { id: record.sourceRowId, at: null })
     }
   }
 
   append(message: NativeChatMessage, row: MessageQuestionRow): readonly string[] {
     const created: string[] = []
-    let scan = this.scan
-    if (row.turnId !== null && this.interruptedTurns.has(row.turnId)) {
-      let owned = this.interruptedScans.get(row.turnId)
-      if (!owned) {
-        owned = createPendingAskScanner()
-        this.interruptedScans.set(row.turnId, owned)
-      }
-      scan = owned
-    }
+    const parser = row.turnId !== null && this.isolatedTurns.has(row.turnId) ? row.turnId : 'live'
     if (isInterruptedStatusMessage(message)) {
+      this.rows.reset(parser)
       const fact = { id: message.id, at: message.timestamp ?? null, order: row.order }
       if (row.turnId === null) {
         this.interruptContext(row.context, fact)
       } else {
-        this.interruptedTurns.set(row.turnId, fact)
-      }
-      if (row.turnId !== null) {
-        this.settleDefinitions(scan, row.context, {
-          interruptedTurns: this.interruptedTurns,
-          interruptedContexts: this.interruptedContexts
-        })
+        this.interrupt(row.turnId, fact)
       }
       this.dirty = true
     } else if (isDeliveredNativeChatUserMessage(message)) {
       this.deliver(row.context, { id: message.id, at: message.timestamp ?? null, order: row.order })
-      if (scan === this.scan) {
-        this.interruptedScans.clear()
-      }
+      this.rows.reset()
     }
-    for (const contributor of scan.append(message)) {
+    const rowKey = JSON.stringify([row.context, message.id])
+    const previousSlots = this.rowSlots.get(rowKey)
+    for (const contributor of this.rows.read(message, row.context, parser)) {
       const sourceId = messageQuestionSourceId(this.source)
-      const established = this.addresses.get(
+      const established = this.addressIndex.addresses.get(
         JSON.stringify([row.context, contributor.sourceRowId, contributor.callSlot])
       )
       const id =
         established?.id ?? messageQuestionOccurrenceId(this.source, row.context, contributor)
       created.push(id)
-      this.definitions.set(id, {
+      const previous = this.definitions.get(id) ?? this.effectiveById.get(id) ?? established
+      const order = this.contributorOrders.get(id) ?? row.order
+      this.contributorOrders.set(id, order)
+      const definition: MessageQuestionOccurrence = {
         id,
         sourceId,
         context: established?.context ?? row.context,
         sourceRowId: contributor.sourceRowId,
         callSlot: contributor.callSlot,
-        order: [row.order[0], row.order[1]],
+        order: [order[0], order[1]],
         timestamp: contributor.timestamp,
         turnId: row.turnId,
         responseMode: contributor.responseMode,
         questions: contributor.questions,
-        resolution: this.definitions.get(id)?.resolution ?? PENDING_MESSAGE_QUESTION
-      })
+        resolution: previous?.resolution ?? PENDING_MESSAGE_QUESTION
+      }
+      const resolved = {
+        ...definition,
+        resolution: reconcileMessageQuestionResolution(
+          { ...definition, context: row.context },
+          this.rawFacts()
+        )
+      }
+      this.definitions.set(id, resolved)
+      this.indexRow(message.id, id)
+      this.active.add(resolved, row.context)
       this.dirty = true
     }
+    if (previousSlots) {
+      const retained = new Set(created)
+      this.replace(
+        [...previousSlots].filter((id) => !retained.has(id)),
+        { id: message.id, at: message.timestamp ?? null }
+      )
+    }
+    this.rowSlots.set(rowKey, new Set(created))
     return created
   }
 
+  removeRow(sourceRowId: string, fact: MessageQuestionFact): void {
+    this.replace(this.occurrencesByRow.get(sourceRowId) ?? [], fact)
+  }
+
+  private indexRow(sourceRowId: string, id: string): void {
+    const ids = this.occurrencesByRow.get(sourceRowId) ?? new Set<string>()
+    ids.add(id)
+    this.occurrencesByRow.set(sourceRowId, ids)
+  }
+
+  isolate(turnId: string): void {
+    this.isolatedTurns.add(turnId)
+  }
+
   interrupt(turnId: string, fact: MessageQuestionFact): void {
+    this.isolate(turnId)
+    if (this.interruptedTurns.has(turnId)) {
+      return
+    }
     this.interruptedTurns.set(turnId, fact)
+    this.settleDefinitions(this.active.takeTurn(turnId), {
+      interruptedTurns: new Map([[turnId, fact]])
+    })
     this.dirty = true
   }
 
   deliver(context: string, fact: MessageQuestionDelivery): void {
+    const deliveryKey = JSON.stringify([context, fact.id])
+    if (this.deliveredIds.has(deliveryKey)) {
+      return
+    }
+    this.deliveredIds.add(deliveryKey)
     const prior = this.delivered.get(context)
     if (!prior || compareMessageQuestionOrder(prior.order, fact.order) < 0) {
       this.delivered.set(context, fact)
-      this.settleDefinitions(this.scan, context, {
-        interruptedTurns: this.interruptedTurns,
-        delivered: this.delivered
+      this.settleDefinitions(this.active.takeContext(context), {
+        delivered: new Map([[context, fact]])
       })
       this.dirty = true
     }
@@ -155,9 +182,8 @@ export class MessageQuestionIngest {
 
   interruptContext(context: string, fact: MessageQuestionDelivery): void {
     this.interruptedContexts.set(context, fact)
-    this.settleDefinitions(this.scan, context, {
-      interruptedTurns: this.interruptedTurns,
-      interruptedContexts: this.interruptedContexts
+    this.settleDefinitions(this.active.takeContext(context), {
+      interruptedContexts: new Map([[context, fact]])
     })
     this.dirty = true
   }
@@ -167,27 +193,43 @@ export class MessageQuestionIngest {
     if (otherContext !== undefined) {
       this.retiredContexts.set(otherContext, fact)
     }
-    this.settleDefinitions(this.scan, context, { retiredContexts: this.retiredContexts })
+    this.settleDefinitions(this.active.takeContext(context), {
+      retiredContexts: this.retiredContexts
+    })
     if (otherContext !== undefined) {
-      this.settleDefinitions(this.scan, otherContext, { retiredContexts: this.retiredContexts })
+      this.settleDefinitions(this.active.takeContext(otherContext), {
+        retiredContexts: this.retiredContexts
+      })
     }
-    this.scan.interrupt()
-    this.interruptedScans.clear()
+    this.rows.reset()
     this.dirty = true
   }
 
   replace(ids: Iterable<string>, fact: MessageQuestionFact): void {
     for (const id of ids) {
+      const prior = this.replacedOccurrences.get(id)
+      if (prior) {
+        continue
+      }
       this.replacedOccurrences.set(id, fact)
+      const record = this.definitions.get(id) ?? this.effectiveById.get(id)
+      if (record) {
+        this.settleDefinitions([record], { replacedOccurrences: new Map([[id, fact]]) })
+        this.active.remove(id)
+      }
     }
     this.dirty = true
   }
 
+  admitSourceState(state?: MessageQuestionSourceState): void {
+    this.pendingState = state ?? this.pendingState
+  }
+
   current(state?: MessageQuestionSourceState) {
-    if (!this.dirty && !this.retry && !state) {
+    this.admitSourceState(state)
+    if (!this.dirty && !this.retry && !this.pendingState) {
       return this.effective
     }
-    this.pendingState = state ?? this.pendingState
     const result = this.repository.reconcile(
       this.source,
       [...this.definitions.values()],
@@ -208,12 +250,23 @@ export class MessageQuestionIngest {
   }
 
   cancel(ids: readonly string[], caller: string, now: number) {
-    this.current()
-    if (this.retry) {
-      throw new Error('Question changes could not be saved')
+    const targets = new Map(
+      ids.map((id) => [id, this.definitions.get(id) ?? this.effectiveById.get(id)])
+    )
+    const committed = this.repository.cancel(this.source, ids, caller, now, this.facts(), targets)
+    for (const record of committed) {
+      this.active.remove(record.id)
+      this.effectiveById.set(record.id, record)
+      const staged = this.definitions.get(record.id)
+      if (staged) {
+        this.definitions.set(record.id, { ...staged, resolution: record.resolution })
+      }
     }
-    this.setEffective(this.repository.cancel(this.source, ids, caller, now, this.facts()))
-    return this.effective
+    if (committed.length) {
+      // The next resource read repairs the full projection; the action returns only its target receipt.
+      this.retry = true
+    }
+    return committed
   }
 
   private setEffective(snapshot: MessageQuestionSnapshot): void {
@@ -224,50 +277,38 @@ export class MessageQuestionIngest {
     this.effectiveById = new Map(snapshot.records.map((record) => [record.id, record]))
   }
 
-  private facts() {
-    const expand = <T>(facts: ReadonlyMap<string, T>): ReadonlyMap<string, T> => {
-      if (!this.contextAliases.size) {
-        return facts
-      }
-      const result = new Map(facts)
-      for (const [saved, semantic] of this.contextAliases) {
-        const fact = facts.get(semantic)
-        if (fact !== undefined) {
-          result.set(saved, fact)
-        }
-      }
-      return result
-    }
+  private rawFacts(): MessageQuestionFacts {
     return {
-      delivered: expand(this.delivered),
+      delivered: this.delivered,
       interruptedTurns: this.interruptedTurns,
-      interruptedContexts: expand(this.interruptedContexts),
-      retiredContexts: expand(this.retiredContexts),
+      interruptedContexts: this.interruptedContexts,
+      retiredContexts: this.retiredContexts,
+      replacedOccurrences: this.replacedOccurrences
+    }
+  }
+
+  private facts() {
+    const aliases = this.addressIndex.contextAliases
+    return {
+      delivered: expandMessageQuestionContextFacts(aliases, this.delivered),
+      interruptedTurns: this.interruptedTurns,
+      interruptedContexts: expandMessageQuestionContextFacts(aliases, this.interruptedContexts),
+      retiredContexts: expandMessageQuestionContextFacts(aliases, this.retiredContexts),
       replacedOccurrences: this.replacedOccurrences
     }
   }
 
   private settleDefinitions(
-    scan: ReturnType<typeof createPendingAskScanner>,
-    context: string,
+    records: Iterable<MessageQuestionOccurrence>,
     facts: MessageQuestionFacts
   ): void {
-    // Preserve ordered terminal outcomes before the scanner abandons these contributors.
-    for (const contributor of scan.current().contributors) {
-      const established = this.addresses.get(
-        JSON.stringify([context, contributor.sourceRowId, contributor.callSlot])
-      )
-      const id = established?.id ?? messageQuestionOccurrenceId(this.source, context, contributor)
-      const definition = this.definitions.get(id) ?? this.effectiveById.get(id)
-      if (!definition) {
-        continue
-      }
-      const resolution = reconcileMessageQuestionResolution(
-        definition.context === context ? definition : { ...definition, context },
-        facts
-      )
+    for (const record of records) {
+      const definition =
+        this.definitions.get(record.id) ?? this.effectiveById.get(record.id) ?? record
+      const context = this.addressIndex.contextAliases.get(definition.context) ?? definition.context
+      const resolution = reconcileMessageQuestionResolution({ ...definition, context }, facts)
       if (resolution !== definition.resolution) {
-        this.definitions.set(id, { ...definition, resolution })
+        this.definitions.set(record.id, { ...definition, resolution })
         this.dirty = true
       }
     }

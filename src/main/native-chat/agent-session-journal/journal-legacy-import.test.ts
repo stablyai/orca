@@ -8,8 +8,9 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandle } from '../../../shared/agent-session-provider-handle'
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
-import type * as TranscriptLineDecoders from '../transcript-line-decoders'
+import * as lineDecoders from '../transcript-line-decoders'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
+import { resolveLegacyTranscriptFormat } from './journal-legacy-transcript-format'
 import {
   importLegacyTranscriptIntoJournal,
   prepareLegacyTranscriptImport,
@@ -32,7 +33,7 @@ const decodedClaudeOverride = vi.hoisted((): { message: NativeChatMessage | null
 }))
 
 vi.mock('../transcript-line-decoders', async (importOriginal) => {
-  const actual = await importOriginal<typeof TranscriptLineDecoders>()
+  const actual = await importOriginal<typeof lineDecoders>()
   return {
     ...actual,
     decodeClaudeTranscriptLine: (...args: Parameters<typeof actual.decodeClaudeTranscriptLine>) =>
@@ -52,7 +53,7 @@ function tick(): number {
   return clock
 }
 
-type ImportAgent = 'claude' | 'codex' | 'grok' | 'omp'
+type ImportAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'pi'
 
 function providerHandle(agent: ImportAgent, sessionId: string): AgentSessionProviderHandle {
   if (agent === 'claude') {
@@ -374,6 +375,68 @@ describe('codex import', () => {
       sessionId: CODEX_SESSION,
       recordId: '#3'
     })
+  })
+})
+
+describe('original import serialization', () => {
+  it.each([
+    ['claude', 'claude', lineDecoders.decodeClaudeTranscriptLine],
+    ['openclaude', 'claude', lineDecoders.decodeClaudeTranscriptLine],
+    ['codex', 'codex', lineDecoders.decodeCodexTranscriptLine],
+    ['grok', 'grok', lineDecoders.decodeGrokTranscriptLine],
+    ['omp', 'omp', lineDecoders.decodeOmpTranscriptLine],
+    ['pi', 'omp', lineDecoders.decodeOmpTranscriptLine],
+    ['opencode', 'opencode', null],
+    ['opencode2', 'opencode', null],
+    ['zcode', 'opencode', null]
+  ] as const)('uses one format and matching decoder for %s', (agent, transcriptAgent, decode) => {
+    expect(resolveLegacyTranscriptFormat(agent)).toEqual({ transcriptAgent, decode })
+  })
+
+  it('retains Pi source identity through the actual original importer', async () => {
+    const filePath = await writeFixture('pi.jsonl', [
+      { type: 'session', version: 3, id: CODEX_SESSION, cwd: root },
+      {
+        type: 'message',
+        id: 'pi-original',
+        parentId: null,
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Pi original' }]
+        }
+      }
+    ])
+    const journal = await open('pi', CODEX_SESSION)
+    expect(
+      await importLegacyTranscriptIntoJournal({
+        journal,
+        agent: 'pi',
+        sessionId: CODEX_SESSION,
+        fence: 1,
+        options: { filePath }
+      })
+    ).toMatchObject({ ok: true, imported: 1 })
+    const item = journal.snapshot().items[0]
+    expect(item?.itemId).toBe(
+      agentJournalItemKey({
+        provider: 'legacy',
+        agent: 'pi',
+        sessionId: CODEX_SESSION,
+        recordId: 'pi-original'
+      })
+    )
+    expect(item?.body).toEqual({
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Pi original' }]
+    })
+    expect(journal.itemFence(item.itemId)).toBe(0)
+    expect(journal.agent).toBe('pi')
+  })
+
+  it('does not grant unsupported imports a decoder', () => {
+    expect(resolveLegacyTranscriptFormat('gemini')).toBeNull()
+    expect(resolveLegacyTranscriptFormat(null)).toBeNull()
   })
 })
 

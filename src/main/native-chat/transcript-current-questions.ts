@@ -131,7 +131,7 @@ async function withTranscriptQuestionSource<T>(
   const querySignal = signal ? AbortSignal.any([signal, deadline]) : deadline
   try {
     await waitForPromiseWithSignal(
-      retained.source.refresh().catch((error: unknown) => {
+      retained.source.refresh(!requireRefresh).catch((error: unknown) => {
         if (requireRefresh) {
           throw error
         }

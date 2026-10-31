@@ -13,14 +13,11 @@ import type {
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../session-file-resolver'
 import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine,
-  decodeOmpTranscriptLine
-} from '../transcript-line-decoders'
+  resolveLegacyTranscriptFormat,
+  type LegacyLineTranscriptFormat
+} from './journal-legacy-transcript-format'
 import { decodeTranscriptStream } from '../transcript-stream-lines'
 import { readOpenCodeNativeChatTranscriptFull } from '../transcript-opencode'
 import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
@@ -89,13 +86,11 @@ export async function prepareLegacyTranscriptImport(input: {
 }): Promise<PreparedLegacyImport> {
   const options = input.options ?? {}
   const limits = options.limits ?? LEGACY_IMPORT_BLOCK_LIMITS
-  // OMP retained Pi's format, so its decoder also reads Pi sessions.
-  const transcriptAgent =
-    input.agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(input.agent)
-  if (!transcriptAgent) {
+  const format = resolveLegacyTranscriptFormat(input.agent)
+  if (!format) {
     return { ok: false, error: `Unsupported agent for journal import: ${input.agent}` }
   }
-  if (transcriptAgent === 'opencode') {
+  if (format.transcriptAgent === 'opencode') {
     return prepareOpenCodeImport({ ...input, limits })
   }
   const filePath =
@@ -107,7 +102,7 @@ export async function prepareLegacyTranscriptImport(input: {
   try {
     const { items, consumedBytes } = await decodeReplacementItems({
       filePath,
-      transcriptAgent,
+      format,
       agent: input.agent,
       sessionId: input.sessionId,
       source: options.source,
@@ -184,17 +179,10 @@ function replacementItem(
   }
 }
 
-const TRANSCRIPT_DECODERS = {
-  claude: decodeClaudeTranscriptLine,
-  codex: decodeCodexTranscriptLine,
-  grok: decodeGrokTranscriptLine,
-  omp: decodeOmpTranscriptLine
-} as const
-
 /** Bound during decode so memory follows retained history rather than source-file size. */
 async function decodeReplacementItems(input: {
   filePath: string
-  transcriptAgent: keyof typeof TRANSCRIPT_DECODERS
+  format: LegacyLineTranscriptFormat
   agent: AgentType
   sessionId: string
   decodedMessageIdentities?: true
@@ -210,11 +198,11 @@ async function decodeReplacementItems(input: {
       })
     : null
   const tracker = createLegacyIdentityTracker({
-    transcriptAgent: input.transcriptAgent,
+    transcriptAgent: input.format.transcriptAgent,
     agent: input.agent,
     sessionId: input.sessionId
   })
-  const decode = TRANSCRIPT_DECODERS[input.transcriptAgent]
+  const { decode } = input.format
   const toItem = (message: NativeChatMessage, identity: AgentJournalItemIdentity) =>
     replacementItem(message, identity, input.limits)
   const retained = createNewestItemWindow(MAX_LEGACY_IMPORT_RETAINED_BYTES)

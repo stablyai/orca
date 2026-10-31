@@ -149,8 +149,15 @@ export function journal(
     messageQuestions: () => {
       throw new Error('This ownership fixture does not publish async questions')
     },
+    historyOrigin: () => {
+      throw new Error('This ownership fixture does not publish async questions')
+    },
+    questionSourceFacts: () => {
+      throw new Error('This ownership fixture does not publish async questions')
+    },
     item: (itemId) => items.find((item) => item.itemId === itemId) ?? null,
     cursor: () => ({ epoch: EPOCH, sequence: items.length }),
+    readSince: () => ({ ok: false, reset: 'epoch_changed' }),
     visitItems: (visit) => {
       for (const item of items) {
         visit(item.itemId, item.sequence, item.body)

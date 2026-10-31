@@ -191,18 +191,15 @@ export class MessageQuestionRepository {
     ids: readonly string[],
     caller: string,
     now: number,
-    facts: MessageQuestionFacts = {}
-  ): MessageQuestionSnapshot {
+    facts: MessageQuestionFacts = {},
+    admitted: ReadonlyMap<string, MessageQuestionOccurrence | undefined> = new Map()
+  ): readonly MessageQuestionOccurrence[] {
     if (!caller) {
       throw new Error('Message question cancellation needs an authenticated caller')
     }
-    const reconciled = this.reconcile(source, [], facts)
-    if (reconciled.writeError) {
-      throw reconciled.writeError
-    }
     const sourceId = messageQuestionSourceId(source)
     let changed = false
-    this.database.transaction((db) => {
+    const committed = this.database.transaction((db) => {
       const targets = [...new Set(ids)].map((id) => {
         const row = db
           .prepare(
@@ -218,33 +215,42 @@ export class MessageQuestionRepository {
         }
         return record
       })
-      for (const record of targets) {
+      return targets.map((record) => {
         if (record.resolution.state !== 'pending') {
-          continue
+          return record
         }
+        const staged = admitted.get(record.id)
+        const resolution = reconcileMessageQuestionResolution(
+          staged?.sourceId === sourceId && staged.resolution.state !== 'pending'
+            ? { ...record, resolution: staged.resolution }
+            : record,
+          facts
+        )
         changed = true
+        const terminal: MessageQuestionOccurrence = {
+          ...record,
+          resolution:
+            resolution.state !== 'pending'
+              ? resolution
+              : {
+                  state: 'cancelled',
+                  reason: 'user',
+                  factId: record.id,
+                  resolvedBy: caller,
+                  resolvedAt: now
+                }
+        }
         db.prepare(
           'UPDATE message_question_occurrences SET record_json = ? WHERE occurrence_id = ? AND source_id = ?'
-        ).run(
-          JSON.stringify({
-            ...record,
-            resolution: {
-              state: 'cancelled',
-              reason: 'user',
-              factId: record.id,
-              resolvedBy: caller,
-              resolvedAt: now
-            }
-          }),
-          record.id,
-          sourceId
-        )
-      }
+        ).run(JSON.stringify(terminal), record.id, sourceId)
+        return terminal
+      })
     })
+    // Cache repair cannot become an unrelated read prerequisite for a committed target receipt.
     if (changed) {
       this.invalidate(sourceId)
     }
-    return this.current(source)
+    return committed
   }
 
   ownSource(source: MessageQuestionSource, release: () => void): () => void {
