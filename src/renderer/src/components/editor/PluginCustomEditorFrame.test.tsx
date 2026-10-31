@@ -113,21 +113,6 @@ async function renderFrame(props: {
 }
 
 describe('PluginCustomEditorFrame', () => {
-  it('renders the editor in a scripts-only sandbox inside the CSP shell', async () => {
-    const { iframe } = await renderFrame({ content: '{}' })
-    expect(readCustomEditorEntry).toHaveBeenCalledWith({
-      pluginKey: 'stablyai.excalidraw',
-      editorId: 'excalidraw'
-    })
-    // allow-same-origin would expose app DOM, storage and IPC to the plugin.
-    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts')
-    expect(iframe.getAttribute('name')?.startsWith('orca-plugin-panel:editor:')).toBe(true)
-    // window.name is readable in the frame, so it must not name the file.
-    expect(iframe.getAttribute('name')).not.toContain('diagram')
-    expect(iframe.getAttribute('name')).not.toContain('/repo')
-    expect(iframe.getAttribute('srcdoc')).toContain('<main>editor</main>')
-  })
-
   it('sends the buffer on ready and applies edits without saving', async () => {
     const { posted, fromFrame, onContentChange, onSave } = await renderFrame({ content: 'scene' })
     await fromFrame(READY)

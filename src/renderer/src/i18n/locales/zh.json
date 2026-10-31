@@ -893,6 +893,13 @@
       "pluginNewFile": {
         "unavailable": "{{value0}} 已不可用。请重新启用其插件。",
         "failed": "无法创建文件。"
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}} 已更新到 {{value1}}",
+        "many": "已更新 {{value0}} 个插件"
+      },
+      "pluginInstallLink": {
+        "invalid": "该插件链接无效。"
       }
     },
     "lib": {
@@ -1165,16 +1172,6 @@
       "worktree": {
         "activation": {
           "cannotOpenFolderWorkspace": "无法打开文件夹工作区"
-        },
-        "palette": {
-          "search": {}
-        },
-        "creation": {
-          "flow": {
-            "structured": {
-              "launch": {}
-            }
-          }
         }
       },
       "folderWorkspacePathStatus": {
@@ -1570,20 +1567,6 @@
       "ipcEvents": {
         "sshManagedServer": {
           "refusedBlocked": "无法在此 SSH 主机上设置 Orca。设置中的“SSH 主机”会显示原因。"
-        }
-      },
-      "ipc": {
-        "events": {
-          "browserStateIpcBridge": {},
-          "os": {
-            "markdown": {
-              "file": {
-                "open": {
-                  "bridge": {}
-                }
-              }
-            }
-          }
         }
       }
     },
@@ -3066,15 +3049,6 @@
         "IssueSourceIndicator": {
           "issueFromRepo": "来自 <repo/> 的议题",
           "issuesFromRepo": "来自 <repo/> 的议题"
-        },
-        "CloseReasonDropdown": {},
-        "GitHubIssueCommentComposer": {},
-        "GitHubWorkItemAssigneePopoverContent": {},
-        "GitHubWorkItemLabelPopoverContent": {},
-        "githubIssueCloseReasons": {
-          "completed": {},
-          "notPlanned": {},
-          "duplicate": {}
         }
       },
       "linear": {
@@ -4251,8 +4225,7 @@
               "waiting": {
                 "label": "运行 Claude 时更新",
                 "message": "Claude 用量将在下次运行 Claude 时更新。"
-              },
-              "expired": {}
+              }
             },
             "remoteOwnerNotConfigured": "未在 {{server}} 上配置",
             "remoteOwnerSignInSavedHere": "其登录信息仅保存在此电脑上。",
@@ -4764,8 +4737,7 @@
         "usageFormatters": {
           "notScannedYet": "尚未扫描",
           "updatedAt": "更新于 {{time}}"
-        },
-        "UsageSessionsTable": {}
+        }
       },
       "sparse": {
         "SparseCheckoutPresetSelect": {
@@ -5228,13 +5200,7 @@
         "managedRemoval": {
           "removed": "已移除 {{removed}} 个。",
           "removedPreserved_other": "已移除 {{removed}} 个 · 已保留 {{count}} 个已修改的技能。"
-        },
-        "SkillFreshnessRow": {},
-        "SkillUpdateResultRows": {},
-        "SkillCloudManagementActions": {},
-        "SkillManagedInstallList": {},
-        "SkillSelectionBar": {},
-        "SkillsSharedLinksHeader": {}
+        }
       },
       "sidebar": {
         "AddProjectFromFolderDialog": {
@@ -6653,13 +6619,7 @@
           "needsInput": "需要输入",
           "running": "运行中",
           "idle": "空闲"
-        },
-        "WorktreeCardReviewDetailSection": {},
-        "index": {},
-        "ProjectOrderManualDefaultNotice": {},
-        "SidebarHostScopeStrip": {},
-        "WorktreeIssueLinkField": {},
-        "worktreeIssueDisplacement": {}
+        }
       },
       "shared": {
         "useDaemonActions": {
@@ -9487,8 +9447,7 @@
               "extension": "扩展程序",
               "chrome": "chrome",
               "password": "密码管理器"
-            },
-            "nativeChat": {}
+            }
           }
         },
         "floating": {
@@ -11328,7 +11287,8 @@
           "pathLabel": "开发插件文件夹路径",
           "placeholder": "插件文件夹路径",
           "add": "添加路径",
-          "reviewHelp": "只审核一次。之后的代码修改会直接运行。"
+          "reviewHelp": "只审核一次。之后的代码修改会直接运行。",
+          "dialogTitle": "开发文件夹"
         },
         "PluginInstallDialog": {
           "localRequired": "请输入插件文件夹路径。",
@@ -12533,7 +12493,9 @@
           "repository": "仓库",
           "stoppedDataBody": "无法加载其文件。重新启动以重试。",
           "newerBody": "你浏览时目录已更改。",
-          "showNewer": "查看新版本"
+          "showNewer": "查看新版本",
+          "newerTitle": "有更新的版本",
+          "alsoListedBy": "{{value0}} 也收录了此插件。更新只来自安装时所用的目录；如需切换，请移除后重新安装。"
         },
         "PluginDetailSections": {
           "typeLanguagePack": "界面语言",
@@ -12583,7 +12545,9 @@
           "rollbackTo": "回滚到 {{value0}}…",
           "copyContentHash": "复制内容哈希",
           "reviewUpdate": "审核更新",
-          "dataLoadFailed": "无法加载其文件"
+          "dataLoadFailed": "无法加载其文件",
+          "updateNeedsReview": "更新 {{value0}} 需要审查",
+          "updatedTo": "已更新到 {{value0}}"
         },
         "PluginSettingsOverview": {
           "offTitle": "插件已关闭"
@@ -12646,20 +12610,27 @@
           "dark": "深色",
           "light": "浅色",
           "languageIncomplete": "已翻译 {{value0}}%，不够完整，无法用作 Orca 的语言",
-          "languageCoverage": "界面语言 · 已翻译 {{value0}}%"
+          "languageCoverage": "界面语言 · 已翻译 {{value0}}%",
+          "newFileMenu": "添加到 + 菜单"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "无其他访问权限",
           "replacesShortcut": "{{value0}}（{{value1}}）会替换你的“{{value2}}”快捷键。",
           "updatesKeepApproval": "仅在需要新访问权限时更新才会再次询问",
           "fullAccessUpdates": "更新可能会在不询问的情况下更改其代码",
-          "editsFileTypes": "在 Orca 中打开并编辑 {{value0}} 文件。它可以读取自己打开的文件。"
+          "editsFileTypes": "在 Orca 中打开并编辑 {{value0}} 文件。它可以读取自己打开的文件。",
+          "install": "安装并启用",
+          "keepOff": "保持关闭"
         },
         "PluginPageAction": {
-          "contentOnly": "仅内容"
+          "contentOnly": "仅内容",
+          "failedTitle": "无法安装 {{value0}}"
         },
         "PluginSettingsMenu": {
-          "autoUpdateHint": "仅在需要新访问权限时再次询问"
+          "autoUpdateHint": "仅在需要新访问权限时再次询问",
+          "label": "插件设置",
+          "development": "开发文件夹…",
+          "autoUpdateLabel": "自动更新插件"
         },
         "PluginInUseAction": {
           "inUseDark": "使用中 · 深色",
@@ -12730,12 +12701,39 @@
           "review": "审核",
           "dismiss": "关闭"
         },
-        "AgentLocationSetting": {},
-        "AutoRenameBranchPromptEditor": {},
-        "computerUseSkillRuntime": {},
-        "MobileRelayStatusSection": {},
-        "MobileRelayBetaAvailability": {},
-        "PluginMarketplacePreviewDialog": {}
+        "PluginInstallTrustDialog": {
+          "titleFolder": "请确认你信任此文件夹",
+          "title": "请确认你信任 {{value0}}",
+          "theme": "此主题来自 {{value0}}，而非 Orca。请只安装你信任的作者的插件。",
+          "content": "此插件来自 {{value0}}，而非 Orca。请只安装你信任的作者的插件。",
+          "translations": "此翻译来自 {{value0}}，而非 Orca。翻译可以更改 Orca 中的任何文本，因此请只安装你信任的作者的翻译。",
+          "code": "此插件来自 {{value0}}，而非 Orca。它会在 Orca 内运行发布者的代码，因此仅在你信任 {{value0}} 时安装。",
+          "git": "Orca 尚未检查此仓库。来自它的插件可以在 Orca 内运行发布者的代码，因此仅在你信任 {{value0}} 时安装。",
+          "localFolder": "这是未经验证的本地文件夹。来自它的插件可以在 Orca 内运行代码，因此仅在你信任其来源时安装。",
+          "devFolder": "这是未经验证的本地文件夹。Orca 会按原样加载其插件，之后的代码修改会直接运行而不再询问，因此请只添加你信任的文件夹。",
+          "publisher": "发布者",
+          "repository": "仓库",
+          "folder": "文件夹",
+          "catalog": "目录",
+          "cancel": "取消",
+          "addFolder": "添加文件夹",
+          "install": "安装"
+        },
+        "PluginPageHero": {
+          "screenshots": "屏幕截图",
+          "openScreenshot": "打开屏幕截图：{{value0}}",
+          "position": "{{value0}} / {{value1}}",
+          "previous": "上一张屏幕截图",
+          "next": "下一张屏幕截图"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "更新需要审查",
+          "updatedTo": "已更新到 {{value0}}",
+          "devUnverified": "开发 · 未验证"
+        },
+        "PluginContributionActionNewFile": {
+          "create": "创建"
+        }
       },
       "right": {
         "sidebar": {
@@ -13605,16 +13603,6 @@
                     "216f762bd7": "无法解析工作区连接。",
                     "success": "已为 {{value0}} 失败启动 AI 智能体。"
                   }
-                },
-                "commit": {
-                  "failure": {
-                    "launch": {}
-                  }
-                },
-                "push": {
-                  "failure": {
-                    "launch": {}
-                  }
                 }
               },
               "discard": {
@@ -14127,7 +14115,8 @@
                   "79aa06bb2c": "刷新失败。GitHub 的 API 暂时不可用。正在显示上次已知状态。",
                   "6ec12cee0c": "刷新失败。现在无法访问 GitHub。正在显示上次已知状态。",
                   "de088015e8": "刷新失败。GitHub 正在限制请求频率。正在显示上次已知状态。",
-                  "d9dd7c6687": "无法从 GitHub 刷新。正在显示上次已知状态。"
+                  "d9dd7c6687": "无法从 GitHub 刷新。正在显示上次已知状态。",
+                  "manual_provider": "无法从 {{provider}} 刷新。请重试。"
                 }
               }
             },
@@ -14251,10 +14240,7 @@
             "createInProgress": "正在创建 PR...",
             "workspaceHostUnresolved": "无法解析工作区主机。请刷新工作区后重试。",
             "branchDiscoveryFailed": "分支发现失败。"
-          },
-          "CreatePullRequestDialog": {},
-          "CreatePullRequestGenerateButton": {},
-          "GitHistoryGraphSvg": {}
+          }
         }
       },
       "repo": {
@@ -14608,8 +14594,7 @@
           "androidHelp": {
             "guide": "安装指南"
           },
-          "openAppAndScan": "打开 Orca Mobile，点按 <strong>配对桌面</strong>，然后扫描二维码。",
-          "channel": {}
+          "openAppAndScan": "打开 Orca Mobile，点按 <strong>配对桌面</strong>，然后扫描二维码。"
         },
         "MobilePage": {
           "e17393c6a3": "手机预览",
@@ -14641,9 +14626,7 @@
           "platform": {
             "copy": {
               "downloadApk": "下载 APK",
-              "openAppStore": "打开 App Store",
-              "preview": {},
-              "stable": {}
+              "openAppStore": "打开 App Store"
             }
           }
         },
@@ -15123,11 +15106,6 @@
                 "f421abf962": "会话",
                 "5e45fb1238": "更新于 1 分钟前",
                 "6a4b1d3c38": "Codex"
-              },
-              "types": {},
-              "steps": {},
-              "orchestration": {
-                "cards": {}
               }
             }
           },
@@ -15179,9 +15157,7 @@
             "reopenHint": "可随时从 帮助 > 探索 Orca 重新打开。",
             "done": "完成",
             "continue": "继续"
-          },
-          "ComputerUseAnimatedVisual": {},
-          "ReviewAnimatedVisual": {}
+          }
         },
         "tips": {
           "CliFeatureTipVisual": {
@@ -15268,9 +15244,6 @@
                   "5ee64cd44e": "模拟器屏幕"
                 }
               }
-            },
-            "unavailable": {
-              "pane": {}
             }
           },
           "use": {
@@ -16174,13 +16147,29 @@
           "message": "有插件可以打开 .{{value0}} 文件：{{value1}}",
           "view": "查看插件",
           "notNow": "暂不",
-          "never": "不再为 .{{value0}} 建议"
+          "never": "不再为 .{{value0}} 建议",
+          "editorMessage": "有插件为 .{{value0}} 文件提供编辑器：{{value1}}"
         },
         "RichMarkdownEmojiMenu": {
           "chooseEmoji": "选择表情符号"
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "无法将粘贴的图片保存到文档旁。重启 Orca 后可能无法加载该图片。"
+        },
+        "PluginCustomEditorFrame": {
+          "loading": "正在加载编辑器…",
+          "unresponsive": "{{value0}} 已停止响应。请切换到源代码以继续编辑。",
+          "loadFailed": "无法加载 {{value0}}。请切换到源代码以编辑此文件。",
+          "editTooLarge": "此文件过大，{{value0}} 无法保存更改。请改用源代码。",
+          "saveBlocked": "无法保存 {{value0}} 的最新更改。",
+          "editsHeld": "{{value0}} 发送更改的速度过快；Orca 稍后会应用最新的一次。",
+          "largeFile": "文件较大，可能需要一点时间。"
+        },
+        "PluginBytesCustomEditorSurface": {
+          "retry": "重试",
+          "tooLarge": "{{value0}} 过大，无法在 {{value1}} 中打开（{{value2}}；上限为 {{value3}}）。",
+          "unsupported": "{{value0}} 无法从此文件的存储位置读取它。请更新托管该文件的 Orca 服务器，或切换到源代码。",
+          "readFailed": "无法为 {{value1}} 读取 {{value0}}。{{value2}}"
         }
       },
       "diff": {
@@ -16503,7 +16492,8 @@
           },
           "pluginQuickActions": {
             "description": "{{value0}} 插件命令",
-            "keyword": "插件命令"
+            "keyword": "插件命令",
+            "newFileDescription": "在当前工作区中创建未命名的 {{value0}} 文件。"
           }
         }
       },
@@ -16744,13 +16734,6 @@
             "description": "选择要与此安全密钥一起使用的帐户。",
             "site": "地点",
             "cancel": "取消"
-          }
-        },
-        "profile": {
-          "user": {
-            "agent": {
-              "option": {}
-            }
           }
         }
       },
@@ -17587,70 +17570,8 @@
                         "jiraRequiredFieldsLoadFailed": "无法加载所需的 Jira 字段。"
                       }
                     }
-                  },
-                  "linear": {
-                    "active": {
-                      "collection": {}
-                    }
-                  },
-                  "session": {
-                    "resume": {}
                   }
                 }
-              }
-            }
-          },
-          "chrome": {
-            "task": {
-              "page": {
-                "gitlab": {
-                  "filters": {}
-                }
-              }
-            }
-          },
-          "dialogs": {
-            "new": {
-              "github": {
-                "issue": {
-                  "dialog": {}
-                }
-              },
-              "linear": {
-                "issue": {
-                  "dialog": {}
-                }
-              }
-            },
-            "task": {
-              "page": {
-                "connect": {
-                  "dialogs": {}
-                }
-              }
-            }
-          },
-          "github": {
-            "github": {
-              "detail": {
-                "host": {}
-              },
-              "issue": {
-                "label": {
-                  "selector": {}
-                }
-              },
-              "work": {
-                "item": {
-                  "row": {}
-                }
-              }
-            }
-          },
-          "linear": {
-            "linear": {
-              "connect": {
-                "empty": {}
               }
             }
           }
@@ -17809,7 +17730,8 @@
           "notInstalled": "未安装"
         },
         "PluginListGroup": {
-          "showAll": "再显示 {{value0}} 个"
+          "showAll": "再显示 {{value0}} 个",
+          "showAllTotal": "显示全部 {{value0}} 个插件"
         },
         "PluginListRow": {
           "official": "官方"
@@ -18305,6 +18227,13 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}} 次安装"
+        },
+        "PluginCatalogLinkDialog": {
+          "failed": "无法添加此目录。",
+          "title": "要添加目录 {{value0}} 吗？",
+          "cancel": "取消",
+          "add": "添加目录",
+          "body": "有链接请求显示此目录中的 {{value0}}。请只添加你信任的人的目录。"
         }
       }
     },
@@ -19111,7 +19040,6 @@
         "editMessage": "编辑消息",
         "showFullMessage": "显示完整消息",
         "showLess": "收起",
-        "turnOffQueueing": "关闭排队",
         "withdrawnHold": "在发送前已停止",
         "pausedSendFailed": "无法发送。点按发送以重试。",
         "paused": "已暂停",
@@ -19332,7 +19260,6 @@
         "modelApplyFailed": "无法应用模型 {{value}}。",
         "effortApplyFailed": "无法应用推理强度 {{value}}。"
       },
-      "conversationCommand": {},
       "usageLimitActions": {
         "continueNow": "立即继续",
         "leadIn": "无需等待，继续此聊天：",
@@ -19560,8 +19487,7 @@
           "selectionVanishedCount_other": "所选的 {{count}} 个工作区已不存在。",
           "selectionWithheldCount_other": "所选的 {{count}} 个工作区被当前筛选条件隐藏，已取消选择。",
           "selectAllSafetyChecked_other": "选择全部 {{count}} 个已通过安全检查的工作区",
-          "lastActive": "最后活跃：{{value0}}",
-          "tier": {}
+          "lastActive": "最后活跃：{{value0}}"
         },
         "scan": {
           "progress": "扫描工作区 ({{value0}}/{{value1}})",
@@ -19755,9 +19681,8 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "将后续消息加入队列",
-        "queueFollowUpsCopy": "智能体工作时发送的消息会以卡片形式等待，你可以立即发送、编辑或删除。带图片的消息会立即发送。",
-        "queueFollowUpsToggleLabel": "切换后续消息队列",
+        "followUpBehaviorTitle": "将后续消息加入队列",
+        "followUpBehaviorCopy": "智能体工作时发送的消息会以卡片形式等待到回合结束，而不是进入正在进行的回合。Cmd/Ctrl+Enter 会对单条消息采取相反做法。",
         "inlineVisualsTitle": "内联可视化",
         "inlineVisualsCopy": "允许智能体在其回复中显示图表、示意图和原型图。适用于新启动的聊天。",
         "inlineVisualsToggleLabel": "切换内联可视化",
@@ -19970,8 +19895,7 @@
       "ssh": "SSH 主机",
       "remoteNamed": "远程 Orca 主机 · {{host}}",
       "remote": "远程 Orca 主机"
-    },
-    "placeholder": {}
+    }
   },
   "dashboard": {
     "sidebar": {
@@ -20217,8 +20141,7 @@
       "title": "智能体更容易找到了",
       "description": "智能体视图现在是侧边栏的专用标签页。你的活动和筛选条件都会保留。",
       "dismiss": "知道了"
-    },
-    "new": {}
+    }
   },
   "notifications": {
     "agentStatus": {
@@ -20496,8 +20419,7 @@
       "demoApp": "应用",
       "demoPassword": "密码",
       "demoCookie": "Cookie"
-    },
-    "nativeChatUpgrade": {}
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "可能还有更多匹配结果。请细化搜索以缩小范围。",

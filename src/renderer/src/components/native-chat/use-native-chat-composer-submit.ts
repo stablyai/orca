@@ -2,7 +2,10 @@ import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { applyPickerSuggestion } from '../../../../shared/native-chat/input/native-chat-picker-triggers'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type {
+  NativeChatComposerSendIntent,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
 import {
@@ -40,12 +43,19 @@ export function useNativeChatComposerSubmit(args: {
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   disabled: boolean
   sendPty: () => void
-  sendStructured: (text: string, attachments: readonly NativeChatComposerImageAttachment[]) => void
+  sendStructured: (
+    text: string,
+    attachments: readonly NativeChatComposerImageAttachment[],
+    intent?: NativeChatComposerSendIntent
+  ) => void
   /** Runs a command Orca owns, like `/resume`; true means the draft never reaches the agent. */
   consumeOrcaCommand?: (draft: string) => boolean
   setDraft: (value: string) => void
   setCaret: (caret: number) => void
-}): { send: () => void; goalMode: NativeChatComposerGoalMode } {
+}): {
+  send: (intent?: NativeChatComposerSendIntent) => void
+  goalMode: NativeChatComposerGoalMode
+} {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
   const { consumeOrcaCommand, setCaret, setDraft, structuredTransport } = args
   const threadGoal = structuredTransport?.threadGoal
@@ -104,49 +114,56 @@ export function useNativeChatComposerSubmit(args: {
     })
   }, [draft, draftScopeKey, imageAttachments.length, setCaret, structuredTransport, threadGoal])
 
-  const send = useCallback(() => {
-    // Before goal mode too: a navigation command must never become an objective.
-    if (consumeOrcaCommand?.(draft)) {
-      return
-    }
-    if (
-      structuredTransport &&
-      !admitNativeChatPastedText(draftScopeKey, draft, structuredTransport.onError)
-    ) {
-      return
-    }
-    if (nativeChatImagesHoldSend(imageAttachments)) {
-      return
-    }
-    if (threadGoal && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {
-      // Bare /goal always enters goal mode; even there it must not become an objective.
-      setDraft('')
-      setCaret(0)
-      setEntered(true)
-    } else if (active) {
-      if (!disabled) {
-        setGoal()
+  const send = useCallback(
+    (intent?: NativeChatComposerSendIntent) => {
+      // Before goal mode too: a navigation command must never become an objective.
+      if (consumeOrcaCommand?.(draft)) {
+        return
       }
-    } else if (!structuredTransport) {
-      sendPty()
-    } else if ((draft.trim() !== '' || imageAttachments.length > 0) && !disabled) {
-      sendStructured(draft, imageAttachments)
-    }
-  }, [
-    active,
-    consumeOrcaCommand,
-    disabled,
-    draft,
-    draftScopeKey,
-    imageAttachments,
-    sendPty,
-    sendStructured,
-    setCaret,
-    setDraft,
-    setGoal,
-    structuredTransport,
-    threadGoal
-  ])
+      if (
+        structuredTransport &&
+        !admitNativeChatPastedText(draftScopeKey, draft, structuredTransport.onError)
+      ) {
+        return
+      }
+      if (nativeChatImagesHoldSend(imageAttachments)) {
+        return
+      }
+      if (threadGoal && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {
+        // Bare /goal always enters goal mode; even there it must not become an objective.
+        setDraft('')
+        setCaret(0)
+        setEntered(true)
+      } else if (active) {
+        if (!disabled) {
+          setGoal()
+        }
+      } else if (!structuredTransport) {
+        sendPty()
+      } else if ((draft.trim() !== '' || imageAttachments.length > 0) && !disabled) {
+        if (intent) {
+          sendStructured(draft, imageAttachments, intent)
+        } else {
+          sendStructured(draft, imageAttachments)
+        }
+      }
+    },
+    [
+      active,
+      consumeOrcaCommand,
+      disabled,
+      draft,
+      draftScopeKey,
+      imageAttachments,
+      sendPty,
+      sendStructured,
+      setCaret,
+      setDraft,
+      setGoal,
+      structuredTransport,
+      threadGoal
+    ]
+  )
 
   const exit = useCallback(() => setEntered(false), [])
   const goalMode = useMemo(() => ({ active, exit, interceptPick }), [active, exit, interceptPick])

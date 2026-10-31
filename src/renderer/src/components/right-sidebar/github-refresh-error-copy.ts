@@ -1,3 +1,8 @@
+import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import {
+  localizedHostedReviewCopy,
+  resolveSupportedHostedReviewCopyProvider
+} from '@/i18n/hosted-review-localized-copy'
 import type { PRRefreshUpstreamErrorType } from '../../../../shared/github/pull-request-refresh-types'
 import { translate } from '@/i18n/i18n'
 
@@ -71,5 +76,16 @@ export function getChecksPanelRefreshErrorBannerLine(
   return translate(
     'auto.components.right.sidebar.github.refresh.error.copy.d9dd7c6687',
     "Couldn't refresh from GitHub. Showing the last known status."
+  )
+}
+
+export function getHostedReviewManualRefreshError(provider: HostedReviewProvider): string {
+  return translate(
+    'auto.components.right.sidebar.github.refresh.error.copy.manual_provider',
+    "Couldn't refresh from {{provider}}. Try again.",
+    {
+      provider: localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
+        .providerName
+    }
   )
 }

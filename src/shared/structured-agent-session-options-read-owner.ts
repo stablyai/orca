@@ -166,7 +166,6 @@ export function createStructuredAgentSessionOptionsReadOwner(
             ? {
                 ...current,
                 record: cloneStructuredAgentSessionOptionRecord(current.record),
-                pendingId: null,
                 reportedPermissionMode: undefined,
                 reportedEffort: undefined
               }

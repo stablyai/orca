@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
-import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
+import { RelayAssignmentStore } from '../assignment-store.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from '../database.js'
 
 const NOW = 100_000
 const CELL_COUNT = 32

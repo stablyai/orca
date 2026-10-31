@@ -1668,16 +1668,6 @@
       "worktree": {
         "activation": {
           "cannotOpenFolderWorkspace": "Cannot open folder workspace"
-        },
-        "palette": {
-          "search": {}
-        },
-        "creation": {
-          "flow": {
-            "structured": {
-              "launch": {}
-            }
-          }
         }
       },
       "folderWorkspacePathStatus": {
@@ -2077,20 +2067,6 @@
       "ipcEvents": {
         "sshManagedServer": {
           "refusedBlocked": "Orca couldn’t set itself up on this SSH host. SSH Hosts in Settings shows why."
-        }
-      },
-      "ipc": {
-        "events": {
-          "browserStateIpcBridge": {},
-          "os": {
-            "markdown": {
-              "file": {
-                "open": {
-                  "bridge": {}
-                }
-              }
-            }
-          }
         }
       }
     },
@@ -3645,15 +3621,6 @@
         "IssueSourceIndicator": {
           "issueFromRepo": "Issue from <repo/>",
           "issuesFromRepo": "Issues from <repo/>"
-        },
-        "CloseReasonDropdown": {},
-        "GitHubIssueCommentComposer": {},
-        "GitHubWorkItemAssigneePopoverContent": {},
-        "GitHubWorkItemLabelPopoverContent": {},
-        "githubIssueCloseReasons": {
-          "completed": {},
-          "notPlanned": {},
-          "duplicate": {}
         }
       },
       "linear": {
@@ -4892,8 +4859,7 @@
               "waiting": {
                 "label": "Updates when Claude runs",
                 "message": "Claude usage updates the next time Claude runs."
-              },
-              "expired": {}
+              }
             },
             "justNow": "just now",
             "minutesAgo": "{{minutes}}m ago",
@@ -5412,8 +5378,7 @@
         "usageFormatters": {
           "notScannedYet": "Not scanned yet",
           "updatedAt": "Updated {{time}}"
-        },
-        "UsageSessionsTable": {}
+        }
       },
       "sparse": {
         "SparseCheckoutPresetSelect": {
@@ -5901,13 +5866,7 @@
           "removed": "{{removed}} removed.",
           "removedPreserved_one": "{{removed}} removed · {{count}} modified skill preserved.",
           "removedPreserved_other": "{{removed}} removed · {{count}} modified skills preserved."
-        },
-        "SkillFreshnessRow": {},
-        "SkillUpdateResultRows": {},
-        "SkillCloudManagementActions": {},
-        "SkillManagedInstallList": {},
-        "SkillSelectionBar": {},
-        "SkillsSharedLinksHeader": {}
+        }
       },
       "sidebar": {
         "local": {
@@ -7367,13 +7326,7 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
-        },
-        "SidebarHostScopeStrip": {},
-        "WorktreeCardReviewDetailSection": {},
-        "index": {},
-        "ProjectOrderManualDefaultNotice": {},
-        "WorktreeIssueLinkField": {},
-        "worktreeIssueDisplacement": {}
+        }
       },
       "shared": {
         "useDaemonActions": {
@@ -10263,8 +10216,7 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
-            },
-            "nativeChat": {}
+            }
           }
         },
         "floating": {
@@ -13471,12 +13423,24 @@
           "review": "Review",
           "dismiss": "Dismiss"
         },
-        "AgentLocationSetting": {},
-        "AutoRenameBranchPromptEditor": {},
-        "computerUseSkillRuntime": {},
-        "MobileRelayStatusSection": {},
-        "MobileRelayBetaAvailability": {},
-        "PluginMarketplacePreviewDialog": {}
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Make sure you trust this folder",
+          "title": "Make sure you trust {{value0}}",
+          "theme": "This theme is from {{value0}}, not Orca. Only install plugins from authors you trust.",
+          "content": "This plugin is from {{value0}}, not Orca. Only install plugins from authors you trust.",
+          "translations": "This translation is from {{value0}}, not Orca. Translations can change any text in Orca, so only install them from authors you trust.",
+          "code": "This plugin is from {{value0}}, not Orca. It runs the publisher’s code inside Orca, so only install it if you trust {{value0}}.",
+          "git": "Orca hasn’t checked this repository. A plugin from it can run its publisher’s code inside Orca, so only install it if you trust {{value0}}.",
+          "localFolder": "This is an unverified local folder. A plugin from it can run code inside Orca, so only install it if you trust where it came from.",
+          "devFolder": "This is an unverified local folder. Orca loads its plugin as it is, and later code edits run without asking, so only add folders you trust.",
+          "publisher": "Publisher",
+          "repository": "Repository",
+          "folder": "Folder",
+          "catalog": "Catalog",
+          "cancel": "Cancel",
+          "addFolder": "Add folder",
+          "install": "Install"
+        }
       },
       "right": {
         "sidebar": {
@@ -14362,16 +14326,6 @@
                     "216f762bd7": "Unable to resolve the workspace connection.",
                     "success": "Started an AI agent for the {{value0}} failure."
                   }
-                },
-                "commit": {
-                  "failure": {
-                    "launch": {}
-                  }
-                },
-                "push": {
-                  "failure": {
-                    "launch": {}
-                  }
                 }
               },
               "discard": {
@@ -14893,7 +14847,8 @@
                   "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
                   "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
                   "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
-                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
+                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status.",
+                  "manual_provider": "Couldn't refresh from {{provider}}. Try again."
                 }
               }
             },
@@ -15024,10 +14979,7 @@
             "createInProgress": "Create PR in progress...",
             "workspaceHostUnresolved": "The workspace host is unresolved. Refresh the workspace and retry.",
             "branchDiscoveryFailed": "Branch discovery failed."
-          },
-          "CreatePullRequestDialog": {},
-          "CreatePullRequestGenerateButton": {},
-          "GitHistoryGraphSvg": {}
+          }
         }
       },
       "repo": {
@@ -15385,8 +15337,7 @@
           "androidHelp": {
             "guide": "Install guide"
           },
-          "openAppAndScan": "Open Orca Mobile, tap <strong>Pair Desktop</strong>, and scan the code.",
-          "channel": {}
+          "openAppAndScan": "Open Orca Mobile, tap <strong>Pair Desktop</strong>, and scan the code."
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -15418,9 +15369,7 @@
           "platform": {
             "copy": {
               "downloadApk": "Download APK",
-              "openAppStore": "Open App Store",
-              "preview": {},
-              "stable": {}
+              "openAppStore": "Open App Store"
             }
           }
         },
@@ -15913,11 +15862,6 @@
                 "f421abf962": "Session",
                 "5e45fb1238": "Updated 1m ago",
                 "6a4b1d3c38": "Codex"
-              },
-              "types": {},
-              "steps": {},
-              "orchestration": {
-                "cards": {}
               }
             }
           },
@@ -15969,9 +15913,7 @@
             "reopenHint": "Reopen any time from Help > Explore Orca.",
             "done": "Done",
             "continue": "Continue"
-          },
-          "ComputerUseAnimatedVisual": {},
-          "ReviewAnimatedVisual": {}
+          }
         },
         "tips": {
           "CliFeatureTipVisual": {
@@ -16058,9 +16000,6 @@
                   "5ee64cd44e": "Emulator screen"
                 }
               }
-            },
-            "unavailable": {
-              "pane": {}
             }
           },
           "use": {
@@ -17574,13 +17513,6 @@
             "site": "Site",
             "cancel": "Cancel"
           }
-        },
-        "profile": {
-          "user": {
-            "agent": {
-              "option": {}
-            }
-          }
         }
       },
       "automations": {
@@ -18437,70 +18369,8 @@
                         "jiraRequiredFieldsLoadFailed": "Failed to load required Jira fields."
                       }
                     }
-                  },
-                  "linear": {
-                    "active": {
-                      "collection": {}
-                    }
-                  },
-                  "session": {
-                    "resume": {}
                   }
                 }
-              }
-            }
-          },
-          "chrome": {
-            "task": {
-              "page": {
-                "gitlab": {
-                  "filters": {}
-                }
-              }
-            }
-          },
-          "dialogs": {
-            "new": {
-              "github": {
-                "issue": {
-                  "dialog": {}
-                }
-              },
-              "linear": {
-                "issue": {
-                  "dialog": {}
-                }
-              }
-            },
-            "task": {
-              "page": {
-                "connect": {
-                  "dialogs": {}
-                }
-              }
-            }
-          },
-          "github": {
-            "github": {
-              "detail": {
-                "host": {}
-              },
-              "issue": {
-                "label": {
-                  "selector": {}
-                }
-              },
-              "work": {
-                "item": {
-                  "row": {}
-                }
-              }
-            }
-          },
-          "linear": {
-            "linear": {
-              "connect": {
-                "empty": {}
               }
             }
           }
@@ -20044,7 +19914,6 @@
         "editMessage": "Edit message",
         "showFullMessage": "Show full message",
         "showLess": "Show less",
-        "turnOffQueueing": "Turn off queueing",
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
         "withdrawnHold": "Stopped before it was sent",
@@ -20261,7 +20130,6 @@
       "webPeek": {
         "unavailable": "No preview for this page."
       },
-      "conversationCommand": {},
       "usageLimitActions": {
         "continueNow": "Continue Now",
         "leadIn": "Continue this chat without waiting:",
@@ -20500,8 +20368,7 @@
           "selectionWithheldCount_other": "{{count}} selected workspaces are hidden by the current filters and were deselected.",
           "selectAllSafetyChecked_one": "Select {{count}} safety-checked workspace",
           "selectAllSafetyChecked_other": "Select all {{count}} safety-checked workspaces",
-          "lastActive": "Last active {{value0}}",
-          "tier": {}
+          "lastActive": "Last active {{value0}}"
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",
@@ -20650,12 +20517,11 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "Queue follow-ups",
+        "followUpBehaviorTitle": "Queue follow-ups",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "queueFollowUpsCopy": "Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images send right away.",
-        "queueFollowUpsToggleLabel": "Toggle queue follow-ups",
+        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message.",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",
@@ -20866,8 +20732,7 @@
       "ssh": "SSH host",
       "remoteNamed": "Remote Orca host · {{host}}",
       "remote": "Remote Orca host"
-    },
-    "placeholder": {}
+    }
   },
   "dashboard": {
     "sidebar": {
@@ -20985,8 +20850,7 @@
       "demoApp": "App",
       "demoPassword": "password",
       "demoCookie": "cookie"
-    },
-    "nativeChatUpgrade": {}
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "More matches may be available. Refine your search to narrow the results.",
@@ -21276,8 +21140,7 @@
       "title": "Agents are easier to find",
       "description": "Your Agents view is now a dedicated sidebar tab. Your activity and filters are preserved.",
       "dismiss": "Got it"
-    },
-    "new": {}
+    }
   },
   "rendererRecovery": {
     "reload": "Reload",

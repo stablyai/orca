@@ -194,7 +194,11 @@
       "cancelEditing": "Отменить редактирование",
       "placeholder": "Задайте вопрос; @ — файлы, / — команды",
       "saveEditedMessage": "Сохранить изменённое сообщение",
-      "sendMessage": "Отправить сообщение"
+      "sendMessage": "Отправить сообщение",
+      "sendQueue": "В очередь",
+      "sendSteer": "Направить",
+      "sendQueueHint": "Выполнится после текущего хода",
+      "sendSteerHint": "Попадёт в то, что агент делает сейчас"
     },
     "composerAttachments": {
       "attachedImage": "Прикреплённое изображение",

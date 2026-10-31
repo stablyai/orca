@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -256,7 +256,7 @@ const usageLimitView = {
   }
 
   it.each(['claude', 'codex', 'grok'] as const)(
-    'keeps a collapsed %s quota warning visible without a continuation action',
+    'keeps a collapsed %s quota warning visible and continues once the limit resets',
     (agent) => {
       continueUsageLimit.mockClear()
       const items: AgentJournalRenderItem[] = [

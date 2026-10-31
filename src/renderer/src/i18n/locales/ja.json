@@ -893,6 +893,13 @@
       "pluginNewFile": {
         "unavailable": "{{value0}} は利用できなくなりました。プラグインを再度オンにしてください。",
         "failed": "ファイルを作成できませんでした。"
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}} を {{value1}} にアップデートしました",
+        "many": "{{value0}} 件のプラグインをアップデートしました"
+      },
+      "pluginInstallLink": {
+        "invalid": "このプラグインのリンクは無効です。"
       }
     },
     "lib": {
@@ -1165,16 +1172,6 @@
       "worktree": {
         "activation": {
           "cannotOpenFolderWorkspace": "フォルダーワークスペースを開けません"
-        },
-        "palette": {
-          "search": {}
-        },
-        "creation": {
-          "flow": {
-            "structured": {
-              "launch": {}
-            }
-          }
         }
       },
       "folderWorkspacePathStatus": {
@@ -1570,20 +1567,6 @@
       "ipcEvents": {
         "sshManagedServer": {
           "refusedBlocked": "この SSH ホストに Orca をセットアップできませんでした。理由は設定の [SSH ホスト] で確認できます。"
-        }
-      },
-      "ipc": {
-        "events": {
-          "browserStateIpcBridge": {},
-          "os": {
-            "markdown": {
-              "file": {
-                "open": {
-                  "bridge": {}
-                }
-              }
-            }
-          }
         }
       }
     },
@@ -3066,15 +3049,6 @@
         "IssueSourceIndicator": {
           "issueFromRepo": "<repo/> の Issue",
           "issuesFromRepo": "<repo/> の Issue"
-        },
-        "CloseReasonDropdown": {},
-        "GitHubIssueCommentComposer": {},
-        "GitHubWorkItemAssigneePopoverContent": {},
-        "GitHubWorkItemLabelPopoverContent": {},
-        "githubIssueCloseReasons": {
-          "completed": {},
-          "notPlanned": {},
-          "duplicate": {}
         }
       },
       "linear": {
@@ -4251,8 +4225,7 @@
               "waiting": {
                 "label": "Claude の実行時に更新",
                 "message": "Claude の使用状況は、次に Claude を実行したときに更新されます。"
-              },
-              "expired": {}
+              }
             },
             "remoteOwnerNotConfigured": "{{server}} では未構成",
             "remoteOwnerSignInSavedHere": "サインイン情報はこのコンピュータにのみ保存されています。",
@@ -4764,8 +4737,7 @@
         "usageFormatters": {
           "notScannedYet": "未スキャン",
           "updatedAt": "更新: {{time}}"
-        },
-        "UsageSessionsTable": {}
+        }
       },
       "sparse": {
         "SparseCheckoutPresetSelect": {
@@ -5228,13 +5200,7 @@
         "managedRemoval": {
           "removed": "{{removed}} 件を削除しました。",
           "removedPreserved_other": "{{removed}} 件を削除 · 変更済みのスキル {{count}} 件を保持しました。"
-        },
-        "SkillFreshnessRow": {},
-        "SkillUpdateResultRows": {},
-        "SkillCloudManagementActions": {},
-        "SkillManagedInstallList": {},
-        "SkillSelectionBar": {},
-        "SkillsSharedLinksHeader": {}
+        }
       },
       "sidebar": {
         "AddProjectFromFolderDialog": {
@@ -6653,13 +6619,7 @@
           "needsInput": "入力待ち",
           "running": "実行中",
           "idle": "アイドル"
-        },
-        "WorktreeCardReviewDetailSection": {},
-        "index": {},
-        "ProjectOrderManualDefaultNotice": {},
-        "SidebarHostScopeStrip": {},
-        "WorktreeIssueLinkField": {},
-        "worktreeIssueDisplacement": {}
+        }
       },
       "shared": {
         "useDaemonActions": {
@@ -9524,8 +9484,7 @@
               "extension": "拡張機能",
               "chrome": "クローム",
               "password": "パスワードマネージャー"
-            },
-            "nativeChat": {}
+            }
           }
         },
         "floating": {
@@ -11328,7 +11287,8 @@
           "pathLabel": "開発用プラグインのフォルダーパス",
           "placeholder": "プラグインフォルダーのパス",
           "add": "パスを追加",
-          "reviewHelp": "確認は一度だけ。その後のコード変更は確認なしで実行されます。"
+          "reviewHelp": "確認は一度だけ。その後のコード変更は確認なしで実行されます。",
+          "dialogTitle": "開発フォルダー"
         },
         "PluginInstallDialog": {
           "localRequired": "プラグインフォルダーのパスを入力してください。",
@@ -12500,7 +12460,9 @@
           "repository": "リポジトリ",
           "stoppedDataBody": "ファイルを読み込めませんでした。再起動して再試行してください。",
           "newerBody": "表示中にカタログが更新されました。",
-          "showNewer": "新しい版を表示"
+          "showNewer": "新しい版を表示",
+          "newerTitle": "新しいバージョンがあります",
+          "alsoListedBy": "{{value0}} にも掲載されています。アップデートはインストール元のカタログからのみ届きます。切り替えるには、削除してから再インストールしてください。"
         },
         "PluginDetailSections": {
           "typeLanguagePack": "表示言語",
@@ -12550,7 +12512,9 @@
           "rollbackTo": "{{value0}} に戻す…",
           "copyContentHash": "コンテンツハッシュをコピー",
           "reviewUpdate": "アップデートを確認",
-          "dataLoadFailed": "ファイルを読み込めませんでした"
+          "dataLoadFailed": "ファイルを読み込めませんでした",
+          "updateNeedsReview": "アップデート {{value0}} のレビューが必要です",
+          "updatedTo": "{{value0}} にアップデート済み"
         },
         "PluginSettingsOverview": {
           "offTitle": "プラグインはオフです"
@@ -12613,20 +12577,27 @@
           "dark": "ダーク",
           "light": "ライト",
           "languageIncomplete": "{{value0}}% 翻訳済み。Orca の言語として使うには不完全です",
-          "languageCoverage": "インターフェース言語 · {{value0}}% 翻訳済み"
+          "languageCoverage": "インターフェース言語 · {{value0}}% 翻訳済み",
+          "newFileMenu": "+ メニューに追加"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "その他のアクセスはありません",
           "replacesShortcut": "{{value0}}（{{value1}}）が {{value2}} のショートカットを置き換えます。",
           "updatesKeepApproval": "アップデートは新しいアクセスがあるときだけ確認します",
           "fullAccessUpdates": "アップデートで確認なしにコードが変わることがあります",
-          "editsFileTypes": "Orca で {{value0}} ファイルを開いて編集します。開いたファイルを読み取れます。"
+          "editsFileTypes": "Orca で {{value0}} ファイルを開いて編集します。開いたファイルを読み取れます。",
+          "install": "インストールして有効化",
+          "keepOff": "オフのままにする"
         },
         "PluginPageAction": {
-          "contentOnly": "コンテンツのみ"
+          "contentOnly": "コンテンツのみ",
+          "failedTitle": "{{value0}} をインストールできませんでした"
         },
         "PluginSettingsMenu": {
-          "autoUpdateHint": "新しいアクセスがあるときだけ確認します"
+          "autoUpdateHint": "新しいアクセスがあるときだけ確認します",
+          "label": "プラグイン設定",
+          "development": "開発フォルダー…",
+          "autoUpdateLabel": "プラグインを自動でアップデート"
         },
         "PluginInUseAction": {
           "inUseDark": "使用中 · ダーク",
@@ -12730,12 +12701,39 @@
           "review": "確認",
           "dismiss": "閉じる"
         },
-        "AgentLocationSetting": {},
-        "AutoRenameBranchPromptEditor": {},
-        "computerUseSkillRuntime": {},
-        "MobileRelayStatusSection": {},
-        "MobileRelayBetaAvailability": {},
-        "PluginMarketplacePreviewDialog": {}
+        "PluginInstallTrustDialog": {
+          "titleFolder": "このフォルダーを信頼できることを確認してください",
+          "title": "{{value0}} を信頼できることを確認してください",
+          "theme": "このテーマは Orca ではなく {{value0}} によるものです。信頼できる作者のプラグインだけをインストールしてください。",
+          "content": "このプラグインは Orca ではなく {{value0}} によるものです。信頼できる作者のプラグインだけをインストールしてください。",
+          "translations": "この翻訳は Orca ではなく {{value0}} によるものです。翻訳は Orca 内のあらゆるテキストを変更できるため、信頼できる作者のものだけをインストールしてください。",
+          "code": "このプラグインは Orca ではなく {{value0}} によるものです。公開元のコードを Orca 内で実行するため、{{value0}} を信頼できる場合にのみインストールしてください。",
+          "git": "Orca はこのリポジトリを確認していません。ここからのプラグインは公開元のコードを Orca 内で実行できるため、{{value0}} を信頼できる場合にのみインストールしてください。",
+          "localFolder": "これは未検証のローカルフォルダーです。ここからのプラグインは Orca 内でコードを実行できるため、入手元を信頼できる場合にのみインストールしてください。",
+          "devFolder": "これは未検証のローカルフォルダーです。Orca はそのプラグインをそのまま読み込み、以降のコード変更は確認なしで実行されます。信頼できるフォルダーだけを追加してください。",
+          "publisher": "公開元",
+          "repository": "リポジトリ",
+          "folder": "フォルダー",
+          "catalog": "カタログ",
+          "cancel": "キャンセル",
+          "addFolder": "フォルダーを追加",
+          "install": "インストール"
+        },
+        "PluginPageHero": {
+          "screenshots": "スクリーンショット",
+          "openScreenshot": "スクリーンショットを開く: {{value0}}",
+          "position": "{{value0}} / {{value1}}",
+          "previous": "前のスクリーンショット",
+          "next": "次のスクリーンショット"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "アップデートのレビューが必要",
+          "updatedTo": "{{value0}} にアップデート済み",
+          "devUnverified": "開発 · 未検証"
+        },
+        "PluginContributionActionNewFile": {
+          "create": "作成"
+        }
       },
       "right": {
         "sidebar": {
@@ -13605,16 +13603,6 @@
                     "216f762bd7": "ワークスペースの接続を解決できません。",
                     "success": "{{value0}}の失敗に対してAIAgent を起動しました。"
                   }
-                },
-                "commit": {
-                  "failure": {
-                    "launch": {}
-                  }
-                },
-                "push": {
-                  "failure": {
-                    "launch": {}
-                  }
                 }
               },
               "discard": {
@@ -14127,7 +14115,8 @@
                   "79aa06bb2c": "更新できませんでした。GitHub の API を一時的に利用できません。最後に取得した状態を表示しています。",
                   "6ec12cee0c": "更新できませんでした。現在 GitHub に接続できません。最後に取得した状態を表示しています。",
                   "de088015e8": "更新できませんでした。GitHub がリクエストを制限しています。最後に取得した状態を表示しています。",
-                  "d9dd7c6687": "GitHub から更新できませんでした。最後に取得した状態を表示しています。"
+                  "d9dd7c6687": "GitHub から更新できませんでした。最後に取得した状態を表示しています。",
+                  "manual_provider": "{{provider}} から更新できませんでした。もう一度お試しください。"
                 }
               }
             },
@@ -14251,10 +14240,7 @@
             "createInProgress": "PR を作成中…",
             "workspaceHostUnresolved": "ワークスペースのホストを特定できません。ワークスペースを更新して再試行してください。",
             "branchDiscoveryFailed": "ブランチの検出に失敗しました。"
-          },
-          "CreatePullRequestDialog": {},
-          "CreatePullRequestGenerateButton": {},
-          "GitHistoryGraphSvg": {}
+          }
         }
       },
       "repo": {
@@ -14608,8 +14594,7 @@
           "androidHelp": {
             "guide": "インストールガイド"
           },
-          "openAppAndScan": "Orca Mobile を開き、<strong>デスクトップのペアリング</strong>をタップしてコードをスキャンしてください。",
-          "channel": {}
+          "openAppAndScan": "Orca Mobile を開き、<strong>デスクトップのペアリング</strong>をタップしてコードをスキャンしてください。"
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -14641,9 +14626,7 @@
           "platform": {
             "copy": {
               "downloadApk": "APK をダウンロード",
-              "openAppStore": "App Store を開く",
-              "preview": {},
-              "stable": {}
+              "openAppStore": "App Store を開く"
             }
           }
         },
@@ -15123,11 +15106,6 @@
                 "f421abf962": "セッション",
                 "5e45fb1238": "1分前に更新されました",
                 "6a4b1d3c38": "Codex"
-              },
-              "types": {},
-              "steps": {},
-              "orchestration": {
-                "cards": {}
               }
             }
           },
@@ -15179,9 +15157,7 @@
             "reopenHint": "ヘルプ > Orca を探索 からいつでも再度開けます。",
             "done": "完了",
             "continue": "続行"
-          },
-          "ComputerUseAnimatedVisual": {},
-          "ReviewAnimatedVisual": {}
+          }
         },
         "tips": {
           "CliFeatureTipVisual": {
@@ -15268,9 +15244,6 @@
                   "5ee64cd44e": "エミュレータ画面"
                 }
               }
-            },
-            "unavailable": {
-              "pane": {}
             }
           },
           "use": {
@@ -16174,13 +16147,29 @@
           "message": ".{{value0}} ファイルを開けるプラグインがあります: {{value1}}",
           "view": "プラグインを表示",
           "notNow": "今はしない",
-          "never": ".{{value0}} では提案しない"
+          "never": ".{{value0}} では提案しない",
+          "editorMessage": "プラグインが .{{value0}} ファイル用のエディターを追加します: {{value1}}"
         },
         "RichMarkdownEmojiMenu": {
           "chooseEmoji": "絵文字を選択"
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "貼り付けた画像をドキュメントの隣に保存できませんでした。Orca の再起動後に読み込めない場合があります。"
+        },
+        "PluginCustomEditorFrame": {
+          "loading": "エディターを読み込み中…",
+          "unresponsive": "{{value0}} が応答しなくなりました。編集を続けるにはソースに切り替えてください。",
+          "loadFailed": "{{value0}} を読み込めませんでした。このファイルを編集するにはソースに切り替えてください。",
+          "editTooLarge": "このファイルは大きすぎるため、{{value0}} では変更を保存できません。代わりにソースを使用してください。",
+          "saveBlocked": "{{value0}} からの最新の変更を保存できませんでした。",
+          "editsHeld": "{{value0}} からの変更の送信が速すぎます。Orca はまもなく最新の変更を適用します。",
+          "largeFile": "大きなファイルです。少し時間がかかる場合があります。"
+        },
+        "PluginBytesCustomEditorSurface": {
+          "retry": "再試行",
+          "tooLarge": "{{value0}} は大きすぎるため {{value1}} で開けません（{{value2}}、上限は {{value3}}）。",
+          "unsupported": "{{value0}} はこのファイルの保存場所から読み取れません。ホストしている Orca サーバーをアップデートするか、ソースに切り替えてください。",
+          "readFailed": "{{value1}} 用に {{value0}} を読み取れませんでした。{{value2}}"
         }
       },
       "diff": {
@@ -16503,7 +16492,8 @@
           },
           "pluginQuickActions": {
             "description": "{{value0}} プラグインのコマンド",
-            "keyword": "プラグインのコマンド"
+            "keyword": "プラグインのコマンド",
+            "newFileDescription": "アクティブなワークスペースに無題の {{value0}} ファイルを作成します。"
           }
         }
       },
@@ -16744,13 +16734,6 @@
             "description": "このセキュリティキーで使用するアカウントを選択します。",
             "site": "サイト",
             "cancel": "キャンセル"
-          }
-        },
-        "profile": {
-          "user": {
-            "agent": {
-              "option": {}
-            }
           }
         }
       },
@@ -17587,70 +17570,8 @@
                         "jiraRequiredFieldsLoadFailed": "必要な Jira フィールドをロードできませんでした。"
                       }
                     }
-                  },
-                  "linear": {
-                    "active": {
-                      "collection": {}
-                    }
-                  },
-                  "session": {
-                    "resume": {}
                   }
                 }
-              }
-            }
-          },
-          "chrome": {
-            "task": {
-              "page": {
-                "gitlab": {
-                  "filters": {}
-                }
-              }
-            }
-          },
-          "dialogs": {
-            "new": {
-              "github": {
-                "issue": {
-                  "dialog": {}
-                }
-              },
-              "linear": {
-                "issue": {
-                  "dialog": {}
-                }
-              }
-            },
-            "task": {
-              "page": {
-                "connect": {
-                  "dialogs": {}
-                }
-              }
-            }
-          },
-          "github": {
-            "github": {
-              "detail": {
-                "host": {}
-              },
-              "issue": {
-                "label": {
-                  "selector": {}
-                }
-              },
-              "work": {
-                "item": {
-                  "row": {}
-                }
-              }
-            }
-          },
-          "linear": {
-            "linear": {
-              "connect": {
-                "empty": {}
               }
             }
           }
@@ -17809,7 +17730,8 @@
           "notInstalled": "未インストール"
         },
         "PluginListGroup": {
-          "showAll": "さらに {{value0}} 件を表示"
+          "showAll": "さらに {{value0}} 件を表示",
+          "showAllTotal": "{{value0}} 件のプラグインをすべて表示"
         },
         "PluginListRow": {
           "official": "公式"
@@ -18305,6 +18227,13 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}} 件のインストール"
+        },
+        "PluginCatalogLinkDialog": {
+          "failed": "このカタログを追加できませんでした。",
+          "title": "カタログ {{value0}} を追加しますか？",
+          "cancel": "キャンセル",
+          "add": "カタログを追加",
+          "body": "リンクがこのカタログの {{value0}} の表示を求めています。カタログは信頼できる相手からのものだけを追加してください。"
         }
       }
     },
@@ -19138,7 +19067,6 @@
         "editMessage": "メッセージを編集",
         "showFullMessage": "メッセージ全体を表示",
         "showLess": "折りたたむ",
-        "turnOffQueueing": "キューへの追加をオフにする",
         "withdrawnHold": "送信前に停止されました",
         "pausedSendFailed": "送信できませんでした。「送信」を押して再試行してください。",
         "paused": "一時停止中",
@@ -19366,7 +19294,6 @@
         "modelApplyFailed": "モデル {{value}} を適用できませんでした。",
         "effortApplyFailed": "推論レベル {{value}} を適用できませんでした。"
       },
-      "conversationCommand": {},
       "usageLimitActions": {
         "continueNow": "今すぐ続ける",
         "leadIn": "待たずにこのチャットを続ける：",
@@ -19601,8 +19528,7 @@
           "selectionVanishedCount_other": "選択した {{count}} 件のワークスペースはすでに存在しません。",
           "selectionWithheldCount_other": "選択した {{count}} 件のワークスペースは現在のフィルターで非表示になっているため、選択を解除しました。",
           "selectAllSafetyChecked_other": "安全性を確認した {{count}} 件のワークスペースをすべて選択",
-          "lastActive": "最終アクティブ：{{value0}}",
-          "tier": {}
+          "lastActive": "最終アクティブ：{{value0}}"
         },
         "scan": {
           "progress": "ワークスペースのスキャン ({{value0}}/{{value1}})",
@@ -19754,9 +19680,8 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "フォローアップをキューに入れる",
-        "queueFollowUpsCopy": "Agent の作業中に送信したメッセージは、今すぐ送信・編集・削除できるカードとして待機します。画像付きのメッセージはすぐに送信されます。",
-        "queueFollowUpsToggleLabel": "フォローアップのキューを切り替え",
+        "followUpBehaviorTitle": "フォローアップをキューに入れる",
+        "followUpBehaviorCopy": "Agent の作業中に送信したメッセージは、実行中のターンに送られる代わりに、ターンが終わるまでカードとして待機します。Cmd/Ctrl+Enter では 1 件だけその逆になります。",
         "inlineVisualsTitle": "インライン表示",
         "inlineVisualsCopy": "Agent が返信内でグラフ、図、モックアップを表示できるようにします。新しく開始したチャットに適用されます。",
         "inlineVisualsToggleLabel": "インライン表示を切り替え",
@@ -19969,8 +19894,7 @@
       "ssh": "SSH ホスト",
       "remoteNamed": "リモート Orca ホスト · {{host}}",
       "remote": "リモート Orca ホスト"
-    },
-    "placeholder": {}
+    }
   },
   "dashboard": {
     "sidebar": {
@@ -20216,8 +20140,7 @@
       "title": "Agent が見つけやすくなりました",
       "description": "Agent ビューはサイドバーの専用タブになりました。アクティビティとフィルターはそのまま引き継がれます。",
       "dismiss": "OK"
-    },
-    "new": {}
+    }
   },
   "notifications": {
     "agentStatus": {
@@ -20495,8 +20418,7 @@
       "demoApp": "アプリ",
       "demoPassword": "パスワード",
       "demoCookie": "Cookie"
-    },
-    "nativeChatUpgrade": {}
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "さらに多くの一致が利用可能になる可能性があります。検索を絞り込んで結果を絞り込みます。",

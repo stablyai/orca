@@ -1121,6 +1121,13 @@
       "pluginNewFile": {
         "unavailable": "{{value0}} n’est plus disponible. Réactivez son plugin.",
         "failed": "Impossible de créer le fichier."
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}} mis à jour vers {{value1}}",
+        "many": "{{value0}} plugins mis à jour"
+      },
+      "pluginInstallLink": {
+        "invalid": "Ce lien de plugin n’est pas valide."
       }
     },
     "lib": {
@@ -1393,16 +1400,6 @@
       "worktree": {
         "activation": {
           "cannotOpenFolderWorkspace": "Impossible d'ouvrir l'espace de travail de type dossier"
-        },
-        "palette": {
-          "search": {}
-        },
-        "creation": {
-          "flow": {
-            "structured": {
-              "launch": {}
-            }
-          }
         }
       },
       "folderWorkspacePathStatus": {
@@ -1800,20 +1797,6 @@
       "ipcEvents": {
         "sshManagedServer": {
           "refusedBlocked": "Orca n’a pas pu s’installer sur cet hôte SSH. La section Hôtes SSH des Paramètres en indique la raison."
-        }
-      },
-      "ipc": {
-        "events": {
-          "browserStateIpcBridge": {},
-          "os": {
-            "markdown": {
-              "file": {
-                "open": {
-                  "bridge": {}
-                }
-              }
-            }
-          }
         }
       }
     },
@@ -3344,15 +3327,6 @@
         "IssueSourceIndicator": {
           "issueFromRepo": "Issue de <repo/>",
           "issuesFromRepo": "Issues de <repo/>"
-        },
-        "CloseReasonDropdown": {},
-        "GitHubIssueCommentComposer": {},
-        "GitHubWorkItemAssigneePopoverContent": {},
-        "GitHubWorkItemLabelPopoverContent": {},
-        "githubIssueCloseReasons": {
-          "completed": {},
-          "notPlanned": {},
-          "duplicate": {}
         }
       },
       "linear": {
@@ -4571,8 +4545,7 @@
               "waiting": {
                 "label": "Se met à jour quand Claude s'exécute",
                 "message": "L'utilisation de Claude se met à jour la prochaine fois que Claude s'exécute."
-              },
-              "expired": {}
+              }
             },
             "remoteOwnerNotConfigured": "Non configuré sur {{server}}",
             "remoteOwnerSignInSavedHere": "Sa connexion est enregistrée uniquement sur cet ordinateur.",
@@ -5132,8 +5105,7 @@
         "usageFormatters": {
           "notScannedYet": "Pas encore analysé",
           "updatedAt": "Mis à jour : {{time}}"
-        },
-        "UsageSessionsTable": {}
+        }
       },
       "sparse": {
         "SparseCheckoutPresetSelect": {
@@ -5647,13 +5619,7 @@
           "removedPreserved_one": "Supprimés : {{removed}} · {{count}} skill modifié conservé.",
           "removedPreserved_other": "Supprimés : {{removed}} · {{count}} skills modifiés conservés.",
           "removedPreserved_many": "Supprimés : {{removed}} · {{count}} skills modifiés conservés."
-        },
-        "SkillFreshnessRow": {},
-        "SkillUpdateResultRows": {},
-        "SkillCloudManagementActions": {},
-        "SkillManagedInstallList": {},
-        "SkillSelectionBar": {},
-        "SkillsSharedLinksHeader": {}
+        }
       },
       "sidebar": {
         "local": {
@@ -7155,13 +7121,7 @@
           "needsInput": "Intervention requise",
           "running": "En cours",
           "idle": "Inactif"
-        },
-        "SidebarHostScopeStrip": {},
-        "WorktreeCardReviewDetailSection": {},
-        "index": {},
-        "ProjectOrderManualDefaultNotice": {},
-        "WorktreeIssueLinkField": {},
-        "worktreeIssueDisplacement": {}
+        }
       },
       "shared": {
         "useDaemonActions": {
@@ -10052,8 +10012,7 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "gestionnaire de mots de passe"
-            },
-            "nativeChat": {}
+            }
           }
         },
         "floating": {
@@ -11828,7 +11787,8 @@
           "pathLabel": "Chemin du dossier de plugin de développement",
           "placeholder": "Chemin d'un dossier de plugin",
           "add": "Ajouter un chemin",
-          "reviewHelp": "Vérifié une fois. Les modifications de code suivantes s'exécutent sans demander."
+          "reviewHelp": "Vérifié une fois. Les modifications de code suivantes s'exécutent sans demander.",
+          "dialogTitle": "Dossiers de développement"
         },
         "PluginInstallDialog": {
           "localRequired": "Saisissez le chemin du dossier du plugin.",
@@ -13012,7 +12972,9 @@
           "repository": "Dépôt",
           "stoppedDataBody": "Impossible de charger ses fichiers. Redémarrez pour réessayer.",
           "newerBody": "Le catalogue a changé pendant votre visite.",
-          "showNewer": "Voir la nouvelle"
+          "showNewer": "Voir la nouvelle",
+          "newerTitle": "Une version plus récente est disponible",
+          "alsoListedBy": "Également proposé par {{value0}}. Les mises à jour proviennent uniquement du catalogue d’installation ; pour en changer, supprimez-le puis réinstallez-le."
         },
         "PluginDetailSections": {
           "typeLanguagePack": "Langue de l’interface",
@@ -13062,7 +13024,9 @@
           "rollbackTo": "Revenir à {{value0}}…",
           "copyContentHash": "Copier le hash du contenu",
           "reviewUpdate": "Vérifier la mise à jour",
-          "dataLoadFailed": "Impossible de charger ses fichiers"
+          "dataLoadFailed": "Impossible de charger ses fichiers",
+          "updateNeedsReview": "la mise à jour {{value0}} doit être relue",
+          "updatedTo": "mis à jour vers {{value0}}"
         },
         "PluginSettingsOverview": {
           "offTitle": "Les plugins sont désactivés"
@@ -13125,20 +13089,27 @@
           "dark": "Sombre",
           "light": "Clair",
           "languageIncomplete": "Traduit à {{value0}} %, trop incomplet pour servir de langue à Orca",
-          "languageCoverage": "Langue de l’interface · traduite à {{value0}} %"
+          "languageCoverage": "Langue de l’interface · traduite à {{value0}} %",
+          "newFileMenu": "S’ajoute au menu +"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "Aucun autre accès",
           "replacesShortcut": "{{value0}} ({{value1}}) remplace votre raccourci pour {{value2}}.",
           "updatesKeepApproval": "Les mises à jour ne redemandent que pour un nouvel accès",
           "fullAccessUpdates": "Les mises à jour peuvent modifier son code sans demander",
-          "editsFileTypes": "Ouvre et modifie les fichiers {{value0}} dans Orca. Il peut lire les fichiers qu’il ouvre."
+          "editsFileTypes": "Ouvre et modifie les fichiers {{value0}} dans Orca. Il peut lire les fichiers qu’il ouvre.",
+          "install": "Installer et activer",
+          "keepOff": "Laisser désactivé"
         },
         "PluginPageAction": {
-          "contentOnly": "Contenu uniquement"
+          "contentOnly": "Contenu uniquement",
+          "failedTitle": "Impossible d’installer {{value0}}"
         },
         "PluginSettingsMenu": {
-          "autoUpdateHint": "Ne redemande que pour un nouvel accès"
+          "autoUpdateHint": "Ne redemande que pour un nouvel accès",
+          "label": "Paramètres des plugins",
+          "development": "Dossiers de développement…",
+          "autoUpdateLabel": "Mettre à jour les plugins automatiquement"
         },
         "PluginInUseAction": {
           "inUseDark": "Utilisé · Sombre",
@@ -13242,12 +13213,39 @@
           "review": "Vérifier",
           "dismiss": "Ignorer"
         },
-        "AgentLocationSetting": {},
-        "AutoRenameBranchPromptEditor": {},
-        "computerUseSkillRuntime": {},
-        "MobileRelayStatusSection": {},
-        "MobileRelayBetaAvailability": {},
-        "PluginMarketplacePreviewDialog": {}
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Assurez-vous de faire confiance à ce dossier",
+          "title": "Assurez-vous de faire confiance à {{value0}}",
+          "theme": "Ce thème provient de {{value0}}, pas d’Orca. N’installez que des plugins d’auteurs de confiance.",
+          "content": "Ce plugin provient de {{value0}}, pas d’Orca. N’installez que des plugins d’auteurs de confiance.",
+          "translations": "Cette traduction provient de {{value0}}, pas d’Orca. Les traductions peuvent modifier n’importe quel texte d’Orca : ne les installez que depuis des auteurs de confiance.",
+          "code": "Ce plugin provient de {{value0}}, pas d’Orca. Il exécute le code de l’éditeur dans Orca : ne l’installez que si vous faites confiance à {{value0}}.",
+          "git": "Orca n’a pas vérifié ce dépôt. Un plugin qui en provient peut exécuter le code de son éditeur dans Orca : ne l’installez que si vous faites confiance à {{value0}}.",
+          "localFolder": "Ce dossier local n’est pas vérifié. Un plugin qui en provient peut exécuter du code dans Orca : ne l’installez que si vous faites confiance à sa provenance.",
+          "devFolder": "Ce dossier local n’est pas vérifié. Orca charge son plugin tel quel, et les modifications de code ultérieures s’exécutent sans confirmation : n’ajoutez que des dossiers de confiance.",
+          "publisher": "Éditeur",
+          "repository": "Dépôt",
+          "folder": "Dossier",
+          "catalog": "Catalogue",
+          "cancel": "Annuler",
+          "addFolder": "Ajouter le dossier",
+          "install": "Installer"
+        },
+        "PluginPageHero": {
+          "screenshots": "Captures d’écran",
+          "openScreenshot": "Ouvrir la capture d’écran : {{value0}}",
+          "position": "{{value0}} sur {{value1}}",
+          "previous": "Capture précédente",
+          "next": "Capture suivante"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "Mise à jour à relire",
+          "updatedTo": "Mis à jour vers {{value0}}",
+          "devUnverified": "Dév · non vérifié"
+        },
+        "PluginContributionActionNewFile": {
+          "create": "Créer"
+        }
       },
       "right": {
         "sidebar": {
@@ -14171,16 +14169,6 @@
                     "216f762bd7": "Impossible de résoudre la connexion de l'espace de travail.",
                     "success": "Un agent IA a été lancé pour l'échec de {{value0}}."
                   }
-                },
-                "commit": {
-                  "failure": {
-                    "launch": {}
-                  }
-                },
-                "push": {
-                  "failure": {
-                    "launch": {}
-                  }
                 }
               },
               "discard": {
@@ -14719,7 +14707,8 @@
                   "79aa06bb2c": "Actualisation impossible. L'API de GitHub est temporairement indisponible. Affichage du dernier statut connu.",
                   "6ec12cee0c": "Actualisation impossible. GitHub est injoignable pour le moment. Affichage du dernier statut connu.",
                   "de088015e8": "Actualisation impossible. GitHub limite les requêtes. Affichage du dernier statut connu.",
-                  "d9dd7c6687": "Actualisation depuis GitHub impossible. Affichage du dernier statut connu."
+                  "d9dd7c6687": "Actualisation depuis GitHub impossible. Affichage du dernier statut connu.",
+                  "manual_provider": "Actualisation depuis {{provider}} impossible. Réessayez."
                 }
               }
             },
@@ -14842,10 +14831,7 @@
             "createInProgress": "Création de la PR en cours...",
             "workspaceHostUnresolved": "L'hôte de l'espace de travail n'a pas pu être résolu. Actualisez l'espace de travail et réessayez.",
             "branchDiscoveryFailed": "Échec de la détection des branches."
-          },
-          "CreatePullRequestDialog": {},
-          "CreatePullRequestGenerateButton": {},
-          "GitHistoryGraphSvg": {}
+          }
         }
       },
       "repo": {
@@ -15207,8 +15193,7 @@
           "androidHelp": {
             "guide": "Guide d'installation"
           },
-          "openAppAndScan": "Ouvrez Orca Mobile, appuyez sur <strong>Appairer l'ordinateur</strong> et scannez le code.",
-          "channel": {}
+          "openAppAndScan": "Ouvrez Orca Mobile, appuyez sur <strong>Appairer l'ordinateur</strong> et scannez le code."
         },
         "MobilePage": {
           "e17393c6a3": "Aperçu du téléphone",
@@ -15240,9 +15225,7 @@
           "platform": {
             "copy": {
               "downloadApk": "Télécharger l'APK",
-              "openAppStore": "Ouvrir l'App Store",
-              "preview": {},
-              "stable": {}
+              "openAppStore": "Ouvrir l'App Store"
             }
           }
         },
@@ -15722,11 +15705,6 @@
                 "f421abf962": "Session",
                 "5e45fb1238": "Mis à jour il y a 1 min",
                 "6a4b1d3c38": "Codex"
-              },
-              "types": {},
-              "steps": {},
-              "orchestration": {
-                "cards": {}
               }
             }
           },
@@ -15778,9 +15756,7 @@
             "reopenHint": "Rouvrez-le à tout moment depuis Aide > Découvrir Orca.",
             "done": "Terminé",
             "continue": "Continuer"
-          },
-          "ComputerUseAnimatedVisual": {},
-          "ReviewAnimatedVisual": {}
+          }
         },
         "tips": {
           "CliFeatureTipVisual": {
@@ -15867,9 +15843,6 @@
                   "5ee64cd44e": "Écran de l'émulateur"
                 }
               }
-            },
-            "unavailable": {
-              "pane": {}
             }
           },
           "use": {
@@ -16801,13 +16774,29 @@
           "message": "Un plugin peut ouvrir les fichiers .{{value0}} : {{value1}}",
           "view": "Voir le plugin",
           "notNow": "Pas maintenant",
-          "never": "Ne plus suggérer pour .{{value0}}"
+          "never": "Ne plus suggérer pour .{{value0}}",
+          "editorMessage": "Un plugin ajoute un éditeur pour les fichiers .{{value0}} : {{value1}}"
         },
         "RichMarkdownEmojiMenu": {
           "chooseEmoji": "Choisir un emoji"
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "Impossible d’enregistrer l’image collée à côté du document. Elle risque de ne pas se charger après le redémarrage d’Orca."
+        },
+        "PluginCustomEditorFrame": {
+          "loading": "Chargement de l’éditeur…",
+          "unresponsive": "{{value0}} ne répond plus. Passez à Source pour continuer à modifier.",
+          "loadFailed": "Impossible de charger {{value0}}. Passez à Source pour modifier ce fichier.",
+          "editTooLarge": "Ce fichier est trop volumineux pour que {{value0}} enregistre les modifications. Utilisez Source à la place.",
+          "saveBlocked": "Impossible d’enregistrer les dernières modifications de {{value0}}.",
+          "editsHeld": "{{value0}} envoie des modifications trop vite ; Orca appliquera la plus récente sous peu.",
+          "largeFile": "Fichier volumineux — cela peut prendre un moment."
+        },
+        "PluginBytesCustomEditorSurface": {
+          "retry": "Réessayer",
+          "tooLarge": "{{value0}} est trop volumineux pour s’ouvrir dans {{value1}} ({{value2}} ; la limite est de {{value3}}).",
+          "unsupported": "{{value0}} ne peut pas lire ce fichier depuis son emplacement. Mettez à jour le serveur Orca qui l’héberge ou passez à Source.",
+          "readFailed": "Impossible de lire {{value0}} pour {{value1}}. {{value2}}"
         }
       },
       "diff": {
@@ -17136,7 +17125,8 @@
           },
           "pluginQuickActions": {
             "description": "commande du plugin {{value0}}",
-            "keyword": "commande de plugin"
+            "keyword": "commande de plugin",
+            "newFileDescription": "Créer un fichier {{value0}} sans titre dans l’espace de travail actif."
           }
         }
       },
@@ -17377,13 +17367,6 @@
             "description": "Choisissez le compte à utiliser avec cette clé de sécurité.",
             "site": "Site",
             "cancel": "Annuler"
-          }
-        },
-        "profile": {
-          "user": {
-            "agent": {
-              "option": {}
-            }
           }
         }
       },
@@ -18265,70 +18248,8 @@
                         "jiraRequiredFieldsLoadFailed": "Échec du chargement des champs Jira obligatoires."
                       }
                     }
-                  },
-                  "linear": {
-                    "active": {
-                      "collection": {}
-                    }
-                  },
-                  "session": {
-                    "resume": {}
                   }
                 }
-              }
-            }
-          },
-          "chrome": {
-            "task": {
-              "page": {
-                "gitlab": {
-                  "filters": {}
-                }
-              }
-            }
-          },
-          "dialogs": {
-            "new": {
-              "github": {
-                "issue": {
-                  "dialog": {}
-                }
-              },
-              "linear": {
-                "issue": {
-                  "dialog": {}
-                }
-              }
-            },
-            "task": {
-              "page": {
-                "connect": {
-                  "dialogs": {}
-                }
-              }
-            }
-          },
-          "github": {
-            "github": {
-              "detail": {
-                "host": {}
-              },
-              "issue": {
-                "label": {
-                  "selector": {}
-                }
-              },
-              "work": {
-                "item": {
-                  "row": {}
-                }
-              }
-            }
-          },
-          "linear": {
-            "linear": {
-              "connect": {
-                "empty": {}
               }
             }
           }
@@ -18495,7 +18416,8 @@
           "notInstalled": "Non installés"
         },
         "PluginListGroup": {
-          "showAll": "Afficher {{value0}} de plus"
+          "showAll": "Afficher {{value0}} de plus",
+          "showAllTotal": "Afficher les {{value0}} plugins"
         },
         "PluginListRow": {
           "official": "Officiel"
@@ -18999,6 +18921,13 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}} installations"
+        },
+        "PluginCatalogLinkDialog": {
+          "failed": "Impossible d’ajouter ce catalogue.",
+          "title": "Ajouter le catalogue {{value0}} ?",
+          "cancel": "Annuler",
+          "add": "Ajouter le catalogue",
+          "body": "Un lien a demandé d’afficher {{value0}} depuis ce catalogue. N’ajoutez des catalogues que de personnes de confiance."
         }
       }
     },
@@ -19895,7 +19824,6 @@
         "editMessage": "Modifier le message",
         "showFullMessage": "Afficher le message complet",
         "showLess": "Afficher moins",
-        "turnOffQueueing": "Désactiver la file d'attente",
         "withdrawnHold": "Arrêté avant l'envoi",
         "pausedSendFailed": "Envoi impossible. Appuyez sur Envoyer pour réessayer.",
         "paused": "En pause",
@@ -20120,7 +20048,6 @@
         "modelApplyFailed": "Impossible d’appliquer le modèle {{value}}.",
         "effortApplyFailed": "Impossible d’appliquer l’effort {{value}}."
       },
-      "conversationCommand": {},
       "usageLimitActions": {
         "continueNow": "Continuer maintenant",
         "leadIn": "Continuez cette conversation sans attendre :",
@@ -20363,8 +20290,7 @@
           "selectAllSafetyChecked_one": "Sélectionner {{count}} espace de travail dont la sécurité a été vérifiée",
           "selectAllSafetyChecked_other": "Sélectionner tous les {{count}} espaces de travail dont la sécurité a été vérifiée",
           "selectAllSafetyChecked_many": "Sélectionner tous les {{count}} espaces de travail dont la sécurité a été vérifiée",
-          "lastActive": "Dernière activité : {{value0}}",
-          "tier": {}
+          "lastActive": "Dernière activité : {{value0}}"
         },
         "scan": {
           "progress": "Analyse des espaces de travail ({{value0}}/{{value1}})",
@@ -20560,9 +20486,8 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "Mettre les messages en file d’attente",
-        "queueFollowUpsCopy": "Les messages envoyés pendant que l'agent travaille attendent sous forme de cartes que vous pouvez envoyer maintenant, modifier ou supprimer. Les messages avec des images sont envoyés immédiatement.",
-        "queueFollowUpsToggleLabel": "Activer ou désactiver la file d'attente",
+        "followUpBehaviorTitle": "Mettre les messages suivants en file d’attente",
+        "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour, au lieu d’entrer dans le tour en cours. Cmd/Ctrl+Entrée fait l’inverse pour un message.",
         "inlineVisualsTitle": "Visuels intégrés",
         "inlineVisualsCopy": "Laissez l'agent afficher des graphiques, des diagrammes et des maquettes dans ses réponses. S'applique aux nouveaux chats.",
         "inlineVisualsToggleLabel": "Activer/désactiver les visuels intégrés",
@@ -20776,8 +20701,7 @@
       "ssh": "Hôte SSH",
       "remoteNamed": "Hôte Orca distant · {{host}}",
       "remote": "Hôte Orca distant"
-    },
-    "placeholder": {}
+    }
   },
   "dashboard": {
     "sidebar": {
@@ -20895,8 +20819,7 @@
       "demoApp": "App",
       "demoPassword": "mot de passe",
       "demoCookie": "cookie"
-    },
-    "nativeChatUpgrade": {}
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats.",
@@ -21422,8 +21345,7 @@
       "title": "Les agents sont plus faciles à trouver",
       "description": "Votre vue Agents est désormais un onglet de barre latérale dédié. Votre activité et vos filtres sont conservés.",
       "dismiss": "J'ai compris"
-    },
-    "new": {}
+    }
   },
   "rendererRecovery": {
     "reload": "Recharger",
