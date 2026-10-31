@@ -67,6 +67,10 @@ async function settlePathResolve(): Promise<void> {
   })
 }
 
+function rows(container: HTMLElement): (string | null)[] {
+  return [...container.querySelectorAll('[role="option"]')].map((row) => row.textContent)
+}
+
 function selectedRow(container: HTMLElement): string | null | undefined {
   return container.querySelector('[role="option"][aria-selected="true"]')?.textContent
 }
@@ -119,6 +123,39 @@ describe('RemoteFileBrowser keyboard navigation', () => {
 
     expect(browseDir).toHaveBeenCalledWith({ targetId: 'target-1', dirPath: '/home/alice/src' })
     expect(selectedRow(container)).toBe('docs')
+
+    await act(async () => root.unmount())
+  })
+
+  it('opens the highlighted folder with Right and goes back up with Left', async () => {
+    const { container, input, root } = await render()
+    await press(input, 'ArrowDown')
+    browseDir.mockImplementationOnce(async () => ({
+      entries: [{ name: 'lib', isDirectory: true }],
+      resolvedPath: '/home/alice/src',
+      pathFlavor: 'posix' as const
+    }))
+
+    await press(input, 'ArrowRight')
+    expect(browseDir).toHaveBeenLastCalledWith({ targetId: 'target-1', dirPath: '/home/alice/src' })
+    expect(selectedRow(container)).toBe('lib')
+    expect(container.textContent).toContain('/home/alice/src')
+
+    // The parent listing comes back from the picker's cache, so check the folder shown, not a request.
+    await press(input, 'ArrowLeft')
+    expect(rows(container)).toEqual(['docs', 'src', 'README.md'])
+    expect(container.textContent).not.toContain('/home/alice/src')
+
+    // Right with the caret before the end of the filter, or on a file, does not navigate.
+    browseDir.mockClear()
+    await type(input, 'do')
+    input.setSelectionRange(0, 0)
+    await press(input, 'ArrowRight')
+    await type(input, '')
+    await press(input, 'ArrowDown')
+    await press(input, 'ArrowDown')
+    await press(input, 'ArrowRight')
+    expect(browseDir).not.toHaveBeenCalled()
 
     await act(async () => root.unmount())
   })
