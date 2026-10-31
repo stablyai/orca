@@ -546,6 +546,31 @@ describe('WslHostService', () => {
     expect(connector.connect).not.toHaveBeenCalled()
   })
 
+  it('a focus re-check overtaken by a user Start never publishes stopped over the live host', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    await connector.disconnect('Ubuntu')
+    connector.distro.state = 'stopped'
+    let finishRead: (state: 'stopped') => void = () => {}
+    connector.reachability.mockImplementationOnce(
+      () => new Promise((resolve) => (finishRead = resolve))
+    )
+
+    service.focusHost('wsl:ubuntu')
+    await vi.waitFor(() => expect(connector.reachability).toHaveBeenCalled())
+    // The user's Start boots and connects while the focus read is still out.
+    connector.distro.state = 'running'
+    await service.connect('wsl:ubuntu')
+    service.handleConnectionChange('Ubuntu', connection('Ubuntu'), { state: 'ready', census: null })
+    finishRead('stopped')
+
+    await vi.waitFor(() => expect(connector.reachability).toHaveBeenCalledTimes(2))
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).resolves.toBeUndefined()
+    expect(published.at(-1)).toMatchObject({ environmentId: 'wsl:ubuntu', state: 'ready' })
+    expect(published.filter((status) => status.state === 'distro-stopped')).toEqual([])
+  })
+
   it('never boots for a poll: not visible, or unconfirmed, is a refusal; lost contact never parks', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)

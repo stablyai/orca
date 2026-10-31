@@ -50,6 +50,7 @@ export class WslHostService {
   private visible = new Set<string>()
   private readonly parked = new Set<string>()
   private readonly removing = new Set<string>()
+  private readonly readyGenerations = new Map<string, number>()
   // Invalidate in-flight Adds when disabled so they cannot later publish ready hosts.
   private disableGeneration = 0
 
@@ -212,6 +213,7 @@ export class WslHostService {
       removing: this.removing,
       parked: this.parked,
       isVisible,
+      readyGeneration: () => this.readyGenerations.get(environmentId) ?? 0,
       publishStopped: (record) =>
         this.setStatus(record, { state: 'distro-stopped', terminals: 'exited', recovering: false }),
       publishReady: (record, connection) =>
@@ -334,6 +336,10 @@ export class WslHostService {
     status: WslOrcadConnectionStatus,
     connection: WslOrcadConnection | null = null
   ): void {
+    if (status.state === 'ready') {
+      const generation = this.readyGenerations.get(record.environmentId) ?? 0
+      this.readyGenerations.set(record.environmentId, generation + 1)
+    }
     this.board.set(toWslHostStatus(record, status, connection))
   }
 
