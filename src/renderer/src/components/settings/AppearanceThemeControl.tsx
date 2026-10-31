@@ -1,5 +1,5 @@
 import type React from 'react'
-import { RefreshCw } from 'lucide-react'
+import { Zap } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   editorThemeSlotUpdate,
@@ -128,7 +128,7 @@ export function AppearanceThemeSlotSelect({
               'Match Terminal'
             )}
             <span className="flex items-center text-xs text-muted-foreground">
-              (<RefreshCw className="mr-1 size-3" aria-hidden />
+              (<Zap className="mr-1 size-3" aria-hidden />
               {translate('auto.components.settings.AppearanceThemeControl.dynamic', 'dynamic')})
             </span>
           </SelectItem>
