@@ -108,15 +108,9 @@ export function assertHelperStartScope(
   }
   if (args.followUp) {
     const { of, addressed, custodian } = args.followUp
-    // An accepted Dispatch proves no agent; with none ever placed there is no worker to own.
-    if (!custodian) {
-      throw new OrchestrationError(
-        'worker_not_restartable',
-        `Dispatch ${addressed} has no worker Orca started that it can continue; start new helper work with worker-start --spec. No effects were applied.`,
-        { effectsApplied: false }
-      )
-    }
-    const holder = db.getDispatchContextById(custodian)
+    const holder = custodian
+      ? db.getDispatchContextById(custodian)
+      : creationRoot(db, of, creator.run_id)
     const owner = holder?.run_id === creator.run_id ? holder.creator_dispatch_id : null
     if (!owner || !continuesDispatch(db, creator, owner)) {
       const target =
@@ -130,6 +124,24 @@ export function assertHelperStartScope(
       )
     }
   }
+}
+
+/** With no agent ever placed in the lineage, the helper is still its requester's: the first Dispatch of its follow-up chain. */
+function creationRoot(
+  db: OrchestrationDb,
+  latestId: string,
+  runId: string
+): DispatchContextRow | undefined {
+  const seen = new Set<string>()
+  let row = db.getDispatchContextById(latestId)
+  while (row && row.run_id === runId && !seen.has(row.id)) {
+    if (!row.follow_up_of_dispatch_id) {
+      return row
+    }
+    seen.add(row.id)
+    row = db.getDispatchContextById(row.follow_up_of_dispatch_id)
+  }
+  return undefined
 }
 
 /** Whether `ancestorId` is `from` or an earlier Dispatch of the same worker in its Run: one it continued with a

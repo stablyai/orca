@@ -163,6 +163,7 @@ function afterShellRelease(error: unknown, dispatchId: string): unknown {
   ) {
     return error
   }
+  // Refusals that claim no effects end with a "No ... effects were applied." sentence; that sentence is what goes.
   return new OrchestrationError(
     error.code,
     `${error.message.replace(/\s*No [^.]*effects were applied\.$/, '')} The follow-up did not start, but Orca had already asked to close the shell Dispatch ${dispatchId}'s finished agent left behind.`,

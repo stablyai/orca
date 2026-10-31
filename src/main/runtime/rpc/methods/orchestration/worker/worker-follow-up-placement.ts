@@ -17,7 +17,7 @@ export type WorkerFollowUp = {
   of: string
   /** The Dispatch the sender named, which a refusal reports. */
   addressed: string
-  /** The Dispatch that last took custody of the worker's agent, whose creator owns it; absent when none ever got one. */
+  /** The Dispatch that last took custody of the worker's agent, whose creator owns it; absent when none ever got one, and the first request's creator owns it. */
   custodian?: string
   /** The start owner admits the caller before resolving placement, which may release an owned shell. */
   place: (assertCreatorCurrent: () => void) => Promise<WorkerFollowUpPlacement>
