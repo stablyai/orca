@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type { SetStateAction } from 'react'
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -10,7 +11,6 @@ import {
   type HostedReviewForBranchArgs,
   type HostedReviewInfo
 } from '../../../../../shared/hosted-review'
-import { makePR } from '../../../../../main/github/pr-refresh-coordinator-test-harness'
 import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
 import { selectChecksPanelReview } from '../checks-panel-review'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
@@ -63,6 +63,20 @@ const lookup = vi.fn(() => provider())
 let olderHost = false
 // The paired runtime's request timeout: the click gives up while its host lookup runs on.
 let clickTimesOut = false
+
+function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
+  return {
+    number: 12,
+    title: 'Test PR',
+    state: 'open',
+    url: 'https://github.com/acme/repo/pull/12',
+    checksStatus: 'pending',
+    updatedAt: '2026-05-12T00:00:00Z',
+    mergeable: 'MERGEABLE',
+    headSha: 'head-sha',
+    ...overrides
+  }
+}
 
 function cacheKey(): string {
   return getHostedReviewCacheKey(
@@ -598,9 +612,15 @@ it.each([false, true])(
       fetchPRForBranch: store.fetchPRForBranch,
       fetchPRChecks: store.fetchPRChecks,
       fetchPRComments: store.fetchPRComments,
-      setChecks: vi.fn((checks: PRCheckDetail[]) => void (shown.checks = checks)),
-      setComments: vi.fn((comments: PRComment[]) => void (shown.comments = comments)),
-      setChecksLoading: vi.fn((loading: boolean) => void (shown.checksLoading = loading))
+      setChecks: vi.fn((next: SetStateAction<PRCheckDetail[]>) => {
+        shown.checks = typeof next === 'function' ? next(shown.checks) : next
+      }),
+      setComments: vi.fn((next: SetStateAction<PRComment[]>) => {
+        shown.comments = typeof next === 'function' ? next(shown.comments) : next
+      }),
+      setChecksLoading: vi.fn((next: SetStateAction<boolean>) => {
+        shown.checksLoading = typeof next === 'function' ? next(shown.checksLoading) : next
+      })
     }
     const panel = {
       ...input,

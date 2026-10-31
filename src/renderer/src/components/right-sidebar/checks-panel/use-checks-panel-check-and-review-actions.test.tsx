@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { makePR } from '../../../../../main/github/pr-refresh-coordinator-test-harness'
+import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import type { ChecksPanelCheckAndReviewActionsInput } from './check-and-review-action-dependencies'
 import { useChecksPanelCheckAndReviewActions } from './use-checks-panel-check-and-review-actions'
 
@@ -389,6 +389,20 @@ describe('useChecksPanelCheckAndReviewActions AI details diagnostics', () => {
     expect(JSON.stringify(mocks.startFixChecksAgent.mock.calls)).not.toContain('SYNTHETIC_SECRET')
   })
 })
+
+function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
+  return {
+    number: 12,
+    title: 'Test PR',
+    state: 'open',
+    url: 'https://github.com/acme/repo/pull/12',
+    checksStatus: 'pending',
+    updatedAt: '2026-05-12T00:00:00Z',
+    mergeable: 'MERGEABLE',
+    headSha: 'head-sha',
+    ...overrides
+  }
+}
 
 it('link refresh reads the selected GitHub PR after the action at both read seams', async () => {
   const original = useAppStore.getState()
