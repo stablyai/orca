@@ -1,62 +1,31 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   getFollowUpDispatch,
   recordWorkerResumeSession
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
-import { installSqlVisitCounters } from '../../../../dispatch-predicate-visits.test-fixture'
 import { receipt, type Started, useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
+import { seedUnrelatedHistory, traceCallerReads } from './helper-follow-up-sql-trace.test-support'
 
 const HISTORY_INDEX = 'idx_dispatch_pane_leaf_history'
 
-/** Each execution of the pane-history read, the rows its index ranges visited, and its query plan. */
-function traceHistory(db: OrchestrationDb) {
-  let visited = 0
-  const native = installSqlVisitCounters({ pane_history_visit: () => ++visited })
-  const prepare = db.db.prepare.bind(db.db)
-  const executions: { query: string; parameters: unknown[] }[] = []
-  const spy = vi.spyOn(db.db, 'prepare').mockImplementation((query) => {
-    if (!query.startsWith('WITH holders AS')) {
-      return prepare(query)
-    }
-    const statement = prepare(
-      query.replaceAll('= ? AND host_scope', '= ? AND pane_history_visit(rowid) AND host_scope')
-    )
-    const all = statement.all.bind(statement)
-    vi.spyOn(statement, 'all').mockImplementation((...parameters) => {
-      executions.push({ query, parameters })
-      return all(...parameters)
-    })
-    return statement
-  })
-  return {
-    reads: () => executions.length,
-    visited: () => visited,
-    expectIndexedPlans() {
-      for (const { query, parameters } of executions) {
-        const plan = prepare(`EXPLAIN QUERY PLAN ${query}`)
-          .all(...(parameters as string[]))
-          .map((row) => String((row as { detail: string }).detail))
-        // Two ranges of the history index, one owner probe per holder, and no table scan.
-        expect(plan.filter((detail) => detail.includes(HISTORY_INDEX))).toHaveLength(2)
-        expect(plan).toContainEqual(
-          expect.stringMatching(/SEARCH r USING .*idx_worker_terminal_resources_owner/)
-        )
-        expect(plan.filter((detail) => /SCAN (dispatch_contexts|r)\b/.test(detail))).toEqual([])
-      }
-    },
-    restore() {
-      spy.mockRestore()
-      native.mockRestore()
-    }
-  }
-}
-
 /** Shared steps over one fixture, for the in-memory and file-backed suites. */
 function externalSteps(f: ReturnType<typeof useHelperFollowUpCli>) {
-  const { h, start, report, takeOver } = f
+  const { h, start, report, takeOver, success } = f
   return {
+    /** A coordinator dispatches a Task straight to the agent on `terminal`, which finishes it: a claim with no custody row. */
+    async directDispatch(terminal: string, coordinator = 'term_coord') {
+      const { task } = z
+        .object({ task: z.object({ id: z.string() }) })
+        .parse(await success('task-create', '--from', coordinator, '--spec', 'direct work'))
+      const args = ['--from', coordinator, '--task', task.id, '--to', terminal, '--inject']
+      await success('dispatch', ...args)
+      const direct = h.db.getDispatchContext(task.id)!
+      expect(direct).toMatchObject({ assignee_handle: terminal, host_scope: null })
+      expect(h.db.getWorkerTerminalResourceByOwner(direct.id)).toBeUndefined()
+      await report(terminal, { taskId: task.id, dispatchId: direct.id }, coordinator)
+      return direct
+    },
     /** A worker the coordinator started on the user's own terminal starts a helper; both report. */
     async workerWithHelper(terminal: string) {
       const worker = await takeOver('term_coord', terminal)
@@ -88,11 +57,23 @@ function externalSteps(f: ReturnType<typeof useHelperFollowUpCli>) {
 describe('helpers of a worker on the user’s own terminal, through CLI argv, RPC and SQLite', () => {
   const f = useHelperFollowUpCli()
   const { h, success, start, report, follow, takeOver, continues, otherRun, effects, reopenOn } = f
-  const { workerWithHelper, assignments, terminalRows } = externalSteps(f)
+  const { workerWithHelper, assignments, terminalRows, directDispatch } = externalSteps(f)
 
-  it.each(['live', 'closed'] as const)(
-    'lets a worker reopened on the user’s own terminal continue its %s helper, whatever the timestamps',
-    async (state) => {
+  it.each([
+    ['live', 'nothing'],
+    ['closed', 'nothing'],
+    ['live', 'a direct dispatch'],
+    ['closed', 'a direct dispatch from another Run']
+  ] as const)(
+    'lets a worker reopened on the user’s own terminal continue its %s helper after %s there before it, whatever the timestamps',
+    async (state, before) => {
+      // A direct dispatch inserted before the worker was accepted cannot fall between it and its recovery.
+      if (before !== 'nothing') {
+        await directDispatch(
+          'term_user',
+          before.endsWith('another Run') ? (otherRun(), 'term_other_coord') : 'term_coord'
+        )
+      }
       const { worker, helper } = await workerWithHelper('term_user')
       if (state === 'closed') {
         await success('worker-release', '--dispatch', helper.dispatchId)
@@ -197,10 +178,27 @@ describe('helpers of a worker on the user’s own terminal, through CLI argv, RP
     expect(effects()).toEqual(before)
   })
 
+  it('blocks only the recovery a direct dispatch falls inside, not a later one', async () => {
+    const { worker, helper } = await workerWithHelper('term_user')
+    await directDispatch('term_user')
+    const reopened = await reopenOn(worker, 'term_user')
+    const before = effects()
+    expect((await follow('term_user', helper.dispatchId)).error).toMatchObject({
+      code: 'task_not_found',
+      message: expect.stringContaining(`is not a helper of Dispatch ${reopened.dispatchId}`)
+    })
+    expect(effects()).toEqual(before)
+    // Helpers the reopened worker starts itself stay its own across its next recovery.
+    const own = await start('term_user', 'term_user_helper_2')
+    await report('term_user_helper_2', own, `dispatch:${reopened.dispatchId}`)
+    await report('term_user', reopened, 'term_coord')
+    await continues('term_user', own, await reopenOn(reopened, 'term_user'))
+  })
+
   it.each([
-    'a direct dispatch to the same agent',
     'a replaced process',
     'another host',
+    'a supervised start with no custody row of its own',
     'a backfilled custody row',
     'unreadable custody history'
   ] as const)('refuses a worker reopened on the user’s terminal after %s', async (between) => {
@@ -208,26 +206,6 @@ describe('helpers of a worker on the user’s own terminal, through CLI argv, RP
     const earlier = h.db.getWorkerTerminalResourceByOwner(worker.dispatchId)!
     const authority = vi.mocked(h.runtime.getOrchestrationDispatchAuthority)
     const current = authority.getMockImplementation()!
-    if (between === 'a direct dispatch to the same agent') {
-      // The production dispatch writer records the agent's pane but no custody row and no host.
-      const { task } = z
-        .object({ task: z.object({ id: z.string() }) })
-        .parse(await success('task-create', '--from', 'term_coord', '--spec', 'direct work'))
-      await success(
-        'dispatch',
-        '--from',
-        'term_coord',
-        '--task',
-        task.id,
-        '--to',
-        'term_user',
-        '--inject'
-      )
-      const direct = h.db.getDispatchContext(task.id)!
-      expect(direct).toMatchObject({ assignee_handle: 'term_user', host_scope: null })
-      expect(h.db.getWorkerTerminalResourceByOwner(direct.id)).toBeUndefined()
-      await report('term_user', { taskId: task.id, dispatchId: direct.id }, 'term_coord')
-    }
     if (between === 'a replaced process' || between === 'another host') {
       authority.mockImplementation((handle) => ({
         ...current(handle)!,
@@ -235,6 +213,16 @@ describe('helpers of a worker on the user’s own terminal, through CLI argv, RP
           ? { processIncarnation: `replaced:${handle}` }
           : { hostScope: { kind: 'local', hostId: 'elsewhere' } })
       }))
+    }
+    if (between === 'a supervised start with no custody row of its own') {
+      // A worker row marks it supervised (attached after acceptance, or since transferred), so its insertion proves no
+      // place in the order, unlike a direct dispatch's.
+      const supervised = await directDispatch('term_user')
+      h.db.db
+        .prepare(
+          "INSERT INTO worker_dispatches (dispatch_id, state, stage, start_options) VALUES (?, 'succeeded', 'ready', '{}')"
+        )
+        .run(supervised.id)
     }
     const corrupt = {
       'a backfilled custody row': ['retained_reason', 'legacy_ambiguous'],
@@ -269,45 +257,33 @@ describe('helpers of a worker on the user’s own terminal, through CLI argv, RP
   })
 
   it('reads the same history however much unrelated work is stored', async () => {
-    const counts: { reads: number; visited: number }[] = []
+    const counts: unknown[] = []
     for (const unrelated of [40, 400]) {
       const terminal = `term_user_${unrelated}`
       const { worker, helper } = await workerWithHelper(terminal)
       const reopened = await reopenOn(worker, terminal)
-      const pane = h.runtime.getTerminalPaneKey(terminal)!
-      const host = h.db.getDispatchContextById(worker.dispatchId)!.host_scope
-      const task = h.db.createTask({ runId: h.activeRunId, spec: 'unrelated history' })
-      // Settled assignments of other panes, and of this pane's leaf on another host, with their custody rows.
-      h.db.db
-        .prepare(
-          `INSERT INTO dispatch_contexts
-             (id, run_id, task_id, assignee_handle, assignee_pane_key, process_incarnation, host_scope, status)
-           WITH RECURSIVE seq(n) AS (VALUES(1) UNION ALL SELECT n + 1 FROM seq WHERE n < ?)
-           SELECT 'unrelated_' || ? || '_' || n, ?, ?, 'term_unrelated',
-                  CASE WHEN n % 4 = 0 THEN ? ELSE 'tab_unrelated:' || ? || '-' || n END, 'process:unrelated',
-                  CASE WHEN n % 4 = 0 THEN 'another host' ELSE ? END, 'completed'
-             FROM seq`
-        )
-        .run(unrelated, unrelated, h.activeRunId, task.id, pane, unrelated, host)
-      h.db.db
-        .prepare(
-          `INSERT INTO worker_terminal_resources
-             (id, origin_dispatch_id, owner_dispatch_id, terminal_handle, pane_key, process_incarnation, host_scope, ownership_state)
-           SELECT 'wtr_' || id, id, id, assignee_handle, assignee_pane_key, process_incarnation, host_scope, 'external'
-             FROM dispatch_contexts WHERE id LIKE ?`
-        )
-        .run(`unrelated_${unrelated}_%`)
-      const trace = traceHistory(h.db)
+      const { process_incarnation: incarnation, host_scope: host } = h.db.getDispatchContextById(
+        worker.dispatchId
+      )!
+      seedUnrelatedHistory(h.db, h.activeRunId, unrelated, {
+        pane: h.runtime.getTerminalPaneKey(terminal)!,
+        incarnation: incarnation!,
+        host
+      })
+      const trace = traceCallerReads(h.db)
       await continues(terminal, helper, reopened)
-      trace.expectIndexedPlans()
-      counts.push({ reads: trace.reads(), visited: trace.visited() })
+      expect(trace.expectIndexedPlans()).toEqual(['history'])
+      counts.push(trace.counts())
       trace.restore()
     }
     // One derivation, visiting only this pane's two assignments, at both sizes.
-    expect(counts).toEqual([
-      { reads: 1, visited: 2 },
-      { reads: 1, visited: 2 }
-    ])
+    expect(counts).toEqual(
+      Array(2).fill({
+        history: { executions: 1, visited: 2 },
+        identity: { executions: 0, visited: 0 },
+        formerOwner: { executions: 0, visited: 0 }
+      })
+    )
   })
 
   it.each(['one pane', 'two panes joined by a follow-up'] as const)(
@@ -315,6 +291,10 @@ describe('helpers of a worker on the user’s own terminal, through CLI argv, RP
     async (shape) => {
       for (const length of [3, 30]) {
         const first = `term_a_${length}`
+        // As many old direct dispatches as recoveries: each read and classified once, not once per edge.
+        for (let claim = 0; claim < length; claim++) {
+          await directDispatch(first)
+        }
         const { helper } = await workerWithHelper(first)
         let terminal = first
         if (shape === 'two panes joined by a follow-up') {
@@ -351,13 +331,13 @@ describe('helpers of a worker on the user’s own terminal, through CLI argv, RP
           await report(terminal, moved, 'term_coord')
         }
         const caller = await assignments(terminal, length)
-        const trace = traceHistory(h.db)
+        const trace = traceCallerReads(h.db)
         await continues(terminal, helper, caller)
         trace.expectIndexedPlans()
         const panes = shape === 'one pane' ? 1 : 2
-        // One read per pane however many ancestors share it; each visits only that pane's assignments.
-        expect(trace.reads()).toBe(panes)
-        expect(trace.visited()).toBeLessThanOrEqual(panes * (length + 2))
+        // One read per pane however many ancestors and claims share it; each visits only that pane's holders.
+        expect(trace.counts().history).toMatchObject({ executions: panes })
+        expect(trace.counts().history.visited).toBeLessThanOrEqual(panes * (2 * length + 2))
         trace.restore()
       }
     }

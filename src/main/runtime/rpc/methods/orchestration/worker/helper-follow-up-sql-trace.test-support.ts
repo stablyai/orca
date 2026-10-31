@@ -8,7 +8,8 @@ const CALLER_READS = {
   history: {
     match: (sql: string) => sql.startsWith('WITH holders AS'),
     index: 'idx_dispatch_pane_leaf_history',
-    probes: [/SEARCH r USING .*idx_worker_terminal_resources_owner/]
+    // One custody-owner and one worker-row probe per holder.
+    probes: [/SEARCH r USING .*idx_worker_terminal_resources_owner/, /SEARCH w USING /]
   },
   identity: {
     match: (sql: string) =>
