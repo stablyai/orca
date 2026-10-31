@@ -45,9 +45,9 @@ export function sameProviderAccountData(left: unknown, right: unknown): boolean 
 }
 
 function publish<P extends Provider>(
-  resource: Resource,
+  resource: NoInfer<{ answers: Record<P, Answer<P>>; listeners: Resource['listeners'] }>,
   provider: P,
-  accounts: ProviderAccountsSnapshot[P] | null,
+  accounts: ProviderAccountsSnapshot[NoInfer<P>] | null,
   known: boolean
 ): void {
   const previous = resource.answers[provider]

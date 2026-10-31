@@ -115,7 +115,7 @@ it.each([100, 1000])(
     )
     expect(reads).toBe(0)
     expect(mocks.renders).not.toHaveBeenCalled()
-    const renamed = { ...tabs[0]!, customLabel: 'Renamed', executionHostId: 'runtime:b' }
+    const renamed: Tab = { ...tabs[0]!, customLabel: 'Renamed', executionHostId: 'runtime:b' }
     await act(async () =>
       useAppStore.setState({
         unifiedTabsByWorktree: { folder: watched([renamed, ...tabs.slice(1)]) }
