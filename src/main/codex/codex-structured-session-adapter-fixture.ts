@@ -1,3 +1,5 @@
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionOptionsReportedEvent
@@ -5,6 +7,8 @@ import type {
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type {
   AgentJournalMessageItem,
+  AgentJournalItemBody,
+  AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import type {
@@ -207,4 +211,73 @@ export async function acquired(
     spawnToken: 'spawn-9'
   })
   return adapter
+}
+
+export function lifecycleRecorder(
+  acceptPromptCancellation = true,
+  acceptTurnCompletion = true
+): {
+  sink: StructuredAgentSessionEventSink
+  bodies: Map<string, AgentJournalItemBody>
+  order: string[]
+} {
+  const bodies = new Map<string, AgentJournalItemBody>()
+  const order: string[] = []
+  const settlements = new Set<string>()
+  const append = (identity: AgentJournalItemIdentity, body: AgentJournalItemBody): void => {
+    bodies.set(agentJournalItemKey(identity), body)
+  }
+  const sink: StructuredAgentSessionEventSink = {
+    appendItem: append,
+    appendTombstone: (identity) => bodies.delete(agentJournalItemKey(identity)),
+    publish: () => {},
+    tryAppendItem: (identity, body, options) => {
+      if (
+        body.kind === 'approval' &&
+        body.resolution.state === 'cancelled' &&
+        options?.lifecycle === true
+      ) {
+        if (!acceptPromptCancellation) {
+          return { accepted: false, reason: 'backpressure' }
+        }
+        order.push('prompt-lifecycle')
+      }
+      append(identity, body)
+      return { accepted: true }
+    },
+    tryAppendLifecycleBatch: (settlementId, mutations) => {
+      const cancelsPrompt = mutations.some(
+        (mutation) =>
+          mutation.kind === 'item' &&
+          (mutation.body.kind === 'approval' || mutation.body.kind === 'question') &&
+          mutation.body.resolution.state === 'cancelled'
+      )
+      if (cancelsPrompt && !acceptPromptCancellation) {
+        return { accepted: false, reason: 'backpressure' }
+      }
+      if (settlementId.startsWith('turn-completed:') && !acceptTurnCompletion) {
+        return { accepted: false, reason: 'backpressure' }
+      }
+      if (settlements.has(settlementId)) {
+        return { accepted: true }
+      }
+      settlements.add(settlementId)
+      for (const mutation of mutations) {
+        if (mutation.kind === 'item') {
+          append(mutation.identity, mutation.body)
+        } else {
+          bodies.delete(agentJournalItemKey(mutation.identity))
+        }
+      }
+      if (cancelsPrompt) {
+        order.push('prompt-lifecycle')
+      }
+      if (settlementId.startsWith('turn-completed:')) {
+        order.push('turn-lifecycle')
+      }
+      return { accepted: true }
+    },
+    tryPublish: () => ({ accepted: true })
+  }
+  return { sink, bodies, order }
 }

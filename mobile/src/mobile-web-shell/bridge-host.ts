@@ -5,6 +5,7 @@ import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { createBridgeHostStreamFrames } from './bridge-host-stream-frames'
 import {
+  BRIDGE_EXTERNAL_LINK_FULL_URL,
   BRIDGE_FAULT_GRANT,
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
@@ -29,6 +30,7 @@ export type { BridgeHost, BridgeHostDiagnostic, BridgeHostOptions } from './brid
 export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId, pageRoutes, host } = options
   const granted: readonly string[] = [
+    BRIDGE_EXTERNAL_LINK_FULL_URL,
     BRIDGE_FAULT_GRANT,
     BRIDGE_RPC_ENVELOPE_GRANT,
     ...options.routeGrants
@@ -124,6 +126,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         createBridgeInitFrame({
           sessionId,
           buildId,
+          inboundMessageBytes: options.inboundMessageBytes,
           connection: snapshot(),
           route,
           safeAreaInsets: routes.safeAreaInsets(),
@@ -147,14 +150,16 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     )
   }
 
-  function sendReply(id: string, payload: RpcResponse): void {
+  async function sendReply(id: string, payload: RpcResponse): Promise<void> {
     const split = splitBridgeReply(id, payload)
     if (!split.ok) {
       sendError(id, new BridgeReplyUndeliverableError(split.refusal))
       return
     }
     for (const frame of split.frames) {
-      send(frame)
+      if (!(await postJson(JSON.stringify(frame)))) {
+        return
+      }
     }
   }
 
@@ -294,7 +299,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         options.onDiagnostic?.({ kind: 'frame-after-dispose' })
         return
       }
-      const read = readBridgeClientMessage(json)
+      const read = readBridgeClientMessage(json, options.inboundMessageBytes)
       if (!read.ok) {
         options.onDiagnostic?.({ kind: 'refused', refusal: read.refusal })
         return

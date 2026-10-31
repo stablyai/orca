@@ -1,4 +1,4 @@
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc-client-contract'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
@@ -69,6 +69,7 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   clientIdentity?: string | null
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   safeAreaInsets?: BridgeSafeAreaInsets
+  inboundMessageBytes?: number
   keyboardInset?: number
   foldDivision?: BridgeFoldDivision | null
   terminalKeyRail?: BridgeTerminalKeyRail
@@ -162,6 +163,7 @@ function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
     case 'native.audio.stop':
       return { stopped: true, base64: '', droppedBytes: 0 }
   }
+  return undefined
 }
 
 export function createBridgePortPair<TRpc extends RpcClient>(
@@ -190,6 +192,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   })
   const host = createBridgeHost({
     client: rpc,
+    inboundMessageBytes: options.inboundMessageBytes,
     post: (json) => {
       toPage.push(json)
       return Promise.resolve()

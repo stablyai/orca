@@ -35,6 +35,12 @@
     "../src/wsl-guest/**/*",
     "../src/types/**/*"
   ],
+  "exclude": [
+    "../src/shared/mobile-bridge-request-retention.test.ts",
+    "../src/main/codex/codex-form-transport-envelope.test.ts",
+    "../src/main/codex/codex-settled-body-contract-fixture.ts",
+    "../src/main/codex/codex-url-opener-contract.test.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node"]

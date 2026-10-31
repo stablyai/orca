@@ -14,14 +14,11 @@ import { BridgePageGeometrySchema } from './bridge-page-geometry'
 import { BridgeFoldDivisionSchema } from './bridge-fold-division'
 import { BridgeNotifySchema } from './bridge-notify-envelope'
 import { BRIDGE_BACK_FRAME } from './bridge-page-back'
-import {
-  BRIDGE_TERMINAL_KEY_FRAME,
-  BridgeTerminalKeyIdSchema,
-  BridgeTerminalKeyRailSchema
-} from './bridge-terminal-key'
+import * as terminalKey from './bridge-terminal-key'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
 
 export {
+  BRIDGE_EXTERNAL_LINK_FULL_URL,
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_FOREGROUND_NUDGE_REASONS,
@@ -245,8 +242,8 @@ const BridgeHostMessageSchema = z.union([
   // One press on the shell's key rail. Sent only to a page granted the rail, which knows the frame.
   z.object({
     v: versionSchema,
-    type: z.literal(BRIDGE_TERMINAL_KEY_FRAME),
-    key: BridgeTerminalKeyIdSchema,
+    type: z.literal(terminalKey.BRIDGE_TERMINAL_KEY_FRAME),
+    key: terminalKey.BridgeTerminalKeyIdSchema,
     inputOwner: z.string().min(1).max(128).optional()
   }),
   z.object({
@@ -279,7 +276,10 @@ const BridgeHostMessageSchema = z.union([
     foldDivision: salvagedOptional('foldDivision', BridgeFoldDivisionSchema).optional(),
     /** The keys the shell's rail shows beside this page, which then drops them from its own row.
      *  Absent reads as no rail. */
-    terminalKeyRail: salvagedOptional('terminalKeyRail', BridgeTerminalKeyRailSchema).optional(),
+    terminalKeyRail: salvagedOptional(
+      'terminalKeyRail',
+      terminalKey.BridgeTerminalKeyRailSchema
+    ).optional(),
     // Older pages strip this key; a locale this page does not ship is salvaged rather than refusing init.
     uiLocale: salvagedOptional('uiLocale', BridgeUiLocaleSchema).optional(),
     host: BridgeInitHostSchema.optional(),
@@ -307,6 +307,10 @@ const BridgeHostMessageSchema = z.union([
       .optional(),
     // Send manifest grant pairs so local hops cannot run targets under insufficient opener grants. Older shells omit/older pages ignore this field; absent pairs retain the older handoff rule.
     pageRouteGrants: BridgePageRouteGrantsSchema.optional(),
+    inboundMessageBytes: salvagedOptional(
+      'inboundMessageBytes',
+      z.number().int().min(655360).max(4194304)
+    ).optional(),
     ownsHostArea: salvagedOptional('ownsHostArea', z.boolean()).optional()
   })
 ])
@@ -330,8 +334,11 @@ export function readRefusedBridgeFrameId(raw: string): string | null {
   return typeof id === 'string' && BRIDGE_ID_PATTERN.test(id) ? id : null
 }
 
-export function readBridgeClientMessage(raw: string): BridgeRead<BridgeClientMessage> {
-  return readMessage(raw, BridgeClientMessageSchema, 'page-to-shell')
+export function readBridgeClientMessage(
+  raw: string,
+  maxBytes?: number
+): BridgeRead<BridgeClientMessage> {
+  return readMessage(raw, BridgeClientMessageSchema, 'page-to-shell', maxBytes)
 }
 
 export function readBridgeHostMessage(raw: string): BridgeRead<BridgeHostMessage> {
@@ -341,9 +348,10 @@ export function readBridgeHostMessage(raw: string): BridgeRead<BridgeHostMessage
 function readMessage<TMessage>(
   raw: string,
   schema: z.ZodType<TMessage>,
-  direction: BridgeDirection
+  direction: BridgeDirection,
+  maxBytes?: number
 ): BridgeRead<TMessage> {
-  const framed = parseBridgeMessage(raw, direction)
+  const framed = parseBridgeMessage(raw, direction, maxBytes)
   if (!framed.ok) {
     return framed
   }

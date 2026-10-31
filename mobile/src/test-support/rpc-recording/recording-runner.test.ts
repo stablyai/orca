@@ -57,7 +57,7 @@ describe('recording boundaries', () => {
       })
       transport.complete(
         'worktree.ps#1',
-        { omitted: undefined, nullable: null, supportsWorktreeVisibilitySourceDefaults: true },
+        { nullable: null, supportsWorktreeVisibilitySourceDefaults: true },
         { ok: true, result: null }
       )
       await result

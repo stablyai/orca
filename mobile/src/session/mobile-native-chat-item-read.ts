@@ -1,3 +1,4 @@
+import type { AgentSessionSettledBodyRead } from '../../../src/shared/agent-session-settled-body-wire'
 import { createContext, type ContextType } from 'react'
 import { z } from 'zod'
 import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session-journal-schemas'
@@ -47,4 +48,27 @@ export async function readMobileNativeChatItem(
     throw new Error('The host could not read this item.')
   }
   return reply.item
+}
+
+const settledBodyRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'agentSession.item.settledBody',
+    method: 'agentSession.item',
+    acceptance: 'object-result-or-null',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('settled-body-piece', z.unknown())
+  })
+)
+export async function readMobileSettledBody(
+  source: MobileNativeChatVisualSource,
+  request: AgentSessionSettledBodyRead
+): Promise<unknown> {
+  const { sessionId, itemId, ...bodySource } = request
+  const response = await settledBodyRead.request(
+    source.client,
+    { sessionId, itemId, bodySource },
+    { timeoutMs: READ_TIMEOUT_MS, budgetSpansConnect: true }
+  )
+  const result = settledBodyRead.interpret(response)
+  return result
 }

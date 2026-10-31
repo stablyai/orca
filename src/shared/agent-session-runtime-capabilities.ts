@@ -1,3 +1,5 @@
+import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from './runtime-ordinary-message-capability'
+import { AGENT_SESSION_SETTLED_BODY_CAPABILITY } from './agent-session-settled-body'
 import { AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES } from './agent-session-attention-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from './agent-session-continue-interrupted-capability'
@@ -107,6 +109,8 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+  AGENT_SESSION_SETTLED_BODY_CAPABILITY,
+  RUNTIME_ORDINARY_MESSAGE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   // The host side: it accepts a send before any agent has it, and a Stop with no writer before a

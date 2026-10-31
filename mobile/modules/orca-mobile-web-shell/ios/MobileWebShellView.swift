@@ -151,7 +151,7 @@ internal final class MobileWebShellBridgeUnavailableException: Exception, @unche
 internal final class MobileWebShellBridgeMessageTooLargeException: GenericException<Int>,
   @unchecked Sendable {
   override var reason: String {
-    "A bridge message of \(param) bytes exceeds the \(MobileWebShellBridge.maxMessageByteCount) byte cap"
+    "A bridge message of \(param) bytes exceeds the \(MobileWebShellBridge.maxOutboundMessageByteCount) byte cap"
   }
 }
 
@@ -343,7 +343,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       throw MobileWebShellBridgeUnavailableException()
     }
     let byteCount = json.utf8.count
-    guard MobileWebShellBridge.acceptsByteCount(byteCount) else {
+    guard byteCount <= MobileWebShellBridge.maxOutboundMessageByteCount else {
       throw MobileWebShellBridgeMessageTooLargeException(byteCount)
     }
     // Use the two in: labels plus completionHandler to select the callback overload and reply to the frame that spoke.

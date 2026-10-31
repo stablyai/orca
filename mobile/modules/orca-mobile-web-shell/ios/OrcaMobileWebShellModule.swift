@@ -6,6 +6,7 @@ public class OrcaMobileWebShellModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("OrcaMobileWebShell")
+    Constants(["inboundMessageBytes": MobileWebShellBridge.maxMessageByteCount])
 
     AsyncFunction("presentPdf") { (url: URL) in
       guard let presenter = self.appContext?.utilities?.currentViewController() else {

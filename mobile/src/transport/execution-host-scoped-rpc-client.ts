@@ -1,3 +1,4 @@
+import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../../src/shared/runtime-ordinary-message-capability'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import type { RpcClient } from './rpc-client'
@@ -38,12 +39,52 @@ export function routeRpcClientCalls(
   hostOf: (params: unknown) => ExecutionHostId | undefined
 ): RpcClient {
   return {
-    sendRequest: (method, params, options) =>
-      client.sendRequest(method, params, onExecutionHost(options, hostOf(params))),
+    sendRequest: async (method, params, options) => {
+      const generation = client.getGeneration?.()
+      const executionHost = hostOf(params)
+      const routed = client.sendRequest(method, params, onExecutionHost(options, executionHost))
+      if (method !== 'status.get' || !executionHost?.startsWith('runtime:')) {
+        return routed
+      }
+      const { executionHost: _route, ...originEnvelope } = options?.envelope ?? {}
+      const [destination, origin] = await Promise.all([
+        routed,
+        client.sendRequest('status.get', undefined, { ...options, envelope: originEnvelope })
+      ])
+      if (
+        !destination.ok ||
+        typeof destination.result !== 'object' ||
+        destination.result === null ||
+        !('capabilities' in destination.result) ||
+        !Array.isArray(destination.result.capabilities)
+      ) {
+        return destination
+      }
+      const supported =
+        generation === client.getGeneration?.() &&
+        origin.ok &&
+        typeof origin.result === 'object' &&
+        origin.result !== null &&
+        'capabilities' in origin.result &&
+        Array.isArray(origin.result.capabilities) &&
+        origin.result.capabilities.includes(RUNTIME_ORDINARY_MESSAGE_CAPABILITY)
+      return supported
+        ? destination
+        : {
+            ...destination,
+            result: {
+              ...destination.result,
+              capabilities: destination.result.capabilities.filter(
+                (capability) => capability !== RUNTIME_ORDINARY_MESSAGE_CAPABILITY
+              )
+            }
+          }
+    },
     subscribe: (method, params, onData, options) =>
       client.subscribe(method, params, onData, onExecutionHost(options, hostOf(params))),
     updateTerminalSubscriptionViewport: (terminal, viewport) =>
       client.updateTerminalSubscriptionViewport(terminal, viewport),
+    getRequestByteCapacity: () => client.getRequestByteCapacity?.() ?? 0,
     getState: () => client.getState(),
     getReconnectAttempt: () => client.getReconnectAttempt(),
     getLastConnectedAt: () => client.getLastConnectedAt(),

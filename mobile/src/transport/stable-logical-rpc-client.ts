@@ -83,6 +83,7 @@ export function createStableLogicalRpcClient(
   bindActiveState(initialSession, generation)
 
   const logical: StableLogicalRpcClient = {
+    getRequestByteCapacity: () => activeSession.getRequestByteCapacity?.() ?? 0,
     sendRequest(method, params, options) {
       if (closed) {
         return Promise.reject(new Error('Client closed'))

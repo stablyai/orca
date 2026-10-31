@@ -1,6 +1,7 @@
 import type { BridgeTerminalToolbar } from './bridge-terminal-key'
 import type { ForegroundNudgeReason } from '../../transport/types'
 import {
+  BRIDGE_EXTERNAL_LINK_FULL_URL,
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
@@ -99,8 +100,7 @@ export function createBridgeClientNotifications(
       if (!deps.hasGrant(BRIDGE_EXTERNAL_LINK_GRANT)) {
         return false
       }
-      // Send the normalized URL the parser checked; stripped controls can make it differ from caller text.
-      const target = readBridgeExternalLinkUrl(url)
+      const target = readBridgeExternalLinkUrl(url, deps.hasGrant(BRIDGE_EXTERNAL_LINK_FULL_URL))
       if (target === null) {
         return false
       }

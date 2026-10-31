@@ -139,7 +139,10 @@ describe('remote RPC replies over the encrypted channel', () => {
           JSON.stringify({
             id: request.id,
             ok: true,
-            result: 'x'.repeat(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES)
+            result:
+              request.id === 'big'
+                ? 'x'.repeat(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES)
+                : 'still connected'
           })
         )
       }
@@ -164,6 +167,18 @@ describe('remote RPC replies over the encrypted channel', () => {
     )
     await vi.waitFor(() => expect(encrypted.replies()).toHaveLength(1))
 
+    encrypted.channel.handleRawMessage(
+      encrypt(
+        JSON.stringify({ id: 'sibling', method: 'agentSessions.list', params: {} }),
+        encrypted.sharedKey
+      )
+    )
+    await vi.waitFor(() => expect(encrypted.replies()).toHaveLength(2))
+    expect(encrypted.replies()[1]).toMatchObject({
+      id: 'sibling',
+      ok: true,
+      result: 'still connected'
+    })
     expect(encrypted.onError).not.toHaveBeenCalled()
     expect(encrypted.replies()[0]).toMatchObject({
       id: 'big',

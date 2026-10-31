@@ -1,3 +1,4 @@
+import type { AgentSessionFormContent } from './agent-session-form'
 import type { AgentJournalQuestion, AgentJournalQuestionItem } from './agent-session-journal-types'
 
 const GROUP_ANSWER_PREFIX = 'question-group:'
@@ -19,6 +20,7 @@ export type AgentSessionQuestionAnswer = {
 
 /** What a client chose on a prompt: a decision id for an approval, per-question answers for a question. */
 export type AgentSessionPromptResponse =
+  | { kind: 'form'; content: AgentSessionFormContent }
   | { kind: 'option'; optionId: string }
   | { kind: 'answers'; answers: AgentSessionQuestionAnswer[] }
 

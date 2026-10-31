@@ -7,9 +7,10 @@ import org.junit.Test
 
 class MobileWebShellBridgeTest {
   @Test
-  fun `caps a message at 640 KiB of raw bytes`() {
+  fun `caps inbound messages at 4 MiB with legacy outbound headroom`() {
     val cap = MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES
-    assertEquals(640 * 1024, cap)
+    assertEquals(4 * 1024 * 1024, cap)
+    assertEquals(640 * 1024, MOBILE_WEB_SHELL_BRIDGE_MAX_OUTBOUND_BYTES)
     assertTrue(acceptsMobileWebShellBridgeByteCount(0))
     assertTrue(acceptsMobileWebShellBridgeByteCount(cap - 1))
     assertTrue(acceptsMobileWebShellBridgeByteCount(cap))

@@ -40,11 +40,10 @@ export const BRIDGE_EXTERNAL_LINK_SCHEMES: readonly string[] = ['https:', 'http:
 
 export const BRIDGE_MAX_EXTERNAL_LINK_CHARS = BRIDGE_MAX_ROUTE_HREF_CHARS
 
-// Parse absolute URLs without a base; relative targets belong to navigate. Forward the normalized href so device handling sees the same URL that passed the scheme check.
-// Normalize rather than rejecting changed spellings: bare origins gain a slash, while WHATWG strips controls/space before interpreting schemes.
-export function readBridgeExternalLinkUrl(url: string): string | null {
-  // Bound before parsing, then bound normalized output too because percent-encoding can expand it.
-  if (url.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS) {
+// Complete readers preserve the original scheme-validated string; legacy readers retain their normalized2048 contract.
+export function readBridgeExternalLinkUrl(url: string, complete = false): string | null {
+  // Legacy normalization can expand beyond the old reader’s domain.
+  if (!complete && url.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS) {
     return null
   }
   let parsed: URL
@@ -56,7 +55,7 @@ export function readBridgeExternalLinkUrl(url: string): string | null {
   if (!BRIDGE_EXTERNAL_LINK_SCHEMES.includes(parsed.protocol)) {
     return null
   }
-  return parsed.href.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS ? null : parsed.href
+  return complete ? url : parsed.href.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS ? null : parsed.href
 }
 
 export function isBridgeExternalLinkUrl(url: string): boolean {
@@ -155,13 +154,17 @@ function inspectDocument(root: unknown): DocumentRefusal | null {
 
 // Share the receiver’s size predicate so senders refuse early instead of posting frames that get dropped without reply.
 // Code-unit length is a cheap safe rejection: each unit encodes to at least one UTF-8 byte; byte length decides the rest.
-export function isBridgeFrameWithinCap(raw: string): boolean {
-  return raw.length <= BRIDGE_MAX_MESSAGE_BYTES && utf8ByteLength(raw) <= BRIDGE_MAX_MESSAGE_BYTES
+export function isBridgeFrameWithinCap(raw: string, maxBytes = BRIDGE_MAX_MESSAGE_BYTES): boolean {
+  return raw.length <= maxBytes && utf8ByteLength(raw) <= maxBytes
 }
 
 // Require an explicit direction because only page-to-shell frames receive document limits.
-export function parseBridgeMessage(raw: string, direction: BridgeDirection): BridgeRead<unknown> {
-  if (!isBridgeFrameWithinCap(raw)) {
+export function parseBridgeMessage(
+  raw: string,
+  direction: BridgeDirection,
+  maxBytes = BRIDGE_MAX_MESSAGE_BYTES
+): BridgeRead<unknown> {
+  if (!isBridgeFrameWithinCap(raw, maxBytes)) {
     return { ok: false, refusal: 'oversized' }
   }
   let parsed: unknown

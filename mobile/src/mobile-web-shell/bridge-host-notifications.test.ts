@@ -1,3 +1,4 @@
+import { BRIDGE_EXTERNAL_LINK_FULL_URL } from './bridge/bridge-frame-fields'
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
 import { clientFrame, createFakeRpcClient, flushBridge } from './bridge-host-test-fakes'
@@ -195,7 +196,7 @@ describe('navigate-back', () => {
     bridge.host.receive(clientFrame({ type: 'ready' }))
     expect(bridge.last()).toMatchObject({
       type: 'init',
-      grants: { native: ['fault', 'rpcEnvelope', 'navigate'] }
+      grants: { native: [BRIDGE_EXTERNAL_LINK_FULL_URL, 'fault', 'rpcEnvelope', 'navigate'] }
     })
     bridge.host.receive(back)
     expect(bridge.backPops).toEqual(['popped'])
@@ -268,19 +269,19 @@ describe('externalLink', () => {
     expect(bridge.diagnostics).toEqual([])
   })
 
-  it('hands over the URL the parser read, not the string the page sent', () => {
+  it('hands over the complete original URL after scheme validation', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    // The WHATWG parser strips tab/LF/CR and trims leading C0/space; these raw spellings pass a naive scheme check.
+    // Complete support preserves the original spelling after WHATWG scheme validation.
     bridge.host.receive(open('ht\ntps://example.com'))
     bridge.host.receive(open('https://example.com/a\r\n'))
     bridge.host.receive(open('  https://example.com/a  '))
     bridge.host.receive(open('https:example.com'))
     expect(bridge.externalLinks).toEqual([
-      'https://example.com/',
-      'https://example.com/a',
-      'https://example.com/a',
-      'https://example.com/'
+      'ht\ntps://example.com',
+      'https://example.com/a\r\n',
+      '  https://example.com/a  ',
+      'https:example.com'
     ])
   })
 

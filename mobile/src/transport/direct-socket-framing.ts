@@ -1,4 +1,9 @@
 import {
+  mobileE2eeOutboundMemory,
+  registerMobileE2eeSocket
+} from './mobile-e2ee-outbound-admission'
+import { createWsOutboundBackpressureQueue } from '../../../src/shared/ws-outbound-backpressure-queue'
+import {
   createPairedE2EEClientHandshake,
   PairedE2EEDowngradeError,
   type PairedE2EEFraming
@@ -91,13 +96,23 @@ function createLegacyFraming(args: Parameters<typeof createDirectSocketFraming>[
   let keyed = false
   let authenticated = false
   let disposed = false
+  const socketMemory = registerMobileE2eeSocket(socket)
+  const outbound = createWsOutboundBackpressureQueue<string>({
+    send: (plaintext) => socket.send(handshake.channel.sealText(plaintext)),
+    byteLengthOf: (plaintext) =>
+      4 * Math.ceil((new TextEncoder().encode(plaintext).length + 40) / 3),
+    getBufferedAmount: () => socket.bufferedAmount,
+    isWritable: () => socket.readyState === socket.OPEN && !disposed,
+    canSend: (bytes) => socketMemory.canSend(bytes),
+    claimQueuedBytes: (bytes) => mobileE2eeOutboundMemory.claimQueuedBytes(3 * bytes),
+    onOverflow: () => events.onProtocolError(new Error('E2EE outbound buffer overflow'))
+  })
 
   const sendText = (plaintext: string): boolean => {
     if (!keyed || disposed) {
       return false
     }
-    socket.send(handshake.channel.sealText(plaintext))
-    return true
+    return outbound.enqueue(plaintext)
   }
 
   const sendAuth = async (): Promise<void> => {
@@ -182,6 +197,8 @@ function createLegacyFraming(args: Parameters<typeof createDirectSocketFraming>[
     sendText,
     dispose: () => {
       disposed = true
+      outbound.dispose()
+      socketMemory.dispose()
     }
   }
 }

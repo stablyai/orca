@@ -1,3 +1,4 @@
+import type * as permission from './native-chat/input/mobile-native-chat-permission'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useCallback, useMemo } from 'react'
 import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat/input/native-chat-task-list-history'
@@ -59,7 +60,6 @@ import {
   NO_COMPOSER_TRAY,
   type ComposerTrayProps
 } from './native-chat/composer/use-mobile-native-chat-composer-tray'
-import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './native-chat/input/MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatScrollRootsBoundary } from './MobileNativeChatScrollRootsBoundary'
@@ -137,9 +137,9 @@ type ChatViewProps = MobileNativeChatSendProps & {
   collapsedPrompt?: { title: string; expand: () => void } | null
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
-  permission?: MobileChatPermission | null
+  permission?: permission.MobileChatPermission | null
   promptKey?: string | null
-  onRespondPermission?: (send: string) => Promise<boolean>
+  onRespondPermission?: permission.MobilePermissionResponse
   onOpenFile?: (relativePath: string) => void
   keyboardInset?: number
 }

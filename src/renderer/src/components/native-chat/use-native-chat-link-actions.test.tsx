@@ -2,20 +2,24 @@
 import type { ReactNode } from 'react'
 import { useRef } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
+import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import type * as HttpLinkRoutingModule from '@/lib/http-link-routing'
 
-const mocks = vi.hoisted(() => ({
-  openHttpLink: vi.fn(),
-  openFileLink: vi.fn(),
-  settings: { openLinksInApp: true, terminalLinkActionPopoverEnabled: true } as {
-    openLinksInApp?: boolean
-    terminalLinkActionPopoverEnabled?: boolean
-  }
-}))
+type LinkSettings = {
+  openLinksInApp?: boolean
+  terminalLinkActionPopoverEnabled?: boolean
+  terminalLinkClickBehavior?: 'none' | 'actions' | 'open'
+}
+
+const mocks = vi.hoisted(() => {
+  const settings: LinkSettings = { openLinksInApp: true, terminalLinkActionPopoverEnabled: true }
+  return { openHttpLink: vi.fn(), openFileLink: vi.fn(), settings }
+})
 
 vi.mock('@/lib/http-link-routing', async (importOriginal) => ({
   ...(await importOriginal<typeof HttpLinkRoutingModule>()),
@@ -91,6 +95,57 @@ afterEach(() => {
 })
 
 describe('native chat transcript links', () => {
+  it.each(['none', 'actions', 'open'] as const)(
+    'explicit approval Open uses the routed opener for pointer and keyboard with %s gestures',
+    async (behavior) => {
+      mocks.settings = { openLinksInApp: true, terminalLinkClickBehavior: behavior }
+      const choose = vi.fn()
+      function Prompt() {
+        const root = useRef<HTMLDivElement>(null)
+        const actions = useNativeChatLinkActions(context, root, {
+          sessionId: 'session-1',
+          isVisible: true
+        })
+        return (
+          <div ref={root}>
+            <NativeChatApprovalCard
+              approval={{
+                title: 'Connect service',
+                url: 'https://example.com/connect',
+                detail: 'https://example.com/connect',
+                options: [
+                  { label: 'Continue', send: 'accept' },
+                  { label: 'Decline', send: 'decline' }
+                ]
+              }}
+              onChoose={choose}
+              onOpenUrl={actions.openUrl}
+            />
+            <LinkActionPopover
+              request={actions.linkActionRequest}
+              onClose={actions.closeLinkActions}
+            />
+          </div>
+        )
+      }
+      render(<Prompt />)
+      const open = screen.getByRole('button', { name: 'Open link' })
+      expect(mocks.openHttpLink).not.toHaveBeenCalled()
+      fireEvent.click(open)
+      open.focus()
+      await userEvent.keyboard('{Enter}')
+      expect(mocks.openHttpLink).toHaveBeenCalledTimes(2)
+      expect(mocks.openHttpLink).toHaveBeenLastCalledWith(
+        'https://example.com/connect',
+        expect.objectContaining({ worktreeId: 'wt-1', forceInApp: true })
+      )
+      expect(screen.queryByText('System Browser')).toBeNull()
+      expect(choose).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+      expect(choose).toHaveBeenCalledExactlyOnceWith('accept')
+    }
+  )
+
   it.each(['hidden', 'session', 'workspace', 'no-context'] as const)(
     'dismisses a request when the transcript is %s',
     async (change) => {

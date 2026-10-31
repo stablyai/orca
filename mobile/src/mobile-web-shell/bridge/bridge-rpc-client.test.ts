@@ -206,8 +206,8 @@ describe('bridge round trip: notifications and state', () => {
     expect(pair.rpc.requests).toEqual([])
   })
 
-  // Page normalization hides raw input from the host; inject an unnormalized frame too so both endpoints’ use of the shared URL rule is tested.
-  it('asks the shell to open a URL outside the app, normalized once and the same on both sides', async () => {
+  // Capable sender and receiver preserve original strings after the same scheme check.
+  it('asks the shell to open the exact original URL outside the app', async () => {
     const pair = await ready(createFakeBridgePortPair())
     const inputs = [
       'https://github.com/stablyai/orca/pull/1',
@@ -226,14 +226,7 @@ describe('bridge round trip: notifications and state', () => {
       .filter((frame: { name?: string }) => frame.name === 'externalLink')
       .map((frame: { url: string }) => frame.url)
     expect(pair.externalLinks).toEqual(posted)
-    expect(posted).toEqual([
-      'https://github.com/stablyai/orca/pull/1',
-      'https://example.com/',
-      'https://example.com/a',
-      'https://example.com/a',
-      'https://example.com/',
-      'mailto:someone@example.com'
-    ])
+    expect(posted).toEqual(inputs)
     pair.host.receive(
       JSON.stringify({
         v: BRIDGE_PROTOCOL_VERSION,
@@ -243,7 +236,7 @@ describe('bridge round trip: notifications and state', () => {
       })
     )
     await pair.flush()
-    expect(pair.externalLinks.at(-1)).toBe('https://example.com/b')
+    expect(pair.externalLinks.at(-1)).toBe('  https://example.com/b\r\n  ')
     expect(pair.rpc.requests).toEqual([])
   })
 

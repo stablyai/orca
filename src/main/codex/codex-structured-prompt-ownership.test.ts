@@ -1,20 +1,17 @@
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { codexPromptIdentity } from './codex-structured-prompt-items'
 import {
   acquireReadyCodexForTest,
   THREAD_ID,
   acquired,
   adapterFor,
   fakeCodex,
-  identityFor
+  identityFor,
+  lifecycleRecorder
 } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
@@ -30,7 +27,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 function registerPrompt(
   adapter: Awaited<ReturnType<typeof acquired>>,
   codex: ReturnType<typeof fakeCodex>,
-  itemId = 'journal-prompt',
+  itemId = promptId(),
   threadId = THREAD_ID,
   turnId = 'turn-1'
 ): void {
@@ -79,75 +76,6 @@ function completionThreads(events: CodexStructuredSessionEvent[]): string[] {
   )
 }
 
-function lifecycleRecorder(
-  acceptPromptCancellation = true,
-  acceptTurnCompletion = true
-): {
-  sink: StructuredAgentSessionEventSink
-  bodies: Map<string, AgentJournalItemBody>
-  order: string[]
-} {
-  const bodies = new Map<string, AgentJournalItemBody>()
-  const order: string[] = []
-  const settlements = new Set<string>()
-  const append = (identity: AgentJournalItemIdentity, body: AgentJournalItemBody): void => {
-    bodies.set(agentJournalItemKey(identity), body)
-  }
-  const sink: StructuredAgentSessionEventSink = {
-    appendItem: append,
-    appendTombstone: (identity) => bodies.delete(agentJournalItemKey(identity)),
-    publish: () => {},
-    tryAppendItem: (identity, body, options) => {
-      if (
-        body.kind === 'approval' &&
-        body.resolution.state === 'cancelled' &&
-        options?.lifecycle === true
-      ) {
-        if (!acceptPromptCancellation) {
-          return { accepted: false, reason: 'backpressure' }
-        }
-        order.push('prompt-lifecycle')
-      }
-      append(identity, body)
-      return { accepted: true }
-    },
-    tryAppendLifecycleBatch: (settlementId, mutations) => {
-      const cancelsPrompt = mutations.some(
-        (mutation) =>
-          mutation.kind === 'item' &&
-          (mutation.body.kind === 'approval' || mutation.body.kind === 'question') &&
-          mutation.body.resolution.state === 'cancelled'
-      )
-      if (cancelsPrompt && !acceptPromptCancellation) {
-        return { accepted: false, reason: 'backpressure' }
-      }
-      if (settlementId.startsWith('turn-completed:') && !acceptTurnCompletion) {
-        return { accepted: false, reason: 'backpressure' }
-      }
-      if (settlements.has(settlementId)) {
-        return { accepted: true }
-      }
-      settlements.add(settlementId)
-      for (const mutation of mutations) {
-        if (mutation.kind === 'item') {
-          append(mutation.identity, mutation.body)
-        } else {
-          bodies.delete(agentJournalItemKey(mutation.identity))
-        }
-      }
-      if (cancelsPrompt) {
-        order.push('prompt-lifecycle')
-      }
-      if (settlementId.startsWith('turn-completed:')) {
-        order.push('turn-lifecycle')
-      }
-      return { accepted: true }
-    },
-    tryPublish: () => ({ accepted: true })
-  }
-  return { sink, bodies, order }
-}
-
 describe('Codex live prompt ownership', () => {
   it('lets an answer hold the callback claim through its journal commit', async () => {
     const codex = fakeCodex()
@@ -158,7 +86,7 @@ describe('Codex live prompt ownership', () => {
 
     const answer = adapter.answerPrompt({
       sessionId: 'session-1',
-      itemId: 'journal-prompt',
+      itemId: promptId(),
       kind: 'approval',
       response: { kind: 'option', optionId: 'accept' },
       fence: 7,
@@ -175,7 +103,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         turnId: 'turn-1',
         fence: 7,
-        prompt: { itemId: 'journal-prompt' }
+        prompt: { itemId: promptId() }
       })
     ).resolves.toEqual({ cancelled: false })
     expect(codex.connections[0]?.calls.some((call) => call.method === 'turn/interrupt')).toBe(false)
@@ -200,7 +128,7 @@ describe('Codex live prompt ownership', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
       fence: 7,
-      prompt: { itemId: 'journal-prompt' }
+      prompt: { itemId: promptId() }
     })
     await vi.waitFor(() =>
       expect(codex.connections[0]?.calls.at(-1)?.method).toBe('turn/interrupt')
@@ -209,7 +137,7 @@ describe('Codex live prompt ownership', () => {
     await expect(
       adapter.answerPrompt({
         sessionId: 'session-1',
-        itemId: 'journal-prompt',
+        itemId: promptId(),
         kind: 'approval',
         response: { kind: 'option', optionId: 'accept' },
         fence: 7,
@@ -223,7 +151,7 @@ describe('Codex live prompt ownership', () => {
     await expect(
       adapter.answerPrompt({
         sessionId: 'session-1',
-        itemId: 'journal-prompt',
+        itemId: promptId(),
         kind: 'approval',
         response: { kind: 'option', optionId: 'accept' },
         fence: 7,
@@ -240,7 +168,7 @@ describe('Codex live prompt ownership', () => {
     await expect(
       adapter.answerPrompt({
         sessionId: 'session-1',
-        itemId: 'journal-prompt',
+        itemId: promptId(),
         kind: 'approval',
         response: { kind: 'option', optionId: 'accept' },
         fence: 8,
@@ -264,12 +192,12 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         turnId: 'turn-1',
         fence: 7,
-        prompt: { itemId: 'journal-prompt' }
+        prompt: { itemId: promptId() }
       })
     ).resolves.toEqual({ cancelled: false, refusal: {} })
     await adapter.answerPrompt({
       sessionId: 'session-1',
-      itemId: 'journal-prompt',
+      itemId: promptId(),
       kind: 'approval',
       response: { kind: 'option', optionId: 'decline' },
       fence: 7,
@@ -288,14 +216,14 @@ describe('Codex live prompt ownership', () => {
       fence: 7,
       spawnToken: 'spawn-9'
     })
-    registerPrompt(adapter, codex, 'child-prompt', 'thread-child', 'child-turn')
+    registerPrompt(adapter, codex, promptId('thread-child'), 'thread-child', 'child-turn')
 
     await expect(
       adapter.cancelTurn({
         sessionId: 'session-1',
         turnId: 'root-turn',
         fence: 7,
-        prompt: { itemId: 'child-prompt' }
+        prompt: { itemId: promptId('thread-child') }
       })
     ).resolves.toEqual({ cancelled: true })
     expect(codex.connections[0]?.calls.at(-1)).toEqual({
@@ -313,14 +241,14 @@ describe('Codex live prompt ownership', () => {
       'turn/interrupt': () => completeTurn(codex, 'thread-child', promptTurnId)
     })
     const adapter = await acquired(codex)
-    registerPrompt(adapter, codex, 'child-prompt', 'thread-child', promptTurnId)
+    registerPrompt(adapter, codex, promptId('thread-child'), 'thread-child', promptTurnId)
 
     await expect(
       adapter.cancelTurn({
         sessionId: 'session-1',
         turnId: 'root-turn',
         fence: 7,
-        prompt: { itemId: 'child-prompt' }
+        prompt: { itemId: promptId('thread-child') }
       })
     ).resolves.toEqual({ cancelled: true })
     expect(codex.connections[0]?.calls.at(-1)).toEqual({
@@ -611,13 +539,13 @@ describe('Codex live prompt ownership', () => {
       }
     })
     const adapter = await acquired(codex, {}, events)
-    registerPrompt(adapter, codex, 'child-prompt', 'thread-child')
+    registerPrompt(adapter, codex, promptId('thread-child'), 'thread-child')
 
     const cancellation = adapter.cancelTurn({
       sessionId: 'session-1',
       turnId: 'turn-1',
       fence: 7,
-      prompt: { itemId: 'child-prompt' }
+      prompt: { itemId: promptId('thread-child') }
     })
     await vi.waitFor(() => expect(completionThreads(events)).toEqual([THREAD_ID, 'thread-child']))
 
@@ -632,7 +560,7 @@ describe('Codex live prompt ownership', () => {
 
     for (const input of [
       { turnId: 'turn-1', fence: 7, itemId: 'other-item' },
-      { turnId: 'turn-1', fence: 6, itemId: 'journal-prompt' }
+      { turnId: 'turn-1', fence: 6, itemId: promptId() }
     ]) {
       await expect(
         adapter.cancelTurn({
@@ -655,7 +583,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         turnId: 'turn-1',
         fence: 8,
-        prompt: { itemId: 'journal-prompt' }
+        prompt: { itemId: promptId() }
       })
     ).resolves.toEqual({ cancelled: false })
     expect(codex.connections[1]?.calls.some((call) => call.method === 'turn/interrupt')).toBe(false)
@@ -668,8 +596,8 @@ describe('Codex live prompt ownership', () => {
       method: 'item/commandExecution/requestApproval',
       params: { itemId: 'codex-item-1', threadId: THREAD_ID, turnId: 'turn-1' }
     })
-    prompts.bindJournalItemId('journal-prompt', THREAD_ID, 'codex-item-1', 'turn-1')
-    const claim = prompts.claimBound('journal-prompt')
+    prompts.bindJournalItemId(promptId(), THREAD_ID, 'codex-item-1', 'turn-1')
+    const claim = prompts.claimBound(promptId())
     if (!claim) {
       throw new Error('expected prompt claim')
     }
@@ -677,6 +605,10 @@ describe('Codex live prompt ownership', () => {
     prompts.clearTurn(THREAD_ID, 'turn-1')
 
     expect(prompts.ownsClaim(claim)).toBe(false)
-    expect(prompts.find('journal-prompt')).toBeNull()
+    expect(prompts.find(promptId())).toBeNull()
   })
 })
+
+function promptId(threadId = THREAD_ID): string {
+  return agentJournalItemKey(codexPromptIdentity({ threadId, promptKey: 'codex-item-1' }))
+}

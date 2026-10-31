@@ -80,8 +80,7 @@ export function createBridgeNotifyForwarder(args: {
       return
     }
     if (message.name === BRIDGE_EXTERNAL_LINK_GRANT) {
-      // Pass the same normalized URL the envelope checked to the device handler; raw spelling could otherwise differ from the parsed target. Both use the same rule, so null is unreachable.
-      const target = readBridgeExternalLinkUrl(message.url)
+      const target = readBridgeExternalLinkUrl(message.url, true)
       if (target !== null) {
         options.onExternalLink(target)
       }

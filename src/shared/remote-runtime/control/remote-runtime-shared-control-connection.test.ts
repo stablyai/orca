@@ -1,3 +1,6 @@
+import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../runtime-ordinary-message-capability'
+import { sendRemoteRuntimeRequestOnSocket } from '../requests/remote-runtime-request-socket'
+import { RemoteRuntimeRequestConnection } from '../requests/remote-runtime-request-connection'
 import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
 import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
 import { createFixedKeyLegacyHandshakeForTest } from '../../paired-e2ee-fixed-key-test-fixture'
@@ -22,6 +25,50 @@ const TEST_PROJECT_PATH = path.join('tmp', 'project')
 afterEach(closeSharedControlTestServers)
 
 describe('RemoteRuntimeSharedControlConnection', () => {
+  it.each(['cached', 'shared', 'one-shot'] as const)(
+    'negotiates complete ordinary requests on the actual %s socket',
+    async (kind) => {
+      for (const supported of [false, true]) {
+        const server = await createServer({
+          resultForRequest: (method) =>
+            method === 'status.get'
+              ? { capabilities: supported ? [RUNTIME_ORDINARY_MESSAGE_CAPABILITY] : [] }
+              : { text: 'z'.repeat(3 * 1024 * 1024) }
+        })
+        const cached = new RemoteRuntimeRequestConnection(server.pairing)
+        const shared = new RemoteRuntimeSharedControlConnection(server.pairing)
+        const request = (method: string, params: unknown) =>
+          kind === 'cached'
+            ? cached.request(method, params, 5000)
+            : kind === 'shared'
+              ? shared.request(method, params, 5000)
+              : sendRemoteRuntimeRequestOnSocket(server.pairing, method, params, 5000)
+        const params = { text: `${' '.repeat(3 * 1024 * 1024 - 1)}x` }
+        try {
+          if (supported) {
+            await expect(request('agentSession.respondToApproval', params)).resolves.toMatchObject({
+              ok: true,
+              result: { text: 'z'.repeat(3 * 1024 * 1024) }
+            })
+            expect(
+              server.requests.find((request) => request.method === 'agentSession.respondToApproval')
+                ?.params
+            ).toEqual(params)
+          } else {
+            await expect(request('agentSession.respondToApproval', params)).rejects.toMatchObject({
+              code: 'invalid_argument'
+            })
+            expect(server.requests.map((request) => request.method)).toEqual(['status.get'])
+          }
+          await expect(request('status.get', null)).resolves.toMatchObject({ ok: true })
+        } finally {
+          cached.close()
+          shared.close()
+        }
+      }
+    }
+  )
+
   it('routes multiple one-shot RPCs over one authenticated WebSocket', async () => {
     const server = await createServer()
     const states: string[] = []
@@ -126,10 +173,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
 
     connection.reconnectNow()
 
-    await expect(response).resolves.toMatchObject({
-      ok: true,
-      result: { method: 'worktree.ps' }
-    })
+    await expect(response).resolves.toMatchObject({ ok: true, result: { method: 'worktree.ps' } })
     expect(server.connectionCount()).toBe(2)
     expect(server.requests.map(({ method }) => method)).toEqual(['worktree.ps'])
     expect(connection.getDiagnostics().pendingRequestCount).toBe(0)
@@ -512,7 +556,10 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   })
 
   it('keeps sent request bytes admitted while a ready socket stops responding', async () => {
-    const server = await createServer({ silentMethods: ['worktree.large'] })
+    const server = await createServer({
+      silentMethods: ['worktree.large'],
+      resultForRequest: () => ({ capabilities: [RUNTIME_ORDINARY_MESSAGE_CAPABILITY] })
+    })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
     const params = { value: 'x'.repeat(3 * 1024 * 1024) }
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
@@ -535,7 +582,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     const requests = Array.from({ length: admittedCount }, () =>
       connection.request('worktree.large', params, 60_000).catch(() => undefined)
     )
-    await vi.waitFor(() => expect(server.requests).toHaveLength(admittedCount))
+    await vi.waitFor(() =>
+      expect(server.requests.filter((request) => request.method === 'worktree.large')).toHaveLength(
+        admittedCount
+      )
+    )
 
     expect(
       Array.from(pendingRequests.values()).every(

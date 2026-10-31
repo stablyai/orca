@@ -2,6 +2,10 @@ import type { AgentSessionPromptResponse } from '../../shared/agent-session-ques
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CODEX_PROMPT_MAX_ANSWER_BYTES } from './codex-prompt-registry-bounds'
 import {
+  validateAgentSessionFormContent,
+  type AgentSessionFormContent
+} from '../../shared/agent-session-form'
+import {
   CODEX_MCP_ELICITATION_METHOD,
   CODEX_USER_INPUT_METHOD,
   type CodexPendingPrompt,
@@ -55,6 +59,7 @@ export function decodeCodexQuestionOptionId(
 }
 
 export type CodexPreparedAnswer =
+  | { kind: 'form'; content: AgentSessionFormContent }
   | { kind: 'decision'; decision: CodexApprovalDecision }
   | { kind: 'answer'; questionId: string; answer: string }
 
@@ -63,6 +68,15 @@ export function prepareCodexPromptAnswer(
   prompt: CodexPendingPrompt,
   response: AgentSessionPromptResponse
 ): CodexPreparedAnswer {
+  if (response.kind === 'form') {
+    if (prompt.elicitation?.kind !== 'form') {
+      throw new Error('This prompt does not accept form values.')
+    }
+    return {
+      kind: 'form',
+      content: validateAgentSessionFormContent(prompt.elicitation, response.content)
+    }
+  }
   if (prompt.method !== CODEX_USER_INPUT_METHOD) {
     if (response.kind !== 'option' || !isCodexApprovalDecision(response.optionId)) {
       throw new Error(`Codex item ${prompt.codexItemId} takes an approval decision`)
@@ -114,7 +128,17 @@ export function applyCodexPromptAnswer(
   prompt: CodexPendingPrompt,
   prepared: CodexPreparedAnswer
 ): Record<string, unknown> | null {
+  if (prepared.kind === 'form') {
+    return { action: 'accept', content: prepared.content, _meta: null }
+  }
   if (prepared.kind === 'decision') {
+    if (prompt.elicitation) {
+      return {
+        action: prepared.decision,
+        content: null,
+        _meta: null
+      }
+    }
     return prompt.method === CODEX_MCP_ELICITATION_METHOD
       ? codexMcpElicitationReply(prepared.decision)
       : { decision: prepared.decision }
@@ -147,7 +171,7 @@ export function answerCodexPrompt(
   const prompt = claim.prompt
   const reply = applyCodexPromptAnswer(prompt, prepared)
   if (reply === null) {
-    registry.releaseClaim(claim)
+    registry.completePartialAnswer(claim)
     return
   }
   // Forget before responding to prevent duplicate replies.

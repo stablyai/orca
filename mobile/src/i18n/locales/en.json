@@ -820,6 +820,30 @@
     }
   },
   "components": {
+    "native-chat": {
+      "form": {
+        "yes": "Yes",
+        "no": "No",
+        "error": {
+          "choice": "Choose an offered value.",
+          "text": "Enter text.",
+          "minLength": "Enter at least {{minimum}} characters.",
+          "maxLength": "Enter at most {{maximum}} characters.",
+          "format": "Enter a valid {{format}} value.",
+          "number": "Enter a finite number.",
+          "integer": "Enter a whole number within the supported range.",
+          "minimum": "Enter a value of at least {{minimum}}.",
+          "maximum": "Enter a value of at most {{maximum}}.",
+          "unknownField": "The response includes an unknown field.",
+          "required": "{{field}}: Enter a value.",
+          "draftNumber": "{{field}}: Enter a number.",
+          "check": "Check the form values."
+        },
+        "optional": "Optional",
+        "clear": "Clear",
+        "clearField": "Clear {{field}}"
+      }
+    },
     "agentLaunchNotice": {
       "updateRequired": "Update Orca on your computer to start an agent from your phone.",
       "statusUnreadable": "Could not read this host's status. Retrying…",
@@ -2580,6 +2604,7 @@
     },
     "permission": {
       "reason": "Reason: ",
+      "openLink": "Open link",
       "needsAccessTo": "Needs access to: ",
       "planFile": "Plan file: {{filePath}}",
       "newerVersionRequired": "This request needs a newer version of Orca."

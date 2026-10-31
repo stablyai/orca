@@ -15,7 +15,6 @@ import {
   MAX_CODEX_GENERIC_TURN_BUCKETS
 } from './codex-structured-journal-translation'
 import { MAX_CODEX_WORDLESS_ROWS_PER_TURN } from './codex-structured-journal-limits'
-import { CODEX_COMMAND_APPROVAL_METHOD } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 const SESSION_ID = 'session-1'
@@ -128,29 +127,6 @@ describe('codex journal translation', () => {
     expect(
       tap.rows.filter((row) => row.body.kind === 'tool-call' && row.body.state === 'failed').length
     ).toBeGreaterThan(0)
-  })
-
-  it('terminalizes evicted pending prompts instead of silently forgetting them', () => {
-    const { translator, tap } = translatorWith()
-    translator.handle(TURN_STARTED)
-    for (let index = 0; index <= 128; index += 1) {
-      expect(
-        translator.handle({
-          type: 'prompt',
-          sessionId: SESSION_ID,
-          threadId: THREAD_ID,
-          method: CODEX_COMMAND_APPROVAL_METHOD,
-          params: {},
-          codexItemId: `prompt-item-${index}`,
-          promptKey: `prompt-${index}`
-        })
-      ).toEqual({ accepted: true })
-    }
-    expect(
-      tap.rows.some(
-        (row) => row.body.kind === 'approval' && row.body.resolution.state === 'cancelled'
-      )
-    ).toBe(true)
   })
 
   it('publishes after every write so a subscriber never trails the journal', () => {

@@ -160,14 +160,13 @@ export function admitCodexLifecycleItems(
     return { accepted: false, reason: 'untranslated' }
   }
   if (sink.tryAppendLifecycleBatch) {
-    const admission = criticalAdmission(
+    return criticalAdmission(
       sink.tryAppendLifecycleBatch(
         settlementId,
         items.map((item) => journalLifecycleItemMutation(attribution, item.identity, item.body)),
-        { lifecycle: true }
+        { lifecycle: true, publish: true }
       )
     )
-    return admission.accepted ? publishCodexLifecycle(sink) : admission
   }
   for (const item of items) {
     const admission = appendCodexLifecycleItem(sink, item.identity, item.body, attribution)

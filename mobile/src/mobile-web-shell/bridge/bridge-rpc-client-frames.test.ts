@@ -319,6 +319,78 @@ describe('bridge client after close', () => {
 })
 
 describe('bridge client replies', () => {
+  it('keeps ordinary operation identity at the page deadline without changing native timeouts', async () => {
+    const page = createPageClient()
+    page.start()
+    const ordinarySettled = vi.fn()
+    const nativeSettled = vi.fn()
+    const overriddenSettled = vi.fn()
+    const ordinary = page.client.sendRequest('worktree.ps').catch((error: unknown) => {
+      ordinarySettled()
+      return error
+    })
+    const native = page.client
+      .callNativeVerb('native.clipboard.read', { mime: 'text' })
+      .catch((error: unknown) => {
+        nativeSettled()
+        return error
+      })
+    const overridden = page.client
+      .sendRequest('settings.get', undefined, { timeoutMs: 50 })
+      .catch((error: unknown) => {
+        overriddenSettled()
+        return error
+      })
+    const ordinaryId = idOf(page, 0)
+    const overriddenId = idOf(page, 2)
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'reply',
+      id: ordinaryId,
+      part: { i: 0, of: 2 },
+      chunk: '{'
+    })
+    await vi.advanceTimersByTimeAsync(49)
+    expect(overriddenSettled).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    const overriddenError = await overridden
+    expect(readError(overriddenError).message).toBe('Request timed out: settings.get')
+    expect(isRpcDeliveryUnknown(overriddenError)).toBe(true)
+    expect(overriddenSettled).toHaveBeenCalledTimes(1)
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'reply',
+      id: overriddenId,
+      payload: { id: overriddenId, ok: true, result: 'late' }
+    })
+    await vi.advanceTimersByTimeAsync(29_949)
+    expect(ordinarySettled).not.toHaveBeenCalled()
+    expect(nativeSettled).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    const ordinaryError = await ordinary
+    const nativeError = await native
+    expect(readError(ordinaryError).name).toBe('Error')
+    expect(readError(ordinaryError).message).toBe('Request timed out: worktree.ps')
+    expect(readError(nativeError).name).toBe('Error')
+    expect(readError(nativeError).message).toBe('Request timed out')
+    expect(isRpcDeliveryUnknown(ordinaryError)).toBe(true)
+    expect(isRpcDeliveryUnknown(nativeError)).toBe(true)
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'reply',
+      id: ordinaryId,
+      part: { i: 1, of: 2 },
+      chunk: '}'
+    })
+    expect(page.diagnostics).toEqual([{ kind: 'unknown-id' }, { kind: 'unknown-id' }])
+    expect(ordinarySettled).toHaveBeenCalledTimes(1)
+    expect(nativeSettled).toHaveBeenCalledTimes(1)
+    expect(overriddenSettled).toHaveBeenCalledTimes(1)
+    expect(page.frames().filter((frame) => frame.type === 'request')).toHaveLength(3)
+    page.client.close()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('rejects with the class and the delivery mark the shell captured', async () => {
     const page = createPageClient()
     page.start()

@@ -69,6 +69,9 @@ export function deliverCodexServerRequest(
   }
   const disposition = disposeCodexServerRequest(session.prompts, session.connection, request)
   const threadId = readCodexThreadId(request.params) ?? session.threadId
+  if (disposition.kind === 'admission-refused' || disposition.kind === 'replay') {
+    return { accepted: true }
+  }
   if (disposition.kind === 'responded') {
     const admission = emit(session, {
       type: 'server-request',

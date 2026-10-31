@@ -1,44 +1,30 @@
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { codexPromptIdentity, codexQuestionItems } from './codex-structured-prompt-items'
+import { digestPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { MAX_CODEX_PENDING_PROMPTS } from './codex-structured-journal-limits'
 import { randomUUID } from 'node:crypto'
-import {
-  codexMcpToolApprovalDecisions,
-  isCodexMcpToolApproval,
-  type CodexMcpToolApprovalDecision
-} from './codex-mcp-tool-approval'
 import {
   MAX_CODEX_PROMPT_JOURNAL_BINDINGS,
   MAX_CODEX_PROMPT_REGISTRY_BYTES,
   MAX_CODEX_PROMPT_REGISTRY_ENTRIES,
-  codexJournalPromptIdPart,
   codexPromptMatchesTurn,
   codexPromptRegistryEntryBytes,
-  codexPromptTurnIdentity,
-  readQuestionIds,
-  readQuestionOptionAnswers
+  codexPromptTurnIdentity
 } from './codex-prompt-registry-bounds'
-import { readRecord, readString as readRecordString } from './codex-item-field-readers'
-
-export const CODEX_COMMAND_APPROVAL_METHOD = 'item/commandExecution/requestApproval'
-export const CODEX_FILE_CHANGE_APPROVAL_METHOD = 'item/fileChange/requestApproval'
-export const CODEX_USER_INPUT_METHOD = 'item/tool/requestUserInput'
-export const CODEX_MCP_ELICITATION_METHOD = 'mcpServer/elicitation/request'
-
-export type CodexPendingPrompt = {
-  requestId: number | string
-  method: string
-  threadId: string
-  turnId: string | null
-  /** Oversized turn IDs stay comparable within the registry byte cap. */
-  turnIdDigest?: string
-  codexItemId: string
-  /** Prefer approvalId for repeated requests from one tool item. */
-  promptKey: string
-  questionIds: readonly string[]
-  questionIdAliases: ReadonlyMap<string, string>
-  optionAnswers: ReadonlyMap<string, { questionId: string; answer: string }>
-  answers: Map<string, string>
-  /** Set when the request limits the decisions, so an unoffered one is refused. */
-  offeredDecisions?: readonly CodexMcpToolApprovalDecision[]
-}
+import {
+  CODEX_COMMAND_APPROVAL_METHOD,
+  CODEX_USER_INPUT_METHOD,
+  readCodexPendingPrompt,
+  type CodexPendingPrompt
+} from './codex-prompt-request'
+export {
+  CODEX_COMMAND_APPROVAL_METHOD,
+  CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_USER_INPUT_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
+  isCodexPromptMethod,
+  type CodexPendingPrompt
+} from './codex-prompt-request'
 
 export type CodexAbandonedCommand = { threadId: string; itemId: string }
 const NO_ABANDONED_COMMANDS: readonly CodexAbandonedCommand[] = []
@@ -46,33 +32,7 @@ const NO_ABANDONED_COMMANDS: readonly CodexAbandonedCommand[] = []
 export type CodexPromptClaim = {
   readonly itemId: string
   readonly prompt: CodexPendingPrompt
-}
-
-function readString(params: unknown, key: string): string | null {
-  return readRecordString(readRecord(params), key)
-}
-
-export function isCodexPromptMethod(method: string): boolean {
-  return (
-    method === CODEX_COMMAND_APPROVAL_METHOD ||
-    method === CODEX_FILE_CHANGE_APPROVAL_METHOD ||
-    method === CODEX_USER_INPUT_METHOD ||
-    method === CODEX_MCP_ELICITATION_METHOD
-  )
-}
-
-/** A fresh registry id fences elicitation request ids reused after app-server restart. */
-function readPromptItemId(
-  request: { id: number | string; method: string; params: unknown },
-  registryId: string
-) {
-  if (request.method === CODEX_MCP_ELICITATION_METHOD) {
-    // Turn-less approvals escape turn stop and cleanup, so they keep the safe decline.
-    return isCodexMcpToolApproval(request.params) && readString(request.params, 'turnId')
-      ? `mcp-elicitation:${registryId}:${request.id}`
-      : null
-  }
-  return readString(request.params, 'itemId')
+  answer?: string
 }
 
 // Callback ownership is session-local and cannot be reconstructed from the journal.
@@ -97,71 +57,83 @@ export class CodexPromptRegistry {
     method: string
     params: unknown
   }): CodexPendingPrompt | null {
-    const codexItemId = readPromptItemId(request, this.registryId)
-    const threadId = readString(request.params, 'threadId')
-    if (!isCodexPromptMethod(request.method) || !codexItemId || !threadId) {
-      return null
+    const admission = this.admit(request)
+    return admission.kind === 'admitted' ? admission.prompt : null
+  }
+
+  admit(request: {
+    id: number | string
+    method: string
+    params: unknown
+  }):
+    | { kind: 'admitted'; prompt: CodexPendingPrompt; replay: boolean }
+    | { kind: 'unsupported' | 'refused' } {
+    const prompt = readCodexPendingPrompt(request, this.registryId)
+    if (!prompt) {
+      return { kind: 'unsupported' }
     }
-    const questionIds =
-      request.method === CODEX_USER_INPUT_METHOD ? readQuestionIds(request.params) : []
-    if (questionIds === null) {
-      return null
-    }
-    const optionAnswers =
-      request.method === CODEX_USER_INPUT_METHOD
-        ? readQuestionOptionAnswers(request.params)
-        : new Map<string, { questionId: string; answer: string }>()
-    if (optionAnswers === null) {
-      return null
-    }
-    const turnId = readString(request.params, 'turnId')
-    const turnIdentity = turnId ? codexPromptTurnIdentity(turnId) : { turnId: null }
-    if (turnId && turnIdentity.turnId === null) {
-      return null
-    }
-    const isMcpElicitation = request.method === CODEX_MCP_ELICITATION_METHOD
-    const prompt: CodexPendingPrompt = {
-      requestId: request.id,
-      method: request.method,
-      threadId,
-      ...turnIdentity,
-      codexItemId,
-      promptKey: isMcpElicitation
-        ? codexItemId
-        : (readString(request.params, 'approvalId') ?? codexItemId),
-      ...(isMcpElicitation
-        ? { offeredDecisions: codexMcpToolApprovalDecisions(request.params) }
-        : {}),
-      questionIds,
-      questionIdAliases:
-        request.method === CODEX_USER_INPUT_METHOD
-          ? new Map(questionIds.map((id) => [codexJournalPromptIdPart(id), id]))
-          : new Map(),
-      optionAnswers,
-      answers: new Map()
-    }
-    const promptBytes = codexPromptRegistryEntryBytes(prompt)
-    if (promptBytes > MAX_CODEX_PROMPT_REGISTRY_BYTES) {
-      return null
-    }
-    while (
-      this.retainedPromptBytes() + promptBytes > MAX_CODEX_PROMPT_REGISTRY_BYTES &&
-      this.byAddress.size > 0
+    const rows =
+      prompt.method === CODEX_USER_INPUT_METHOD
+        ? codexQuestionItems({
+            threadId: prompt.threadId,
+            promptKey: prompt.promptKey,
+            params: request.params
+          })
+        : [{ identity: codexPromptIdentity(prompt), questionId: null }]
+    prompt.journalRows = new Map(
+      rows.map((row): [string, string | null] => [
+        agentJournalItemKey(row.identity),
+        row.questionId
+      ])
+    )
+    prompt.requestFingerprint = digestPayload(JSON.stringify(request.params))
+    if (
+      rows.length === 0 ||
+      prompt.journalRows.size !== new Set(rows.map((row) => row.questionId)).size ||
+      (prompt.method === CODEX_USER_INPUT_METHOD &&
+        (rows.length !== prompt.questionIds.length ||
+          new Set(prompt.questionIds).size !== prompt.journalRows.size ||
+          rows.some(
+            (row) => row.questionId === null || !prompt.questionIds.includes(row.questionId)
+          )))
     ) {
-      const oldest = this.byAddress.values().next().value
-      if (!oldest) {
-        break
-      }
-      this.byAddress.delete(this.address(oldest.threadId, oldest.promptKey))
+      return { kind: 'refused' }
     }
-    if (this.retainedPromptBytes() + promptBytes > MAX_CODEX_PROMPT_REGISTRY_BYTES) {
-      return null
-    }
+    const retained = this.retainedPrompts()
     const address = this.address(prompt.threadId, prompt.promptKey)
-    this.byAddress.delete(address)
+    for (const prior of retained) {
+      if (prior.threadId === prompt.threadId && prior.requestId === prompt.requestId) {
+        return prior.method === prompt.method &&
+          prior.requestFingerprint === prompt.requestFingerprint
+          ? { kind: 'admitted', prompt: prior, replay: true }
+          : { kind: 'refused' }
+      }
+      if (
+        this.address(prior.threadId, prior.promptKey) === address ||
+        [...prompt.journalRows.keys()].some((id) => prior.journalRows.has(id))
+      ) {
+        return { kind: 'refused' }
+      }
+    }
+    const reserved = [...retained].reduce(
+      (total, prior) =>
+        total +
+        [...prior.journalRows.values()].filter((id) => id === null || !prior.answers.has(id))
+          .length,
+      0
+    )
+    if (
+      retained.size + 1 > MAX_CODEX_PROMPT_REGISTRY_ENTRIES ||
+      reserved + prompt.journalRows.size >
+        Math.min(MAX_CODEX_PENDING_PROMPTS, MAX_CODEX_PROMPT_JOURNAL_BINDINGS) ||
+      this.retainedPromptBytes() + codexPromptRegistryEntryBytes(prompt) >
+        MAX_CODEX_PROMPT_REGISTRY_BYTES
+    ) {
+      return { kind: 'refused' }
+    }
+    // Reserve the complete obligation before publication can reenter delivery.
     this.byAddress.set(address, prompt)
-    this.trim()
-    return prompt
+    return { kind: 'admitted', prompt, replay: false }
   }
 
   bindJournalItemId(
@@ -170,21 +142,20 @@ export class CodexPromptRegistry {
     promptKey: string,
     turnId?: string | null
   ): void {
-    if (this.journalItemIds.has(journalItemId)) {
-      this.boundPrompts.delete(journalItemId)
-    }
-    this.journalItemIds.delete(journalItemId)
     const address = this.address(threadId, promptKey)
     const prompt = this.byAddress.get(address)
-    if (!prompt) {
+    if (!prompt || !prompt.journalRows.has(journalItemId)) {
       return
+    }
+    const previous = this.boundPrompts.get(journalItemId)
+    if (previous && previous !== prompt) {
+      throw new Error('A live prompt binding cannot be replaced.')
     }
     if (prompt.turnId === null && prompt.turnIdDigest === undefined && turnId) {
       Object.assign(prompt, codexPromptTurnIdentity(turnId))
     }
     this.journalItemIds.set(journalItemId, address)
     this.boundPrompts.set(journalItemId, prompt)
-    this.trim()
   }
 
   find(journalItemId: string): CodexPendingPrompt | null {
@@ -285,26 +256,44 @@ export class CodexPromptRegistry {
     return prompt.method === CODEX_USER_INPUT_METHOD ? 'question' : 'approval'
   }
 
-  private retainedPromptBytes(): number {
-    const prompts = new Set([...this.byAddress.values(), ...this.boundPrompts.values()])
-    return [...prompts].reduce((total, prompt) => total + codexPromptRegistryEntryBytes(prompt), 0)
+  reserveAnswer(claim: CodexPromptClaim, answer: string): boolean {
+    if (
+      !this.ownsClaim(claim) ||
+      this.retainedPromptBytes() + Buffer.byteLength(answer, 'utf8') >
+        MAX_CODEX_PROMPT_REGISTRY_BYTES
+    ) {
+      return false
+    }
+    // Count answers held across the asynchronous commit, including other requests' claims.
+    claim.answer = answer
+    return true
   }
 
-  private trim(): void {
-    while (this.byAddress.size > MAX_CODEX_PROMPT_REGISTRY_ENTRIES) {
-      const oldest = this.byAddress.values().next().value
-      if (!oldest) {
-        break
-      }
-      this.byAddress.delete(this.address(oldest.threadId, oldest.promptKey))
+  completePartialAnswer(claim: CodexPromptClaim): void {
+    if (this.boundPrompts.get(claim.itemId) === claim.prompt) {
+      this.boundPrompts.delete(claim.itemId)
+      this.journalItemIds.delete(claim.itemId)
     }
-    while (this.journalItemIds.size > MAX_CODEX_PROMPT_JOURNAL_BINDINGS) {
-      const oldest = this.journalItemIds.keys().next().value
-      if (!oldest) {
-        break
-      }
-      this.journalItemIds.delete(oldest)
-      this.boundPrompts.delete(oldest)
-    }
+    this.releaseClaim(claim)
+  }
+
+  private retainedPrompts(): Set<CodexPendingPrompt> {
+    return new Set([
+      ...this.byAddress.values(),
+      ...this.boundPrompts.values(),
+      ...this.claims.keys()
+    ])
+  }
+
+  private retainedPromptBytes(): number {
+    const prompts = this.retainedPrompts()
+    const claimedBytes = [...this.claims.values()].reduce(
+      (total, claim) => total + Buffer.byteLength(claim.answer ?? '', 'utf8'),
+      0
+    )
+    return (
+      claimedBytes +
+      [...prompts].reduce((total, prompt) => total + codexPromptRegistryEntryBytes(prompt), 0)
+    )
   }
 }

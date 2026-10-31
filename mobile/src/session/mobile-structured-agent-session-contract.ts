@@ -1,3 +1,4 @@
+import type { AgentSessionSettledBodyOwner } from '../../../src/shared/agent-session-settled-body-reader'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { RpcClient } from '../transport/rpc-client'
@@ -7,7 +8,10 @@ import type {
   MobileNativeChatSendOutcome
 } from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatVisualSource } from './native-chat/visual/mobile-native-chat-visual-read'
-import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
+import type {
+  MobileChatPermission,
+  MobilePermissionResponse
+} from './native-chat/input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { NativeChatLiveTurnIndicator } from '../../../src/shared/native-chat-turn-status'
@@ -48,12 +52,13 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     actionablePromptIds: readonly string[] | undefined
     permission: MobileChatPermission | null
     question: MobileChatQuestion | null
-    respondPermission: (optionId: string) => Promise<boolean>
+    respondPermission: MobilePermissionResponse
     respondQuestion: (answer: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
     queued: MobileStructuredQueuedMessageControls
     commandRefusalCauses: MobileNativeChatCommandRefusalCauses
     backgroundTasks: MobileStructuredBackgroundTasks
+    settledBodyOwner: AgentSessionSettledBodyOwner | null
     visualSource: MobileNativeChatVisualSource | null
     imagePreviewsByMessageId: Record<string, string[]>
   }

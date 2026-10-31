@@ -1,4 +1,7 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
+import { createAgentSessionFormSubmissions } from '../../../src/shared/agent-session-form-submission'
+import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session-current-requests'
+import { structuredSessionOperationId } from './structured-session-operation-id'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -22,6 +25,7 @@ export function useMobileStructuredAgentMutate(args: {
   agentName?: string
 }): MobileStructuredAgentMutate {
   const { agentName, client, enabled, onSendError, sessionId, stateRef } = args
+  const formSubmissions = useMemo(() => createAgentSessionFormSubmissions(), [client, sessionId])
   return useCallback(
     async <TValue>(
       method: string,
@@ -33,7 +37,16 @@ export function useMobileStructuredAgentMutate(args: {
       if (!client || !sessionId || !enabled || current.fence === null) {
         return { status: 'rejected' }
       }
-      const targetFence = current.fence
+      const submission = formSubmissions.capture({
+        method,
+        fingerprintMethod,
+        sessionId,
+        fields,
+        fence: current.fence,
+        operationId: structuredSessionOperationId,
+        liveItemIds: new Set(selectAgentSessionCurrentRequests(current).map((item) => item.itemId))
+      })
+      const targetFence = submission?.envelope.expectedRuntimeFence ?? current.fence
       const result = await requestStructuredAgentSessionMutation<TValue>({
         client,
         method,
@@ -41,8 +54,12 @@ export function useMobileStructuredAgentMutate(args: {
         sessionId,
         expectedRuntimeFence: targetFence,
         fields,
+        ...(submission ? { clientOperationId: submission.envelope.clientOperationId } : {}),
         ...(agentName ? { agentName } : {})
       })
+      const unknown =
+        result.status === 'unknown' || (submission?.unknown === true && result.status === 'failed')
+      formSubmissions.settle(fields.itemId, submission, unknown)
       if (result.status === 'accepted') {
         return {
           status: 'accepted',
@@ -50,14 +67,14 @@ export function useMobileStructuredAgentMutate(args: {
           sameFence: stateRef.current.fence === targetFence
         }
       }
-      if (result.status === 'unknown') {
-        return result
+      if (unknown) {
+        return { status: 'unknown' }
       }
       if (shouldReportError?.() !== false) {
         onSendError(result.message)
       }
       return { status: 'rejected' }
     },
-    [agentName, client, enabled, onSendError, sessionId, stateRef]
+    [agentName, client, enabled, formSubmissions, onSendError, sessionId, stateRef]
   )
 }

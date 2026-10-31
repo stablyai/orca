@@ -1,3 +1,4 @@
+import { SETTLED_BODY_HISTORY_READER } from './agent-session-item-wire-form'
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
@@ -28,12 +29,14 @@ export function readStructuredAgentSessionHistoryResult(input: {
   request: AgentSessionHistoryRequest
   scope?: AgentSessionHistoryScope
   replaceNormalizedHistory?: boolean
+  readsSettledBodies?: boolean
   /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
 }): AgentSessionHistoryResult {
   const result = withPublishedWorkResult(
     readAgentSessionHistory(input.journal, input.request, {
       scope: input.scope,
+      ...(input.readsSettledBodies ? { reader: SETTLED_BODY_HISTORY_READER } : {}),
       rowReplay: input.replaceNormalizedHistory === false
     }),
     input.work

@@ -138,6 +138,28 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })
 
+  it('submits whitespace-only form text without changing it into a control choice', () => {
+    const onAnswer = vi.fn()
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={{
+            questions: [
+              { question: 'Name', multiSelect: false, options: [{ label: 'Decline request' }] }
+            ]
+          }}
+          allowOther
+          freeTextInputs={[{ allowEmpty: true }]}
+          onAnswer={onAnswer}
+          onCancel={() => {}}
+        />
+      )
+    })
+    typeAnswer('   ')
+    clickAction('Submit')
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: '   ' }])
+  })
+
   it('delivers a multi-select pick as its option indices', () => {
     const onAnswer = vi.fn()
     render(

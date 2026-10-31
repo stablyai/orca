@@ -4,7 +4,8 @@ package expo.modules.orcamobilewebshell
 internal const val MOBILE_WEB_SHELL_BRIDGE_OBJECT = "orcaBridge"
 
 /** Enforce the shared UTF-8 JSON byte ceiling natively, before parsing. */
-internal const val MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES = 640 * 1024
+internal const val MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES = 4 * 1024 * 1024
+internal const val MOBILE_WEB_SHELL_BRIDGE_MAX_OUTBOUND_BYTES = 640 * 1024
 
 internal fun acceptsMobileWebShellBridgeByteCount(byteCount: Int): Boolean =
   byteCount <= MOBILE_WEB_SHELL_BRIDGE_MAX_MESSAGE_BYTES
