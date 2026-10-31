@@ -1,3 +1,4 @@
+import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import {
   agentSessionFailureFact,
   providerDiagnostic,
@@ -19,6 +20,8 @@ type Submission = {
   signInRefusal?: string
 }
 type DeliveryDeps = {
+  agentName?: string
+  correlated?: boolean
   send: (frame: JsonlRpcRecord) => Promise<void>
   accepted: (id: string, at: number) => void
   commandOnly: () => void
@@ -36,10 +39,13 @@ export function piRpcFailureFact(error: string) {
   )
 }
 
-function piRejection(fact: SubmissionRejectionFact): AgentSessionDispatchOutcome {
+function piRejection(
+  fact: SubmissionRejectionFact,
+  agentName: string
+): AgentSessionDispatchOutcome {
   return {
     state: 'rejected',
-    ...agentSessionFailureWords(fact, { agentName: 'Pi', surface: 'rejection' })
+    ...agentSessionFailureWords(fact, { agentName, surface: 'rejection' })
   }
 }
 
@@ -64,12 +70,15 @@ export class PiRpcPromptDelivery {
     if (this.ended) {
       throw new Error('Pi prompt queue unavailable')
     }
+    if (this.deps.correlated) {
+      frame = { ...frame, id: `orca-prompt:${id}` }
+    }
     const bytes = Buffer.byteLength(JSON.stringify(frame))
     if (this.pending.size >= 128 || this.heldBytes + bytes > 32 * 1024 * 1024) {
       return {
         state: 'rejected',
         ...agentSessionFailureWords(agentSessionFailureFact('queueFull'), {
-          agentName: 'Pi',
+          agentName: this.deps.agentName ?? 'Pi',
           surface: 'rejection'
         })
       }
@@ -105,14 +114,25 @@ export class PiRpcPromptDelivery {
 
   reply(frame: JsonlRpcRecord): void {
     const reply = piRpcPromptReplySchema.parse(frame)
-    const submission = this.acknowledgements.shift()
+    const index = this.deps.correlated
+      ? this.acknowledgements.findIndex((pending) => `orca-prompt:${pending.id}` === frame.promptId)
+      : 0
+    if (index < 0) {
+      return
+    }
+    const submission = this.acknowledgements.splice(index, 1)[0]
     if (!submission) {
       throw new Error('Pi prompt reply has no request')
     }
     if (!reply.success) {
-      const error = reply.error ?? 'Pi rejected the prompt'
+      const error = reply.error ?? `${this.deps.agentName ?? 'Pi'} rejected the prompt`
       const fact = piRpcFailureFact(error)
-      if (!submission.accepted && fact.kind === 'notSignedIn' && submission.retries++ < 8) {
+      if (
+        !this.deps.correlated &&
+        !submission.accepted &&
+        fact.kind === 'notSignedIn' &&
+        submission.retries++ < 8
+      ) {
         submission.signInRefusal = error
         this.removeWaiting(submission)
         const timer = setTimeout(() => {
@@ -144,7 +164,7 @@ export class PiRpcPromptDelivery {
         fact.kind === 'notSignedIn' && !submission.accepted
           ? { ...fact, neverReachedAgent: true as const }
           : fact
-      this.deps.settled(submission.id, piRejection(settledFact))
+      this.deps.settled(submission.id, piRejection(settledFact, this.deps.agentName ?? 'Pi'))
       if (submission.accepted) {
         this.deps.rejectedAfterAcceptance(error)
       } else {
@@ -171,7 +191,10 @@ export class PiRpcPromptDelivery {
       if (submission.signInRefusal !== undefined) {
         this.deps.settled(
           submission.id,
-          piRejection({ ...piRpcFailureFact(submission.signInRefusal), neverReachedAgent: true })
+          piRejection(
+            { ...piRpcFailureFact(submission.signInRefusal), neverReachedAgent: true },
+            this.deps.agentName ?? 'Pi'
+          )
         )
       } else if (!submission.accepted) {
         this.deps.settled(submission.id, {
@@ -221,6 +244,22 @@ export class PiRpcPromptDelivery {
   private finishIfConsumed(submission: Submission): void {
     if (!this.waiting.includes(submission) && !this.acknowledgements.includes(submission)) {
       this.pending.delete(submission)
+    }
+  }
+}
+
+export function piRpcFailureStatus(
+  turn: string,
+  error: string,
+  agentName = 'Pi'
+): ProviderTimelineEvent {
+  return {
+    type: 'item.close',
+    item: `error:${turn}`,
+    body: {
+      kind: 'status',
+      tone: 'error',
+      ...agentSessionFailureWords(piRpcFailureFact(error), { agentName, surface: 'row' })
     }
   }
 }

@@ -14,7 +14,9 @@ import {
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
-import { toolResultOutput } from './transcript-record-blocks'
+import { toolResultOutput, inlineToolResultImages } from './transcript-record-blocks'
+import { ompHistoricalEditBlocks } from '../omp/rpc-edit-results'
+import { ompHistoricalTodoBlocks, ompTodoInputPlan } from '../omp/rpc-todo'
 
 export function decodeOmpTranscriptLine(
   line: string,
@@ -60,11 +62,20 @@ export function decodeOmpTranscriptLine(
       id,
       role: 'tool',
       blocks: [
+        ...ompHistoricalTodoBlocks(
+          message.details,
+          typeof message.toolName === 'string' ? message.toolName : undefined
+        ),
         {
           type: 'tool-result',
           output: toolResultOutput(message.content),
           ...(message.isError === true ? { isError: true } : {})
-        }
+        },
+        ...inlineToolResultImages(message.content),
+        ...ompHistoricalEditBlocks(
+          message.details,
+          typeof message.toolName === 'string' ? message.toolName : undefined
+        )
       ],
       timestamp,
       source: 'transcript'
@@ -231,7 +242,14 @@ function ompContentBlock(record: Record<string, unknown> | null): NativeChatBloc
     }
     case 'toolCall': {
       const name = extractString(record.name) ?? 'tool'
-      return { type: 'tool-call', name, input: record.arguments }
+      const input = name === 'todo' ? ompTodoInputPlan(record.arguments) : null
+      const callId = input ? extractString(record.id) : null
+      return {
+        type: 'tool-call',
+        name: input ? 'update_plan' : name,
+        input: input ?? record.arguments,
+        ...(callId ? { callId } : {})
+      }
     }
     case 'image': {
       const data = extractString(record.data)

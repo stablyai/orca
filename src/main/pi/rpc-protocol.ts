@@ -134,7 +134,8 @@ export const piRpcDialogSchema = z.discriminatedUnion('method', [
     method: z.literal('select'),
     title: z.string(),
     message: z.string().optional(),
-    options: z.array(z.string()).min(1).max(64)
+    options: z.array(z.string()).min(1).max(64),
+    optionDetails: z.array(z.object({ description: z.string().optional() })).optional()
   }),
   z.object({
     id: z.union([z.string(), z.number()]),

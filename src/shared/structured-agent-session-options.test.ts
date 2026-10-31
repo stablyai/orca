@@ -34,6 +34,20 @@ function viewModel(
 }
 
 describe('structured agent session options', () => {
+  it.each(['codex', 'claude', 'pi'])(
+    'shows the current model from a legacy %s host without a listing',
+    (agent) => {
+      const state = applyStructuredAgentSessionOptions(
+        createStructuredAgentSessionOptionState(agent),
+        CODEX_SESSION_OPTION_CATALOG,
+        { models: [], current: { model: 'legacy-current-model' } },
+        { newLaunch: false, coherentCatalog: false }
+      )
+      expect(viewModel(state, undefined, {})).toBe('legacy-current-model')
+      expect(state.catalogSource).toBe('live')
+    }
+  )
+
   it('accepts a later catalog after a live answer becomes unknown', () => {
     const seed = structuredAgentSessionSeedCatalog('pi')
     const unknown = { models: [], modelsKnown: false as const, current: { defaulted: [] } }

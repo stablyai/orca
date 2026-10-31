@@ -51,7 +51,10 @@ export function piRpcDialogPresentation(value: unknown): PiRpcDialogPresentation
     dialog.method === 'select'
       ? dialog.options.map((label, index) => ({
           id: `option-${index}`,
-          label: label || 'Empty value'
+          label: label || 'Empty value',
+          ...(dialog.optionDetails?.[index]?.description
+            ? { description: dialog.optionDetails[index].description }
+            : {})
         }))
       : []
   return {

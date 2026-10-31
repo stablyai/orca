@@ -35,6 +35,7 @@ describe('Pi final tail before host eviction', () => {
       throw new Error('the sink must provide transitions')
     }
     const onFailed = vi.fn()
+    const onChildWorkEvidence = vi.fn()
     const lane = new JsonlRpcTimelineLane({
       sink,
       sessionId: SESSION,
@@ -44,6 +45,7 @@ describe('Pi final tail before host eviction', () => {
       pauseReading: vi.fn(),
       resumeReading: vi.fn(),
       onInputAccepted: vi.fn(),
+      onChildWorkEvidence,
       onFailed
     })
     cleanups.push(
@@ -83,6 +85,14 @@ describe('Pi final tail before host eviction', () => {
     vi.useFakeTimers()
     const reply = `Final reply${'r'.repeat(2 * 1024 * 1024)}`
     const status = `Final status${'s'.repeat(17 * 1024 * 1024)}`
+    const children = [
+      {
+        type: 'ended',
+        observedAt: 2,
+        handle: { idKind: 'task_id', id: 'child' },
+        outcome: 'succeeded'
+      }
+    ] as const
     lane.apply([
       { type: 'text.delta', item: { id: 'reply' }, channel: 'assistant', text: reply },
       {
@@ -91,6 +101,7 @@ describe('Pi final tail before host eviction', () => {
         body: { kind: 'status', tone: 'info', text: status }
       }
     ])
+    lane.childWork([...children])
     lane.finalize({ type: 'session.ended', verdict: { state: 'interrupted', completedAt: 2 } })
     lane.apply([
       {
@@ -108,9 +119,11 @@ describe('Pi final tail before host eviction', () => {
     expect(journal.snapshot().items).toHaveLength(before)
     expect(landed).toBe(false)
     expect(onFailed).not.toHaveBeenCalled()
+    expect(onChildWorkEvidence).not.toHaveBeenCalled()
     gate.resolve()
     await blocked
     await expect(barrier).resolves.toEqual({ ok: true })
+    expect(onChildWorkEvidence).toHaveBeenCalledExactlyOnceWith(children)
     const acknowledgeRelease = vi.fn(() => lane.dispose())
     await evictStructuredAgentSession({
       sessionId: SESSION,

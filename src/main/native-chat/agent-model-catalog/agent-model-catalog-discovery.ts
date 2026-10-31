@@ -19,6 +19,8 @@ export type AgentModelCatalogProbe = ((
     operation?: StructuredAgentResolutionOperation
   }
 ) => Promise<AgentModelCatalogSuccess>) & {
+  /** This probe lists models without reopening the saved conversation. */
+  sessionless?: true
   resolveLegacy?: (
     home: AgentSessionAccountHome,
     operation?: StructuredAgentResolutionOperation

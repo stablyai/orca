@@ -10,9 +10,10 @@ import {
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { piRpcMessageEventSchema, piRpcToolEventSchema } from './rpc-protocol'
 import type { PiRpcContextUsage } from './rpc-context-usage'
+import { inlineToolResultImages } from '../native-chat/transcript-record-blocks'
 
 const resultSchema = z.object({
-  content: z.array(z.object({ type: z.string(), text: z.string().optional() }))
+  content: z.array(z.looseObject({ type: z.string(), text: z.string().optional() }))
 })
 
 /** One row per turn: a second close of the same item is dropped. */
@@ -190,6 +191,8 @@ export class PiRpcMessages {
                 : journalToolPayload(output, state === 'running')
           })
     }
+    const images =
+      state === 'running' ? [] : inlineToolResultImages(content.success ? content.data.content : [])
     if (state === 'running') {
       if (this.tools.size >= 128 && !previous) {
         throw new Error('Pi tool stream capacity exceeded')
@@ -232,7 +235,16 @@ export class PiRpcMessages {
         type: state === 'running' ? (previous ? 'item.update' : 'item.open') : 'item.close',
         item: `tool:${event.toolCallId}`,
         body
-      }
+      },
+      ...(images.length > 0
+        ? [
+            {
+              type: 'item.close' as const,
+              item: `tool-images:${event.toolCallId}`,
+              body: { kind: 'message' as const, role: 'tool' as const, blocks: images }
+            }
+          ]
+        : [])
     ]
   }
 

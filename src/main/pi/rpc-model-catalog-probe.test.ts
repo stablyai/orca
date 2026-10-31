@@ -124,10 +124,17 @@ describe('Pi model catalog', () => {
         {
           id: 'openai/gpt-6',
           label: 'GPT-6',
+          description: 'openai/gpt-6',
           isDefault: false,
           efforts: levels(['minimal', 'low', 'medium', 'high', 'xhigh'])
         },
-        { id: 'openai/gpt-4o-mini', label: 'GPT-4o mini', isDefault: false, efforts: [] }
+        {
+          id: 'openai/gpt-4o-mini',
+          label: 'GPT-4o mini',
+          description: 'openai/gpt-4o-mini',
+          isDefault: false,
+          efforts: []
+        }
       ])
       const live = await readPiRpcSessionOptions({
         request: async (command) =>

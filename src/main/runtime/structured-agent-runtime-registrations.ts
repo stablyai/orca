@@ -1,3 +1,4 @@
+import { createOmpRpcAdapter } from '../omp/rpc-runtime-registration'
 import { AcpAtRestCommandCatalog } from '../acp/acp-at-rest-commands'
 import { resolveNativeChatVisualsSkillLocation } from '../native-chat/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../codex/codex-cli-installation-error'
@@ -214,6 +215,8 @@ function registrationWithAdapter(
   switch (entry.kind) {
     case 'pi':
       return PI_RPC_RUNTIME_REGISTRATION
+    case 'omp':
+      return Object.assign(entry.metadata, { createAdapter: createOmpRpcAdapter })
     case 'codex':
       return Object.assign(entry.metadata, { createAdapter: createCodexAdapter })
     case 'claude':

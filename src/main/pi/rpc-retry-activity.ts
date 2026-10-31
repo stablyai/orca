@@ -3,7 +3,7 @@ import { agentSessionFailureWords } from '../../shared/agent-session-failure-wor
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 
-export function piRpcRetryActivity(frame: JsonlRpcRecord): ProviderTimelineEvent {
+export function piRpcRetryActivity(frame: JsonlRpcRecord, agentName = 'Pi'): ProviderTimelineEvent {
   return {
     type: 'activity',
     text:
@@ -15,7 +15,7 @@ export function piRpcRetryActivity(frame: JsonlRpcRecord): ProviderTimelineEvent
                   ? providerDiagnostic(frame.errorMessage, 'person')
                   : undefined
             }),
-            { agentName: 'Pi', surface: 'row' }
+            { agentName, surface: 'row' }
           ).text
         : null
   }

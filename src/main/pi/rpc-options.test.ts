@@ -3,6 +3,7 @@ import {
   applyPiRpcSessionOption,
   parsePiModelOptionId,
   PiRpcOptionObservations,
+  readPiRpcCommands,
   readPiRpcSessionOptions,
   type PiRpcOptionProof,
   type PiRpcRequester
@@ -59,7 +60,8 @@ describe('Pi RPC session options', () => {
             reasoning: true,
             thinkingLevelMap: { off: null, low: 'low', medium: 'medium', high: 'high' }
           },
-          { provider: 'other', id: 'gpt-6.1-sol', name: 'Other Sol', reasoning: false }
+          { provider: 'other', id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol', reasoning: false },
+          { provider: 'other', id: 'gpt-6.1-sol-alt', name: 'GPT-6.1 Sol', reasoning: false }
         ]
       },
       get_state: {
@@ -80,9 +82,17 @@ describe('Pi RPC session options', () => {
       effort: 'medium',
       confirmed: ['model', 'effort']
     })
-    expect(result.models.map((model) => [model.id, model.isDefault])).toEqual([
-      ['openai-codex/gpt-6.1-sol', false],
-      ['other/gpt-6.1-sol', false]
+    expect(
+      result.models.map(({ id, label, description, isDefault }) => [
+        id,
+        label,
+        description,
+        isDefault
+      ])
+    ).toEqual([
+      ['openai-codex/gpt-6.1-sol', 'GPT-6.1 Sol', 'openai-codex/gpt-6.1-sol', false],
+      ['other/gpt-6.1-sol', 'GPT-6.1 Sol', 'other/gpt-6.1-sol', false],
+      ['other/gpt-6.1-sol-alt', 'GPT-6.1 Sol', 'other/gpt-6.1-sol-alt', false]
     ])
     expect(result.models[0]?.efforts.map((effort) => effort.value)).toEqual([
       'minimal',
@@ -116,6 +126,28 @@ describe('Pi RPC session options', () => {
       applyPiRpcSessionOption(rejected, selected, 'model', 'other/new-model')
     ).rejects.toThrow('provider refused model')
     expect(selected.get('model')).toBe('openai-codex/gpt-6.1-sol')
+  })
+
+  it('preserves input hints on provider-discovered commands and skills', async () => {
+    const rpc = requester({
+      get_commands: {
+        commands: [
+          {
+            name: 'review',
+            description: 'Review changes',
+            source: 'extension',
+            input: { hint: '<path>' }
+          },
+          { name: 'search', source: 'skill' }
+        ]
+      }
+    })
+    expect(await readPiRpcCommands(rpc)).toEqual({
+      commands: [
+        { name: 'review', kind: 'command', description: 'Review changes', argumentHint: '<path>' },
+        { name: 'search', kind: 'skill' }
+      ]
+    })
   })
 
   it('keeps ordinary thinking levels when the map only supplies overrides', async () => {

@@ -1,4 +1,3 @@
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionCommandRun
@@ -9,12 +8,14 @@ import type { JsonlRpcRequestOptions } from '../jsonl-rpc/peer-oversized-record'
 import type { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { PiRpcContextUsage } from './rpc-context-usage'
 import { PiRpcMessages, piRpcSkippedEventNotice } from './rpc-messages'
-import { PiRpcPromptDelivery, piRpcFailureFact } from './rpc-prompt-delivery'
+import { PiRpcPromptDelivery, piRpcFailureStatus } from './rpc-prompt-delivery'
 import { PiRpcIdleCheck } from './rpc-idle-check'
 import { piRpcRetryActivity } from './rpc-retry-activity'
 import { type PiRpcState, piRpcMessageSchema, piRpcSkippedEvent } from './rpc-protocol'
 
 export type PiRpcTurnDeps = {
+  agentName?: string
+  correlatedPrompts?: boolean
   lane: JsonlRpcTimelineLane
   generation: string
   send: (frame: JsonlRpcRecord) => Promise<void>
@@ -62,10 +63,10 @@ export class PiRpcTurns {
       failed: deps.failed
     })
     this.delivery = new PiRpcPromptDelivery({
+      ...deps,
+      correlated: deps.correlatedPrompts,
       send: (frame) =>
         deps.send({ ...frame, streamingBehavior: this.working ? 'steer' : 'followUp' }),
-      settled: deps.settled,
-      failed: deps.failed,
       accepted: (id, at) => {
         this.open(at)
         this.deps.lane.apply([{ type: 'input.accepted', clientMessageId: id, requestedAt: at }])
@@ -146,7 +147,7 @@ export class PiRpcTurns {
             this.lastStopReason = message.data.stopReason
             this.failure =
               message.data.stopReason === 'error'
-                ? (message.data.errorMessage ?? 'Pi request failed')
+                ? (message.data.errorMessage ?? 'Agent request failed')
                 : undefined
           }
         }
@@ -189,16 +190,16 @@ export class PiRpcTurns {
         return
       case 'auto_retry_start':
         this.touch()
-        this.deps.lane.apply([piRpcRetryActivity(frame)])
+        this.deps.lane.apply([piRpcRetryActivity(frame, this.deps.agentName)])
         return
       case 'auto_retry_end':
-        this.deps.lane.apply([piRpcRetryActivity(frame)])
+        this.deps.lane.apply([piRpcRetryActivity(frame, this.deps.agentName)])
         if (frame.success === true) {
           this.failure = undefined
           this.lastStopReason = undefined
         } else {
           this.failure =
-            typeof frame.finalError === 'string' ? frame.finalError : 'Pi auto-retry failed'
+            typeof frame.finalError === 'string' ? frame.finalError : 'Agent auto-retry failed'
         }
         break
     }
@@ -212,6 +213,15 @@ export class PiRpcTurns {
     }
     if (contentLost && this.active && !this.ended) {
       this.deps.lane.apply([piRpcSkippedEventNotice(this.active)])
+    }
+  }
+
+  reportPromptOutcome(outcome: 'success' | 'failure' | 'cancellation', detail?: string): void {
+    if (!this.ended) {
+      this.stopped ||= outcome === 'cancellation'
+      if (outcome === 'failure') {
+        this.failure = detail ?? 'Agent prompt failed'
+      }
     }
   }
 
@@ -280,16 +290,7 @@ export class PiRpcTurns {
         : 'success'
     const events: ProviderTimelineEvent[] = []
     if (outcome === 'failure' && this.failure) {
-      const fact = piRpcFailureFact(this.failure)
-      events.push({
-        type: 'item.close',
-        item: `error:${this.active}`,
-        body: {
-          kind: 'status',
-          tone: 'error',
-          ...agentSessionFailureWords(fact, { agentName: 'Pi', surface: 'row' })
-        }
-      })
+      events.push(piRpcFailureStatus(this.active, this.failure, this.deps.agentName))
     }
     events.push({
       type: 'turn.end',

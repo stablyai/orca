@@ -9,6 +9,7 @@ import type {
 import { piRpcModelSchema, piRpcStateSchema } from './rpc-protocol'
 
 export type PiRpcRequester = {
+  thinkingLevels?: () => Promise<string[]>
   request(
     command: string,
     params?: Record<string, unknown>,
@@ -30,6 +31,7 @@ const commandsSchema = z.object({
     z.object({
       name: z.string().min(1),
       description: z.string().optional(),
+      input: z.object({ hint: z.string().optional() }).optional(),
       source: z.string().optional()
     })
   )
@@ -57,6 +59,7 @@ export async function readPiRpcModelOptions(
   const models = modelsSchema.parse(await rpc.request('get_available_models')).models
   return models.map((model) => {
     const id = piModelOptionId(model.provider, model.id)
+    const label = model.name || id
     const efforts =
       model.reasoning !== true
         ? []
@@ -68,7 +71,8 @@ export async function readPiRpcModelOptions(
           }).map((level) => ({ value: level, label: level }))
     return {
       id,
-      label: model.name || id,
+      label,
+      ...(label !== id ? { description: id } : {}),
       isDefault: false,
       efforts
     }
@@ -82,9 +86,18 @@ export async function readPiRpcSessionOptions(
   const listed = await readPiRpcModelOptions(rpc)
   beforeStateRead?.()
   const state = stateSchema.parse(await rpc.request('get_state'))
+  const levels = rpc.thinkingLevels ? await rpc.thinkingLevels() : undefined
+  const current = piRpcStateOptions(state)
   return {
-    models: listed,
-    current: piRpcStateOptions(state)
+    models:
+      levels === undefined
+        ? listed
+        : listed.map((model) => ({
+            ...model,
+            efforts:
+              model.id === current.model ? levels.map((value) => ({ value, label: value })) : []
+          })),
+    current
   }
 }
 
@@ -263,7 +276,8 @@ export async function readPiRpcCommands(rpc: PiRpcRequester): Promise<AgentSessi
       name: command.name,
       kind: command.source === 'skill' ? 'skill' : 'command',
       ...(command.source === undefined ? { kindUnspecified: true as const } : {}),
-      ...(command.description ? { description: command.description } : {})
+      ...(command.description ? { description: command.description } : {}),
+      ...(command.input?.hint ? { argumentHint: command.input.hint } : {})
     }))
   }
 }

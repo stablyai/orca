@@ -136,6 +136,16 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(changed.projectCurrent?.(saved)?.confirmed).toEqual([])
   })
 
+  it('reports root-only close without claiming descendant proof', async () => {
+    const h = await setup()
+    h.connection.closeResult = { root: 'exited', tree: null }
+    await expect(h.adapter.closeSession(sessionId)).rejects.toMatchObject({
+      name: 'AgentSessionAcquisitionRootExitObservedError',
+      deathEvidenceKind: 'exit-observed'
+    })
+    expect(h.connection.lastCloseResult).toEqual({ root: 'exited', tree: null })
+  })
+
   it('refuses a floating chat whose folder is gone with the reason the person reads', async () => {
     const h = await setup()
     await h.adapter.closeSession(sessionId)

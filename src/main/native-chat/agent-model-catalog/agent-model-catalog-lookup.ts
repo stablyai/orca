@@ -199,10 +199,10 @@ export function createAgentModelCatalogLookup(
         await bound.projecting
         return
       }
-      if (!exact && agentModelCatalogReleasedOwner(scoped)) {
+      const probe = deps.probes?.[params.agent]
+      if (!exact && agentModelCatalogReleasedOwner(scoped) && !probe?.sessionless) {
         return
       }
-      const probe = deps.probes?.[params.agent]
       const signal = AbortSignal.any([lifetime.signal, controller.signal, operation.signal])
       const list = scopedAgentModelCatalogLister({
         legacy: params.legacy,

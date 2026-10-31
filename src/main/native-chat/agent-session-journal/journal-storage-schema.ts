@@ -141,6 +141,15 @@ export const storedMessageBody = messageBody.extend({
   from: messageSource.nullable().optional()
 })
 
+const [goalSet, goalCleared] = statusBody.shape.threadGoal.unwrap().options[0].options
+const storedThreadGoal = z.discriminatedUnion('state', [
+  goalSet.extend({
+    // Older OMP adapters persisted the native goal ID; keep it through replay and outcome writes.
+    goal: goalSet.shape.goal.extend({ id: z.string().optional() })
+  }),
+  goalCleared
+])
+
 export const storedItemBody = z.discriminatedUnion('kind', [
   storedMessageBody,
   agentStartBody.extend({ worker: sender.nullable().optional() }),
@@ -149,6 +158,7 @@ export const storedItemBody = z.discriminatedUnion('kind', [
   approvalBody,
   questionBody,
   statusBody.extend({
+    threadGoal: storedThreadGoal.optional(),
     failure: storedFailureFact.optional(),
     turnLifecycle: turnBody.omit({ kind: true }).optional()
   }),

@@ -81,13 +81,15 @@ function walkFromLeaf(
 /** Match adoption identities so both import paths deduplicate. */
 export function piHistoryEntryIdentity(
   sessionFile: string,
-  entryId: string
+  entryId: string,
+  agent = 'pi'
 ): AgentJournalItemIdentity {
-  return { provider: 'legacy', agent: 'pi', sessionId: sessionFile, recordId: entryId }
+  return { provider: 'legacy', agent, sessionId: sessionFile, recordId: entryId }
 }
 
 /** Stage all outside rows before writing; exclude journaled entries so prior imports cannot veto newer ones. */
 export function createPiHistoryImportPlan(input: {
+  agent?: string
   sessionFile: string
   journal: StructuredAgentSessionTransitionJournal
   path: readonly PiSessionEntry[]
@@ -99,7 +101,7 @@ export function createPiHistoryImportPlan(input: {
   const entryIds: string[] = []
   for (const entry of input.path) {
     input.check()
-    const identity = piHistoryEntryIdentity(input.sessionFile, entry.id)
+    const identity = piHistoryEntryIdentity(input.sessionFile, entry.id, input.agent)
     if (input.journal.item(input.journal.canonicalItemId(agentJournalItemKey(identity))) !== null) {
       continue
     }
@@ -112,7 +114,11 @@ export function createPiHistoryImportPlan(input: {
       batch.push(
         journalLifecycleItemMutation(
           { turnScope: AGENT_JOURNAL_THREAD_SCOPE },
-          piHistoryEntryIdentity(input.sessionFile, continuedOutsideRecordId(entry.id)),
+          piHistoryEntryIdentity(
+            input.sessionFile,
+            continuedOutsideRecordId(entry.id),
+            input.agent
+          ),
           continuedOutsideNotice(input.rewound)
         )
       )

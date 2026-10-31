@@ -4,6 +4,24 @@ import type {
   NativeChatToolResultBlock
 } from '../../shared/native-chat-types'
 import { asRecord, extractString } from '../ai-vault/session-scanner-values'
+import { buildImageDataUri } from '../../shared/image-data-uri'
+
+export function inlineToolResultImages(content: unknown): NativeChatImageRefBlock[] {
+  if (!Array.isArray(content)) {
+    return []
+  }
+  return content.flatMap((value): NativeChatImageRefBlock[] => {
+    const block = asRecord(value)
+    if (block?.type !== 'image' || typeof block.data !== 'string') {
+      return []
+    }
+    const url = buildImageDataUri(
+      typeof block.mimeType === 'string' ? block.mimeType : undefined,
+      block.data
+    )
+    return url ? [{ type: 'image-ref', url }] : []
+  })
+}
 
 export function toolResultOutput(value: unknown): string {
   if (typeof value === 'string') {

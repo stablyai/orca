@@ -7,6 +7,7 @@ import type {
 } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import { nativeChatSessionSkills } from '../../../../shared/native-chat-skill-visibility'
 import { structuredSessionSlashCommands } from '../../../../shared/structured-agent-session-composer'
+import { translate } from '@/i18n/i18n'
 import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
@@ -23,15 +24,27 @@ export function useNativeChatComposerCatalog(
   const structured = Boolean(structuredTransport)
   const reported = structuredTransport?.sessionCommands
   const conversationCommands = structuredTransport?.conversationCommands
-  const agentCommands = useMemo(
-    () =>
-      structured
-        ? withNativeChatResumeCommand(
-            structuredSessionSlashCommands(agent, conversationCommands, reported)
-          )
-        : getVerifiedNativeChatCommands(agent),
-    [agent, conversationCommands, reported, structured]
-  )
+  const hostSetsGoals = structuredTransport?.threadGoal !== undefined
+  const agentCommands = useMemo(() => {
+    if (!structured) {
+      return getVerifiedNativeChatCommands(agent)
+    }
+    const commands = structuredSessionSlashCommands(agent, conversationCommands, reported)
+    return withNativeChatResumeCommand(
+      hostSetsGoals && !commands.some(({ name }) => name === 'goal')
+        ? [
+            ...commands,
+            {
+              name: 'goal',
+              description: translate(
+                'components.native-chat.slashCommandDescriptions.goal',
+                'Set or view the goal'
+              )
+            }
+          ]
+        : commands
+    )
+  }, [agent, conversationCommands, reported, structured, hostSetsGoals])
   const sessionSkills = useMemo(() => nativeChatSessionSkills(agent, reported), [agent, reported])
   return { agentCommands, sessionSkills }
 }

@@ -3,8 +3,11 @@
 import type { AgentSessionCapabilities } from '../../../shared/agent-session-capabilities'
 import type { AgentSessionStoredAgent } from '../../../shared/agent-session/lifecycle/agent-session-stored-agent'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import type { AgentSessionProviderTransport } from '../../../shared/agent-session-provider-handle'
 
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
+  /** Older handle namespaces this adapter can resolve; new handles still use handleTransport. */
+  legacyHandleTransports?: readonly AgentSessionProviderTransport[]
   capabilities: AgentSessionCapabilities
   /** Absent means Orca never supplies this agent’s managed runtime. */
   managedRuntime?: () => boolean

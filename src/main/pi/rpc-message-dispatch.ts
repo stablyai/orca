@@ -17,11 +17,11 @@ import type { PiRpcSession, PiRpcSessionDeps } from './rpc-session'
 
 type DispatchInput = Parameters<StructuredAgentSessionAdapter['dispatch']>[0]
 
-function exited(): AgentSessionDispatchOutcome {
+function exited(agentName: string): AgentSessionDispatchOutcome {
   return {
     state: 'rejected',
     ...agentSessionFailureWords(agentSessionFailureFact('providerExited'), {
-      agentName: 'Pi',
+      agentName,
       surface: 'rejection'
     })
   }
@@ -31,7 +31,8 @@ export async function dispatchPiRpcMessage(
   session: PiRpcSession,
   input: DispatchInput,
   logger: PiRpcSessionDeps['logger'],
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  optionWriter?: NonNullable<PiRpcSessionDeps['dialect']>['dispatchOptions']
 ): Promise<AgentSessionDispatchOutcome> {
   let prompt
   try {
@@ -48,37 +49,42 @@ export async function dispatchPiRpcMessage(
         error instanceof PiRpcPromptError || error instanceof ClaudeDispatchContentError
           ? error.failure
           : agentSessionFailureFact('attachmentUnreadable'),
-        { agentName: 'Pi', surface: 'rejection' }
+        { agentName: session.agentName, surface: 'rejection' }
       )
     }
   }
   input.signal?.throwIfAborted()
   if (!isCurrent() || session.connection.closed) {
-    return exited()
+    return exited(session.agentName)
   }
   input.onInputPreparation?.()
   if (!input.executionOptions) {
     input.signal?.throwIfAborted()
     return submitPiRpcPrompt(session, input, prompt)
   }
-  for (const key of ['model', 'effort'] as const) {
+  for (const key of optionWriter?.keys ?? ['model', 'effort']) {
     const value = input.executionOptions[key]
-    if (value === undefined || session.optionProof.current.get(key) === value) {
+    if (
+      value === undefined ||
+      (!optionWriter?.alwaysWrite?.includes(key) && session.optionProof.current.get(key) === value)
+    ) {
       continue
     }
     try {
-      await applyPiRpcSessionOption(
-        session.connection,
-        session.selected,
-        key,
-        value,
-        { signal: input.signal },
-        session.optionProof
-      )
+      await (optionWriter
+        ? optionWriter.write(session, key, value, input.signal)
+        : applyPiRpcSessionOption(
+            session.connection,
+            session.selected,
+            key,
+            value,
+            { signal: input.signal },
+            session.optionProof
+          ))
     } catch (error) {
       input.signal?.throwIfAborted()
       if (session.connection.closed) {
-        return exited()
+        return exited(session.agentName)
       }
       if (error instanceof JsonlRpcResponseError) {
         throw withProviderDiagnostic(
@@ -91,7 +97,7 @@ export async function dispatchPiRpcMessage(
   }
   input.signal?.throwIfAborted()
   if (!isCurrent() || session.connection.closed) {
-    return exited()
+    return exited(session.agentName)
   }
   return submitPiRpcPrompt(session, input, prompt)
 }
