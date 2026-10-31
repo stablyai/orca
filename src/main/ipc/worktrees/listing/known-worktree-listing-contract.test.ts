@@ -21,7 +21,7 @@ import { readSidebarFeedDomains } from '../../../../shared/sidebar-list/sidebar-
 import { readFeedWorkspaceRow } from '../../../../shared/sidebar-list/sidebar-feed-worktrees'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
-import { storeWorktreeMeta } from '../../../runtime/runtime-store-partial-fixture'
+import { storeProject, storeWorktreeMeta } from '../../../runtime/runtime-store-partial-fixture'
 
 const { statProbe, realpathProbe, gitRead, rawScan, gate, wake } = vi.hoisted(() => ({
   statProbe: vi.fn(async (_path: string) => ({ isDirectory: () => true })),
@@ -424,6 +424,26 @@ it('bounds host census, removal inventory, and complete cached observations at N
     let metaVisits = 0,
       sessionVisits = 0,
       removalVisits = 0
+    let projectVisits = 0,
+      projectBatchVisits = 0
+    const projects = repos.map((entry) => {
+      const project = storeProject({ id: entry.id, sourceRepoIds: [entry.id] })
+      Object.defineProperty(project, 'sourceRepoIds', {
+        get: () => {
+          projectVisits++
+          return [entry.id]
+        }
+      })
+      return project
+    })
+    const projectIterator = projects[Symbol.iterator].bind(projects)
+    projects[Symbol.iterator] = function* () {
+      for (const project of projectIterator()) {
+        projectBatchVisits++
+        yield project
+      }
+    }
+    store.getProjects = () => projects
     for (const entry of repos) {
       const id = `${entry.id}::${entry.path}/child`
       meta[id] = storeWorktreeMeta({
@@ -487,6 +507,7 @@ it('bounds host census, removal inventory, and complete cached observations at N
     }
     expect(metaVisits).toBe(2 * n)
     expect(sessionVisits).toBe(n)
+    expect(projectBatchVisits).toBe(n)
     expect(statProbe).not.toHaveBeenCalled()
     expect(realpathProbe).not.toHaveBeenCalled()
     expect(gitRead).not.toHaveBeenCalled()
@@ -545,8 +566,11 @@ it('bounds host census, removal inventory, and complete cached observations at N
       realpathProbe.mock.calls.length,
       gitRead.mock.calls.length
     ]).toEqual([statCount, realpathCount, gitCount])
+    expect(projectBatchVisits).toBe(n)
     results.push({
       n,
+      projectBatchVisits,
+      existingProjectLookupVisits: projectVisits - projectBatchVisits,
       metaVisits,
       sessionVisits,
       removalVisits,
