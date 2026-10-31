@@ -7,6 +7,7 @@ import {
 import { hasWorktreeRemovalsInFlight } from './ipc/worktrees/worktree-ipc-context'
 import { hasPendingWorktreeCreatePreparations } from './worktree-create-preparation'
 import { hasPendingWorktreeRemovals } from './worktree-removal-table'
+import { isOnBatteryPower } from './electron-battery-power'
 
 // pack-refs shares a ref lock with worktree deletion; defer while user work is active.
 export type RepoMaintenanceIdleInputs = {
@@ -42,14 +43,5 @@ export function installRepoMaintenanceIdleGate(
     const stopped = disposeLocalRepoRefMaintenance()
     setRepoMaintenanceActivityProbe(null)
     return stopped
-  }
-}
-
-function isOnBatteryPower(): boolean {
-  try {
-    return powerMonitor.isOnBatteryPower()
-  } catch {
-    // An unavailable power API is not evidence of battery use.
-    return false
   }
 }
