@@ -1286,6 +1286,11 @@
       "title": "Something went wrong",
       "tryAgain": "Try again",
       "home": "Home"
+    },
+    "native-chat": {
+      "userMessage": {
+        "automationInstructions": "Automation instructions"
+      }
     }
   },
   "pullRequest": {

@@ -20181,6 +20181,7 @@
       "deliveryUnconfirmed": "Доставка не подтверждена — проверьте чат перед повторной отправкой",
       "messageSending": "Отправка…",
       "userMessage": {
+        "automationInstructions": "Инструкции автоматизации",
         "showFull": "Показать сообщение целиком",
         "showLess": "Свернуть"
       },

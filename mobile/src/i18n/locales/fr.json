@@ -1050,6 +1050,11 @@
       "title": "Une erreur est survenue",
       "tryAgain": "Réessayer",
       "home": "Accueil"
+    },
+    "native-chat": {
+      "userMessage": {
+        "automationInstructions": "Instructions d’automatisation"
+      }
     }
   },
   "connection": {

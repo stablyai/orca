@@ -18936,6 +18936,7 @@
       "deliveryUnconfirmed": "전달 확인 안 됨 — 다시 시도하기 전에 채팅을 확인하세요",
       "messageSending": "전송 중…",
       "userMessage": {
+        "automationInstructions": "자동화 지침",
         "showFull": "전체 메시지 표시",
         "showLess": "접기"
       },

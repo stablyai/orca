@@ -1003,6 +1003,11 @@
       "title": "문제가 발생했습니다",
       "tryAgain": "다시 시도",
       "home": "홈"
+    },
+    "native-chat": {
+      "userMessage": {
+        "automationInstructions": "자동화 지침"
+      }
     }
   },
   "connection": {

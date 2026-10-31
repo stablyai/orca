@@ -19516,6 +19516,7 @@
       "deliveryUnconfirmed": "Zustellung unbestätigt — vor erneutem Versuch den Chat prüfen",
       "messageSending": "Wird gesendet…",
       "userMessage": {
+        "automationInstructions": "Automatisierungsanweisungen",
         "showFull": "Vollständige Nachricht anzeigen",
         "showLess": "Weniger anzeigen"
       },

@@ -19503,6 +19503,7 @@
       "deliveryUnconfirmed": "İletim doğrulanamadı — tekrar denemeden önce sohbeti kontrol edin",
       "messageSending": "Gönderiliyor…",
       "userMessage": {
+        "automationInstructions": "Otomasyon talimatları",
         "showFull": "Mesajın tamamını göster",
         "showLess": "Daha az göster"
       },

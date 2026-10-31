@@ -4,11 +4,7 @@ import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection
 import { MobileNativeChatLongPressContent as Content } from '../../MobileNativeChatLongPressContent'
 import { splitNativeChatBlocks } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
-import {
-  isImageRefBlock,
-  isSubagentGroupBlock,
-  isTextBlock
-} from '../../../../../src/shared/native-chat-types'
+import { isSubagentGroupBlock, isTextBlock } from '../../../../../src/shared/native-chat-types'
 import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
@@ -31,7 +27,7 @@ import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/nati
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from './MobileNativeChatNoticeRow'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
-import { MobileNativeChatUserMessageFold } from './MobileNativeChatUserMessageFold'
+import { MobileNativeChatUserMessageBubble } from './MobileNativeChatUserMessageBubble'
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
 import { MobileNativeChatResolutionReceipt } from '../../MobileNativeChatResolutionReceipt'
@@ -261,6 +257,25 @@ function MobileNativeChatMessageImpl({
     )
   const proseRows = (blocks: NativeChatBlock[]) =>
     blocks.map((block, index) => proseRow(block, index, isTextBlock(block) ? block.text : ''))
+  const activity = (
+    <>
+      {askRow}
+      {showToolRun ? (
+        <ToolRun
+          blocks={tools}
+          disclosureId={runOwner ?? rowKey ?? message.id}
+          asides={asides}
+          activeTurnIsWorking={structuredActivityUi ? activeTurnIsWorking : undefined}
+          trailing={trailingRun}
+          awaitingAnswer={askPending}
+          previousTodoWrite={previousTodoWrite}
+          previousUpdatePlan={previousUpdatePlan}
+          fontScale={fontScale}
+          onOpenFile={onOpenFile}
+        />
+      ) : null}
+    </>
+  )
   return (
     <>
       {}
@@ -269,43 +284,40 @@ function MobileNativeChatMessageImpl({
         style={[styles.row, isUser && styles.rowUser]}
         testID={mobileNativeChatRowId(rowKey ?? message.id)}
       >
-        <Content
-          onLongPress={onLongPress}
-          style={[
-            styles.content,
-            isUser && styles.userBubble,
-            attribution !== null && styles.agentMessage
-          ]}
-        >
-          {attribution !== null ? (
-            <Text selectable={INLINE_TEXT_SELECTION} style={styles.agentAttribution}>
-              {attribution}
-            </Text>
-          ) : null}
-          {/* A roster is not tool activity, so it stays out of the settled-tools collapse. */}
-          {isSystem ? (
-            <MobileNativeChatNoticeRow
-              blocks={drawnProse}
-              fontScale={fontScale}
-              onOpenFile={onOpenFile}
-              onLongPress={onLongPress}
-            />
-          ) : null}
-          {isUser ? (
-            <>
-              {proseRows(drawnProse.filter(isImageRefBlock))}
-              <MobileNativeChatUserMessageFold
-                text={deriveNativeChatRowContent(message.blocks).markdown}
+        {isUser ? (
+          <MobileNativeChatUserMessageBubble
+            key={message.id}
+            blocks={drawnProse}
+            fontScale={fontScale}
+            open={userMessageOpen === true}
+            onToggle={() => onToggleUserMessage?.(message.id)}
+            recovery={recovery}
+            status={showFull}
+            onOpenFile={onOpenFile}
+            onLongPress={onLongPress}
+            renderProse={proseRows}
+          >
+            {activity}
+          </MobileNativeChatUserMessageBubble>
+        ) : (
+          <Content
+            onLongPress={onLongPress}
+            style={[styles.content, attribution !== null && styles.agentMessage]}
+          >
+            {attribution !== null ? (
+              <Text selectable={INLINE_TEXT_SELECTION} style={styles.agentAttribution}>
+                {attribution}
+              </Text>
+            ) : null}
+            {/* A roster is not tool activity, so it stays out of the settled-tools collapse. */}
+            {isSystem ? (
+              <MobileNativeChatNoticeRow
+                blocks={drawnProse}
                 fontScale={fontScale}
-                open={userMessageOpen === true}
-                onToggle={() => onToggleUserMessage?.(message.id)}
-                recovery={recovery}
-                status={showFull}
-              >
-                {proseRows(drawnProse.filter((block) => !isImageRefBlock(block)))}
-              </MobileNativeChatUserMessageFold>
-            </>
-          ) : (
+                onOpenFile={onOpenFile}
+                onLongPress={onLongPress}
+              />
+            ) : null}
             <MobileNativeChatPacedProse
               rowKey={message.id}
               blocks={drawnProse}
@@ -314,24 +326,10 @@ function MobileNativeChatMessageImpl({
             >
               {(block, index, shown) => proseRow(block, index, shown.text, shown.revealing)}
             </MobileNativeChatPacedProse>
-          )}
-          {isUser ? null : showFull}
-          {askRow}
-          {showToolRun ? (
-            <ToolRun
-              blocks={tools}
-              disclosureId={runOwner ?? rowKey ?? message.id}
-              asides={asides}
-              activeTurnIsWorking={structuredActivityUi ? activeTurnIsWorking : undefined}
-              trailing={trailingRun}
-              awaitingAnswer={askPending}
-              previousTodoWrite={previousTodoWrite}
-              previousUpdatePlan={previousUpdatePlan}
-              fontScale={fontScale}
-              onOpenFile={onOpenFile}
-            />
-          ) : null}
-        </Content>
+            {showFull}
+            {activity}
+          </Content>
+        )}
         {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
         {/* Always shown, so the row never shifts when copy appears. */}
         {isChatTurn ? (

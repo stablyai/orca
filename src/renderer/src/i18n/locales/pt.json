@@ -20516,6 +20516,7 @@
       "deliveryUnconfirmed": "Entrega não confirmada — confira o chat antes de tentar novamente",
       "messageSending": "Enviando…",
       "userMessage": {
+        "automationInstructions": "Instruções de automação",
         "showFull": "Mostrar mensagem completa",
         "showLess": "Mostrar menos"
       },

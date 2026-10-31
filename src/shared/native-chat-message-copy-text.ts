@@ -1,3 +1,4 @@
+import { splitAutomationRunMessage } from './automation-run-preamble'
 import type { NativeChatMessage } from './native-chat-types'
 import { deriveNativeChatRowContent } from './native-chat-row-content'
 import { nativeChatBlocksInOwnWords } from './native-chat/native-chat-stopped-before-start'
@@ -11,5 +12,7 @@ export function nativeChatMessageCopyText(
   const { markdown } = deriveNativeChatRowContent(
     nativeChatBlocksInOwnWords(message.blocks, stoppedLabel)
   )
-  return message.role === 'user' ? markdown : withoutNativeChatVisualDirectiveLines(markdown)
+  return message.role === 'user'
+    ? (splitAutomationRunMessage(markdown)?.task ?? markdown)
+    : withoutNativeChatVisualDirectiveLines(markdown)
 }

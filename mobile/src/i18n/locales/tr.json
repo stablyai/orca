@@ -1007,6 +1007,11 @@
       "title": "Bir sorun oluştu",
       "tryAgain": "Tekrar dene",
       "home": "Ana sayfa"
+    },
+    "native-chat": {
+      "userMessage": {
+        "automationInstructions": "Otomasyon talimatları"
+      }
     }
   },
   "connection": {
