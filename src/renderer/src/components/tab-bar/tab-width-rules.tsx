@@ -21,11 +21,15 @@ export const TAB_ROOT_WIDTH_CLASSES = 'w-full'
 
 export const TAB_LABEL_WIDTH_CLASSES = 'min-w-0 flex-1 truncate'
 
+// Each extra leading glyph is a 12px icon plus the 4px gap before it (w-3 + gap-1).
+const TAB_LEADING_SLOT_WIDTH = '1rem'
+
 // Agents can retitle a tab every few seconds; widths wait for the strip to go quiet so tabs move at most once.
 const TITLE_QUIET_MS = 3000
 
 type SettledTabTitle = {
   title: string
+  leadingSlots: number
   widthKey: string
   renameCount: number
   awaitingRename: boolean
@@ -125,19 +129,22 @@ export function useFitsTabsToTitles(): boolean {
 
 export type TabTitleRename = { count: number; title: string | null }
 
-/** Hold the width-defining title until the strip settles or the user renames, so agent renames can't keep shifting tabs. */
+/** Hold the width-defining title and icon count until the strip settles or the user renames, so agent renames and status changes can't keep shifting tabs. */
 function useSettledTabTitle(
   tabId: string,
   title: string,
+  leadingSlots: number,
   rename: TabTitleRename | undefined
-): string {
+): { settledTitle: string; settledSlots: number } {
   const strip = useContext(TabTitleWidthContext)
   let settledTitle = title
+  let settledSlots = leadingSlots
   if (strip !== null) {
     const { widthKey, settledByTabId } = strip
     const previous = settledByTabId.get(tabId)
     const next = nextSettledTabTitle(previous, {
       title,
+      leadingSlots,
       widthKey,
       renameCount: rename?.count ?? 0,
       renamedTo: rename?.title
@@ -147,33 +154,47 @@ function useSettledTabTitle(
       settledByTabId.set(tabId, next)
     }
     settledTitle = next.title
+    settledSlots = next.leadingSlots
   }
   const noteTitleChange = strip?.noteTitleChange
-  const pending = settledTitle !== title
+  const pending = settledTitle !== title || settledSlots !== leadingSlots
   useEffect(() => {
     if (pending) {
       noteTitleChange?.()
     }
-  }, [pending, title, noteTitleChange])
-  return settledTitle
+  }, [pending, title, leadingSlots, noteTitleChange])
+  return { settledTitle, settledSlots }
 }
 
 function nextSettledTabTitle(
   previous: SettledTabTitle | undefined,
   live: {
     title: string
+    leadingSlots: number
     widthKey: string
     renameCount: number
     renamedTo: string | null | undefined
   }
 ): SettledTabTitle {
-  const { title, widthKey, renameCount, renamedTo } = live
+  const { title, leadingSlots, widthKey, renameCount, renamedTo } = live
   if (!previous || previous.widthKey !== widthKey) {
-    return { title, widthKey, renameCount, awaitingRename: false }
+    return {
+      title,
+      leadingSlots,
+      widthKey,
+      renameCount,
+      awaitingRename: false
+    }
   }
   if (previous.renameCount !== renameCount) {
     // A host may normalize or clear the committed name, so the next title change also settles.
-    return { title, widthKey, renameCount, awaitingRename: title !== renamedTo }
+    return {
+      title,
+      leadingSlots,
+      widthKey,
+      renameCount,
+      awaitingRename: title !== renamedTo
+    }
   }
   if (previous.awaitingRename && previous.title !== title) {
     return { ...previous, title, awaitingRename: false }
@@ -184,25 +205,35 @@ function nextSettledTabTitle(
 export function TabTitleLabel({
   tabId,
   title,
+  leadingSlots = 1,
   rename,
   className
 }: {
   tabId: string
   title: string
+  /** Glyphs in the tab's leading icon; the label absorbs changes until the strip settles. */
+  leadingSlots?: number
   /** The user's latest inline rename; its result may arrive after a host round trip. */
   rename?: TabTitleRename
   className?: string
 }): React.JSX.Element {
-  const settledTitle = useSettledTabTitle(tabId, title, rename)
-  if (settledTitle === title) {
+  const { settledTitle, settledSlots } = useSettledTabTitle(tabId, title, leadingSlots, rename)
+  const slotShift = settledSlots - leadingSlots
+  if (settledTitle === title && slotShift === 0) {
     return <span className={cn(TAB_LABEL_WIDTH_CLASSES, 'mr-1', className)}>{title}</span>
   }
   return (
-    // The hidden pseudo-element sizes the tab from the settled title without duplicating text content.
+    // The hidden pseudo-element sizes the tab from the settled title without duplicating text content;
+    // its margin gives back (or takes) the width the leading icon gained (or lost) since the strip settled.
     <span
       data-settled-title={settledTitle}
+      style={
+        {
+          '--tab-slot-shift': `calc(${slotShift} * ${TAB_LEADING_SLOT_WIDTH})`
+        } as React.CSSProperties
+      }
       className={cn(
-        'relative mr-1 min-w-0 flex-1 overflow-hidden whitespace-nowrap before:invisible before:content-[attr(data-settled-title)]',
+        'relative mr-1 min-w-0 flex-1 overflow-hidden whitespace-nowrap before:invisible before:inline-block before:mr-(--tab-slot-shift) before:content-[attr(data-settled-title)]',
         className
       )}
     >

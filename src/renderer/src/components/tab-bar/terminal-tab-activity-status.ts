@@ -338,3 +338,18 @@ export function resetTerminalTabActivityFlagsCacheForTest(): void {
 export function resetUnreadAgentCompletionTabIdsCacheForTest(): void {
   unreadAgentCompletionTabIdsBySnapshot = new WeakMap()
 }
+
+/** Glyphs a terminal tab's leading icon shows (status glyph beside agent identity, or one icon). */
+export function terminalTabLeadingIconSlots({
+  hasAgent,
+  activityStatus,
+  showUnreadActivity
+}: {
+  hasAgent: boolean
+  activityStatus: TerminalTabActivityStatus
+  showUnreadActivity: boolean
+}): number {
+  const hasStatusGlyph =
+    showUnreadActivity || terminalTabActivityToAgentDotState(activityStatus) !== null
+  return hasStatusGlyph && hasAgent ? 2 : 1
+}

@@ -24,6 +24,7 @@ function TabWidthFixture({
   count,
   titles = TITLES,
   renamedTitles,
+  workingAfterMount,
   browserTabs,
   editorFiles,
   tabBarOrder
@@ -32,6 +33,8 @@ function TabWidthFixture({
   titles?: string[]
   /** Titles an agent applies after mount; with no pointer over the strip, widths follow them. */
   renamedTitles?: string[]
+  /** Tabs whose agent starts working after mount, adding a status glyph beside the agent icon. */
+  workingAfterMount?: string[]
 } & Pick<TabBarProps, 'browserTabs' | 'editorFiles' | 'tabBarOrder'>): React.JSX.Element {
   const [activeTabId, setActiveTabId] = useState('tab-0')
   const [liveTitles, setLiveTitles] = useState(titles)
@@ -40,6 +43,29 @@ function TabWidthFixture({
       setLiveTitles(renamedTitles)
     }
   }, [renamedTitles])
+  useEffect(() => {
+    if (!workingAfterMount) {
+      return
+    }
+    const now = Date.now()
+    const entries = workingAfterMount.map((tabId) => {
+      const paneKey = `${tabId}:00000000-0000-4000-8000-000000000001`
+      const entry = {
+        paneKey,
+        worktreeId: WORKSPACE_ID,
+        agentType: 'codex' as const,
+        state: 'working' as const,
+        prompt: '',
+        updatedAt: now,
+        stateStartedAt: now,
+        stateHistory: []
+      }
+      return [paneKey, entry] as const
+    })
+    useAppStore.setState((state) => ({
+      agentStatusByPaneKey: { ...state.agentStatusByPaneKey, ...Object.fromEntries(entries) }
+    }))
+  }, [workingAfterMount])
   const tabs: TerminalTab[] = Array.from({ length: count }, (_, index) => ({
     id: `tab-${index}`,
     worktreeId: WORKSPACE_ID,
@@ -217,6 +243,20 @@ export const agentRenameCrowded = defineFixture({
       count={4}
       titles={['A very long conversation title '.repeat(4), 'Notes', 'Codex Chat', 'Review']}
       renamedTitles={['Done', 'Notes', 'Investigate why tab widths shift', 'Review']}
+    />
+  ),
+  interact: () =>
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+})
+
+export const agentStartsWorking = defineFixture({
+  setup: enableFitTitles,
+  width: 1280,
+  render: () => (
+    <TabWidthFixture
+      count={3}
+      titles={['Review the implementation', 'Notes', 'Codex Chat']}
+      workingAfterMount={['tab-0']}
     />
   ),
   interact: () =>

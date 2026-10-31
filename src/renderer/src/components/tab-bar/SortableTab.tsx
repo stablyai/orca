@@ -5,7 +5,6 @@ import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { basename } from '@/lib/path'
-import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
@@ -29,9 +28,11 @@ import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import { SortableTabRenameInput } from './SortableTabRenameInput'
 import {
   isTerminalTabActivityLive,
-  terminalTabHasUnreadActivity
+  terminalTabHasUnreadActivity,
+  terminalTabLeadingIconSlots
 } from './terminal-tab-activity-status'
 import { useTerminalTabActivity } from './use-terminal-tab-activity'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
@@ -260,36 +261,25 @@ export default function SortableTab({
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}
       {isEditing ? (
-        <Input
-          ref={setRenameInputElement}
-          data-tab-rename-input="true"
+        <SortableTabRenameInput
+          inputRef={setRenameInputElement}
           value={renameValue}
-          aria-label={translate(
-            'auto.components.tab.bar.SortableTab.ab19f603eb',
-            'Rename tab {{value0}}',
-            { value0: tabTitle }
-          )}
-          onChange={(event) => setRenameValue(event.target.value)}
-          onBlur={commitRename}
+          tabTitle={tabTitle}
+          onValueChange={setRenameValue}
+          onCommit={commitRename}
           onKeyDown={onRenameKeyDown}
-          // Why: stop bubbling so clicking inside the input doesn't activate the tab or start a dnd-kit drag.
-          onPointerDown={(event) => event.stopPropagation()}
-          onMouseDown={(event) => {
-            // Why: stopPropagation avoids outer tab activation/drag; preventDefault on middle-click blocks Linux X11 paste.
-            event.stopPropagation()
-            if (event.button === 1) {
-              event.preventDefault()
-            }
-          }}
-          onClick={(event) => event.stopPropagation()}
-          onDoubleClick={(event) => event.stopPropagation()}
-          onAuxClick={(event) => event.stopPropagation()}
-          // Why: base Input's min-w-0 lets flex shrink it to ~0 in a saturated tab bar; force a usable minimum width.
-          className="mr-1 h-5 min-w-[72px] flex-1 px-1 py-0 text-xs"
-          spellCheck={false}
         />
       ) : (
-        <TabTitleLabel tabId={tab.id} title={displayTitle} rename={committedRename} />
+        <TabTitleLabel
+          tabId={tab.id}
+          title={displayTitle}
+          leadingSlots={terminalTabLeadingIconSlots({
+            hasAgent: tabAgent !== null,
+            activityStatus,
+            showUnreadActivity
+          })}
+          rename={committedRename}
+        />
       )}
       {tab.color && !isEditing && (
         <span
