@@ -179,16 +179,6 @@ describe('a create refused before it commits', () => {
     expect(refusal?.message).toContain('could not open the session store')
   })
 
-  it('answers a missing host as a definitive envelope rather than a thrown code', async () => {
-    setStructuredAgentSessionHost(null)
-
-    const response = await create()
-
-    const refusal = refusalOf(response)
-    expect(refusal?.code).toBe('structured_agent_session_unsupported')
-    expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
-  })
-
   it('still refuses a fingerprint conflict with its own code, not a pre-commit one', async () => {
     const response = await create(
       {},

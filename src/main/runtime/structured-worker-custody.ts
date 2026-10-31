@@ -19,21 +19,31 @@ import {
   structuredWorkerRecordIsCurrent
 } from './structured-worker-identity'
 
+type SessionTabReader = Pick<
+  NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  'getPersistedVisibleSessionTabIndex'
+>
+
+type CustodySource =
+  | ReturnType<typeof captureStructuredWorkerTabVisibility>
+  | SessionTabReader
+  | null
+
 /** Judge ownership on the resolved successor session; absent host returns null because reading storage would install it. */
 export function structuredWorkerOwned(
   running: RunningStructuredSession,
-  visibility?: ReturnType<typeof captureStructuredWorkerTabVisibility>
+  source?: CustodySource
 ): boolean | null {
-  if (visibility) {
-    return visibility.installed
+  if (source && 'installed' in source) {
+    return source.installed
       ? structuredWorkerRecordIsCurrent(
           running.record,
           running.record.ownerObservation.claimStatus === 'released' &&
-            visibility.isListed(running.sessionId)
+            source.isListed(running.sessionId)
         )
       : null
   }
-  const host = getStructuredAgentSessionHost()
+  const host = source === undefined ? getStructuredAgentSessionHost() : source
   if (!host) {
     return null
   }
@@ -61,10 +71,7 @@ export function structuredSessionTabRetired(
 }
 
 /** Retirement is the tab index: every path that ends a chat for good hides its tab. */
-function structuredSessionTabListed(
-  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
-  sessionId: string
-): boolean {
+function structuredSessionTabListed(host: SessionTabReader, sessionId: string): boolean {
   try {
     return host.getPersistedVisibleSessionTabIndex?.().sessionIds.includes(sessionId) ?? false
   } catch {
@@ -92,9 +99,9 @@ export function structuredWorkerAddressable(
   db: OrchestrationDb | null | undefined,
   running: RunningStructuredSession,
   row: CustodyRow | undefined,
-  visibility?: ReturnType<typeof captureStructuredWorkerTabVisibility>
+  source?: CustodySource
 ): boolean | null {
-  const owned = structuredWorkerOwned(running, visibility)
+  const owned = structuredWorkerOwned(running, source)
   if (owned === null) {
     return null
   }

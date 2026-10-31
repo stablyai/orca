@@ -217,6 +217,7 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.preparation().envPatch).not.toHaveProperty('CLAUDE_CONFIG_DIR')
     expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
     expect(f.router.routedHome()).toBeNull()
+    expect(f.router.routedHome('identity')).toBeNull()
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe('')
     expect(f.router.coveredBySystemDefault('a')).toBe(true)
 
@@ -228,6 +229,8 @@ describe('ClaudeProfileRouter', () => {
     })
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe(f.home('a'))
     expect(f.router.coveredBySystemDefault('a')).toBe(false)
+    expect(f.router.routedHome()).toBe(f.home('a'))
+    expect(f.router.routedHome('identity')).toBe(f.home('a'))
   })
 
   it('tells whether a terminal opened before routing runs another account than the selected one', () => {
@@ -420,6 +423,8 @@ describe('ClaudeProfileRouter', () => {
     const f = fixture()
     f.settings.activeClaudeManagedAccountId = 'b'
     expect(() => f.router.preparation()).toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
+    expect(() => f.router.routedHome()).toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
+    expect(f.router.routedHome('identity')).toBe(f.home('b'))
     expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
     f.router.publish()
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe(f.home('b'))
