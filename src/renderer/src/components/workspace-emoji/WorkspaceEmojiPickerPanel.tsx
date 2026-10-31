@@ -8,8 +8,8 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
+import { getWorkspaceEmojiPickerDefaults } from '@/lib/workspace-emoji-picker-defaults'
 import {
-  getWorkspaceEmojiPickerDefaults,
   searchWorkspaceEmojiShortcodes,
   type WorkspaceEmojiSuggestion
 } from '@/lib/workspace-emoji-shortcodes'

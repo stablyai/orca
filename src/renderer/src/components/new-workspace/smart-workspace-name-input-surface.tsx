@@ -55,7 +55,8 @@ export function renderSmartWorkspaceNameInput(
     linearStatusId,
     unresolvedLinearUrlIntent,
     blockingTaskUrlResolution,
-    handleEmojiPickerOpenChange
+    handleEmojiPickerOpenChange,
+    handleEmojiPickerValueChange
   } = controller
   // Emoji only make sense where the user types a name, not a search query.
   const showEmojiPickerButton = mode === 'smart' || mode === 'text'
@@ -313,7 +314,7 @@ export function renderSmartWorkspaceNameInput(
           disabled={disabled}
           inputRef={localInputRef}
           onOpenChange={handleEmojiPickerOpenChange}
-          onValueChange={onValueChange}
+          onValueChange={handleEmojiPickerValueChange}
         />
       ) : null}
     </>
