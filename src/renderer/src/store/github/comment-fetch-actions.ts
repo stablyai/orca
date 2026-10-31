@@ -53,6 +53,7 @@ export const createCommentFetchActions = (
     const requestStartedAt = Date.now()
     // Carry the replaced read's local posts: its reply will no longer publish them.
     const postedComments: PRComment[] = [...(inflightRequest?.postedComments ?? [])]
+    let reply: Promise<PRComment[]> | undefined
     const request = (async () => {
       try {
         const requestContext = getGitHubWorkItemRequestContext(
@@ -62,9 +63,9 @@ export const createCommentFetchActions = (
           repoPath,
           options?.sourceContext
         )
-        let comments: PRComment[] =
+        reply =
           requestContext.target.kind === 'environment'
-            ? await callRuntimeRpc<PRComment[]>(
+            ? callRuntimeRpc<PRComment[]>(
                 { kind: 'environment', environmentId: requestContext.target.environmentId },
                 'github.prComments',
                 {
@@ -75,7 +76,7 @@ export const createCommentFetchActions = (
                 },
                 { timeoutMs: 30_000 }
               )
-            : await window.api.gh.prComments({
+            : window.api.gh.prComments({
                 repoPath,
                 repoId,
                 prNumber,
@@ -83,6 +84,15 @@ export const createCommentFetchActions = (
                 noCache: force,
                 sourceContext: options?.sourceContext
               })
+        // If this read fails, the read it replaced still lands its answer, which is newer than the cache.
+        let comments = await reply.catch(async (err: unknown) => {
+          if (!inflightRequest?.reply) {
+            throw err
+          }
+          return inflightRequest.reply.catch(() => {
+            throw err
+          })
+        })
         if (!ownsInflightRequest(inflightCommentsRequests, cacheKey, requestId)) {
           // Its callers show the owner's answer, so a late superseded reply cannot repaint older comments.
           await inflightCommentsRequests.get(cacheKey)?.promise
@@ -114,7 +124,7 @@ export const createCommentFetchActions = (
       }
     })()
 
-    inflightCommentsRequests.set(cacheKey, { promise: request, requestId, postedComments })
+    inflightCommentsRequests.set(cacheKey, { promise: request, reply, requestId, postedComments })
     return request
   }
 })

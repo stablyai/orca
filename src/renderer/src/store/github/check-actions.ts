@@ -138,6 +138,8 @@ export const createCheckActions = (
 
     const requestId = nextProviderRequestId()
     const requestStartedAt = Date.now()
+    const replaced = inflightChecksRequests.get(inflightKey)
+    let reply: Promise<PRCheckDetail[]> | undefined
     const request = (async () => {
       const requestContext = getGitHubWorkItemRequestContext(
         get(),
@@ -146,9 +148,9 @@ export const createCheckActions = (
         repoPath,
         options?.sourceContext
       )
-      const checks =
+      reply =
         requestContext.target.kind === 'environment'
-          ? await callRuntimeRpc<PRCheckDetail[]>(
+          ? callRuntimeRpc<PRCheckDetail[]>(
               { kind: 'environment', environmentId: requestContext.target.environmentId },
               'github.prChecks',
               {
@@ -161,7 +163,7 @@ export const createCheckActions = (
               },
               { timeoutMs: 30_000 }
             )
-          : await window.api.gh.prChecks({
+          : window.api.gh.prChecks({
               repoPath,
               repoId,
               prNumber,
@@ -172,6 +174,15 @@ export const createCheckActions = (
               ...(userRefresh ? { userRefresh: true } : {}),
               ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
             })
+      // If this read fails, the read it replaced still lands its answer, which is newer than the cache.
+      const checks = await reply.catch(async (err: unknown) => {
+        if (!replaced?.reply) {
+          throw err
+        }
+        return replaced.reply.catch(() => {
+          throw err
+        })
+      })
       // Bounded waits and explicit refreshes overlap older reads; only the current key owner may write caches/derived PR state, preserving newer run evidence.
       if (!ownsInflightRequest(inflightChecksRequests, inflightKey, requestId)) {
         // Its callers show the owner's answer, so a late superseded reply cannot repaint older checks.
@@ -216,6 +227,7 @@ export const createCheckActions = (
 
     inflightChecksRequests.set(inflightKey, {
       promise: request,
+      reply,
       requestId,
       force,
       noCache,
