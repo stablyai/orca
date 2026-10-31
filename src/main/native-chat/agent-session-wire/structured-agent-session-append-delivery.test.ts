@@ -1,6 +1,5 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// What an open chat receives, asserted at its subscriber rather than in the journal: a fresh
-// subscribe re-reads the journal and hides a write that never reached the readers already open.
+// Observe existing subscribers: fresh subscribe could hide missed live delivery by rereading the journal.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -25,7 +24,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
@@ -39,7 +41,6 @@ let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let generation = 0
 
-/** Everything a live subscriber was sent after its opening snapshot. */
 async function liveReader() {
   const events: AgentSessionSubscribeEvent[] = []
   await host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => events.push(event) })
@@ -64,13 +65,16 @@ async function liveReader() {
     }
     return {
       statuses: items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : [])),
-      /** Each status row as the chat renders it: its latest revision, once. */
       statusRows: [...rows.values()],
       submissions,
       batches: events.slice(opened).filter((event) => event.type === 'batch').length
     }
   }
-  return { received }
+  const hydration = events.findLast((event) => event.type === 'snapshot' || event.type === 'reset')
+  return {
+    received,
+    hydratedCursor: hydration?.page.liveCursor ?? hydration?.page.window.nextCursor
+  }
 }
 
 async function send(text: string): Promise<string> {
@@ -154,6 +158,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -161,18 +166,16 @@ describe('an open chat receives every row its journal commits', () => {
   it('shows a failed start whose lease could not be handed back', async () => {
     const held = await send('hello')
     const pane = await liveReader()
-    // The exit settles the journal, then fails to release the lease: nothing moves the fence.
+    // Inject lease-release failure after journal exit settlement without advancing the fence.
     vi.spyOn(store, 'transitionHandoff').mockRejectedValueOnce(new Error('record store busy'))
 
     await exitBeforeProof()
 
-    // The exit ends the child; the delivery loop, which reads why, rejects what it had queued.
     await vi.waitFor(() =>
       expect(pane.received().submissions).toContainEqual(
         expect.objectContaining({ clientMessageId: held, dispatchState: 'rejected' })
       )
     )
-    // One row, however many of its writers reported the start.
     expect(pane.received().statusRows).toEqual([
       'Codex stopped before it finished starting. Send your message to try again.'
     ])
@@ -223,7 +226,44 @@ describe('an open chat receives each row once', () => {
     if (!journal) {
       throw new Error('the attached chat has no journal')
     }
-    const readSince = vi.spyOn(journal, 'readSince')
+    const hydratedCursor = journal.cursor()
+    expect(pane.hydratedCursor).toEqual(hydratedCursor)
+    const reads: {
+      epoch: string
+      sequence: number
+      limit: number | undefined
+      ok: boolean
+      returnedCursor: { epoch: string; sequence: number } | null
+      rowCount: number
+      rows: { epoch: string; sequence: number; kind: string; itemId: string | null }[]
+    }[] = []
+    const realReadSince = journal.readSince.bind(journal)
+    const readSince = vi.spyOn(journal, 'readSince').mockImplementation((cursor, limit) => {
+      const epoch = cursor.epoch
+      const sequence = cursor.sequence
+      const result = realReadSince(cursor, limit)
+      reads.push({
+        epoch,
+        sequence,
+        limit,
+        ok: result.ok,
+        returnedCursor: result.ok
+          ? { epoch: result.cursor.epoch, sequence: result.cursor.sequence }
+          : null,
+        rowCount: result.ok ? result.rows.length : 0,
+        rows: result.ok
+          ? result.rows.map((row) => ({
+              epoch: row.epoch,
+              sequence: row.seq,
+              kind: row.kind,
+              // A new chat saves outcomes, whose change index names the items each sequence wrote.
+              itemId:
+                row.kind === 'outcome' ? row.itemIds.join() : 'itemId' in row ? row.itemId : null
+            }))
+          : []
+      })
+      return result
+    })
 
     sink.appendItem(
       { provider: 'orca', clientMessageId: 'streamed' },
@@ -234,8 +274,41 @@ describe('an open chat receives each row once', () => {
     await host.flushStreamedEvents(SESSION)
 
     expect(pane.received().statuses).toEqual(['streamed row'])
-    // The frame's publish finds the reader caught up and reads no rows: streaming stays one read.
-    expect(readSince).toHaveBeenCalledOnce()
+    expect(pane.received().batches).toBe(1)
+    const committedCursor = { epoch: hydratedCursor.epoch, sequence: hydratedCursor.sequence + 1 }
+    expect(journal.cursor()).toEqual(committedCursor)
+    const readResult = {
+      epoch: hydratedCursor.epoch,
+      sequence: hydratedCursor.sequence,
+      ok: true,
+      returnedCursor: committedCursor,
+      rowCount: 1,
+      rows: [
+        {
+          epoch: committedCursor.epoch,
+          sequence: committedCursor.sequence,
+          kind: 'outcome',
+          itemId: 'orca:streamed'
+        }
+      ]
+    }
+    // Call-time provenance: readForward owns lookahead; reusePromptProjection owns the delta.
+    const paneHistoryRead = { ...readResult, limit: 201 }
+    const promptDeltaRead = { ...readResult, limit: 200 }
+    expect(reads.filter(({ limit }) => limit === paneHistoryRead.limit)).toEqual([paneHistoryRead])
+    expect(reads.filter(({ limit }) => limit === promptDeltaRead.limit)).toEqual([promptDeltaRead])
+    expect(reads).toHaveLength(2)
+    expect(readSince).toHaveBeenCalledTimes(2)
+    expect(reads.reduce((count, read) => count + read.rowCount, 0)).toBe(2)
+
+    const delivered = pane.received()
+    const settledReads = [...reads]
+    sink.publish()
+    await host.flushStreamedEvents(SESSION)
+
+    expect(reads).toEqual(settledReads)
+    expect(readSince).toHaveBeenCalledTimes(2)
+    expect(pane.received()).toEqual(delivered)
   })
 
   it('when a writer publishes the row it appended', async () => {
@@ -256,7 +329,6 @@ describe('an open chat receives each row once', () => {
     expect(pane.received().statuses).toEqual(['host row'])
     const delivered = pane.received().batches
     host['subscribers'].publish(SESSION, journal)
-    // The second publish found nothing past the reader's cursor, so it sent nothing at all.
     expect(pane.received().batches).toBe(delivered)
   })
 })

@@ -140,7 +140,6 @@ describe('managed stop requests', () => {
     const { request } = running()
     const path = orcadManagedStopRequestPath(request.instance)
     const { lockPath } = request.instance
-    // `/` separators and a `.` segment: the same file, not the same string.
     const respelled = `${dirname(lockPath)}/./${basename(lockPath)}`.replaceAll(sep, '/')
     expect(respelled).not.toBe(lockPath)
     const sent = { ...request, instance: { ...request.instance, lockPath: respelled } }

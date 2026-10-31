@@ -1,5 +1,4 @@
-// Today's two records per terminal tab, and the tab-bar entry for every tab, derived from one
-// layout tab. Order fields are derived from the one tab order.
+// Derive legacy terminal rows, tab-bar entries and all order fields from the canonical layout order.
 
 import type { ExecutionHostId } from '../execution-host'
 import type { Tab } from '../tab-types'
@@ -22,7 +21,6 @@ const SHARED_OPTIONAL_FIELDS = [
   'viewMode'
 ] as const
 
-/** What one saved workspace's records share: its key, worktree id, host and the beside records. */
 export type WorkspaceSaveScope = {
   workspaceKey: string
   worktreeId: string
@@ -108,11 +106,10 @@ export function saveTabBarEntry(
   }
 }
 
-/** Each pane's leaf-keyed values, as a layout's per-leaf map. */
-function byLeaf(
+function byLeaf<T>(
   leafIds: readonly string[],
-  value: (leafId: string) => string | undefined
-): Record<string, string> {
+  value: (leafId: string) => T | undefined
+): Record<string, T> {
   return Object.fromEntries(
     leafIds.flatMap((leafId) => {
       const entry = value(leafId)
@@ -143,10 +140,16 @@ export function saveTerminalLayout(
     ptyIdsByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.ptyId),
     buffersByLeafId: byLeaf(leafIds, (leafId) => facts.scrollback[leafId]?.buffer),
     scrollbackRefsByLeafId: byLeaf(leafIds, (leafId) => facts.scrollback[leafId]?.scrollbackRef),
-    titlesByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.title)
+    titlesByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.title),
+    lastGridsByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.lastGrid)
   }
   // Today's writers always write the bindings, even empty, and the other maps only when filled.
-  for (const field of ['buffersByLeafId', 'scrollbackRefsByLeafId', 'titlesByLeafId'] as const) {
+  for (const field of [
+    'buffersByLeafId',
+    'scrollbackRefsByLeafId',
+    'titlesByLeafId',
+    'lastGridsByLeafId'
+  ] as const) {
     if (Object.keys(layout[field] ?? {}).length === 0) {
       delete layout[field]
     }

@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { createServer } from 'node:net'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { SshPortForwardManager } from './ssh-port-forward'
+import { PortForwardTornDownError, SshPortForwardManager } from './ssh-port-forward'
+import type { SshConnection } from '../connection/ssh-connection'
 
 const { startSystemSshPortForwardProcessMock } = vi.hoisted(() => ({
   startSystemSshPortForwardProcessMock: vi.fn()
@@ -32,6 +33,7 @@ function createMockConn(forwardOutErr?: Error) {
   }
   return {
     getClient: vi.fn().mockReturnValue(mockClient),
+    isDisposed: vi.fn().mockReturnValue(false),
     usesSystemSshTransport: vi.fn().mockReturnValue(false),
     mockClient,
     mockChannel
@@ -41,6 +43,7 @@ function createMockConn(forwardOutErr?: Error) {
 function createSystemSshConn() {
   return {
     getClient: vi.fn().mockReturnValue(null),
+    isDisposed: vi.fn().mockReturnValue(false),
     usesSystemSshTransport: vi.fn().mockReturnValue(true),
     getSystemSshBuildArgsOptions: vi.fn().mockReturnValue({}),
     getTarget: vi.fn().mockReturnValue({
@@ -51,6 +54,16 @@ function createSystemSshConn() {
       username: 'vscode'
     })
   }
+}
+
+type ConnectionStub = Pick<
+  ReturnType<typeof createMockConn>,
+  'getClient' | 'isDisposed' | 'usesSystemSshTransport'
+>
+
+function asSshConnection(conn: ConnectionStub): SshConnection {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the manager and its providers read only the members these stubs define.
+  return conn as unknown as SshConnection
 }
 
 function createFakeSystemSshForward(localPort = 3000) {
@@ -125,15 +138,14 @@ describe('SshPortForwardManager', () => {
 
   it('reports the port the OS bound when an ssh2 forward asks for port 0', async () => {
     const conn = createMockConn()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the getClient/usesSystemSshTransport surface the ssh2 provider reads.
-    const entry = await manager.addForward('conn-1', conn as never, 0, '127.0.0.1', 6768)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 0, '127.0.0.1', 6768)
 
     expect(entry.localPort).toBe(43210)
   })
 
   it('adds an ssh2 port forward and returns entry', async () => {
     const conn = createMockConn()
-    const entry = await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
 
     expect(entry).toMatchObject({
       connectionId: 'conn-1',
@@ -147,10 +159,11 @@ describe('SshPortForwardManager', () => {
   it('throws when no port forward provider can handle the connection', async () => {
     const conn = {
       getClient: vi.fn().mockReturnValue(null),
+      isDisposed: vi.fn().mockReturnValue(false),
       usesSystemSshTransport: vi.fn().mockReturnValue(false)
     }
     await expect(
-      manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
+      manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
     ).rejects.toThrow('SSH connection is not established')
   })
 
@@ -159,7 +172,7 @@ describe('SshPortForwardManager', () => {
     startSystemSshPortForwardProcessMock.mockReturnValue(forward)
     const conn = createSystemSshConn()
 
-    const entry = await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
 
     expect(startSystemSshPortForwardProcessMock).toHaveBeenCalledWith(
       conn.getTarget(),
@@ -182,8 +195,7 @@ describe('SshPortForwardManager', () => {
     startSystemSshPortForwardProcessMock.mockReturnValue(createFakeSystemSshForward(49800))
     const conn = createSystemSshConn()
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the system-SSH surface the provider reads.
-    const entry = await manager.addForward('conn-1', conn as never, 0, '127.0.0.1', 6768)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 0, '127.0.0.1', 6768)
 
     expect(entry.localPort).toBe(49800)
   })
@@ -206,7 +218,7 @@ describe('SshPortForwardManager', () => {
       }
     })
 
-    await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
 
     expect(startSystemSshPortForwardProcessMock).toHaveBeenCalledWith(
       conn.getTarget(),
@@ -230,7 +242,7 @@ describe('SshPortForwardManager', () => {
     const conn = createSystemSshConn()
 
     await expect(
-      manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+      manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
     ).rejects.toThrow('bind: Address already in use')
     expect(manager.listForwards('conn-1')).toHaveLength(0)
   })
@@ -240,7 +252,7 @@ describe('SshPortForwardManager', () => {
     startSystemSshPortForwardProcessMock.mockReturnValue(forward)
     const conn = createSystemSshConn()
 
-    const entry = await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
 
     expect(manager.removeForward(entry.id)).toMatchObject({ id: entry.id })
     expect(forward.dispose).toHaveBeenCalled()
@@ -258,7 +270,7 @@ describe('SshPortForwardManager', () => {
     startSystemSshPortForwardProcessMock.mockReturnValue(forward)
     const conn = createSystemSshConn()
 
-    await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
 
     let resolved = false
     const removal = manager.removeAllForwards('conn-1').then(() => {
@@ -272,6 +284,152 @@ describe('SshPortForwardManager', () => {
     expect(resolved).toBe(true)
   })
 
+  it('waits for a close already under way before a connection teardown resolves', async () => {
+    let resolveClose!: () => void
+    const forward = createFakeSystemSshForward()
+    forward.close.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveClose = resolve
+      })
+    )
+    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
+    const entry = await manager.addForward(
+      'conn-1',
+      asSshConnection(createSystemSshConn()),
+      3000,
+      '127.0.0.1',
+      8080
+    )
+    void manager.removeForwardAndWait(entry.id)
+
+    let resolved = false
+    const teardown = manager.removeAllForwards('conn-1').then(() => {
+      resolved = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(resolved).toBe(false)
+    resolveClose()
+    await teardown
+    expect(resolved).toBe(true)
+  })
+
+  it('closes a forward still starting when its connection is torn down', async () => {
+    let finishStart!: (value: ReturnType<typeof createFakeSystemSshForward>) => void
+    const forward = createFakeSystemSshForward()
+    startSystemSshPortForwardProcessMock.mockReturnValue(
+      new Promise((resolve) => {
+        finishStart = resolve
+      })
+    )
+    const adding = manager.addForward(
+      'conn-1',
+      asSshConnection(createSystemSshConn()),
+      3000,
+      '127.0.0.1',
+      8080
+    )
+    await vi.waitFor(() => expect(startSystemSshPortForwardProcessMock).toHaveBeenCalled())
+
+    const teardown = manager.removeAllForwards('conn-1')
+    finishStart(forward)
+    await teardown
+
+    expect(forward.close).toHaveBeenCalled()
+    await expect(adding).rejects.toThrow('closed while this port forward was starting')
+    expect(manager.listForwards('conn-1')).toHaveLength(0)
+  })
+
+  it('bounds a teardown on a start that never answers, and closes it once it does', async () => {
+    vi.useFakeTimers()
+    try {
+      let finishStart!: (value: ReturnType<typeof createFakeSystemSshForward>) => void
+      const forward = createFakeSystemSshForward()
+      startSystemSshPortForwardProcessMock.mockReturnValue(
+        new Promise((resolve) => {
+          finishStart = resolve
+        })
+      )
+      const conn = asSshConnection(createSystemSshConn())
+      const adding = manager.addForward('conn-1', conn, 3000, '127.0.0.1', 8080)
+      adding.catch(() => undefined)
+      await vi.waitFor(() => expect(startSystemSshPortForwardProcessMock).toHaveBeenCalled())
+
+      const teardown = manager.removeAllForwards('conn-1')
+      await vi.advanceTimersByTimeAsync(3_000)
+      await teardown
+
+      finishStart(forward)
+      await expect(adding).rejects.toThrow('closed while this port forward was starting')
+      expect(forward.close).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not roll an edit back onto a connection torn down while it started', async () => {
+    const first = createFakeSystemSshForward()
+    startSystemSshPortForwardProcessMock.mockReturnValueOnce(first)
+    const conn = asSshConnection(createSystemSshConn())
+    const entry = await manager.addForward('conn-1', conn, 3000, '127.0.0.1', 8080)
+    let finishStart!: (value: ReturnType<typeof createFakeSystemSshForward>) => void
+    startSystemSshPortForwardProcessMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishStart = resolve
+      })
+    )
+    const editing = manager.updateForward(entry.id, conn, 3001, '127.0.0.1', 8080)
+    await vi.waitFor(() => expect(startSystemSshPortForwardProcessMock).toHaveBeenCalledTimes(2))
+
+    const teardown = manager.removeAllForwards('conn-1')
+    finishStart(createFakeSystemSshForward(3001))
+    await teardown
+
+    await expect(editing).rejects.toThrow('closed while this port forward was starting')
+    expect(startSystemSshPortForwardProcessMock).toHaveBeenCalledTimes(2)
+    expect(manager.listForwards('conn-1')).toHaveLength(0)
+  })
+
+  it('refuses an add on a connection its teardown disposed, as a teardown', async () => {
+    // As after disconnect(): disposed, with no client and no system transport left.
+    const conn = {
+      ...createSystemSshConn(),
+      isDisposed: vi.fn().mockReturnValue(true),
+      usesSystemSshTransport: vi.fn().mockReturnValue(false)
+    }
+
+    const adding = manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
+
+    await expect(adding).rejects.toThrow(PortForwardTornDownError)
+    expect(startSystemSshPortForwardProcessMock).not.toHaveBeenCalled()
+    expect(manager.listForwards('conn-1')).toHaveLength(0)
+  })
+
+  it('reports an edit Disconnect overtook as a teardown, so its saved forwards survive', async () => {
+    let resolveClose!: () => void
+    const first = createFakeSystemSshForward()
+    first.close.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveClose = resolve
+      })
+    )
+    startSystemSshPortForwardProcessMock.mockReturnValue(first)
+    const conn = createSystemSshConn()
+    const session = asSshConnection(conn)
+    const entry = await manager.addForward('conn-1', session, 3000, '127.0.0.1', 8080)
+    const editing = manager.updateForward(entry.id, session, 3001, '127.0.0.1', 8080)
+
+    // Teardown must cover a pending start even after connection disposal.
+    const teardown = manager.removeAllForwards('conn-1')
+    conn.isDisposed.mockReturnValue(true)
+    conn.usesSystemSshTransport.mockReturnValue(false)
+    resolveClose()
+    await teardown
+
+    await expect(editing).rejects.toThrow(PortForwardTornDownError)
+    expect(startSystemSshPortForwardProcessMock).toHaveBeenCalledTimes(1)
+    expect(manager.listForwards('conn-1')).toHaveLength(0)
+  })
+
   it('removes an unexpectedly exited system SSH forward and calls the close callback', async () => {
     const onForwardClosed = vi.fn()
     manager.setCallbacks({ onForwardClosed })
@@ -279,7 +437,7 @@ describe('SshPortForwardManager', () => {
     startSystemSshPortForwardProcessMock.mockReturnValue(forward)
     const conn = createSystemSshConn()
 
-    const entry = await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
     forward.process.stderr.emit('data', Buffer.from('channel open failed'))
     forward.process.emit('exit', 255)
 
@@ -300,25 +458,23 @@ describe('SshPortForwardManager', () => {
     startSystemSshPortForwardProcessMock.mockReturnValue(forward)
     const conn = createSystemSshConn()
 
-    await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
-    // A long-lived forward against a chatty remote sshd: emit >64 KB of stderr.
+    await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
+    // Keep only a bounded diagnostic tail from a long-lived chatty sshd.
     forward.process.stderr.emit('data', Buffer.from(`HEAD_MARKER${'x'.repeat(70 * 1024)}`))
     forward.process.stderr.emit('data', Buffer.from('TAIL_MARKER'))
     forward.process.emit('exit', 255)
 
     const detail = onForwardClosed.mock.calls[0]?.[1]?.detail as string
-    // The oldest bytes are trimmed; the most-recent tail is retained.
     expect(detail).toContain('TAIL_MARKER')
     expect(detail).not.toContain('HEAD_MARKER')
-    // Bounded well below the ~70 KB produced.
     expect(detail.length).toBeLessThan(66 * 1024)
   })
 
   it('lists forwards filtered by connectionId', async () => {
     const conn = createMockConn()
-    await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
-    await manager.addForward('conn-2', conn as never, 3001, 'localhost', 8081)
-    await manager.addForward('conn-1', conn as never, 3002, 'localhost', 8082)
+    await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
+    await manager.addForward('conn-2', asSshConnection(conn), 3001, 'localhost', 8081)
+    await manager.addForward('conn-1', asSshConnection(conn), 3002, 'localhost', 8082)
 
     expect(manager.listForwards('conn-1')).toHaveLength(2)
     expect(manager.listForwards('conn-2')).toHaveLength(1)
@@ -327,7 +483,7 @@ describe('SshPortForwardManager', () => {
 
   it('removes a forward by id', async () => {
     const conn = createMockConn()
-    const entry = await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
 
     const removed = manager.removeForward(entry.id)
     expect(removed).toMatchObject({ id: entry.id, localPort: 3000 })
@@ -336,7 +492,7 @@ describe('SshPortForwardManager', () => {
 
   it('awaits forward close when removing a forward for user actions', async () => {
     const conn = createMockConn()
-    const entry = await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
 
     await expect(manager.removeForwardAndWait(entry.id)).resolves.toMatchObject({
       id: entry.id,
@@ -347,7 +503,7 @@ describe('SshPortForwardManager', () => {
 
   it('destroys local sockets that emit errors', async () => {
     const conn = createMockConn()
-    await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
+    await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
     const server = getLastMockServer()
     const socket = createFakeSocket()
 
@@ -362,8 +518,7 @@ describe('SshPortForwardManager', () => {
     conn.mockClient.forwardOut.mockImplementation(() => {
       throw new Error('Not connected')
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the getClient/usesSystemSshTransport surface the ssh2 provider reads.
-    await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
+    await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
     const socket = createFakeSocket()
 
     expect(() => getLastMockServer()?._connectionHandler(socket)).not.toThrow()
@@ -384,9 +539,10 @@ describe('SshPortForwardManager', () => {
     }
     const conn = {
       getClient: vi.fn().mockReturnValue(mockClient),
+      isDisposed: vi.fn().mockReturnValue(false),
       usesSystemSshTransport: vi.fn().mockReturnValue(false)
     }
-    const entry = await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
     const server = getLastMockServer()
     const socket = createFakeSocket()
 
@@ -404,9 +560,9 @@ describe('SshPortForwardManager', () => {
 
   it('removes all forwards for a connection', async () => {
     const conn = createMockConn()
-    await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
-    await manager.addForward('conn-1', conn as never, 3001, 'localhost', 8081)
-    await manager.addForward('conn-2', conn as never, 3002, 'localhost', 8082)
+    await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
+    await manager.addForward('conn-1', asSshConnection(conn), 3001, 'localhost', 8081)
+    await manager.addForward('conn-2', asSshConnection(conn), 3002, 'localhost', 8082)
 
     await manager.removeAllForwards('conn-1')
     expect(manager.listForwards()).toHaveLength(1)
@@ -415,8 +571,7 @@ describe('SshPortForwardManager', () => {
 
   it('closes only the ssh2 forwards bound to a client the connection replaced', async () => {
     const conn = createMockConn()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the getClient/usesSystemSshTransport surface the ssh2 provider reads.
-    const sshConn = conn as never
+    const sshConn = asSshConnection(conn)
     await manager.addForward('conn-1', sshConn, 3000, 'localhost', 8080)
     await manager.addForward('conn-2', sshConn, 3002, 'localhost', 8082)
 
@@ -441,8 +596,7 @@ describe('SshPortForwardManager', () => {
     )
     const second = createFakeSystemSshForward(3001)
     startSystemSshPortForwardProcessMock.mockReturnValueOnce(first).mockReturnValueOnce(second)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the system-SSH surface the provider reads.
-    const conn = createSystemSshConn() as never
+    const conn = asSshConnection(createSystemSshConn())
     await manager.addForward('conn-1', conn, 3000, '127.0.0.1', 8080)
     await manager.addForward('conn-2', conn, 3001, '127.0.0.1', 8081)
 
@@ -463,8 +617,8 @@ describe('SshPortForwardManager', () => {
 
   it('dispose removes all forwards', async () => {
     const conn = createMockConn()
-    await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
-    await manager.addForward('conn-2', conn as never, 3001, 'localhost', 8081)
+    await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
+    await manager.addForward('conn-2', asSshConnection(conn), 3001, 'localhost', 8081)
 
     manager.dispose()
     expect(manager.listForwards()).toHaveLength(0)
@@ -474,7 +628,7 @@ describe('SshPortForwardManager', () => {
     const conn = createMockConn()
     const entry = await manager.addForward(
       'conn-1',
-      conn as never,
+      asSshConnection(conn),
       3000,
       'localhost',
       8080,
@@ -486,9 +640,15 @@ describe('SshPortForwardManager', () => {
 
   it('preserves the existing id when updating a forward succeeds', async () => {
     const conn = createMockConn()
-    const entry = await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
 
-    const updated = await manager.updateForward(entry.id, conn as never, 3001, 'localhost', 8081)
+    const updated = await manager.updateForward(
+      entry.id,
+      asSshConnection(conn),
+      3001,
+      'localhost',
+      8081
+    )
 
     expect(updated.id).toBe(entry.id)
     expect(updated.localPort).toBe(3001)
@@ -505,10 +665,10 @@ describe('SshPortForwardManager', () => {
       .mockReturnValueOnce(failedForward)
       .mockReturnValueOnce(rollbackForward)
     const conn = createSystemSshConn()
-    const entry = await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
 
     await expect(
-      manager.updateForward(entry.id, conn as never, 3001, '127.0.0.1', 8081)
+      manager.updateForward(entry.id, asSshConnection(conn), 3001, '127.0.0.1', 8081)
     ).rejects.toThrow('bind failed')
 
     expect(initialForward.close).toHaveBeenCalled()

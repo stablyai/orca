@@ -1,7 +1,8 @@
-// A new chat reads its options at rest before its agent starts. That answer must name the model and
-// effort the catalog's first frame showed for its workspace, or the picker changes before any start.
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+// Before start, new-chat options must match the workspace catalog's first model/effort frame so the picker stays stable.
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -32,7 +33,6 @@ import type { StructuredAgentSessionMutationContext } from '../native-chat/agent
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 import { PI_RPC_AGENT } from '../pi/rpc-agent-definition'
-import { piModelCatalogFromListing } from '../pi/rpc-model-catalog-probe'
 
 // A chat whose agent offers permission modes also names its own, which a new chat leaves at Ask.
 const modeOf = (agent: string) => (agentChatPermissionModes(agent) ? { permissionMode: 'ask' } : {})
@@ -107,13 +107,14 @@ const GROK_LISTING = grokModelCatalogFromState({
   ]
 })
 
-const PI_LISTING = piModelCatalogFromListing(
-  [
-    'provider   model            context  max-out  thinking  images',
-    'anthropic  claude-sonnet-4  200K     64K      yes       yes',
-    'openai     gpt-6            400K     128K     yes       yes'
-  ].join('\n')
-)
+const PI_LISTING: AgentSessionModelOption[] = [
+  { id: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
+  { id: 'openai/gpt-6', label: 'GPT-6' }
+].map((model) => ({
+  ...model,
+  isDefault: false,
+  efforts: ['off', 'minimal', 'low', 'medium', 'high'].map((value) => ({ value, label: value }))
+}))
 
 type Account = {
   models: AgentSessionModelOption[]
@@ -153,11 +154,13 @@ function newChatRecord(
   workspacePath: string,
   options: Record<string, string>
 ): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog service and the at-rest read touch only these fields.
-  return {
+  const providerHandleChain: AgentSessionRecord['providerHandleChain'] = []
+
+  return agentSessionRecordFixture({
     sessionId: `${agent}-new`,
     provider: agent,
     accountHome: HOMES[agent]!,
+    providerHandleChain,
     launchDirectory: workspacePath,
     location: {
       executionHostId: 'local',
@@ -166,7 +169,7 @@ function newChatRecord(
       workspaceKind: 'git-worktree'
     },
     options
-  } as AgentSessionRecord
+  })
 }
 
 /** A host whose catalog for `agent`'s account is warm, holding one new chat that never sent. */
@@ -186,9 +189,27 @@ function host(agent: string, record: AgentSessionRecord) {
   }
   const modelCatalog = createAgentModelCatalogService({
     store,
+    getConversation: (sessionId) => {
+      const saved = sessionId === record.sessionId ? record : undefined
+      return saved ? agentSessionConversationView(saved) : undefined
+    },
     getRecord: (sessionId) => (sessionId === record.sessionId ? record : undefined),
     drivesRecord: () => true,
     resolveAccountHome: async (name) => HOMES[name]!,
+    probes: {
+      codex: async (_home, options) => {
+        const project = existsSync(join(options?.workspacePath ?? '', '.codex/config.toml'))
+        const effort = project ? 'high' : 'medium'
+        return {
+          models: CODEX_LISTING.map((row) =>
+            row.isDefault ? { ...row, defaultEffort: effort } : row
+          ),
+          configured: { model: 'gpt-5.5', effort },
+          complete: true,
+          origin: 'probe'
+        }
+      }
+    },
     listingNamesConfiguredModel: new Set(['codex']),
     recordWorkspacePath: async (row) => row.launchDirectory ?? null,
     agentReadsProjectModelConfig,
@@ -197,11 +218,26 @@ function host(agent: string, record: AgentSessionRecord) {
   const resting = {
     child: null,
     params: { provider: agent },
-    journal: { threadGoal: () => null, contextUsage: () => null, context: { floor: () => null } }
+    journal: {
+      threadGoal: () => null,
+      visitItems: () => {},
+      submissions: () => [],
+      contextUsage: () => null,
+      context: { floor: () => null }
+    }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the at-rest read touches only these members.
   const context = {
-    deps: { adapter: {}, agents: AGENTS, store: { getRecord: () => record }, modelCatalog },
+    deps: {
+      adapter: {},
+      agents: AGENTS,
+      store: {
+        getRecord: () => record,
+        getConversation: () => (record ? agentSessionConversationView(record) : null),
+        requireWritableRecord: () => record
+      },
+      modelCatalog
+    },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
     openConversation: async () => resting,
     conversation: async () => resting
@@ -241,13 +277,21 @@ async function newChatFrames(
     await modelCatalog.read({ agent, waitForListing: true, workspacePath }),
     { newLaunch: true }
   )
+  await modelCatalog.prepareSaved({ agent, sessionId: record.sessionId, inSessionWorkspace: true })
   // Read before applying the answer: applying updates the state's option record in place.
   const firstPills = pills(first)
   const atRest = await readStructuredAgentSessionOptions(context, record.sessionId, {
     readsWithoutModel: chat.readsWithoutModel ?? true
   })
-  const settled = applyStructuredAgentSessionOptions(first, seed, atRest)
+  const settled = applyStructuredAgentSessionOptions(first, seed, atRest, { newLaunch: true })
   return { atRest, first: firstPills, settled: pills(settled) }
+}
+
+const AT_REST_METADATA = {
+  confirmed: undefined,
+  fastMode: undefined,
+  serviceTier: undefined,
+  reportedPermissionMode: undefined
 }
 
 describe("a new chat's effort pill before its agent starts", () => {
@@ -263,14 +307,18 @@ describe("a new chat's effort pill before its agent starts", () => {
       expect(first.model?.value).toBe(model)
       expect(first.effort?.value).toBe(effort)
       expect(settled).toEqual(first)
-      expect(atRest.current).toEqual({ model, effort, ...modeOf(agent) })
+      expect(atRest.current).toStrictEqual({
+        model,
+        effort,
+        defaulted: [],
+        ...modeOf(agent),
+        ...AT_REST_METADATA,
+        acceptedInputSources: { model: 'policy', effort: 'policy' }
+      })
     }
   )
 
-  it.each([
-    ['codex', '.codex/config.toml', 'model_reasoning_effort = "high"\n'],
-    ['pi', '.pi/settings.json', '{ "defaultThinkingLevel": "low" }']
-  ])(
+  it.each([['pi', '.pi/settings.json', '{ "defaultThinkingLevel": "low" }']])(
     '%s names no default model or effort at rest where the project’s config may pick one',
     async (agent, file, text) => {
       const { atRest, first, settled } = await newChatFrames(agent, {
@@ -280,37 +328,70 @@ describe("a new chat's effort pill before its agent starts", () => {
       expect(first.model?.value).toBeUndefined()
       expect(first.effort).toBeNull()
       expect(settled).toEqual(first)
-      expect(atRest.current).toEqual(modeOf(agent))
+      expect(atRest.current).toStrictEqual({
+        defaulted: [],
+        ...modeOf(agent),
+        effort: undefined,
+        ...AT_REST_METADATA,
+        acceptedInputSources: {}
+      })
     }
   )
 
-  it('keeps the account default model, with no effort, for a client that needs a model', async () => {
+  it('names the exact project default for a client that needs a model', async () => {
     const { atRest } = await newChatFrames('codex', {
       projectFiles: { '.codex/config.toml': 'model_reasoning_effort = "high"\n' },
       readsWithoutModel: false
     })
 
-    // The account default is not what this repo runs, so its effort is never claimed.
-    expect(atRest.current).toEqual({ model: 'gpt-5.5', permissionMode: 'ask' })
+    expect(atRest.current).toStrictEqual({
+      model: 'gpt-5.5',
+      effort: 'high',
+      defaulted: [],
+      permissionMode: 'ask',
+      ...AT_REST_METADATA,
+      acceptedInputSources: { model: 'policy', effort: 'policy' }
+    })
     expect(atRest.conversationCommands).toEqual(['clear', 'compact'])
   })
 
   it('names the folder’s default effort for a client that needs a model too', async () => {
     const { atRest } = await newChatFrames('codex', { readsWithoutModel: false })
 
-    expect(atRest.current).toEqual({ model: 'gpt-5.5', effort: 'medium', permissionMode: 'ask' })
+    expect(atRest.current).toStrictEqual({
+      model: 'gpt-5.5',
+      effort: 'medium',
+      defaulted: [],
+      permissionMode: 'ask',
+      ...AT_REST_METADATA,
+      acceptedInputSources: { model: 'policy', effort: 'policy' }
+    })
   })
 
   it('keeps a saved effort over the default model’s', async () => {
     const { atRest, settled } = await newChatFrames('grok', { saved: { effort: 'high' } })
 
-    expect(atRest.current).toEqual({ model: 'grok-4', effort: 'high', ...modeOf('grok') })
+    expect(atRest.current).toStrictEqual({
+      model: 'grok-4',
+      effort: 'high',
+      defaulted: [],
+      ...modeOf('grok'),
+      ...AT_REST_METADATA,
+      acceptedInputSources: { model: 'policy', effort: 'saved' }
+    })
     expect(settled.effort?.value).toBe('high')
   })
 
   it('leaves the effort of a saved model to the agent, as its running child reports it', async () => {
     const { atRest } = await newChatFrames('codex', { saved: { model: 'gpt-5.5-mini' } })
 
-    expect(atRest.current).toEqual({ model: 'gpt-5.5-mini', permissionMode: 'ask' })
+    expect(atRest.current).toStrictEqual({
+      model: 'gpt-5.5-mini',
+      defaulted: [],
+      permissionMode: 'ask',
+      effort: undefined,
+      ...AT_REST_METADATA,
+      acceptedInputSources: { model: 'saved' }
+    })
   })
 })

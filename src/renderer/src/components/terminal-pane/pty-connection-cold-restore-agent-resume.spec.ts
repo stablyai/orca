@@ -1,10 +1,17 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  expectNoWindowStart,
+  expectWindowPaintsColdRestoreOnly,
+  mainLayoutApplyTransport
+} from './pty-connection-test-main-pane-start-fixtures'
 import { RESET_GRAPHIC_RENDITION } from '../../../../shared/terminal-mode-reset-profiles'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { UUID_RE } from './pty-connection-test-constants'
 import {
+  terminalWriteText,
   LEAF_1,
   createMockTransport,
   createPane,
@@ -47,6 +54,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      ;(await mainLayoutApplyTransport()).reset()
     })
 
     afterEach(async () => {
@@ -105,6 +113,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        return
+      }
+
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_GRAPHIC_RENDITION}cold-payload`,
         expect.any(Function)
@@ -117,7 +131,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex 'resume' 'codex-session-1'",
+          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
           resumeProviderSession: {
             key: 'session_id',
             id: 'codex-session-1',
@@ -200,6 +214,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        return
+      }
+
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_GRAPHIC_RENDITION}cold-payload`,
         expect.any(Function)
@@ -208,7 +228,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: `codex 'resume' 'codex-session-1'"'"'s'`,
+          command: `codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'"'"'s'`,
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
             ORCA_TAB_ID: 'tab-1',
@@ -278,6 +298,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        return
+      }
+
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_GRAPHIC_RENDITION}cold-payload`,
         expect.any(Function)
@@ -286,7 +312,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         expect.stringContaining('--- session restored ---'),
         expect.any(Function)
       )
-      const writeCalls = pane.terminal.write.mock.calls.map(([data]) => data)
+      const writeCalls = pane.terminal.write.mock.calls.map(([data]) => terminalWriteText(data))
       expect(writeCalls.findIndex((data) => data.includes('--- session restored ---'))).toBe(-1)
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'restored')
@@ -294,7 +320,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex 'resume' 'codex-session-1'",
+          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
           resumeProviderSession: {
             key: 'session_id',
             id: 'codex-session-1',
@@ -319,8 +345,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
-          // Why: main dropped `resume <id>` because it could not verify which Codex
-          // account owns the rollout, so this PTY is a new session, not a restore.
+          // Unverified Codex rollout ownership prevents resume; main starts a new session instead.
           return {
             id: 'fresh-pty',
             coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' },
@@ -341,6 +366,9 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
           agentCmdOverrides: {}
         },
         agentStatusByPaneKey: {},
+        consumeTabStartupCommand: vi.fn(),
+        pendingStartupByTabId: {},
+        automaticAgentResumeClaimsByTabId: {},
         sleepingAgentSessionsByPaneKey: {
           [paneKey]: {
             paneKey,
@@ -354,7 +382,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
             updatedAt: 1
           }
         }
-      } as StoreState
+      }
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -367,8 +395,21 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        expectNoWindowStart(transport, mockStoreState)
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionId: 'lost-pty', attachOnlyView: true })
+        )
+        expect(pane.terminal.write).toHaveBeenCalledWith(
+          `${RESET_GRAPHIC_RENDITION}cold-payload`,
+          expect.any(Function)
+        )
+        expect(transport.sendInput).not.toHaveBeenCalled()
+      }
+
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'resume-unavailable')
+      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
     })
 
     it('resumes from an unambiguous legacy sleeping record when cold-restoring a preserved pane', async () => {
@@ -434,6 +475,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        return
+      }
+
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_GRAPHIC_RENDITION}cold-payload`,
         expect.any(Function)
@@ -443,7 +490,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex 'resume' 'codex-session-1'"
+          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'"
         })
       )
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(legacyPaneKey)

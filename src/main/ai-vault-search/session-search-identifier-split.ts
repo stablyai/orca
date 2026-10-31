@@ -1,12 +1,8 @@
-// Identifier shadow terms: `resolveTerminalPath` → `resolve terminal path`,
-// `src/main/foo-bar.ts` → `src main foo bar ts`. Stored in a separate FTS5
-// column so a partial identifier still matches; the largest single accuracy
-// win measured in the retrieval shoot-out (MRR 0.50 → 0.55).
+// Store split identifier terms separately so queries can match part of a symbol or path.
 
 const RAW_TOKEN = /[A-Za-z0-9_./-]+/g
 const CAMEL_PIECE = /[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|[a-z0-9]+/g
 const SEPARATOR = /[_./-]+/
-// Worth shadowing: has a separator, a camel boundary, or is SCREAMING_CASE.
 const INTERESTING = /[_./-]|[a-z0-9][A-Z]|^[A-Z]{2,}[0-9_]*$/
 const MIN_TOKEN = 3
 const MAX_TOKEN = 120

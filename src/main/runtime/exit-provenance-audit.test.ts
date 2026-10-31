@@ -1,5 +1,4 @@
-// STA-4603 / STA-4536: an operator close, a clean finish and a crash must not
-// leave the same record. Each case here was byte-identical before the fix.
+// STA-4603/STA-4536: distinguish operator close, clean finish and crash records.
 import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,6 +7,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import type { DispatchContextRow } from './orchestration/types'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
 const TAB_ID = '11111111-1111-4111-8111-111111111111'
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -17,6 +17,19 @@ const HANDLE = 'term_exit_provenance'
 const WORKTREE_ID = 'repo-audit::/tmp/audit'
 
 const directories: string[] = []
+
+class ExitProvenanceRuntime extends OrcaRuntimeService {
+  exitEvidence() {
+    const pty = this.ptysById.get(PTY_ID)
+    if (!pty) {
+      throw new Error('Missing test PTY')
+    }
+    return [pty, ...this.getLeavesForPty(PTY_ID)].map((record) => ({
+      code: record.lastExitCode,
+      cause: record.lastExitCause
+    }))
+  }
+}
 
 afterEach(() => {
   for (const directory of directories.splice(0)) {
@@ -30,8 +43,11 @@ function createDb(): OrchestrationDb {
   return new OrchestrationDb(join(directory, 'orchestration.db'))
 }
 
-function createRuntime(db: OrchestrationDb): OrcaRuntimeService {
-  const runtime = new OrcaRuntimeService(null)
+function createRuntime(
+  db: OrchestrationDb,
+  incarnationId: string | null = 'audit-incarnation'
+): ExitProvenanceRuntime {
+  const runtime = new ExitProvenanceRuntime(null)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write: () => true,
@@ -41,7 +57,7 @@ function createRuntime(db: OrchestrationDb): OrcaRuntimeService {
   runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
     tabId: TAB_ID,
     leafId: LEAF_ID,
-    incarnationId: 'audit-incarnation'
+    ...(incarnationId ? { incarnationId } : {})
   })
   runtime.registerPreAllocatedHandleForPty(PTY_ID, HANDLE)
   runtime.attachWindow(1)
@@ -78,7 +94,6 @@ function dispatchOnHandle(
   }
 }
 
-/** Where a lightweight Run's coordinator actually reads its mail (STA-4604). */
 function escalations(db: OrchestrationDb, runId: string) {
   return db.getUnreadMessages(`run:${runId}`, ['escalation'])
 }
@@ -145,8 +160,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const db = createDb()
     const runtime = createRuntime(db)
     const ctx = dispatchOnHandle(db, 'exit delivered without a cause')
-    // No `cause`: the reporter forwards a number and nothing else. Its 0 may be
-    // a SIGKILL, so the record must not claim the agent finished.
+    // Bare code 0 can be synthetic SIGKILL; without cause it cannot prove clean completion.
     runtime.onPtyExit(PTY_ID, 0)
     expect(observe(db, ctx.id)).toEqual({
       status: 'failed',
@@ -160,8 +174,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const runtime = createRuntime(db)
     const ctx = dispatchOnHandle(db, 'whole-tab operator close')
     runtime.markPtyStopRequested(PTY_ID)
-    // The tab teardown drops the leaf from the renderer graph first; the exit
-    // used to find no leaf and leave the row reading 'dispatched' forever.
+    // Renderer teardown removes the leaf first; exit must still settle the dispatch.
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.onPtyExit(PTY_ID, 0)
     expect(observe(db, ctx.id)).toEqual({
@@ -177,8 +190,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const closedCtx = dispatchOnHandle(closedDb, 'no escalation on close')
     closed.markPtyStopRequested(PTY_ID)
     closed.onPtyExit(PTY_ID, 0)
-    // Assert the dispatch actually settled first: an empty inbox also happens
-    // when nothing was settled at all, which would make this vacuous.
+    // Prove settlement before absence checks so an inert dispatch cannot pass.
     expect(observe(closedDb, closedCtx.id).termination_reason).toBe('operator_close')
     expect(escalations(closedDb, closedCtx.runId)).toHaveLength(0)
 
@@ -192,15 +204,13 @@ describe('STA-4603/STA-4536 exit provenance', () => {
   it('does not carry an unconsumed stop intent across a same-id respawn', () => {
     const db = createDb()
     const runtime = createRuntime(db)
-    // The operator asked for a stop, but the stop never produced an exit — the
-    // process outlived it. A respawn then reuses the same session id.
+    // An unobserved stop outlives its request; respawn reuses the session id.
     runtime.markPtyStopRequested(PTY_ID)
     runtime.synchronizePtyOutputSequenceFromProvider(PTY_ID, { value: 0, generation: 'reset' })
     expect(runtime.isPtyStopRequested(PTY_ID)).toBe(false)
 
     const ctx = dispatchOnHandle(db, 'crash after respawn')
     runtime.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
-    // The replacement's crash must not inherit the old close's provenance.
     expect(observe(db, ctx.id)).toEqual({
       status: 'failed',
       last_failure: 'Agent process killed by signal 9',
@@ -213,15 +223,13 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const runtime = createRuntime(db)
     const ctx = dispatchOnHandle(db, 'stop requested but never confirmed')
     runtime.markPtyStopRequested(PTY_ID)
-    // The stop paths pass -1 when they asked a process to die and never saw it.
-    // The process may still be running against a revoked dispatch.
+    // -1 reports an unverified stop, so the process may still own a revoked dispatch.
     runtime.onPtyExit(PTY_ID, -1)
     expect(observe(db, ctx.id)).toEqual({
       status: 'failed',
       last_failure: 'Agent process stop was requested but never confirmed',
       termination_reason: 'unknown'
     })
-    // ...and it must still wake the coordinator, unlike a clean close.
     expect(escalations(db, ctx.runId)).toHaveLength(1)
   })
 
@@ -244,9 +252,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const db = createDb()
     const runtime = new OrcaRuntimeService(null)
     runtime.setOrchestrationDb(db)
-    // Model the shipping controller: `orca terminal close` reaches stopAndWait,
-    // which verifies the stop and then reports it with a synthetic code 0 --
-    // a number indistinguishable from a clean agent finish.
+    // stopAndWait reports verified user stops with synthetic 0, indistinguishable from finish by code alone.
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -305,5 +311,100 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     dispatchOnHandle(db, 'still running')
     const summary = await runtime.showTerminal(HANDLE)
     expect(summary.exitCause).toBeUndefined()
+  })
+
+  describe.each(['registration', 'spawn'] as const)('incarnation replacement via %s', (path) => {
+    function announce(runtime: OrcaRuntimeService, incarnationId?: string): void {
+      if (path === 'registration') {
+        runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+          tabId: TAB_ID,
+          leafId: LEAF_ID,
+          incarnationId
+        })
+      } else {
+        runtime.onPtySpawned(PTY_ID, incarnationId, { awaitsRegistration: false })
+      }
+    }
+
+    it('retires an operator close and ignores a late predecessor exit', async () => {
+      const runtime = createRuntime(createDb())
+      runtime.markPtyStopRequested(PTY_ID)
+      await runtime.onPtyExit(PTY_ID, 0, 'audit-incarnation')
+      expect((await runtime.showTerminal(HANDLE)).exitCause).toEqual({ kind: 'operator_close' })
+
+      announce(runtime, 'replacement-incarnation')
+      runtime.registerPreAllocatedHandleForPty(PTY_ID, 'term_replacement')
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: TAB_ID,
+            worktreeId: WORKTREE_ID,
+            title: 'Agent',
+            activeLeafId: LEAF_ID,
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: TAB_ID,
+            worktreeId: WORKTREE_ID,
+            leafId: LEAF_ID,
+            paneRuntimeId: 1,
+            ptyId: PTY_ID
+          }
+        ]
+      })
+
+      const summary = await runtime.showTerminal('term_replacement')
+      expect(summary.connected).toBe(true)
+      expect(summary.incarnationId).toBe('replacement-incarnation')
+      expect(summary.exitCause).toBeUndefined()
+      const clearedEvidence = { code: null, cause: null }
+      expect(runtime.exitEvidence()).toEqual(
+        ORCA_LAYOUT_OWNER_IS_MAIN ? [clearedEvidence] : [clearedEvidence, clearedEvidence]
+      )
+      await runtime.onPtyExit(PTY_ID, -1, 'audit-incarnation', {
+        cause: { kind: 'unknown', reason: 'stop_unverified' }
+      })
+      expect((await runtime.showTerminal('term_replacement')).exitCause).toBeUndefined()
+
+      await runtime.onPtyExit(PTY_ID, 7, 'replacement-incarnation', {
+        cause: { kind: 'exited', exitCode: 7 }
+      })
+      expect((await runtime.showTerminal('term_replacement')).exitCause).toEqual({
+        kind: 'exited',
+        exitCode: 7
+      })
+    })
+
+    it.each(['audit-incarnation', undefined])(
+      'retains unverified stop evidence when reconnect identity is %s',
+      async (incarnationId) => {
+        const runtime = createRuntime(createDb())
+        await runtime.onPtyExit(PTY_ID, -1, 'audit-incarnation', {
+          cause: { kind: 'unknown', reason: 'stop_unverified' }
+        })
+        announce(runtime, incarnationId)
+        expect((await runtime.showTerminal(HANDLE)).exitCause).toEqual({
+          kind: 'unknown',
+          reason: 'stop_unverified'
+        })
+      }
+    )
+
+    it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN && path === 'registration')(
+      'retains stop evidence without a known predecessor incarnation',
+      async () => {
+        const runtime = createRuntime(createDb(), null)
+        await runtime.onPtyExit(PTY_ID, -1, undefined, {
+          cause: { kind: 'unknown', reason: 'stop_unverified' }
+        })
+        announce(runtime, 'newly-observed-incarnation')
+        expect((await runtime.showTerminal(HANDLE)).exitCause).toEqual({
+          kind: 'unknown',
+          reason: 'stop_unverified'
+        })
+      }
+    )
   })
 })

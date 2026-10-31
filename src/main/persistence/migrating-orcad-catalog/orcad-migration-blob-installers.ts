@@ -1,13 +1,9 @@
-/**
- * Per-kind handling of migration blobs on the destination: a content check before the catalog
- * commits, and an installer after the commit is durable that moves the received blob into live
- * state and deletes it. Kinds without an installer are not advertised, so none arrive.
- */
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+// Validate blob contents before commit; install only advertised kinds after durable commit.
+import { servesWslMovedPaneHistory } from '../../orcad/orcad-migration-wsl-destination'
+import { readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { OrcadMigrationBlobKind } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
-import { ORCAD_MIGRATION_EDITOR_DRAFTS_KEY } from '../../../shared/orcad-migration/orcad-migration-editor-drafts'
 import {
   ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS_KEY,
   parseOrcadMigrationTerminalRestoreHintsText,
@@ -26,6 +22,10 @@ import {
   assertOrcadMigrationShellHistoryValid,
   installOrcadMigrationShellHistory
 } from './orcad-shell-history-installer'
+import {
+  assertOrcadMigrationTerminalHistoryValid,
+  installOrcadMigrationTerminalHistory
+} from './orcad-terminal-history-installer'
 import type {
   OrcadTerminalRestoreHintPlacement,
   OrcadTerminalRestoreHintStore
@@ -48,13 +48,13 @@ const BLOB_CONTENT_CHECKS: Partial<Record<OrcadMigrationBlobKind, OrcadMigration
     },
     'shell-history': ({ key, path, manifest }) => {
       assertOrcadMigrationShellHistoryValid(key, path, manifest.payload)
+    },
+    'terminal-history': ({ key, path, manifest }) => {
+      assertOrcadMigrationTerminalHistoryValid(key, path, manifest)
     }
   }
 
-/**
- * Bytes that matched their digest but not their format mean a buggy sender. Refusing here, before
- * anything lands, fails the move while the source still owns everything — nothing is lost.
- */
+/** Reject malformed content before commit while the source still owns everything. */
 export function assertOrcadMigrationBlobContentsValid(
   manifest: OrcadMigrationManifest,
   root: string
@@ -77,35 +77,29 @@ export type OrcadMigrationBlobInstall = {
   migration: OrcadMigrationRequestIdentity
   root: string
   terminalRestoreHints: OrcadTerminalRestoreHintStore
-  /** This host's `getHistoryRoot()`, where its panes' HISTFILEs live. */
+  /** This host's getHistoryRoot(). */
   shellHistoryRoot: string
+  /** This host's `getDaemonHistoryDir()`, where its terminals' checkpoints live. */
+  terminalHistoryRoot: string
   /** The shell binary a new pane on this host would actually run. */
   paneShellPath: () => string
-  /**
-   * The runtime's live-shell check. Without it (store load, before a runtime attached) shell
-   * history waits: a shell that outlived a restart would overwrite whatever lands under it.
-   */
+  /** Defer without runtime evidence: shells surviving a restart could overwrite installed history. */
   worktreeHasLiveShells?: (worktreeId: string) => boolean
-  /** Worktrees whose history install waits for their live shells to exit. */
   deferredShellHistoryWorktreeIds: Set<string>
-  /** The worktree that owns the pane on this host, or null when the pane is not here. */
   paneWorktreeId: (paneKey: string) => string | null
+  /** The workspace's folder on this host, or null when it is not here. */
+  workspacePath: (worktreeId: string) => string | null
   now: number
 }
 
-/**
- * Idempotent: a blob already installed is only deleted, and the hint store remembers installed
- * migrations so a retry never revives a hint a pane already took. A write failure keeps the blob
- * for the next retry: a commit retry, a catalog-state query, the runtime's post-attach pass, or
- * (for restore hints) the next store load.
- */
+/** Retain failed blobs for retry; installed-migration markers prevent consumed hints from reviving. */
 export function installOrcadMigrationReceivedBlobs(install: OrcadMigrationBlobInstall): void {
   let firstError: unknown = null
-  // One kind's failure must not hold back the others; each keeps its own blobs for the retry.
+  // Keep failures independent so other blob kinds can still install.
   for (const installKind of [
     installTerminalRestoreHints,
     installShellHistory,
-    releaseEditorDrafts
+    installTerminalHistory
   ]) {
     try {
       installKind(install)
@@ -116,6 +110,21 @@ export function installOrcadMigrationReceivedBlobs(install: OrcadMigrationBlobIn
   if (firstError !== null) {
     throw firstError
   }
+}
+
+function installTerminalHistory(install: OrcadMigrationBlobInstall): void {
+  // Only a WSL host advertises terminal history, so no other destination should hold any.
+  if (!servesWslMovedPaneHistory()) {
+    return
+  }
+  installOrcadMigrationTerminalHistory({
+    migration: install.migration,
+    root: install.root,
+    historyRoot: install.terminalHistoryRoot,
+    paneWorktreeId: install.paneWorktreeId,
+    workspacePath: install.workspacePath,
+    now: install.now
+  })
 }
 
 function installShellHistory(install: OrcadMigrationBlobInstall): void {
@@ -131,19 +140,6 @@ function installShellHistory(install: OrcadMigrationBlobInstall): void {
     deferredWorktreeIds: install.deferredShellHistoryWorktreeIds,
     now: install.now
   })
-}
-
-// The drafts landed in the committed session; this file only served a commit retry.
-function releaseEditorDrafts(install: OrcadMigrationBlobInstall): void {
-  const path = getOrcadMigrationReceivedBlobPath(install.root, install.migration, {
-    blobKind: 'editor-drafts',
-    key: ORCAD_MIGRATION_EDITOR_DRAFTS_KEY
-  })
-  if (!existsSync(path)) {
-    return
-  }
-  rmSync(path, { force: true })
-  syncDirectoryDurablySync(dirname(path))
 }
 
 function installTerminalRestoreHints(install: OrcadMigrationBlobInstall): void {
@@ -170,8 +166,7 @@ function installTerminalRestoreHints(install: OrcadMigrationBlobInstall): void {
       if (!isHintFormatError(error)) {
         throw error
       }
-      // The pre-commit check passed these bytes, so only a damaged file lands here; the catalog
-      // is already durable, and its panes reopen at their default folder.
+      // Pre-commit validation passed; damaged hints can only fall back to the default folder now.
       console.error(
         `[orcad-migration] dropped unreadable terminal restore hints for ${install.migration.migrationId}:`,
         error
@@ -182,7 +177,7 @@ function installTerminalRestoreHints(install: OrcadMigrationBlobInstall): void {
   syncDirectoryDurablySync(dirname(path))
 }
 
-// A hint whose pane is not in this host's session has no worktree to scope it to, so it is dropped.
+// Drop hints whose panes have no worktree on this host.
 function placeHints(
   hints: readonly OrcadMigrationTerminalRestoreHint[],
   paneWorktreeId: (paneKey: string) => string | null

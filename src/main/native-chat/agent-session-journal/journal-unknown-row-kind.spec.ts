@@ -1,7 +1,4 @@
-// A newer build's row kind is never damage: like a newer row version, it fails this build's load as
-// a newer Orca's chat with every row kept, so the newer build still reads the whole chat after an
-// upgrade.
-// A row whose stored sequence and body disagree is damage, which fails the load with every row kept.
+// Unsupported row kinds require a newer reader; sequence mismatches are damage. Neither deletes history.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -16,6 +13,7 @@ import {
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,
+  deleteTestJournalRow,
   insertTestJournalRowJson,
   liveTestJournalRows,
   openTestJournalHostDatabase,
@@ -42,7 +40,7 @@ export function registerJournalUnknownRowKindTests(): void {
   const SCOPE = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
 
   let root: string
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-journal-newer-kind-'))
@@ -61,15 +59,14 @@ export function registerJournalUnknownRowKindTests(): void {
     return journal.snapshot().items.map((entry) => entry.itemId)
   }
 
-  /** What a newer build would write: a kind this build does not know, in the envelope every row keeps. */
+  function rowEnvelope(epoch: string, seq: number) {
+    return { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch, seq, fence: 1, ts: 5_000 + seq }
+  }
+
   function newerRow(epoch: string, seq: number, extra: Record<string, unknown> = {}) {
     return {
-      v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+      ...rowEnvelope(epoch, seq),
       kind: 'future-mark',
-      epoch,
-      seq,
-      fence: 1,
-      ts: 5_000 + seq,
       payload: { said: 'by a newer build', seq },
       ...extra
     }
@@ -79,22 +76,17 @@ export function registerJournalUnknownRowKindTests(): void {
     return journals.open({ identity: IDENTITY, stateDirectory: root })
   }
 
-  /** Closes the chat, applies `edit` to its stored rows as a newer build or a bad write would, and
-   *  reopens it as a restarted host would. */
-  /** Rewrites rows with every journal closed, so the caller's next open replays them. */
+  /** Edit with all handles closed so the next open replays changed rows. */
   async function rewriteClosed(
     edit: (put: (seq: number, json: string) => void) => void = () => {}
   ) {
     await journals.closeAll()
     const { db } = openTestJournalHostDatabase(root)
     edit((seq, json) => {
-      db.prepare('DELETE FROM journal_rows WHERE session_id = ? AND seq = ?').run(
-        IDENTITY.sessionId,
-        seq
-      )
+      deleteTestJournalRow(db, IDENTITY.sessionId, seq)
       insertTestJournalRowJson(db, IDENTITY.sessionId, seq, json, 5_000 + seq)
     })
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
   }
 
   async function restartAfter(edit: (put: (seq: number, json: string) => void) => void = () => {}) {
@@ -112,15 +104,13 @@ export function registerJournalUnknownRowKindTests(): void {
     return stored().map((row) => [row.seq, JSON.parse(row.rowJson).kind])
   }
 
-  /** A journal of its anchor and one item, closed: the next row lands at sequence 3. */
   async function journalWithOneItem(): Promise<string> {
     const first = await open()
     await first.appendItem(item(0), { kind: 'status', text: 'before' }, SCOPE)
     return first.epoch
   }
 
-  /** One valid row of every kind this build writes; a kind added to the union without one here
-   *  fails to compile. */
+  /** Require a fixture for every row kind at compile time. */
   function rowOfEveryKind(): { [Kind in JournalRow['kind']]: Extract<JournalRow, { kind: Kind }> } {
     const base = { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch: 'epoch-1', fence: 1, ts: 1 }
     const providerHandle = agentSessionJournalProviderHandle(IDENTITY)
@@ -159,6 +149,18 @@ export function registerJournalUnknownRowKindTests(): void {
         kind: 'lifecycle-batch',
         settlementId: 's',
         mutations: [{ kind: 'tombstone', itemId: 'i', revision: 3 }]
+      },
+      queue: {
+        ...base,
+        seq: 7,
+        kind: 'queue',
+        messageId: 'q',
+        change: {
+          op: 'queued',
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'later' }] },
+          position: 1,
+          queuedAt: null
+        }
       }
     }
   }
@@ -194,7 +196,7 @@ export function registerJournalUnknownRowKindTests(): void {
 
     it('reads a known kind that fails its own checks as malformed', () => {
       const parsed = parseJournalRow(
-        JSON.stringify({ ...newerRow('epoch-1', 7), kind: 'item', itemId: 'x', revision: 1 })
+        JSON.stringify({ ...rowEnvelope('epoch-1', 7), kind: 'item', itemId: 'x', revision: 1 })
       )
       expect(parsed).toEqual({ ok: false, unreadable: false })
     })
@@ -225,7 +227,6 @@ export function registerJournalUnknownRowKindTests(): void {
       expect(stored()).toEqual(refused)
       expect(stored().find((row) => row.seq === 3)?.rowJson).toBe(newer)
 
-      // Stand-in for the newer build after an upgrade: the same place holds a kind it reads.
       const upgraded = await restartAfter((put) => put(3, known))
       expect(itemIds(upgraded)).toHaveLength(4)
       await upgraded.appendItem(item(4), { kind: 'status', text: 'after' }, SCOPE)
@@ -262,7 +263,12 @@ export function registerJournalUnknownRowKindTests(): void {
       ['a later', 9]
     ])('fails the load and is kept when it names %s one', async (_name, seq) => {
       const epoch = await journalWithOneItem()
-      const tombstone = { ...newerRow(epoch, seq), kind: 'tombstone', itemId: 'gone', revision: 1 }
+      const tombstone = {
+        ...rowEnvelope(epoch, seq),
+        kind: 'tombstone',
+        itemId: 'gone',
+        revision: 1
+      }
       await expect(restartAfter((put) => put(3, JSON.stringify(tombstone)))).rejects.toMatchObject(
         UNLOADABLE
       )

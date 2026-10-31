@@ -1,9 +1,5 @@
-/**
- * Opaque blobs a migration carries beside the signed manifest: data the catalog does not model
- * (pane restore hints, shell history files, native-chat records) that the destination installs
- * itself. Each kind is gated by its own destination capability, because an older destination
- * would drop a kind it does not know — the desktop refuses before staging instead.
- */
+/** Opaque migration blobs travel beside the signed catalog. Gate each kind by its destination capability:
+ * older destinations drop unknown kinds, so clients must refuse before staging. */
 import { z } from 'zod'
 import {
   ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES,
@@ -20,7 +16,7 @@ export const ORCAD_MIGRATION_BLOB_KINDS = [
   'terminal-restore-hints',
   'shell-history',
   'agent-session-records',
-  'editor-drafts'
+  'terminal-history'
 ] as const
 
 export type OrcadMigrationBlobKind = (typeof ORCAD_MIGRATION_BLOB_KINDS)[number]
@@ -56,11 +52,11 @@ export const ORCAD_MIGRATION_BLOB_KIND_CONTRACTS: Record<
     maxBytes: 64 * MIB,
     capability: 'orcad.migration-blob.agent-session-records.v1'
   },
-  // Every shed unsaved editor buffer of the migration in one document, named by the manifest.
-  'editor-drafts': {
-    key: /^drafts$/,
-    maxBytes: 64 * MIB,
-    capability: 'orcad.migration-blob.editor-drafts.v1'
+  // 16 hex of the pane key's sha256; the session id it restores as travels inside.
+  'terminal-history': {
+    key: /^[a-f0-9]{16}$/,
+    maxBytes: 16 * MIB,
+    capability: 'orcad.migration-blob.terminal-history.v1'
   }
 }
 
@@ -139,7 +135,6 @@ export function parseOrcadMigrationBlobDescriptor(value: unknown): OrcadMigratio
   }
 }
 
-/** Duplicate-free and within the count and total caps; the shape both peers hold a set to. */
 export function assertOrcadMigrationBlobSet(
   descriptors: readonly OrcadMigrationBlobDescriptor[]
 ): void {
@@ -267,14 +262,15 @@ export function parseOrcadMigrationBlobChunkResult(
 export const ORCAD_MIGRATION_INSTALLABLE_BLOB_KINDS: readonly OrcadMigrationBlobKind[] = [
   'terminal-restore-hints',
   'shell-history',
-  'editor-drafts'
+  'terminal-history'
 ]
 
-export function advertisedOrcadMigrationBlobCapabilities(): string[] {
+/** Moved panes' terminal history installs only on a WSL host, the one destination a WSL move has. */
+export function advertisedOrcadMigrationBlobCapabilities(host: { wslHost: boolean }): string[] {
   return [
     ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
-    ...ORCAD_MIGRATION_INSTALLABLE_BLOB_KINDS.map(
-      (kind) => ORCAD_MIGRATION_BLOB_KIND_CONTRACTS[kind].capability
-    )
+    ...ORCAD_MIGRATION_INSTALLABLE_BLOB_KINDS.filter(
+      (kind) => kind !== 'terminal-history' || host.wslHost
+    ).map((kind) => ORCAD_MIGRATION_BLOB_KIND_CONTRACTS[kind].capability)
   ]
 }

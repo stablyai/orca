@@ -7,19 +7,7 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribe extends OrcaRuntimeWi
     viewport?: { cols: number; rows: number }
   ): Promise<boolean>
 
-  // Why: server-side auto-fit on mobile subscribe. The runtime is the single
-  // source of truth — the mobile client just passes its viewport and the runtime
-  // decides whether to resize. This eliminates the measure→RPC→resubscribe
-  // pipeline that caused race conditions.
-  //
-  // Multi-mobile keying: each subscriber lives in `mobileSubscribers[ptyId]`'s
-  // inner map under its own clientId. Phone B subscribing does not overwrite
-  // phone A's record — both stay until each unsubscribes.
-  //
-  // Subscribe-in-desktop-mode rule: a subscribe with displayMode='desktop' is
-  // a passive watch; it does NOT take the floor. The driver remains
-  // `idle`/`desktop`. The lock banner is reserved for actual mobile
-  // interaction (input/resize/setDisplayMode/auto-or-phone subscribe).
+  // Runtime owns mobile fitting; retain separate client records per PTY. Desktop-mode subscriptions only watch and must not claim the floor.
   async handleMobileSubscribe(
     ptyId: string,
     clientId: string,

@@ -51,6 +51,11 @@ vi.mock('../../hooks/useIssueMetadata', () => ({
 describe('createLinearSlice caching', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    linearStatus.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'workspace-1'
+    })
   })
 
   it('serves fresh list cache and lets forced refresh bypass it', async () => {
@@ -156,7 +161,7 @@ describe('createLinearSlice caching', () => {
     ).toMatchObject({ items: [{ id: 'LIN-FORCED' }] })
 
     staleRequest.resolve({ items: [issue('LIN-STALE')] })
-    await expect(stalePromise).resolves.toMatchObject({ items: [{ id: 'LIN-STALE' }] })
+    await expect(stalePromise).rejects.toThrow('Linear read abandoned')
     expect(
       store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
     ).toMatchObject({ items: [{ id: 'LIN-FORCED' }] })
@@ -185,26 +190,42 @@ describe('createLinearSlice caching', () => {
     ).toMatchObject([{ id: 'LIN-FORCED' }])
 
     staleRequest.resolve([issue('LIN-STALE')])
-    await expect(stalePromise).resolves.toMatchObject([{ id: 'LIN-STALE' }])
+    await expect(stalePromise).rejects.toThrow('Linear read abandoned')
     expect(
       store.getState().getCachedLinearIssues({ kind: 'search', query: 'loading', limit: 36 })
     ).toMatchObject([{ id: 'LIN-FORCED' }])
   })
 
-  it('preserves cached list rows when forced revalidation fails transiently', async () => {
-    const store = createTestStore()
-    store.setState({
-      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
-      linearListCache: {
-        'workspace-1::list::all::36::': { data: { items: [issue('LIN-CACHED')] }, fetchedAt: 1 }
+  it.each(['list', 'search'] as const)(
+    'rejects a failed forced %s read while preserving its warm cache',
+    async (kind) => {
+      const store = createTestStore()
+      store.setState({
+        linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
+      })
+      const args =
+        kind === 'list'
+          ? { kind: 'list' as const, filter: 'all' as const, limit: 36 }
+          : { kind: 'search' as const, query: 'loading', limit: 36 }
+      const read = () =>
+        kind === 'list'
+          ? store
+              .getState()
+              .listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
+          : store.getState().searchLinearIssues('loading', 36, { force: true })
+      const runtime = kind === 'list' ? linearListIssues : linearSearchIssues
+      if (kind === 'list') {
+        linearListIssues.mockResolvedValueOnce({ items: [issue('LIN-CACHED')] })
+      } else {
+        linearSearchIssues.mockResolvedValueOnce([issue('LIN-CACHED')])
       }
-    })
-    linearListIssues.mockRejectedValueOnce(new Error('network down'))
-
-    await expect(
-      store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
-    ).resolves.toMatchObject({ items: [{ id: 'LIN-CACHED' }] })
-  })
+      await read()
+      const cached = store.getState().getCachedLinearIssues(args)
+      runtime.mockRejectedValueOnce(new Error('network down'))
+      await expect(read()).rejects.toThrow('network down')
+      expect(store.getState().getCachedLinearIssues(args)).toBe(cached)
+    }
+  )
 
   it('rethrows attribute-filter unsupported errors so UI can surface an upgrade message', async () => {
     const store = createTestStore()
@@ -248,21 +269,6 @@ describe('createLinearSlice caching', () => {
         attributeFilter
       })
     ).toMatchObject({ items: [{ id: 'LIN-CACHED' }] })
-  })
-
-  it('preserves cached search rows when forced revalidation fails transiently', async () => {
-    const store = createTestStore()
-    store.setState({
-      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
-      linearSearchCache: {
-        'workspace-1::search::loading::36': { data: [issue('LIN-CACHED')], fetchedAt: 1 }
-      }
-    })
-    linearSearchIssues.mockRejectedValueOnce(new Error('network down'))
-
-    await expect(
-      store.getState().searchLinearIssues('loading', 36, { force: true })
-    ).resolves.toMatchObject([{ id: 'LIN-CACHED' }])
   })
 
   it('returns stale cached rows for immediate rendering while revalidation decides freshness', () => {

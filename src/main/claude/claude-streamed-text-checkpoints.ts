@@ -9,60 +9,41 @@ import {
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
 
 export type ClaudeStreamedTextCheckpointDeps = {
-  /** Rewrites the block's journal row with the text accumulated so far. `ended` is set on the
-   *  block's last write, when it ends without the final frame that would otherwise replace it. */
+  /** Rewrite accumulated text; ended marks the last write when no final frame will arrive. */
   persist: (
     identity: AgentJournalItemIdentity,
     text: string,
     options: StructuredAgentSessionAppendOptions,
     ended?: ClaudeStreamedBlockEnd
   ) => void
-  /** Who produced a block, asked by the scope the block streamed under. */
   producer: ClaudeSubagentLinkageSource
   coalesceMs?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
 }
 
-/** How a block ended: `completedAt` is when the host saw it end, or saw what cut it off. */
+/** Host time of completion or interruption. */
 export type ClaudeStreamedBlockEnd = { completedAt?: number }
 
 export type ClaudeStreamedTextCheckpoints = {
-  /** Accumulate a delta; the row is rewritten on the coalescer's own cadence. */
+  /** Coalesce deltas and widen checkpoint intervals to avoid per-token journal rewrites. */
   append: (
     identity: AgentJournalItemIdentity,
     text: string,
     parentToolUseId?: string | null
   ) => void
-  /** Write every block whose row is behind the text received for it. */
   flush: () => void
-  /** Rewrite every block whose producer now resolves differently. A block that
-   *  stopped streaming before its announcement is never revisited otherwise,
-   *  and would keep a provisional id no later checkpoint comes to correct. */
+  /** Correct provisional producers even for blocks that stopped receiving checkpoints. */
   reattribute: () => void
-  /** Drop one block's state, for a block whose final frame has now landed. */
   forget: (key: string) => void
-  /** The text received for a block so far, if it is still streaming. */
   latest: (key: string) => string | undefined
-  /** Write each matching block's text one last time as ended, then drop it: its final frame is
-   *  never coming. A block with no text has no row and is only dropped. */
+  /** End matching rows whose final frames will never arrive; discard empty blocks. */
   finish: (ended: ClaudeStreamedBlockEnd, only?: (key: string) => boolean) => void
-  /**
-   * Drop every block still awaiting its final frame, at turn settlement. Their
-   * text is already journaled by the flush that precedes settlement; keeping it
-   * live would grow with every interrupted turn for the life of the session.
-   */
+  /** Flush before settling; discard retained blocks so interrupted turns cannot accumulate text. */
   settle: () => void
-  /** Blocks still awaiting a final frame. A settled turn must leave none. */
   readonly pending: number
   dispose: () => void
 }
 
-/**
- * Growth of a streamed block's row between its deltas and its final frame.
- *
- * The row is rewritten on a widening interval rather than per delta: a 200-line
- * reply would otherwise rewrite the same journal row once per token.
- */
 function sameLinkage(
   left: StructuredAgentSessionAppendOptions,
   right: StructuredAgentSessionAppendOptions
@@ -80,20 +61,14 @@ export function createClaudeStreamedTextCheckpoints(
   deps: ClaudeStreamedTextCheckpointDeps
 ): ClaudeStreamedTextCheckpoints {
   const identities = new Map<string, AgentJournalItemIdentity>()
-  /** The scope a block streamed under, kept because the persist callback has no
-   *  frame to re-read it from. */
+  /** Retain producer scope because persist has no frame to read. */
   const scopes = new Map<string, string | null>()
-  /** What each block's row was last written WITH — never a latch on resolving
-   *  it again. Every checkpoint rewrites the same identity, so a block has one
-   *  row and re-resolving can only revise it; this exists so a re-attribution
-   *  that would change nothing does not burn a revision. */
+  /** Last written linkage, used only to skip revisions that change nothing. */
   const writtenLinkage = new Map<string, StructuredAgentSessionAppendOptions>()
   const latestText = new Map<string, string>()
   const checkpointLengths = new Map<string, number>()
 
-  /** Resolved FRESH on every checkpoint. A provisional producer is stamped with
-   *  the handle it has rather than holding the prose back: the next checkpoint,
-   *  or `reattribute` once the announcement lands, revises the same row. */
+  /** Resolve each checkpoint afresh; later announcements revise provisional producers on the same row. */
   const producerOptions = (key: string): StructuredAgentSessionAppendOptions => {
     const scope = scopes.get(key) ?? null
     if (scope === null) {
@@ -157,7 +132,6 @@ export function createClaudeStreamedTextCheckpoints(
         }
         const options = producerOptions(key)
         const written = writtenLinkage.get(key)
-        // Nothing resolved differently: a duplicate must not burn a revision.
         if (written && sameLinkage(written, options)) {
           continue
         }
@@ -181,7 +155,6 @@ export function createClaudeStreamedTextCheckpoints(
       }
     },
     settle: () => {
-      // Map iteration tolerates deletion of the entry just visited.
       for (const key of identities.keys()) {
         drop(key)
       }

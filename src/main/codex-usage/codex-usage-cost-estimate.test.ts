@@ -69,6 +69,19 @@ describe('estimateCostUsd', () => {
     )
   })
 
+  it.each(['gpt-6.1-sol', 'gpt-6.1-sol-high', 'gpt-6.1-sol(max)'])(
+    'prices %s at GPT-6.1 Sol rates rather than GPT-6 Sol',
+    (model) => {
+      // Base $2 / $0.10 / $10: 1M*2 + 1M*0.1 + 1M*10.
+      expect(estimateCostUsd(model, shortContext(2_000_000, 1_000_000, 1_000_000))).toBeCloseTo(
+        12.1,
+        9
+      )
+      // Long $4 / $0.20 / $15: 0.15M*4 + 0.15M*0.2 + 0.1M*15.
+      expect(estimateCostUsd(model, longContext(300_000, 150_000, 100_000))).toBeCloseTo(2.13, 9)
+    }
+  )
+
   it('returns null for an unpriced model', () => {
     expect(estimateCostUsd('gpt-7-unreleased', shortContext(1, 0, 1))).toBeNull()
   })

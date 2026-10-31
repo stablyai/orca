@@ -34,7 +34,11 @@ describe('OSC 9999 split-frame scan budget', () => {
     const small = feedWithScanBudget(feedOf(2000))
     const large = feedWithScanBudget(feedOf(4000))
 
-    expect(small.results.every((result) => result.payloads.length === 0)).toBe(true)
+    for (const feed of [small, large]) {
+      expect(
+        feed.results.every((result) => result.payloads.length === 0 && result.cleanData === '')
+      ).toBe(true)
+    }
     // Re-scanning the accumulation would quadruple the budget when the feed doubles.
     expect(large.searchedChars).toBeLessThan(small.searchedChars * 3)
   })

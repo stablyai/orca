@@ -152,11 +152,7 @@ describe('createIpcPtyTransport', () => {
   })
 
   it('refuses to call a cross-connection SSH reattach expired, and still raises no error toast', async () => {
-    // Retargeted from "…as expired instead of a red error toast" (#7661), which pinned the bug:
-    // "belongs to SSH connection" is minted client-side by the id router before any relay is asked,
-    // so it is not evidence the process died. `sessionExpired` cold-restores the agent, and after an
-    // SSH target re-adoption the other connection is the SAME machine — two `claude --resume` on one
-    // transcript. The no-toast half of #7661 is still pinned below; the verdict half is now unverifiable.
+    // Client-side connection mismatch proves no host exit, even after same-machine re-adoption; keep it unverifiable to avoid duplicate resume while preserving toast suppression (#7661).
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnMock = vi
       .fn()
@@ -190,14 +186,12 @@ describe('createIpcPtyTransport', () => {
     })
 
     expect(onError).not.toHaveBeenCalled()
-    // undefined, not a sessionExpired result: an unaddressable id is unverifiable, never a
-    // licence to restart the shell.
+    // Unaddressable IDs remain unverifiable and cannot authorize respawn.
     expect(result).toBeUndefined()
   })
 
   it('still calls a relay-attested gone session expired so a truly dead PTY respawns', async () => {
-    // Guards the other direction of the change above: only the client-side mismatch lost its
-    // respawn licence. SSH_SESSION_EXPIRED is the relay's own absence verdict and must keep it.
+    // Relay-proven expiry still authorizes respawn; only client mismatch lost that authority.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnMock = vi.fn().mockRejectedValue(new Error('SSH_SESSION_EXPIRED: ssh:ssh-1@@pty-3'))
     ;(globalThis as { window: typeof window }).window = {

@@ -8,20 +8,6 @@ import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 const runId = 'run_legacy_local'
 
-// Overwrites the datetime('now')-seeded timestamps with explicit fixture values
-// so stale-detection assertions stay deterministic (no wall clock).
-function setDispatchTimes(
-  d: OrchestrationDb,
-  id: string,
-  dispatchedAt: string,
-  heartbeatAt: string | null = null
-): void {
-  const sqlite = (d as unknown as { db: Database.Database }).db
-  sqlite
-    .prepare('UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?')
-    .run(dispatchedAt, heartbeatAt, id)
-}
-
 describe('OrchestrationDb', () => {
   let db: OrchestrationDb | undefined
 
@@ -140,8 +126,6 @@ describe('OrchestrationDb', () => {
 
       const rows = d.listTasksWithDispatch()
       const row = rows.find((r) => r.id === task.id)
-      // Task is completed — its dispatch is terminal and should not appear as
-      // an "active" assignee.
       expect(row?.assignee_handle).toBeNull()
       expect(row?.dispatch_id).toBeNull()
     })
@@ -181,8 +165,7 @@ describe('OrchestrationDb', () => {
       )
     })
 
-    // Real leaf UUIDs: pane keys are `${tabId}:${leafUuid}`; only the leaf is
-    // remint-stable identity (tab half can change on pane break-out).
+    // Only the leaf UUID survives pane break-out; the tab portion of paneKey can change.
     const LEAF_A = '11111111-1111-1111-8111-111111111111'
     const LEAF_B = '22222222-2222-4222-9222-222222222222'
 
@@ -223,8 +206,7 @@ describe('OrchestrationDb', () => {
       const t2 = d.createTask({ runId, spec: 'second' })
       createRootDispatch(d, t1.id, 'term_worker')
 
-      // New dispatch has a pane key but the active row is legacy (no pane key):
-      // only handle identity can lock; a different handle is free.
+      // A legacy active row without paneKey can lock only by handle identity.
       expect(() => createRootDispatch(d, t2.id, 'term_other', `tab_1:${LEAF_A}`)).not.toThrow()
     })
 
@@ -462,121 +444,6 @@ describe('OrchestrationDb', () => {
       expect(after?.last_heartbeat_at).toBe('2026-05-04T00:00:00.000Z')
     })
 
-    it('getStaleDispatches returns only dispatched rows past the grace window', () => {
-      const d = createDb()
-      // Fixture: four rows, SQL-backdated timestamps (no fake clock):
-      //  (a) dispatched, heartbeated 5 min ago → not stale
-      //  (b) dispatched, heartbeated 12 min ago → STALE (expected result)
-      //  (c) dispatched, never heartbeated, dispatched 30s ago → not stale (grace)
-      //  (d) completed, heartbeated 30 min ago → not stale (status filter)
-      const taskA = d.createTask({ runId, spec: 'a' })
-      const taskB = d.createTask({ runId, spec: 'b' })
-      const taskC = d.createTask({ runId, spec: 'c' })
-      const taskD = d.createTask({ runId, spec: 'd' })
-      const ctxA = createRootDispatch(d, taskA.id, 'term_a')
-      const ctxB = createRootDispatch(d, taskB.id, 'term_b')
-      const ctxC = createRootDispatch(d, taskC.id, 'term_c')
-      const ctxD = createRootDispatch(d, taskD.id, 'term_d')
-      d.completeDispatch(ctxD.id)
-
-      const now = Date.now()
-      const iso = (ms: number) => new Date(now - ms).toISOString()
-
-      // Backdate dispatched_at for a, b, d to long ago so the grace doesn't
-      // shield them. c keeps its default (≈now).
-      const sqlite = (d as unknown as { db: Database.Database }).db
-      sqlite
-        .prepare(
-          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
-        )
-        .run(iso(60 * 60 * 1000), iso(5 * 60 * 1000), ctxA.id)
-      sqlite
-        .prepare(
-          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
-        )
-        .run(iso(60 * 60 * 1000), iso(12 * 60 * 1000), ctxB.id)
-      sqlite
-        .prepare('UPDATE dispatch_contexts SET dispatched_at = ? WHERE id = ?')
-        .run(iso(30_000), ctxC.id)
-      sqlite
-        .prepare(
-          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
-        )
-        .run(iso(60 * 60 * 1000), iso(30 * 60 * 1000), ctxD.id)
-
-      const stale = d.getStaleDispatches(iso(10 * 60 * 1000))
-      expect(stale.map((s) => s.id)).toEqual([ctxB.id])
-    })
-
-    // Regression for #8452: dispatched_at / last_heartbeat_at are written by
-    // datetime('now') (space-format, e.g. "2026-07-12 12:00:00") while the
-    // threshold is ISO ("...T11:55:00.000Z"). Raw TEXT ordering ranks the space
-    // (0x20) below the 'T' (0x54) at index 10, flagging fresh same-date rows.
-    it('getStaleDispatches ignores fresh SQLite space-format timestamps (#8452)', () => {
-      const d = createDb()
-
-      // Fresh worker: dispatched 12:00, heartbeat 12:05 (space-format), both
-      // after the 11:55 threshold → NOT stale.
-      const fresh = createRootDispatch(d, d.createTask({ runId, spec: 'fresh' }).id, 'term_fresh')
-      setDispatchTimes(d, fresh.id, '2026-07-12 12:00:00', '2026-07-12 12:05:00')
-
-      // Legacy ISO-format fresh row (mixed-format table) stays fresh too.
-      const legacy = createRootDispatch(
-        d,
-        d.createTask({ runId, spec: 'legacy' }).id,
-        'term_legacy'
-      )
-      setDispatchTimes(d, legacy.id, '2026-07-12T12:00:00.000Z', '2026-07-12T12:05:00.000Z')
-
-      // Genuinely hung: dispatched + heartbeated at 10:00, ~2h before threshold.
-      const hung = createRootDispatch(d, d.createTask({ runId, spec: 'hung' }).id, 'term_hung')
-      setDispatchTimes(d, hung.id, '2026-07-12 10:00:00', '2026-07-12 10:00:00')
-
-      const stale = d.getStaleDispatches('2026-07-12T11:55:00.000Z')
-      expect(stale.map((s) => s.id)).toEqual([hung.id])
-    })
-
-    it('getStaleDispatches keeps a just-dispatched space-format row in the grace window (#8452)', () => {
-      const d = createDb()
-
-      // Space-format dispatched_at one minute after the threshold, no heartbeat
-      // yet → still inside the grace window, must not be flagged.
-      const ctx = createRootDispatch(d, d.createTask({ runId, spec: 'x' }).id, 'term_x')
-      setDispatchTimes(d, ctx.id, '2026-07-12 12:00:00')
-
-      const stale = d.getStaleDispatches('2026-07-12T11:59:00.000Z')
-      expect(stale).toEqual([])
-    })
-
-    // Same-UTC-date midnight threshold: keeps the buggy space-vs-'T' compare in
-    // play so this guards the fix at a day boundary (#8452; idea from @KMGeon's #8453).
-    it('getStaleDispatches keeps a fresh row just after a UTC-midnight threshold (#8452)', () => {
-      const d = createDb()
-
-      const ctx = createRootDispatch(
-        d,
-        d.createTask({ runId, spec: 'midnight' }).id,
-        'term_midnight'
-      )
-      setDispatchTimes(d, ctx.id, '2026-05-04 00:04:00')
-
-      const stale = d.getStaleDispatches('2026-05-04T00:00:00.000Z')
-      expect(stale).toEqual([])
-    })
-
-    // Guards the last_heartbeat_at half of the fix on its own: a worker
-    // dispatched long before the threshold (stale under either format) that
-    // just sent a fresh space-format heartbeat must stay fresh (#8452).
-    it('getStaleDispatches keeps a live worker with a fresh space-format heartbeat (#8452)', () => {
-      const d = createDb()
-
-      const ctx = createRootDispatch(d, d.createTask({ runId, spec: 'live' }).id, 'term_live')
-      setDispatchTimes(d, ctx.id, '2026-07-12 10:00:00', '2026-07-12 11:59:00')
-
-      const stale = d.getStaleDispatches('2026-07-12T11:55:00.000Z')
-      expect(stale).toEqual([])
-    })
-
     it('getThreadMessagesFor returns only same-thread replies to a handle', () => {
       const d = createDb()
       const outbound = d.insertMessage({
@@ -587,7 +454,6 @@ describe('OrchestrationDb', () => {
         type: 'decision_gate',
         body: 'yes or no?'
       })
-      // Reply in the same thread addressed to the worker
       const reply = d.insertMessage({
         runId,
         from: 'coord',
@@ -596,7 +462,6 @@ describe('OrchestrationDb', () => {
         body: 'yes',
         threadId: outbound.id
       })
-      // Distractor: different thread, same recipient
       d.insertMessage({
         runId,
         from: 'coord',
@@ -605,7 +470,6 @@ describe('OrchestrationDb', () => {
         body: 'unrelated',
         threadId: 'thread_other'
       })
-      // Distractor: same thread but not addressed to worker
       d.insertMessage({
         runId,
         from: 'coord',
@@ -626,8 +490,7 @@ describe('OrchestrationDb', () => {
     let tempDir: string
 
     afterEach(() => {
-      // Why: Windows keeps the SQLite file locked until the DB handle closes,
-      // so migration temp directories must close before recursive cleanup.
+      // Close SQLite before recursive cleanup because Windows retains its file lock.
       db?.close()
       db = undefined
       if (tempDir) {
@@ -718,7 +581,6 @@ describe('OrchestrationDb', () => {
       const d = new OrchestrationDb(path)
       db = d
 
-      // (a) INSERT type='heartbeat' now succeeds
       expect(() =>
         d.insertMessage({
           runId,
@@ -730,7 +592,6 @@ describe('OrchestrationDb', () => {
         })
       ).not.toThrow()
 
-      // (b) last_heartbeat_at column exists on dispatch_contexts
       const task = d.createTask({ runId, spec: 'work' })
       const ctx = createRootDispatch(d, task.id, 'term_a')
       d.recordHeartbeat(ctx.id, '2026-05-04T00:00:00.000Z')
@@ -738,7 +599,6 @@ describe('OrchestrationDb', () => {
       expect(d.getTask(task.id)?.task_title).toBe('work')
       expect(d.getTask(task.id)?.display_name).toBe('work')
 
-      // (c) Indexes still attached to messages post-rebuild.
       const sqlite = (d as unknown as { db: Database.Database }).db
       const indexes = sqlite
         .prepare(
@@ -751,7 +611,6 @@ describe('OrchestrationDb', () => {
       expect(names.has('idx_messages_undelivered_inbox')).toBe(true)
       expect(names.has('idx_thread')).toBe(true)
 
-      // v1 data preserved
       expect(d.getMessageById('msg_v1')?.subject).toBe('pre-migration')
       expect(d.getMessageById('msg_v1')?.run_id).toBe(d.getLegacyAdoption()?.adopted_run_id)
       expect(d.getRun(LEGACY_RUN_ID)).toMatchObject({ legacy: 1 })

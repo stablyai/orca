@@ -63,7 +63,9 @@ it.each([false, true])('keeps cold authority with read failure=%s', async (failR
     )
     if (index === 0) {
       const context = jsonLines([{ type: 'turn_context', payload: { cwd: '/repo' } }])
+      const { atime, mtime } = await stat(path)
       await appendFile(path, `\n${context}\n`)
+      await utimes(path, atime, mtime)
     }
     const { mtimeMs, size: sizeBytes, mtime } = await stat(path)
     const parsed = await parseAgentSessionFileCached(
@@ -184,7 +186,6 @@ it('settles out-of-scope transcripts once and reads none of them after a restart
 
   const listed = (await scan()).sessions.map((session) => session.cwd)
   expect(listed.filter((cwd) => cwd === '/repo')).toHaveLength(1)
-  // The walked Grok session was ruled out from summary.json, never its history.
   expect(reads).not.toContain(join(others[2], 'chat_history.jsonl'))
 
   await flushSessionParseCachePersist()

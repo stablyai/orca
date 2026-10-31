@@ -60,7 +60,6 @@ describe('scanAiVaultSessions — CodeBuddy scope discovery', () => {
       id: 'old-in-scope',
       timestamp: '2026-05-01T10:00:00.000Z'
     })
-    // Newer, out of scope, and a sibling whose encoding shares the workspace prefix.
     await writeCodeBuddySession({
       sessionsDir: roots.codebuddyProjectsDir,
       cwd: '/home/ada/other',

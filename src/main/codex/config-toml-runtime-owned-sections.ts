@@ -100,21 +100,19 @@ export function isRuntimePreservedTomlSection(header: string): boolean {
 
 export function isRuntimeHookTrustTomlSection(header: string): boolean {
   const table = parseTomlTableHeaderPath(header)
-  // Why: Codex's config writer materializes the parent table on Windows. It is
-  // part of runtime-owned trust and must survive the next config mirror too.
-  // Its `["hooks"."state"]` spelling is the same table (#22592).
+  // Preserve the hooks.state parent Codex materializes on Windows, including quoted spellings.
   return !!table && !table.isArray && table.segments[0] === 'hooks' && table.segments[1] === 'state'
 }
 
-// Why: user-layer keys name the home's own hooks.json/config.toml; plugin/project keys don't.
+// Home-owned hook sources must not be shared between runtime homes.
 export function classifyHookTrustKey(key: string, homeDir: string): 'home-scoped' | 'shared' {
   const sourcePath = CODEX_HOOK_TRUST_KEY.exec(key)?.[1]
   if (sourcePath === undefined) {
-    // Why: Codex never writes another key shape; carry nothing we cannot attribute.
+    // Do not carry keys whose source cannot be attributed.
     return 'home-scoped'
   }
   const homeFiles = ['hooks.json', 'config.toml'].flatMap((file) => {
-    // Why: not path.join; a WSL home is a Linux path even when Orca runs on Windows.
+    // WSL homes require Linux separators even when Orca runs on Windows.
     const logicalPath = `${homeDir.replace(/[\\/]+$/, '')}/${file}`
     return [logicalPath, getCodexExplicitHomeHookSourcePath(logicalPath)]
   })
@@ -134,7 +132,7 @@ export function getHookTrustTomlSectionKeys(sections: readonly TomlSection[]): S
   return keys
 }
 
-// Why: runtime copy wins, else a duplicate table breaks Codex; exact keys keep slash variants apart.
+// Runtime trust wins; compare exact keys to retain required Windows separator variants.
 function claimSharedHookTrustSection(
   header: string,
   { systemHomeDir }: SharedHookTrustCarry,
@@ -157,7 +155,6 @@ export function isRuntimeProjectTomlSection(header: string): boolean {
 
 const CODEX_MCP_SERVER_TABLE_ROOT = 'mcp_servers'
 
-/** Returns the decoded MCP server name for an owner table or nested descendant. */
 export function getMcpServerTomlSectionName(header: string): string | null {
   const table = parseTomlTableHeaderPath(header)
   if (!table || table.isArray || table.segments[0] !== CODEX_MCP_SERVER_TABLE_ROOT) {
@@ -173,8 +170,7 @@ export function getTomlSectionHeaderKey(header: string): string {
     : `project:${normalizeCodexProjectPathForLookup(projectPath)}`
 }
 
-// Why: configs written before WSL tails compared case-sensitively can hold a
-// revocation under drifted casing; match it loosely so trust is not resurrected.
+// Match legacy WSL revocations loosely so case drift cannot restore trust.
 export function getRevocationTomlSectionHeaderKey(header: string): string {
   const projectPath = parseCodexProjectHeaderPath(header)
   return projectPath === null
@@ -182,8 +178,7 @@ export function getRevocationTomlSectionHeaderKey(header: string): string {
     : `project:${normalizeCodexProjectPathForRevocationLookup(projectPath)}`
 }
 
-// Why: hook upsert already removes both quote representations, while its paired
-// Windows slash variants are required for Codex 0.140 and must remain distinct.
+// Deduplicate only projects; hook trust needs distinct Windows separator variants.
 export function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSection[] {
   const deduplicated: TomlSection[] = []
   const projectIndexes = new Map<string, number>()
@@ -205,7 +200,7 @@ export function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSec
       getProjectTrustLevel(existing.block) !== 'untrusted' &&
       getProjectTrustLevel(section.block) === 'untrusted'
     ) {
-      // Why: revocation must survive self-healing regardless of duplicate order.
+      // Revocation wins regardless of duplicate order.
       deduplicated[existingIndex] = section
     }
   }
@@ -221,9 +216,7 @@ export function joinTomlBlocks(blocks: string[]): string {
   return normalizedBlocks.length === 0 ? '' : `${normalizedBlocks.join('\n\n')}\n`
 }
 
-// Why: with no ~/.codex/config.toml the runtime config is the user's only
-// config, so promotion seeds ~/.codex from it. Trust is runtime-owned and the
-// mirror re-appends it, so drop every project and hook-trust table here.
+// Seed missing canonical configs from runtime settings while excluding runtime-owned trust.
 export function extractOrdinaryCodexSettings(config: string): string {
   const sections = deduplicateProjectTomlSections(getTomlSections(config))
   const projectHeaders = new Set(
@@ -231,6 +224,6 @@ export function extractOrdinaryCodexSettings(config: string): string {
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
-  // Why: the daemon override exists only because Orca's home path is long; ~/.codex is not.
+  // The daemon override belongs to the managed home and must not be promoted.
   return stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders)).trimEnd()
 }

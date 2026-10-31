@@ -10,12 +10,11 @@ import {
   createCodexStructuredLaunchResolver,
   TEST_SPAWN_TOKEN
 } from '../runtime/structured-agent-launch-composition.test-support'
-import { withSupportedCodexCli } from '../codex/codex-cli-installation-error'
+import { readCodexCliVersion, withSupportedCodexCli } from '../codex/codex-cli-installation-error'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { createStructuredAgentEnvironmentResolvers } from '../runtime/structured-agent-shell-environment'
 import { identityFor } from '../codex/codex-structured-session-adapter-fixture'
-import { readCodexCliInstallation } from './codex-cli-installation'
 import type * as CommandResolution from '../../shared/node-cli-command-resolution'
 
 vi.mock('../startup/login-shell-environment', () => ({
@@ -59,7 +58,7 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
       const sources = {
         resolveCommand: (options?: { pathEnv?: string | null; homePath?: string }) =>
           resolveStructuredAgentCommand('codex', settings, options),
-        resolveAgentLaunchEnv: () => resolveTuiAgentLaunchEnv('codex', settings.agentDefaultEnv)
+        resolveAgentLaunchEnv: () => resolveTuiAgentLaunchEnv('codex', settings)
       }
       const environment = createStructuredAgentEnvironmentResolvers(sources)
       const record: AgentSessionRecord = {
@@ -75,8 +74,7 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
           resolveCommand: sources.resolveCommand,
           resolveEnvironment: () => environment.resolveAgentEnvironment('codex'),
           resolveLaunchArgs: () => [],
-          resolveWorkspacePath: async () => cwd,
-          resolveRollout: async () => null
+          resolveWorkspacePath: async () => cwd
         })
       )
       for (const resume of [false, true]) {
@@ -100,7 +98,6 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
         await expect(
           resolve({ identity: identityFor(record.sessionId), spawnToken: TEST_SPAWN_TOKEN })
         ).rejects.toThrow('0.135.0')
-        // An external update is checked again on the next chat start.
         await writeFile(versionFile, '0.136.0')
         await expect(
           resolve({ identity: identityFor(record.sessionId), spawnToken: TEST_SPAWN_TOKEN })
@@ -119,10 +116,10 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
       mode: 0o755
     })
     const input = { program: join('bin', 'codex'), cwd: root, env: { PATH: '' } }
-    expect((await readCodexCliInstallation(input)).status).toBe('ready')
+    expect(await readCodexCliVersion(input)).toEqual({ version: '0.136.0' })
     await writeFile(file, `#!${process.execPath}\nconsole.log('codex-cli 0.135.0')\n`, {
       mode: 0o755
     })
-    expect((await readCodexCliInstallation(input)).status).toBe('unsupported')
+    expect(await readCodexCliVersion(input)).toEqual({ version: '0.135.0' })
   })
 })

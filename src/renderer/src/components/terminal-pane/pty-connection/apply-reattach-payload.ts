@@ -1,4 +1,7 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import {
+  applyTerminalLaunchResult,
+  captureTerminalLaunchContext
+} from './terminal-launch-result-policy'
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
 import {
   POST_REPLAY_MODE_RESET,
@@ -14,6 +17,8 @@ import {
 } from '../terminal-snapshot-replay-paint'
 
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
+import { ackPaintedColdRestore } from './painted-cold-restore-ack'
+import { mainStartsPane } from './main-starts-pane'
 import { fitReattachedPaneToGrid, noteReattachAltFrameSkip } from './reattach-grid-fit'
 
 import type { ReattachPayloadContext } from './reattach-payload-context'
@@ -43,7 +48,7 @@ export function createReattachPayloadHandlers(
         ? snapshotPrefixAnsi + snapshotFrameAnsi
         : ctx.connectResult.snapshot
       session.rememberReattachPayloadAgentSignal(daemonSnapshotReplay, { fullScreenReplay: true })
-      // Why: replay at the snapshot's own dimensions to avoid rewrapping soft-wrapped rows at a different column count (#7279); suppress the PTY forward so this layout-only resize doesn't SIGWINCH the remote TUI.
+      // Replay at capture geometry to preserve wraps; suppress layout-only resize forwarding so it cannot SIGWINCH the host TUI (#7279).
       const snapshotDimensions = resolvePositiveTerminalDimensions(
         ctx.connectResult.snapshotCols,
         ctx.connectResult.snapshotRows
@@ -68,9 +73,7 @@ export function createReattachPayloadHandlers(
         kittyKeyboardFlags: ctx.connectResult.snapshotKittyKeyboardFlags,
         snapshotSeq: ctx.connectResult.snapshotSeq
       })
-      // A narrower fit clips the fixed-grid alt frame; drop it and let SIGWINCH repaint.
-      // A dead-owner restore keeps history plus its restored-session treatment;
-      // a frozen foreign-width frame would look live when no owner remains.
+      // Drop clipped foreign-width live frames for SIGWINCH repaint; dead owners retain history without showing a frozen frame as live.
       const daemonAltFrameSkippable =
         hasSplitDaemonAltFrame &&
         typeof snapshotFrameRestoreAnsi === 'string' &&
@@ -115,24 +118,21 @@ export function createReattachPayloadHandlers(
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
         // Snapshot superseded the cold-restore payload; ack so the daemon doesn't redeliver it.
-        if (!isRemoteRuntimePtyId(ctx.ptyId)) {
-          window.api.pty.ackColdRestore(ctx.ptyId)
-        }
+        ackPaintedColdRestore(session, ctx.ptyId)
       }
     } else if (ctx.connectResult?.replay || ctx.prefetchedParkModelSnapshot) {
-      // Why scoped to a park-reveal: an in-place reattach (network reconnect,
-      // wake, reload) already has its replay in hand.
+      // Only park-reveal needs this lookup; in-place reconnect already carries its replay.
       const modelSnapshot = ctx.revealFollowsTerminalPark ? ctx.prefetchedParkModelSnapshot : null
       if (!ctx.isCurrentReattachPayload()) {
         return
       }
       if (modelSnapshot) {
-        // Why composed for scan/reset only: kitty + reset heuristics need
-        // the full byte stream; the actual writes go through the shared
-        // alt-screen choreography below (scrollbackAnsi is '' for
-        // normal-buffer snapshots, so composition matches data there).
+        // Scan/reset needs composed snapshot bytes; actual writes use alt-screen choreography to preserve scrollback.
         const modelData = `${modelSnapshot.scrollbackAnsi ?? ''}${modelSnapshot.data}`
-        session.rememberReattachPayloadAgentSignal(modelData, { fullScreenReplay: true })
+        session.rememberReattachPayloadAgentSignal(modelData, {
+          fullScreenReplay: true,
+          imageTitle: modelSnapshot.lastTitle
+        })
         const modelCols = modelSnapshot.cols
         const modelRows = modelSnapshot.rows
         if (
@@ -151,10 +151,7 @@ export function createReattachPayloadHandlers(
           kittyKeyboardFlags: modelSnapshot.kittyKeyboardFlags,
           snapshotSeq: modelSnapshot.seq
         })
-        // Why shared: park+reveal of an alt-screen TUI needs the same
-        // ?1049l/?1049h rebuild as applyMainBufferSnapshot (main strips
-        // the ?1049h marker when splitting scrollbackAnsi) — inlined here
-        // because nesting structuralReplayCoordinator would deadlock.
+        // Share alt-screen rebuild with model snapshots; nesting replay coordinators here would deadlock.
         for (const replayChunk of buildMainModelSnapshotReplayWrites(modelSnapshot, {
           skipAltFrame: noteReattachAltFrameSkip(
             ctx,
@@ -170,7 +167,8 @@ export function createReattachPayloadHandlers(
             modelData,
             Boolean(ctx.connectResult?.coldRestore),
             modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen,
-            modelSnapshot.terminalOwner
+            modelSnapshot.terminalOwner,
+            modelSnapshot.lastTitle
           )
         )
         if (modelSnapshot.pendingEscapeTailAnsi) {
@@ -185,8 +183,8 @@ export function createReattachPayloadHandlers(
         )
         session.recordRendererOrderedSeq(modelSnapshot)
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
-        if (ctx.connectResult?.coldRestore && !isRemoteRuntimePtyId(ctx.ptyId)) {
-          window.api.pty.ackColdRestore(ctx.ptyId)
+        if (ctx.connectResult?.coldRestore) {
+          ackPaintedColdRestore(session, ctx.ptyId)
         }
       } else if (ctx.connectResult?.replay) {
         session.rememberReattachPayloadAgentSignal(ctx.connectResult.replay, {
@@ -196,13 +194,8 @@ export function createReattachPayloadHandlers(
         session.writeReplayData(
           `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`
         )
-        // Why: raw relay replay may contain the app's own kitty pushes; re-arm with set semantics so redelivery can't grow the stack.
-        // A constructor-fresh mirror (window reload) first demotes to unproven:
-        // the replay window proves nothing about negotiations that predate it.
-        if (!session.kittyKeyboardModes.hasProvenBaseline) {
-          session.kittyKeyboardModes.resetForSnapshot()
-        }
-        session.kittyKeyboardModes.scanReplay(ctx.connectResult.replay)
+        // Replay Kitty pushes with set semantics to avoid stack growth; fresh mirrors stay unproven for negotiations predating replay.
+        session.kittyKeyboardModes.adoptSnapshot(ctx.connectResult.replay, undefined)
         session.writeReplayData(
           `${ctx.connectResult.coldRestore ? RESET_GRAPHIC_RENDITION : ''}${ctx.connectResult.replay}`
         )
@@ -215,9 +208,7 @@ export function createReattachPayloadHandlers(
         )
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
         if (ctx.connectResult.coldRestore) {
-          if (!isRemoteRuntimePtyId(ctx.ptyId)) {
-            window.api.pty.ackColdRestore(ctx.ptyId)
-          }
+          ackPaintedColdRestore(session, ctx.ptyId)
         }
       }
     } else if (ctx.connectResult?.coldRestore) {
@@ -259,20 +250,41 @@ export function createReattachPayloadHandlers(
           session.suppressStructuralReplayPtyResize = false
         }
       }
-      // Why: recorded scrollback is raw PTY output that may hold query sequences; xterm.write would auto-reply into the new shell's stdin. See replay-guard.ts.
+      // Guard raw replay queries from auto-replying into the fresh shell (replay-guard.ts).
       session.writeReplayData(
         `${RESET_GRAPHIC_RENDITION}${ctx.connectResult.coldRestore.scrollback}`
       )
-      const preparedStartup = ctx.coldRestoreStartup ?? session.buildColdRestoreAgentResumeStartup()
-      const didPrepareResume = session.applyColdRestoreAgentResumeStartup(preparedStartup)
-      if (didPrepareResume) {
-        if (ctx.connectResult.agentResumeUnavailable) {
-          // Why: main dropped the resume argv, so this pane is a NEW session —
-          // the plain restored banner would claim the old one came back.
-          session.showSessionRestoredBanner('resume-unavailable')
-        } else if (preparedStartup?.hasSleepingRecord) {
-          session.showSessionRestoredBanner()
+      // An existing owner permits history replay, not another saved continuation.
+      let resumeUnavailable = Boolean(ctx.connectResult.agentResumeUnavailable)
+      let preparedStartup =
+        mainStartsPane(session) ||
+        ctx.connectResult.isReattach === true ||
+        ctx.connectResult.agentResumeRefused ||
+        resumeUnavailable
+          ? null
+          : (ctx.coldRestoreStartup ?? session.buildColdRestoreAgentResumeStartup())
+      if (preparedStartup && !ctx.coldRestoreStartup) {
+        const rejected = applyTerminalLaunchResult(
+          session,
+          ctx.connectResult,
+          captureTerminalLaunchContext(session, preparedStartup),
+          'candidate'
+        )
+        if (rejected) {
+          resumeUnavailable = true
+          preparedStartup = null
         }
+      }
+      const didPrepareResume =
+        ctx.connectResult.isReattach !== true &&
+        session.applyColdRestoreAgentResumeStartup(preparedStartup)
+      if (resumeUnavailable) {
+        // Dropped resume argv starts a new session; the restored banner must not claim the old session returned.
+        session.showSessionRestoredBanner('resume-unavailable')
+      } else if (didPrepareResume && preparedStartup?.hasSleepingRecord) {
+        session.showSessionRestoredBanner()
+      }
+      if (didPrepareResume) {
         session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
@@ -280,9 +292,7 @@ export function createReattachPayloadHandlers(
       session.consumeRestoredViewportBlankingMarker()
       // Why: a taller destination fit must not pull recovered rows back into the fresh shell's viewport after source-grid replay.
       session.writeFreshShellViewportBlanking(Math.max(destinationRows, session.pane.terminal.rows))
-      if (!isRemoteRuntimePtyId(ctx.ptyId)) {
-        window.api.pty.ackColdRestore(ctx.ptyId)
-      }
+      ackPaintedColdRestore(session, ctx.ptyId)
       if (didPrepareResume && !ctx.coldRestoreStartup) {
         session.schedulePendingStartupCommandDelivery()
       }

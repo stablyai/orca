@@ -53,7 +53,7 @@ describe('computeTrustKey', () => {
     ).toBe(`${join(tmpDir, 'hooks.json')}:user_prompt_submit:0:0`)
   })
 
-  // Why: ordinary Windows CI tokens cannot create file symlinks without Developer Mode.
+  // Windows CI requires Developer Mode for file symlinks.
   it.skipIf(process.platform === 'win32')(
     'preserves a hooks.json leaf symlink in the trust key',
     () => {
@@ -85,7 +85,6 @@ describe('computeTrustKey', () => {
   )
 
   it('uses native Windows backslashes in the trust key Codex looks up', () => {
-    // Why: Codex 0.140 writes approved Windows hook trust keys as raw native paths under [hooks.state].
     const winPath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
     const key = computeTrustKey({
       sourcePath: winPath,
@@ -99,8 +98,6 @@ describe('computeTrustKey', () => {
   })
 
   it('preserves literal backslashes in non-Windows-style fallback paths', () => {
-    // Why: SSH/POSIX paths can legally contain `\` as a filename character;
-    // only Windows-style separators should be normalized.
     expect(normalizeCodexHookSourcePath('/tmp/with\\literal/hooks.json')).toBe(
       '/tmp/with\\literal/hooks.json'
     )
@@ -134,7 +131,6 @@ describe('parseTrustKey', () => {
   })
 
   it('parses a Windows-style sourcePath whose drive letter contains a colon', () => {
-    // Why: anchor on the LAST three colons so colons inside sourcePath round-trip.
     expect(parseTrustKey('C:\\Users\\x\\.codex\\hooks.json:session_start:2:3')).toEqual({
       sourcePath: 'C:\\Users\\x\\.codex\\hooks.json',
       eventLabel: 'session_start',
@@ -181,7 +177,6 @@ describe('parseTrustKey', () => {
     })
   })
 
-  // Why: Number('') === 0 passes Number.isInteger, so empty segments need explicit rejection.
   it('returns null for empty group/handler segments', () => {
     expect(parseTrustKey('/x/hooks.json:pre_tool_use::0')).toBeNull()
     expect(parseTrustKey('/x/hooks.json:pre_tool_use:0:')).toBeNull()

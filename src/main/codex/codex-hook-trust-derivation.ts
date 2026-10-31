@@ -1,8 +1,9 @@
 import { realpathSync, statSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { withCliRuntimeOnPath } from '../codex-cli/command'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { collectListedHooks, type CodexListedHook } from './codex-app-server-client'
@@ -17,30 +18,26 @@ import {
   type CodexEventLabel
 } from './config-toml-trust'
 
-/**
- * Codex's hash per event it lists Orca's entry in; null for a listed event on a
- * Codex with no hook approvals (before 0.129). An unlisted event gets no entry.
- */
+/** Absent: unlisted event; null: listed by pre-0.129 Codex without hook approvals. */
 export type CodexHookHashes = Readonly<Partial<Record<CodexEventLabel, string | null>>>
 
-/** What Codex said about Orca's entry. */
 export type CodexHookAnswer =
   | { kind: 'hashes'; codexVersion: string; hashes: CodexHookHashes }
-  /** Codex answered, and its answer cannot approve Orca's entry: too old, unrecognized, inconsistent. */
+  /** Definitive rejection: too old, unrecognized or inconsistent. */
   | { kind: 'refused'; codexVersion: string; failure: string }
-  /** No answer yet (not asked, not found, or Codex failed before answering); asking again may get one. */
+  /** No definitive answer; retrying may succeed. */
   | { kind: 'pending'; failure: string; codexMissing?: true }
 
-// Why this long off the launch path: macOS assesses a new codex on its first run, measured at 10-12 s.
+// Allow macOS first-run assessment, measured at 10–12s, off the launch path.
 const VERSION_TIMEOUT_MS = 30_000
-// Why: an app-server start with a cold sqlite takes ~4 s; this bounds a hung binary.
+// Allow cold SQLite startup (~4s) while bounding hung binaries.
 const DERIVE_TIMEOUT_MS = 30_000
-// Why a second group: the copy after it shows whether Codex's hash depends on position.
+// Shift a copy to verify that Codex hashes do not depend on position.
 const SCRATCH_DUMMY_HOOK = { type: 'command', command: 'exit 0' }
 const SCRATCH_ORCA_GROUP_INDEXES = [0, 2] as const
 const SCRATCH_DUMMY_GROUP_INDEX = 1
 const SCRATCH_PREFIXES = ['orca-codex-hook-trust-', 'orca-codex-version-'] as const
-// Why an hour: no ask lives that long, so an older scratch home is one a quit left behind.
+// An hour exceeds any probe's lifetime; older scratch homes were abandoned.
 const STALE_SCRATCH_MS = 60 * 60_000
 
 type CodexHookScratchListing = {
@@ -50,10 +47,8 @@ type CodexHookScratchListing = {
 }
 
 /**
- * Asks one Codex binary for its hash of Orca's entry in each event, from a
- * throwaway CODEX_HOME. The same entry is listed at group 0, after another
- * group, and from a trusted project folder; Codex must hash all three alike,
- * so the answer holds for every home. Never throws; never reads or writes a real home.
+ * Verify position/file-independent hashes using a disposable home and trusted project.
+ * Failures become answers; real homes are never read or written.
  */
 export async function deriveCodexHookHashes(
   codexPath: string,
@@ -67,7 +62,7 @@ export async function deriveCodexHookHashes(
       hookCommand
     )
     if (hashes === 'inconsistent') {
-      // Why once more: the copies come from different config layers, so confirm before refusing.
+      // Confirm cross-layer inconsistency before refusing this version.
       hashes = readCodexHookHashes(await listScratchHomeHooks(codexPath, hookCommand), hookCommand)
     }
     if (hashes === 'inconsistent') {
@@ -76,7 +71,7 @@ export async function deriveCodexHookHashes(
       )
     }
     if (hashes === 'unloaded') {
-      // Why pending: an empty or reshaped answer says nothing about this version.
+      // An unloaded scratch home cannot establish version incompatibility.
       return {
         kind: 'pending',
         failure: `${describeCodexVersion(codexVersion)} listed no hooks from Orca's test home`
@@ -93,12 +88,11 @@ export async function deriveCodexHookHashes(
       )
     }
     console.warn('[codex-hook-trust] could not derive Codex hook hashes:', error)
-    // Why pending: a crash, timeout or RPC error says nothing about the version, so it must not be saved for it.
+    // Do not persist transient crashes, timeouts or RPC failures as version incompatibility.
     return { kind: 'pending', failure: error instanceof Error ? error.message : String(error) }
   }
 }
 
-/** Orca's entry in every event: alone in group 0 and, with `positionCopy`, again after a dummy group. */
 export function buildScratchHooksJson(hookCommand: string, positionCopy: boolean): string {
   const hooks = Object.fromEntries(
     CODEX_EVENTS.map((eventName) => {
@@ -109,7 +103,7 @@ export function buildScratchHooksJson(hookCommand: string, positionCopy: boolean
   return `${JSON.stringify({ hooks }, null, 2)}\n`
 }
 
-/** `hooks/list` for `codexHome`, or the default home when it is null; it changes no hook or config file. */
+/** Null selects the default home; hook and config files remain unchanged. */
 export async function listCodexHooks(
   codexPath: string,
   codexHome: string | null,
@@ -118,7 +112,7 @@ export async function listCodexHooks(
   const result = await runCodexAppServerSession(
     {
       command: codexPath,
-      // Why the probe args: plugin startup can leave marketplace clones behind a short session.
+      // Disable plugin startup to avoid leaving marketplace clones behind short sessions.
       args: [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS],
       cliPath: codexPath,
       ...(codexHome ? { env: { CODEX_HOME: codexHome } } : { envToDelete: ['CODEX_HOME'] }),
@@ -135,7 +129,7 @@ async function listScratchHomeHooks(
 ): Promise<CodexHookScratchListing> {
   const root = await mkdtemp(join(tmpdir(), SCRATCH_PREFIXES[0]))
   try {
-    // Why resolved: Codex keys hooks and project trust by the real path (macOS /var is /private/var).
+    // Codex keys hooks/project trust by real paths (macOS /var resolves to /private/var).
     const resolvedRoot = await realpath(root)
     const scratchHome = join(resolvedRoot, 'home')
     const project = join(resolvedRoot, 'project')
@@ -156,15 +150,13 @@ async function listScratchHomeHooks(
       projectHooksPath: join(project, '.codex', 'hooks.json')
     }
   } finally {
-    await rm(root, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})
+    await removeTree(root).catch(() => {})
   }
 }
 
 /**
- * Codex's hash per event it lists Orca's scratch entry at group 0 for;
- * 'inconsistent' when a copy elsewhere hashes differently; null when Codex
- * loaded the scratch home (its dummy hook is listed) but none of Orca's
- * entries; 'unloaded' when it listed neither. Only the scratch files count.
+ * 'inconsistent': copies hash differently; null: dummy listed without Orca; 'unloaded': neither listed.
+ * Only scratch files count; absent events stay absent.
  */
 export function readCodexHookHashes(
   scratch: CodexHookScratchListing,
@@ -214,19 +206,17 @@ export function readCodexHookHashes(
     )
     return loaded ? null : 'unloaded'
   }
-  // Why drop hash-less events when others have one: on a Codex with approvals they would wait for review.
+  // On Codex with approvals, hashless events would wait for review.
   return Object.values(hashes).some((hash) => hash !== null)
     ? Object.fromEntries(Object.entries(hashes).filter(([, hash]) => hash !== null))
     : hashes
 }
 
-/** "Codex 0.150.1" for `codex --version`'s "codex-cli 0.150.1"; other output as it is. */
 function describeCodexVersion(codexVersion: string): string {
   return codexVersion.replace(/^codex-cli\s+/, 'Codex ')
 }
 
-// Why these fields: they change when an update or reinstall replaces the binary behind the path.
-/** The identity of the binary at `codexPath` as it is on disk now; null when there is none. */
+// Detect binary replacement by updates/reinstalls, including equal-size atomic replacements via inode.
 export function fingerprintCodex(codexPath: string): string | null {
   try {
     const realPath = realpathSync(codexPath)
@@ -237,9 +227,8 @@ export function fingerprintCodex(codexPath: string): string | null {
   }
 }
 
-/** `codex --version`'s output; null when it reports none. */
 export async function probeCodexVersion(codexCommand: string): Promise<string | null> {
-  // Why a throwaway home: even `--version` leaves a tmp/arg0 folder in its CODEX_HOME.
+  // Even --version creates tmp/arg0 in CODEX_HOME; isolate it from real homes.
   const scratchHome = await mkdtemp(join(tmpdir(), SCRATCH_PREFIXES[1]))
   try {
     const result = await runProcess({
@@ -247,16 +236,15 @@ export async function probeCodexVersion(codexCommand: string): Promise<string | 
       args: ['--version'],
       env: withCliRuntimeOnPath(codexCommand, { ...process.env, CODEX_HOME: scratchHome }),
       timeoutMs: VERSION_TIMEOUT_MS,
-      // Why the tree: a hung Windows wrapper's codex child would outlive a root-only kill.
+      // A hung Windows wrapper's Codex child would survive a root-only kill.
       terminationBarrier: true
     })
     return (result.code === 0 && result.stdout.trim()) || null
   } finally {
-    await rm(scratchHome, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})
+    await removeTree(scratchHome).catch(() => {})
   }
 }
 
-/** Removes the scratch homes an earlier process left when it quit mid-ask. Never throws. */
 export async function sweepStaleCodexScratchHomes(): Promise<void> {
   const root = tmpdir()
   const names = await readdir(root).catch(() => [])
@@ -264,7 +252,7 @@ export async function sweepStaleCodexScratchHomes(): Promise<void> {
     const path = join(root, name)
     const info = await stat(path).catch(() => null)
     if (info && Date.now() - info.mtimeMs > STALE_SCRATCH_MS) {
-      await rm(path, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})
+      await removeTree(path).catch(() => {})
     }
   }
 }

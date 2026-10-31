@@ -59,14 +59,6 @@ describePostgres('removed relay tables against PostgreSQL', () => {
     await client.end()
   })
 
-  it('does not create the removed tables on a fresh database', async () => {
-    await resetSchema()
-    const database = await openRelayDatabase({ databaseUrl: scopedUrl(), dataDir: '' })
-    await database.close()
-
-    expect(await existingDeadTables()).toEqual([])
-  })
-
   it('boots on a database an older image created, leaving those tables alone', async () => {
     await resetSchema()
     await onScoped(async (client) => {

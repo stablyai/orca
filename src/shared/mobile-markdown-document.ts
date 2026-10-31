@@ -2,9 +2,7 @@ import { getClipboardTextByteLength, isClipboardTextByteLengthOverLimit } from '
 import { clampUtf8TextPrefix } from './utf8-byte-limits'
 
 export const MOBILE_MARKDOWN_EDIT_MAX_BYTES = 256 * 1024
-/** Markdown preview budget; the file preview keeps its own. Above it a mobile read returns a
- *  UTF-8-boundary prefix marked `truncated`, never a refusal. Sized like the 2 MiB terminal
- *  snapshot; the relay splice frame cap is 8 MiB. */
+/** Over-budget mobile reads return a UTF-8-boundary prefix marked truncated. Matches the 2 MiB terminal snapshot; relay splice cap is 8 MiB. */
 export const MOBILE_MARKDOWN_READ_MAX_BYTES = 2 * 1024 * 1024
 
 export type RuntimeMarkdownReadOnlyReason =
@@ -12,34 +10,6 @@ export type RuntimeMarkdownReadOnlyReason =
   | 'unsupported_tab'
   | 'unsupported_untitled'
   | 'file_too_large'
-
-export type RuntimeMobileMarkdownRequest =
-  | {
-      id: string
-      operation: 'read'
-      worktreeId: string
-      tabId: string
-    }
-  | {
-      id: string
-      operation: 'save'
-      worktreeId: string
-      tabId: string
-      baseVersion: string
-      content: string
-    }
-
-export type RuntimeMobileMarkdownResponse =
-  | {
-      id: string
-      ok: true
-      result: RuntimeMarkdownReadTabResult | RuntimeMarkdownSaveTabResult
-    }
-  | {
-      id: string
-      ok: false
-      error: string
-    }
 
 export type RuntimeMarkdownReadTabResult = {
   tabId: string

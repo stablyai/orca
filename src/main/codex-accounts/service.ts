@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import type {
   CodexManagedAccount,
@@ -30,6 +31,8 @@ import type {
   CodexResetCreditConsumeResult
 } from './codex-account-service-types'
 import { toCodexManagedAccountSummary } from './codex-account-service-types'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
+import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
 export type {
   CodexAccountAddTarget,
   CodexAccountReauthenticateOptions,
@@ -52,8 +55,7 @@ function killLoginProcessTree(
     typeof terminationPid === 'number' &&
     child.exitCode === null &&
     child.signalCode === null &&
-    // Last in the chain so a kill we never issue is never recorded, and a pid
-    // Electron owns refuses here into the plain-signal fallback below.
+    // Record only attempted kills; Electron-owned PIDs fall back to a direct signal.
     admitSelfInitiatedTreeKill({
       pid: terminationPid,
       site: 'codex-account-login-teardown',
@@ -61,9 +63,7 @@ function killLoginProcessTree(
     })
   ) {
     try {
-      // Why: child.kill() only reaches the direct child (cmd.exe for npm .cmd
-      // shims); taskkill /t also ends codex descendants whose open handles on
-      // the managed home make post-login file operations fail with ENOTEMPTY.
+      // Kill descendants too: their Windows file handles can block post-login home operations.
       execFileSync('taskkill', ['/pid', String(terminationPid), '/t', '/f'], {
         windowsHide: true,
         timeout: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS,
@@ -71,15 +71,14 @@ function killLoginProcessTree(
       })
       return
     } catch {
-      // Why: taskkill can race an already-exited tree; fall back to the plain
-      // signal so the direct child never outlives its deadline.
+      // If the tree already exited, still try signaling the direct child.
     }
   }
   child.kill()
 }
 
 export class CodexAccountService {
-  // Why: serialize the read-modify-write of settings; overlapping calls (e.g. double-click Add) would lose updates.
+  // Serialize settings read-modify-write operations to prevent overlapping account changes losing updates.
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingCodexLogin: (() => boolean) | null = null
   private pendingLoginUrl: string | null = null
@@ -99,13 +98,17 @@ export class CodexAccountService {
     private readonly runtimeHome: CodexRuntimeHomeService,
     lifecycle: CodexAccountServiceLifecycle = {}
   ) {
-    this.managedHomePaths = new CodexManagedHomePath((distro, script) =>
-      execFileSync(
-        'wsl.exe',
-        ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(script)],
-        { windowsHide: true, encoding: 'utf-8', timeout: 5000, cwd: resolveWslInteropSpawnCwd() }
-      )
-    )
+    this.managedHomePaths = new CodexManagedHomePath((distro, script) => {
+      const args = ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(script)]
+      // Bypasses process-host, so check the internal distro allowlist here too.
+      assertWslDistroAllowed('wsl.exe', args)
+      return execFileSync('wsl.exe', args, {
+        windowsHide: true,
+        encoding: 'utf-8',
+        timeout: 5000,
+        cwd: resolveWslInteropSpawnCwd()
+      })
+    })
     this.managedHomes = new CodexManagedHomeLifecycle(this.managedHomePaths)
     this.identity = new CodexAccountIdentity((path, accountId) =>
       this.managedHomePaths.assert(path, accountId)
@@ -129,6 +132,7 @@ export class CodexAccountService {
       configMirror: this.configMirror,
       lifecycle,
       resolveSystemDefault: () => this.resolveSystemDefaultIdentity(),
+      readIdentityFromHome: (path, accountId) => this.readIdentityFromHome(path, accountId),
       removeManagedHome: (path, accountId) => this.safeRemoveManagedHome(path, accountId),
       discardResetAttempts: (accountId) => this.resetCredits.discardForRemovedAccount(accountId)
     })
@@ -146,11 +150,7 @@ export class CodexAccountService {
     this.configMirror.safeSyncToManagedHomes()
   }
 
-  /**
-   * Read-only access for surfaces that report on the runtime home rather than
-   * prepare it — notably the config-sync status channel, which must resolve the
-   * home the current selection actually mirrors into without creating anything.
-   */
+  /** Expose runtime-home status without preparing a launch home. */
   get runtimeHomeService(): CodexRuntimeHomeService {
     return this.runtimeHome
   }
@@ -170,29 +170,38 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.registration.add(target))
   }
 
-  /** Abandons the login waiting on a browser, if any. True when one was stopped. */
+  async addAccountWithDeviceCode(
+    channel: HostAccountSignInChannel
+  ): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
+    return this.serializeMutation(() =>
+      this.registration.add({ runtime: 'host' }, (managedHomePath) =>
+        this.runCodexLogin(managedHomePath, channel)
+      )
+    )
+  }
+
   cancelPendingLogin(): boolean {
     return this.cancelPendingCodexLogin?.() ?? false
   }
 
-  /** The sign-in link of the login waiting on a browser, for a late-joining renderer. */
+  /** Pending sign-in link for late-joining renderers. */
   getPendingLoginUrl(): string | null {
     return this.pendingLoginUrl
   }
 
-  /** Registration lasts the process's lifetime; there is no teardown to hand back. */
+  /** Listeners live for the process lifetime; no teardown is returned. */
   onPendingLoginUrlChanged(listener: (url: string | null) => void): void {
     this.pendingLoginUrlListeners.add(listener)
   }
 
-  /** Lets the desktop open a WSL login's link; orcad never sets one. */
+  /** The desktop supplies a WSL link opener; orcad leaves it unset. */
   setWslLoginUrlOpener(opener: ((url: string) => void) | null): void {
     this.openWslLoginUrl = opener
   }
 
   private setPendingLoginUrl(url: string | null): void {
-    // Why the guard: every login that ends before printing a link clears an
-    // already-empty value, and each change reaches every window.
+    // Suppress duplicate login-link broadcasts to every window.
     if (this.pendingLoginUrl === url) {
       return
     }
@@ -202,21 +211,15 @@ export class CodexAccountService {
     }
   }
 
-  // Why before the queue, not inside it: the abandoned login owns the queue slot
-  // every later account action waits for. Called from the four the user drives,
-  // never from serializeMutation, which background reset-credit work also uses.
+  // Cancel before queueing: abandoned logins hold the slot needed by later user account actions.
+  // Background resets share the queue without superseding logins.
   private supersedePendingLogin(): void {
     if (this.cancelPendingLogin()) {
       console.info('[codex-accounts] Cancelled a pending Codex login superseded by a new request.')
     }
   }
 
-  /**
-   * Registers a managed Codex account from an already-authenticated `CODEX_HOME`
-   * instead of driving `codex login` here. Lets the `orca account add --agent codex`
-   * CLI run the login in the user's own terminal on a headless host and then import
-   * the captured `auth.json` into managed storage.
-   */
+  /** Import credentials from a terminal login on a headless host. */
   async addAccountFromHome(
     sourceHome: string,
     target?: CodexAccountAddTarget
@@ -284,27 +287,51 @@ export class CodexAccountService {
     this.managedHomes.safeRemove(candidatePath, expectedAccountId)
   }
 
-  private async runCodexLogin(managedHomePath: string): Promise<void> {
+  private async runCodexLogin(
+    managedHomePath: string,
+    deviceChannel?: HostAccountSignInChannel
+  ): Promise<void> {
+    // A device flow cancelled while queued must never spawn a login.
+    if (deviceChannel?.signal.aborted) {
+      throw new Error(CODEX_LOGIN_CANCELLED_MESSAGE)
+    }
+    // Capture this login so a late abort cannot cancel a newer flow.
+    let cancelThisLogin: (() => boolean) | null = null
+    const cancelForChannel = (): void => {
+      cancelThisLogin?.()
+    }
+    deviceChannel?.signal.addEventListener('abort', cancelForChannel, { once: true })
     try {
       await runCodexLoginSession(managedHomePath, {
         wslCommand: 'wsl.exe',
-        spawn: ({ command, args, env, stdio }) =>
-          spawn(command, args, {
+        spawn: ({ command, args, env, stdio }) => {
+          assertWslDistroAllowed(command, args)
+          return spawn(command, args, {
             stdio,
-            // Why: hide the outer wrapper only. A dedicated login console stays visible.
+            // Hide the outer wrapper; the dedicated login console remains visible.
             windowsHide: true,
             env
-          }),
+          })
+        },
         killProcessTree: killLoginProcessTree,
         setCancel: (cancel) => {
           this.cancelPendingCodexLogin = cancel
+          cancelThisLogin = cancel
         },
         onAuthUrl: (url) => this.setPendingLoginUrl(url),
-        openWslAuthUrl: this.openWslLoginUrl
+        openWslAuthUrl: this.openWslLoginUrl,
+        ...(deviceChannel
+          ? {
+              deviceAuth: {
+                onPrompt: ({ url, userCode }) =>
+                  deviceChannel.onPrompt({ url, userCode, needsCode: false })
+              }
+            }
+          : {})
       })
     } finally {
-      // Why: both die with the login server — no surface may keep offering a
-      // link nothing is listening on, or a cancel with nothing to cancel.
+      deviceChannel?.signal.removeEventListener('abort', cancelForChannel)
+      // Clear the link and cancellation handle when their login server ends.
       this.cancelPendingCodexLogin = null
       this.setPendingLoginUrl(null)
     }

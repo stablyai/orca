@@ -34,7 +34,7 @@ export function formatCommandHelp(spec: CommandSpec): string {
   const displayedFlags =
     spec.argumentMode === 'passthrough'
       ? []
-      : supportsBrowserPageFlag(spec.path)
+      : supportsBrowserPageFlag(spec)
         ? [...spec.allowedFlags, 'page']
         : spec.allowedFlags
 
@@ -88,7 +88,6 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
   }
-  // Why: the shared --title help says "terminal tab" — correct for `rename`, wrong for one pane.
   if (command === 'terminal set-pane-title' && flag === 'title') {
     return '--title <text>         Custom title for one pane (pass "" to reset)'
   }
@@ -123,10 +122,13 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
   }
   if (command === 'orchestration worker-list' && flag === 'cursor') {
-    return '--cursor <cursor>      Opaque page cursor copied from page.nextCursor'
+    return '--cursor <cursor>      Opaque page cursor copied from nextCursor'
   }
   if (command === 'orchestration worker-list' && flag === 'terminal-state') {
     return '--terminal-state <state> Terminal accounting filter: active, reclaimable, retained, release_pending, release_unknown, or released'
+  }
+  if (command.startsWith('orchestration ') && flag === 'full') {
+    return '--full                 Print the full record Orca returned instead of the concise view'
   }
   if (command === 'skills get' && flag === 'full') {
     return '--full                 Print the full guide with bundled references'
@@ -182,8 +184,6 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'orchestration task-create' && flag === 'display-name') {
     return '--display-name <text> UI label shown for dispatched worker rows'
   }
-  // Why: the shared --agent help describes launching a TUI agent in a terminal,
-  // which is the wrong meaning here — this selects the account provider.
   if (command === 'account add' && flag === 'agent') {
     return '--agent <id>           Account provider: claude, codex, opencode, or devin (default claude)'
   }

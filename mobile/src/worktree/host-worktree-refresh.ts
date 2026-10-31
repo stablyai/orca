@@ -1,21 +1,28 @@
-import { AppState } from 'react-native'
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
 import type { RpcClient } from '../transport/rpc-client'
-import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-reader'
+import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
 
 const WORKTREE_REFRESH_MS = 3000
 
 type WorktreeRefreshOptions = { allowDuringModal?: boolean; queueIfInFlight?: boolean }
 type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
 
+// Keep lifecycle callers independent of RN types.
+type HostAppState = {
+  currentState: string
+  addEventListener: (type: 'change', listener: (state: string) => void) => { remove: () => void }
+}
+
 type HostWorktreeRefreshArgs = {
-  client: RpcClient
+  client: Pick<RpcClient, 'subscribe'>
   fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<void>
   fetchRepoMetadata: (options?: RepoRefreshOptions) => Promise<void>
-  /** Re-reads the Workspace options the phone shares with the desktop. */
-  syncViewSettings: (options?: { reconnected?: boolean }) => Promise<void>
+  /** Re-reads the Workspace options the phone shares with the desktop; `resend` retries unanswered changes. */
+  syncViewSettings: (options?: { resend?: boolean }) => Promise<void>
   /** The host's sidebar feed, which replaces the poll: its notices say when anything changed. */
   sidebarFeed?: HostSidebarFeedTriggers | null
+  /** React Native's AppState; passed in so the lifecycle also runs off the device. */
+  appState: HostAppState
 }
 
 export function startHostWorktreeRefresh({
@@ -23,13 +30,14 @@ export function startHostWorktreeRefresh({
   fetchWorktrees,
   fetchRepoMetadata,
   syncViewSettings,
-  sidebarFeed
+  sidebarFeed,
+  appState
 }: HostWorktreeRefreshArgs): () => void {
   let stale = false
   let eventStreamReady = false
 
   const refreshOnForeground = (): void => {
-    if (AppState.currentState !== 'active') {
+    if (appState.currentState !== 'active') {
       return
     }
     sidebarFeed?.refresh()
@@ -37,7 +45,7 @@ export function startHostWorktreeRefresh({
     void fetchRepoMetadata({ queueIfInFlight: true })
   }
 
-  const appStateSubscription = AppState.addEventListener('change', (state) => {
+  const appStateSubscription = appState.addEventListener('change', (state) => {
     if (state === 'active') {
       refreshOnForeground()
     }
@@ -45,15 +53,11 @@ export function startHostWorktreeRefresh({
   const interval = sidebarFeed
     ? null
     : setInterval(() => {
-        if (AppState.currentState !== 'active') {
+        if (appState.currentState !== 'active') {
           return
         }
         void fetchWorktrees()
-        // Why: desktop Settings repo edits (icon/color/name, repo removal) now emit `reposChanged`
-        // (#11994), but a host on an older build does not; keep this periodic repo.list as the
-        // convergence safety-net. fetchRepoMetadata self-throttles to REPO_METADATA_REFRESH_MS
-        // (60s), so this is ~1 request/min while foregrounded — the AppState gate is what removes
-        // the waste (both stop while backgrounded).
+        // Older hosts emit no reposChanged; retain foreground repo polling, self-throttled to once a minute.
         void fetchRepoMetadata()
       }, WORKTREE_REFRESH_MS)
   const unsubscribe = client.subscribe(
@@ -73,7 +77,7 @@ export function startHostWorktreeRefresh({
           // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
           void fetchWorktrees()
           void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-          void syncViewSettings({ reconnected: true })
+          void syncViewSettings({ resend: true })
         }
         return
       }
@@ -105,6 +109,8 @@ export function startHostWorktreeRefresh({
   sidebarFeed?.refresh()
   void fetchWorktrees()
   void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+  // A lost write predates the new lifecycle’s replayed ready; explicitly resend it on reconnect.
+  void syncViewSettings({ resend: true })
 
   return () => {
     stale = true

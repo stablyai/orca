@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../agent-session-journal/journal-host-database-test-support'
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,7 +8,7 @@ import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease
 import {
   readPersistedLease,
   writeOlderBuildLease
-} from '../../runtime/agent-session-older-build-lease.test-fixture'
+} from '../../runtime/agent-session/ownership/agent-session-older-build-lease.test-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { supervisedPosixLaunch } from '../../provider-process/provider-process-supervisor'
@@ -24,6 +25,7 @@ const roots: string[] = []
 let operations = 0
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -208,7 +210,7 @@ describe('structured session recovery resolution', () => {
       [4242, 'SIGTERM'],
       [4242, 'SIGKILL']
     ])
-    // Its transport died with the runtime that held it; nothing proved it gone, so no evidence.
+    // Lost transport permits release but supplies no death proof.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
@@ -232,7 +234,7 @@ describe('structured session recovery resolution', () => {
     )
 
     expect(result).toBe('resolved')
-    // The pid may have been reused by an unrelated process.
+    // Saved PIDs may belong to unrelated processes.
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
@@ -258,7 +260,7 @@ describe('structured session recovery resolution', () => {
     )
 
     expect(result).toBe('resolved')
-    // Windows stops a tree only through a child it still holds; a saved pid is never signalled.
+    // Windows requires a held child to stop a tree; never signal a saved PID.
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
@@ -273,7 +275,6 @@ describe('structured session recovery resolution', () => {
     await liveOwner(await openStore(directory))
     await writeOlderBuildLease(directory, SESSION, { runtimeKind: 'tui' })
     await (await openStore(directory)).reconcileOnRestart({ probe: async () => MATCHED, now: NOW })
-    // A fresh load of what that restart persisted, as any later or older build reads it.
     const store = await openStore(directory)
     await store.reconcileOnRestart({ probe: async () => MATCHED, now: NOW })
     const stopOwnerProcess = vi.fn()
@@ -285,7 +286,7 @@ describe('structured session recovery resolution', () => {
       )
     ).toBe('unresolved')
     expect(stopOwnerProcess).not.toHaveBeenCalled()
-    // Older builds stop only a native owner that is not conflicted, the same rule as this one.
+    // Conflicted claims must remain safe for older builds’ native-owner stop rules.
     expect(await readPersistedLease(directory, SESSION)).toMatchObject({
       runtimeKind: 'native',
       claimStatus: 'conflicted',
@@ -313,7 +314,6 @@ describe('structured session recovery resolution', () => {
       probe: async () => ({ outcome: 'indeterminate', reason: 'no scan' }),
       now: NOW
     })
-    // No process is recorded for a conflict to name, so there is nothing to wait out.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
       claimStatus: 'released',
@@ -382,7 +382,7 @@ describe.runIf(process.platform !== 'win32')(
       const result = await resolveStructuredSessionRecovery(
         {
           store,
-          // The recorded pid is the supervisor's; its absence is the proof recovery evicts on.
+          // Supervisor absence proves provider-group cleanup.
           probeRecord: async () =>
             alive(supervisor.pid!) ? MATCHED : { outcome: 'pid-absent' as const },
           now: () => NOW + 10_000
@@ -391,7 +391,7 @@ describe.runIf(process.platform !== 'win32')(
       )
 
       expect(result).toBe('resolved')
-      // Evicted on proof of death, which must hold for the provider too, not only the supervisor.
+      // Death proof must cover the provider, not merely its supervisor.
       expect(store.getRecord(SESSION)?.lease.deathEvidence).not.toBeNull()
       expect(alive(provider)).toBe(false)
     })

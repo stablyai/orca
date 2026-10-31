@@ -1,6 +1,5 @@
 import type { AppState } from '@/store/types'
 import { getAllWorktreesFromState } from '@/store/selectors'
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import {
   getLocalExecutionHostLabel,
@@ -22,7 +21,13 @@ import type {
 } from '../../../../shared/sidebar-list/sidebar-feed-rows'
 import type { SmartStampFields } from '../../../../shared/sidebar-list/sort-stamps'
 import { buildPairedServerActivityFacts } from '../../../../shared/sidebar-list/paired-server-activity-facts'
-import { GOLDEN_NOW, folder, group, lineage } from './sidebar-list-golden-factories.test-fixture'
+import { keyWorkspaceActivityByRow } from '../../../../shared/sidebar-list/workspace-activity-facts'
+import { GOLDEN_NOW, folder, lineage } from './sidebar-list-golden-factories.test-fixture'
+import {
+  GROUPED_REPOS,
+  GROUPED_WORKTREES,
+  GROUPS_OF_GROUPED_REPOS
+} from './sidebar-list-parity-catalog.test-fixture'
 import { sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import {
   readWindowWorkspaceActivityFacts,
@@ -34,6 +39,12 @@ import {
   readWindowPairedServerRows
 } from '@/lib/sidebar-shadow/paired-server-rows-shadow'
 import type { SidebarInputsFeedDomain } from '../../../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
+import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/sidebar-feed-domains'
+import { buildSidebarFeedCatalog } from '../../../../shared/sidebar-list/sidebar-feed-catalog'
+import {
+  projectCatalogDomain,
+  windowCatalogFromServerAnswers
+} from './sidebar-list-parity-project-catalog.test-fixture'
 
 const SERVER_HOST_ID = 'runtime:env-1'
 
@@ -48,10 +59,8 @@ const buildServer: PublicKnownRuntimeEnvironment = {
   preferredEndpointId: 'ws'
 }
 
-// Stamps on every host's rows, so Recent and Smart order across local, SSH and the paired server.
 const STAMPS: Record<string, SmartStampFields & { lastActivityAt?: number; isUnread?: boolean }> = {
   Zeta: { smartTier: 'needs-you', smartAt: GOLDEN_NOW - 600_000 },
-  // Done holds only while unread: feat-a and api-y were not read yet.
   'feat-a': { smartTier: 'done', smartAt: GOLDEN_NOW - 60_000, isUnread: true },
   'api-y': {
     smartTier: 'done',
@@ -60,20 +69,19 @@ const STAMPS: Record<string, SmartStampFields & { lastActivityAt?: number; isUnr
     isUnread: true
   },
   'remote-x': { smartTier: 'working', smartAt: GOLDEN_NOW - 30_000 },
-  // Read since it finished, so it ranks as Rest.
   'feat-b': { smartTier: 'done', smartAt: GOLDEN_NOW - 1_000 },
   'gitlab-mr': { smartTier: 'working', smartAt: GOLDEN_NOW - 900_000 }
 }
 
-/**
- * What the parity suite adds to the golden store: stamps, a paired server the desktop knows with
- * a nested workspace and a folder workspace, an SSH connection, a saved host order and a creation
- * this host runs.
- */
+/** Extend the golden world with host stamps, paired-server workspaces, SSH and manual host order. */
 export function parityWorldOverrides(base: Partial<AppState>): Partial<AppState> {
-  const repoById = new Map((base.repos ?? []).map((repo) => [repo.id, repo]))
+  const repos = [...(base.repos ?? []), ...GROUPED_REPOS]
+  const repoById = new Map(repos.map((entry) => [entry.id, entry]))
   const worktreesByRepo: AppState['worktreesByRepo'] = {}
-  for (const [repoId, worktrees] of Object.entries(base.worktreesByRepo ?? {})) {
+  for (const [repoId, worktrees] of Object.entries({
+    ...base.worktreesByRepo,
+    ...GROUPED_WORKTREES
+  })) {
     const repo = repoById.get(repoId)
     worktreesByRepo[repoId] = worktrees.map((worktree) => {
       const branch = worktree.branch.replace('refs/heads/', '')
@@ -83,29 +91,20 @@ export function parityWorldOverrides(base: Partial<AppState>): Partial<AppState>
           ? { cliProvenance: { kind: 'created-by-cli' as const, createdAt: 1 } }
           : {})
       }
-      // Hosts stamped as the window's catalog fetch stamps them.
       const listed = repo ? withRepoHostOwnership(worktree, getRepoExecutionHostId(repo)) : worktree
       return { ...listed, ...stamps }
     })
   }
   const pending = Object.values(base.pendingWorktreeCreations ?? {})[0]
   const [serverMain, serverChild] = worktreesByRepo.api ?? []
+  const projectGroups = [...(base.projectGroups ?? []), ...GROUPS_OF_GROUPED_REPOS]
+  const catalog = windowCatalogFromServerAnswers({ ...base, repos, worktreesByRepo, projectGroups })
   return {
-    worktreesByRepo,
-    // A server workspace nested under the server's main, and a server folder workspace.
+    ...catalog,
     worktreeLineageById: {
       ...base.worktreeLineageById,
       ...(serverMain && serverChild ? { [serverChild.id]: lineage(serverChild, serverMain) } : {})
     },
-    projectGroups: [
-      ...(base.projectGroups ?? []),
-      group('pg-server-folders', 'Server folders', {
-        parentPath: '/srv/folders',
-        createdFrom: 'folder-scan',
-        executionHostId: SERVER_HOST_ID,
-        tabOrder: 3
-      })
-    ],
     folderWorkspaces: [
       ...(base.folderWorkspaces ?? []),
       folder('fw-server', 'pg-server-folders', { executionHostId: SERVER_HOST_ID, sortOrder: 3 })
@@ -177,58 +176,65 @@ export function parityServerBrowserTabState(): Partial<AppState> {
   }
 }
 
-/**
- * The feed domains main would publish for this store, read through the window-side projections
- * the shadow comparison held equal to main's producers before the window read main's feed.
- */
-export function feedDomainsFromWindowState(state: AppState): SidebarInputsFeedDomain[] {
+/** Project this store into main’s feed domains using the window projections checked against its producers. */
+export function feedDomainsFromWindowState(
+  state: AppState,
+  serverHostIds: ReadonlySet<string> = new Set([SERVER_HOST_ID])
+): SidebarInputsFeedDomain[] {
   const worktrees = getAllWorktreesFromState(state)
-  const servers = readWindowPairedServerHosts(state, new Set([SERVER_HOST_ID]))
+  const servers = readWindowPairedServerHosts(state, serverHostIds)
   const windowActivity = readWindowWorkspaceActivityFacts(state, GOLDEN_NOW)
   const serverRows = readWindowPairedServerRows(state, new Set(servers.keys()))
-  // The server reports the terminals and agents the desktop runs in its workspaces.
   const reportedRows = [...serverRows.values()].map((row) => {
     const facts = windowActivity.get(row.worktreeId)
     return { ...row, activity: { terminal: facts?.terminal ?? null, agent: facts?.agent ?? null } }
   })
-  const domain = (name: string, read: () => Record<string, unknown>): SidebarInputsFeedDomain => ({
+  const rowsOf = <Row extends { key: string }>(rows: readonly Row[], hostId: string): Row[] =>
+    rows.filter((row) => row.key.startsWith(`${hostId}|`))
+  const domain = (
+    name: string,
+    read: SidebarInputsFeedDomain['read']
+  ): SidebarInputsFeedDomain => ({
     name,
     read,
     watch: () => () => {}
   })
+  const workspaceRows = Object.fromEntries(
+    buildWorkspaceRows({
+      worktrees,
+      folderWorkspaces: state.folderWorkspaces,
+      repos: state.repos,
+      lineageById: state.worktreeLineageById
+    })
+  )
   return [
-    domain('workspaces', () =>
-      Object.fromEntries(
-        buildWorkspaceRows({
-          worktrees,
-          folderWorkspaces: state.folderWorkspaces,
-          repos: state.repos,
-          lineageById: state.worktreeLineageById
-        })
-      )
-    ),
+    domain('workspaces', () => workspaceRows),
     domain('activity', () => ({
-      // The window's browser and chat tabs, as its saved session for the server holds them.
       ...buildPairedServerActivityFacts(
-        [{ hostId: SERVER_HOST_ID, freshness: 'live', rows: reportedRows }],
+        [...servers.keys()].map((hostId) => ({
+          hostId,
+          freshness: 'live' as const,
+          rows: rowsOf(reportedRows, hostId)
+        })),
         () => ({
           browserTabsByWorktree: state.browserTabsByWorktree,
           unifiedTabs: state.unifiedTabsByWorktree
         })
       ),
-      ...Object.fromEntries(toLocallyOwnedRows(state, windowActivity))
+      ...keyWorkspaceActivityByRow(
+        Object.fromEntries(toLocallyOwnedRows(state, windowActivity)),
+        workspaceRows
+      )
     })),
     domain('review', () => ({
       ...buildPairedServerReviewFacts(
-        [{ hostId: SERVER_HOST_ID, rows: [...serverRows.values()] }],
+        [...servers.keys()].map((hostId) => ({
+          hostId,
+          rows: rowsOf([...serverRows.values()], hostId)
+        })),
         state.prCache
       ),
-      ...Object.fromEntries(
-        toLocallyOwnedRows(
-          state,
-          new Map(Object.entries(buildWorkspaceReviewFacts(worktrees, state.repos, state.prCache)))
-        )
-      )
+      ...buildWorkspaceReviewFacts(worktrees, state.repos, state.prCache)
     })),
     domain('creations', () =>
       Object.fromEntries(
@@ -245,26 +251,21 @@ export function feedDomainsFromWindowState(state: AppState): SidebarInputsFeedDo
       )
     ),
     domain('pairedServerRows', () => Object.fromEntries(serverRows)),
-    domain('desktop', () => readWindowDesktopSidebarFacts(state))
+    domain('desktop', () => readWindowDesktopSidebarFacts(state)),
+    projectCatalogDomain(state)
   ]
 }
 
-/** What the host's own phone reads beside the feed: repo.list, groups and ui.get/settings.get. */
-export function phoneInputsFromWindowState(state: AppState): {
+/** What the host's own phone reads: the feed's catalog, and ui.get/settings.get for its view. */
+export function phoneInputsFromWindowState(
+  state: AppState,
+  domains: SidebarFeedDomains
+): {
   catalog: SidebarFeedCatalog
   view: SidebarFeedView
 } {
-  const projection = getProjectHostSetupProjectionFromState(state)
   return {
-    catalog: {
-      repos: state.repos,
-      projectGroups: state.projectGroups ?? [],
-      // The projection the window publishes for the phone (mobileRelay.projectSections).
-      projectGrouping: {
-        projects: projection.projects,
-        projectHostSetups: projection.setups
-      }
-    },
+    catalog: buildSidebarFeedCatalog(domains.projectCatalog, [], []),
     view: {
       groupBy: state.groupBy,
       sortBy: state.sortBy,
@@ -282,11 +283,7 @@ export function phoneInputsFromWindowState(state: AppState): {
   }
 }
 
-/**
- * What both adapters must agree on, one line per row in occurrence order: headers with their
- * counts and collapse keys, lineage keys, and which occurrences are active. Labels a client draws
- * from its own icons, host health and card contents are presentation and left out.
- */
+/** Compare occurrence order, header counts/collapse, lineage and activation; omit client-specific presentation. */
 export function projectParityRows(
   rows: readonly HostSectionRow[],
   activeRowKeys: ReadonlySet<string>
@@ -299,7 +296,7 @@ export function projectParityRows(
         ]
       case 'header':
         return [
-          `HEADER ${row.key} collapseKey=${row.collapseKey ?? '-'} label=${row.label ?? '-'} icon=${JSON.stringify(row.icon)} count=${row.count} hostId=${row.hostId ?? '-'}`
+          `HEADER ${row.key} collapseKey=${row.collapseKey ?? '-'} label=${row.label ?? '-'} icon=${JSON.stringify(row.icon)} count=${row.count} hostId=${row.hostId ?? '-'} groupDepth=${row.projectGroupDepth ?? '-'}`
         ]
       case 'item':
         return [

@@ -1,7 +1,3 @@
-// A real host over a real store and journal, with a scripted provider and a clock the test moves,
-// for the tests of a conversation that outlives its agent. The idle sweep runs on its own short
-// interval; a test moves `clock.now` past the idle window and waits for the outcome.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,7 +30,10 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
@@ -61,14 +60,12 @@ export type RestTestRig = {
   adapter: RestTestAdapter
   clock: { now: number }
   statusEvents: AgentSessionStatusEvent[]
-  /** `readChildWork` serves the session's child records, as the host's store does. */
   sink: {
     publish: Mock
     forget: Mock
     readChildWork: Mock<(subject: unknown) => AgentChildWorkView[]>
   }
-  /** Wraps a spawn so its child stays `starting`: every other child proves its start once
-   *  published. */
+  /** Keep this spawn starting; other children prove startup after publication. */
   heldStart: (
     acquire: StructuredAgentSessionAdapter['acquire']
   ) => StructuredAgentSessionAdapter['acquire']
@@ -77,7 +74,6 @@ export type RestTestRig = {
     fence: number
     acquisitionGeneration: string
   }) => Promise<void>
-  /** Opens a fresh host over the same store and journals: what a restart leaves behind. */
   restart: (deps?: Partial<StructuredAgentSessionHostDeps>) => Promise<StructuredAgentSessionHost>
   dispose: () => Promise<void>
 }
@@ -113,7 +109,6 @@ export function restTestSend(
   }
 }
 
-/** Every item and submission a reader was sent, whatever frame carried it. */
 export function readerSaw(events: readonly AgentSessionSubscribeEvent[]) {
   const items = events.flatMap((event) =>
     event.type === 'batch' ? event.batch.items : event.type === 'end' ? [] : event.page.items
@@ -219,6 +214,7 @@ export async function createRestTestRig(
     },
     dispose: async () => {
       await rig.host.flushAllStreamedEvents().catch(() => undefined)
+      await closeTestJournalHostDatabases()
       await rm(root, { recursive: true, force: true })
     }
   }
@@ -226,7 +222,6 @@ export async function createRestTestRig(
   return rig
 }
 
-/** Creates the chat, lists its tab, and sends one message so its journal is on disk. */
 export async function foundRestTestChat(rig: RestTestRig): Promise<void> {
   const attached = await rig.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
   if (!attached.ok) {
@@ -240,12 +235,10 @@ export async function foundRestTestChat(rig: RestTestRig): Promise<void> {
   await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalled())
 }
 
-/** Runs one sweep pass now, for a test that set `idleSweep.intervalMs` out of reach. */
 export function sweepOnce(host: StructuredAgentSessionHost): Promise<void> {
   return host.collaboratorsForTests().lifetime.idleSweep.tick()
 }
 
-/** Waits long enough for several sweep ticks to have run. */
 export function sweepTicks(count = 6): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, SWEEP_INTERVAL_MS * count))
 }

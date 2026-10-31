@@ -134,16 +134,14 @@ function storeWithRestoredFolderOwner(): ReturnType<typeof createTestStore> {
 }
 
 describe('all-host folder workspace settlement', () => {
-  it('keeps restored folder owner hints when the local catalog fails', async () => {
+  it('drops a restored owner its own host settled even when the local catalog fails', async () => {
     folderWorkspacesList.mockRejectedValue(new Error('local down'))
     const store = storeWithRestoredFolderOwner()
 
     await store.getState().fetchFolderWorkspacesForAllHosts()
 
     expect(store.getState().folderWorkspaces.map((w) => w.id)).toEqual(['remote-folder'])
-    expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({
-      [restoredFolderKey]: 'runtime:env-1'
-    })
+    expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({})
   })
 
   it('keeps restored folder owner hints and lists no runtimes when remote hosts are skipped', async () => {

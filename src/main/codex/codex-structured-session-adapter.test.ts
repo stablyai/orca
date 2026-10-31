@@ -11,10 +11,8 @@ import {
   identityFor
 } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  CodexAppServerRequestError,
-  type openCodexAppServerConnection
-} from './codex-app-server-connection'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import type { openCodexAppServerConnection } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   CodexStructuredSessionAdapter,
@@ -41,12 +39,14 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-saved',
       effort: 'low',
-      serviceTier: 'priority'
+      serviceTier: 'priority',
+      reportedPermissionMode: null
     })
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',
       'thread/start',
-      'model/list'
+      'config/read',
+      'skills/list'
     ])
   })
 
@@ -91,7 +91,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
   })
 
-  it('leaves a rejected listing as a catalog error after the thread opens', async () => {
+  it('keeps current intent usable without inventing controls when a listing fails', async () => {
     const codex = fakeCodex({
       'model/list': () => {
         throw new Error('stub model/list rejected')
@@ -102,16 +102,40 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
-      spawnToken: 'spawn-9'
+      spawnToken: 'spawn-9',
+      options: { model: 'gpt-live', effort: 'medium' }
     })
 
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-live',
-      effort: 'medium'
+      effort: 'medium',
+      reportedPermissionMode: null
     })
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).rejects.toThrow(
-      'stub model/list rejected'
-    )
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
+      current: { model: 'gpt-live', effort: 'medium', reportedPermissionMode: null },
+      models: [
+        {
+          id: 'gpt-live',
+          label: 'GPT Live',
+          description: 'gpt-live',
+          isDefault: false,
+          efforts: [],
+          effortsKnown: false
+        }
+      ]
+    })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'after-listing-failure',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    expect(
+      codex.connections[0].calls.findLast((call) => call.method === 'turn/start')?.params
+    ).toMatchObject({ model: 'gpt-live', effort: 'medium' })
     expect(codex.connections[0].closeCount).toBe(0)
   })
 
@@ -126,7 +150,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       resolveLaunch: createCodexStructuredLaunchResolver({
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => '/work/repo',
-        resolveCommand: () => 'codex',
+        resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
         resolveLaunchArgs: () => []
       })
     })
@@ -142,9 +166,9 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       params: {
         cwd: '/work/repo',
         approvalPolicy: 'on-request',
-        sandbox: 'workspace-write',
+        sandbox: 'read-only',
         approvalsReviewer: 'user',
-        // A user's `inherit = "core"` policy would strip these from every command the chat runs.
+        // Explicit values survive inherit = core.
         config: {
           'shell_environment_policy.set.ORCA_AGENT_SESSION_ID': 'session-1',
           'shell_environment_policy.set.ORCA_STRUCTURED_SESSION': '1',
@@ -163,8 +187,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
   it('resumes the thread the durable handle chain names, not the client one', async () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex, {
-      resumeThreadId: 'thread-proven',
-      resumePath: '/rollouts/thread-proven.jsonl'
+      resumeThreadId: 'thread-proven'
     })
 
     await acquireReadyCodexForTest(adapter, {
@@ -177,8 +200,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       method: 'thread/resume',
       params: expect.objectContaining({
         threadId: 'thread-proven',
-        cwd: '/work/repo',
-        path: '/rollouts/thread-proven.jsonl'
+        cwd: '/work/repo'
       })
     })
     expect(codexStartedLink(adapter)?.origin).toBe('resumed')
@@ -246,8 +268,6 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     codex.routes['thread/start'] = () => {
-      // Codex talks as soon as the child is up, which is before the adapter has
-      // a thread id to publish the session under.
       codex.connections[0].handlers.onNotification?.('item/started', { threadId: THREAD_ID })
       codex.connections[0].handlers.onServerRequest?.({
         id: 5,
@@ -260,8 +280,6 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     const adapter = await acquired(codex, {}, events)
 
     expect(events.map((event) => event.type)).toEqual(['notification', 'prompt'])
-    // The early approval is answerable, so Codex is not left blocked on a
-    // request that arrived a moment too soon.
     await adapter.answerPrompt({
       sessionId: 'session-1',
       itemId: 'codex-item-early',
@@ -320,7 +338,6 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         resumeThreadId: null
       }),
       openConnection: codex.openConnection,
-      // The child dies while the acquisition is still reading its identity.
       readProcessStartTime: async () => {
         codex.connections[0].closed = true
         return 1_700_000_000_000
@@ -452,13 +469,15 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    // Identity is not knowable here: a send coalesced into a running turn shares
-    // that turn's id, so the echo settles which message landed where.
-    expect(outcome).toEqual({ state: 'admitted' })
+    // Coalesced sends share a turn ID; the echo supplies message identity.
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params).toEqual(
       {
         threadId: THREAD_ID,
         clientUserMessageId: 'client-1',
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        sandboxPolicy: { type: 'readOnly' },
         input: [
           { type: 'text', text: 'ship it' },
           { type: 'localImage', path: '/tmp/shot.png' },
@@ -487,7 +506,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({ state: 'admitted' })
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(events.at(-1)).toMatchObject({ type: 'notification', method: 'turn/started' })
   })
 
@@ -495,8 +514,6 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     codex.routes['turn/start'] = () => {
-      // A subagent runs its own thread over the same connection, and its turn
-      // starts first.
       const notify = codex.connections[0].handlers.onNotification
       notify?.('turn/started', { threadId: 'thread-child', turn: { id: 'turn-child' } })
       notify?.('turn/started', { threadId: THREAD_ID, turn: { id: 'turn-root' } })
@@ -511,9 +528,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({ state: 'admitted' })
-    // Each event carries the thread it actually came from, so the journal can
-    // keep a subagent's turn out of the root conversation.
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(events.map((event) => (event.type === 'notification' ? event.threadId : null))).toEqual([
       'thread-child',
       THREAD_ID
@@ -536,7 +551,6 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
         fence: 7
       })
     ).toEqual({
-      // Built without Codex's own words, so nothing is quoted and no detail is invented.
       state: 'rejected',
       reason: "Codex didn't accept this message.",
       rejection: { kind: 'providerRejected', neverReachedAgent: true }

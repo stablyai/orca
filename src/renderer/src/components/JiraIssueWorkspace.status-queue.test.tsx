@@ -11,7 +11,7 @@ import {
 } from './__mocks__/jira-issue-workspace-edit-fixture'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { JiraTransition } from '../../../shared/jira-types'
+import type { JiraTransition } from '../../../shared/jira/jira-types'
 
 describe('JiraIssueWorkspace queued status metadata', () => {
   it('reloads transitions on a reopened issue when its earlier status save completes', async () => {

@@ -1,4 +1,7 @@
-import type { RuntimeFileOpenPosition } from '../../shared/runtime-file-contracts'
+import type {
+  RuntimeEditorTabReveal,
+  RuntimeFileOpenPosition
+} from '../../shared/runtime-file-contracts'
 import { ipcRenderer } from 'electron'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
@@ -8,6 +11,7 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
@@ -139,6 +143,11 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:agentLaunchPaneVerdict', listener)
     return () => ipcRenderer.removeListener('ui:agentLaunchPaneVerdict', listener)
   },
+  onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: PaneLaunchRecipe) => callback(data)
+    ipcRenderer.on('ui:launchRecipe', listener)
+    return () => ipcRenderer.removeListener('ui:launchRecipe', listener)
+  },
   onSplitTerminal: (
     callback: (data: {
       tabId: string
@@ -212,12 +221,7 @@ export const uiTerminalAndSessionTabsApi = {
     return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
   },
   onFocusEditorTab: (
-    callback: (data: {
-      tabId: string
-      worktreeId: string
-      /** The user clicked a notification, so revealing the tab is navigation and not a courtesy. */
-      userInitiated?: boolean
-    }) => void
+    callback: (data: { tabId: string; worktreeId: string; userInitiated?: boolean }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
@@ -278,5 +282,13 @@ export const uiTerminalAndSessionTabsApi = {
     ) => callback(data)
     ipcRenderer.on('ui:openFileFromMobile', listener)
     return () => ipcRenderer.removeListener('ui:openFileFromMobile', listener)
+  },
+  onRevealEditorTabFromRuntime: (
+    callback: (data: RuntimeEditorTabReveal) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: RuntimeEditorTabReveal) =>
+      callback(data)
+    ipcRenderer.on('ui:revealEditorTabFromRuntime', listener)
+    return () => ipcRenderer.removeListener('ui:revealEditorTabFromRuntime', listener)
   }
 } satisfies Partial<PreloadApi['ui']>

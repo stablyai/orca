@@ -14,9 +14,8 @@ vi.mock('node:fs', async (importOriginal) => {
   return { ...actual, mkdirSync: vi.fn(actual.mkdirSync) }
 })
 
-vi.mock('node:os', async () => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
-  const actual = await vi.importActual<typeof import('node:os')>('node:os')
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -63,8 +62,6 @@ describe('ClaudeRuntimePathResolver', () => {
     const paths = new ClaudeRuntimePathResolver().getRuntimePaths()
 
     expect(paths.configDir).toBe(join(testState.fakeHomeDir, '.claude'))
-    // Why: background rate-limit refreshes resolve these paths even when Claude
-    // is disabled, so resolving must never materialize the directory (#12181).
     expect(existsSync(paths.configDir)).toBe(false)
   })
 

@@ -7,9 +7,6 @@ import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-
 import { writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-fixture'
 import SyncDatabase from '../sqlite/sync-database'
 
-// Why readers and not casts: the worker dispatch returns `value: unknown` on purpose — it
-// crosses a process boundary. Narrowing here keeps the repo's no-assertions rule and fails
-// the test with a readable message if the payload shape ever changes.
 function readCandidates(value: unknown): { agent: string; path: string }[] {
   if (typeof value !== 'object' || value === null || !('candidates' in value)) {
     throw new Error('expected a listing payload with candidates')

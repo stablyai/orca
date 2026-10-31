@@ -7,6 +7,8 @@ import { hostSnapshotAffirmsWorktreeContents } from './host-session-snapshot-aut
 export type WebSessionTerminalHandleUpdate = {
   surfacePresent: boolean
   terminalHandle: string | null
+  /** The published handle's process lifetime, when the host stamps one. */
+  incarnationId?: string | null
 }
 
 type TerminalHandleSubscriber = {
@@ -49,7 +51,8 @@ function resolveSubscriberUpdate(
     mirroredSurfaces.find((surface) => surface.status === 'ready')
   return {
     surfacePresent: true,
-    terminalHandle: readySurface?.terminal ?? null
+    terminalHandle: readySurface?.terminal ?? null,
+    ...(readySurface?.incarnationId ? { incarnationId: readySurface.incarnationId } : {})
   }
 }
 
@@ -97,8 +100,7 @@ export function queueAcceptedWebSessionTerminalSnapshot(
     eligibleSubscribers: new Set(subscribers)
   }
   pendingSnapshotBySession.set(key, pendingSnapshot)
-  // Why: freshness checks can run inside a Zustand updater; defer transport
-  // callbacks and coalesce same-tick snapshots so only the newest fact can win.
+  // Coalesce updater-time snapshots in a microtask so transport callbacks see committed state and newest facts.
   queueMicrotask(() => {
     if (pendingSnapshotBySession.get(key) !== pendingSnapshot) {
       return

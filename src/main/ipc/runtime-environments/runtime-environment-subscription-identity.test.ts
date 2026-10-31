@@ -1,5 +1,6 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
 
 const mocks = vi.hoisted(() => ({ handle: vi.fn(), on: vi.fn(), subscribe: vi.fn() }))
@@ -20,13 +21,11 @@ const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscrip
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()
 
 type Callbacks = Parameters<typeof subscribeRuntimeEnvironment>[5]
-const sender = {
+const sender = Object.assign(new EventEmitter(), {
   id: 1,
   isDestroyed: () => false,
-  send: vi.fn(),
-  once: vi.fn(),
-  removeListener: vi.fn()
-}
+  send: vi.fn()
+})
 const args = { selector: 'env', method: 'terminal.multiplex', subscriptionId: 'reused-id' }
 function handler(channel: string) {
   return mocks.handle.mock.calls.find(([name]) => name === channel)![1]
@@ -119,7 +118,6 @@ it('does not retain a subscription that closes before setup resolves', async () 
       return value
     }
   )
-  // The renderer hears the close, and the id is not kept for a dead connection.
   await expect(open()).resolves.toMatchObject({ subscriptionId: 'reused-id' })
   expect(sender.send).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', {
     subscriptionId: 'reused-id',
@@ -128,4 +126,34 @@ it('does not retain a subscription that closes before setup resolves', async () 
   expect(value.close).toHaveBeenCalledOnce()
   mocks.subscribe.mockResolvedValueOnce(connection())
   await expect(open()).resolves.toMatchObject({ subscriptionId: 'reused-id' })
+})
+
+it('releases open and pending streams across five reloads of the same WebContents', async () => {
+  for (let reload = 0; reload < 5; reload++) {
+    const active = connection()
+    const late = connection()
+    const setup = Promise.withResolvers<RemoteRuntimeSubscription>()
+    mocks.subscribe.mockResolvedValueOnce(active).mockReturnValueOnce(setup.promise)
+    await open()
+    const pending = handler('runtimeEnvironments:subscribe')(
+      { sender },
+      { ...args, subscriptionId: 'pending' }
+    )
+    const signal: AbortSignal = mocks.subscribe.mock.lastCall![7]
+    expect(remoteRuntimeSubscriptions.size).toBe(1)
+    expect(pendingSubscriptions.size).toBe(1)
+
+    sender.emit('did-navigate', {}, 'file:///app', 200, 'OK')
+    expect(signal.aborted).toBe(true)
+    expect(active.close).toHaveBeenCalledOnce()
+    setup.resolve(late)
+    await pending
+    expect(late.close).toHaveBeenCalledOnce()
+    expect(remoteRuntimeSubscriptions.size).toBe(0)
+    expect(pendingSubscriptions.size).toBe(0)
+    expect(sender.eventNames()).toEqual([])
+  }
+  mocks.subscribe.mockResolvedValueOnce(connection())
+  await open()
+  expect(remoteRuntimeSubscriptions.size).toBe(1)
 })

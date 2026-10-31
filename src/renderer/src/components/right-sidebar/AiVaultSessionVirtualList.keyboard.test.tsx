@@ -4,10 +4,13 @@ import { act, cleanup, render } from '@testing-library/react'
 import { createRef, type KeyboardEvent } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { z } from 'zod'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { AgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -15,11 +18,11 @@ import {
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 import type { AiVaultSessionListKeyboard } from './use-ai-vault-session-keyboard-navigation'
 import type { AiVaultResumeHere } from './ai-vault-session-resume-here'
+import * as resumeHere from './ai-vault-session-resume-here'
 
 const VIEWPORT_PX = 600
 const ROW_PX = 98
 
-// The rich row is covered by its own tests; here only which row is selected matters.
 vi.mock('./AiVaultSessionRow', () => ({
   VaultSessionRow: (props: { session: AiVaultSession }) => <div>{props.session.title}</div>
 }))
@@ -78,7 +81,22 @@ vi.mock('@/lib/activate-ai-vault-structured-session', async (importOriginal) => 
       structuredSession: { sessionId: string; workspaceId: string }
     }) => {
       const tabs = useAppStore.getState().unifiedTabsByWorktree[s.workspaceId] ?? []
-      if (!tabs.some((tab) => tab.entityId === s.sessionId)) {
+      if (tabs.some((tab) => tab.entityId === s.sessionId)) {
+        return true
+      }
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Switch-on, the host's republished chat reaches the window as main's frame.
+        await layoutApplyTestTransport.call({
+          command: {
+            type: 'openAgentSessionTab',
+            workspace: s.workspaceId,
+            tabId: s.sessionId,
+            sessionId: s.sessionId,
+            agent: 'claude'
+          }
+        })
+        await layoutApplyTestTransport.settle()
+      } else {
         useAppStore.getState().createUnifiedTab(s.workspaceId, 'agent-session', {
           id: s.sessionId,
           entityId: s.sessionId,
@@ -91,7 +109,48 @@ vi.mock('@/lib/activate-ai-vault-structured-session', async (importOriginal) => 
   )
 }))
 
+// Switch-on, main opens and closes the chat tabs and its frames draw them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const rpc = (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+  return {
+    ...rpc,
+    callRuntimeRpc: (...args: Parameters<typeof rpc.callRuntimeRpc>) =>
+      args[1] === 'agentSession.history'
+        ? Promise.resolve({
+            ok: true,
+            page: {
+              sessionId: z.object({ sessionId: z.string() }).parse(args[2]).sessionId,
+              epoch: 'idle',
+              direction: 'tail',
+              items: [],
+              removedItemIds: [],
+              submissions: [],
+              window: { oldest: null, newest: null, nextCursor: null },
+              hasOlder: false,
+              hasNewer: false,
+              working: false,
+              actionablePromptIds: [],
+              latestTurn: null,
+              nextQueuedMessageId: null,
+              backgroundTasks: null
+            }
+          })
+        : rpc.callRuntimeRpc(...args)
+  }
+})
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
 class NoopResizeObserver {
   observe(): void {}
@@ -222,7 +281,11 @@ beforeEach(() => {
   })
 })
 
+let main: TabsDrawnFromMain | undefined
+
 afterEach(() => {
+  main?.close()
+  main = undefined
   cleanup()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -270,14 +333,17 @@ describe('Session History keyboard selection', () => {
         agentSessionAgent: 'claude'
       })
     }
+    main = await drawTabsFromMain(useAppStore)
     const order = () => store().groupsByWorktree[workspaceId]?.[0]?.tabOrder
     const resumed = structuredAgentSessionTabId('new')
-    const confirm = vi.fn<(options: unknown) => Promise<boolean>>()
+    const admission = vi.spyOn(resumeHere, 'resumeAiVaultSessionHere')
+    const confirm = vi.fn<(options: unknown) => Promise<boolean>>().mockResolvedValue(false)
     const here = { workspaceId, agent: 'claude' as const, dismiss: vi.fn(), confirm }
     const { press } = renderList({ resumeHere: { ...here, tabId: 'old' } })
     const settle = async () =>
       act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        await admission.mock.results.at(-1)?.value
+        await main?.settle()
       })
     const pick = async (settlement: StructuredAgentLaunchSettlement, enter = press) => {
       launch.settlement = settlement
@@ -339,10 +405,18 @@ describe('Session History keyboard selection', () => {
         agentSessionAgent: 'claude'
       })
     }
+    main = await drawTabsFromMain(useAppStore)
     const order = () => useAppStore.getState().groupsByWorktree[workspaceId]?.[0]?.tabOrder
     const dismiss = vi.fn()
+    const admission = vi.spyOn(resumeHere, 'resumeAiVaultSessionHere')
     const { press } = renderList({
-      resumeHere: { tabId: 'old', workspaceId, agent: 'claude', dismiss, confirm: vi.fn() }
+      resumeHere: {
+        tabId: 'old',
+        workspaceId,
+        agent: 'claude',
+        dismiss,
+        confirm: vi.fn().mockResolvedValue(false)
+      }
     })
     // A row listed before the takeover carries no link; only the host's refusal names the owner.
     const refusedBy = async (sessionId: string) => {
@@ -356,14 +430,14 @@ describe('Session History keyboard selection', () => {
       }
       press('Enter')
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        await admission.mock.results.at(-1)?.value
+        await main?.settle()
       })
     }
     await refusedBy('old')
     expect(dismiss).toHaveBeenCalledOnce()
     await refusedBy('other')
     expect(order()).toEqual(['old', 'other'])
-    // The closed chat that holds the row reopens in this one's place.
     await refusedBy('held')
     expect(order()).toEqual(['held', 'other'])
     expect(toastError).not.toHaveBeenCalled()

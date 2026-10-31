@@ -6,14 +6,15 @@ import {
 import { agentSessionLeaseIsReleased } from '../../shared/agent-session-lease-adjudication'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import type { StructuredAgentSessionAcquisitionReceipt } from '../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
-import { assertFence, withLease } from './agent-session-lease-transitions'
+import { assertFence, withLease } from './agent-session/ownership/agent-session-lease-transitions'
 
 /** An unpublished start's observed exit belongs to its reservation, never a later owner. */
 export function recordAgentSessionAcquisitionExit(
   record: AgentSessionRecord,
   receipt: StructuredAgentSessionAcquisitionReceipt,
   expectedFence: number,
-  now: number
+  now: number,
+  deathEvidenceKind: 'exit-observed' | 'kill-delivered' = 'exit-observed'
 ): AgentSessionRecord {
   assertFence(record.lease, expectedFence)
   const lease = record.lease
@@ -46,7 +47,7 @@ export function recordAgentSessionAcquisitionExit(
     handoffOperationId: null,
     lastRenewedAt: now,
     deathEvidence: {
-      kind: 'exit-observed',
+      kind: deathEvidenceKind,
       detail: 'the failed acquisition provider root exited',
       ownerFence: receipt.fence,
       observedAt: now

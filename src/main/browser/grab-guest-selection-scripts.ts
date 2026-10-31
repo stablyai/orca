@@ -1,12 +1,5 @@
 export const AWAIT_CLICK_SCRIPT = `(async function() {
-  // Why: hand the click result to executeJavaScript through a native (intrinsic)
-  // Promise. On pages that replace the global Promise with a non-native thenable
-  // — e.g. Angular Zone.js's ZoneAwarePromise — a bare \`new Promise(...)\` is not
-  // recognized as a promise by Electron, so its raw wrapper object (exposing
-  // __zone_symbol__state/__value instead of { page, target }) crosses the boundary
-  // and main rejects it as an invalid payload structure. An async function's
-  // promise comes from the engine intrinsic that page code cannot reassign, so
-  // Electron always unwraps it to the resolved payload.
+  // Async returns an intrinsic Promise Electron unwraps even when Zone.js replaces global Promise.
   return await new Promise(function(resolve, reject) {
     'use strict';
     var grab = window.__orcaGrab;
@@ -25,12 +18,9 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       }
     }
 
-    function onClick(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      grab.host.removeEventListener('click', onClick, true);
-      grab.host.removeEventListener('contextmenu', onContext, true);
+    // The overlay blocks the press and hands it here; a later await replaces this one.
+    grab.onPick = function(e) {
+      grab.onPick = null;
       var el = grab.getCurrentElement();
       if (!el) {
         grab.cleanup();
@@ -39,45 +29,15 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       }
       var payload = extractSelectedPayload(el);
       if (!payload) return;
-      // Why: freeze the highlight instead of removing it so the user sees
-      // which element was selected while the copy menu is shown. Teardown
-      // happens later when the renderer calls setGrabMode(false) or re-arms.
+      // Keep the selected element outlined while the renderer shows its copy menu.
       grab.freezeHighlight(payload.page.capturedAt);
-      resolve(payload);
-    }
+      // The marker opens the action menu instead of auto-copying.
+      resolve(e.type === 'contextmenu' ? { __orcaContextMenu: true, payload: payload } : payload);
+    };
 
-    function onContext(e) {
-      // Why: right-click resolves with the payload wrapped in a context-menu
-      // marker so the renderer can show the full action dropdown instead of
-      // auto-copying. This gives users a deliberate path to screenshot and
-      // other secondary actions while keeping left-click as the fast copy path.
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      grab.host.removeEventListener('click', onClick, true);
-      grab.host.removeEventListener('contextmenu', onContext, true);
-      var el = grab.getCurrentElement();
-      if (!el) {
-        grab.cleanup();
-        reject(new Error('cancelled'));
-        return;
-      }
-      var payload = extractSelectedPayload(el);
-      if (!payload) return;
-      grab.freezeHighlight(payload.page.capturedAt);
-      resolve({ __orcaContextMenu: true, payload: payload });
-    }
-
-    grab.host.addEventListener('click', onClick, true);
-    grab.host.addEventListener('contextmenu', onContext, true);
-
-    // Store cancel hook so teardown can settle the Promise
     grab.cancelAwait = function() {
-      grab.host.removeEventListener('click', onClick, true);
-      grab.host.removeEventListener('contextmenu', onContext, true);
       grab.cleanup();
-      // Why: teardown cancellation is a normal user flow; resolving a marker
-      // avoids a noisy guest-console Error while main still treats it as cancel.
+      // Resolve cancellation to avoid guest-console errors during normal teardown.
       resolve({ __orcaCancelled: true });
     };
   });
@@ -100,7 +60,7 @@ export const FINALIZE_SCRIPT = `(function() {
   return payload;
 })()`
 
-// extractHover: read payload but keep overlay/listeners active so the user can keep picking (C/S shortcut copy, no click).
+// Extract without ending grab mode, so shortcut copy can keep selecting.
 export const EXTRACT_HOVER_SCRIPT = `(function() {
   'use strict';
   var grab = window.__orcaGrab;
@@ -118,9 +78,7 @@ export const TEARDOWN_SCRIPT = `(function() {
   'use strict';
   var grab = window.__orcaGrab;
   if (!grab) return true;
-  // If there's an active awaitClick Promise, cancel it: cancelAwait resolves
-  // it with the __orcaCancelled marker so the executeJavaScript call in main
-  // settles the grab op as a cancellation.
+  // Settle the outstanding executeJavaScript call before removing grab state.
   if (grab.cancelAwait) {
     grab.cancelAwait();
   } else {

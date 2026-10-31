@@ -8,6 +8,12 @@ import { getDefaultSettings } from '../../../shared/constants'
 import { WIN_PATH, WSL_PATH } from '../../../shared/launch-parity-window-cases.test-fixture'
 import { launchWorkspaceId } from '../../../shared/launch-parity-window-request.test-fixture'
 
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 vi.mock('@/store', async () =>
   (await import('@/lib/launch-parity-renderer.test-fixture')).launchStoreModuleMock(holder)
@@ -17,8 +23,7 @@ const load = perClientLoader(async () => ({
   launch: await import('@/lib/launch-agent-in-new-tab')
 }))
 
-// Pins main's current launch behaviour as the convergence parity baseline (row 1, Q5): C2 must keep,
-// or knowingly change, which saved default args stop "+" at the window planner.
+// Pin which saved arguments reject + before convergence changes the window planner (row 1, Q5).
 describe('"+" saved default args at the window planner', () => {
   beforeAll(async () => {
     await load('win32')
@@ -40,7 +45,6 @@ describe('"+" saved default args at the window planner', () => {
       })
     )
     const worktreeId = launchWorkspaceId(workspace)
-    // Hand-built copy of what the tab-bar "+" menu passes.
     const result = modules.launch.launchAgentInNewTab({
       requestId: 'parity-plus',
       agent: 'claude',

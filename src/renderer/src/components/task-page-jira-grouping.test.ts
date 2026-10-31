@@ -14,8 +14,8 @@ import { groupJiraIssuesByStatus, TaskPageJiraIssueList } from './task-page-jira
 import {
   getSingleJiraProjectScope,
   loadTaskPageJiraProjectStatusOrder
-} from './task-page-jira-status-order'
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira-types'
+} from './task-page/jira/task-page-jira-status-order'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
 
 const { jiraGetProjectStatusOrderMock } = vi.hoisted(() => ({
   jiraGetProjectStatusOrderMock: vi.fn()

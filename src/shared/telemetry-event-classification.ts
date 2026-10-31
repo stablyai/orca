@@ -7,14 +7,13 @@ export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof event
 export type EventName = keyof EventMap
 export type EventProps<N extends EventName> = EventMap[N]
 
-// Why: non-`ZodObject` schemas have no `.shape`; return null so `key in undefined` can't throw at module load.
-// Why `object` and not zod's own field-record type: callers only ask `key in fields`.
+// Non-object schemas have no shape; callers only need membership checks, so return object or null.
 function eventSchemaFields(schema: z.ZodTypeAny): object | null {
   if (schema instanceof z.ZodObject) {
     return schema.shape
   }
 
-  // Why: refined object schemas may expose `.shape` even when refinement breaks `instanceof ZodObject`.
+  // Refinements can preserve shape without preserving instanceof ZodObject.
   if ('shape' in schema && typeof schema.shape === 'object' && schema.shape !== null) {
     return schema.shape
   }
@@ -32,10 +31,9 @@ function eventsDeclaringKey(key: string): ReadonlySet<EventName> {
   )
 }
 
-// Cohort injection is gated on this derived set because `.strict()` schemas drop events that don't declare `nth_repo_added`.
+// Inject only declared fields; strict schemas reject undeclared cohort properties.
 const COHORT_EXTENDED_SET = eventsDeclaringKey('nth_repo_added')
 
-// Compile-time roster guarding the runtime injection set against silent schema drift.
 type _CohortExtendedRoster =
   | 'app_opened'
   | 'app_starred_orca'
@@ -60,7 +58,9 @@ type _CohortExtendedRoster =
   | 'orca_cli_feature_tip_setup_result'
   | 'cmd_j_palette_feature_tip_shown'
   | 'cmd_j_palette_feature_tip_acknowledged'
-// Why: strict empty payloads infer a string index signature; ignore index-only keys so they aren't pulled into keyed rosters.
+  | 'chat_ui_feature_tip_shown'
+  | 'chat_ui_feature_tip_action'
+// Strict empty payloads infer string index signatures; exclude those from keyed rosters.
 type _KnownPayloadKeys<T> = string extends keyof T ? never : keyof T
 type _DerivedCohortExtendedEvents = {
   [N in EventName]: 'nth_repo_added' extends _KnownPayloadKeys<EventMap[N]> ? N : never
@@ -77,12 +77,11 @@ export function isCohortExtendedEvent(name: EventName): boolean {
   return COHORT_EXTENDED_SET.has(name)
 }
 
-// Events whose schema declares `cohort`: the IPC handler injects cohort only for these — a `.strict()` schema without it would reject the event.
+// Inject cohort only into schemas declaring it; other strict schemas reject it.
 const ONBOARDING_COHORT_SET = eventsDeclaringKey('cohort')
-// `NonNullable` strips `undefined` introduced by `cohortSchema`'s `.optional()`.
 export type OnboardingCohort = NonNullable<z.infer<typeof cohortSchema>>
 
-// Compile-time roster: dropping `cohort` from any of these fails tsc, rather than silently at runtime (`.optional()` would tolerate that).
+// Catch removed cohort fields at compile time; optional fields would hide the drift at runtime.
 type _OnboardingCohortRoster =
   | 'onboarding_started'
   | 'onboarding_step_viewed'
@@ -118,18 +117,18 @@ export function isOnboardingEvent(name: EventName): boolean {
   return ONBOARDING_COHORT_SET.has(name)
 }
 
-// No `env` discriminator: every transmitted event is from an official CI build (dev/contributor builds only console-mirror).
-// The per-field `.max(64)` is the validator's string-length cap — there is no separate post-parse length check.
+// Only official CI builds transmit; contributor/dev builds console-mirror, so no env discriminator is needed.
 export const commonPropsSchema = z
   .object({
     app_version: z.string().max(64),
     platform: z.string().max(64),
     arch: z.string().max(64),
     os_release: z.string().max(64),
-    // `.min(1)`: an empty install_id/session_id would collapse unrelated events into one synthetic user/session, corrupting analytics.
+    // Empty IDs merge unrelated users/sessions in analytics.
     install_id: z.string().min(1).max(64),
     session_id: z.string().min(1).max(64),
-    orca_channel: z.enum(['stable', 'rc'])
+    orca_channel: z.enum(['stable', 'rc']),
+    onboarding_language_v1: z.enum(['control', 'treatment']).optional()
   })
   .strict()
 export type CommonProps = z.infer<typeof commonPropsSchema>

@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
@@ -12,7 +13,7 @@ const REGISTERED: RuntimeCapability[] = [
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
 ]
 const SETTINGS = {
-  experimentalNativeChat: true
+  nativeChatProviders: EVERY_AGENT_CHAT
 }
 
 const mocks = vi.hoisted(() => {
@@ -109,7 +110,7 @@ describe('a new tab whose chat route waits on the host agent list', () => {
     const relaunch = fakeRelaunch()
     const focusIntent = { request: vi.fn(), cancel: vi.fn() }
 
-    const result = launchOnceHostAnswered(route, { ...args, focusIntent }, startupPlan, relaunch)
+    const result = launchOnceHostAnswered(route, { ...args, focusIntent }, relaunch)
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(relaunch).not.toHaveBeenCalled()
@@ -162,11 +163,10 @@ describe('a new tab whose chat route waits on the host agent list', () => {
     }
     const relaunch = vi.fn((_relaunched: LaunchAgentInNewTabArgs) => ({
       surface: { kind: 'local-terminal' as const, tabId: 'tab-1' },
-      startupPlan,
       pasteDraftAfterLaunch: false
     }))
 
-    const result = launchOnceHostAnswered(route, args, startupPlan, relaunch)
+    const result = launchOnceHostAnswered(route, args, relaunch)
     await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS - 1)
     expect(relaunch).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
@@ -188,11 +188,7 @@ describe('a new tab whose chat route waits on the host agent list', () => {
       plan: { route: 'structured-native-chat' }
     })
     expect(
-      routeNewTabLaunch(
-        storeWithSettings({ ...SETTINGS, experimentalNativeChat: false }),
-        args,
-        request
-      )
+      routeNewTabLaunch(storeWithSettings({ ...SETTINGS, nativeChatProviders: {} }), args, request)
     ).toMatchObject({ plan: { route: 'terminal-tui' } })
   })
 })
@@ -227,12 +223,13 @@ describe("a new tab during startup, before this computer's runtime answered", ()
   it.each(['claude', 'opencode'] as const)(
     'opens the %s chat when the capabilities arrive within the wait, after a failed probe',
     async (agent) => {
+      vi.useFakeTimers()
       const route = awaitingRoute(agent)
       const relaunch = fakeRelaunch()
 
-      const result = launchOnceHostAnswered(route, { ...args, agent }, startupPlan, relaunch)
+      const result = launchOnceHostAnswered(route, { ...args, agent }, relaunch)
       // The failed probe has answered; the launch is still waiting for one that lands.
-      await new Promise((resolve) => setTimeout(resolve, 20))
+      await vi.advanceTimersByTimeAsync(20)
       expect(relaunch).not.toHaveBeenCalled()
       await capabilitiesLand()
 
@@ -240,26 +237,28 @@ describe("a new tab during startup, before this computer's runtime answered", ()
         kind: 'structured',
         sessionId: 'session-1'
       })
+      expect(relaunch).toHaveBeenCalledOnce()
       expect(relaunch.mock.calls[0]?.[0]).toMatchObject({
         agentSessionLaunchPlan: { route: 'structured-native-chat' }
       })
     }
   )
 
-  it('opens the terminal chat after the cap when they never arrive, and says why', async () => {
+  it('keeps an awaited terminal refusal notified without claiming a surface opened', async () => {
     vi.useFakeTimers()
     const route = awaitingRoute('claude')
-    const relaunch = fakeRelaunch()
+    const refused = { delivered: false, failureNotified: true }
+    const relaunch = vi.fn((_next: LaunchAgentInNewTabArgs) => ({ refused }))
 
     const result = launchOnceHostAnswered(
       route,
-      { ...args, agent: 'claude' },
-      startupPlan,
+      { ...args, agent: 'claude', prompt: 'keep this prompt' },
       relaunch
     )
     await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS - 1)
     expect(relaunch).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
+    expect((await result?.promptDeliveryResult)?.failureNotified).toBe(true)
 
     await expect(result?.structuredSettlement).resolves.toEqual({
       kind: 'cancelled',

@@ -23,7 +23,7 @@ const WSL_HOST = { ORCA_WSL_ORCAD_HOST: '1', WSL_DISTRO_NAME: 'ubuntu' }
 describe('WSL migration destination', () => {
   it('serves the WSL source only on the orcad Orca launched inside a distro', () => {
     expect(servesLocalWslMigrationSource(WSL_HOST, 'linux')).toBe(true)
-    // An SSH remote or Orca under WSLg is a WSL guest too, but not a WSL host's orcad.
+    // WSLg and SSH guests lack the desktop-launched WSL host identity.
     expect(servesLocalWslMigrationSource({ WSL_DISTRO_NAME: 'Ubuntu' }, 'linux')).toBe(false)
     expect(servesLocalWslMigrationSource(WSL_HOST, 'win32')).toBe(false)
   })

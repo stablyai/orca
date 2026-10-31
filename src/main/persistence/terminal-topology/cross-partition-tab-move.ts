@@ -1,6 +1,4 @@
-// Moving editor tabs between workspaces held in two partitions (a local and an SSH workspace):
-// main reads both, moves the tabs as it would within one, and writes back only what each
-// partition's records changed. A window save no longer carries the move.
+// Main moves editor tabs across partitions and writes only changed records, retaining in-memory views.
 
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -20,13 +18,27 @@ import type {
 import { patchStoredSession } from '../../../shared/workspace-layout/workspace-layout-record-patch'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
 import { moveTabToWorkspace } from '../../../shared/workspace-layout/workspace-layout-workspace-move'
+import { editorViewsOfModel, type PartitionEditorViews } from '../loading-store/layout-editor-views'
 
-type PartitionSession = { hostId: ExecutionHostId; session: WorkspaceSessionState }
+type PartitionSession = {
+  hostId: ExecutionHostId
+  session: WorkspaceSessionState
+  /** In-memory views may be absent for this partition. */
+  views?: PartitionEditorViews
+}
 
 export type CrossPartitionTabMove = {
   value: LayoutApplyOutcome
-  /** Each partition's session after the move; null when nothing changes. */
+  /** Null means no session changes. */
   sessions: { from: WorkspaceSessionState; to: WorkspaceSessionState } | null
+  views?: { from: PartitionEditorViews; to: PartitionEditorViews }
+}
+
+function loadContext(partition: PartitionSession) {
+  const { views } = partition
+  return views
+    ? { ...nameBasedLoadContext(), editorViewsOf: (key: string) => views[key] }
+    : nameBasedLoadContext()
 }
 
 function withLoadedWorkspace(
@@ -43,7 +55,7 @@ function withLoadedWorkspace(
   return { ...model, workspaces }
 }
 
-/** `stored` with only the records the move changed in its loaded partition rewritten. */
+/** Patch changed loaded records back into stored form. */
 function written(
   stored: WorkspaceSessionState,
   loaded: LoadedWorkspaceLayout,
@@ -57,18 +69,17 @@ function written(
   )
 }
 
-/** The move of `command` from its workspace in `from` to its target workspace in `to`. */
 export function moveTabAcrossPartitions(
   from: PartitionSession,
   to: PartitionSession,
   command: CommandOf<'moveTabToWorkspace'>
 ): CrossPartitionTabMove {
-  const loadedFrom = loadWorkspaceLayout(from.hostId, from.session, nameBasedLoadContext())
-  const loadedTo = loadWorkspaceLayout(to.hostId, to.session, nameBasedLoadContext())
+  const loadedFrom = loadWorkspaceLayout(from.hostId, from.session, loadContext(from))
+  const loadedTo = loadWorkspaceLayout(to.hostId, to.session, loadContext(to))
   if (!loadedFrom.layout.workspaces[command.workspace]) {
     return { value: { ok: false, code: 'workspace_not_found' }, sessions: null }
   }
-  // Both partitions' workspaces, so a new tab id either one holds is refused.
+  // Include both partitions so generated tab IDs cannot collide in either.
   const joined = withLoadedWorkspace(
     {
       ...loadedFrom.layout,
@@ -89,27 +100,24 @@ export function moveTabAcrossPartitions(
   if (moved.model === joined) {
     return { value, sessions: null }
   }
+  const fromAfter = withLoadedWorkspace(
+    loadedFrom.layout,
+    command.workspace,
+    moved.model.workspaces[command.workspace]
+  )
+  const toAfter = withLoadedWorkspace(
+    loadedTo.layout,
+    command.toWorkspace,
+    moved.model.workspaces[command.toWorkspace]
+  )
   return {
     value,
     sessions: {
-      from: written(
-        from.session,
-        loadedFrom,
-        withLoadedWorkspace(
-          loadedFrom.layout,
-          command.workspace,
-          moved.model.workspaces[command.workspace]
-        )
-      ),
-      to: written(
-        to.session,
-        loadedTo,
-        withLoadedWorkspace(
-          loadedTo.layout,
-          command.toWorkspace,
-          moved.model.workspaces[command.toWorkspace]
-        )
-      )
-    }
+      from: written(from.session, loadedFrom, fromAfter),
+      to: written(to.session, loadedTo, toAfter)
+    },
+    ...(from.views && to.views
+      ? { views: { from: editorViewsOfModel(fromAfter), to: editorViewsOfModel(toAfter) } }
+      : {})
   }
 }

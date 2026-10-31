@@ -12,10 +12,7 @@ import type { SourceControlRemoteActionRunner } from '../sync/use-remote-action-
 import type { CreatePrIntentRunSnapshot } from './create-pr-intent-run-snapshot'
 import type { SourceControlCreatePrIntentCommitMessage } from './use-create-pr-intent-commit-message'
 
-/**
- * Gets the branch to a committed, ff-current state before eligibility is read. Returns false when
- * the intent must stop — the caller has nothing left to clean up beyond its own finally block.
- */
+/** Prepare a committed fast-forward-current branch; false stops the intent with only caller finally cleanup remaining. */
 export async function runCreatePrIntentBranchPrep({
   commitDraftsRef,
   commitErrorsRef,
@@ -45,7 +42,7 @@ export async function runCreatePrIntentBranchPrep({
     return false
   }
 
-  // Why: fast-forward behind-only before commit so a dirty worktree can't become ahead+behind and dead-end at the sync-first stop; --ff-only never auto-merges.
+  // Fast-forward behind-only before commit to avoid creating divergence; ff-only never auto-merges.
   if (isBehindOnlyUpstream(snapshot.upstreamStatus)) {
     setCreatePrIntentNoticeForWorktree(token.worktreeId, {
       tone: 'muted',
@@ -149,7 +146,7 @@ export async function runCreatePrIntentBranchPrep({
     return false
   }
   if (!committed) {
-    // Why: pre-commit/lint hooks may rewrite tracked files before failing; re-stage those outputs so retrying Create PR doesn't strand changes.
+    // Failed hooks may rewrite tracked files; restage their outputs so Create PR retries retain those changes.
     if (await refreshIntentSnapshot()) {
       await stageLatestIntentPaths()
     }

@@ -1,7 +1,4 @@
-// Frame parity: for each stored profile, the store slices the frame applier builds from main's
-// published layout frames, the content facts and the window's view must equal the slices the
-// window's startup restores from the stored session. The window's view of them must differ only
-// as the Loader parity test lists; slices may differ only as listed below.
+// Compare frame-applied slices with disk-session startup restore. Views may differ only by Loader parity entries; slice differences are enumerated below.
 
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -39,7 +36,8 @@ import {
 import {
   ACCEPTED_DIFFERENCES,
   GIT,
-  KNOWN_DIFFERENCES
+  KNOWN_DIFFERENCES,
+  sweptAtStartup
 } from './startup-window-parity-differences.test-fixture'
 import {
   bootWindowFromPartitions,
@@ -47,6 +45,13 @@ import {
   projectStartupWindowView
 } from './startup-window-view.test-fixture'
 
+// Compare layout-owner main/frame application against legacy window restore.
+const layoutOwner = vi.hoisted(() => ({ isMain: true }))
+vi.mock('../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
@@ -153,11 +158,11 @@ const PROFILES: readonly WorkspaceLayoutProfile[] = [
   { name: 'groups with no selected tab', hostId: 'local', build: groupsWithoutSelection }
 ]
 
-/** What main publishes for a stored partition, and what the Loader keeps beside the layout. */
+/** What main publishes for a stored partition after its startup sweep, and what the Loader keeps beside the layout. */
 function frameInput(hostId: ExecutionHostId, stored: WorkspaceSessionState): LayoutFrameSliceInput {
   const { layout, facts, desktopView } = loadWorkspaceLayoutWithoutReport(
     hostId,
-    stored,
+    sweptAtStartup(hostId, stored),
     nameBasedLoadContext()
   )
   return {
@@ -172,7 +177,6 @@ function frameInput(hostId: ExecutionHostId, stored: WorkspaceSessionState): Lay
   }
 }
 
-/** Every leaf value that differs, as `slice key …` paths. */
 function diffSlices(restored: unknown, applied: unknown, path: string, into: string[]): string[] {
   if (JSON.stringify(restored) === JSON.stringify(applied)) {
     return into
@@ -197,7 +201,7 @@ function diffSlices(restored: unknown, applied: unknown, path: string, into: str
 const PARITY_REATTACH_ONLY = (paths: string[]): boolean =>
   paths.every((path) => path.endsWith(' reattaches'))
 
-/** View paths the Loader parity test lists for a fixture, minus what the applier never writes. */
+/** Loader parity paths excluding reconnect-only state the frame applier never writes. */
 function loaderParityPaths(fixture: string): string[] {
   return [
     ...KNOWN_DIFFERENCES.filter((entry) => entry.fixture === fixture).flatMap(
@@ -221,16 +225,6 @@ type SliceDifference = {
 /** Slice paths that differ. Entries may only be removed. */
 const SLICE_DIFFERENCES: readonly SliceDifference[] = [
   {
-    fixture: 'row without a tab-bar entry or a terminal',
-    cause: 'ghost tab (Loader parity)',
-    paths: [
-      `tabsByWorktree ${GIT} 1`,
-      'terminalLayoutsByTabId tab-b',
-      `unifiedTabsByWorktree ${GIT} 1`,
-      `groupsByWorktree ${GIT} 0 tabOrder 1`
-    ]
-  },
-  {
     fixture: 'legacy surface tombstone on a pane still showing its terminal',
     cause: 'tombstones (Loader parity)',
     paths: [
@@ -252,6 +246,11 @@ const SLICE_DIFFERENCES: readonly SliceDifference[] = [
     paths: [`unifiedTabsByWorktree ${GIT} 1 executionHostId`]
   },
   {
+    fixture: 'row without a tab-bar entry, its terminal only on a relay',
+    cause: 'host stamp (above)',
+    paths: [`unifiedTabsByWorktree ${GIT} 1 executionHostId`]
+  },
+  {
     fixture: 'legacy split row sharing one pane’s terminal with a tab-bar tab',
     cause: 'host stamp (above)',
     paths: [`unifiedTabsByWorktree ${GIT} 2 executionHostId`]
@@ -270,6 +269,18 @@ const SLICE_DIFFERENCES: readonly SliceDifference[] = [
       `activeGroupIdByWorktree ${GIT}`,
       `layoutByWorktree ${GIT} groupId`
     ]
+  },
+  {
+    fixture: 'session from before the tab bar, a row with no terminal',
+    cause: 'root group and host stamp (above), for the one kept tab',
+    paths: [
+      `unifiedTabsByWorktree ${GIT} 0 groupId`,
+      `unifiedTabsByWorktree ${GIT} 0 executionHostId`,
+      `groupsByWorktree ${GIT} 0 id`,
+      `groupsByWorktree ${GIT} 0 recentTabIds`,
+      `activeGroupIdByWorktree ${GIT}`,
+      `layoutByWorktree ${GIT} groupId`
+    ]
   }
 ]
 
@@ -278,9 +289,12 @@ async function restoreAndApply(profile: WorkspaceLayoutProfile): Promise<{
   applied: LayoutFrameSlices
 }> {
   const stored = profile.build()
+  layoutOwner.isMain = false
   const restored = await bootWindowFromPartitions(createTestStore(), [
     { hostId: profile.hostId, session: stored }
-  ])
+  ]).finally(() => {
+    layoutOwner.isMain = true
+  })
   return { restored, applied: buildLayoutFrameSlices(frameInput(profile.hostId, stored)) }
 }
 

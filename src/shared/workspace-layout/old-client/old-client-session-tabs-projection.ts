@@ -1,16 +1,10 @@
-// The model as today's `session.tabs.*` snapshot (design 2.6), for old phones and desktops. Rows,
-// ids and group orders keep today's shape (wire rule 3). The runtime still adds what the model
-// does not hold: live terminal handles, agent status, terminal theme, launch drafts, a browser
-// page's certificate failure, a dirty markdown draft's document version, and the publication
-// epoch and version.
+// Preserve session.tabs row/ID/group shapes for older phones/desktops. Runtime adds live handles/status/theme/drafts/certificate errors/document versions and publication fences.
 
-import { defaultAgentChatLabel } from '../../agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../agent-session/agent-session-chat-label'
 import { resolveTerminalTabTitle } from '../../tab-title-resolution'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionFileTab,
-  RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
 } from '../../runtime-mobile-session-tab-contracts'
@@ -18,21 +12,17 @@ import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
 } from '../../runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../tab-types'
 import type { TerminalLayoutSnapshot } from '../../terminal-tab-types'
 import { pruneGroupLayout } from '../../workspace-session-terminal-tab-close'
-import {
-  agentSessionRowId,
-  publishedTabOrderId,
-  terminalRowId
-} from './old-client-session-tab-rows'
+import { diffTabRow, editorTabRow } from './old-client-session-editor-rows'
+import { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
 import { collectLayoutLeafIdsInOrder } from '../terminal-pane-tree'
+import { groupsInLayoutOrder } from './old-client-group-order'
 import {
   BLANK_BROWSER_TAB_STATE,
   type DesktopLayoutView,
   type LayoutContentFacts
 } from '../workspace-layout-beside'
-import { editorFileKey, editorTabFile } from '../workspace-layout-editor-tab-file'
 import type {
   LayoutContentTab,
   LayoutTab,
@@ -40,7 +30,7 @@ import type {
   WorkspaceLayout
 } from '../workspace-layout-model'
 
-/** One view's selection: the desktop's record today, a phone's own record once views exist. */
+/** Selections belong to the view: current desktop record or a phone’s own record when supported. */
 export type SessionTabsView = Pick<
   DesktopLayoutView,
   'activeGroupIdByWorktree' | 'groups' | 'panes' | 'editorDrafts'
@@ -143,27 +133,16 @@ function resolveActiveGroupId(
   return groupsInLayoutOrder(workspace)[0]?.id ?? null
 }
 
-function groupsInLayoutOrder(workspace: WorkspaceLayout): WorkspaceLayout['groups'] {
-  const ids: string[] = []
-  const visit = (node: TabGroupLayoutNode | undefined): void => {
-    if (node?.type === 'leaf') {
-      ids.push(node.groupId)
-    } else if (node) {
-      visit(node.first)
-      visit(node.second)
-    }
-  }
-  visit(workspace.groupLayout)
-  const placed = ids.flatMap((id) => workspace.groups.filter((group) => group.id === id))
-  return [...placed, ...workspace.groups.filter((group) => !placed.includes(group))]
-}
-
 function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotTab[] {
   switch (tab.kind) {
     case 'terminal':
       return terminalRows(tab, scope)
     case 'editor': {
-      const row = editorRow(tab, scope)
+      const row = editorTabRow(tab, scope)
+      return row ? [row] : []
+    }
+    case 'diff': {
+      const row = diffTabRow(tab, scope)
       return row ? [row] : []
     }
     case 'browser': {
@@ -174,11 +153,11 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
       const row = agentSessionRow(tab, scope)
       return row ? [row] : []
     }
-    // The model holds no file record for a diff (the window lists it from its own state); the
-    // others need the desktop to draw them and are not listed today.
-    case 'diff':
     case 'conflict-review':
     case 'check-details':
+      // Virtual views have no file to read and no compatible session.tabs kind.
+      return []
+    // A simulator needs the desktop to draw it; the window lists none either.
     case 'simulator':
       return []
   }
@@ -204,8 +183,7 @@ function terminalRows(tab: LayoutTerminalTab, scope: Scope): RuntimeMobileSessio
     ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
     ...(titlesByLeafId ? { titlesByLeafId } : {})
   }
-  // Tab-wide evidence (tab title, quick-command label, launch agent) describes a sole pane that is
-  // also the focused one, as the window publishes it.
+  // Tab-wide title/launch evidence applies only to the focused sole pane, matching window publication.
   const root = tab.panes.root
   const tabWide = root?.type === 'leaf' && activeLeafId === root.leafId
   const liveTitle =
@@ -213,7 +191,7 @@ function terminalRows(tab: LayoutTerminalTab, scope: Scope): RuntimeMobileSessio
   return leafIds.map((leafId) => {
     const leaf = leaves[leafId]
     const paneTitle = leaf?.title?.trim() || undefined
-    // Today's order: a custom title beats the pane's own title (#19582); other panes show theirs.
+    // Custom tab title wins over the sole pane title (#19582); split panes keep their own titles.
     const title = tabWide
       ? resolveTerminalTabTitle(
           { ...tab, title: paneTitle ?? liveTitle },
@@ -225,8 +203,14 @@ function terminalRows(tab: LayoutTerminalTab, scope: Scope): RuntimeMobileSessio
       type: 'terminal',
       id: terminalRowId(tab.entityId, leafId),
       title,
+      // Send cleared names as null; paired desktops read absence as keep mine.
+      customTitle: tab.customTitle?.trim() || null,
       ...(tabWide && tab.quickCommandLabel?.trim()
         ? { quickCommandLabel: tab.quickCommandLabel.trim() }
+        : {}),
+      ...(tabWide && tab.aiVaultTitle?.title.trim() ? { aiVaultTitle: tab.aiVaultTitle } : {}),
+      ...(tabWide && scope.generatedTitlesEnabled && tab.generatedTitle?.trim()
+        ? { generatedTitle: tab.generatedTitle.trim() }
         : {}),
       parentTabId: tab.entityId,
       leafId,
@@ -253,45 +237,10 @@ function recordOf(
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 
-/** Only edit-mode files are in the model; other editor tabs are the desktop view's own. */
-function editorRow(
-  tab: LayoutContentTab,
-  scope: Scope
-): RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab | null {
-  const file = editorTabFile(scope.workspace, tab.entityId)
-  if (!file) {
-    return null
-  }
-  const common = {
-    id: tab.id,
-    title: file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File',
-    filePath: file.filePath,
-    relativePath: file.relativePath,
-    isDirty:
-      scope.view.editorDrafts[scope.key]?.[editorFileKey(file)]?.dirtyDraftContent !== undefined,
-    color: tab.color ?? null,
-    isPinned: tab.isPinned === true,
-    isActive: scope.activeTabId === tab.id
-  }
-  if (file.language === 'markdown') {
-    return {
-      ...common,
-      type: 'markdown',
-      language: 'markdown',
-      mode: 'edit',
-      sourceFileId: file.filePath,
-      sourceFilePath: file.filePath,
-      sourceRelativePath: file.relativePath,
-      documentVersion: `file:${file.filePath}`
-    }
-  }
-  return { ...common, type: 'file', language: file.language, mode: 'edit' }
-}
-
 function browserRow(tab: LayoutContentTab, scope: Scope): RuntimeMobileSessionBrowserTab | null {
   const record = scope.workspace.browserTabs?.find((entry) => entry.id === tab.entityId)
   const live = scope.facts.browserTabs[scope.key]?.[tab.entityId] ?? BLANK_BROWSER_TAB_STATE
-  // A workspace document is served to one desktop only; old clients would offer it as a web page.
+  // Document grants are desktop-specific; older clients would incorrectly treat them as ordinary web pages.
   if (live.docLocation) {
     return null
   }

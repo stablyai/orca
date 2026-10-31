@@ -16,8 +16,19 @@ export function applyWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
   now = Date.now(),
-  options?: WebSessionTabsSnapshotApplyOptions
+  options?: WebSessionTabsSnapshotApplyOptions,
+  changedAgentPaneKeys?: Set<string>
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  if (changedAgentPaneKeys) {
+    return applyWebSessionTabsSnapshots(
+      state,
+      [snapshot],
+      environmentId,
+      now,
+      changedAgentPaneKeys,
+      options
+    )
+  }
   return applyWebSessionTabsSnapshotWithContext(
     state,
     snapshot,
@@ -28,14 +39,25 @@ export function applyWebSessionTabsSnapshot(
   )
 }
 
+export function createWebSessionTabsSnapshotPatch(
+  snapshot: RuntimeMobileSessionTabsResult,
+  environmentId: string
+) {
+  return (state: WebSessionTabsSyncState, keys: Set<string>) =>
+    applyWebSessionTabsSnapshot(state, snapshot, environmentId, undefined, undefined, keys)
+}
+
 export function applyWebSessionTabsSnapshots(
   state: WebSessionTabsSyncState,
   snapshots: readonly RuntimeMobileSessionTabsResult[],
   environmentId: string,
-  now = Date.now()
+  now = Date.now(),
+  changedAgentPaneKeys?: Set<string>,
+  options?: WebSessionTabsSnapshotApplyOptions
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   const nextState = { ...state }
   const batchContext: WebSessionTabsBatchContext = {
+    changedAgentPaneKeys,
     agentPaneKeysByTabId: null,
     changedRecords: new Set(),
     openFilesIndex: null
@@ -47,7 +69,8 @@ export function applyWebSessionTabsSnapshots(
       snapshot,
       environmentId,
       now,
-      batchContext
+      batchContext,
+      options
     )
     if (patch === nextState) {
       continue
@@ -111,7 +134,8 @@ export function decideWebSessionTabsSnapshotOperations(
 
 export function applyWebSessionTabsSnapshotOperations(
   state: WebSessionTabsSyncState,
-  operations: readonly DecidedWebSessionTabsSnapshotOperation[]
+  operations: readonly DecidedWebSessionTabsSnapshotOperation[],
+  changedAgentPaneKeys?: Set<string>
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   let nextState = state
   let mergedPatch: Partial<WebSessionTabsSyncState> = {}
@@ -119,7 +143,14 @@ export function applyWebSessionTabsSnapshotOperations(
     if (!decision.apply) {
       continue
     }
-    const patch = applyWebSessionTabsSnapshot(nextState, snapshot, environmentId)
+    const patch = applyWebSessionTabsSnapshot(
+      nextState,
+      snapshot,
+      environmentId,
+      undefined,
+      undefined,
+      changedAgentPaneKeys
+    )
     if (patch === nextState) {
       continue
     }

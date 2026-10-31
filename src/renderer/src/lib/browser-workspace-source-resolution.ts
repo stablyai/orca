@@ -27,10 +27,7 @@ export function resolveBrowserWorkspaceOwner(
   return null
 }
 
-/**
- * The unified tab wrapping a source browser page. Anything but exactly one live wrapper in the
- * caller's workspace is ambiguous, so the caller omits the source relationship.
- */
+/** Keep a source relationship only when exactly one live wrapper exists in the caller’s workspace. */
 export function resolveBrowserSourceUnifiedTab(
   state: Pick<
     AppState,

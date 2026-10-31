@@ -1,16 +1,16 @@
 import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
 import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   detectAgentStatusFromTitle,
   isClaudeManagementTitle
 } from '../../../shared/agent-detection'
-import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
 import {
-  resolveStructuredWorkerAuthority,
-  resolveStructuredWorkerIdentityForSession
-} from '../structured-worker-authority'
+  GENERIC_PROCESS_NAME_AGENTS,
+  recognizeAgentProcess
+} from '../../../shared/agent-process-recognition'
+import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import {
   chatDispatchMailTarget,
@@ -47,8 +47,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
     let newestMatch: RuntimePtyWorktreeRecord | null = null
     for (const pty of this.ptysById.values()) {
-      const ptyPane = parsePaneKey(pty.paneKey ?? '')
-      if (pty.paneKey === paneKey || (parsed && ptyPane && parsed.leafId === ptyPane.leafId)) {
+      const recordedPaneKey = this.paneOfPty(pty).paneKey
+      const ptyPane = parsePaneKey(recordedPaneKey ?? '')
+      if (recordedPaneKey === paneKey || (parsed && ptyPane && parsed.leafId === ptyPane.leafId)) {
         if (pty.connected) {
           return pty
         }
@@ -59,15 +60,12 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   protected getPaneKeyForTerminalHandle(handle: string): string | null {
-    const livePty = this.getLivePtyForHandle(handle)
-    if (livePty?.pty.paneKey) {
-      return livePty.pty.paneKey
+    const livePaneKey = this.paneOfPty(this.getLivePtyForHandle(handle)?.pty).paneKey
+    if (livePaneKey) {
+      return livePaneKey
     }
     const record = this.handles.get(handle)
-    if (!record || record.runtimeId !== this.runtimeId) {
-      return null
-    }
-    if (!isTerminalLeafId(record.leafId)) {
+    if (!record || record.runtimeId !== this.runtimeId || !isTerminalLeafId(record.leafId)) {
       return null
     }
     return makePaneKey(record.tabId, record.leafId)
@@ -113,7 +111,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     return this.titleObservationSequence
   }
 
-  // Why: title is the tightest agent-presence signal, but a Claude management title is negative evidence for task activity.
+  // Agent titles prove presence, but Claude management titles do not imply task activity.
   async isTerminalRunningAgent(
     handle: string,
     options?: RuntimeTerminalAgentPresenceOptions
@@ -123,28 +121,23 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
     try {
-      const livePty = this.getLivePtyForHandle(handle)
-      const leaf = livePty ? null : this.getLiveLeafForHandle(handle).leaf
-      const ptyId = livePty?.pty.ptyId ?? leaf?.ptyId ?? null
-      const trackedPty = livePty?.pty ?? (ptyId ? this.ptysById.get(ptyId) : null)
-      if (!ptyId || !trackedPty || !this.ptyController) {
+      const { pty: trackedPty } = this.getTerminalPtyForHandle(handle)
+      const { ptyId } = trackedPty
+      if (!this.ptyController) {
         return false
       }
       let foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
       let agent = recognizeAgentProcess(foregroundProcess)?.agent
-      // Why: the cached foreground name can be an executable basename nothing recognizes
-      // (macOS p_comm reports the native Claude installer as `2.1.258`), and treating that
-      // as "no agent" silently downgrades the prompt to unframed chunks, which Claude's
-      // composer truncates. A fresh process-table scan reads the real command line.
+      // Confirm unfamiliar foreground names (macOS Claude p_comm can be 2.1.258) before downgrading atomic paste to truncating unframed chunks.
       if (agent === undefined && this.ptyController.confirmForegroundProcess) {
         foregroundProcess = await this.ptyController.confirmForegroundProcess(ptyId)
         agent = recognizeAgentProcess(foregroundProcess)?.agent
       }
-      if (agent !== 'claude' && agent !== 'codex') {
-        return false
-      }
-      const presence = { retryForegroundWrappers: false, foregroundProcess }
-      if (!(await this.isTerminalRunningAgent(handle, presence))) {
+      // Why every agent: unframed keystrokes can open Pi's `#` completion or answer a trust menu; Dispatch already frames them all.
+      // A generic process name alone could be an ordinary tool, so those agents need title or hook evidence.
+      const proof = agent && GENERIC_PROCESS_NAME_AGENTS.has(agent) ? null : foregroundProcess
+      const presence = { retryForegroundWrappers: false, foregroundProcess: proof }
+      if (agent === undefined || !(await this.isTerminalRunningAgent(handle, presence))) {
         return false
       }
       trackedPty.foregroundAgent = agent
@@ -154,12 +147,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
   }
 
-  /**
-   * The identity seam: whether this handle still names a live agent identity, in either lane.
-   *
-   * Read-only by construction — a handle and a boolean — so it can serve the CLI's sender
-   * validation without `terminal.show`'s writable-looking pane payload.
-   */
+  /** Read-only live-agent identity in either lane, without terminal.show's writable-looking pane payload. */
   resolveTerminalIdentity(handle: string) {
     return resolveTerminalIdentityFromProbes(handle, {
       isLiveStructuredWorker: () =>
@@ -171,20 +159,6 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     })
   }
 
-  /**
-   * A structured worker's own pane key, for callers that can only name the session.
-   *
-   * Resolved HERE rather than published: the pane key is a random identity credential — anyone
-   * holding it can read and consume that worker's mailbox, and session ids are embedded in tab ids
-   * — so it must never travel to a renderer to be echoed back.
-   */
-  getStructuredWorkerPaneKeyForSession(sessionId: string): string | null {
-    const identity = resolveStructuredWorkerIdentityForSession(sessionId, this._orchestrationDb)
-    return identity && resolveStructuredWorkerAuthority(identity.handle, this._orchestrationDb)
-      ? identity.paneKey
-      : null
-  }
-
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     this.orchestrationMailboxNotifications.deliverForHandle(handle, reservedTypes)
   }
@@ -194,11 +168,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
   }
 
-  /**
-   * Every structured session's status change reaches here. At its working and idle edges, retry
-   * what is parked on it; at idle also re-derive the mailboxes it owns, so mail it could not take
-   * earlier (closed) is pointed again. Workers and chats alike: this is not per-dispatch.
-   */
+  /** Retry parked mail on working/idle edges; at idle re-derive owned mailboxes for workers and chats. */
   onStructuredSessionStatusForMail(summary: {
     sessionId: string
     status: 'working' | 'attention' | 'idle' | null
@@ -206,9 +176,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     if (summary.status === 'attention') {
       return
     }
-    // Logged, never thrown: the same status callback goes on to the first-turn workspace rename.
+    // Log failures without blocking the later first-turn workspace rename.
     try {
-      // Working also follows an answered prompt, so mail held behind the prompt is retried too.
+      // A working edge can follow a human answer, unblocking parked mail too.
       this.notifyStructuredSessionJournalActivity(summary.sessionId)
       if (summary.status === 'working') {
         return
@@ -224,11 +194,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
   }
 
-  /**
-   * A chat tab left the screen. If that chat worked a Dispatch and has now ended, the Dispatch
-   * settles as a terminal the operator closed does; a /clear moves the tab, so its successor keeps
-   * the work.
-   */
+  /** Settle ended chat Dispatches on tab hide; /clear successors retain their work. */
   onStructuredSessionTabHidden(sessionId: string): void {
     this.removeWindowlessAgentSessionTab(sessionId)
     try {
@@ -248,15 +214,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
   }
 
-  /**
-   * The session a mailbox must be nudged through, or null when a live PTY can take the bytes.
-   *
-   * All THREE address forms a structured session can own resolve here — its `dispatch:` address,
-   * its `run:` mailbox when it coordinates, and its own bearer handle for peer mail outside a
-   * dispatch. `run:` was the one that fell in a hole: the PTY lane declines because the owner is
-   * structured, and this lane used to decline anything that was not `dispatch:`, so each half
-   * believed the other owned it and a structured coordinator was never nudged.
-   */
+  /** Resolve every structured-owned mailbox here; declining Run or direct mail would leave both delivery lanes refusing it. */
   protected resolveStructuredMailboxTarget(mailboxHandle: string): StructuredPointerTarget | null {
     if (mailboxHandle.startsWith('run:')) {
       return this.resolveStructuredCoordinatorMailboxTarget(mailboxHandle.slice('run:'.length))
@@ -282,14 +240,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     return sessionId ? { sessionId, dispatchId } : null
   }
 
-  /**
-   * A Run's own mailbox, when the coordinator holding it is a structured session.
-   *
-   * A structured coordinator does NOT block in `check --wait` the way a PTY one does — it is a
-   * chat session, and its turn ends — so the waiter that used to preempt pointer delivery is not
-   * there to cover for the missing nudge. Session-scoped: a coordinator's run mailbox has no
-   * dispatch, and needs none, since the ledger bucket is all a dispatch id ever supplied.
-   */
+  /** Structured coordinators need Run nudges after turns end; no blocking check waiter or Dispatch is required. */
   protected resolveStructuredCoordinatorMailboxTarget(
     runId: string
   ): StructuredPointerTarget | null {
@@ -306,24 +257,12 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     return workerSessionId ? { sessionId: workerSessionId, dispatchId: null } : null
   }
 
-  /**
-   * Direct peer mail, addressed to the worker's own handle rather than to a dispatch.
-   *
-   * Nothing else can serve it: the PTY lane refuses a structured handle outright, so without this
-   * the send stores durably, reports success, and no lane ever nudges the worker — the sender sees
-   * success and the peer waiting on a reply hangs.
-   *
-   * The worker's ACTIVE dispatch is preferred when it has one, so peer and coordinator nudges share
-   * one caller key and one set of retain rules. A worker BETWEEN dispatches is still nudged, under
-   * a session-scoped caller key: the mail is durable, the session is live, and a dispatch
-   * says nothing about whether delivery is safe — the idle gate and the writer lease do that.
-   */
+  /** Route direct worker mail through its active Dispatch or a session-scoped ledger between Dispatches; downstream idle/lease gates decide safety. */
   protected resolveStructuredWorkerDirectMailboxTarget(
     handle: string
   ): StructuredPointerTarget | null {
     const db = this._orchestrationDb
-    // Answers null for anything that is not a live structured worker of THIS runtime, so `run:`
-    // and PTY handles fall through to the PTY lane exactly as before.
+    // Only this runtime's held structured workers resolve here; other owners remain for their own lane.
     const authority = resolveStructuredWorkerAuthority(handle, db)
     if (!authority) {
       return null
@@ -379,9 +318,5 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     } catch {
       // The unref'd repair can outlive a test/runtime-owned database during shutdown.
     }
-  }
-
-  protected deliverPendingMessagesForLeaf(leaf: RuntimeLeafRecord): void {
-    this.orchestrationMailboxNotifications.deliverForLeaf(leaf)
   }
 }

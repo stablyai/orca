@@ -1,8 +1,8 @@
-import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { runE2eTypecheck } from './run-e2e-typecheck.mjs'
 import {
   diffCounts,
   parseCountBaseline,
@@ -10,20 +10,16 @@ import {
   totalCount
 } from './ratchet-baseline.mjs'
 
-// Ratchet on type errors under tests/. tests/ has never been typechecked, so a spec can import a
-// helper that doesn't exist (convertThenRetire, #30231) and nothing notices until a host-gated
-// lane runs it. Counts per file may only go down.
+// Ratchet tests/ type errors downward: missing helpers otherwise hide until gated hosts run their specs (#30231).
 
 const BASELINE_PATH = 'config/e2e-typecheck-baseline.txt'
-const TSCONFIG = 'config/tsconfig.e2e.json'
 const HEADER = [
   '# Type errors per file under tests/ (tsc -p config/tsconfig.e2e.json).',
   '# This is a RATCHET: counts may only go DOWN. Fix the errors in a file you touch.',
   '# Prune after a fix: pnpm check:e2e-typecheck-ratchet --prune'
 ]
 
-// Only tests/ rows: errors tsc reports in imported cloud/ or mobile/ sources depend on whether
-// those workspaces are installed, which differs between CI jobs.
+// Count tests/ only; imported mobile/cloud errors vary with each CI job’s installed workspaces.
 const TEST_ERROR_ROW = /^(tests\/[^(\s]+)\(\d+,\d+\): error TS\d+:/
 
 export function countTestTypeErrors(tscOutput) {
@@ -37,21 +33,11 @@ export function countTestTypeErrors(tscOutput) {
   return counts
 }
 
-function runTsc(root) {
-  const result = spawnSync(
-    process.execPath,
-    ['node_modules/typescript/bin/tsc', '--noEmit', '--pretty', 'false', '-p', TSCONFIG],
-    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
-  )
-  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
-  // tsc exits 2 when it reports errors; anything else without diagnostics means it never ran.
-  if (result.error || (result.status !== 0 && !/error TS\d+:/.test(output))) {
-    throw new Error(`tsc -p ${TSCONFIG} failed to run:\n${result.error ?? output}`)
-  }
-  return output
-}
-
-export function main(root = process.cwd(), arg = undefined, tscOutput = runTsc(root)) {
+export function main(
+  root = process.cwd(),
+  arg = undefined,
+  tscOutput = runE2eTypecheck({ root }).output
+) {
   const current = countTestTypeErrors(tscOutput)
   if (arg === '--prune') {
     const total = pruneCountBaseline(root, BASELINE_PATH, HEADER, current)

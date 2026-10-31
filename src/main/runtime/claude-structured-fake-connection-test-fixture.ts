@@ -1,5 +1,7 @@
-// A fake Claude stream-json child for the structured-session integration suite.
-
+import {
+  type claudeInitialization,
+  claudeInitializationScope
+} from '../claude/claude-structured-startup-settled-test-support'
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -14,17 +16,34 @@ export type FakeClaudeConnection = Omit<ClaudeStreamJsonConnection, 'closed' | '
   handlers: ClaudeStreamJsonConnectionHandlers
   calls: { subtype: string; params?: Record<string, unknown> }[]
   sent: Record<string, unknown>[]
+  initialization: ReturnType<typeof claudeInitialization>
+  closeProven: boolean
 }
 
 export function fakeClaude(providerSession: string) {
   const connections: FakeClaudeConnection[] = []
   let initializeAccount: unknown
-  /** A child that dies during start, with the close verdict its ladder observed. */
-  let selfExit: { message: string; exitVerdict: ClaudeStreamJsonConnection['exitVerdict'] } | null =
-    null
+  let initializeHeld = false
+  const initializationScope = claudeInitializationScope()
+  let disposed = false
   let contextUsage: () => Promise<unknown> = async () => ({})
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake answers every control request the session issues; the real opener's signature is what the runtime under test calls.
   const openConnection = (async (launch, handlers = {}) => {
+    const initialization = initializationScope.create({
+      held: initializeHeld,
+      response: {
+        models: [{ value: 'sonnet', displayName: 'Sonnet' }],
+        ...(initializeAccount === undefined ? {} : { account: initializeAccount })
+      },
+      deliver: () =>
+        handlers.onMessage?.({
+          type: 'system',
+          subtype: 'init',
+          session_id: providerSession,
+          model: 'claude-sonnet-5',
+          apiKeySource: 'none'
+        })
+    })
     const connection: FakeClaudeConnection = {
       launch,
       handlers,
@@ -32,34 +51,14 @@ export function fakeClaude(providerSession: string) {
       sent: [],
       pid: 4321 + connections.length,
       closed: false,
-      initializationResult: async () => {
-        connection.calls.push({ subtype: 'initialize' })
-        if (selfExit) {
-          const error = new Error(selfExit.message)
-          if (selfExit.exitVerdict.root === 'exited') {
-            handlers.onExit?.(error)
-          } else {
-            handlers.onFault?.(error)
-          }
-          return { models: [] }
-        }
-        handlers.onMessage?.({
-          type: 'system',
-          subtype: 'init',
-          session_id: providerSession,
-          ...(connections.length === 0 ? { uuid: 'init-leaf' } : {}),
-          model: 'claude-sonnet-5',
-          apiKeySource: 'none'
-        })
-        return {
-          models: [{ value: 'sonnet', displayName: 'Sonnet' }],
-          ...(initializeAccount === undefined ? {} : { account: initializeAccount })
-        }
-      },
+      initialization,
+      closeProven: true,
+      initializationResult: () => initialization.read(connection.calls),
       getSettings: async () => {
         connection.calls.push({ subtype: 'get_settings' })
         return { env: {} }
       },
+      renameSession: async () => {},
       getContextUsage: async () => {
         connection.calls.push({ subtype: 'get_context_usage' })
         return contextUsage()
@@ -92,10 +91,11 @@ export function fakeClaude(providerSession: string) {
           handlers.onMessage?.({ ...message, uuid: 'user-1' })
         }
       },
-      exitVerdict: selfExit?.exitVerdict ?? { root: 'live', tree: 'unverifiable' },
+      exitVerdict: { root: 'live', tree: 'unverifiable' },
       close: async () => {
         connection.closed = true
-        return selfExit === null || selfExit.exitVerdict.tree === 'exited'
+        initialization.dispose()
+        return disposed || connection.closeProven
       }
     }
     connections.push(connection)
@@ -115,8 +115,12 @@ export function fakeClaude(providerSession: string) {
     setInitializeAccount: (account: unknown) => {
       initializeAccount = account
     },
-    setSelfExit: (exit: typeof selfExit) => {
-      selfExit = exit
+    setInitializeHeld: (held: boolean) => {
+      initializeHeld = held
+    },
+    dispose: () => {
+      disposed = true
+      initializationScope.dispose()
     },
     setContextUsage: (answer: () => Promise<unknown>) => {
       contextUsage = answer

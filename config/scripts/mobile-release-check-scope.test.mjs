@@ -87,7 +87,10 @@ it('gates Ruby independently and retains mobile static validation', () => {
       step.name !== 'Summarize RPC recording changes'
   )
   expect(gated.map((step) => step.name)).toEqual([
-    'Setup Ruby and fastlane',
+    'Setup Ruby',
+    'Resolve fastlane bundle cache',
+    'Restore fastlane bundle',
+    'Install fastlane',
     'Test iOS release version resolution',
     'Test TestFlight lane arguments',
     'Smoke-check the Fastfile',
@@ -115,9 +118,7 @@ it('gates Ruby independently and retains mobile static validation', () => {
     expect(workflow.on.pull_request.paths.some((pattern) => matchesGlob(file, pattern))).toBe(true)
   }
   expect(workflow.jobs.verify.env.BUNDLE_FROZEN).toBe('true')
-  expect(steps.find((step) => step.name === 'Setup Ruby and fastlane').with['bundler-cache']).toBe(
-    true
-  )
+  expect(steps.find((step) => step.name === 'Install fastlane').run).toContain('bundle install')
   expect(steps.find((step) => step.name === 'Smoke-check the Fastfile').run).toBe(
     'bundle exec fastlane lanes'
   )
@@ -147,6 +148,7 @@ function fixture(detectorStep = detector) {
     'config/scripts/pr-code-change-scope.mjs',
     'config/scripts/pr-package-test-paths.mjs',
     'config/scripts/pr-layout-oracle-route.mjs',
+    'config/scripts/pr-shell-contract-prefixes.mjs',
     'config/scripts/mobile-release-check-scope.mjs',
     'config/scripts/mobile-test-change-scope.mjs'
   ]) {

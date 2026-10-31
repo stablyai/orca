@@ -1,8 +1,4 @@
-/**
- * The hostile-host matrix: each cell is an SSH target (a container, or the runner's own loopback
- * sshd) and what managed orcad must do there. `ssh-hostile-hosts.docker.test.ts` drives the real
- * client-side deploy against each one; `.github/workflows/ssh-hostile-hosts.yml` runs it.
- */
+/** Run real managed-orcad deployment against container/loopback host constraints in ssh-hostile-hosts.yml. */
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import type { OrcadHostUnavailableReason } from '../../orcad/orcad-host-unavailable'
 
@@ -17,16 +13,15 @@ export function forbiddenToolShimScript(logPath: string): string {
   )
 }
 
-/** What any hostile-host driver needs, whatever provisions the host. */
 export type HostileHostCellCore = {
   id: string
-  /** Managed orcad on a fresh host: the runtime target it resolves, and what the deploy does there. */
   managed: ManagedOrcadExpectation
+  /** This computer's Node download is refused and its cache is empty, so only the host can fetch it. */
+  desktopNoEgress?: boolean
 }
 
 export type ManagedOrcadExpectation =
   | { outcome: 'activated'; runtime: NodeRuntimeTarget }
-  /** The deploy throws an error the connect classifies as this host being unable to run orcad. */
   | { outcome: 'unavailable'; runtime: NodeRuntimeTarget; reason: OrcadHostUnavailableReason }
 
 export type DockerHostileHostCell = HostileHostCellCore & {
@@ -39,16 +34,10 @@ export type DockerHostileHostCell = HostileHostCellCore & {
   noEgress?: boolean
 }
 
-/**
- * The runner itself as the SSH host: a user-level sshd on a loopback port logs in as the runner
- * user with PATH cut to the shims and the OS base, and HOME moved to an empty directory so no
- * profile or rc file puts Homebrew or a toolchain back.
- */
+/** User-level loopback sshd with shim-only PATH and empty HOME keeps profiles/toolchains from leaking into deployment. */
 export type LocalSshdHostileHostCell = HostileHostCellCore & {
   host: 'local-sshd'
-  /** The machine the cell must run on; its runtime target is this machine's own. */
   runsOn: { platform: NodeJS.Platform; arch: string }
-  /** Shimmed beside FORBIDDEN_TOOLS for this host only. */
   extraForbiddenTools?: readonly string[]
 }
 
@@ -62,8 +51,7 @@ export function forbiddenToolsFor(cell: HostileHostCell): string[] {
   return [...FORBIDDEN_TOOLS, ...(isLocalSshdCell(cell) ? (cell.extraForbiddenTools ?? []) : [])]
 }
 
-// Why xattr: SFTP writes carry no com.apple.quarantine, so the pinned Node must run as uploaded;
-// a deploy that reached for `xattr -d` would be papering over a Gatekeeper block.
+// SFTP uploads carry no quarantine attribute; deployment must run without xattr remediation.
 const MACOS_FORBIDDEN_TOOLS = ['xattr']
 
 // Digests are the multi-arch indexes of each tag as of 2026-09-30.
@@ -77,7 +65,7 @@ const UBUNTU_22_04 =
   'ubuntu:22.04@sha256:b8b6ee6aa931ecd9d0d952abc34dc0e5f7c6a30c6bb71b079fe399fde0329c02'
 const CENTOS_7 = 'centos:7@sha256:be65f488b7764ad3638f236b7b515b3678369a5124c47b8d32916d6487418ea4'
 
-// Why the archive: buster left deb.debian.org; its packages live on only at archive.debian.org.
+// Debian buster packages moved to archive.debian.org.
 const DEBIAN_10_LINES = [
   `FROM ${DEBIAN_10}`,
   "RUN printf '%s\\n' 'deb http://archive.debian.org/debian buster main' 'deb http://archive.debian.org/debian-security buster/updates main' > /etc/apt/sources.list" +
@@ -130,7 +118,7 @@ export const HOSTILE_HOST_CELLS: readonly HostileHostCell[] = [
     id: 'centos7-glibc217',
     dockerfile: [
       `FROM ${CENTOS_7}`,
-      // Why the vault: CentOS 7 is end of life and mirror.centos.org no longer serves it.
+      // CentOS7 mirrors are gone; use its end-of-life vault.
       "RUN sed -i -e 's/^mirrorlist=/#mirrorlist=/' -e 's|^#\\?baseurl=http://mirror.centos.org/centos/$releasever|baseurl=http://vault.centos.org/7.9.2009|' /etc/yum.repos.d/CentOS-*.repo" +
         ' && yum install -y openssh-server procps-ng && yum clean all'
     ],
@@ -141,6 +129,16 @@ export const HOSTILE_HOST_CELLS: readonly HostileHostCell[] = [
     id: 'debian10-no-egress',
     dockerfile: DEBIAN_10_LINES,
     noEgress: true,
+    managed: { outcome: 'activated', runtime: 'linux-x64-glibc' }
+  },
+  {
+    // This computer can't reach nodejs.org, so the host downloads the runtime with its own curl.
+    id: 'almalinux8-desktop-no-egress',
+    dockerfile: [
+      `FROM ${ALMALINUX_8}`,
+      'RUN dnf install -y openssh-server procps-ng tar gzip curl && dnf clean all'
+    ],
+    desktopNoEgress: true,
     managed: { outcome: 'activated', runtime: 'linux-x64-glibc' }
   },
   {
@@ -169,10 +167,7 @@ export function canRunHostileHostCell(cell: HostileHostCell, machine: HostileHos
   return machine.platform === 'linux'
 }
 
-/**
- * `ORCA_SSH_HOSTILE_HOST_CELLS=a,b` narrows a run and every named cell must be hostable here;
- * unset or empty runs every cell this machine can host.
- */
+/** An explicit cell filter must be hostable here; empty selects every compatible cell. */
 export function selectHostileHostCells(
   filter: string | undefined,
   cells: readonly HostileHostCell[] = HOSTILE_HOST_CELLS,
@@ -186,7 +181,7 @@ export function selectHostileHostCells(
   if (unknown.length > 0) {
     throw new Error(`Unknown hostile-host cells: ${unknown.join(', ')}`)
   }
-  // Why: a named cell skipped for the wrong OS or arch would leave its CI job green with no run.
+  // Explicit unhostable cells must fail rather than produce a green empty job.
   const unhostable = cells.filter(
     (cell) => wanted.includes(cell.id) && !canRunHostileHostCell(cell, machine)
   )

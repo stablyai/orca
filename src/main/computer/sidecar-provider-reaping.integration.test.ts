@@ -14,7 +14,7 @@ describe.skipIf(process.platform === 'win32')('real sidecar exit reaping', () =>
     directory = await mkdtemp(join(tmpdir(), 'orca-sidecar-reaping-'))
     entry = join(directory, 'sidecar.cjs')
     await build({
-      entryPoints: [join(__dirname, 'sidecar-entry.ts')],
+      entryPoints: [join(__dirname, 'computer-sidecar.ts')],
       outfile: entry,
       bundle: true,
       platform: 'node',
@@ -46,7 +46,7 @@ describe.skipIf(process.platform === 'win32')('real sidecar exit reaping', () =>
                   await once(child.stdout, 'data');
                   child.stdout.destroy();
                   child.kill('SIGSTOP');
-                  return { ready: true };
+                  return { ready: true, supports: { observation: {} } };
                 }};
               }
               export function shutdownComputerProviders() {

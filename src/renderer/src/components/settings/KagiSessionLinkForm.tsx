@@ -34,9 +34,7 @@ export function KagiSessionLinkForm(): React.JSX.Element {
   )
   const resolvedDraftState = resolveKagiSessionLinkDraftState(draftState, persistedDraft)
 
-  // Why: the Kagi token is edited as a masked draft so accidental typing or
-  // external settings updates do not immediately overwrite the persisted
-  // secret; when the stored secret changes, reconcile before commit.
+  // Keep the secret in a masked draft and reconcile external changes before commit; typing must not overwrite it immediately.
   if (resolvedDraftState !== draftState) {
     setDraftState(resolvedDraftState)
   }

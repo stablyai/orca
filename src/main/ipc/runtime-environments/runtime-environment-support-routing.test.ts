@@ -36,12 +36,12 @@ vi.mock('./runtime-environment-request-connections', async (importOriginal) => (
   ...(await importOriginal()),
   subscribeRemoteRuntimeSharedControlRequest: subscribeSharedMock
 }))
-vi.mock('../../../shared/remote-runtime-client', async (importOriginal) => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', async (importOriginal) => ({
   ...(await importOriginal()),
   subscribeRemoteRuntimeRequest: subscribeLegacyMock
 }))
 import type { subscribeRemoteRuntimeSharedControlRequest } from './runtime-environment-request-connections'
-import type { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import type { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 
 import {
   subscribeSupportRoutedRuntimeEnvironment,

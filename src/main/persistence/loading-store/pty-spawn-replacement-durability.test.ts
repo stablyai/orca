@@ -5,10 +5,8 @@ import { deferred, fixture, admitRuntimeSpawnPane } from './profile-state-delaye
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitPtyIpcSpawn } from '../../ipc/pty/ipc/spawn-commit'
 import { createPtyIpcSpawnState } from '../../ipc/pty/ipc/spawn-state'
-import type { PtySpawnIpcDeps } from '../../ipc/pty/ipc/spawn-types'
 import { commitRuntimePtySpawn } from '../../ipc/pty/runtime/spawn-commit'
 import { createRuntimePtySpawnState } from '../../ipc/pty/runtime/spawn-state'
-import type { PtyRuntimeControllerDeps } from '../../ipc/pty/runtime/controller-deps'
 import { ptyIncarnationById, ptyOwnership } from '../../ipc/pty/provider/ownership-state'
 import { clearProviderPtyState } from '../../ipc/pty/provider/state-cleanup'
 import { createPtySpawnCommitDependencies } from './pty-spawn-commit-dependencies-fixture'
@@ -124,19 +122,19 @@ it.each(['ipc', 'runtime'])(
     const { store, authority } = await fixture()
     const runtime = new OrcaRuntimeService(store)
     runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
+    const deps = createPtySpawnCommitDependencies(runtime, store)
+    const claim = runtime.beginPtyRegistration(binding.ptyId, binding.incarnationId)
     let commit: () => Promise<unknown>
     if (controller === 'ipc') {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only commit runs; the runtime/store are real and preflight-only dependencies are unreachable.
-      const deps = { runtime, store } as PtySpawnIpcDeps
       const ctx = createPtyIpcSpawnState(deps, { ...binding, cols: 80, rows: 24 })
+      ctx.pendingRegistrationClaim = claim
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
       ctx.metadataLeafId = binding.leafId
       ctx.validatedLeafId = binding.leafId
       commit = () => commitPtyIpcSpawn(ctx)
     } else {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only commit runs; the runtime/store are real and preflight-only dependencies are unreachable.
-      const deps = { runtime, store } as PtyRuntimeControllerDeps
       const ctx = createRuntimePtySpawnState(deps, { ...binding, cols: 80, rows: 24 })
+      ctx.pendingRegistrationClaim = claim
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
       ctx.metadataLeafId = binding.leafId
       await admitRuntimeSpawnPane(store, binding)
@@ -144,7 +142,7 @@ it.each(['ipc', 'runtime'])(
       commit = () => commitRuntimePtySpawn(ctx)
     }
     const gate = authority.pause()
-    const pending = expect(commit()).rejects.toThrow('agent_session_exited_during_start')
+    const pending = expect(commit()).rejects.toThrow('terminal_pane_owner_changed')
     await gate.started.promise
     await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, { providerExitObserved: true })
     runtime.onPtySpawned(binding.ptyId, replacementIncarnation)
@@ -187,7 +185,6 @@ it.each(
     const deps = createPtySpawnCommitDependencies(runtime, store)
     vi.spyOn(store, 'persistPtyBinding').mockImplementation(async () => {
       if (exitsDuringSave) {
-        // The provider's exit listener, as local-configure wires it.
         clearProviderPtyState(binding.ptyId)
         ptyOwnership.delete(binding.ptyId)
         await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, {
@@ -238,7 +235,6 @@ it.each(
     const { store } = await fixture()
     const runtime = new OrcaRuntimeService(store)
     runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
-    // The provider's exit listener ran before the commit recorded ownership.
     await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, { providerExitObserved: true })
     const deps = createPtySpawnCommitDependencies(runtime, store)
     if (saveAndShutdownFail) {
@@ -283,7 +279,7 @@ it.each(['ipc', 'runtime'])(
     await runtime.onPtyExit(binding.ptyId, 0, replacementIncarnation, {
       providerExitObserved: true
     })
-    // A daemon respawn under the same id does not reset that id-keyed verdict.
+    // Same-ID daemon respawn does not reset an ID-keyed exit verdict.
     const deps = createPtySpawnCommitDependencies(runtime, store)
     let commit: () => Promise<unknown>
     if (controller === 'ipc') {

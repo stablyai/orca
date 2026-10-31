@@ -1,7 +1,4 @@
-/**
- * The shared half of the launch route: the renderer's `resolveAgentLaunchRoute` and orchestration's
- * worker-mode decision both answer from these, so a change here moves both surfaces at once.
- */
+/** Renderer and orchestration share launch feasibility/defaults; changes here must move both surfaces together. */
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -9,12 +6,11 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from './protocol-version'
 import {
-  isNativeChatEnabled,
+  nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
+  type NativeChatDefaultSettings,
   type StructuredNativeChatSupportInput
 } from './structured-native-chat-launch-route'
-
-const ON = { experimentalNativeChat: true }
 
 function support(overrides: Partial<StructuredNativeChatSupportInput> = {}) {
   return resolveStructuredNativeChatSupport({
@@ -26,29 +22,13 @@ function support(overrides: Partial<StructuredNativeChatSupportInput> = {}) {
   })
 }
 
-describe('the Chat UI switch', () => {
-  it('selects structured chat from the one persisted setting', () => {
-    const oldSelectorOff = { experimentalNativeChat: true, openAgentTabsInChatByDefault: false }
-    expect(isNativeChatEnabled(ON)).toBe(true)
-    expect(isNativeChatEnabled({ experimentalNativeChat: false })).toBe(false)
-    expect(isNativeChatEnabled(oldSelectorOff)).toBe(true)
-  })
-
-  it.each([null, undefined, {}])('reads %s as no preference', (settings) => {
-    expect(isNativeChatEnabled(settings)).toBe(false)
-  })
-})
-
 describe('per-launch structured feasibility', () => {
-  it.each(['claude', 'codex'] as const)('supports a local %s launch', (agent) => {
-    expect(support({ agent })).toEqual({ supported: true })
-  })
-
   const blockerCases: [string, Partial<StructuredNativeChatSupportInput>, string][] = [
     ['a reused PTY agent', { reusesTerminal: true }, 'reused-terminal'],
     ['grok', { agent: 'grok' }, 'agent-without-structured-session'],
     ['openclaude', { agent: 'openclaude' }, 'agent-without-structured-session'],
     ['a custom start directory', { startsOutsideWorkspaceRoot: true }, 'custom-start-directory'],
+    ['a host-nested SSH project', { projectExecutionKind: 'ssh' }, 'remote-execution-host'],
     ['an SSH host', { executionHostId: 'ssh:host-a' }, 'remote-execution-host'],
     ['a missing capability', { hostCapabilities: [] }, 'runtime-capability'],
     ['an unanswered host', { hostCapabilities: null }, 'runtime-capability-unknown']
@@ -90,8 +70,7 @@ describe('per-launch structured feasibility', () => {
     ).toEqual({ supported: false, blocker: 'project-runtime' })
   })
 
-  // Why floating is supported: its configured directory resolves like any other workspace, so a
-  // session can be filed under it. Workspace kind no longer refuses anything on its own.
+  // Floating workspaces have resolvable configured directories; kind alone must not refuse structured launches.
   it.each(['folder', 'floating', 'git-worktree'] as const)(
     'supports a local %s workspace',
     (workspaceKind) => {
@@ -137,3 +116,38 @@ describe('agents beyond Claude and Codex', () => {
     expect(support({ agent: 'codex' })).toEqual({ supported: true })
   })
 })
+
+describe('per-agent Chat | CLI preference', () => {
+  it('opens only an agent saved as chat as a chat, host-registered ids included', () => {
+    expect(
+      nativeChatPreferenceFor({ nativeChatProviders: { 'acme-agent': true } }, 'acme-agent')
+    ).toBe(true)
+    expect(nativeChatPreferenceFor({}, 'claude')).toBe(false)
+    expect(nativeChatPreferenceFor({ nativeChatProviders: { claude: true } }, 'acme-agent')).toBe(
+      false
+    )
+    expect(nativeChatPreferenceFor({ nativeChatProviders: { claude: false } }, 'claude')).toBe(
+      false
+    )
+    expect(nativeChatPreferenceFor(null, 'claude')).toBe(false)
+    // Inherited object keys are not saved choices.
+    expect(nativeChatPreferenceFor({ nativeChatProviders: {} }, 'constructor')).toBe(false)
+  })
+})
+
+it.each(['chat', 'terminal'] as const)(
+  'resolves boolean overrides before default %s for existing and later agents',
+  (agentDefaultSurface) => {
+    const settings: NativeChatDefaultSettings = {
+      agentDefaultSurface,
+      nativeChatProviders: { claude: false, codex: true }
+    }
+    expect(nativeChatPreferenceFor(settings, 'claude')).toBe(false)
+    expect(nativeChatPreferenceFor(settings, 'codex')).toBe(true)
+    expect(nativeChatPreferenceFor(settings, 'later-agent')).toBe(agentDefaultSurface === 'chat')
+    Reflect.set(settings.nativeChatProviders!, 'malformed', 'true')
+    expect(nativeChatPreferenceFor(settings, 'malformed')).toBe(agentDefaultSurface === 'chat')
+    Reflect.set(settings, 'agentDefaultSurface', 'invalid')
+    expect(nativeChatPreferenceFor(settings, 'later-agent')).toBe(false)
+  }
+)

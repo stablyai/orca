@@ -1,5 +1,4 @@
-// The resume and fork startups a terminal opens a saved conversation with, built from the host's
-// platform, shell and launch settings, so the desktop and the phone run one builder.
+// Share desktop/mobile saved-conversation startups using host platform, actual shell and launch settings.
 
 import { isAntigravityReferenceSession } from './antigravity-session-origin'
 import type { AiVaultAgent, AiVaultSession } from './ai-vault-types'
@@ -14,7 +13,11 @@ import {
   type SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import { normalizeAiVaultResumeFilePath } from './ai-vault-resume-path'
-import { resolveTuiAgentLaunchArgs, resolveTuiAgentLaunchEnv } from './tui-agent-launch-defaults'
+import {
+  resolveTuiAgentLaunchRawArgs,
+  resolveTuiAgentLaunchEnv,
+  type AgentLaunchProfileSettings
+} from './tui-agent-launch-defaults'
 import { buildAgentResumeStartupPlan } from './tui-agent-startup'
 import {
   quoteStartupArg,
@@ -28,6 +31,7 @@ import { assertOpenCodeCopyUsesLocalStore } from './opencode-launch-command'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from './structured-agent-cli-conversation-adoption'
 import type { GlobalSettings } from './global-settings-types'
 import { parseWslUncPath } from './wsl-paths'
+import { managedDataAccountResumeEnv } from './managed-data-account-resume'
 
 export type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
@@ -47,13 +51,14 @@ export type AiVaultResumeStartup = {
   providerSession?: AgentProviderSessionMetadata
 }
 
-export type AiVaultResumeLaunchSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv'>
->
+export type AiVaultResumeLaunchSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> &
+  AgentLaunchProfileSettings
 
 /** The platform and live shell a resume line is written for, and the Codex home it pins. */
 export type AiVaultResumeHostShell = {
   platform: NodeJS.Platform
+  /** OS that runs the agent when `platform` is only a quoting guess; null when unreported, absent when `platform`. */
+  agentHostPlatform?: NodeJS.Platform | null
   codexHome: string | null
   liveShell: AgentStartupShell | undefined
 }
@@ -69,8 +74,7 @@ export function getAiVaultResumeCodexHome(
   codexHome: string | null,
   platform: NodeJS.Platform
 ): string | null {
-  // Why: WSL UNC Codex homes must be POSIX when invoking Linux commands.
-  // Keep original paths unchanged for non-Linux targets.
+  // Translate WSL UNC Codex homes to POSIX only for Linux targets.
   if (!codexHome || platform !== 'linux') {
     return codexHome
   }
@@ -132,10 +136,20 @@ export function buildAiVaultLocalResumeStartup(
       providerSession: localProviderSession,
       cmdOverrides: resumeCommandOverrides(args),
       platform,
+      agentHostPlatform: args.host.agentHostPlatform,
       shell: liveShell,
       agentArgs:
-        args.agentArgs ?? resolveTuiAgentLaunchArgs(session.agent, settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings?.agentDefaultEnv),
+        args.agentArgs ??
+        resolveTuiAgentLaunchRawArgs(
+          session.agent,
+          settings,
+          undefined,
+          resolveStartupShell(platform, liveShell)
+        ),
+      agentEnv: {
+        ...resolveTuiAgentLaunchEnv(session.agent, settings, platform),
+        ...managedDataAccountResumeEnv(session)
+      },
       resumeInLaunchCwd: true,
       ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
     })
@@ -175,16 +189,13 @@ export function buildAiVaultLocalResumeStartup(
     command: buildAiVaultResumeCommand({
       agent: session.agent,
       sessionId: session.sessionId,
-      // Why: OMP resumes by absolute transcript path, so local rebuilds must
-      // forward it too — otherwise a custom OMP_CODING_AGENT_DIR / WSL-store
-      // session would resume by id against the default store and miss.
+      // Forward OMP transcript paths during local rebuilds so custom/WSL stores cannot fall back to default-store ID lookup.
       resumeFilePath,
       cwd,
       platform,
       commandOverride: args.commandOverride,
       codexHome,
-      // Why: non-resumable agents queue through this fallback too, so it must
-      // quote for the live Windows shell like the startup-plan branch above.
+      // Fallbacks also handle non-resumable agents; quote for the live Windows shell like startup plans.
       shell: liveShell,
       clearEnvNames
     }),
@@ -193,13 +204,7 @@ export function buildAiVaultLocalResumeStartup(
   }
 }
 
-/**
- * A terminal session that starts from a copy of a conversation a native chat owns.
- *
- * Null when the agent cannot fork: a plain resume in its place would make the terminal a second
- * writer on the chat's conversation. No `providerSession` either: the copy gets its own id, and a
- * cold restore of this tab must never re-enter the chat's conversation.
- */
+/** Return null without fork support: plain resume would create a second writer on the chat's conversation. Omit providerSession because the copy owns a new ID and cold restore must not resume the source. */
 export function buildAiVaultForkStartup(
   args: AiVaultResumeStartupArgs
 ): AiVaultResumeStartup | null {
@@ -217,9 +222,15 @@ export function buildAiVaultForkStartup(
     providerSession,
     cmdOverrides: resumeCommandOverrides(args),
     platform,
+    agentHostPlatform: args.host.agentHostPlatform,
     shell: liveShell,
-    agentArgs: resolveTuiAgentLaunchArgs(session.agent, settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings?.agentDefaultEnv),
+    agentArgs: resolveTuiAgentLaunchRawArgs(
+      session.agent,
+      settings,
+      undefined,
+      resolveStartupShell(platform, liveShell)
+    ),
+    agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
     resumeInLaunchCwd: true,
     fork: true
   })
@@ -250,7 +261,12 @@ export function resolveAiVaultCopiedSessionAgentArgs(
   const { platform, liveShell } = args.host
   const shell = resolveStartupShell(platform, liveShell)
   const configuredArgs = isTuiAgent(session.agent)
-    ? resolveTuiAgentLaunchArgs(session.agent, settings?.agentDefaultArgs)
+    ? resolveTuiAgentLaunchRawArgs(
+        session.agent,
+        settings,
+        undefined,
+        resolveStartupShell(platform, liveShell)
+      )
     : ''
   const configured = tokenizeStartupCommand(configuredArgs, shell)
   if (!configured.ok) {
@@ -284,8 +300,7 @@ export function resolveAiVaultCopiedSessionAgentArgs(
     .join(' ')
 }
 
-/** OpenCode copies are written to the local store, so the launch must not point elsewhere. Checked
- *  before the copy exists, so every CLI whose chat could own the row's conversation is checked. */
+/** Check every possible chat-owning CLI before copying: OpenCode copies live in the local store and launch args must not redirect them. */
 export function assertAiVaultCopiedSessionStoreAllowed(args: AiVaultResumeStartupArgs): void {
   const row = args.session.agent
   if (row !== 'opencode' && row !== 'opencode2') {
@@ -298,7 +313,7 @@ export function assertAiVaultCopiedSessionStoreAllowed(args: AiVaultResumeStartu
       args.settings?.agentCmdOverrides?.[agent] ||
       getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], platform)
     const parsed = tokenizeStartupCommand(
-      `${command} ${resolveTuiAgentLaunchArgs(agent, args.settings?.agentDefaultArgs)}`,
+      `${command} ${resolveTuiAgentLaunchRawArgs(agent, args.settings, undefined, resolveStartupShell(platform, liveShell))}`,
       resolveStartupShell(platform, liveShell)
     )
     if (!parsed.ok) {

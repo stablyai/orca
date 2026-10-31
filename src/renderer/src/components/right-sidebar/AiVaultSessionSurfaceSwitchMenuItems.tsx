@@ -6,9 +6,9 @@ import { translate } from '@/i18n/i18n'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { ResumeInNewCliTooltipText } from './ai-vault-session-cli-fork-copy'
 
-/** "Switch to Chat" / "Switch to Terminal", shared by the session-history row menus and
- *  the tab menu so both offer the same move under the same words. */
+/** History opens a new tab; active-tab controls switch surfaces. */
 export function AiVaultSessionSurfaceSwitchMenuItems({
+  action,
   menuKind,
   tooltipSide,
   chatPending,
@@ -16,6 +16,7 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
   onResumeInNewCli,
   cliPending = false
 }: {
+  action: 'resume' | 'switch'
   menuKind: 'dropdown' | 'context'
   tooltipSide: 'left' | 'right'
   chatPending?: boolean
@@ -33,10 +34,15 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
           aria-busy={chatPending || undefined}
         >
           <MessagesSquare className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-            'Switch to Chat'
-          )}
+          {action === 'resume'
+            ? translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
+                'Resume in New Chat'
+              )
+            : translate(
+                'components.tab.bar.SortableTabContextMenu.switchToChatView',
+                'Continue in Chat UI'
+              )}
         </Item>
       ) : null}
       {onResumeInNewCli ? (
@@ -48,10 +54,15 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
               ) : (
                 <SquareTerminal className="size-3.5" />
               )}
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-                'Switch to Terminal'
-              )}
+              {action === 'resume'
+                ? translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
+                    'Resume in New Terminal'
+                  )
+                : translate(
+                    'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
+                    'Continue with Terminal Agent'
+                  )}
             </Item>
           </TooltipTrigger>
           <TooltipContent side={tooltipSide} sideOffset={8}>

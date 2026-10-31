@@ -1,6 +1,5 @@
-// AppImage: Crashpad's handler outlives us on the FUSE mount and SIGBUSes once it is unmounted
-// (#22542). Stopped, not relocated: Electron always launches it from the executable's directory.
-// A main-process crash runs no exit hook, so the handler still faults after writing that dump.
+// Stop the handler before AppImage FUSE unmount invalidates its executable pages.
+// Main-process crashes bypass exit hooks, so the handler may still fault after writing the dump.
 
 import { readdirSync, readlinkSync, statSync } from 'node:fs'
 // posix: /proc paths are Linux-only, and tests run this matcher on every host.
@@ -34,16 +33,13 @@ function isRunningFromOwnMount(runtimeRoot: string): boolean {
   }
 }
 
-/**
- * Use `exit`: Electron can defer `will-quit`; this hook runs only in Node's final exit phase.
- */
+/** Use Node's final exit phase because Electron can defer will-quit. */
 export function installAppImageCrashpadHandlerExit(): void {
   const runtimeRoot = posix.dirname(process.execPath)
-  // Why resolve now: validation reads the AppImage file, which may be moved or deleted by exit.
+  // Validate now because the AppImage may be moved or deleted before exit.
   if (!resolveAppImageRuntimeIdentity() || !isRunningFromOwnMount(runtimeRoot)) {
     return
   }
-  // The mount path is unique per launch, so only this launch's handler matches.
   const handlerPath = posix.join(runtimeRoot, 'chrome_crashpad_handler')
   process.once('exit', () => {
     for (const pid of listPids()) {
@@ -51,10 +47,10 @@ export function installAppImageCrashpadHandlerExit(): void {
         continue
       }
       try {
-        // Why SIGKILL: SIGTERM runs the handler's own signal code, whose cold pages race the unmount.
+        // SIGTERM executes handler code that may fault as FUSE unmounts; SIGKILL does not.
         process.kill(pid, 'SIGKILL')
       } catch {
-        // Already gone.
+        // The handler may already have exited.
       }
     }
   })

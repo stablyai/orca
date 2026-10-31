@@ -12,6 +12,7 @@ import {
   type GitHistoryOptions,
   type GitHistoryResult
 } from './git-history-types'
+import { getGitCurrentBranchName } from './git-current-branch'
 
 export type {
   GitHistoryExecutor,
@@ -76,10 +77,7 @@ async function resolveSymbolicFullName(
       ['rev-parse', '--symbolic-full-name', '--end-of-options', ref],
       cwd
     )
-    // Why skip the marker: --verify swallows --end-of-options, but
-    // --symbolic-full-name deliberately echoes it, so the first line is the marker
-    // rather than the ref. Taking it made every branch and tag fall through
-    // gitHistoryRefFromFullName's prefix checks into the "commits" category.
+    // --symbolic-full-name echoes --end-of-options; skip it or branches/tags fall through ref-prefix checks as commits.
     return (
       stdout
         .trim()
@@ -96,22 +94,17 @@ async function resolveCurrentRef(
   cwd: string,
   headOid: string
 ): Promise<{ currentRef: GitHistoryItemRef; branchName: string | null }> {
-  try {
-    const { stdout } = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], cwd)
-    const branchName = stdout.trim()
-    if (branchName) {
-      return {
-        branchName,
-        currentRef: {
-          id: `refs/heads/${branchName}`,
-          name: branchName,
-          revision: headOid,
-          category: 'branches'
-        }
+  const branchName = await getGitCurrentBranchName((args) => git(args, cwd))
+  if (branchName) {
+    return {
+      branchName,
+      currentRef: {
+        id: `refs/heads/${branchName}`,
+        name: branchName,
+        revision: headOid,
+        category: 'branches'
       }
     }
-  } catch {
-    // Detached HEAD.
   }
 
   return {
@@ -139,8 +132,7 @@ async function resolveUpstreamRef(
     if (!upstreamRef || !upstreamShortName) {
       return undefined
     }
-    // Why: %(upstream:objectname) is not portable across Git versions; resolve
-    // the upstream name first, then ask rev-parse for the commit object.
+    // Resolve upstream names then commit OIDs; %(upstream:objectname) is not portable across Git versions.
     const oid = await resolveCommit(git, cwd, upstreamRef)
     return oid ? gitHistoryRefFromFullName(upstreamRef, upstreamShortName, oid) : undefined
   } catch {
@@ -192,8 +184,7 @@ export async function loadGitHistoryFromExecutor(
       ? rawBaseRef
       : undefined
 
-  // Why: this panel is scoped to the active workspace. Upstream and base refs
-  // stay as comparison metadata so old workspaces do not list newly fetched upstream/base commits.
+  // Keep upstream/base as comparison metadata so old workspaces do not gain fetched commits outside their HEAD history.
   const historyRevisions = [headOid]
 
   let mergeBase: string | undefined

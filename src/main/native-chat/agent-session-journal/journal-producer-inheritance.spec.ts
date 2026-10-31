@@ -19,11 +19,6 @@ import { createTrackedJournalOpener } from './journal-host-database-test-support
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 export function registerJournalProducerInheritanceTests(): void {
-  // A row's producer is fixed by the write that created it. A revision naming no
-  // producer — a settlement, a prompt answer, a reopen sweep — keeps it; a
-  // revision naming one replaces the whole bundle, which is how a provisional
-  // stamp is corrected.
-
   const child: AgentJournalItemIdentity = {
     provider: 'codex',
     threadId: 'child',

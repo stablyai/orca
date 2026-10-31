@@ -1,6 +1,4 @@
-/** The two filter value domains, in menu order. The types below, the client
- *  schema's `z.enum`s and the normalizers all derive from these, so a new value
- *  cannot drift out of any of them. */
+/** Derive types, client enums and normalizers from menu-order values so additions cannot drift. */
 export const THREAD_READ_FILTER_VALUES = ['all', 'unread'] as const
 export const ACTIVITY_GROUP_BY_VALUES = ['none', 'status', 'project', 'worktree', 'agent'] as const
 

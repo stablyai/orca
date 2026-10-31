@@ -45,9 +45,7 @@ describe('selectPaletteStatusInputs', () => {
     expect(closing.tabsByWorktree).toBe(tabs)
   })
 
-  // Why this is the load-bearing case: agent transitions and pane-title writes are the hottest
-  // writes in the app. If they moved this bundle, the open palette would re-render its whole list
-  // on every one of them — which is exactly what the dots' own subscription now covers instead.
+  // Hot agent/title writes must not rerender the whole palette; status dots own those subscriptions.
   it('does not move when the two hot maps churn while active', () => {
     const r1 = selectPaletteStatusInputs(BASE, true)
     const churned: PaletteStatusInputsState = {
@@ -80,8 +78,7 @@ describe('selectPaletteIndexStatusSnapshot', () => {
     expect(snapshot.agentStatusByPaneKey).toBe(statuses)
   })
 
-  // Why here and not subscribed: recent-section membership reads these, and the row order is frozen
-  // on open — a live unread write would change membership the frozen order can no longer honour.
+  // Snapshot unread status with recent membership; live changes cannot agree with frozen open-time order.
   it('snapshots the unread maps alongside the status maps', () => {
     const unreadTabs = { 'term-1': true } as const
     const unreadPanes = { 'term-1:leaf-1': true } as const
@@ -110,7 +107,6 @@ describe('selectPaletteIndexStatusSnapshot', () => {
       false
     )
     expect(inactive.runtimePaneTitlesByTabId).toEqual({})
-    // Stable identity, so a closed palette re-reading it can't churn a memo.
     expect(selectPaletteIndexStatusSnapshot(BASE, false)).toBe(inactive)
   })
 })

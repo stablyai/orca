@@ -1,3 +1,4 @@
+import { withGitHubRepoExecution } from './github-repository-identity'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import {
@@ -44,26 +45,33 @@ export async function getIssueGitHubApiRepository(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubApiRepository | null> {
-  const originPromise = getGitHubApiRepositoryForRemote(
-    repoPath,
-    'origin',
-    connectionId,
-    localGitOptions
-  ).then(
-    (value) => ({ status: 'fulfilled' as const, value }),
-    (reason: unknown) => ({ status: 'rejected' as const, reason })
-  )
-  const upstream = (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions))
-    ? await getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
-    : null
-  if (upstream) {
-    return upstream
-  }
-  const origin = await originPromise
-  if (origin.status === 'rejected') {
-    throw origin.reason
-  }
-  return origin.value
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    const originPromise = getGitHubApiRepositoryForRemote(
+      repoPath,
+      'origin',
+      connectionId,
+      localGitOptions
+    ).then(
+      (value) => ({ status: 'fulfilled' as const, value }),
+      (reason: unknown) => ({ status: 'rejected' as const, reason })
+    )
+    const upstream = (await shouldProbeGitRemote(
+      repoPath,
+      'upstream',
+      connectionId,
+      localGitOptions
+    ))
+      ? await getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
+      : null
+    if (upstream) {
+      return upstream
+    }
+    const origin = await originPromise
+    if (origin.status === 'rejected') {
+      throw origin.reason
+    }
+    return origin.value
+  })
 }
 
 export type GitHubApiRepositoryCandidates = {
@@ -77,50 +85,52 @@ export async function resolveGitHubApiRepositoryCandidates(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubApiRepositoryCandidates> {
-  const originPromise = getGitHubApiRepositoryForRemote(
-    repoPath,
-    'origin',
-    connectionId,
-    localGitOptions,
-    {
-      requireVerifiedSshProbe: true
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    const originPromise = getGitHubApiRepositoryForRemote(
+      repoPath,
+      'origin',
+      connectionId,
+      localGitOptions,
+      {
+        requireVerifiedSshProbe: true
+      }
+    ).then(
+      (value) => ({ status: 'fulfilled' as const, value }),
+      (reason: unknown) => ({ status: 'rejected' as const, reason })
+    )
+    const probeUpstream = await shouldProbeGitRemote(
+      repoPath,
+      'upstream',
+      connectionId,
+      localGitOptions
+    )
+    const [upstream, originResult] = await Promise.all([
+      probeUpstream
+        ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions, {
+            requireVerifiedSshProbe: true
+          })
+        : null,
+      originPromise
+    ])
+    if (originResult.status === 'rejected') {
+      throw originResult.reason
     }
-  ).then(
-    (value) => ({ status: 'fulfilled' as const, value }),
-    (reason: unknown) => ({ status: 'rejected' as const, reason })
-  )
-  const probeUpstream = await shouldProbeGitRemote(
-    repoPath,
-    'upstream',
-    connectionId,
-    localGitOptions
-  )
-  const [upstream, originResult] = await Promise.all([
-    probeUpstream
-      ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions, {
-          requireVerifiedSshProbe: true
-        })
-      : null,
-    originPromise
-  ])
-  if (originResult.status === 'rejected') {
-    throw originResult.reason
-  }
-  const origin = originResult.value
-  const seen = new Set<string>()
-  const candidates: GitHubApiRepository[] = []
-  for (const candidate of [upstream, origin]) {
-    if (!candidate) {
-      continue
+    const origin = originResult.value
+    const seen = new Set<string>()
+    const candidates: GitHubApiRepository[] = []
+    for (const candidate of [upstream, origin]) {
+      if (!candidate) {
+        continue
+      }
+      const key = githubRepoIdentityKey(candidate)
+      if (seen.has(key)) {
+        continue
+      }
+      seen.add(key)
+      candidates.push(candidate)
     }
-    const key = githubRepoIdentityKey(candidate)
-    if (seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    candidates.push(candidate)
-  }
-  return { candidates, headRepo: origin }
+    return { candidates, headRepo: origin }
+  })
 }
 
 export type ResolvedGitHubApiRepositorySource = {
@@ -129,46 +139,47 @@ export type ResolvedGitHubApiRepositorySource = {
   fellBack: boolean
 }
 
-/** Hosted mirror of resolveIssueSource — same preference semantics. */
 export async function resolveIssueGitHubApiRepositorySource(
   repoPath: string,
   preference: IssueSourcePreference | undefined,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ResolvedGitHubApiRepositorySource> {
-  if (preference === 'upstream') {
-    const upstream = await getGitHubApiRepositoryForRemote(
-      repoPath,
-      'upstream',
-      connectionId,
-      localGitOptions
-    )
-    if (upstream) {
-      return { source: upstream, fellBack: false }
-    }
-    const origin = await getGitHubApiRepositoryForRemote(
-      repoPath,
-      'origin',
-      connectionId,
-      localGitOptions
-    )
-    return { source: origin, fellBack: origin !== null }
-  }
-  if (preference === 'origin') {
-    return {
-      source: await getGitHubApiRepositoryForRemote(
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    if (preference === 'upstream') {
+      const upstream = await getGitHubApiRepositoryForRemote(
+        repoPath,
+        'upstream',
+        connectionId,
+        localGitOptions
+      )
+      if (upstream) {
+        return { source: upstream, fellBack: false }
+      }
+      const origin = await getGitHubApiRepositoryForRemote(
         repoPath,
         'origin',
         connectionId,
         localGitOptions
-      ),
+      )
+      return { source: origin, fellBack: origin !== null }
+    }
+    if (preference === 'origin') {
+      return {
+        source: await getGitHubApiRepositoryForRemote(
+          repoPath,
+          'origin',
+          connectionId,
+          localGitOptions
+        ),
+        fellBack: false
+      }
+    }
+    return {
+      source: await getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
       fellBack: false
     }
-  }
-  return {
-    source: await getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
-    fellBack: false
-  }
+  })
 }
 
 export async function resolveGitHubApiRepository(
@@ -177,43 +188,42 @@ export async function resolveGitHubApiRepository(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubApiRepository | null> {
-  if (repository && !isValidGitHubApiRepository(repository)) {
-    return null
-  }
-  if (repository?.host) {
-    const host = repository.host.trim().toLowerCase()
-    if (!host) {
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    if (repository && !isValidGitHubApiRepository(repository)) {
       return null
     }
-    if (isDefaultGitHubHost(host)) {
-      return { ...repository, host }
+    if (repository?.host) {
+      const host = repository.host.trim().toLowerCase()
+      if (!host) {
+        return null
+      }
+      if (isDefaultGitHubHost(host)) {
+        return { ...repository, host }
+      }
+      // Verify supplied hosts against local auth inventory before giving them ambient Enterprise credentials.
+      const authenticated = await isGitHubHostAuthenticated(
+        host,
+        repoPath,
+        connectionId,
+        localGitOptions
+      )
+      return authenticated ? { ...repository, host } : null
     }
-    // Why: client-supplied hosts must match gh's local auth inventory before
-    // they can receive ambient Enterprise credentials from a host-pinned call.
-    const authenticated = await isGitHubHostAuthenticated(
-      host,
+    const originRepository = await getOriginGitHubApiRepository(
       repoPath,
       connectionId,
       localGitOptions
     )
-    return authenticated ? { ...repository, host } : null
-  }
-  const originRepository = await getOriginGitHubApiRepository(
-    repoPath,
-    connectionId,
-    localGitOptions
-  )
-  if (!repository) {
-    return originRepository
-  }
-  // Why: older clients only send owner/repo. The origin still supplies the
-  // execution host for fork-base slugs on the same GitHub Enterprise server.
-  if (originRepository?.host) {
-    return { ...repository, host: originRepository.host }
-  }
-  // Why: a host-less identity can honor ambient GH_HOST even with a local cwd.
-  // Only a resolved origin may supply the execution host for legacy clients.
-  return null
+    if (!repository) {
+      return originRepository
+    }
+    // Older clients omit host; resolved origin supplies it for fork-base slugs on the same server.
+    if (originRepository?.host) {
+      return { ...repository, host: originRepository.host }
+    }
+    // Host-less calls could follow ambient GH_HOST; only resolved origin can supply the legacy host.
+    return null
+  })
 }
 
 export async function resolveGitHubRepoExecution(
@@ -222,25 +232,25 @@ export async function resolveGitHubRepoExecution(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubRepoExecution> {
-  // Why: issue-scoped paths retain their upstream-first resolver while sharing
-  // the same repo-scoped and host-scoped gh execution option construction.
-  const requestedRepository = typeof repository === 'function' ? await repository() : repository
-  // Why: normalize host-less resolver results without replacing an
-  // authoritative null with the generic origin fallback.
-  const ownerRepo =
-    typeof repository === 'function' && !requestedRepository
-      ? null
-      : await resolveGitHubApiRepository(
-          repoPath,
-          requestedRepository,
-          connectionId,
-          localGitOptions
-        )
-  return {
-    ownerRepo,
-    ghOptions: {
-      ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
-      ...githubHostExecOptions(ownerRepo)
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    // Retain upstream-first issue resolution with the same host-pinned execution options.
+    const requestedRepository = typeof repository === 'function' ? await repository() : repository
+    // Preserve authoritative nulls instead of replacing them with origin.
+    const ownerRepo =
+      typeof repository === 'function' && !requestedRepository
+        ? null
+        : await resolveGitHubApiRepository(
+            repoPath,
+            requestedRepository,
+            connectionId,
+            localGitOptions
+          )
+    return {
+      ownerRepo,
+      ghOptions: {
+        ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
+        ...githubHostExecOptions(ownerRepo)
+      }
     }
-  }
+  })
 }

@@ -15,15 +15,22 @@ import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harnes
 
 function startPendingPtyHarness() {
   const waits = new Map<string, { signal: AbortSignal; resolve: (ptyId: string) => void }>()
+  const ptyIds = new Map<string, string>()
   const requestRendererTerminalTabMount = vi.fn()
   const harness = startDesktopMultiplexSubscribe({
-    resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+    resolveLiveLeafForHandle: vi.fn((handle: string) => ({ ptyId: ptyIds.get(handle) ?? null })),
     requestRendererTerminalTabMount,
     waitForLeafPtyId: vi.fn(
       (handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
         new Promise<string>((resolve, reject) => {
           if (signal) {
-            waits.set(handle, { signal, resolve })
+            waits.set(handle, {
+              signal,
+              resolve: (ptyId) => {
+                ptyIds.set(handle, ptyId)
+                resolve(ptyId)
+              }
+            })
           }
           signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
             once: true
@@ -80,7 +87,7 @@ describe('terminal multiplex PTY wait queue', () => {
     await vi.waitFor(() =>
       expect(waits.size).toBe(TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION)
     )
-    // Why: a queued pane's mount is part of its paced admission, not fired at subscribe.
+    // Mount only during paced admission, not when subscribe queues the pane.
     expect(requestRendererTerminalTabMount).toHaveBeenCalledTimes(
       TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION
     )

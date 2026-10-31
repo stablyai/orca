@@ -6,12 +6,15 @@ import type { StoreState } from './pty-connection-test-store-state'
 export function createInitialStoreState(getState: () => StoreState): StoreState {
   return {
     activeWorktreeId: 'wt-1',
+    unifiedTabsByWorktree: {},
     tabsByWorktree: {
       'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
     },
     ptyIdsByTabId: {
       'tab-1': ['tab-pty']
     },
+    terminalPaneStartsByPaneKey: {},
+    terminalPaneResumeOutcomesByPaneKey: {},
     terminalLayoutsByTabId: {
       'tab-1': {
         root: { type: 'leaf', leafId: LEAF_1 },
@@ -31,7 +34,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     sshConnectionStates: new Map(),
     transientClearedAgentStatusConnectionIds: {},
     cacheTimerByKey: {},
-    // Why: terminalMainSideEffectAuthority false pins the legacy renderer byte-parser wiring this suite asserts on (onTitleChange/onBell); authority-on mode has its own tests.
+    // Pin legacy byte-parser wiring; main-authority facts have separate coverage.
     settings: {
       promptCacheTimerEnabled: true,
       experimentalTerminalAttention: true,
@@ -92,7 +95,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     }),
     markTerminalBell: vi.fn(),
     markAgentAttentionUnread: vi.fn()
-  } as StoreState
+  }
 }
 
 export function buildReattachPaneTitleState(current: StoreState, title: string): StoreState {
@@ -104,7 +107,7 @@ export function buildReattachPaneTitleState(current: StoreState, title: string):
     runtimePaneTitlesByTabId: {
       'tab-1': { 1: title }
     }
-  } as StoreState
+  }
 }
 
 // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
@@ -114,9 +117,14 @@ export function buildActiveRuntimeEnvironmentState(
 ): StoreState {
   return {
     ...current,
+    // The client stamps a server's rows on arrival; focus alone never names the owner.
+    repos: current.repos.map((repo) => ({
+      ...repo,
+      executionHostId: repo.executionHostId ?? `runtime:${environmentId}`
+    })),
     settings: {
       ...current.settings,
       activeRuntimeEnvironmentId: environmentId
     }
-  } as StoreState
+  }
 }

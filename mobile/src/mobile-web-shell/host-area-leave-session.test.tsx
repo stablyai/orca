@@ -1,9 +1,4 @@
-/**
- * Leaving a detail session for the host route on a wide layout: the page's back chevron
- * (`leaveSession`, which replaces to `/h/<host>` when nothing is below it) and the missing-worktree
- * bounce (`/h/<host>?notice=…`). Under a page that owns the host area that hop reaches the shell,
- * which must land on one host route rather than stack a second host-area session on the session.
- */
+// Session exit and missing-worktree bounces must land on one host route instead of stacking another host-area session.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const harness = await vi.hoisted(async () => await import('./mobile-web-shell-screen-test-harness'))
@@ -44,6 +39,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
 import { MobileWebShellScreen } from './MobileWebShellScreen'
+import type { NativeStackState } from './native-stack-return'
 
 const HOST = '/h/host-1'
 const DETAIL = '/h/host-1/session/wt-1'
@@ -51,18 +47,33 @@ const BOUNCE = '/h/host-1?notice=worktree-missing'
 const IPAD = { width: 1180, height: 820 }
 const PHONE = { width: 390, height: 844 }
 
-/** A stack entry: the route's pathname and its search, as the native stack holds them. */
 type Entry = string
 
-/**
- * The native stack the screen's calls act on, with expo-router 55's semantics: `push` adds,
- * `dismissTo` is react-navigation's POP_TO — pop back to the nearest entry of that route and take
- * the new params, or replace the current entry when there is none below it.
- */
+function rootStateOf(stack: readonly Entry[]): NativeStackState {
+  const routes = stack.map((entry, index) => {
+    const [path = '', search = ''] = entry.split('?')
+    const [, , hostId = '', area, worktreeId] = path.split('/')
+    const query = Object.fromEntries(new URLSearchParams(search))
+    return area === undefined
+      ? { key: `entry-${index}`, name: '[hostId]/index', params: { hostId, ...query } }
+      : {
+          key: `entry-${index}`,
+          name: `[hostId]/${area}/[worktreeId]`,
+          params: { hostId, worktreeId: worktreeId ?? '', ...query }
+        }
+  })
+  const hostStack = { key: 'host-stack', index: routes.length - 1, routes }
+  return { key: 'root-stack', index: 0, routes: [{ key: 'h', name: 'h', state: hostStack }] }
+}
+
+// Model Expo Router 55: dismissTo pops to the nearest matching route with new params, or replaces the current entry when no match exists.
 function applied(stack: readonly Entry[]): Entry[] {
   const next = [...stack]
   for (const [href] of dependencies.push.mock.calls) {
     next.push(String(href))
+  }
+  for (const [action] of dependencies.dispatch.mock.calls) {
+    next.splice(next.length - action.payload.count)
   }
   for (const [href] of device.dismissTo.mock.calls) {
     const target = String(href)
@@ -77,10 +88,14 @@ function applied(stack: readonly Entry[]): Entry[] {
   return next
 }
 
-/** The session page on screen, asking the shell for `href`. */
-async function hopFromSession(viewport: { width: number; height: number }, href: string) {
+async function hopFromSession(
+  viewport: { width: number; height: number },
+  stack: readonly Entry[],
+  href: string
+) {
   device.width = viewport.width
   device.height = viewport.height
+  dependencies.rootState = rootStateOf(stack)
   dependencies.client = createFakeRpcClient()
   dependencies.state = harness.readyState('session-one')
   dependencies.pageRoutes = ['/h/[hostId]', '/h/[hostId]/session/[worktreeId]']
@@ -114,25 +129,42 @@ afterEach(() => {
 
 describe('leaving a wide detail session for its host route', () => {
   it('returns to the host-area session below it, so Back does not reopen the session', async () => {
-    await hopFromSession(IPAD, HOST)
+    await hopFromSession(IPAD, [HOST, DETAIL], HOST)
     expect(applied([HOST, DETAIL])).toEqual([HOST])
   })
 
   it('carries the bounce notice to that host route, and still stacks nothing', async () => {
-    await hopFromSession(IPAD, BOUNCE)
+    await hopFromSession(IPAD, [HOST, DETAIL], BOUNCE)
     expect(applied([HOST, DETAIL])).toEqual([BOUNCE])
   })
 
   it('lands on one host route from a cold deep link, with nothing below the session', async () => {
-    await hopFromSession(IPAD, BOUNCE)
+    await hopFromSession(IPAD, [DETAIL], BOUNCE)
     expect(applied([DETAIL])).toEqual([BOUNCE])
   })
 })
 
 describe('the same hop on a phone', () => {
-  it('pushes, as it always has', async () => {
-    await hopFromSession(PHONE, HOST)
+  it.each([HOST, BOUNCE])('replaces a cold detail session with %s', async (href) => {
+    await hopFromSession(PHONE, [DETAIL], href)
+    expect(applied([DETAIL])).toEqual([href])
+    expect(dependencies.push).not.toHaveBeenCalled()
+  })
+
+  it('updates the existing host notice without retaining the exited detail session', async () => {
+    await hopFromSession(PHONE, [HOST, DETAIL], BOUNCE)
+    expect(applied([HOST, DETAIL])).toEqual([BOUNCE])
+  })
+
+  it('returns to the host route below rather than stacking a second one', async () => {
+    await hopFromSession(PHONE, [HOST, DETAIL], HOST)
     expect(device.dismissTo).not.toHaveBeenCalled()
-    expect(applied([HOST, DETAIL])).toEqual([HOST, DETAIL, HOST])
+    expect(applied([HOST, DETAIL])).toEqual([HOST])
+  })
+
+  it('pushes a route the stack does not hold, such as another worktree', async () => {
+    const other = '/h/host-1/session/wt-2'
+    await hopFromSession(PHONE, [HOST, DETAIL], other)
+    expect(applied([HOST, DETAIL])).toEqual([HOST, DETAIL, other])
   })
 })

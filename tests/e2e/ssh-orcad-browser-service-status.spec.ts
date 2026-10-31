@@ -17,6 +17,7 @@ import {
 import { createRetentionFixtureDirectory } from './helpers/host-created-terminal-retention-oracle'
 import { reconnect, serverCall } from './helpers/orcad-convert-flow'
 import { ORCAD_TEMPLATE, skipUnlessManagedDockerHost } from './helpers/orcad-managed-workspace'
+import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
 
 skipUnlessManagedDockerHost()
 
@@ -64,7 +65,7 @@ test('an unavailable browser on a responding managed host does not report a serv
     expect(JSON.parse(server)).toMatchObject({ kind: 'managed' })
     const environments = await page.evaluate(() => window.api.runtimeEnvironments.list())
     const environment = environments.find(
-      (entry) => entry.orcadDeployment?.sshTargetId === remote.targetId
+      (entry) => getOrcadSshDeployment(entry)?.sshTargetId === remote.targetId
     )
     if (!environment) {
       throw new Error('Missing managed environment')

@@ -1,15 +1,17 @@
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity
+  AgentJournalItemIdentity,
+  AgentJournalMessageItem
 } from '../../../shared/agent-session-journal-types'
 import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalAppendResult, JournalItemAppendOptions } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
-import type { JournalOperationReceipt } from './journal-row-writer'
+import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
+import type { JournalAttachmentClaim, journalInputClaimsReceipt } from './journal-submission-hook'
 
-// A module-level Error's lazy stack retains the bundle's startup code and read buffer.
+// Module-level Error stacks retain startup code and buffers; construct them only when needed.
 class NothingResolvedError extends Error {}
 
 export type JournalResolvedItem = { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
@@ -17,11 +19,13 @@ export type JournalResolvedItem = { identity: AgentJournalItemIdentity; body: Ag
 export class JournalItemAppender {
   constructor(
     private readonly deps: {
-      state: () => JournalReducerState
-      enqueue: (
-        build: (seq: number, ts: number) => JournalRow,
+      inputReceipt: (
+        rows: readonly JournalRow[],
         receipt?: JournalOperationReceipt
-      ) => Promise<JournalRow>
+      ) => ReturnType<typeof journalInputClaimsReceipt>
+      state: () => JournalReducerState
+      enqueue: JournalRowWriter['enqueue']
+      claimAttachments: JournalAttachmentClaim
     }
   ) {}
 
@@ -33,30 +37,58 @@ export class JournalItemAppender {
   ): Promise<JournalAppendResult> {
     const itemId = agentJournalItemKey(identity)
     return this.deps
-      .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options), receipt)
+      .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options), (rows) =>
+        this.deps.inputReceipt(rows, receipt)
+      )
       .then((row) => appendResult(row, itemId))
   }
 
-  /** `resolve` reads the fold at the write's own place in the queue; null writes nothing. */
+  /** A client-authored message claims the uploads it names with its row; a swept one refuses both. */
+  appendClaimingAttachments(
+    identity: AgentJournalItemIdentity,
+    body: AgentJournalMessageItem,
+    options: JournalItemAppendOptions
+  ): Promise<JournalAppendResult> {
+    let committed: (() => void) | void
+    return this.deps
+      .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options), {
+        write: (db) => {
+          committed = this.deps.claimAttachments(
+            db,
+            body,
+            true,
+            undefined,
+            body.sentAs === 'goal' ? agentJournalItemKey(identity) : undefined
+          )
+        },
+        committed: () => committed?.()
+      })
+      .then((row) => appendResult(row, agentJournalItemKey(identity)))
+  }
+
+  /** Resolve against preceding queued writes; null appends nothing. */
   appendResolved(
     resolve: () => JournalResolvedItem | null,
     options: JournalItemAppendOptions
   ): Promise<JournalAppendResult | null> {
     let itemId = ''
     return this.deps
-      .enqueue((seq, ts) => {
-        const resolved = resolve()
-        if (resolved === null) {
-          throw new NothingResolvedError('journal_item_resolved_to_nothing')
-        }
-        itemId = agentJournalItemKey(resolved.identity)
-        return journalItemRowBuilder(
-          this.deps.state,
-          resolved.identity,
-          resolved.body,
-          options
-        )(seq, ts)
-      })
+      .enqueue(
+        (seq, ts) => {
+          const resolved = resolve()
+          if (resolved === null) {
+            throw new NothingResolvedError('journal_item_resolved_to_nothing')
+          }
+          itemId = agentJournalItemKey(resolved.identity)
+          return journalItemRowBuilder(
+            this.deps.state,
+            resolved.identity,
+            resolved.body,
+            options
+          )(seq, ts)
+        },
+        (rows) => this.deps.inputReceipt(rows)
+      )
       .then(
         (row) => appendResult(row, itemId),
         (error: unknown) => {

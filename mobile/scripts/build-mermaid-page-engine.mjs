@@ -13,15 +13,8 @@ const outputPath = path.join(
   'mermaid-page-engine.generated.ts'
 )
 
-// Why: the page imports mermaid on demand, and `import('mermaid')` from inside the app bundle lands
-// 103 emitted scripts rather than one -- mermaid lazily imports each of its own diagram types, so
-// esbuild splits along those boundaries. All 103 sit inside the OTA generation the phone has
-// already downloaded, so the split buys nothing in transfer and spends 103 of the 256 manifest
-// assets the shell will load. Bundled here into one artifact, which the page imports on demand
-// exactly as it imported the package.
-//
-// Unlike the sibling that builds the WebView engine, this is not a string: it is the module the
-// page evaluates, so it is emitted as source and `mermaid-page-engine.ts` is what types it.
+// Bundle mermaid as one deferred module: internal lazy imports otherwise emit 103 assets against the shell’s 256 cap, despite all bytes already being downloaded.
+// Unlike WebView engine’s string artifact, page evaluates this source module typed by mermaid-page-engine.ts.
 async function main() {
   const { version } = require(require.resolve('mermaid/package.json'))
   const { outputFiles } = await esbuild.build({
@@ -34,7 +27,6 @@ async function main() {
     },
     bundle: true,
     format: 'esm',
-    // The whole point: one file, so the app bundle emits one deferred chunk for it.
     splitting: false,
     // Metro transforms this module again; preserve enum assignments for its export analysis.
     minifyWhitespace: true,

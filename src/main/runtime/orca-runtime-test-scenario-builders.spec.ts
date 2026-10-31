@@ -37,7 +37,6 @@ type MobileCreateTestNotifier = {
   renameTerminal: TestMock
   closeTerminal: (tabId: string, leafId?: string) => void
   closeSessionTab: TestMock
-  sleepWorktree: TestMock
   terminalFitOverrideChanged: TestMock
   terminalDriverChanged: TestMock
 }
@@ -125,9 +124,7 @@ async function publishClientHostedPage(
   return placement
 }
 
-// Why (#10333): `orca serve` publishes a ready graph under
-// HEADLESS_RUNTIME_WINDOW_ID with no BrowserWindow behind it, so every
-// focus-requested create used to fall through to getAuthoritativeWindow().
+// #10333: serve publishes a ready graph without BrowserWindow; focus-requested creates must stay headless.
 const wireHeadlessServeRuntime = (): RuntimeService => {
   const runtime = new OrcaRuntimeService(store)
   electronMocks.BrowserWindow.fromId.mockReturnValue(null as never)
@@ -218,8 +215,10 @@ function makePostRevealWorkerRecoveryHarness(
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This recovery fixture reaches only the listed planner, terminal settlement and authority lookup methods.
   runtime.setOrchestrationDb({
+    listSessionDispatchesForPresentation: () => [],
     reconcileMissingWorkerTerminal: vi.fn(),
     getActiveDispatchForTerminal: () => undefined,
+    findActiveRemoteAttachmentForPane: () => undefined,
     listLegacyWorkerTerminalRecoveryRows: () => [
       {
         dispatch_id: 'dispatch-post-reveal',
@@ -327,7 +326,6 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
   return { runtime, spawn }
 }
 
-// Why: the five #7587 mobile-create tests share one notifier factory so interface changes live in one place.
 function createMobileCreateTestNotifier(
   closeTerminal: (tabId: string, leafId?: string) => void
 ): MobileCreateTestNotifier {
@@ -342,7 +340,6 @@ function createMobileCreateTestNotifier(
     renameTerminal: vi.fn(),
     closeTerminal,
     closeSessionTab: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   }

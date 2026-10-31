@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -47,14 +47,17 @@ import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index
 import { agentLaunchFixture, agentLaunchHostFixture } from './agent-launch-test-fixtures'
 
 const WORKTREE_ID = 'repo-1::/tmp/repo'
+const ORIGINAL_EXIT_CODE = process.exitCode
+
+afterEach(() => {
+  process.exitCode = ORIGINAL_EXIT_CODE
+})
 
 async function runRefused(argv: string[]): Promise<string> {
   const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-  const priorExitCode = process.exitCode
   await main(argv, '/tmp/repo')
   expect(process.exitCode).toBe(1)
-  process.exitCode = priorExitCode
   return [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
 }
 
@@ -167,7 +170,6 @@ describe('orca cli agent launch', () => {
       )
     )
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const previousExitCode = process.exitCode
     const args = [
       'agent',
       'launch',
@@ -180,7 +182,6 @@ describe('orca cli agent launch', () => {
       '--json'
     ]
     await main(args, '/tmp/repo')
-    process.exitCode = previousExitCode
     const error = JSON.parse(String(logSpy.mock.calls[0]?.[0])).error
     expect(error.code).toBe('agent_session_operation_unknown')
     expect(error.data.retrySafe).toBe(true)
@@ -191,7 +192,9 @@ describe('orca cli agent launch', () => {
       error.data.operationId
     ])
     expect(JSON.stringify(error)).not.toContain('Restart Orca and try again')
-    expect(launchCalls()).toHaveLength(1)
+    expect(launchCalls()).toEqual([
+      ['agent.launchReplay', expect.objectContaining({ operationId: error.data.operationId })]
+    ])
   })
 
   it.each([['--retry-launch'], ['--retry-launch', ' ']])(
@@ -241,7 +244,9 @@ describe('orca cli agent launch', () => {
     expect(error.code).toBe('agent_session_operation_unknown')
     expect(error.data.operationId).toBe(operationId)
     expect(error.data.nextSteps.join(' ')).toContain('never retry as a fresh launch')
-    expect(launchCalls()).toHaveLength(1)
+    expect(launchCalls()).toEqual([
+      ['agent.launchReplay', expect.objectContaining({ operationId })]
+    ])
   })
 
   it('uses the caller folder identity after validating its native host and enclosing path', async () => {
@@ -303,7 +308,10 @@ describe('orca cli agent launch', () => {
       '--json'
     ])
 
-    expect(output).toContain('cannot start agents from the CLI')
+    expect(JSON.parse(output).error).toMatchObject({
+      code: 'incompatible_runtime',
+      message: expect.stringContaining('cannot start agents from the CLI')
+    })
     expect(launchCalls()).toEqual([])
   })
 
@@ -325,14 +333,18 @@ describe('orca cli agent launch', () => {
       '--json'
     ])
 
-    expect(output).toContain('cannot start an agent on a chosen model or effort')
+    expect(JSON.parse(output).error).toMatchObject({
+      code: 'incompatible_runtime',
+      message: expect.stringContaining('cannot start an agent on a chosen model or effort')
+    })
     expect(launchCalls()).toEqual([])
   })
 
   it.each([
     [['--agent', 'codex', '--effort', 'high'], '--effort requires --model'],
     [['--model', 'gpt-5.5'], '--model requires --agent'],
-    [['--agent', 'codex', '--model', 'gpt-5.5', '--effort', 'turbo'], 'does not support effort']
+    [['--agent', 'codex', '--model', 'gpt-5.5', '--effort', 'turbo'], 'does not support effort'],
+    [['--surface', 'terminal'], '--surface requires --agent']
   ])('refuses %j before creating anything', async (flags, message) => {
     const output = await runRefused([
       'worktree',

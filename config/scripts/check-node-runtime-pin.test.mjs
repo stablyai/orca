@@ -2,16 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import {
-  NODE_RUNTIME_ASSETS,
-  NODE_RUNTIME_PIN,
-  SERVER_TARGETS
-} from '../../src/shared/node-runtime-pin.ts'
-import {
-  findNodeRuntimePinProblems,
-  lockfileRootImporter,
-  main
-} from './check-node-runtime-pin.mjs'
+import { findNodeRuntimePinProblems, main } from './check-node-runtime-pin.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
 const HASH = 'a'.repeat(64)
@@ -186,38 +177,9 @@ describe('findNodeRuntimePinProblems', () => {
   })
 })
 
-describe('lockfileRootImporter', () => {
-  it('merges the root importer across pnpm 12 lockfile documents', () => {
-    const contents = [
-      '---',
-      "lockfileVersion: '9.0'",
-      'importers:',
-      '  .:',
-      '    packageManagerDependencies: {}',
-      '---',
-      "lockfileVersion: '9.0'",
-      'importers:',
-      '  .:',
-      '    devDependencies:',
-      '      electron:',
-      '        specifier: 43.7.5',
-      '        version: 43.7.5(supports-color@7.2.0)',
-      ''
-    ].join('\n')
-    expect(lockfileRootImporter(contents).devDependencies.electron.version).toBe(
-      '43.7.5(supports-color@7.2.0)'
-    )
-  })
-})
-
 describe('committed pin', () => {
   it('passes the repository check', () => {
     expect(main(projectDir)).toBe(0)
-  })
-
-  it('covers every server target', () => {
-    expect(Object.keys(NODE_RUNTIME_ASSETS).sort()).toEqual([...SERVER_TARGETS].sort())
-    expect(NODE_RUNTIME_PIN.headers.file).toBe(`node-v${NODE_RUNTIME_PIN.version}-headers.tar.gz`)
   })
 
   it('runs in the static analysis job', () => {

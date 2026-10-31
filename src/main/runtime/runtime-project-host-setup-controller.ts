@@ -19,14 +19,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { getProjectIdForProviderIdentity } from '../../shared/project-host-setup-projection'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
-import { assertImportedFolderRemoteMatchesProject } from '../../shared/imported-folder-project-identity'
+import { resolveImportedFolderProjectLink } from '../../shared/imported-folder-project-identity'
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
-import {
-  SshHostNotServedError,
-  sshTargetNotConnectedMessage
-} from '../providers/ssh-host-not-served-error'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../folder-repo-git-conversion'
@@ -42,8 +38,10 @@ import {
   assertWslMoveHostSetupWritable,
   assertWslMoveReposWritable
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { runtimeVisibleProjectHostSetups } from './runtime-visible-catalog'
 import {
   findProjectHostSetup,
+  SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
   type ProjectHostSetupTarget
 } from '../../shared/project-host-setup-target'
 
@@ -58,8 +56,7 @@ type RuntimeProjectHostSetupDependencies = {
   countLiveTerminalsForRepo: (repo: Repo) => number
 }
 
-// Why clone refuses up front: `cloneRepo` runs `git clone` on the client, so accepting `ssh:*`
-// here would register the client's copy as the host's repo — a local answer to a remote question.
+// cloneRepo runs locally; accepting SSH would register the client's checkout as a remote repo.
 function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined): void {
   if (parseExecutionHostId(hostId)?.kind !== 'ssh') {
     return
@@ -69,11 +66,8 @@ function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined):
   )
 }
 
-export const SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE =
-  "This Orca server can't add projects on its SSH hosts. Add the SSH host on your computer to open its projects."
-
 function sshTargetNotServedError(connectionId: string): SshHostNotServedError {
-  return new SshHostNotServedError(connectionId, sshTargetNotConnectedMessage(connectionId))
+  return new SshHostNotServedError(connectionId, SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
 }
 
 export class RuntimeProjectHostSetupController {
@@ -101,6 +95,11 @@ export class RuntimeProjectHostSetupController {
 
   listSetups(): ProjectHostSetup[] {
     return this.deps.getStore()?.getProjectHostSetups?.() ?? []
+  }
+
+  /** What clients may list; internal lookups keep the full store, as `listSetups` does. */
+  listVisibleSetups(): ProjectHostSetup[] {
+    return runtimeVisibleProjectHostSetups(this.deps.getStore())
   }
 
   createSetup(args: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult {
@@ -131,15 +130,15 @@ export class RuntimeProjectHostSetupController {
     }
     const repo = await this.deps.addRepo(args.path, kind, args.hostId)
     const repoWasCreated = !knownRepoIds.has(repo.id)
-    // Why: a registered row's stored remote can predate a remote the user has since added.
-    const folderRemote = repoWasCreated ? repo : await readCurrentGitRemoteIdentity(repo)
+    // Stored remotes may predate user-added ones; probe current Git state.
+    const folderRemote =
+      repoWasCreated && repo.gitRemoteIdentity !== undefined
+        ? repo
+        : await readCurrentGitRemoteIdentity(repo)
     return this.completeSetup(args, repo, repoWasCreated, folderRemote)
   }
 
-  /**
-   * `repo.addRemote` stays registered for older clients, which still offer it; this process serves
-   * no SSH target, so the refusal says where such a project can be added instead.
-   */
+  /** Keep repo.addRemote registered for older clients, but refuse unserved SSH targets with guidance for adding them on the right host. */
   addSshRepo(args: { connectionId: string }): Promise<Repo> {
     if (!this.deps.getStore()) {
       throw new Error('runtime_unavailable')
@@ -155,11 +154,12 @@ export class RuntimeProjectHostSetupController {
       { ...args, path: repo.path, kind: 'git', setupMethod: 'cloned' },
       repo,
       !knownRepoIds.has(repo.id),
-      repo
+      // Fresh-clone remote is unprobed; Git-remote linking needs that fact.
+      repo.gitRemoteIdentity === undefined ? await readCurrentGitRemoteIdentity(repo) : repo
     )
   }
 
-  // Why sync up front: availability and the WSL move fence refuse before any Git probe starts.
+  // Refuse unavailable/WSL-moving projects before any Git probe.
   updateSetup(args: ProjectHostSetupUpdateArgs): Promise<ProjectHostSetupUpdateResult> {
     const store = this.deps.getStore()
     const updateProjectHostSetup = store?.updateProjectHostSetup?.bind(store)
@@ -220,16 +220,16 @@ export class RuntimeProjectHostSetupController {
     return result
   }
 
-  // Why the shared invalidators: desktop and runtime scan caches key on repo id, not path or kind.
+  // Invalidate shared repo-id scan caches on desktop and runtime, regardless of path/kind.
   private retireRepoCatalog(repoId: string): void {
     runWorktreeChangeInvalidators(repoId)
     invalidateAuthorizedRootsCache()
   }
 
-  // Why only for an explicit `force: false`: older clients omit it and must keep their delete.
+  // Only explicit force:false adds refusal; omission preserves older clients' delete behavior.
   private assertSetupRemovalIsUnused(store: RuntimeStore, target: ProjectHostSetupTarget): void {
     const setup = findProjectHostSetup(this.listSetups(), target)
-    // Same exact-host match the store's delete uses, so a sibling host's row is never measured.
+    // Measure the exact host row the store will delete, never its same-id sibling.
     const repo = setup?.repoId
       ? this.deps
           .listRepos()
@@ -244,7 +244,7 @@ export class RuntimeProjectHostSetupController {
       liveTerminals: this.deps.countLiveTerminalsForRepo(repo),
       workspacesWithMetadata: countRepoWorkspacesWithMetadata(
         repo,
-        // Host-qualified read: a same-id, same-path sibling host keeps its rows only in canonical maps.
+        // Read host-qualified: sibling same-path rows may exist only in canonical maps.
         readAllWorktreeMetaForRepo(store, repo)
       )
     })
@@ -263,7 +263,7 @@ export class RuntimeProjectHostSetupController {
       return this.linkRepo(args, initialRepo, folderRemote)
     } catch (error) {
       if (repoWasCreated) {
-        // Why: host-scoped so a rollback never takes a same-id row on another host.
+        // Rollback must remove only this host's row, never a same-id sibling.
         this.deps.getStore()?.removeProjectForHost?.(initialRepo)
         this.deps.invalidateResolvedWorktrees()
         this.deps.invalidateWorktreeScan(initialRepo.id)
@@ -292,18 +292,14 @@ export class RuntimeProjectHostSetupController {
     let setup = getProjectHostSetupForRepo(this.listSetups(), repo)
     if (setup.projectId !== args.projectId) {
       const existingProject = this.listProjects().find((project) => project.id === args.projectId)
-      const identity = existingProject?.providerIdentity ?? args.projectProviderIdentity
-      if (!identity || getProjectIdForProviderIdentity(identity) !== args.projectId) {
-        throw new Error('Imported folder does not match the selected project identity.')
-      }
-      assertImportedFolderRemoteMatchesProject(folderRemote, identity)
-      const updated = store.updateRepo(repo, {
-        upstream: {
-          owner: identity.owner,
-          repo: identity.repo,
-          ...(identity.host ? { host: identity.host } : {})
-        }
-      })
+      const updated = store.updateRepo(
+        repo,
+        resolveImportedFolderProjectLink(
+          { ...repo, ...folderRemote },
+          args.projectId,
+          existingProject?.providerIdentity ?? args.projectProviderIdentity
+        )
+      )
       if (!updated) {
         throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
       }

@@ -1,5 +1,4 @@
-// One pending linger at a time: re-arming while armed keeps the first deadline,
-// so repeated "no demand" reconciles cannot postpone the close forever.
+// Retain the first deadline so repeated no-demand reconciles cannot postpone close forever.
 export class RelayLingerTimer {
   private timer: ReturnType<typeof setTimeout> | null = null
 

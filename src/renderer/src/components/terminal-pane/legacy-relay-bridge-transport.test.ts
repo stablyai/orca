@@ -387,6 +387,48 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     ).toEqual(['ssh:ssh-box@@pty-3'])
   })
 
+  it('hands back every viewer when two attaches for the pane overlap', async () => {
+    let next = 0
+    bridge.attach.mockImplementation(async () => {
+      next += 1
+      return { status: 'attached', replay: '', acquisitionId: next }
+    })
+    const transport = createLegacyRelayBridgeTransport(PTY, innerTransport())
+    // A connect and an attach for the same pane, both answered before either settles.
+    const connecting = transport.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
+    transport.attach({ existingPtyId: PTY, callbacks: callbacks() })
+    await connecting
+    await vi.waitFor(() => expect(bridge.attach).toHaveBeenCalledTimes(2))
+    await Promise.resolve()
+    transport.detach?.()
+    expect(bridge.detach.mock.calls.map(([args]) => args.acquisitionId).sort()).toEqual([1, 2])
+  })
+
+  it('keeps the newest attach’s viewer when an older attach answers last', async () => {
+    const answers: ((acquisitionId: number) => void)[] = []
+    bridge.attach.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          answers.push((acquisitionId) =>
+            resolve({ status: 'attached', replay: `SCREEN-${acquisitionId}`, acquisitionId })
+          )
+        )
+    )
+    const transport = createLegacyRelayBridgeTransport(PTY, innerTransport())
+    const older = transport.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
+    transport.attach({ existingPtyId: PTY, callbacks: callbacks() })
+    await vi.waitFor(() => expect(answers).toHaveLength(2))
+    // The newer attach answers first, then the older one.
+    answers[1](2)
+    await vi.waitFor(() => expect(transport.isConnected()).toBe(true))
+    answers[0](1)
+    // The connect still paints its screen: the attach that won delivers none of its own.
+    await expect(older).resolves.toMatchObject({ replay: 'SCREEN-1' })
+    expect(bridge.detach.mock.calls.map(([args]) => args.acquisitionId)).toEqual([1])
+    transport.detach?.()
+    expect(bridge.detach.mock.calls.map(([args]) => args.acquisitionId)).toEqual([1, 2])
+  })
+
   it('hands any other connect straight to the managed server’s transport', async () => {
     const inner = innerTransport()
     const transport = createLegacyRelayBridgeTransport(PTY, inner)

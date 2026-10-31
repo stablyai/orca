@@ -147,9 +147,6 @@ function createDaemonAdapter(
 }
 
 it('forwards dead-endpoint write-unavailable signals from the daemon adapters', () => {
-  // Why revert-sensitive: this provider is the live localProvider in degraded launch
-  // mode and main subscribes on it, so without forwarding the STA-2373 fan-out reaches
-  // no listener and sibling panes stay frozen.
   const current = createDaemonAdapter('daemon')
   const legacy = createDaemonAdapter('legacy')
   const fallback = createProvider('fallback')
@@ -307,19 +304,16 @@ describe('DegradedDaemonPtyProvider', () => {
     const fallback = createProvider('fallback', ['fresh-fallback-session'])
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
 
-    // Unknown id: the fallback's resolving no-op attach must never read as
-    // success — the runtime would pin a blank stream as attached.
+    // A resolving fallback attach would pin a blank stream as successfully attached.
     await expect(provider.attach('wt-1@@unknown')).rejects.toThrow(
       'Session not found: wt-1@@unknown'
     )
-    // Fallback-owned fresh sessions stream in-process; attach is refused too.
     await expect(provider.attach('fresh-fallback-session')).rejects.toThrow(
       'Session not found: fresh-fallback-session'
     )
     expect(fallback.attach).not.toHaveBeenCalled()
     expect(current.attach).not.toHaveBeenCalled()
 
-    // Once a daemon adapter owns the id, attach routes to that adapter.
     daemonSessions.push('wt-1@@learned')
     await expect(provider.attach('wt-1@@learned')).resolves.toBeUndefined()
     expect(current.attach).toHaveBeenCalledWith('wt-1@@learned')
@@ -329,7 +323,7 @@ describe('DegradedDaemonPtyProvider', () => {
   it('forwards the owning daemon sequence from attach', async () => {
     const legacy = createDaemonAdapter('legacy', ['daemon-session'])
     const providerSequence = { value: 204, generation: 'continued' as const }
-    vi.mocked(legacy.attach).mockResolvedValueOnce({ providerSequence })
+    vi.mocked(legacy.attach).mockResolvedValueOnce({ id: 'daemon-session', providerSequence })
     const provider = new DegradedDaemonPtyProvider({
       current: createDaemonAdapter('current'),
       legacy: [legacy],
@@ -337,7 +331,10 @@ describe('DegradedDaemonPtyProvider', () => {
     })
     await provider.discoverDaemonSessions()
 
-    await expect(provider.attach('daemon-session')).resolves.toEqual({ providerSequence })
+    await expect(provider.attach('daemon-session')).resolves.toEqual({
+      id: 'daemon-session',
+      providerSequence
+    })
   })
 
   it('only delegates owner-listing authority to the provider that owns the id', async () => {
@@ -645,11 +642,8 @@ describe('DegradedDaemonPtyProvider', () => {
       }
     })
 
-    // Why: a single un-killable local PTY must not abort the daemon restart.
     const killedCount = await provider.shutdownFallbackSessions()
 
-    // Best-effort: the one that shut down is counted, the stuck one is not, and
-    // crucially it does not throw — so the daemon restart sequence proceeds.
     expect(killedCount).toBe(1)
     expect(warn).toHaveBeenCalled()
     expect(fallback.shutdown).toHaveBeenCalledWith('stuck', { immediate: true })

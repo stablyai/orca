@@ -1,12 +1,10 @@
-// Loading a journal: the session projection names the live epoch, and that
-// epoch's rows are folded through the reducer in sequence order.
-//
-// There is no snapshot to anchor to and no superseded-epoch rows to drop — a
-// roll deletes them in the same transaction that publishes the new epoch. A row
-// this build cannot parse, a gap, or a first row that is not the epoch's is
-// damage, and a row a newer Orca wrote is one this build cannot place: the load
-// names either and the open fails on it. Nothing is deleted.
+// Replay live epochs without rewriting history; damage/newer rows fail load and remain on disk.
 
+import { journalOutcomeSource } from './journal-outcome-format'
+import { readJournalOutcomes } from './journal-outcome-table'
+import { JournalOutcomeDecodeError } from './journal-outcome-codec'
+import { readJournalOutcomeGroups, type JournalReadRow } from './journal-read-row'
+import { AgentSessionJournalError } from './journal-write-guards'
 import type Database from '../../sqlite/sync-database'
 import {
   applyJournalRow,
@@ -18,52 +16,100 @@ import {
   readJournalRowsAfter,
   readJournalSessionEpoch
 } from './journal-row-table'
-import { parseJournalRow, type JournalRow } from './journal-row-schema'
+import { parseJournalRow } from './journal-row-schema'
 
-/** Every epoch row is sequence 1, and no compaction moves that floor. */
 const FIRST_JOURNAL_SEQUENCE = 1
 
-/** Where a journal stops being one this build can read as written. */
 export type JournalDamage = {
-  /** The first sequence that is missing, or not what the rows before it promise. */
   sequence: number
   cause: 'unparseable-row' | 'misnumbered-row' | 'sequence-gap' | 'no-epoch-row'
 }
 
 export type JournalLoad = {
   state: JournalReducerState
-  /** The first row a newer Orca wrote: a future row version, or a row kind this build does not
-   *  know. Only an update opens the chat. */
+  /** Future row versions/kinds require an updated reader. */
   newer: { sequence: number } | null
-  /** Set when the history is damaged; a newer build's row wins over damage beside it. */
+  /** Newer content outranks adjacent damage. */
   damage: JournalDamage | null
 }
 
-/** Replays one chat from the host's database. Returns null when the chat has no journal yet. */
 export function replayJournal(db: Database.Database, sessionId: string): JournalLoad | null {
   const epoch = readJournalSessionEpoch(db, sessionId)
   if (epoch === null) {
     return null
   }
-  const fold = startJournalRowFold({ sessionId, epoch })
-  for (const entry of iterateJournalEpochRows(db, sessionId, epoch)) {
-    if (!fold.add(entry)) {
+  return foldJournalFromState(db, createJournalReducerState(sessionId, epoch))
+}
+
+/** The read is synchronous, like main's replay: it blocks once for one chat's saved records (its
+ * frozen input prefix, then each outcome key's newest record), and nothing can interleave with it.
+ * Admission comes first, so a newer chat is never folded. */
+export function restoreJournal(db: Database.Database, sessionId: string): JournalLoad | null {
+  const epoch = readJournalSessionEpoch(db, sessionId)
+  if (epoch === null) {
+    return null
+  }
+  const empty = createJournalReducerState(sessionId, epoch)
+  try {
+    const source = journalOutcomeSource(db, sessionId, epoch)
+    if (!source) {
+      return foldJournalFromState(db, empty)
+    }
+    let baseline: JournalReducerState | undefined
+    if (source.prefix > 0) {
+      const prefix = foldJournalFromState(db, empty, source.prefix)
+      if (prefix.newer || prefix.damage || prefix.state.lastSequence !== source.prefix) {
+        const gap = { sequence: prefix.state.lastSequence + 1, cause: 'sequence-gap' as const }
+        return { ...prefix, damage: prefix.newer ? null : (prefix.damage ?? gap) }
+      }
+      baseline = prefix.state
+    }
+    const state = readJournalOutcomes(db, sessionId, epoch, source, baseline)
+    return { state, newer: null, damage: null }
+  } catch (error) {
+    if (error instanceof AgentSessionJournalError && error.code === 'journal_read_only') {
+      return { state: empty, newer: { sequence: 1 }, damage: null }
+    }
+    // Only stored content this build rejects is damage; a storage error stays retryable, as on main.
+    if (error instanceof JournalOutcomeDecodeError) {
+      return { state: empty, newer: null, damage: { sequence: 1, cause: 'unparseable-row' } }
+    }
+    throw error
+  }
+}
+
+/** Folds input rows as main does, up to `through` when the epoch's outcome records follow them. */
+function foldJournalFromState(
+  db: Database.Database,
+  state: JournalReducerState,
+  through = Number.POSITIVE_INFINITY
+): JournalLoad {
+  const { sessionId, epoch, lastSequence } = state
+  const fold = startJournalRowFold({ sessionId, epoch }, state)
+  for (const entry of iterateJournalEpochRows(
+    db,
+    sessionId,
+    epoch,
+    lastSequence === 0 ? Number.MIN_SAFE_INTEGER : lastSequence
+  )) {
+    if (entry.seq > through || !fold.add(entry)) {
       break
     }
   }
   return fold.finish()
 }
 
-/** The same fold, fed a row at a time, for a caller that yields between batches of rows. */
-export function startJournalRowFold(input: { sessionId: string; epoch: string }): {
-  /** False once the fold has stopped: the rest of the rows are not read. */
+/** untilDamage stops at the first damage, for callers that only ask whether a fold publishes. */
+export function startJournalRowFold(
+  input: { sessionId: string; epoch: string; untilDamage?: boolean },
+  state = createJournalReducerState(input.sessionId, input.epoch)
+): {
   add: (entry: { seq: number; rowJson: string; ts?: number }) => boolean
   finish: () => JournalLoad
 } {
-  const state = createJournalReducerState(input.sessionId, input.epoch)
-  let expectedSequence = FIRST_JOURNAL_SEQUENCE
+  let expectedSequence = state.lastSequence + 1
   let damage: JournalDamage | null = null
-  let anchored = false
+  let anchored = state.lastSequence > 0
   let newer: { sequence: number } | null = null
   let empty = true
 
@@ -74,12 +120,12 @@ export function startJournalRowFold(input: { sessionId: string; epoch: string })
       newer = { sequence: entry.seq }
       return false
     }
-    // Damage is read past, so a newer build's row further on still says to update.
+    // Continue past damage to discover later rows requiring a newer reader.
     if (!parsed.ok) {
       damage ??= { sequence: entry.seq, cause: 'unparseable-row' }
       return true
     }
-    // A body naming another sequence than its key: writes would number past the key.
+    // Key/body sequence mismatches would make future writes number against the wrong prefix.
     if (parsed.row.seq !== entry.seq) {
       damage ??= { sequence: entry.seq, cause: 'misnumbered-row' }
       return true
@@ -104,7 +150,7 @@ export function startJournalRowFold(input: { sessionId: string; epoch: string })
   }
   const finish = (): JournalLoad => {
     state.oldestSequence = FIRST_JOURNAL_SEQUENCE
-    // An epoch with no rows at all holds nothing to lose: the open founds a fresh one over it.
+    // Empty epochs contain no recoverable history; founding a fresh epoch loses nothing.
     const found =
       damage ??
       (anchored || empty
@@ -112,35 +158,54 @@ export function startJournalRowFold(input: { sessionId: string; epoch: string })
         : { sequence: FIRST_JOURNAL_SEQUENCE, cause: 'no-epoch-row' as const })
     return { state, newer, damage: newer ? null : found }
   }
-  return { add, finish }
+  return { add: input.untilDamage ? (entry) => add(entry) && damage === null : add, finish }
 }
 
-/** `readJournalRowsAfterCursor` over one epoch, for a reader that supplies only the sequence. */
 export function journalRowsAfterReader(
   db: Database.Database,
   sessionId: string,
   epoch: string,
   limit?: number
-): (afterSequence: number) => JournalRow[] {
+): (afterSequence: number) => JournalReadRow[] {
   return (afterSequence) => readJournalRowsAfterCursor(db, sessionId, epoch, afterSequence, limit)
 }
 
-/** Rows after a cursor, in sequence order. Stops at the first row this build cannot parse: rows
- *  past it are never served. */
+/** Stop replay at the first unreadable row; never serve a partial tail beyond it. A chat with an
+ * input prefix pages its rows, then its outcome groups, each sequence exactly once. */
 export function readJournalRowsAfterCursor(
   db: Database.Database,
   sessionId: string,
   epoch: string,
   afterSequence: number,
   limit?: number
-): JournalRow[] {
-  const rows: JournalRow[] = []
-  for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {
-    const parsed = parseJournalRow(stored.rowJson)
-    if (!parsed.ok) {
-      break
+): JournalReadRow[] {
+  const source = journalOutcomeSource(db, sessionId, epoch)
+  const prefix = source ? source.prefix : Number.POSITIVE_INFINITY
+  const rows: JournalReadRow[] = []
+  if (afterSequence < prefix) {
+    for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {
+      const parsed = stored.seq <= prefix ? parseJournalRow(stored.rowJson) : null
+      if (!parsed?.ok) {
+        // An unreadable prefix row ends the page; outcome groups never skip past it.
+        return parsed ? rows : [...rows, ...groupsAfter(prefix)]
+      }
+      rows.push(parsed.row)
     }
-    rows.push(parsed.row)
+    if (!source || (limit !== undefined && rows.length >= limit)) {
+      return rows
+    }
   }
-  return rows
+  return [...rows, ...groupsAfter(Math.max(afterSequence, prefix))]
+
+  function groupsAfter(after: number): JournalReadRow[] {
+    return source
+      ? readJournalOutcomeGroups(
+          db,
+          epoch,
+          source,
+          after,
+          limit === undefined ? undefined : limit - rows.length
+        )
+      : []
+  }
 }

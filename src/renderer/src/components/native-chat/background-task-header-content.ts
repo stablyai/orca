@@ -1,5 +1,3 @@
-// Desktop words for the background-tasks strip header (`shared/background-task-header-content.ts`).
-
 import {
   backgroundTasksHeaderContent as headerContent,
   type BackgroundTasksHeaderContent

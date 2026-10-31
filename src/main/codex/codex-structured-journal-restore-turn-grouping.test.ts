@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { nativeChatTurnFold } from '../../shared/native-chat-turn-fold'
+import { nativeChatTurnFold } from '../../shared/native-chat/transcript/native-chat-turn-fold'
 import { nativeChatTurnMembership } from '../../shared/native-chat-turn-membership'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
@@ -30,8 +30,7 @@ function historicalTurn(index: number): Record<string, unknown> {
   }
 }
 
-/** What the journal hands a reader after a restore: rows in append order. With `statesScope`, each
- *  row carries the turn scope the journal gives a row the translator writes without one. */
+/** Model hosts that include derived turn scopes and older hosts that omit them. */
 function restoredJournal(turnCount: number, statesScope: boolean): AgentJournalRenderItem[] {
   const items: AgentJournalRenderItem[] = []
   const derived = new JournalDerivedTurnScope()

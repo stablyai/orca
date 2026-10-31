@@ -40,8 +40,7 @@ export function gitRefTargetsBranchOnRemote(
   if (!trimmed || !remoteName || !branchName) {
     return false
   }
-  // Why: fork reviews can target fork/main while the saved base is origin/main.
-  // Remote-qualified refs must match both pieces, not only the branch leaf.
+  // Fork reviews may target fork/main instead of saved origin/main; match remote and branch together.
   if (
     trimmed === `${remoteName}/${branchName}` ||
     trimmed === `remotes/${remoteName}/${branchName}` ||

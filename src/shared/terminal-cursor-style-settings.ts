@@ -17,8 +17,7 @@ export function normalizeTerminalCursorStyleDefault(
     settings?.terminalCursorStyleDefaultedToBlock === true || options.preserveExplicitValue === true
 
   return {
-    // Why: prior builds persisted the old bar default into profiles; migrate
-    // those inherited values once while preserving later explicit choices.
+    // Migrate the inherited bar default once, preserving later explicit choices.
     terminalCursorStyle:
       defaultedToBlock && isTerminalCursorStyle(settings?.terminalCursorStyle)
         ? settings.terminalCursorStyle

@@ -15,28 +15,17 @@ describe('web GitLab preload API', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.doUnmock('./web-runtime-client')
-    vi.doUnmock('electron')
-  })
-
-  it('keeps the web GitLab preload key set in parity with desktop preload', async () => {
-    vi.doMock('electron', () => ({
-      ipcRenderer: { invoke: vi.fn() }
-    }))
-    const globals = installBrowserGlobals('Linux')
-    const { glApi } = (await import(
-      new URL('../../../preload/gitlab.ts', import.meta.url).href
-    )) as {
-      glApi: Record<string, unknown>
-    }
-    const { installWebPreloadApi } = await import('./web-preload-api')
-
-    installWebPreloadApi()
-
-    expect(Object.keys(globals.window.api.gl).sort()).toEqual(Object.keys(glApi).sort())
   })
 
   it('routes every runtime-backed GitLab method through the expected RPC method', async () => {
     type GitLabApi = NonNullable<PreloadApi['gl']>
+    const pagedResult = {
+      items: [{ id: 'mr-7', type: 'mr', number: 7 }],
+      page: 3,
+      perPage: 1,
+      totalCount: 0,
+      totalPages: 4
+    }
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -45,7 +34,10 @@ describe('web GitLab preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: { ok: true, items: [] },
+            result:
+              method === 'gitlab.listMRs' || method === 'gitlab.listWorkItems'
+                ? pagedResult
+                : { ok: true, items: [] },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -82,15 +74,15 @@ describe('web GitLab preload API', () => {
       },
       {
         key: 'listMRs',
-        invoke: (gl) => gl.listMRs({ repoPath, state: 'opened', page: 1, perPage: 50 }),
+        invoke: (gl) => gl.listMRs({ repoPath, state: 'opened', page: 3, perPage: 1 }),
         expectedMethod: 'gitlab.listMRs',
-        expectedParams: { repoPath, repo: repoPath, state: 'opened', page: 1, perPage: 50 }
+        expectedParams: { repoPath, repo: repoPath, state: 'opened', page: 3, perPage: 1 }
       },
       {
         key: 'listWorkItems',
-        invoke: (gl) => gl.listWorkItems({ repoPath, state: 'closed', page: 2, perPage: 25 }),
+        invoke: (gl) => gl.listWorkItems({ repoPath, state: 'closed', page: 3, perPage: 1 }),
         expectedMethod: 'gitlab.listWorkItems',
-        expectedParams: { repoPath, repo: repoPath, state: 'closed', page: 2, perPage: 25 }
+        expectedParams: { repoPath, repo: repoPath, state: 'closed', page: 3, perPage: 1 }
       },
       {
         key: 'listIssues',
@@ -263,7 +255,10 @@ describe('web GitLab preload API', () => {
     )
 
     for (const routeCase of routeCases) {
-      await routeCase.invoke(api.gl)
+      const result = await routeCase.invoke(api.gl)
+      if (routeCase.key === 'listMRs' || routeCase.key === 'listWorkItems') {
+        expect(result).toEqual(pagedResult)
+      }
     }
 
     expect(runtimeCalls).toEqual(

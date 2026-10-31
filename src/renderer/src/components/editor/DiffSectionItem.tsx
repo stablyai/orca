@@ -18,6 +18,8 @@ import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
 import { submitDiffSectionComment } from './diff-section-comment-submit'
 import type { DiffSectionItemProps } from './diff-section-item-props'
 import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
+import { hasLayoutBox } from '@/hooks/virtualized-hidden-row-measurement'
+import { DiffSectionSaveConflictBar } from './DiffSectionSaveConflictBar'
 
 export function DiffSectionItem({
   section,
@@ -52,10 +54,7 @@ export function DiffSectionItem({
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
-  // Why: subscribe to the raw comments array on the worktree (reference-
-  // stable across unrelated store updates) and filter by filePath inside a
-  // memo. Selecting a fresh `.filter(...)` result would invalidate on every
-  // store change and cause needless re-renders of this section.
+  // Select the stable worktree array and memoize filtering; fresh selector results would rerender this section on unrelated writes.
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
     selectWorktreeDiffComments(s, worktreeId)
   )
@@ -91,9 +90,7 @@ export function DiffSectionItem({
       sectionHeight
     })
 
-  // Why: only forward the pending scroll id when it matches a comment in this
-  // section so unrelated sections don't keep re-rendering their decorator
-  // every time the sidebar requests a scroll elsewhere.
+  // Forward only this section’s scroll target to avoid waking unrelated decorators.
   const pendingScrollForThisSection = useMemo(() => {
     if (!scrollToDiffCommentId) {
       return null
@@ -172,11 +169,14 @@ export function DiffSectionItem({
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
     const modified = editor.getModifiedEditor()
 
-    // Why: measuring before Monaco computes hidden unchanged regions records
-    // full-file height, making virtualized combined diffs jump as rows remount.
+    // Wait for Monaco’s hidden-region layout; earlier full-file measurements make virtualized rows jump on remount.
     let diffLayoutReady = false
     let pendingHeightFrame: number | null = null
     const updateHeight = (): void => {
+      // Zero-width side-by-side editors fall back to inline and report an incorrect taller height.
+      if (!hasLayoutBox(editor.getContainerDomNode())) {
+        return
+      }
       const contentHeight = editor.getModifiedEditor().getContentHeight()
       setSectionHeights((prev) => {
         if (prev[index] === contentHeight) {
@@ -209,11 +209,7 @@ export function DiffSectionItem({
     }
 
     setModifiedEditor(modified)
-    // Why: Monaco disposes inner editors when the DiffEditor container is
-    // unmounted (e.g. section collapse, tab change). Clearing the state
-    // prevents decorator effects and scroll subscriptions from invoking
-    // methods on a disposed editor instance, and avoids stale draft state pointing
-    // at a line in an editor that no longer exists.
+    // Monaco disposes inner editors on unmount; clear state so decorators and drafts cannot retain a disposed instance.
     modified.onDidDispose(() => {
       contentSizeSub.dispose()
       diffUpdateSub.dispose()
@@ -258,8 +254,7 @@ export function DiffSectionItem({
           }
 
           changed = true
-          // Why: virtualized rows unmount when scrolled away, so the draft must
-          // live in section state instead of only in Monaco's mounted model.
+          // Virtualized rows unmount offscreen; retain drafts in section state beyond Monaco’s lifetime.
           return {
             ...s,
             modifiedContent: current,
@@ -275,8 +270,7 @@ export function DiffSectionItem({
       })
     })
     modified.onDidDispose(() => {
-      // Why: editable diff sections own both panes' shortcut bridges and the
-      // model subscription for the lifetime of this Monaco diff instance.
+      // Dispose shortcut bridges and model subscriptions with their owning diff instance.
       cleanupSaveShortcut()
       cleanupOriginalFindShortcut()
       cleanupModifiedFindShortcut()
@@ -312,6 +306,12 @@ export function DiffSectionItem({
         trailingContent={renderHeaderTrailingContent?.(section, index)}
       />
 
+      {section.saveConflict && (
+        <DiffSectionSaveConflictBar
+          onReload={() => retrySection(index)}
+          onOverwrite={() => void handleSectionSaveRef.current(index, 'overwrite')}
+        />
+      )}
       {!section.collapsed && (
         <DiffSectionBody
           section={section}

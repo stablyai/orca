@@ -10,8 +10,7 @@ import { patchDashboardSnapshotFromAgentStatus } from './dashboard-agent-status-
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 250
 const TOPOLOGY_REFRESH_MAX_WAIT_MS = 1_000
 
-/** Which column each card sits in — the only thing a view transition should
- *  animate on. Content-only updates (such as new messages) must not. */
+/** Animate column membership changes only, not content updates. */
 function columnSignature(snapshot: DashboardSnapshot): string {
   return snapshot.cards
     .map((card) => `${card.paneKey}:${card.bucket}`)
@@ -23,20 +22,17 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
 }
 
-/** Why: View Transition snapshots render in the browser top layer, which paints
- *  above any z-index — so a card morphing columns would flicker OVER the open
- *  terminal dialog (a z-50 Radix portal). Skip the transition while it's open;
- *  the card just settles under the dialog, which the user isn't watching. */
+/** Hidden-document transitions reject ready with InvalidStateError, including pop-out occlusion by the main window. */
+function documentIsHidden(): boolean {
+  return document.visibilityState === 'hidden'
+}
+
+/** Transition snapshots paint above all z-index layers; skip morphing while a terminal dialog is open. */
 function terminalDialogIsOpen(): boolean {
   return document.querySelector('[role="dialog"][data-state="open"]') !== null
 }
 
-/**
- * Pop-out side of the dashboard bridge: subscribe to snapshots relayed from the
- * main window and request an initial one on mount. When a card changes column
- * (or one appears/disappears), the update is wrapped in a View Transition so
- * the browser morphs each card from its old position to its new one.
- */
+/** Receive relayed snapshots and request one on mount; animate column membership changes when the document permits it. */
 export function useDashboardSnapshot(): DashboardSnapshot {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>(EMPTY_DASHBOARD_SNAPSHOT)
   const columnSignatureRef = useRef('')
@@ -94,10 +90,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
     }
 
     const apply = (incoming: DashboardSnapshot): void => {
-      // The bridge omits repoIconsByRepoId on throttled republishes when it has
-      // not changed, rather than re-sending data URLs 4x/sec. Retain the last
-      // map we were given; the bridge always re-sends it when this window opens
-      // or asks, so the retained value can never be the only copy.
+      // Retain omitted icon maps to avoid cloning data URLs on every publish; opening/requesting always sends a full map.
       const next =
         incoming.repoIconsByRepoId === undefined && retainedRepoIconsRef.current
           ? { ...incoming, repoIconsByRepoId: retainedRepoIconsRef.current }
@@ -114,6 +107,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       const startViewTransition = document.startViewTransition?.bind(document)
       if (
         !layoutChanged ||
+        documentIsHidden() ||
         prefersReducedMotion() ||
         terminalDialogIsOpen() ||
         !startViewTransition
@@ -121,10 +115,18 @@ export function useDashboardSnapshot(): DashboardSnapshot {
         setSnapshot(next)
         return
       }
-      // flushSync so the DOM reflects `next` synchronously inside the transition
-      // callback — the browser captures the "after" state from it.
-      startViewTransition(() => {
+      // Commit DOM synchronously for the transition’s after-image; consume only occlusion aborts and surface other failures.
+      void startViewTransition(() => {
         flushSync(() => setSnapshot(next))
+      }).ready.catch((error: unknown) => {
+        if (
+          documentIsHidden() &&
+          error instanceof DOMException &&
+          error.name === 'InvalidStateError'
+        ) {
+          return
+        }
+        throw error
       })
     }
 

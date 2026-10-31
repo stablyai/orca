@@ -25,7 +25,7 @@ export type RelayReconnectDependencies = {
 }
 
 type RecoveryGate = 'external-signal' | 'fresh-credential'
-type RetainableRelaySession = Pick<MobileRelayRpcSession, 'getFailure' | 'probeAfterBackground'>
+type RetainableRelaySession = Pick<MobileRelayRpcSession, 'getFailure' | 'notifyForeground'>
 
 export class RelayReconnectController {
   private readonly failureCount = new RelayRecoveryFailureCount(RELAY_STABLE_CONNECTION_MS)
@@ -61,11 +61,9 @@ export class RelayReconnectController {
 
   handleForeground(logical: StableLogicalRpcClient, wasForeground: boolean): void {
     if (!wasForeground) {
-      // Only a relay the background grace retained is still set here.
-      this.activeSession?.probeAfterBackground()
-      // Why: an app resume is a fresh signal, unlike repeated network-flap
-      // nudges — it resets the gated cadence even when it cannot lift the
-      // credential gate, so reopening the app never waits out a 15min tick.
+      // Availability also returns after iOS inactive interruptions; only app-resume proves background.
+      this.activeSession?.notifyForeground('focus')
+      // Resume resets gated cadence even without clearing the credential gate; reopening must not wait a whole escalated tick.
       this.gateReprobeStreak = 0
       if (this.recoveryGate !== 'fresh-credential') {
         this.reset()
@@ -77,13 +75,8 @@ export class RelayReconnectController {
     this.onRetry()
   }
 
-  // Classifies a nudge that arrives while already foreground. A healthy relay is
-  // never suspended here: focus/app-resume probe it, a network change replaces it
-  // make-before-break — suspending first was the grey-blink bug (S2).
-  handleActiveNudge(
-    logical: StableLogicalRpcClient,
-    reason: ForegroundNudgeReason
-  ): 'probe' | 'replace' | 'recover' {
+  // A network callback may describe a healthy unchanged path; the session watchdog owns probing it.
+  handleActiveNudge(logical: StableLogicalRpcClient, reason: ForegroundNudgeReason): void {
     if (this.recoveryGate === 'external-signal') {
       this.liftGate()
     }
@@ -97,10 +90,9 @@ export class RelayReconnectController {
       logical.getActivePath() === 'relay' &&
       logical.getState() === 'connected'
     ) {
-      return reason === 'network-change' ? 'replace' : 'probe'
+      return
     }
     this.onRetry()
-    return 'recover'
   }
 
   handleStateFailure(logical: StableLogicalRpcClient, state: ConnectionState): Error | null {
@@ -124,10 +116,8 @@ export class RelayReconnectController {
     logical.suspendActiveSession()
   }
 
-  // Only these are ever used; the narrow type keeps test doubles honest.
   setActiveSession(session: RetainableRelaySession): void {
-    // Why: an authenticated relay is the desktop accepting this device — the only
-    // evidence that outranks a rejection streak.
+    // Authenticated relay success disproves the rejection streak.
     this.evidence.clear()
     this.activeSession = session
     this.activeRelayConnectedAt = this.dependencies.now()
@@ -140,14 +130,10 @@ export class RelayReconnectController {
       this.recoveryGate === 'fresh-credential' || this.credentials.hasRejected()
     this.activeSession = null
     this.activeRelayConnectedAt = null
-    // Why: direct auth resolves the same desktop device registry, so a live direct
-    // session disproves revocation even though relay is still gated — and it is the
-    // desktop, awake and running Orca.
+    // Direct authentication uses the same device registry, so it also clears revocation/reachability evidence.
     this.evidence.clear()
     if (needsCredentialRefresh) {
-      // Why: the rejected credential stays unusable until its replacement is
-      // durable. No reprobe timer here — direct is live, rotation over it
-      // clears the gate, and any later state failure re-arms via shouldDefer.
+      // Keep rejected credentials gated until durable rotation over direct; no relay reprobe is needed while direct lives.
       this.failureCount.reset()
       this.nextAttemptAt = 0
       this.recoveryGate = 'fresh-credential'
@@ -184,22 +170,18 @@ export class RelayReconnectController {
     return eligible
   }
 
-  // For callers that found no dialable credential at all: keep a slow retry
-  // alive so a later durable write can recover.
+  // Retry missing credentials slowly so later durable writes can restore access.
   armCredentialReprobe(): void {
     if (this.credentials.hasRejected()) {
       this.holdGate(true, 'fresh-credential')
       return
     }
     if (this.recoveryGate) {
-      // Why: under a held gate the tick must mint its pass token — a plain
-      // cooldown tick bounces off shouldDefer and doubles the effective cadence.
+      // Mint a gated tick’s pass token or shouldDefer would double the intended cadence.
       this.holdGate(true)
       return
     }
-    // Why: a merely missing or expired bundle must not enter the credential
-    // gate — that gate forces a rotation on the next direct connect. A plain
-    // cooldown retries the read on the same escalating cadence.
+    // Missing/expired alone must not force rotation; retry durable reads through plain escalating cooldown.
     const delay = this.delays.gateReprobeDelayMs(this.gateReprobeStreak)
     this.nextAttemptAt = this.dependencies.now() + delay
     this.clearTimer()
@@ -230,8 +212,6 @@ export class RelayReconnectController {
     return failure ?? null
   }
 
-  // True when the caller is still inside the cooldown window and must not
-  // re-dial. Arms the self-scheduled retry so recovery still happens on its own.
   shouldDefer(): boolean {
     if (this.recoveryGate) {
       if (this.gateReprobePending) {
@@ -250,11 +230,7 @@ export class RelayReconnectController {
   }
 
   registerFailure(error: Error | null, scheduleRetry = true): void {
-    // Why: the gated early return below skips every later failure, so a revoked
-    // pairing must bank its evidence first or the UI waits forever (STA-4681). A live
-    // authenticated relay is the desktop accepting this device right now, so a failed
-    // replacement dial is not revocation — banking it would fire a false re-pair alarm
-    // the moment that healthy session drops for an unrelated transport error.
+    // Bank rejection evidence before gated early return, except when a live authenticated relay disproves revocation.
     if (!this.activeSession) {
       this.evidence.record(error)
     }
@@ -266,8 +242,7 @@ export class RelayReconnectController {
       this.recoveryGate === 'fresh-credential' ||
       (this.recoveryGate === 'external-signal' && recovery?.kind !== 'disable-relay-credential')
     ) {
-      // Why: a failed reprobe stays gated, but the slow cadence must keep going
-      // — unless the supervisor is backgrounded/stopped; resume re-arms it.
+      // Keep slow gated reprobes running only while active; foreground restores cadence.
       this.holdGate(scheduleRetry)
       return
     }
@@ -275,23 +250,19 @@ export class RelayReconnectController {
     const failureCount = this.failureCount.recordAfterConnection(this.activeRelayConnectedAt, now)
     // Why: only a stable authenticated Relay resets the failure streak.
     this.activeRelayConnectedAt = null
-    // Why: a director Retry-After is the server pacing a bounded overload, and it
-    // only reaches this branch — a director HTTP error carries no relay close code.
+    // Director Retry-After paces overload; HTTP failures carry no relay close code.
     const delay =
       recovery?.kind === 'retry-after-host-offline'
         ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
         : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
     if (error instanceof MobileE2EEAuthenticationError) {
-      // Why: an E2EE rejection is usually pairing revocation, but it also fires
-      // transiently right after pairing while the desktop commits credentials —
-      // reprobe slowly instead of waiting forever for a UI nudge.
+      // E2EE rejection can be transient during credential commit; gate slow reprobes instead of waiting forever for a nudge.
       this.holdGate(scheduleRetry, 'external-signal')
       return
     }
     if (recovery?.kind === 'disable-relay-credential') {
-      // Why: never redial a rejected credential fast, but keep a slow reprobe
-      // alive — the caller re-reads durable state before each gated attempt.
+      // Never retry rejected credentials fast; each slow attempt re-reads durable state.
       this.holdGate(scheduleRetry, 'fresh-credential')
       return
     }
@@ -356,11 +327,9 @@ export class RelayReconnectController {
     }
     this.timer = this.dependencies.setTimer(() => {
       this.timer = null
-      // Why: the streak advances once per fired tick — arm attempts within one
-      // cycle recompute the same delay instead of triple-escalating it.
+      // Advance cadence once per fired tick, not on repeated arm attempts.
       this.gateReprobeStreak = Math.min(this.gateReprobeStreak + 1, 8)
-      // Why: the tick token is only minted while its gate still holds; a later
-      // gate must not spend a stale token and bypass its own cooldown.
+      // Mint only while this gate holds so a later gate cannot spend a stale bypass token.
       if (mintToken && this.recoveryGate) {
         this.gateReprobePending = true
       }
@@ -368,8 +337,7 @@ export class RelayReconnectController {
     }, delay)
   }
 
-  // Holds (or enters) a gate: only the slow reprobe cadence survives, and a
-  // backgrounded or stopped supervisor gets no timer at all until it resumes.
+  // Keep only slow reprobes under a gate, and no timers while backgrounded/stopped.
   private holdGate(scheduleRetry: boolean, gate = this.recoveryGate): void {
     this.recoveryGate = gate
     this.clearTimer()
@@ -378,8 +346,7 @@ export class RelayReconnectController {
     }
   }
 
-  // Why: clearing a gate must also drop its timer, pending tick, and cadence —
-  // an orphaned reprobe timer would otherwise swallow the next fast backoff.
+  // Clear timer/token/cadence with the gate so stale reprobes cannot swallow the next fast retry.
   private liftGate(): void {
     this.recoveryGate = null
     this.gateReprobePending = false

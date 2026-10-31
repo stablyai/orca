@@ -16,15 +16,13 @@ export type AiVaultSessionListKeyboard = {
 }
 
 export type AiVaultSessionSelection = {
-  /** Row index of the selected session, or null when nothing is selectable. */
   selectedIndex: number | null
   select: (index: number) => void
   /** Moves one session up or down, clamped at the ends; returns the new row index. */
   move: (delta: 1 | -1) => number | null
 }
 
-/** Stores the chosen row and its session; the row is derived again once the list changes, and a
- *  new `query` starts over at the top match. */
+/** Reconcile selected session/row after list changes; new queries reset to the top match. */
 export function useAiVaultSessionSelection(
   rows: readonly AiVaultListRow[],
   enabled: boolean,
@@ -33,7 +31,7 @@ export function useAiVaultSessionSelection(
   const [stored, setStored] = useState<{ index: number; sessionId: string; query: string } | null>(
     null
   )
-  // A pick belongs to the search it was made under; editing the search back must not revive it.
+  // Clear query-owned picks so reverting search text cannot revive them.
   if (stored !== null && stored.query !== query) {
     setStored(null)
   }
@@ -42,7 +40,7 @@ export function useAiVaultSessionSelection(
     () => rows.flatMap((row, index) => (row.type === 'session' ? [index] : [])),
     [rows]
   )
-  // The chosen row while it still shows its session, so a session listed twice stays two rows.
+  // Match both row and session so duplicate session listings remain distinct.
   const chosenIndex =
     chosen === null
       ? undefined
@@ -71,7 +69,6 @@ export function useAiVaultSessionSelection(
   }
 }
 
-/** Exposes the selection to the panel, which forwards keys from its search box. */
 export function useAiVaultSessionListKeyboard(
   ref: Ref<AiVaultSessionListKeyboard> | undefined,
   args: {
@@ -103,7 +100,7 @@ export function useAiVaultSessionListKeyboard(
         }
         if (event.key === 'Enter' && selectedSession && selectedIndex !== null) {
           event.preventDefault()
-          // A held Enter must not start the same session twice while the first open is underway.
+          // Held Enter must not open the session twice.
           if (!event.repeat) {
             activate(selectedSession, selectedIndex)
           }
@@ -114,7 +111,7 @@ export function useAiVaultSessionListKeyboard(
   )
 }
 
-/** Panel root props: a clicked row cannot take focus, so it lands on the root and the row keys keep working. */
+/** Clicked rows cannot focus; root focus keeps row navigation working. */
 export function aiVaultPanelKeyboardRootProps(
   keyboardRef: RefObject<AiVaultSessionListKeyboard | null> | undefined
 ): Pick<HTMLAttributes<HTMLElement>, 'tabIndex' | 'onKeyDown'> {

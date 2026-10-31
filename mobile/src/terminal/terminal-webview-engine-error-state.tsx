@@ -1,7 +1,11 @@
 import { useCallback, useState } from 'react'
 import { RefreshCw } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { colors, radii } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export type NativeWebViewEngineEvent = {
   readonly nativeEvent?: object
@@ -26,12 +30,9 @@ export function useTerminalWebViewEngineErrorState(onEngineError?: (message: str
   const reportEngineError = useCallback(
     (message: string, fatal: boolean) => {
       onEngineError?.(message)
-      // eslint-disable-next-line no-console
       console.warn('[terminal-webview] engine error', message)
       if (fatal) {
-        // Why: the first fatal report is the root cause; later cascades (e.g. the
-        // web-ready watchdog firing after a process-crash report) must not
-        // overwrite its more specific diagnostics. clearEngineError resets.
+        // Keep the first fatal cause; later watchdog/cascade reports are less specific until clearEngineError resets it.
         setEngineError((previous) => previous ?? message)
       }
     },
@@ -60,16 +61,18 @@ export function describeNativeWebViewEngineError(
     parts.push(description)
   }
   if (typeof statusCode === 'number') {
-    parts.push(`status ${statusCode}`)
+    parts.push(
+      translate('terminal.webviewEngineErrorState.status', 'status {{statusCode}}', { statusCode })
+    )
   }
   if (typeof code === 'number') {
-    parts.push(`code ${code}`)
+    parts.push(translate('terminal.webviewEngineErrorState.code', 'code {{code}}', { code }))
   }
   if (typeof domain === 'string') {
     parts.push(domain)
   }
   if (native?.didCrash === true) {
-    parts.push('renderer crashed')
+    parts.push(translate('terminal.webviewEngineErrorState.rendererCrashed', 'renderer crashed'))
   }
   return parts.join(' - ')
 }
@@ -78,28 +81,34 @@ export function TerminalWebViewEngineErrorOverlay({
   message,
   onReload
 }: TerminalWebViewEngineErrorOverlayProps) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View style={styles.errorOverlay}>
-      <Text style={styles.errorTitle}>Terminal failed to load</Text>
+      <Text style={styles.errorTitle}>
+        {t('terminal.webviewEngineErrorState.title', 'Terminal failed to load')}
+      </Text>
       <Text style={styles.errorDetail} numberOfLines={4}>
         {message}
       </Text>
       <Pressable accessibilityRole="button" style={styles.reloadButton} onPress={onReload}>
-        <RefreshCw size={16} color={colors.terminalBg} />
-        <Text style={styles.reloadButtonText}>Reload</Text>
+        <RefreshCw size={16} color={colors.bgBase} />
+        <Text style={styles.reloadButtonText}>
+          {t('terminal.webviewEngineErrorState.reload', 'Reload')}
+        </Text>
       </Pressable>
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   errorOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
     padding: 24,
-    backgroundColor: colors.terminalBg
+    backgroundColor: colors.bgBase
   },
   errorTitle: {
     color: colors.textPrimary,
@@ -119,12 +128,12 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 36,
     paddingHorizontal: 14,
-    borderRadius: 6,
+    borderRadius: radii.control,
     backgroundColor: colors.surfaceBright
   },
   reloadButtonText: {
-    color: colors.terminalBg,
+    color: colors.bgBase,
     fontSize: 14,
     fontWeight: '700'
   }
-})
+}))

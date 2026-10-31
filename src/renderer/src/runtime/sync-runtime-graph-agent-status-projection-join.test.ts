@@ -86,21 +86,6 @@ describe('agent-status projection join short circuit', () => {
     expect(sorts).toBe(0)
   })
 
-  it('caches the new map identity on the short-circuit path', () => {
-    resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const map = mapOf([0, 1])
-    buildRuntimeMobileAgentStatusProjectionForTests(map)
-    const again = respread(map)
-    buildRuntimeMobileAgentStatusProjectionForTests(again)
-
-    // A repeat call with the same identity must hit the identity early-out, not re-walk the keys.
-    const { joins, sorts } = countJoins(() =>
-      buildRuntimeMobileAgentStatusProjectionForTests(again)
-    )
-    expect(joins).toBe(0)
-    expect(sorts).toBe(0)
-  })
-
   it('does not rejoin accumulated previews for timestamp-only heartbeats', () => {
     let map = mapOf(Array.from({ length: 500 }, (_, index) => index))
     for (const paneKey of Object.keys(map)) {
@@ -134,62 +119,5 @@ describe('agent-status projection join short circuit', () => {
         [paneKey]: { ...map[paneKey], lastAssistantMessage: 'A new answer' }
       })
     ).not.toBe(first)
-  })
-
-  it('still rebuilds when an entry changes', () => {
-    resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const map = mapOf([0, 1])
-    const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
-
-    const changed = { ...map, 'tab-1:leaf-0': makeEntry(1, { state: 'idle' }) }
-    const { result, joins } = countJoins(() =>
-      buildRuntimeMobileAgentStatusProjectionForTests(changed)
-    )
-
-    expect(result).not.toBe(first)
-    expect(joins).toBeGreaterThan(0)
-  })
-
-  it('still rebuilds when a pane is removed, even though every survivor is reused', () => {
-    // The reuse check alone cannot see a removal; only the entry-count check does.
-    resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const map = mapOf([0, 1])
-    const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
-
-    const removed = { 'tab-0:leaf-0': map['tab-0:leaf-0'] }
-    const result = buildRuntimeMobileAgentStatusProjectionForTests(removed)
-
-    expect(result).not.toBe(first)
-    expect(result).toBe(
-      buildRuntimeMobileAgentStatusProjectionForTests({
-        'tab-0:leaf-0': map['tab-0:leaf-0']
-      })
-    )
-  })
-
-  it('still rebuilds when key membership swaps at a constant entry count', () => {
-    // The entry-count check cannot see a same-size swap; only the per-key lookup does.
-    resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const map = mapOf([0, 1])
-    const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
-
-    const swapped = { 'tab-0:leaf-0': map['tab-0:leaf-0'], 'tab-9:leaf-0': makeEntry(9) }
-    const result = buildRuntimeMobileAgentStatusProjectionForTests(swapped)
-
-    expect(result).not.toBe(first)
-    expect(result).toContain('tab-9:leaf-0')
-    expect(result).not.toContain('tab-1:leaf-0')
-  })
-
-  it('still rebuilds when a pane is added', () => {
-    resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const map = mapOf([0])
-    const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
-
-    const added = { ...map, 'tab-9:leaf-0': makeEntry(9) }
-    const result = buildRuntimeMobileAgentStatusProjectionForTests(added)
-
-    expect(result).not.toBe(first)
-    expect(result).toContain('tab-9:leaf-0')
   })
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { credentialDecryptionMessage } from '../../../src/shared/integration-credential-errors'
 import { fanOutSmartSearch } from './smart-source-fan-out'
 
 type Call = { method: string; params: Record<string, unknown> }
@@ -55,13 +56,25 @@ const smartArgs = {
 describe('fanOutSmartSearch', () => {
   it('fans out to every provider in smart mode and stamps repoId', async () => {
     const calls: Call[] = []
+    const gitlabItems = Array.from({ length: 50 }, (_, index) => ({
+      ...workItem,
+      id: `gl${index + 1}`,
+      type: 'mr',
+      number: index + 2,
+      title: 'B',
+      state: 'opened'
+    }))
     const client = fakeClient(
       {
         'github.listWorkItems': {
           items: [{ ...workItem, id: 'g1', type: 'issue', number: 1, title: 'A' }]
         },
         'gitlab.listWorkItems': {
-          items: [{ ...workItem, id: 'gl1', type: 'mr', number: 2, title: 'B' }]
+          items: gitlabItems,
+          page: 1,
+          perPage: 50,
+          totalCount: 0,
+          totalPages: 2
         },
         'linear.searchIssues': {
           items: [{ ...linearIssue, id: 'l1', identifier: 'ENG-1', title: 'C' }]
@@ -78,7 +91,14 @@ describe('fanOutSmartSearch', () => {
       'repo.searchRefs'
     ])
     expect(result.githubItems[0]).toMatchObject({ number: 1, repoId: 'repo-1' })
-    expect(result.gitlabItems[0]).toMatchObject({ number: 2, repoId: 'repo-1' })
+    expect(result.gitlabItems).toEqual(gitlabItems.map((item) => ({ ...item, repoId: 'repo-1' })))
+    expect(calls.find((call) => call.method === 'gitlab.listWorkItems')?.params).toEqual({
+      repo: 'id:repo-1',
+      state: 'opened',
+      page: 1,
+      perPage: 50,
+      query: 'bug'
+    })
     expect(result.linearIssues[0]).toMatchObject({ identifier: 'ENG-1' })
     expect(result.branches).toEqual([{ refName: 'main', localBranchName: 'main' }])
     expect(result.error).toBe('')
@@ -136,4 +156,20 @@ describe('fanOutSmartSearch', () => {
       branches: []
     })
   })
+})
+
+it.each([
+  ['Linear authentication expired for this workspace.', 'Unable to load Linear issues. Try again.'],
+  ['401 raw old-host diagnostic', 'Unable to load Linear issues. Try again.'],
+  [credentialDecryptionMessage('Linear'), credentialDecryptionMessage('Linear')]
+])('phone retains its existing safe error for %s', async (raw, visible) => {
+  const calls: Call[] = []
+  const result = await fanOutSmartSearch({
+    ...smartArgs,
+    mode: 'linear',
+    client: fakeClient({ 'linear.searchIssues': new Error(raw) }, calls)
+  })
+  expect(result.error).toBe(visible)
+  expect(result.linearIssues).toEqual([])
+  expect(calls.map((call) => call.method)).toEqual(['linear.searchIssues'])
 })

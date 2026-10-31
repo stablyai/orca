@@ -122,45 +122,35 @@ describe('createRuntimeClientEventsSync', () => {
   })
 
   it('does not leak an orphaned subscription when an env is toggled off then on mid-subscribe', async () => {
-    // 'B' stays subscribed throughout so subscriptions is never empty — this is
-    // what prevents the generation from bumping and exposes the overwrite race.
+    // Keep B subscribed so generation never bumps, exposing duplicate A subscriptions across remove/re-add.
     const h = makeHarness(['B'])
     h.sync.sync()
     h.recordsFor('B')[0].resolveWith()
     await flush()
 
-    // 'A' becomes desired — first subscribe starts (kept in flight).
     h.setDesired(['A', 'B'])
     h.sync.sync()
 
-    // 'A' removed while its subscribe is in flight (generation does NOT bump
-    // because 'B' keeps subscriptions non-empty).
     h.setDesired(['B'])
     h.sync.sync()
 
-    // 'A' desired again before the first subscribe resolved — the de-dupe guard
-    // sees no live subscription and no pending entry, so it subscribes AGAIN.
     h.setDesired(['A', 'B'])
     h.sync.sync()
 
     const aRecords = h.recordsFor('A')
-    expect(aRecords).toHaveLength(2) // the duplicate subscribe really happened
+    expect(aRecords).toHaveLength(2)
 
-    // Resolve both A subscribes.
     aRecords[0].resolveWith()
     await flush()
     aRecords[1].resolveWith()
     await flush()
 
-    // Exactly one of the two duplicate subscriptions is unsubscribed (the loser);
-    // the other is retained in the map. Before the fix the second resolution
-    // overwrote the first's unsubscribe in the map, leaking it (0 unsubscribes).
+    // Retain the winning subscribe and unsubscribe the loser; overwriting formerly leaked its preload handle.
     const aUnsubscribed = aRecords.filter(
       (record) => record.unsubscribe.mock.calls.length > 0
     ).length
     expect(aUnsubscribed).toBe(1)
 
-    // 'B' is untouched.
     expect(h.recordsFor('B')[0].unsubscribe).not.toHaveBeenCalled()
   })
 
@@ -173,7 +163,6 @@ describe('createRuntimeClientEventsSync', () => {
     h.sync.stop()
     expect(h.recordsFor('A')[0].unsubscribe).toHaveBeenCalledTimes(1)
 
-    // A subscribe that resolves after stop() must not re-register; it unsubscribes.
     h.setDesired(['C'])
     h.sync.sync()
     h.sync.stop()
@@ -241,18 +230,14 @@ describe('createRuntimeClientEventsSync', () => {
       await Promise.resolve()
       expect(subscribe).toHaveBeenCalledTimes(1)
 
-      // Attempt 2 after 10ms (base).
       await vi.advanceTimersByTimeAsync(10)
       expect(subscribe).toHaveBeenCalledTimes(2)
-      // Attempt 3 after 20ms more (doubled) — not before.
       await vi.advanceTimersByTimeAsync(19)
       expect(subscribe).toHaveBeenCalledTimes(2)
       await vi.advanceTimersByTimeAsync(1)
       expect(subscribe).toHaveBeenCalledTimes(3)
-      // Attempt 4 after 40ms more (doubled again, hits cap).
       await vi.advanceTimersByTimeAsync(40)
       expect(subscribe).toHaveBeenCalledTimes(4)
-      // Attempt 5 stays at the 40ms cap.
       await vi.advanceTimersByTimeAsync(39)
       expect(subscribe).toHaveBeenCalledTimes(4)
       await vi.advanceTimersByTimeAsync(1)
@@ -308,20 +293,17 @@ describe('createRuntimeClientEventsSync', () => {
         random: () => 1
       })
 
-      // Two failures escalate the delay to 20ms.
       sync.sync()
       await Promise.resolve()
       await vi.advanceTimersByTimeAsync(10)
       expect(subscribe).toHaveBeenCalledTimes(2)
 
-      // Third attempt succeeds — failure count resets.
       failing = false
       await vi.advanceTimersByTimeAsync(20)
       await Promise.resolve()
       expect(subscribe).toHaveBeenCalledTimes(3)
 
-      // Env leaves and re-enters the desired set, then fails again: the first
-      // retry is back at the 10ms base, not the escalated delay.
+      // Leaving/reentering resets failure count so first retry returns to base delay.
       desired = []
       sync.sync()
       desired = ['A']
@@ -388,13 +370,11 @@ describe('createRuntimeClientEventsSync', () => {
       })
 
       sync.sync()
-      // Let the rejection propagate through the then/catch chain so the retry
-      // timer is armed before the external sync fires.
+      // Settle rejection before external sync so a pending retry timer exists to bypass.
       await vi.advanceTimersByTimeAsync(0)
       expect(subscribe).toHaveBeenCalledTimes(1)
 
-      // A reachable-set transition calls sync() directly; the pending backoff
-      // timer must not delay this immediate re-attempt.
+      // Reachability changes retry immediately instead of waiting on backoff.
       sync.sync()
       await vi.advanceTimersByTimeAsync(0)
       expect(subscribe).toHaveBeenCalledTimes(2)
@@ -406,9 +386,7 @@ describe('createRuntimeClientEventsSync', () => {
   it('does not carry a stale failure count when a rejection lands after the env left the set', async () => {
     vi.useFakeTimers()
     try {
-      // 'B' stays pending forever so the desired set is never empty and the
-      // generation never bumps — this is what lets A's late rejection still be
-      // observed by its .catch (the exact leave-while-in-flight race).
+      // Keep B pending so generation survives A leaving during subscribe and its late rejection reaches the same generation.
       let desired = ['A', 'B']
       const aRejecters: ((error: Error) => void)[] = []
       let aAttempts = 0
@@ -434,15 +412,12 @@ describe('createRuntimeClientEventsSync', () => {
       sync.sync()
       expect(aAttempts).toBe(1)
 
-      // A leaves the desired set while its subscribe is still in flight.
       desired = ['B']
       sync.sync()
 
-      // A's in-flight subscribe rejects now, after it is no longer desired.
       aRejecters[0](new Error('unreachable'))
       await vi.advanceTimersByTimeAsync(0)
 
-      // A re-enters and its fresh subscribe (attempt 2) also fails.
       desired = ['A', 'B']
       sync.sync()
       await vi.advanceTimersByTimeAsync(0)
@@ -450,8 +425,7 @@ describe('createRuntimeClientEventsSync', () => {
       aRejecters[1](new Error('unreachable'))
       await vi.advanceTimersByTimeAsync(0)
 
-      // The first retry after re-entry must use the base delay (10ms). A stale
-      // count from the discarded rejection would have doubled it to 20ms.
+      // Discard out-of-scope failures or re-entry incorrectly starts with doubled backoff.
       await vi.advanceTimersByTimeAsync(9)
       expect(aAttempts).toBe(2)
       await vi.advanceTimersByTimeAsync(1)

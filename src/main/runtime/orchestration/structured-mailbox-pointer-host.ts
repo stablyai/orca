@@ -1,17 +1,11 @@
-/**
- * The structured-session half of the structured pointer lane.
- *
- * Keeps every `getStructuredAgentSessionHost()` call in one place so the delivery policy above it
- * stays pure and testable. Nothing here decides whether to deliver; it only performs the read and
- * the send and reports what the host said.
- */
+/** Adapt host reads/sends for the pure structured-pointer policy; do not decide delivery here. */
 
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type {
   StructuredMailboxPointerHost,
   StructuredPointerSessionFacts
-} from './structured-mailbox-pointer-delivery'
+} from './structured-mailbox-pointer-host-contract'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import {
   structuredSessionGateFacts,
@@ -24,25 +18,12 @@ export function structuredPointerCallerKey(dispatchId: string): string {
   return `trusted-local:orchestration:${dispatchId}`
 }
 
-/**
- * The caller key for direct peer mail, which is addressed to the worker's own handle and has no
- * dispatch to name.
- *
- * A separate key rather than a reshaped one: the ledger is keyed on (callerKey, operationId), so
- * changing the dispatch key's shape would orphan every nudge already in flight under the old one.
- */
+/** Scope direct mail by session; preserve existing Dispatch key shape so in-flight nudges still replay. */
 export function structuredSessionPointerCallerKey(sessionId: string): string {
   return `trusted-local:orchestration:session:${sessionId}`
 }
 
-/**
- * Whether a structured session is idle, for group addressing (`@idle`), read off its FULL reduced
- * timeline.
- *
- * Never a bounded page. A settled turn's lifecycle item is revised in place, so on any tail window
- * an idle session and a busy one whose lifecycle item scrolled off look identical — and
- * idle-with-history is the normal steady state of a working agent.
- */
+/** Use the full reduced timeline: a busy turn's revised lifecycle item can lie outside any tail page. */
 export async function readStructuredSessionGateFacts(
   sessionId: string
 ): Promise<StructuredSessionGateFacts | null> {
@@ -64,7 +45,7 @@ async function readPointerSessionFacts(
     return null
   }
   const host = getStructuredAgentSessionHost()
-  const boundary = host?.deps.store.getRecord(sessionId)?.providerContextBoundary
+  const boundary = host?.deps.store.getConversation(sessionId)?.providerContextBoundary
   return {
     submissions: boundary
       ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
@@ -99,14 +80,18 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       return getStructuredAgentSessionHost()?.currentWork(sessionId)?.hasActionablePrompt() ?? null
     },
 
+    isWorkingNow(sessionId) {
+      return getStructuredAgentSessionHost()?.currentWork(sessionId)?.working() ?? false
+    },
+
     currentFence(sessionId) {
       return (
-        getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null
+        getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.currentFence ?? null
       )
     },
 
     currentContextClearOperationId(sessionId) {
-      return getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)
+      return getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
         ?.providerContextBoundary?.operationId
     },
 
@@ -131,10 +116,14 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             operationId: input.operationId,
             expectedRuntimeFence: input.expectedRuntimeFence,
             beforeRun: () => {
-              if (
-                input.body.from?.orchestration?.message === 'mail-notice' &&
-                host.currentWork(input.sessionId)?.hasActionablePrompt()
-              ) {
+              if (input.body.from?.orchestration?.message !== 'mail-notice') {
+                return
+              }
+              if (!input.stillOwed()) {
+                throw new StructuredMailObsoleteError()
+              }
+              const work = host.currentWork(input.sessionId)
+              if (work?.hasActionablePrompt() || (input.holdWhileWorking && work?.working())) {
                 throw new StructuredMailHeldError()
               }
             }
@@ -143,6 +132,9 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       } catch (error) {
         if (error instanceof StructuredMailHeldError) {
           return { kind: 'held' }
+        }
+        if (error instanceof StructuredMailObsoleteError) {
+          return { kind: 'obsolete' }
         }
         throw error
       }
@@ -154,8 +146,7 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
         case 'queued':
           return { kind: 'queued' }
         case 'sent': {
-          // `pending` is not yet an acknowledgement; only `accepted` may consume mail. A send still
-          // pending after the wait parks for the next journal edge.
+          // Only accepted acknowledges mail; pending submissions park until the next journal edge.
           const state = outcome.submission?.dispatchState
           return {
             kind: 'sent',
@@ -168,3 +159,4 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
 }
 
 class StructuredMailHeldError extends Error {}
+class StructuredMailObsoleteError extends Error {}

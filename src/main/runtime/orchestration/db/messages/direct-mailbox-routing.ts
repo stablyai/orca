@@ -36,7 +36,7 @@ export function getLatestUnreadDirectMessageSequenceForRun(
   return row?.sequence
 }
 
-// Why: change mailbox ownership without changing unread or acknowledgment state.
+// Transfer mailbox ownership without changing read or acknowledgment state.
 export function routeDirectMessagePage(
   this: OrchestrationDb,
   mailboxHandle: string,

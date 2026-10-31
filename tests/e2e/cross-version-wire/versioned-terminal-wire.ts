@@ -4,11 +4,7 @@ import {
   type ReleaseCheckout
 } from './release-checkout'
 
-/**
- * Structural views of the three modules that make up the remote terminal wire.
- * Kept minimal on purpose: the harness pairs two builds of these modules, so it
- * must not depend on internals that legitimately differ between versions.
- */
+// Keep cross-build structural views minimal so legitimate internal differences cannot bind the harness to one version.
 
 export type TerminalStreamFrame = {
   opcode: number
@@ -138,11 +134,7 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<TerminalWire
   }
 }
 
-/**
- * Load the wire modules for one build. `WORKING_TREE` imports current source (so a
- * locally injected violation is exercised); any other value is a git ref extracted
- * into a cached checkout.
- */
+// Import current source for WORKING_TREE so injected violations execute; extract other refs into the cache.
 export async function loadTerminalWireBuild(ref: string): Promise<TerminalWireBuild> {
   if (ref === WORKING_TREE) {
     return loadWorkingTreeBuild()
@@ -150,12 +142,7 @@ export async function loadTerminalWireBuild(ref: string): Promise<TerminalWireBu
   return loadReleaseBuild(await materializeReleaseCheckout(ref))
 }
 
-/**
- * The same build with one opcode taken out of its decoder — the shape a peer whose
- * release predates that opcode has on the wire, without needing a release that
- * predates it. Production drops a frame whose opcode the receiver cannot decode,
- * so this is the failure the suite exists to catch, expressed as a build.
- */
+// Remove decoder support to model an older peer’s silent frame drops without requiring a pre-opcode release.
 export function withoutOpcodeSupport(
   build: TerminalWireBuild,
   opcodeName: string
@@ -169,8 +156,7 @@ export function withoutOpcodeSupport(
     label: `${build.label}-without-${opcodeName}`,
     codec: {
       ...build.codec,
-      // Both directions of the reverse-mapped opcode table go, so an observer
-      // names the frame `Opcode<n>` rather than borrowing a name this build lost.
+      // Remove both mapping directions so observers cannot retain a name the decoder no longer knows.
       TerminalStreamOpcode: Object.fromEntries(
         Object.entries(build.codec.TerminalStreamOpcode).filter(
           ([name, value]) => name !== opcodeName && value !== opcodeName

@@ -31,7 +31,7 @@ function resolverFor(options: {
     resolveLaunchArgs: () => [],
     store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveCommand: () => '/usr/local/bin/claude',
+    resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
     resolveAuthPolicy: () => ({ account: options.account }),
     ...(options.overlay ? { resolveEnv: () => options.overlay as Record<string, string> } : {})
   })
@@ -50,8 +50,7 @@ function withAmbientAuth<T>(value: string, run: () => Promise<T>): Promise<T> {
 }
 
 describe('claude structured auth parity with the terminal preflight', () => {
-  // Like terminals, a chat keeps the shell's Anthropic auth on every account: a proxy's key must
-  // travel with its ANTHROPIC_BASE_URL.
+  // Proxy credentials must travel with ANTHROPIC_BASE_URL on either account type.
   for (const account of ['managed', 'system'] as const) {
     it(`passes an ambient Anthropic key through on a ${account} account`, async () => {
       await withAmbientAuth('sk-ant-SHELL', async () => {

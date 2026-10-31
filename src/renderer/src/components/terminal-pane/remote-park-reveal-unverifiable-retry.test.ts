@@ -8,11 +8,10 @@ import {
   createPane,
   captureCallbackTerminalWrites,
   createManager,
-  type MockPane,
-  type MockPaneManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps, type PaneConnectionDeps } from './pty-connection-test-deps'
+import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -20,15 +19,7 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
-/**
- * End to end through connectPanePty: a parked remote-runtime pane is revealed,
- * the host answers its snapshot probe with `unavailable: 'no-serializable-buffer'`
- * ("not proof the pane is empty", per the host's own comment), and the pane must
- * keep asking on the hidden-output restore loop's budget rather than paint blank
- * once and go quiet. The request count and the loss banner are the oracle: with
- * the reveal collapsing the answer to null, the count stays at one forever and
- * the banner never appears.
- */
+/** Park reveal’s no-serializable-buffer answer is unverifiable, never empty; reuse the shared bounded restore budget and eventually recover or disclose loss instead of silently stopping after one probe. */
 const REMOTE_PTY_ID = 'remote:env-1@@pty-1'
 const HOST_IMAGE_MARKER = 'HOST-IMAGE-AFTER-PARK'
 const BANNER_FRAGMENT = 'main recovery was unavailable'
@@ -142,18 +133,9 @@ function pairedParkingHostStatus(): StoreState['runtimeStatusByEnvironmentId'] {
   ])
 }
 
-type ConnectMockPane = (
-  pane: MockPane,
-  manager: MockPaneManager,
-  deps: PaneConnectionDeps
-) => { dispose: () => void }
-
 async function revealParkedRemotePane(
   serializeBufferOutcome: ReturnType<typeof vi.fn>
 ): Promise<{ transport: MockTransport; writes: string[]; dispose: () => void }> {
-  const { connectPanePty } = await import('./pty-connection')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared mock pane, manager, and deps stand in for the real xterm-backed objects, exactly as every other connectPanePty suite drives them.
-  const connectMockPane = connectPanePty as unknown as ConnectMockPane
   const transport = createMockTransport()
   // The remote transport's park-reveal result: a bare reattach with no relay tail.
   transport.connect.mockImplementation(async () => {
@@ -180,7 +162,7 @@ async function revealParkedRemotePane(
   const pane = createPane(1)
   const { writes } = captureCallbackTerminalWrites(pane)
   // Why the active pane: an inactive split defers its restore to the frame scheduler.
-  const binding = connectMockPane(
+  const binding = await connectMockPanePty(
     pane,
     createManager(1, 1),
     createDeps({
@@ -220,8 +202,7 @@ describe('parked remote pane reveal with an unverifiable host snapshot', () => {
       availability: { kind: 'retry-worthy', cause: 'host-no-serializable-buffer' },
       snapshot: null
     }
-    // Why the deferred second answer: the loop arms its 2s re-ask timer when an
-    // answer lands, and that timer must be created under fake timers to advance.
+    // Resolve the second answer under fake timers so its deferred retry deadline is controllable.
     const secondAnswer = createDeferred<typeof declined>()
     const serializeBufferOutcome = vi
       .fn()

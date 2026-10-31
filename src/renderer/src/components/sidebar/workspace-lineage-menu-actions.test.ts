@@ -70,7 +70,8 @@ describe('workspace lineage menu actions', () => {
           [grandchild.id]: [{ id: 'grandchild-browser' }]
         },
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        structuredChatSleptAtByPaneKey: {}
       }
     })
 
@@ -97,7 +98,8 @@ describe('workspace lineage menu actions', () => {
         ptyIdsByTabId: { 'child-tab': ['child-pty'] },
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        structuredChatSleptAtByPaneKey: {}
       }
     })
 
@@ -118,7 +120,8 @@ describe('hasSleepableWorkspaceActivity', () => {
         ptyIdsByTabId: { 'tab-1': [] },
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        structuredChatSleptAtByPaneKey: {}
       })
     ).toBe(false)
   })
@@ -130,7 +133,8 @@ describe('hasSleepableWorkspaceActivity', () => {
         ptyIdsByTabId: { 'tab-1': ['pty-1'] },
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        structuredChatSleptAtByPaneKey: {}
       })
     ).toBe(true)
     expect(
@@ -139,7 +143,8 @@ describe('hasSleepableWorkspaceActivity', () => {
         ptyIdsByTabId: {},
         browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] },
         unifiedTabsByWorktree: {},
-        agentStatusByPaneKey: {}
+        agentStatusByPaneKey: {},
+        structuredChatSleptAtByPaneKey: {}
       })
     ).toBe(true)
   })
@@ -164,9 +169,12 @@ describe('hasSleepableWorkspaceActivity', () => {
         ptyIdsByTabId: {},
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: { 'wt-1': [chat] },
-        agentStatusByPaneKey
+        agentStatusByPaneKey,
+        structuredChatSleptAtByPaneKey: {
+          [structuredAgentSessionPaneKey(chat.id, chat.entityId)]: null
+        }
       })
     expect(activity(hostHeld(chat))).toBe(true)
-    expect(activity({})).toBe(false)
+    expect(activity({})).toBe(true)
   })
 })

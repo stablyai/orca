@@ -22,10 +22,7 @@ export function sessionSearchClearDescription(enabled: boolean): string {
       )
 }
 
-/**
- * Clearing this computer's index, behind Advanced because it is the one action
- * here that destroys something.
- */
+/** Hide destructive index clearing under Advanced. */
 export function SessionSearchAdvancedSection({
   enabled,
   disabled,

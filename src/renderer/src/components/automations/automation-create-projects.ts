@@ -6,10 +6,7 @@ import {
 import type { Repo } from '../../../../shared/repo-types'
 import type { AutomationHostTarget } from './automation-host-client'
 
-/**
- * Runtime-host automation creation must choose from that host's repo catalog.
- * Local automation storage intentionally keeps the existing SSH-capable catalog.
- */
+/** Runtime creation uses that host’s repo catalog; desktop storage retains its SSH-capable catalog. */
 export function getAutomationCreateRepos(
   repos: readonly Repo[],
   target: AutomationHostTarget

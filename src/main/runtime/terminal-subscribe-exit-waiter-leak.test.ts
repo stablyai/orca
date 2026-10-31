@@ -1,14 +1,5 @@
-/**
- * Memory-leak regression: terminal.subscribe / terminal.multiplex register a
- * runtime exit-waiter (waitForTerminal condition:'exit') per subscribed slot.
- * Without an AbortSignal that waiter is only removed on real PTY exit, so for a
- * never-exiting agent terminal every remote/mobile reconnect and tab-switch
- * re-subscribe leaked a waiter (and the closed-connection handler context it
- * captures). The subscribe paths now observe pty exit directly instead, so this
- * pins the runtime contract the other waitForTerminal callers still rely on: a
- * signalled exit-waiter is released when the signal aborts, an unsignalled one
- * is not.
- */
+/** Aborted exit waits must release their captured context; unsignalled waits live until PTY exit.
+ * Subscribe/multiplex now observe exits directly, avoiding a leaked waiter per reconnect on long-running agents. */
 import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimeTerminalWait } from '../../shared/runtime-types'
@@ -16,22 +7,22 @@ import type { RuntimeTerminalWait } from '../../shared/runtime-types'
 type RuntimeInternals = {
   recordPtyWorktree: (ptyId: string, worktreeId: string, state?: { connected?: boolean }) => unknown
   handleByPtyId: Map<string, string>
-  terminalWaiters: { get: (handle: string) => ReadonlySet<unknown> | undefined }
+  terminalWaiters: { forPty: (ptyId: string) => unknown[] }
 }
 
 function internals(runtime: OrcaRuntimeService): RuntimeInternals {
   return runtime as unknown as RuntimeInternals
 }
 
-// Register a live, connected PTY that a handle resolves to, so waitForTerminal
-// with condition:'exit' registers a pending waiter instead of resolving early.
+// Register a resolvable live PTY so exit waits remain pending instead of answering early.
 function registerLivePty(runtime: OrcaRuntimeService, ptyId: string, handle: string): void {
   internals(runtime).recordPtyWorktree(ptyId, 'wt-live', { connected: true })
   internals(runtime).handleByPtyId.set(ptyId, handle)
 }
 
 function waiterCount(runtime: OrcaRuntimeService, handle: string): number {
-  return internals(runtime).terminalWaiters.get(handle)?.size ?? 0
+  const ptyId = [...internals(runtime).handleByPtyId].find(([, mapped]) => mapped === handle)?.[0]
+  return ptyId ? internals(runtime).terminalWaiters.forPty(ptyId).length : 0
 }
 
 describe('terminal.subscribe exit-waiter leak regression', () => {

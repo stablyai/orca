@@ -1,8 +1,4 @@
-/**
- * Deploys orcad onto an empty SSH host and pairs this client with it through a loopback tunnel.
- * The target claim is the resume point: an interrupted deploy leaves the target owned by the
- * environment id it was creating, and the next deploy of that target finishes the same one.
- */
+// Target claims preserve environment identity so interrupted deploys resume the same registration.
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { randomUUID } from 'node:crypto'
 import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/runtime-environment-reconciliation-record'
@@ -58,7 +54,6 @@ export async function createManagedOrcadEnvironment(
     sshTargetId: string
     force?: boolean
     signal?: AbortSignal
-    /** Deploying into a target fenced by a migration journal rather than claiming an empty one. */
     migration?: boolean
   }
 ): Promise<OrcadManagedDeployResult> {
@@ -66,7 +61,8 @@ export async function createManagedOrcadEnvironment(
     const { connectionManager, targetStore, claims } = requireManagedOrcadInfrastructure()
     const environmentId =
       getManagedOrcadFenceEnvironmentId(targetStore.getTarget(args.sshTargetId)) ?? randomUUID()
-    const environments = listEnvironments(userDataPath)
+    // Duplicate/name checks before an add: a crash-zeroed list (#18766) must read as empty here.
+    const environments = listEnvironments(userDataPath, { recoverBlankStore: true })
     const registered = environments.find((entry) => entry.id === environmentId)
     if (registered) {
       assertRuntimeEnvironmentNotReconciling(registered)
@@ -86,19 +82,17 @@ export async function createManagedOrcadEnvironment(
       assertMigrationFence(userDataPath, current, environmentId, args.name)
     }
     const claimed = claims.claim(args.sshTargetId, environmentId, {
-      // A migration records itself in its journal, not as a provisioning intent.
       ...(args.migration ? {} : { deployName: args.name }),
-      // Why: this deploy's own claim left a provisioning intent or a journal, or registered a server.
       ownerRecorded:
         Boolean(args.migration) || Boolean(current?.orcadProvisioning) || Boolean(registered)
     })
     await claims.flush(args.signal)
     const targetGeneration = claimed.generation
     if (targetGeneration === undefined) {
-      throw new Error('The managed Orca SSH registration has no durable generation.')
+      throw new Error('The SSH registration for this host’s Orca server has no durable generation.')
     }
     if (registered && getOrcadSshDeployment(registered)?.sshTargetGeneration !== targetGeneration) {
-      throw new Error('The saved managed Orca server has a stale SSH target generation.')
+      throw new Error('The saved Orca server for this host has a stale SSH target generation.')
     }
     let environmentRegistered = false
     try {
@@ -118,29 +112,28 @@ export async function createManagedOrcadEnvironment(
       }
       if (registered) {
         environmentRegistered = true
-        await ensureOrcadManagedTunnel(userDataPath, registered.id)
+        const current = await ensureOrcadManagedTunnel(userDataPath, registered.id)
         const activeVersion = context.activationRecord.active
         if (!activeVersion) {
-          throw new Error('The managed Orca server has no active runtime version.')
+          throw new Error('This host’s Orca server has no active runtime version.')
         }
         return {
           outcome: 'already-current',
-          environment: redactRuntimeEnvironment(registered),
+          environment: redactRuntimeEnvironment(current),
           activeVersion
         }
       }
       const localOrcadDir = await materializeOrcadArtifact(context.serverTarget, {
         signal: args.signal
       })
-      // Before any upload, so a host another version serves is left exactly as it was. A migration
-      // adopts too: only the paired server can count its terminals, so its own deploy would defer.
+      // Adopt before upload: only the paired incumbent can count terminals; redeploy would defer.
       const localVersion = readLocalFullVersion(localOrcadDir)
       const adopted = args.force
         ? null
         : await adoptRunningOrcadVersion(slot, context.activationRecord, localVersion)
       const { active } = context.activationRecord
       if (!adopted && !args.force && active && active !== localVersion) {
-        // The wake re-read a record another desktop changed; the census policy follows it.
+        // Wake may observe a peer's changed record; census admission must use that same record.
         context = { ...context, activationRecord: await readOrcadActivationRecord(slot) }
       }
       const serving: DeployedOrcad | OrcadManagedDeferral =
@@ -149,7 +142,7 @@ export async function createManagedOrcadEnvironment(
       if ('outcome' in serving) {
         return serving
       }
-      // Why read back: orcad binds another port when the preferred one is taken on the host.
+      // Read the bound port: the preferred port may belong to another host process.
       const tunnel = deployedOrcadTunnelChecks(serving.readiness, serving.reprobe)
       const localPort = await startOrcadManagedTunnel(
         environmentId,
@@ -171,7 +164,6 @@ export async function createManagedOrcadEnvironment(
       })
       environmentRegistered = true
       return {
-        // An adopted server keeps its version; the linked update check may replace it later.
         outcome: serving.created ? 'created' : 'already-current',
         environment: redactRuntimeEnvironment(environment),
         activeVersion: serving.version
@@ -197,7 +189,7 @@ async function deployOwnOrcad(
     ...slot,
     localOrcadDir,
     target: context.serverTarget,
-    ...managedOrcadDeployPolicy(context, appVersion, args.force),
+    ...managedOrcadDeployPolicy(context, appVersion, args.force ? 'force' : 'connect'),
     force: args.force,
     appVersion
   })

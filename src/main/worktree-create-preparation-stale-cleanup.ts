@@ -36,10 +36,7 @@ const defaultOwnerProbe: PreparationOwnerProbe = {
   isProcessAlive
 }
 
-/**
- * Exited only when the owner's pid is gone on the machine that issued it. Another machine sharing
- * the repo's disk, or one this host can't identify, leaves the owner unverifiable.
- */
+/** A PID proves owner exit only on its issuing machine; shared disks do not establish ownership. */
 export function preparationOwnerExitedHere(
   lockReason: string,
   repoPath: string,
@@ -70,9 +67,7 @@ export async function startStalePreparationCleanup(
     return
   }
   void retryPendingPreparationDiscards(cleanupKey)
-  // Why 'background': reclaiming another process's leftovers is never what a user is waiting on, and
-  // removing a large tree holds a general admission slot for seconds. The scan keeps the caller's
-  // tier — a create can await a preparation, and so transitively this scan.
+  // Reclaim in background to avoid blocking creates; retain caller priority for the scan they await.
   const reclaimOptions: AddWorktreeOptions = { ...options, admissionTier: 'background' }
   const scan = listWorktreeGraph(repoPath, {
     ...options,
@@ -95,8 +90,7 @@ export async function startStalePreparationCleanup(
         ) {
           continue
         }
-        // Preserve a branch-attached final path after a crash; only detached or
-        // still-hidden preparations are safe to discard automatically.
+        // Preserve branch-attached final paths after crashes; only hidden or detached preparations are disposable.
         if (worktree.branch && pathOwnerPid === null) {
           await unlockPreparedWorktree(
             repoPath,

@@ -75,7 +75,6 @@ describe('coordinator dispatch with an unobserved prompt', () => {
 
     expect(result).toBe('dispatched-unobserved')
     expect(runtime.prompts).toHaveLength(1)
-    // The task stays dispatched, so the next coordinator tick cannot pick it up again.
     expect(db.getTask(task.id)?.status).toBe('dispatched')
     const ctx = db.getDispatchContext(task.id)
     expect(ctx).toMatchObject({

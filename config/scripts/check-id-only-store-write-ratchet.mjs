@@ -2,14 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { runEntryRatchet } from './ratchet-baseline.mjs'
+import { readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
 
-// Ratchet on Store writes addressed by a bare repo or worktree id (R4-2). A local row and an SSH
-// row can share an id, so an id-only write lands on whichever row matches first. Writes take the
-// row's identity instead: `RepoHostTarget` (src/shared/repo-host-identity.ts) or
-// `HostWorktreeTarget` (src/shared/worktree/host-qualified-identity.ts). Entries may only go away.
-// Matched by the first parameter's NAME, whatever its type (`string`, `Repo['id']`, a brand), so a
-// retyped id still counts. Known limit: an id inside an object parameter (`{ projectId }`) is not seen.
+// Bare-ID writes can edit the wrong local/SSH twin; require RepoHostTarget/HostWorktreeTarget and allow counts only to decrease.
+// Match parameter names regardless of types; known limit: IDs inside object parameters are not detected.
 
 const BASELINE_PATH = 'config/id-only-store-write-baseline.txt'
 const COMPOSITION = 'src/main/persistence/loading-store/store-domain-composition.ts'
@@ -41,6 +37,7 @@ const UNIQUE_FOLDER_ID = 'folder workspace ids are minted UUIDs, one row per id 
 export const NOT_HOST_TWINNED = new Map([
   ['AutomationPersistence.advanceAutomationNextRun', 'automation ids are minted UUIDs'],
   ['AutomationPersistence.deleteAutomation', 'automation ids are minted UUIDs'],
+  ['AutomationPersistence.disableAutomations', 'automation ids are minted UUIDs'],
   ['AutomationPersistence.updateAutomation', 'automation ids are minted UUIDs'],
   [
     'MetadataLineageOperations.removeUnhostedWorktreeMeta',
@@ -80,8 +77,20 @@ export const NOT_HOST_TWINNED = new Map([
 /** `[className, file]` for every operations class the Store mixes in, in composition order. */
 export function listStoreOperationClasses(root) {
   const text = fs.readFileSync(path.join(root, COMPOSITION), 'utf8')
+  // Each value name a one-line import brings in (an operations class may share its import).
   const imports = new Map(
-    [...text.matchAll(/^import \{ (\w+) \} from '([^']+)'/gm)].map((m) => [m[1], m[2]])
+    [...text.matchAll(/^import \{ ([\w, ]+) \} from '([^']+)'/gm)].flatMap((m) =>
+      m[1]
+        .split(',')
+        .map((name) =>
+          name
+            .trim()
+            .split(/\s+as\s+/)
+            .at(-1)
+        )
+        .filter(Boolean)
+        .map((name) => [name, m[2]])
+    )
   )
   const list = /STORE_DOMAIN_OPERATION_CLASSES = \[([\s\S]*?)\]/.exec(text)
   if (!list) {
@@ -124,12 +133,68 @@ export function findIdOnlyWrites(className, source) {
   return found
 }
 
+// ID-only row lookups can misroute writes even when mutator takes a row (#review-5: SSH setup renamed local twin).
+const LOOKUP_ROOT = 'src/main/persistence/'
+const REPO_ROW_LOOKUP = /\brepos\s*\??\.\s*(?:find|findIndex|findLast|findLastIndex)\s*\(/g
+// A predicate that names a host (or compares whole rows' host ids) is host-scoped.
+const HOST_SCOPED_PREDICATE = /host|Host|connectionId/
+const ID_COMPARISON = /\bid\s*===|===\s*(?:[\w.]*\.)?id\b/
+const DECLARATION =
+  /^[ \t]*(?:export\s+)?(?:(?:async|public|private|protected|static|override|readonly)\s+)*(?:function\s+(\w+)|(?:const|let)\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*(?::[^=\n]*)?=>|(\w+)\s*(?:<[^>\n]*>)?\s*\([^)]*\)\s*(?::[^{;\n]*)?\{)/gm
+const NOT_A_DECLARATION = new Set(['if', 'for', 'while', 'switch', 'return', 'catch', 'function'])
+
+/** The text from an opening paren to its match, so a multi-line predicate is read whole. */
+function balancedArgs(source, openIndex) {
+  let depth = 0
+  for (let i = openIndex; i < source.length; i++) {
+    if (source[i] === '(') {
+      depth++
+    } else if (source[i] === ')' && --depth === 0) {
+      return source.slice(openIndex, i + 1)
+    }
+  }
+  return source.slice(openIndex)
+}
+
+function enclosingDeclaration(source, index) {
+  let name = '<module>'
+  for (const match of source.slice(0, index).matchAll(DECLARATION)) {
+    const candidate = match[1] ?? match[2] ?? match[3]
+    if (candidate && !NOT_A_DECLARATION.has(candidate)) {
+      name = candidate
+    }
+  }
+  return name
+}
+
+/** `file#function` for every repo-row lookup in `source` whose predicate matches by id alone. */
+export function findIdOnlyLookups(rel, source) {
+  const found = []
+  for (const match of source.matchAll(REPO_ROW_LOOKUP)) {
+    const predicate = balancedArgs(source, match.index + match[0].length - 1)
+    if (ID_COMPARISON.test(predicate) && !HOST_SCOPED_PREDICATE.test(predicate)) {
+      found.push(`lookup:${rel}#${enclosingDeclaration(source, match.index)}`)
+    }
+  }
+  return found
+}
+
+function collectIdOnlyLookups(root) {
+  const sources = readTrackedSources(
+    root,
+    [LOOKUP_ROOT],
+    (rel) => rel.endsWith('.ts') && !/\.(?:test|spec)\.ts$/.test(rel)
+  )
+  return [...sources].flatMap(([rel, source]) => findIdOnlyLookups(rel, source))
+}
+
 export function collectIdOnlyStoreWrites(root = process.cwd()) {
   const entries = []
   for (const [className, rel] of listStoreOperationClasses(root)) {
     const source = fs.readFileSync(path.join(root, rel), 'utf8')
     entries.push(...findIdOnlyWrites(className, source).filter((e) => !NOT_HOST_TWINNED.has(e)))
   }
+  entries.push(...collectIdOnlyLookups(root))
   return [...new Set(entries)].sort()
 }
 
@@ -139,8 +204,10 @@ export function main(root = process.cwd(), arg = undefined) {
       name: 'id-only-store-write',
       baselinePath: BASELINE_PATH,
       header: [
-        '# Store writes whose first parameter is a bare repo or worktree id (R4-2), as Class.method.',
-        '# This is a RATCHET: entries may only be REMOVED. Take RepoHostTarget or HostWorktreeTarget.',
+        '# Store writes whose first parameter is a bare repo or worktree id (R4-2), as Class.method,',
+        '# and persistence repo-row lookups by id alone (review-5 #10), as lookup:file#function.',
+        '# This is a RATCHET: entries may only be REMOVED. Take RepoHostTarget or HostWorktreeTarget,',
+        '# or match the row by id AND host (getRepoExecutionHostId).',
         '# Prune after a fix: pnpm check:id-only-store-write-ratchet --prune'
       ],
       collect: collectIdOnlyStoreWrites,

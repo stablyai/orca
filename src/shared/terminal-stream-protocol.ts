@@ -22,11 +22,9 @@ export enum TerminalStreamOpcode {
   Unsubscribe = 10,
   SnapshotRequest = 11,
   Metadata = 12,
-  // Why 13: Metadata=12 shipped to mobile clients in v1.4.120; Ack (branch-only
-  // remote-multiplex flow control) renumbers to stay wire-compatible.
+  // Metadata=12 shipped in mobile v1.4.120; keep Ack on 13 for wire compatibility.
   Ack = 13,
-  // Why 14: Ack already occupies 13 on current clients; older runtimes ignore
-  // this opcode and still receive the compatibility Resize frame behind it.
+  // Older runtimes ignore ClaimViewport and still receive the following compatibility Resize.
   ClaimViewport = 14,
   OutputSpan = 15,
   // Negotiated per stream; older hosts reject unknown opcodes, so clients send only after capability confirmation.

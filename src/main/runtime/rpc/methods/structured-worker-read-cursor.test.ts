@@ -1,17 +1,14 @@
-/**
- * The structured `worker-read --source transcript` cursor across a MUTATING journal.
- *
- * The journal is a reduced, mutable timeline, and the old `source_changed` anchor fingerprinted
- * only the oldest item's id. It fired when the window slid off the front and could not fire when
- * the page's contents changed under a stable oldest item — the normal case. Two silent failures
- * followed, both returning ok: an already-delivered item revised in place was never redelivered
- * (omission), and a pending approval resolving into the MIDDLE of the array shifted the caller's
- * saved index back onto content it already had (duplication).
- *
- * A static-journal test passes either way, so every case here mutates between reads.
- */
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+/** Mutate journals between reads to catch in-place revisions and mid-array insertions missed by oldest-item-only cursor identity; both can silently omit or duplicate output. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildStructuredJournalArchive } from '../../orchestration/structured-worker-journal-archive'
+import { projectSavedChatContextItems } from '../../../native-chat/agent-session-saved-prompt-text'
+import { formatWorkerTranscriptMessage } from '../../../../shared/worker-transcript-text'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 
@@ -62,7 +59,12 @@ function approval(itemId: string, resolved: boolean, revision = 1): AgentJournal
 function installJournal(items: AgentJournalRenderItem[]): void {
   hostRef.current = {
     deps: {
-      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+      store: {
+        getConversation: () =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: IDENTITY.sessionId }))
+          )
+      }
     },
     hasSession: () => true,
     history: () => ({ page: { items, hasOlder: false } })
@@ -92,10 +94,55 @@ describe('the structured worker-read cursor over a mutating journal', () => {
     hostRef.current = null
   })
 
+  it('omits creation facts from worker output, consumed prefixes, saved context and archives', async () => {
+    const start: AgentJournalRenderItem = {
+      itemId: 'i2',
+      revision: 1,
+      sequence: 2,
+      observedAt: 1,
+      body: {
+        kind: 'agent-start',
+        dispatchId: 'dispatch',
+        task: 'Private worker assignment',
+        worker: {
+          party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+          name: 'Worker'
+        }
+      }
+    }
+    const items = [message('i1', 'first'), start, message('i3', 'answer')]
+    installJournal(items)
+    const first = await read(undefined, 1)
+    expect(textsOf(first)).toEqual(['first'])
+    installJournal([
+      items[0],
+      {
+        ...start,
+        revision: 2,
+        body:
+          start.body.kind === 'agent-start'
+            ? { ...start.body, task: 'Revised display fact' }
+            : start.body
+      },
+      items[2]
+    ])
+    expect(textsOf(await read(first.cursor))).toEqual(['answer'])
+    const saved = projectSavedChatContextItems(items).map(formatWorkerTranscriptMessage).join('\n')
+    expect(saved).toBe('[assistant] first\n[assistant] answer')
+    const archive = buildStructuredJournalArchive({
+      agent: 'claude',
+      processIncarnation: 'fixture',
+      items,
+      hasOlder: false
+    })
+    expect(archive.messages.map(formatWorkerTranscriptMessage)).toEqual([
+      '[assistant] first',
+      '[assistant] answer'
+    ])
+  })
+
   it('refuses to resume when an already-delivered item was revised in place', async () => {
-    // The `"hel"` / `"hello"` defect. The caller is handed a coalesced snapshot, resumes past it,
-    // and the item is later revised at its original sequence — under the old anchor the resume was
-    // accepted and that revision was never delivered to anyone.
+    // Revise an already-read item in place; old oldest-item identity silently skipped the revised text.
     installJournal([message('i1', 'hel'), message('i2', 'second')])
     const first = await read(undefined, 1)
     expect(textsOf(first)).toEqual(['hel'])
@@ -105,9 +152,7 @@ describe('the structured worker-read cursor over a mutating journal', () => {
   })
 
   it('refuses to resume when a resolved prompt inserts ahead of the caller position', async () => {
-    // Duplication. A pending approval projects to null, so resolving it inserts a message in the
-    // MIDDLE; the oldest item never moved, so the old anchor accepted a now-stale index and the
-    // caller re-read content it already had.
+    // Resolving an approval inserts a message mid-array; the old cursor accepted a stale index and duplicated content.
     installJournal([message('i1', 'first'), approval('i2', false), message('i3', 'second')])
     const first = await read(undefined, 2)
     expect(textsOf(first)).toEqual(['first', 'second'])
@@ -117,9 +162,7 @@ describe('the structured worker-read cursor over a mutating journal', () => {
   })
 
   it('still resumes across a page boundary when only unread tail items change', async () => {
-    // The reason this is prefix-scoped and not whole-page: during an active turn the coalescer
-    // revises the streaming item every 60ms. Fingerprinting the whole page would invalidate the
-    // cursor continuously — a useless verb — while the worker is working.
+    // Hash only consumed prefix: whole-page hashing would invalidate on every streaming revision (~60ms).
     installJournal([message('i1', 'first'), message('i2', 'streaming')])
     const first = await read(undefined, 1)
     expect(textsOf(first)).toEqual(['first'])
@@ -130,7 +173,6 @@ describe('the structured worker-read cursor over a mutating journal', () => {
   })
 
   it('delivers every message exactly once when nothing below the cursor changes', async () => {
-    // The property the two refusals above protect: no omission, no duplication.
     installJournal([message('i1', 'a'), message('i2', 'b'), message('i3', 'c')])
     const first = await read(undefined, 2)
     const second = await read(first.cursor, 2)
@@ -138,8 +180,7 @@ describe('the structured worker-read cursor over a mutating journal', () => {
   })
 
   it('still refuses when the window slides off the front', async () => {
-    // The case the old anchor DID catch, and which the prefix scoping must not lose: a slide
-    // shifts every index.
+    // Keep detecting window slides, which shift every message index.
     installJournal([message('i1', 'a'), message('i2', 'b')])
     const first = await read(undefined, 1)
     installJournal([message('i2', 'b'), message('i3', 'c')])

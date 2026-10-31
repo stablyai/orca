@@ -10,7 +10,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
+import { encodePaletteIdentity } from '../../../shared/palette-match/palette-ranking'
 import {
   layoutMultiPrimaryPaletteSections,
   orderMultiPrimaryPaletteItems
@@ -215,7 +215,6 @@ function makeGroup(worktreeId: string, tabIds: string[]): TabGroup {
   }
 }
 
-/** Both primaries overflow their first-screen slice, so the layout interleaves. */
 function makeInterleavedQueryState(): Partial<AppState> {
   const tabIds = Array.from({ length: 8 }, (_, index) => `${index}`)
   return {
@@ -278,7 +277,6 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
   await flushEffects()
 }
 
-/** Palette state with `count` "Perf chat" tabs on one worktree plus 5 "improve-perf" worktrees. */
 function perfTabsPaletteProps(count: number): Partial<AppState> {
   const tabIds = Array.from({ length: count }, (_, index) => `${index}`)
   return {
@@ -312,7 +310,6 @@ function perfTabsPaletteProps(count: number): Partial<AppState> {
   } as Partial<AppState>
 }
 
-/** Each primary row paired with the section header rendered above it, in DOM order. */
 function getPrimaryRowsBySectionHeader(): { header: string; rowId: string }[] {
   const headerLabels = new Set(['Open Tabs', 'Workspaces'])
   const pairs: { header: string; rowId: string }[] = []
@@ -362,7 +359,6 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await flushEffects()
 
     const rows = getPrimaryRowsBySectionHeader()
-    // Why the counts: both remainders must still render, just under a re-emitted header.
     expect(rows.filter((row) => isWorkspaceTabItemId(row.rowId))).toHaveLength(8)
     expect(rows.filter((row) => isWorktreeItemId(row.rowId))).toHaveLength(5)
     for (const { header, rowId } of rows) {
@@ -493,20 +489,17 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     })
     await flushEffects()
 
-    // Preview is 6; 74 follow, 30 of them past the hard cap of 50.
     expect(testContainer.textContent).toContain('74 more')
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
     expect(seeMoreBtn).toBeDefined()
 
-    // Click See more button
     await act(async () => {
       seeMoreBtn?.click()
     })
     await flushEffects()
 
-    // 6 + 20 = 26 preview tabs, 54 follow, 10 still past the raised cap of 70.
     expect(testContainer.textContent).toContain('54 more')
     expect(testContainer.textContent).toContain('10 more')
   })
@@ -519,14 +512,12 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     })
     await flushEffects()
 
-    // 6 preview tabs, 24 more follow below the worktrees section
     expect(testContainer.textContent).toContain('24 more')
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
     expect(seeMoreBtn).toBeDefined()
 
-    // Click See more: preview expands to 6 + 20 = 26 tabs, leaving 4 more
     await act(async () => {
       seeMoreBtn?.click()
     })
@@ -539,7 +530,6 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     )
     expect(seeMoreBtn2).toBeDefined()
 
-    // Click See more again: preview expands to 26 + 20 = 46 tabs (fits all 30), hint disappears
     await act(async () => {
       seeMoreBtn2?.click()
     })
@@ -565,7 +555,6 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await flushEffects()
     expect(testContainer.textContent).toContain('54 more')
 
-    // Change query: should reset back to 6 preview (so 74 more)
     await act(async () => {
       setCommandQuery?.('per')
     })
@@ -582,7 +571,6 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
       showSleepingWorkspaces: true
     })
 
-    // Empty query with 35 worktrees: initial cap is 10, 25 more
     expect(testContainer.textContent).toContain('25 more')
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
@@ -601,7 +589,6 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     })
     await flushEffects()
 
-    // After expanding by 20: 30 worktrees are rendered, 5 more
     const renderedItems = testContainer.querySelectorAll(
       `[data-command-item^="${WORKTREE_ITEM_PREFIX}"]`
     )
@@ -619,7 +606,6 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     ).toBe(firstRevealedItemId)
     expect(document.activeElement).toBe(input)
 
-    // Click again: 30 + 20 = 50 (all 35 fit), hint disappears
     const seeMoreBtn2 = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )

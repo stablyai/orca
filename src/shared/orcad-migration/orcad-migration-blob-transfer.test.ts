@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_ORCAD_MIGRATION_BLOB_TOTAL_BYTES,
   ORCAD_MIGRATION_BLOB_KIND_CONTRACTS,
+  advertisedOrcadMigrationBlobCapabilities,
   OrcadMigrationBlobChunkRequestSchema,
   OrcadMigrationBlobDescriptorSchema,
-  advertisedOrcadMigrationBlobCapabilities,
   assertOrcadMigrationBlobSet,
   findUnsupportedMigrationBlobKind,
   orcadMigrationBlobKindUnsupportedBlocker,
@@ -120,32 +120,15 @@ describe('orcad migration blob contract', () => {
     )
   })
 
-  it('advertises the channel and only the kinds that have an installer', () => {
-    expect(advertisedOrcadMigrationBlobCapabilities()).toEqual([
-      ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
-      'orcad.migration-blob.terminal-restore-hints.v1',
-      'orcad.migration-blob.shell-history.v1',
-      'orcad.migration-blob.editor-drafts.v1'
-    ])
-    // A kind with no installer stays unadvertised, so no desktop sends it here.
-    expect(advertisedOrcadMigrationBlobCapabilities()).not.toContain(
-      'orcad.migration-blob.agent-session-records.v1'
-    )
-  })
-
-  it('accepts only the one drafts key, up to 64 MiB', () => {
-    const drafts = (key: string, byteLength: number) => ({
-      blobKind: 'editor-drafts',
-      key,
-      sha256: 'b'.repeat(64),
-      byteLength
-    })
+  // Drafts stay on each desktop; a chunk from a build that once shed them is refused, not stored.
+  it('refuses the retired editor-drafts kind', () => {
     expect(
-      OrcadMigrationBlobDescriptorSchema.safeParse(drafts('drafts', 64 * 1024 * 1024)).success
-    ).toBe(true)
-    expect(OrcadMigrationBlobDescriptorSchema.safeParse(drafts('drafts-2', 4)).success).toBe(false)
-    expect(
-      OrcadMigrationBlobDescriptorSchema.safeParse(drafts('drafts', 64 * 1024 * 1024 + 1)).success
+      OrcadMigrationBlobDescriptorSchema.safeParse({
+        blobKind: 'editor-drafts',
+        key: 'drafts',
+        sha256: 'b'.repeat(64),
+        byteLength: 4
+      }).success
     ).toBe(false)
   })
 
@@ -210,5 +193,21 @@ describe('orcad migration catalog state with blob uploads', () => {
         manifest
       )
     ).toThrow('orcad_migration_blob_key_invalid')
+  })
+})
+
+describe('advertised migration blob kinds', () => {
+  it('advertises only the kinds this host installs, terminal history only on a WSL host', () => {
+    expect(advertisedOrcadMigrationBlobCapabilities({ wslHost: false })).toEqual([
+      ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
+      'orcad.migration-blob.terminal-restore-hints.v1',
+      'orcad.migration-blob.shell-history.v1'
+    ])
+    expect(advertisedOrcadMigrationBlobCapabilities({ wslHost: true })).toEqual([
+      ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
+      'orcad.migration-blob.terminal-restore-hints.v1',
+      'orcad.migration-blob.shell-history.v1',
+      'orcad.migration-blob.terminal-history.v1'
+    ])
   })
 })

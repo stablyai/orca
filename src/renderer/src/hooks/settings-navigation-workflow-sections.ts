@@ -62,8 +62,7 @@ export function buildWorkflowSettingsSections(
         'auto.hooks.useSettingsNavigationMetadata.shareSkillsDescription',
         'Share your skills with an unlisted link. Anyone who has it can install them.'
       ),
-      // Why: the sidebar entry and the page header both use BookOpen for
-      // skills, so the settings row that opens them matches.
+      // Match the skills sidebar/page icon in its settings entry.
       icon: BookOpen,
       searchEntries: getShareSkillsSettingsSearchEntries(),
       group: 'workflows',
@@ -99,8 +98,7 @@ export function buildWorkflowSettingsSections(
         'Branch naming, base refs, and Git AI Author.'
       ),
       icon: GitBranch,
-      // Why: Git AI Author is rendered inside Git, so shared
-      // metadata must search both surfaces wherever Git appears.
+      // Git AI Author lives inside Git, so search metadata covers both surfaces.
       searchEntries: [
         ...getGitPaneSearchEntries(),
         ...getCommitMessageAiPaneSearchEntries(),

@@ -18,7 +18,6 @@ let push: Mock<(record: unknown) => void>
 let clock: number
 
 function written(): { name: string; attributes: Record<string, unknown>; exit: unknown }[] {
-  // As the sink writes them: one JSON line per span.
   return JSON.parse(JSON.stringify(push.mock.calls.map(([span]) => span)))
 }
 
@@ -66,6 +65,20 @@ describe('a failure that repeats', () => {
     expect(written()).toHaveLength(2)
   })
 
+  it('writes a timing but does not tell repeats apart by it', () => {
+    const logger = createStructuredAgentSessionLogger({ now: () => clock })
+    for (const openMs of [30_001, 30_002]) {
+      logger.warn('a provider could not finish starting', {
+        scope: 'provider-open-failed',
+        sessionId: 'session-1',
+        openMs,
+        error: new Error('thread/start exceeded 30000ms')
+      })
+    }
+    expect(written()).toHaveLength(1)
+    expect(written()[0]?.attributes).toMatchObject({ openMs: 30_001 })
+  })
+
   it('never merges different sessions, scopes, levels, messages or errors', () => {
     const logger = createStructuredAgentSessionLogger({ now: () => clock })
     for (let round = 0; round < 3; round += 1) {
@@ -93,7 +106,7 @@ describe('a failure that repeats', () => {
 
   it('writes a failure whose cause, refusal reason or value differs, and swallows a true repeat', () => {
     const logger = createStructuredAgentSessionLogger({ now: () => clock })
-    // A refusal's message is its bare code: only the cause tells these two apart.
+    // Refusal messages contain only the code; causes distinguish these errors.
     const unreadable = (cause: Error): Error =>
       new AgentSessionRefusalError(
         refuse(
@@ -161,7 +174,6 @@ describe('a failure that repeats', () => {
     expect(repeats.admit('a')).toBe(0)
     expect(repeats.admit('b')).toBe(0)
     expect(repeats.admit('a')).toBeNull()
-    // A third key evicts the one written longest ago, so `a` is written again.
     expect(repeats.admit('c')).toBe(0)
     expect(repeats.admit('a')).toBe(0)
     expect(repeats.admit('c')).toBeNull()
