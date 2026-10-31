@@ -127,7 +127,7 @@ it('copies genuine cache-equal held input after the engine tracker has finished'
   selectNative(text, 12, 6)
   document.dispatchEvent(new Event('selectionchange'))
   expect(editor.state.selection.empty).toBe(true)
-  const input: unknown = Reflect.get(editor.view, 'input')
+  const input: unknown = 'input' in editor.view ? editor.view.input : undefined
   if (!input || typeof input !== 'object' || !('mouseDown' in input)) {
     throw new Error('Expected real engine input')
   }
