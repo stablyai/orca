@@ -15,6 +15,9 @@ import {
 import type { ProjectRef } from '../gitlab/gl-utils'
 import type { GitLabRepoSelectorArgs } from './gitlab-repo-access'
 import { assertRegisteredRepo, localGitOptionArgs, repoConnectionId } from './gitlab-repo-access'
+import { invalidateHostedReviewBranchCache } from '../source-control/hosted-review-branch-cache'
+import { refreshGitLabApprovals } from '../gitlab/mr-approval-batch'
+import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 
 export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
   ipcMain.handle(
@@ -70,15 +73,23 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     'gitlab:updateMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number; updates: GitLabMRUpdate }) => {
       const repo = assertRegisteredRepo(args, store)
-      return updateMR(
-        repo.path,
-        args.iid,
-        args.updates,
-        repo.issueSourcePreference,
-        repoConnectionId(repo),
-        undefined,
-        ...localGitOptionArgs(store, repo)
-      )
+      try {
+        return await updateMR(
+          repo.path,
+          args.iid,
+          args.updates,
+          repo.issueSourcePreference,
+          repoConnectionId(repo),
+          undefined,
+          ...localGitOptionArgs(store, repo)
+        )
+      } finally {
+        if (args.updates.approval) {
+          await refreshGitLabApprovals(repo.path)
+        }
+        // Why: the sidebar refresh reads through the host's 60s review cache; drop it so approval merge status shows at once.
+        invalidateHostedReviewBranchCache(repo.path, getStoredRepoExecutionHostId(repo))
+      }
     }
   )
 

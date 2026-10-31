@@ -17,6 +17,8 @@ import { getHostedReviewStateChangeCopy } from './hosted-review-state-change-cop
 import { buildGitHubPRStackMergeConfirmation } from './github-pr-stack-confirmation'
 import { useReadyHostedReviewAction } from './use-ready-hosted-review-action'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { useGitLabApprovalAction } from './use-gitlab-approval-action'
+import type { GitLabApprovalChange } from './hosted-review-gitlab-actions'
 
 export type HostedReviewActionInfo = Pick<
   HostedReviewInfo,
@@ -30,6 +32,7 @@ export type HostedReviewActionInfo = Pick<
       | 'autoMergeAllowed'
       | 'mergeQueueRequired'
       | 'mergeStateStatus'
+      | 'approval'
     >
   >
 
@@ -56,11 +59,13 @@ export function useHostedReviewActions({
 }): {
   merging: boolean
   readying: boolean
+  approving: boolean
   stateUpdating: 'open' | 'closed' | null
   actionError: string | null
   handleMerge: (method?: GitHubPRMergeMethod) => Promise<void>
   handleAutoMerge: () => Promise<void>
   handleMarkReadyForReview: () => Promise<void>
+  handleApproval: (approval: GitLabApprovalChange) => Promise<void>
   handleCloseReview: () => Promise<void>
   handleReopenReview: () => Promise<void>
 } {
@@ -75,6 +80,12 @@ export function useHostedReviewActions({
     isGitLab,
     shortLabel,
     reviewLabel,
+    onRefreshReview,
+    setActionError
+  })
+  const { approving, handleApproval } = useGitLabApprovalAction({
+    reviewNumber: review.number,
+    repo,
     onRefreshReview,
     setActionError
   })
@@ -273,11 +284,13 @@ export function useHostedReviewActions({
   return {
     merging,
     readying,
+    approving,
     stateUpdating,
     actionError,
     handleMerge,
     handleAutoMerge,
     handleMarkReadyForReview,
+    handleApproval,
     handleCloseReview,
     handleReopenReview
   }
