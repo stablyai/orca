@@ -1,7 +1,10 @@
 // Admission already passed; journal before adapter effects so a crash leaves recoverable unknown work.
 // Calling the adapter first could lose a turn it accepted.
 
-import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
+import {
+  captureStructuredExecutionOptions,
+  captureStructuredSteerOptions
+} from './structured-agent-session-execution-options'
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
 import type {
   AgentJournalMessageItem,
@@ -93,6 +96,8 @@ export async function performSend(
     /** Persist only source kind in the submission. */
     source?: AgentSessionMessageSource
     options?: Readonly<Record<string, string>>
+    steer?: true
+    keepCurrentOptions?: true
     selection?: Readonly<Record<string, string>>
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
@@ -111,13 +116,18 @@ export async function performSend(
       value: { clientMessageId: input.clientMessageId, submission: { ...existing } }
     }
   }
-  const captured = captureStructuredExecutionOptions(ctx, input.options, input.selection)
+  const { steer: _steer, keepCurrentOptions, ...submission } = input
+  const captured = keepCurrentOptions
+    ? { options: undefined }
+    : input.steer
+      ? captureStructuredSteerOptions(ctx, input.options)
+      : captureStructuredExecutionOptions(ctx, input.options, input.selection)
   if ('refusal' in captured) {
     return { ok: false, refusal: captured.refusal }
   }
   try {
     await ctx.journal.appendSubmission(
-      { ...input, options: captured.options, fence: ctx.fence, handoverRecorded: true },
+      { ...submission, options: captured.options, fence: ctx.fence, handoverRecorded: true },
       undefined,
       ctx.operationReceipt
     )

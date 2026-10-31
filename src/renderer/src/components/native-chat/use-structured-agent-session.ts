@@ -19,10 +19,7 @@ import {
 } from '@/runtime/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from '../../../../shared/structured-agent-session-stop-control'
 import type { AgentSessionPromptResponse } from '../../../../shared/agent-session-question-answer'
-import {
-  respondToStructuredAgentSessionPrompt,
-  cancelStructuredAgentSessionPrompt
-} from './structured-agent-session-prompt-response'
+import * as promptResponse from './structured-agent-session-prompt-response'
 import {
   pendingStructuredSessionPrompts,
   type StructuredPromptItem
@@ -104,6 +101,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     isVisible: args.isVisible,
     providerVisible,
     providerStarting,
+    isWorking: transportState.isWorking,
     ...(args.providerRunning ? { providerRunning: true } : {}),
     ...(args.hostOptionStamp ? { hostOptionStamp: args.hostOptionStamp } : {}),
     fence: state.fence,
@@ -143,7 +141,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     queuedMessageIds,
     queue,
     historyLoaded: transportEnabled && state.status === 'ready',
-    isWorking: transportState.isWorking,
+    isWorking,
     stopping: stopControl.stopping,
     sendSelection: sendOptions
   })
@@ -284,12 +282,14 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     capturePresentation,
     /** A plain send would queue: the host takes it, the setting or a waiting command asks, and no unanswerable prompt blocks it. */
     sendsQueue: structuredAgentSessionSendQueues(queue),
+    queue,
+    steerCapability: sends.steerCapability,
     /** What a plain send does now, and whether its alternate would send any differently. */
     sendFollowUp: nativeChatSendFollowUp((alternate) =>
       structuredAgentSessionSendQueues(queue, alternate)
     ),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
-      cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
+      promptResponse.cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>
       mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
@@ -297,7 +297,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
         ...(taskId ? { taskId } : {})
       }),
     respond: (item: StructuredPromptItem, response: AgentSessionPromptResponse) =>
-      respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
+      promptResponse.respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,

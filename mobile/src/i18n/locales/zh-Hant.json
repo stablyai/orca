@@ -369,8 +369,7 @@
       "modelLabel": "模型，{{value}}",
       "permissions": "權限",
       "permissionsLabel": "權限，{{value}}",
-      "settingsLocked": "本回合結束後即可變更模型設定。",
-      "workingAnnouncement": "代理程式正在執行。本回合結束後即可變更模型設定。"
+      "settingsLocked": "本回合結束後即可變更模型設定。"
     },
     "sessionOptionRows": {
       "defaultMarker": "預設",

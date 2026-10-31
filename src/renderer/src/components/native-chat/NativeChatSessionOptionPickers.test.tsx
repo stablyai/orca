@@ -159,6 +159,33 @@ const effortLevels = (): HTMLElement[] =>
 afterEach(() => cleanup())
 
 describe('NativeChatSessionOptionPickers', () => {
+  it('keeps structured model, effort and Fast choices available for future messages while busy', async () => {
+    const busySurface = { ...surface, setOption: vi.fn(async () => ({ snapshot: [] })) }
+    const { container } = render(
+      <NativeChatSessionOptionPickers
+        surface={busySurface}
+        snapshot={[
+          model({ transport: 'agent-session' }),
+          { ...effort, transport: 'agent-session' },
+          { ...fast, transport: 'agent-session' }
+        ]}
+        isWorking
+      />
+    )
+    expect(container.querySelector('[data-disabled=true]')).toBeNull()
+    expect(container.textContent).not.toContain('Running and queued messages keep their choices.')
+    fireEvent.click(screen.getByRole('option', { name: /Sonnet 5/ }))
+    await settle()
+    fireEvent.click(effortLevels()[0])
+    await settle()
+    fireEvent.click(screen.getByRole('switch'))
+    await settle()
+    expect(busySurface.setOption.mock.calls).toEqual([
+      ['model', 'sonnet'],
+      ['effort', 'low'],
+      ['fastMode', false]
+    ])
+  })
   it.each(['model', 'effort'])(
     'opens the one picker when a slash command asks for the %s',
     async (id) => {

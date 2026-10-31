@@ -367,7 +367,8 @@
       "toggleOption": "Переключить {{value0}}",
       "ultra": "Предельный",
       "xhigh": "Очень высокий",
-      "xhighShort": "Очень выс."
+      "xhighShort": "Очень выс.",
+      "futureOptionsRequireUpdate": "Обновите Orca на этом компьютере, чтобы выбирать параметры следующих сообщений."
     },
     "sessionOptionPickers": {
       "agentWorking": "Агент работает",
@@ -378,7 +379,8 @@
       "permissions": "Разрешения",
       "permissionsLabel": "Разрешения: {{value}}",
       "settingsLocked": "Настройки модели станут доступны после завершения текущего ответа.",
-      "workingAnnouncement": "Агент работает. Настройки модели станут доступны после завершения текущего ответа."
+      "futureMessages": "Настройки применятся к следующим сообщениям.",
+      "workingWithDescription": "Агент работает. {{description}}"
     },
     "sessionOptionRows": {
       "defaultMarker": "По умолчанию",

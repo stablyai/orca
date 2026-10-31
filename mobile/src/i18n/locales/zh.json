@@ -369,8 +369,7 @@
       "modelLabel": "模型，{{value}}",
       "permissions": "权限",
       "permissionsLabel": "权限，{{value}}",
-      "settingsLocked": "本轮结束后将解锁模型设置。",
-      "workingAnnouncement": "智能体正在工作。本轮结束后将解锁模型设置。"
+      "settingsLocked": "本轮结束后将解锁模型设置。"
     },
     "sessionOptionRows": {
       "defaultMarker": "默认",

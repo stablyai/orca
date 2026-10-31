@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/structured-agent-session-send-mutation'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
 import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
+import { AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-runtime-capabilities'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import { useCallback, useEffect, useEffectEvent, useSyncExternalStore } from 'react'
 import type {
@@ -46,7 +47,7 @@ export function useStructuredAgentSessionSends(args: {
   /** The chat reads Stopping: a send made now is drawn after the turn being stopped. */
   stopping?: boolean
   /** The composer's model and effort each send carries; undefined to a host that takes none. */
-  sendSelection?: () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'>
+  sendSelection?: () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'> | undefined
   sendOptions?: () => Readonly<Record<string, string>> | undefined
 }) {
   const {
@@ -69,6 +70,10 @@ export function useStructuredAgentSessionSends(args: {
       target,
       AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
     ) === 'supported'
+  const steerCapability = useStructuredAgentSessionHostCapabilityState(
+    target,
+    AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY
+  )
   const subscribe = useCallback(
     (listener: () => void) => subscribeToStructuredAgentSessionPendingSends(sessionId, listener),
     [sessionId]
@@ -115,13 +120,32 @@ export function useStructuredAgentSessionSends(args: {
       if (!text.trim() && attachments.length === 0) {
         return false
       }
-      const delivery = structuredAgentSessionQueueRequest(queue, request?.alternate)
-      const captured = sendSelection?.() ?? { options: sendOptions?.() }
+      if (isWorking && queue.capability !== 'supported' && steerCapability !== 'supported') {
+        return false
+      }
+      if (request?.delivery === 'queue-if-active' && queue.capability !== 'supported') {
+        return false
+      }
+      if (request?.delivery === 'immediate' && steerCapability !== 'supported') {
+        return false
+      }
+      const delivery =
+        request?.delivery === 'immediate'
+          ? undefined
+          : (request?.delivery ?? structuredAgentSessionQueueRequest(queue, request?.alternate))
+      const steers =
+        request?.delivery === 'immediate' ||
+        (!delivery && isWorking && steerCapability === 'supported')
+      const captured = sendSelection ? sendSelection() : { options: sendOptions?.() }
+      if (captured === undefined) {
+        return false
+      }
       const sent = sendStructuredAgentSessionMessage({
         sessionId,
         target,
         text,
         attachments,
+        ...(steers ? { steer: true as const } : {}),
         ...(request?.callerKeepsText ? { callerKeepsText: request.callerKeepsText } : {}),
         ...(request?.usageLimitContinuationOfTurnItemId
           ? { usageLimitContinuationOfTurnItemId: request.usageLimitContinuationOfTurnItemId }
@@ -153,6 +177,7 @@ export function useStructuredAgentSessionSends(args: {
       sendSelection,
       sendOptions,
       sessionId,
+      steerCapability,
       stopping,
       takesSkills,
       target
@@ -161,6 +186,7 @@ export function useStructuredAgentSessionSends(args: {
 
   return {
     pending,
+    steerCapability,
     /** A write such as a /clear keeps every send out meanwhile. */
     held,
     /** Why the last message came back to the composer, until the next send. */

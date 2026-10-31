@@ -19,6 +19,8 @@ import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-s
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-runtime-capabilities'
 import {
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
@@ -234,6 +236,41 @@ describe('mobile structured send actions', () => {
     }
   )
 
+  it.each([true, false])(
+    'delivers async question answers immediately only with host support %s',
+    async (takesSteer) => {
+      hostSupport = structuredAgentSessionHostSupport([
+        AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
+        ...(takesSteer ? [AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY] : [])
+      ])
+      sendRequest.mockImplementation(async (method) =>
+        method === 'agentSession.send' ? sendResult('accepted') : ok({})
+      )
+      await mountSession()
+      await act(async () => {
+        expect(
+          await hook!.sendWithOutcome(
+            'The selected answer',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            {
+              delivery: 'immediate'
+            }
+          )
+        ).toBe(takesSteer ? 'accepted' : 'rejected')
+      })
+      if (takesSteer) {
+        expect(calls()).toHaveLength(1)
+        expect(fieldsOf(calls()[0]![1])).not.toHaveProperty('delivery')
+        expect(fieldsOf(calls()[0]![1])).toHaveProperty('steer', true)
+      } else {
+        expect(calls()).toHaveLength(0)
+        expect(onSendError).toHaveBeenCalledWith(expect.stringContaining('answer'))
+      }
+    }
+  )
   it('selects a native OMP skill and sends the exact token and arguments through RPC', async () => {
     agent = 'omp'
     sendRequest.mockImplementation(async (method) =>

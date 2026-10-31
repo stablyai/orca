@@ -15,3 +15,12 @@ export function scriptedCodexTransport(
     readProcessStartTime: async () => 1_700_000_000_000
   }
 }
+
+export const SCRIPTED_CODEX_MODEL = {
+  model: 'gpt-test',
+  displayName: 'GPT Test',
+  hidden: false,
+  supportedReasoningEfforts: [],
+  defaultReasoningEffort: null,
+  isDefault: true
+}

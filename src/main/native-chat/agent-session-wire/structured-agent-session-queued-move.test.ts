@@ -5,7 +5,11 @@ import {
   QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION,
+  hostTestMessage,
+  hostTestOperationId
+} from './structured-agent-session-host-test-data'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session-wire'
 import { QueuedMessageActionParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import { QueuedMessageMoveParams } from '../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
@@ -195,4 +199,58 @@ describe('authoritative queue ordering', () => {
     ).toBe(false)
     expect(QueuedMessageMoveParams.safeParse(old).success).toBe(false)
   })
+})
+
+it('reorders and edits durable image cards without changing attachments or captured options', async () => {
+  const working = await rig.workingSend()
+  const first = await queue('first')
+  const body = hostTestMessage('with image')
+  body.blocks.push({ type: 'image-ref', path: '/tmp/queued.png' })
+  const choices = { model: 'model-a', effort: 'high', fastMode: 'true', serviceTier: 'priority' }
+  const fields = { body, delivery: 'queue-if-active' as const, options: choices }
+  const sent = await rig.host.send(QUEUED_RIG_CALLER, {
+    envelope: rig.envelope(fields, 'agentSession.send', hostTestOperationId()),
+    ...fields
+  })
+  if (!sent.ok || !('queued' in sent.value)) {
+    throw new Error('expected queued image')
+  }
+  const image = sent.value.queued.messageId
+  const last = await queue('last')
+  expect(await move(image, { beforeMessageId: first })).toMatchObject({
+    ok: true,
+    value: { messageId: image, status: 'moved' }
+  })
+  expect((await rig.drafts()).map((card) => card.messageId)).toEqual([image, first, last])
+  const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.journal
+  const card = journal?.queuedMessages.get(image)
+  if (!card) {
+    throw new Error('expected image card')
+  }
+  const edit = {
+    messageId: image,
+    expectedBodyFingerprint: card.fingerprint,
+    text: 'edited image caption'
+  }
+  expect(
+    await rig.host.queuedMessageUpdate(QUEUED_RIG_CALLER, {
+      envelope: rig.envelope(edit, 'agentSession.queuedMessageUpdate', hostTestOperationId()),
+      ...edit
+    })
+  ).toMatchObject({ ok: true, value: { status: 'updated' } })
+  await rig.restartHostProcess()
+  const history = await rig.host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
+  if (!history.ok) {
+    throw new Error('history refused')
+  }
+  expect(history.page.queuedMessages?.map((entry) => entry.messageId)).toEqual([image, first, last])
+  expect(history.page.queuedMessages?.[0]?.body.blocks).toEqual([
+    { type: 'text', text: 'edited image caption' },
+    { type: 'image-ref', path: '/tmp/queued.png' }
+  ])
+  await rig.deleteQueued(first)
+  expect((await rig.drafts()).map((entry) => entry.messageId)).toEqual([image, last])
+  await rig.settleAccepted(working, 'finished')
+  expect(await rig.sendNow(image)).toMatchObject({ ok: true })
+  await eventually(async () => expect((await rig.handoff(image))?.options).toMatchObject(choices))
 })

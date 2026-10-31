@@ -19528,7 +19528,11 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "nextTurnOptionsLabel": "Next turn: {{options}}",
+        "futureOptionsRequireUpdate": "Update Orca on this host to change future-turn choices while the agent works.",
+        "steerUnavailable": "This host cannot send drafts immediately yet. Update Orca on this host, or change the Enter action in Chat settings.",
+        "queueUnavailable": "This host cannot queue drafts yet. Update Orca on this host; your draft has been kept."
       },
       "tool": {
         "exitCode": "exit {{value0}}",

@@ -110,7 +110,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       ).toBe('Green')
       act(() => vi.runAllTimers())
 
-      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
+      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], { delivery: 'immediate' })
       expect(container.textContent).toContain('Which color?')
       render([
         asked,
@@ -187,7 +187,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       )
       act(() => blue?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
       act(() => vi.runAllTimers())
-      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
+      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], { delivery: 'immediate' })
       expect(container.textContent).toContain('Which color?')
 
       render([
@@ -396,7 +396,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     act(settle)
     render()
     expect(container.textContent).not.toContain('Which color?')
-    expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
+    expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], { delivery: 'immediate' })
   })
 
   it.each([false, true, 'queued'] as const)(

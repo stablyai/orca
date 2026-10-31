@@ -51,6 +51,31 @@ afterEach(() => {
 })
 
 describe('NativeChatComposerActions', () => {
+  it('keeps delivery preferences out of the busy composer', () => {
+    const onStop = vi.fn()
+    render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled={false}
+        isWorking
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={vi.fn()}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={vi.fn()}
+        onStop={onStop}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'Queue' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Draft actions' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Stop the agent' }))
+    expect(onStop).toHaveBeenCalledOnce()
+  })
   it.each(['starting', 'listening'])('blocks new dictation but preserves %s Stop', (state) => {
     const input = document.createElement('textarea')
     const focus = vi.spyOn(input, 'focus')

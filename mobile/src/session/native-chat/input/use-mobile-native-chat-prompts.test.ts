@@ -202,7 +202,14 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
       await expect(ask && captured?.structuredAnswer?.(ask, [{ indices: [1] }])).resolves.toBe(
         accepted
       )
-      expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
+      expect(sendWithOutcome).toHaveBeenCalledWith(
+        '> Which color?\n\nBlue',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { delivery: 'immediate' }
+      )
       messages = [
         ...messages,
         {

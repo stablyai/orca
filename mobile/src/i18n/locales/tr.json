@@ -369,8 +369,7 @@
       "modelLabel": "Model, {{value}}",
       "permissions": "İzinler",
       "permissionsLabel": "İzinler, {{value}}",
-      "settingsLocked": "Bu tur tamamlandığında model ayarlarının kilidi açılır.",
-      "workingAnnouncement": "Ajan çalışıyor. Bu tur tamamlandığında model ayarlarının kilidi açılır."
+      "settingsLocked": "Bu tur tamamlandığında model ayarlarının kilidi açılır."
     },
     "sessionOptionRows": {
       "defaultMarker": "Varsayılan",

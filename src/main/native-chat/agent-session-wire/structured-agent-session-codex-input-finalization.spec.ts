@@ -52,6 +52,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     const persisted = vi.spyOn(journal, 'resolveDispatch')
     if (failure === 'lost-steer') {
       await began(await permissionSend('running', { personality: 'friendly' }))
+      await pick('auto')
     }
     const paused = Promise.withResolvers<void>()
     const preparing = Promise.withResolvers<void>()

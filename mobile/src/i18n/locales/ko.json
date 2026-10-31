@@ -369,8 +369,7 @@
       "modelLabel": "모델, {{value}}",
       "permissions": "권한",
       "permissionsLabel": "권한, {{value}}",
-      "settingsLocked": "이번 턴이 끝나면 모델 설정을 변경할 수 있습니다.",
-      "workingAnnouncement": "에이전트가 작업 중입니다. 이번 턴이 끝나면 모델 설정을 변경할 수 있습니다."
+      "settingsLocked": "이번 턴이 끝나면 모델 설정을 변경할 수 있습니다."
     },
     "sessionOptionRows": {
       "defaultMarker": "기본값",

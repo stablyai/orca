@@ -357,7 +357,14 @@ describe('async occurrences through the phone controller and rendered card actio
         await askAnswer([{ indices: [1] }])
       })
       if (kind === 'structured') {
-        expect(structuredSession.sendWithOutcome).toHaveBeenCalledWith('> Q1?\n\nBlue')
+        expect(structuredSession.sendWithOutcome).toHaveBeenCalledWith(
+          '> Q1?\n\nBlue',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { delivery: 'immediate' }
+        )
         expect(titles()).toEqual(['Q1?'])
       } else {
         expect(client.sendRequest).toHaveBeenCalledWith(
@@ -465,7 +472,14 @@ describe('async occurrences through the phone controller and rendered card actio
       ]
       await render({ tab: structuredTab })
       expect(titles()).toBeUndefined()
-      expect(structuredSession.sendWithOutcome).toHaveBeenCalledWith('> Q1?\n\nBlue')
+      expect(structuredSession.sendWithOutcome).toHaveBeenCalledWith(
+        '> Q1?\n\nBlue',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { delivery: 'immediate' }
+      )
     }
   )
 

@@ -369,8 +369,7 @@
       "modelLabel": "Modell, {{value}}",
       "permissions": "Berechtigungen",
       "permissionsLabel": "Berechtigungen, {{value}}",
-      "settingsLocked": "Die Modelleinstellungen werden nach diesem Durchgang freigegeben.",
-      "workingAnnouncement": "Der Agent arbeitet. Die Modelleinstellungen werden nach diesem Durchgang freigegeben."
+      "settingsLocked": "Die Modelleinstellungen werden nach diesem Durchgang freigegeben."
     },
     "sessionOptionRows": {
       "defaultMarker": "Standard",

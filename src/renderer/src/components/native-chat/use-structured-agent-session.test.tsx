@@ -2,6 +2,9 @@
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
+afterEach(() => setLocalRuntimeCapabilitiesForTests(null))
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
@@ -664,6 +667,7 @@ describe('useStructuredAgentSession options', () => {
   })
 
   it('discards an option read that began before a Fast mutation', async () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY])
     const staleRead = Promise.withResolvers<typeof FAST_OPTIONS>()
     let optionReads = 0
     mocks.call.mockImplementation((_target, method) => {

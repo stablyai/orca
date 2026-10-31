@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -12,6 +12,8 @@ import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
 import { getChatBehaviorSearchEntries } from './chat-behavior-search'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { useStructuredAgentSessionHostQueuesMessages } from '@/runtime/structured-agent-session-host-capability'
+import { getSettingsSectionSearchEntries, matchesSettingsSearch } from './settings-search'
 import { i18n } from '@/i18n/i18n'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { buildCmdJSettingsResults } from '../cmd-j/palette-results'
@@ -94,6 +96,55 @@ describe('Chat settings page', () => {
     }
     expect(results(true)).toEqual([])
   })
+
+  it.each([false, true])(
+    'keeps queue search and palette targets aligned with local support %s',
+    (supported) => {
+      setLocalRuntimeCapabilitiesForTests(
+        supported ? [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY] : []
+      )
+      const { result } = renderHook(() =>
+        useStructuredAgentSessionHostQueuesMessages({ kind: 'local' })
+      )
+      const hostQueuesMessages = result.current
+      const sections = buildSettingsNavigationMetadata({
+        isMac: true,
+        isWindows: false,
+        isWebClient: false,
+        hostQueuesMessages,
+        repos: []
+      })
+      const chat = sections.find((section) => section.id === 'chat')
+      const queueEntry = chat?.searchEntries.find(
+        (entry) => entry.targetSectionId === 'chat-queue-follow-ups'
+      )
+      const queueResult = buildCmdJSettingsResults(sections).find(
+        (entry) => entry.targetSectionId === 'chat-queue-follow-ups'
+      )
+      state.settingsSearchQuery = 'queue'
+      const { container } = renderChat(true)
+      expect(chat && matchesSettingsSearch('queue', getSettingsSectionSearchEntries(chat))).toBe(
+        true
+      )
+      expect(Boolean(queueEntry)).toBe(true)
+      expect(Boolean(queueResult)).toBe(true)
+      expect(Boolean(container.querySelector('#chat-queue-follow-ups'))).toBe(true)
+      expect(Boolean(container.querySelector('#chat-behavior'))).toBe(true)
+      expect(queueResult?.sectionId).toBe('chat')
+      expect(getSettingsScrollTarget(queueResult?.targetSectionId ?? '', container)).toBe(
+        container.querySelector('#chat-queue-follow-ups')
+      )
+      expect(
+        screen
+          .getByRole('switch', {
+            name: getChatBehaviorSearchEntries().find(
+              (entry) => entry.targetSectionId === 'chat-queue-follow-ups'
+            )?.title
+          })
+          .hasAttribute('disabled')
+      ).toBe(!supported)
+    }
+  )
 
   it('retains the unsaved naming draft when search no longer matches Chat', () => {
     const { element, rerender, container } = renderChat(true, true)

@@ -373,8 +373,7 @@
       "modelLabel": "Modelo, {{value}}",
       "permissions": "Permisos",
       "permissionsLabel": "Permisos, {{value}}",
-      "settingsLocked": "La configuración del modelo se desbloqueará cuando termine este turno.",
-      "workingAnnouncement": "El agente está trabajando. La configuración del modelo se desbloqueará cuando termine este turno."
+      "settingsLocked": "La configuración del modelo se desbloqueará cuando termine este turno."
     },
     "sessionOptionRows": {
       "defaultMarker": "Predeterminado",
