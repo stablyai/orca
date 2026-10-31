@@ -501,6 +501,20 @@ describe('orchestration agent views', () => {
     const [row] = JSON.parse(inbox.stdout).result.messages
     expect(row.body).toBe(`${'x'.repeat(200)}… (truncated; --full)`)
     expect(row.payload).toEqual({ taskId: 'task_1' })
+    const emoji = await run(
+      'inbox',
+      [],
+      {
+        messages: [
+          { id: 'msg_2', from_handle: 'term_1', body: `${'x'.repeat(199)}${'😀'.repeat(5)}` }
+        ],
+        count: 1
+      },
+      true
+    )
+    expect(JSON.parse(emoji.stdout).result.messages[0].body).toBe(
+      `${'x'.repeat(199)}😀… (truncated; --full)`
+    )
 
     const request = await run(
       'request-show',
@@ -509,7 +523,13 @@ describe('orchestration agent views', () => {
         requestId: 'req_1',
         state: 'completed',
         method: 'orchestration.taskCreate',
-        receipt: { task: { id: 'task_1', status: 'ready', spec: huge } },
+        receipt: {
+          messageId: 'msg_ask',
+          accepted: { dispatchId: 'ctx_1', taskId: 'task_1', note: huge },
+          run: { id: 'run_1', objective: huge },
+          gate: { id: 'gate_1', question: huge },
+          task: { id: 'task_1', status: 'ready', spec: huge }
+        },
         interpretation: 'Request req_1 already took effect.'
       },
       true
@@ -518,7 +538,13 @@ describe('orchestration agent views', () => {
       requestId: 'req_1',
       state: 'completed',
       method: 'orchestration.taskCreate',
-      taskId: 'task_1',
+      receipt: {
+        messageId: 'msg_ask',
+        accepted: { dispatchId: 'ctx_1', taskId: 'task_1' },
+        run: { id: 'run_1' },
+        gate: { id: 'gate_1' },
+        task: { id: 'task_1' }
+      },
       interpretation: 'Request req_1 already took effect.'
     })
   })

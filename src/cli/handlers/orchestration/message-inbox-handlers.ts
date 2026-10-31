@@ -102,12 +102,17 @@ function inboxRowView(view: MessageView): MessageView {
     ...rest,
     ...(body
       ? {
-          body:
-            body.length > INBOX_BODY_PREVIEW_CHARS
-              ? `${body.slice(0, INBOX_BODY_PREVIEW_CHARS)}… (truncated; --full)`
-              : body
+          body: previewBody(body)
         }
       : {}),
     ...(ids.length ? { payload: Object.fromEntries(ids) } : {})
   }
+}
+
+// Code points, not UTF-16 units, so a cut never leaves half of a surrogate pair.
+function previewBody(body: string): string {
+  const characters = Array.from(body)
+  return characters.length > INBOX_BODY_PREVIEW_CHARS
+    ? `${characters.slice(0, INBOX_BODY_PREVIEW_CHARS).join('')}… (truncated; --full)`
+    : body
 }

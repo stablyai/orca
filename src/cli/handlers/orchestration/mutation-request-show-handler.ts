@@ -34,34 +34,35 @@ export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> 
         requestId: value.requestId,
         state: value.state,
         method: value.method,
-        ...receiptIds(value.receipt),
+        receipt: receiptIds(value.receipt),
         interpretation: value.interpretation
       })
     })
   }
 }
 
-function receiptIds(receipt: unknown): {
-  dispatchId?: string
-  taskId?: string
-  messageId?: string
-} {
-  if (!isRecord(receipt)) {
-    return {}
-  }
-  return {
-    dispatchId: stringOrUndefined(receipt.dispatchId),
-    taskId:
-      stringOrUndefined(receipt.taskId) ??
-      (isRecord(receipt.task) ? stringOrUndefined(receipt.task.id) : undefined),
-    messageId: isRecord(receipt.message) ? stringOrUndefined(receipt.message.id) : undefined
-  }
-}
+const ID_KEY = /^(id|\w+Id)$/
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function stringOrUndefined(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined
+// Keep every id where the receipt nests it (messageId, accepted.dispatchId, run.id), and drop all text.
+function receiptIds(value: unknown, depth = 8): unknown {
+  if (depth === 0 || typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  if (Array.isArray(value)) {
+    const kept = value.map((item) => receiptIds(item, depth - 1)).filter((ids) => ids !== undefined)
+    return kept.length ? kept : undefined
+  }
+  const kept: Record<string, unknown> = {}
+  for (const [key, child] of Object.entries(value)) {
+    const ids =
+      typeof child === 'string'
+        ? ID_KEY.test(key)
+          ? child
+          : undefined
+        : receiptIds(child, depth - 1)
+    if (ids !== undefined) {
+      kept[key] = ids
+    }
+  }
+  return Object.keys(kept).length ? kept : undefined
 }
