@@ -1,36 +1,105 @@
+import {
+  pluginAppThemeCssFallback,
+  type PluginThemeDerivationRule
+} from '../../../shared/plugins/artifacts/plugin-theme-artifact'
+
 /** sRGB channels 0-255 and alpha 0-1, or null when the value is not a CSS color. */
 export type ColorProbe = (value: string) => readonly [number, number, number, number] | null
 export type Rgba = readonly [number, number, number, number]
 
-// Why: a theme must not be able to hide text, so every text/surface pair keeps WCAG AA contrast.
-const CONTRAST_PAIRS: readonly (readonly [string, string])[] = [
-  ['--background', '--foreground'],
-  ['--background', '--muted-foreground'],
-  // Notebook markdown renders directly on the editor surface.
-  ['--editor-surface', '--foreground'],
-  ['--editor-surface', '--muted-foreground'],
-  ['--card', '--card-foreground'],
-  ['--popover', '--popover-foreground'],
-  ['--primary', '--primary-foreground'],
-  ['--secondary', '--secondary-foreground'],
-  ['--muted', '--muted-foreground'],
-  ['--accent', '--accent-foreground'],
-  ['--sidebar', '--sidebar-foreground'],
-  ['--sidebar-primary', '--sidebar-primary-foreground'],
-  ['--sidebar-accent', '--sidebar-accent-foreground'],
-  ['--worktree-sidebar', '--worktree-sidebar-foreground'],
-  ['--worktree-sidebar-accent', '--worktree-sidebar-accent-foreground']
-]
+type ContrastRule = {
+  surface: string
+  text: string
+  min: number
+  /** The only side a failure drops, when the other is a shared token this check must not cost. */
+  drop?: 'surface' | 'text'
+  /** A translucent surface is checked as painted over this opaque one. */
+  over?: string
+}
+
 const MIN_TEXT_CONTRAST = 4.5
+// Why 3:1: status hues tint file names, and Orca's own light ignored color is 3.3:1.
+const MIN_STATUS_TEXT_CONTRAST = 3
+const textPair = (surface: string, text: string): ContrastRule => ({
+  surface,
+  text,
+  min: MIN_TEXT_CONTRAST
+})
+const GIT_DECORATIONS = [
+  'added',
+  'modified',
+  'deleted',
+  'renamed',
+  'untracked',
+  'copied',
+  'ignored'
+]
+
+// Why: a theme must not be able to hide text, so every text/surface pair keeps WCAG AA contrast.
+const CONTRAST_RULES: readonly ContrastRule[] = [
+  textPair('--background', '--foreground'),
+  textPair('--background', '--muted-foreground'),
+  // Notebook markdown renders directly on the editor surface.
+  textPair('--editor-surface', '--foreground'),
+  textPair('--editor-surface', '--muted-foreground'),
+  textPair('--card', '--card-foreground'),
+  textPair('--popover', '--popover-foreground'),
+  textPair('--primary', '--primary-foreground'),
+  textPair('--secondary', '--secondary-foreground'),
+  textPair('--muted', '--muted-foreground'),
+  textPair('--accent', '--accent-foreground'),
+  textPair('--sidebar', '--sidebar-foreground'),
+  textPair('--sidebar-primary', '--sidebar-primary-foreground'),
+  textPair('--sidebar-accent', '--sidebar-accent-foreground'),
+  textPair('--worktree-sidebar', '--worktree-sidebar-foreground'),
+  textPair('--worktree-sidebar-accent', '--worktree-sidebar-accent-foreground'),
+  {
+    ...textPair('--worktree-sidebar-active', '--worktree-sidebar-foreground'),
+    drop: 'surface',
+    over: '--worktree-sidebar'
+  },
+  { ...textPair('--host-badge', '--host-badge-foreground'), over: '--worktree-sidebar' },
+  textPair('--tab-active', '--tab-active-foreground'),
+  textPair('--tab-inactive', '--tab-inactive-foreground'),
+  // Hovered inactive tabs take the active text color.
+  textPair('--tab-inactive', '--tab-active-foreground'),
+  { ...textPair('--chat-user-message', '--foreground'), drop: 'surface', over: '--background' },
+  ...[
+    '--diff-added-background',
+    '--diff-added-emphasis',
+    '--diff-removed-background',
+    '--diff-removed-emphasis'
+  ].map((tint): ContrastRule => ({
+    ...textPair(tint, '--foreground'),
+    drop: 'surface',
+    over: '--editor-surface'
+  })),
+  { ...textPair('--editor-surface', '--text-link'), drop: 'text' },
+  ...GIT_DECORATIONS.map((status): ContrastRule => ({
+    surface: '--sidebar',
+    text: `--git-decoration-${status}`,
+    min: MIN_STATUS_TEXT_CONTRAST,
+    drop: 'text'
+  }))
+]
 // Why 2:1, not WCAG's 3:1: Orca's own light ring is 2.6:1; the goal is a ring that never vanishes.
 const RINGS: readonly (readonly [string, string])[] = [
   ['--ring', '--background'],
   ['--sidebar-ring', '--sidebar'],
-  ['--worktree-sidebar-ring', '--worktree-sidebar']
+  ['--worktree-sidebar-ring', '--worktree-sidebar'],
+  ['--tab-active-indicator', '--tab-active']
 ]
 const MIN_RING_CONTRAST = 2
 // Why a floor, not opaque: Orca's own dark borders are 7% white; 0 or near-0 alpha hides them.
-const BORDERS = ['--border', '--input', '--sidebar-border', '--worktree-sidebar-border']
+const BORDERS = [
+  '--border',
+  '--input',
+  '--sidebar-border',
+  '--worktree-sidebar-border',
+  '--worktree-sidebar-active-border',
+  '--split-divider',
+  '--split-divider-hover'
+]
 const MIN_BORDER_ALPHA = 0.05
 
 function luminance([r, g, b]: Rgba): number {
@@ -52,14 +121,22 @@ function over([r, g, b, a]: Rgba, [br, bg, bb]: Rgba): Rgba {
   return [r * a + br * (1 - a), g * a + bg * (1 - a), b * a + bb * (1 - a), 1]
 }
 
+/** `color-mix(in srgb, a percent%, b)`. */
+function mix(a: Rgba, b: Rgba, percent: number): Rgba {
+  const p = percent / 100
+  const channel = (index: 0 | 1 | 2 | 3): number => a[index] * p + b[index] * (1 - p)
+  return [channel(0), channel(1), channel(2), channel(3)]
+}
+
 /**
  * The plugin tokens that are safe to paint over the built-in ones for the theme's base.
- * Checks run on the effective set (plugin values, else built-in), and dropping a token can
- * expose a built-in value that breaks another pair, so checks repeat until nothing changes.
- * Dropped tokens keep their built-in values.
+ * Checks run on the effective set (plugin values, else what main.css derives from them, else
+ * built-in), and dropping a token can expose a value that breaks another pair, so checks repeat
+ * until nothing changes. Dropped tokens keep their built-in values.
  */
 export function safePluginThemeTokens(
   tokens: Readonly<Record<string, string>>,
+  base: 'light' | 'dark',
   builtIns: Readonly<Record<string, string>>,
   probe: ColorProbe
 ): Record<string, string> {
@@ -71,10 +148,22 @@ export function safePluginThemeTokens(
     }
   }
   const builtInColors = new Map<string, Rgba | null>()
-  const effective = (token: string): Rgba | null => {
+  const derived = (rule: PluginThemeDerivationRule): Rgba | null => {
+    if (!('mixForeground' in rule)) {
+      return rule.map(effective).find(Boolean) ?? null
+    }
+    const foreground = effective('--foreground')
+    const into = effective(rule.into ?? '--background')
+    return foreground && into ? mix(foreground, into, rule.mixForeground) : null
+  }
+  function effective(token: string): Rgba | null {
     const own = accepted.get(token)
     if (own) {
       return own
+    }
+    const fallback = pluginAppThemeCssFallback(token, base)
+    if (fallback) {
+      return derived(fallback)
     }
     if (!builtInColors.has(token)) {
       builtInColors.set(token, builtIns[token] ? probe(builtIns[token]) : null)
@@ -86,17 +175,20 @@ export function safePluginThemeTokens(
 
   for (let changed = true; changed;) {
     changed = false
-    for (const [surface, text] of CONTRAST_PAIRS) {
-      const surfaceColor = effective(surface)
-      const textColor = effective(text)
+    for (const rule of CONTRAST_RULES) {
+      const textColor = effective(rule.text)
+      const ownSurface = effective(rule.surface)
+      const beneath = rule.over ? effective(rule.over) : null
+      const surfaceColor = ownSurface && beneath?.[3] === 1 ? over(ownSurface, beneath) : ownSurface
       if (
         surfaceColor &&
         textColor &&
         (surfaceColor[3] < 1 ||
           textColor[3] < 1 ||
-          contrastRatio(surfaceColor, textColor) < MIN_TEXT_CONTRAST)
+          contrastRatio(surfaceColor, textColor) < rule.min)
       ) {
-        changed = drop(surface, text) || changed
+        const dropped = rule.drop ? [rule[rule.drop]] : [rule.surface, rule.text]
+        changed = drop(...dropped) || changed
       }
     }
     for (const [ring, surface] of RINGS) {

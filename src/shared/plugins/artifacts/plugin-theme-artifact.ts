@@ -40,7 +40,36 @@ export const PLUGIN_APP_THEME_TOKENS = [
   '--worktree-sidebar-accent',
   '--worktree-sidebar-accent-foreground',
   '--worktree-sidebar-border',
-  '--worktree-sidebar-ring'
+  '--worktree-sidebar-ring',
+  '--worktree-sidebar-active',
+  '--worktree-sidebar-active-border',
+  '--host-badge',
+  '--host-badge-foreground',
+  '--tab-bar',
+  '--tab-active',
+  '--tab-active-foreground',
+  '--tab-active-indicator',
+  '--tab-inactive',
+  '--tab-inactive-foreground',
+  '--split-divider',
+  '--split-divider-hover',
+  '--chat-user-message',
+  '--text-link',
+  '--diff-added',
+  '--diff-added-background',
+  '--diff-added-emphasis',
+  '--diff-added-gutter',
+  '--diff-removed',
+  '--diff-removed-background',
+  '--diff-removed-emphasis',
+  '--diff-removed-gutter',
+  '--git-decoration-added',
+  '--git-decoration-modified',
+  '--git-decoration-deleted',
+  '--git-decoration-renamed',
+  '--git-decoration-untracked',
+  '--git-decoration-copied',
+  '--git-decoration-ignored'
 ] as const
 
 const THEME_TOKEN_SET = new Set<string>(PLUGIN_APP_THEME_TOKENS)
@@ -50,11 +79,11 @@ export const PLUGIN_APP_THEME_REQUIRED_TOKENS = ['--background', '--foreground']
 
 // Why: an omitted token would otherwise keep the built-in value and clash with the theme's
 // palette (e.g. a neutral grey selected row on a purple theme). A rule names source tokens
-// (first present wins) or mixes the theme's foreground into its background; the renderer's
-// contrast check still drops any derived pair that ends up unreadable.
-type DerivationRule = readonly string[] | { mixForeground: number }
+// (first present wins) or mixes the theme's foreground into its background (or `into`); the
+// renderer's contrast check still drops any derived pair that ends up unreadable.
+export type PluginThemeDerivationRule = readonly string[] | { mixForeground: number; into?: string }
 
-const DERIVED_TOKENS: Record<string, DerivationRule> = {
+const DERIVED_TOKENS: Record<string, PluginThemeDerivationRule> = {
   '--editor-surface': ['--background'],
   '--card': ['--background'],
   '--card-foreground': ['--foreground'],
@@ -88,6 +117,34 @@ const DERIVED_TOKENS: Record<string, DerivationRule> = {
   '--worktree-sidebar-border': ['--sidebar-border'],
   '--worktree-sidebar-ring': ['--sidebar-ring'],
   '--chart-1': ['--primary']
+}
+
+/**
+ * Tokens whose built-in value main.css derives from other tokens, so an omitted one follows
+ * whatever the theme painted (and a token the contrast check dropped stays dropped). Not painted;
+ * the contrast check and the token reference read them. Keep in sync with main.css.
+ */
+const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
+  string,
+  PluginThemeDerivationRule | Record<'light' | 'dark', PluginThemeDerivationRule>
+> = {
+  '--tab-bar': ['--card'],
+  // Why per base: a white light --card can't be lifted, so light recesses the inactive tabs.
+  '--tab-active': { light: ['--tab-bar'], dark: { mixForeground: 6, into: '--tab-bar' } },
+  '--tab-active-foreground': ['--foreground'],
+  '--tab-active-indicator': ['--tab-active-foreground'],
+  '--tab-inactive': { light: { mixForeground: 4, into: '--tab-bar' }, dark: ['--tab-bar'] },
+  '--tab-inactive-foreground': ['--muted-foreground'],
+  '--host-badge': ['--accent'],
+  '--host-badge-foreground': ['--muted-foreground']
+}
+
+export function pluginAppThemeCssFallback(
+  token: string,
+  base: 'light' | 'dark'
+): PluginThemeDerivationRule | undefined {
+  const rule = PLUGIN_APP_THEME_CSS_FALLBACKS[token]
+  return rule && 'light' in rule ? rule[base] : rule
 }
 
 /** Fills omitted tokens from the ones the theme set, in dependency order. */

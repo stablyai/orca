@@ -30,7 +30,17 @@ Each entry is `{ "id", "title", "path" }` pointing at a JSON file of at most 16 
   refused.
 - Each text/surface pair (for example `--background`/`--foreground`,
   `--primary`/`--primary-foreground`) must be opaque with at least 4.5:1 contrast; a pair that
-  fails is dropped and keeps Orca's built-in colors.
+  fails is dropped and keeps Orca's built-in colors. A pair you set only half of is checked
+  against what the other half falls back to. Some checks drop only your token: `--text-link`
+  needs 4.5:1 on `--editor-surface`, each `--git-decoration-*` 3:1 on `--sidebar`, and
+  `--worktree-sidebar-active`, `--chat-user-message` and the diff line and character tints
+  4.5:1 with the text drawn on them. Those surfaces and `--host-badge` may be translucent; they
+  are checked as painted over the surface beneath.
+- Diff tokens also color the code editor's diff view. Setting only `--diff-added` and
+  `--diff-removed` is enough; the line, gutter and changed-character tints follow them.
+- When the user picks **Match terminal** or **Tinted** for the left sidebar, it ignores the
+  theme's current-row colors (and, for Match terminal, its host badge colors); a chat set to
+  match the terminal ignores the theme's chat and diff colors.
 - Trust and approval dialogs always use Orca's own colors, whatever theme is active.
 - `pnpm validate:plugin` refuses unknown keys, tokens and slots in every theme file. Orca itself
   skips them, so a theme that sets a token added in a newer release still loads on older ones.
