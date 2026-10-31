@@ -1,3 +1,4 @@
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -35,24 +36,32 @@ describe('local Project Settings checkout targets', () => {
         '\\\\wsl$\\Ubuntu\\home\\fixture\\patch'
       ]
     ]
-  ] as const)('opens each same-origin checkout with %s paths', (_platform, paths) => {
-    const repos = makeCheckouts(paths)
-    const projects = buildSettingsProjectList(repos)
-    const representatives = buildRepoIdToRepresentative(projects)
-    const selections = buildRepoIdToHostSelection(projects)
+  ] as const)(
+    'opens each same-origin checkout in folder mode with %s paths',
+    (_platform, paths) => {
+      const repos = makeCheckouts(paths)
+      const projection = projectHostSetupProjectionFromRepos(repos)
+      const projects = buildSettingsProjectList(repos, {
+        projects: projection.projects,
+        projectHostSetups: projection.setups,
+        settings: { projectGroupingMode: 'folder' }
+      })
+      const representatives = buildRepoIdToRepresentative(projects)
+      const selections = buildRepoIdToHostSelection(projects)
 
-    for (const repo of repos) {
-      const representative = representatives.get(repo.id)
-      expect(representative).toBe(repo.id)
-      const entry = projects.find((project) => project.representativeRepoId === representative)
-      expect(entry).toBeDefined()
-      if (!entry) {
-        throw new Error(`No settings entry for ${repo.id}`)
+      for (const repo of repos) {
+        const representative = representatives.get(repo.id)
+        const entry = projects.find((project) => project.selectionKey === representative)
+        expect(entry).toBeDefined()
+        if (!entry) {
+          throw new Error(`No settings entry for ${repo.id}`)
+        }
+        expect(entry?.representativeRepoId).toBe(repo.id)
+        const selection = selections.get(repo.id)
+        expect(getSettingsProjectHostRepo(entry, repos, selection?.hostId)?.id).toBe(repo.id)
       }
-      const selection = selections.get(repo.id)
-      expect(getSettingsProjectHostRepo(entry, repos, selection?.hostId)?.id).toBe(repo.id)
     }
-  })
+  )
 
   it('keeps independent folder projects reachable', () => {
     const repos: Repo[] = makeCheckouts(['/folders/first', '/folders/second']).map((repo) => ({
@@ -64,7 +73,7 @@ describe('local Project Settings checkout targets', () => {
     const representatives = buildRepoIdToRepresentative(projects)
     expect(projects).toHaveLength(2)
     for (const repo of repos) {
-      expect(representatives.get(repo.id)).toBe(repo.id)
+      expect(representatives.get(repo.id)).toBe(`project:repo:${repo.id}`)
     }
   })
 })

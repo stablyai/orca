@@ -1,7 +1,11 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { getGeneralEditorSearchEntries } from './general-editor-search'
 import { translate } from '@/i18n/i18n'
-import { searchKeywords, translateSearchKeyword } from './settings-search-keywords'
+import {
+  searchKeywords,
+  translateSearchKeyword,
+  projectGroupingSearchKeywords
+} from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
@@ -10,6 +14,15 @@ export { getGeneralEditorSearchEntries } from './general-editor-search'
 export { getGeneralSupportSearchEntries } from './general-support-search'
 
 export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.projectGrouping.label', 'Group checkouts'),
+    description: translate(
+      'settings.projectGrouping.description',
+      'Choose which checkouts of a Git repository count as one project.'
+    ),
+    keywords: projectGroupingSearchKeywords(),
+    targetSectionId: 'general-projects'
+  },
   {
     title: translate('auto.components.settings.general.search.4c95d08fa2', 'Workspace Directory'),
     description: translate(

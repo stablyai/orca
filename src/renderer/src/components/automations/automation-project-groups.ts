@@ -1,5 +1,11 @@
+import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { getProjectIdentityKey } from '../../../../shared/project-host-setup-projection'
+import type { ProjectGroupingSettings } from '../../../../shared/project-grouping'
+import {
+  buildRepoProjectGroupingIndex,
+  getProjectGroupForRepo,
+  type ProjectGroupingIndex
+} from '../../../../shared/project-section-grouping'
 import type { Repo } from '../../../../shared/repo-types'
 
 export type AutomationProjectGroup = {
@@ -10,11 +16,14 @@ export type AutomationProjectGroup = {
 
 export function getAutomationProjectGroups(
   repos: readonly Repo[],
-  selectedRepoId: string
+  selectedRepoId: string,
+  settings?: ProjectGroupingSettings | null,
+  grouping?: ProjectGroupingIndex
 ): AutomationProjectGroup[] {
+  const projectIndex = grouping ?? buildRepoProjectGroupingIndex(repos, settings)
   const groupsByProject = new Map<string, AutomationProjectGroup>()
   for (const repo of repos) {
-    const projectKey = getProjectIdentityKey(repo)
+    const projectKey = getProjectGroupForRepo(projectIndex, repo)?.key ?? `project:repo:${repo.id}`
     const current = groupsByProject.get(projectKey)
     if (!current) {
       groupsByProject.set(projectKey, { projectKey, repo, sources: [repo] })
@@ -77,4 +86,18 @@ export function hasMultipleAutomationProjectHosts(repos: readonly Repo[]): boole
     }
   }
   return false
+}
+
+export function filterAutomationProjectGroups(
+  groups: AutomationProjectGroup[],
+  query: string
+): AutomationProjectGroup[] {
+  if (isRepoSearchQueryTooLarge(query)) {
+    return []
+  }
+  const trimmed = query.trim()
+  if (!trimmed) {
+    return groups
+  }
+  return groups.filter((group) => searchRepos(group.sources, trimmed).length > 0)
 }

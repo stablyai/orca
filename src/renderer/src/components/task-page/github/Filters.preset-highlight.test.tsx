@@ -13,11 +13,15 @@ import { TaskPageGitHubFilters } from './Filters'
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
 import type { Repo } from '../../../../../shared/repo-types'
 
+let sourceFixture:
+  | Pick<TaskPageComposerActionsModel, 'selectedRepos' | 'perRepoSourceState'>
+  | undefined
+
 vi.mock('../Surface', () => ({
   TaskPageSurface: ({ model }: { model: TaskPageComposerActionsModel }) => (
     <TooltipProvider>
       <button onClick={() => model.handleSelectGithubTaskKind('prs')}>PRs</button>
-      <TaskPageGitHubFilters model={model} />
+      <TaskPageGitHubFilters model={sourceFixture ? { ...model, ...sourceFixture } : model} />
     </TooltipProvider>
   )
 }))
@@ -41,6 +45,7 @@ const initialApiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
 const viewer = vi.fn<typeof window.api.gh.viewer>()
 
 beforeEach(() => {
+  sourceFixture = undefined
   viewer.mockReset().mockResolvedValue({ login: 'octocat', email: null })
   useAppStore.setState(
     { ...initialStore, settings: null, persistedUIReady: false, repos: [], taskPageData: {} },
@@ -186,7 +191,18 @@ describe('GitHub Tasks preset highlight follows the applied query', () => {
         '/repo',
         expect.any(Number),
         restoredQuery,
-        { sourceContext: null }
+        {
+          sourceContext: {
+            kind: 'task-source',
+            provider: 'github',
+            projectId: 'repo:repo',
+            projectHostSetupId: 'repo',
+            hostId: 'local',
+            repoId: 'repo',
+            providerIdentity: null,
+            accountLabel: null
+          }
+        }
       )
       useAppStore.setState({ repos: [] })
       await renderFilters()
@@ -205,4 +221,103 @@ describe('GitHub Tasks preset highlight follows the applied query', () => {
       })
     }
   )
+})
+
+it.each([
+  [100, 100],
+  [1000, 100],
+  [100, 1000],
+  [1000, 1000]
+])(
+  'bounds actual Tasks source-chip lookup at R=%i F=%i and reuses unchanged selected rows',
+  async (repoCount, sourceCount) => {
+    let reads = 0
+    const selectedRepos = Array.from({ length: repoCount }, (_, i): Repo => ({
+      get id() {
+        reads++
+        return `repo-${i}`
+      },
+      executionHostId: 'runtime:server',
+      path: `/repo-${i}`,
+      displayName: `Selected ${i}`,
+      badgeColor: 'gray',
+      addedAt: 0
+    }))
+    const perRepoSourceState = Array.from({ length: sourceCount }, (_, i) => ({
+      repoId: `repo-${repoCount - 1}`,
+      hostId: 'runtime:server' as const,
+      repoPath: `/repo-${repoCount - 1}`,
+      sourceKey: `source-${i}`,
+      sources: {
+        issues: { owner: 'upstream', repo: `app-${i}` },
+        prs: { owner: 'fork', repo: `app-${i}` },
+        originCandidate: null,
+        upstreamCandidate: null
+      },
+      error: null
+    }))
+    sourceFixture = { selectedRepos, perRepoSourceState }
+    await renderFilters()
+    expect(
+      screen.getAllByTitle(new RegExp(`^Selected ${repoCount - 1}: Issues from upstream/`))
+    ).toHaveLength(sourceCount)
+    expect(reads).toBeLessThanOrEqual(3 * repoCount + 10)
+    const coldReads = reads
+    reads = 0
+    await act(async () => useAppStore.setState({ activeRepoId: 'unrelated' }))
+    expect(reads).toBe(0)
+    await act(async () =>
+      useAppStore.setState({ settings: createGlobalSettingsFixture({ terminalFontSize: 18 }) })
+    )
+    expect(reads).toBe(0)
+    // Real model updates can render the header, but unchanged selected input must not rebuild its collection answer.
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'search' } })
+    expect(reads).toBe(0)
+    process.stdout.write(
+      `PG6-F ${JSON.stringify({ repoCount, sourceCount, coldReads, warmReads: reads })}\n`
+    )
+  }
+)
+
+it('keeps source-chip exact host/first record, missing fallback and meaningful selected replacement', async () => {
+  const first: Repo = {
+    id: 'same',
+    path: '/first',
+    displayName: 'First server',
+    executionHostId: 'runtime:server',
+    badgeColor: 'gray',
+    addedAt: 0
+  }
+  const rows: Repo[] = [
+    { ...first, executionHostId: 'local', displayName: 'Wrong local' },
+    first,
+    { ...first, displayName: 'Later server' }
+  ]
+  sourceFixture = {
+    selectedRepos: rows,
+    perRepoSourceState: [
+      {
+        repoId: 'same',
+        hostId: 'runtime:server',
+        repoPath: '/first',
+        sourceKey: 'source',
+        sources: {
+          issues: { owner: 'org', repo: 'upstream' },
+          prs: { owner: 'fork', repo: 'origin' },
+          originCandidate: null,
+          upstreamCandidate: null
+        },
+        error: null
+      }
+    ]
+  }
+  await renderFilters()
+  expect(screen.getByTitle('First server: Issues from org/upstream')).toBeTruthy()
+  sourceFixture = { ...sourceFixture, selectedRepos: [rows[0], rows[2], first] }
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reorder' } })
+  expect(screen.getByTitle('Later server: Issues from org/upstream')).toBeTruthy()
+  sourceFixture = { ...sourceFixture, selectedRepos: [rows[0]] }
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'missing' } })
+  expect(screen.getByTitle('Issues from org/upstream')).toBeTruthy()
+  expect(screen.queryByText('Wrong local')).toBeNull()
 })

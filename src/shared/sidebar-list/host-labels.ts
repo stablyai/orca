@@ -1,10 +1,7 @@
+import { getRepoHostIdentity, getRepoHostIdentityForParts } from '../repo-host-identity'
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
-import {
-  getRepoExecutionHostId,
-  getRepoExecutionHostIdOrDefault,
-  getWorktreeExecutionHostId
-} from '../execution-host'
+import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../execution-host'
 import type { ExecutionHostId } from '../execution-host'
 import {
   getHostContextLabel,
@@ -15,112 +12,57 @@ import { getProjectGroupingForRepo, type ProjectGroupingIndex } from '../project
 import type { WorktreeGroupEntry } from './worktree-group-entry'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
-import type { RepoOfWorktree } from './row-types'
-
-function getRepoHostId(repoId: string, repoMap: Map<string, Repo>): ExecutionHostId | null {
-  const repo = repoMap.get(repoId)
-  return repo ? getRepoExecutionHostId(repo) : null
-}
-
-function getRepoHostLabel(
-  repoId: string,
-  repoMap: Map<string, Repo>,
-  projectIndex: ProjectGroupingIndex | null,
-  hostLabelById: ReadonlyMap<string, string> | undefined
-): string | null {
-  const setup = projectIndex?.setupByRepoId.get(repoId)
-  if (setup) {
-    return getHostContextLabel(setup.hostId, { hostLabelById })
-  }
-  const repo = repoMap.get(repoId)
-  if (!repo) {
-    return null
-  }
-  const hostId = getRepoExecutionHostId(repo)
-  return getHostContextLabel(hostId, { hostLabelById })
-}
+import type { GroupHeaderRow, RepoOfWorktree } from './row-types'
 
 export function getMixedHostContextLabels(
-  group: WorktreeGroupEntry,
-  repoMap: Map<string, Repo>,
-  projectIndex: ProjectGroupingIndex | null,
+  hostIds: Iterable<ExecutionHostId>,
   hostLabelById: ReadonlyMap<string, string> | undefined
-): Map<string, string> | undefined {
-  const labelsByRepoId = new Map<string, string>()
-  // Host identity, not the rendered label, determines whether rows are ambiguous:
-  // two hosts can intentionally share a user-facing label.
-  const uniqueHostIds = new Set<ExecutionHostId>()
-  for (const repoId of group.repoIds) {
-    const label = getRepoHostLabel(repoId, repoMap, projectIndex, hostLabelById)
-    if (!label) {
-      continue
-    }
-    labelsByRepoId.set(repoId, label)
-    const setup = projectIndex?.setupByRepoId.get(repoId)
-    const hostId = setup?.hostId ?? getRepoHostId(repoId, repoMap)
-    if (hostId) {
-      uniqueHostIds.add(hostId)
-    }
-  }
-  return uniqueHostIds.size > 1 ? labelsByRepoId : undefined
+): Map<ExecutionHostId, string> | undefined {
+  const hosts = new Set(hostIds)
+  return hosts.size > 1
+    ? new Map([...hosts].map((host) => [host, getHostContextLabel(host, { hostLabelById })]))
+    : undefined
 }
 
-/** Each host owning one of a project section's rows, with that host's own registration of the project.
- * Undefined when the rows sit only where the single header already does. */
+/** Project observed hosts onto already admitted concrete targets; membership belongs to section preparation. */
 export function getProjectHeaderHostRepos(args: {
-  group: WorktreeGroupEntry
-  repoMap: Map<string, Repo>
-  repoOf: RepoOfWorktree
-  /** Notice rows carry their own registration, which can differ from repoMap's for a shared repo id. */
-  noticeRepoOf: (repoId: string) => readonly Repo[]
-  hasPendingCreation: (repoId: string) => boolean
-  defaultHostId: ExecutionHostId
+  anchorHostId: ExecutionHostId
+  observedHostIds: ReadonlySet<ExecutionHostId>
+  firstRepoByHost: ReadonlyMap<ExecutionHostId, Repo>
 }): Map<ExecutionHostId, Repo> | undefined {
-  const { group, defaultHostId } = args
-  const hostOf = (repo: Repo | undefined): ExecutionHostId =>
-    getRepoExecutionHostIdOrDefault(repo, defaultHostId)
-  const rowHostIds = new Set<ExecutionHostId>()
-  const registrations: Repo[] = group.repo ? [group.repo] : []
-  for (const worktree of group.items) {
-    const repo = args.repoOf(worktree)
-    rowHostIds.add(getWorktreeExecutionHostId(worktree, repo, defaultHostId))
-    if (repo) {
-      registrations.push(repo)
-    }
-  }
-  for (const repoId of group.repoIds) {
-    const repo = args.repoMap.get(repoId)
-    if (repo) {
-      registrations.push(repo)
-      // Pending rows resolve their repo by id, so they land on that registration's host.
-      if (args.hasPendingCreation(repoId)) {
-        rowHostIds.add(hostOf(repo))
-      }
-    }
-    for (const noticeRepo of args.noticeRepoOf(repoId)) {
-      registrations.push(noticeRepo)
-      rowHostIds.add(hostOf(noticeRepo))
-    }
-  }
-  if (rowHostIds.size === 0 || (rowHostIds.size === 1 && rowHostIds.has(hostOf(group.repo)))) {
+  if (
+    args.observedHostIds.size === 0 ||
+    (args.observedHostIds.size === 1 && args.observedHostIds.has(args.anchorHostId))
+  ) {
     return undefined
   }
-  const projectRepoIds = new Set(group.repoIds)
-  if (group.repo) {
-    projectRepoIds.add(group.repo.id)
-  }
   const hostRepos = new Map<ExecutionHostId, Repo>()
-  for (const hostId of rowHostIds) {
-    // Only this project's own registration on this host: another host's would act on that host,
-    // and another project's (a lineage child shown here) would act on that project.
-    const repo = registrations.find(
-      (candidate) => hostOf(candidate) === hostId && projectRepoIds.has(candidate.id)
-    )
+  for (const host of args.observedHostIds) {
+    const repo = args.firstRepoByHost.get(host)
     if (repo) {
-      hostRepos.set(hostId, repo)
+      hostRepos.set(host, repo)
     }
   }
   return hostRepos.size > 0 ? hostRepos : undefined
+}
+
+export function getProjectHeaderHostScope(
+  ctx: { repoOf: RepoOfWorktree; defaultHostId: ExecutionHostId },
+  group: WorktreeGroupEntry,
+  section: Parameters<typeof getProjectHeaderHostRepos>[0]
+): Pick<GroupHeaderRow, 'hostRepos' | 'hostWorktreeCounts' | 'hostWorktreeIds'> {
+  const hostRepos = getProjectHeaderHostRepos(section)
+  if (!hostRepos) {
+    return {}
+  }
+  const hostWorktreeIds = getHostWorktreeIds(group.items, ctx.repoOf, ctx.defaultHostId)
+  return {
+    hostRepos,
+    hostWorktreeCounts: hostWorktreeIds
+      ? new Map([...hostWorktreeIds].map(([hostId, ids]) => [hostId, ids.length]))
+      : undefined,
+    hostWorktreeIds
+  }
 }
 
 /** Label notice rows by project-wide host ambiguity, even when rendered in pinned fallback.
@@ -132,42 +74,43 @@ export type NoticeHostContext = {
 }
 
 export function getNoticeHostContextLabels(
-  noticeRepoIds: Iterable<string>,
-  allRepoIds: Iterable<string>,
+  noticeRepos: Iterable<Repo>,
+  allRepos: Iterable<Repo>,
   repoMap: Map<string, Repo>,
   projectIndex: ProjectGroupingIndex | null,
   hostLabelById: ReadonlyMap<string, string> | undefined
 ): Map<string, NoticeHostContext> | undefined {
-  const eligible = new Set(noticeRepoIds)
-  if (eligible.size === 0) {
-    return undefined
+  const hostsByProject = new Map<string, Set<string>>()
+  const retain = (key: string, hostId: ExecutionHostId) => {
+    const hosts = hostsByProject.get(key) ?? new Set<string>()
+    hosts.add(hostId)
+    hostsByProject.set(key, hosts)
   }
-  // Count host IDs, not labels: distinct hosts may deliberately share a display name.
-  const hostIdsForProject = new Map<string, Set<string>>()
-  const labelsByRepoId = new Map<string, NoticeHostContext>()
-  const projectKeyByRepoId = new Map<string, string>()
-  for (const repoId of allRepoIds) {
-    const label = getRepoHostLabel(repoId, repoMap, projectIndex, hostLabelById)
-    if (!label) {
-      continue
+  for (const group of projectIndex?.groupByKey.values() ?? []) {
+    for (const setup of group.registrations) {
+      retain(group.key, setup.hostId)
     }
-    const projectKey = getProjectGroupingForRepo(repoId, repoMap, projectIndex).projectId ?? repoId
-    const hostId = projectIndex?.setupByRepoId.get(repoId)?.hostId ?? getRepoHostId(repoId, repoMap)
-    if (hostId) {
-      const hostIds = hostIdsForProject.get(projectKey) ?? new Set<string>()
-      hostIds.add(hostId)
-      hostIdsForProject.set(projectKey, hostIds)
-    }
-    if (eligible.has(repoId) && hostId) {
-      labelsByRepoId.set(repoId, { label, hostId: hostId as ExecutionHostId })
-      projectKeyByRepoId.set(repoId, projectKey)
-    }
+  }
+  for (const repo of allRepos) {
+    const host = getRepoExecutionHostId(repo)
+    const key =
+      projectIndex?.groupByRepoHost.get(getRepoHostIdentity(repo))?.key ??
+      getProjectGroupingForRepo(repo.id, repoMap, projectIndex, host).key
+    retain(key, host)
+  }
+  const candidates = new Map<string, { key: string; hostId: ExecutionHostId }>()
+  for (const repo of noticeRepos) {
+    const hostId = getRepoExecutionHostId(repo)
+    const key =
+      projectIndex?.groupByRepoHost.get(getRepoHostIdentity(repo))?.key ??
+      getProjectGroupingForRepo(repo.id, repoMap, projectIndex, hostId).key
+    retain(key, hostId)
+    candidates.set(getRepoHostIdentityForParts(repo.id, hostId), { key, hostId })
   }
   const mixed = new Map<string, NoticeHostContext>()
-  for (const [repoId, context] of labelsByRepoId) {
-    const projectKey = projectKeyByRepoId.get(repoId)
-    if (projectKey && (hostIdsForProject.get(projectKey)?.size ?? 0) > 1) {
-      mixed.set(repoId, context)
+  for (const [identity, { key, hostId }] of candidates) {
+    if ((hostsByProject.get(key)?.size ?? 0) > 1) {
+      mixed.set(identity, { label: getHostContextLabel(hostId, { hostLabelById }), hostId })
     }
   }
   return mixed.size > 0 ? mixed : undefined

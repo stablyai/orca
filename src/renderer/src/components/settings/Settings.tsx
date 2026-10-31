@@ -9,10 +9,11 @@ import { renderSettingsLoading, renderSettingsPage } from './settings-page-rende
 import type { LoadedSettingsStoreModel, SettingsRenderContext } from './settings-render-context'
 
 function Settings(): React.JSX.Element {
-  const model = useSettingsStoreModel()
-  const interactions = useSettingsInteractionController(model)
+  const storeModel = useSettingsStoreModel()
+  const interactions = useSettingsInteractionController(storeModel)
+  const navigation = useSettingsNavigationModel(storeModel, interactions)
+  const model = navigation.model
   useSettingsPageEffects(model, interactions)
-  const navigation = useSettingsNavigationModel(model, interactions)
   const terminal = useSettingsTerminalModel(model, navigation)
   useSettingsRepoScrollEffects(model, interactions, navigation, terminal)
   const actions = useSettingsNavigationActions(model, interactions)

@@ -1,3 +1,4 @@
+export { withWindowCreations } from './pending-worktree-creation-keys'
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -17,7 +18,6 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
-import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/sidebar-feed-domains'
 import { EMPTY_SIDEBAR_FEED_DOMAINS } from '../../../../../../shared/sidebar-feed-client/sidebar-feed-snapshot'
 import {
   planSidebarFeedRows,
@@ -33,12 +33,16 @@ import {
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/host-filtering'
 import { mergeDraggedHostSectionOrder } from '../../../../../../shared/sidebar-list/host-section-order'
+import { collectHeaderRevealPlacements } from '../../../../../../shared/sidebar-list/header-reveal-placement'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { sidebarWorkspaceRowFilters } from '../../sidebar-filter-actions'
 import type { SidebarListModel, SidebarListModelArgs } from './sidebar-list-model'
-import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
+import {
+  withWindowCreations,
+  selectPendingWorktreeCreationKeys
+} from './pending-worktree-creation-keys'
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
@@ -47,30 +51,6 @@ import { useReusedArrayIdentity } from './use-reused-array-identity'
 
 // The window renders its own collapse, so planning never re-runs on a toggle.
 const PLANNED_UNCOLLAPSED: ReadonlySet<string> = new Set()
-
-/** Combine main’s shared creations with window-only preflight/server work and exclude locally completed requests. */
-export function withWindowCreations(
-  domains: SidebarFeedDomains,
-  pendingCreationKeys: readonly string[],
-  endedCreationIds: ReadonlySet<string>
-): SidebarFeedDomains {
-  let creations: Map<string, { repoId: string }> | null = null
-  for (const creationId of endedCreationIds) {
-    if (domains.creations.has(creationId)) {
-      creations ??= new Map(domains.creations)
-      creations.delete(creationId)
-    }
-  }
-  for (const key of pendingCreationKeys) {
-    const separator = key.indexOf(' ')
-    const creationId = key.slice(0, separator)
-    if (!domains.creations.has(creationId)) {
-      creations ??= new Map(domains.creations)
-      creations.set(creationId, { repoId: key.slice(separator + 1) })
-    }
-  }
-  return creations ? { ...domains, creations } : domains
-}
 
 function folderRecordKey(id: string, hostId: string | null | undefined): string {
   return `${parseExecutionHostId(hostId)?.id ?? ''}\0${id}`
@@ -175,7 +155,13 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
           ? [args.agentSendTargetWorktreeId]
           : undefined,
         importedWorktreesByRepo,
-        newExternalWorktreesInboxByRepo
+        newExternalWorktreesInboxByRepo,
+        creationHostById: new Map(
+          pendingCreationKeys.map((key) => {
+            const separator = key.indexOf(' ')
+            return [key.slice(0, separator), key.slice(separator + 1, key.indexOf('\0', separator))]
+          })
+        )
       }),
     [
       domains,
@@ -183,6 +169,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       catalog,
       view,
       rankedIds,
+      pendingCreationKeys,
       args.agentSendTargetWorktreeId,
       importedWorktreesByRepo,
       newExternalWorktreesInboxByRepo
@@ -244,6 +231,14 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     () => renderSidebarFeedRows(planned, view, effectiveCollapsedGroups, hostDragActive),
     [planned, view, effectiveCollapsedGroups, hostDragActive]
   )
+  const headerRevealPlacements = useMemo(
+    () =>
+      collectHeaderRevealPlacements(
+        renderSidebarFeedRows(planned, view, PLANNED_UNCOLLAPSED).sectionRows,
+        planned.plan.headerRevealPaths
+      ),
+    [planned, view]
+  )
   const sectionRows = useMemo(
     () =>
       rendered.sectionRows.map((row): HostSectionRow => {
@@ -287,6 +282,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     externalWorktreeCards,
     rowModel: {
       occurrencePlan: planned.plan.occurrencePlan,
+      headerRevealPlacements,
       hostOptions: planned.orderedHostOptions,
       effectiveCollapsedGroups,
       rows: rendered.rows,

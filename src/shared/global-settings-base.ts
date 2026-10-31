@@ -1,3 +1,4 @@
+import type { ProjectGroupingPreferences } from './project-grouping'
 import type { BrowserExtensionGlobalSettings } from './browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
@@ -13,7 +14,8 @@ import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choic
 import type { TerminalColorOverrideGlobalSettings } from './terminal-color-overrides'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
-export type GlobalSettingsBase = ClaudeAgentViewSettings &
+export type GlobalSettingsBase = ProjectGroupingPreferences &
+  ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
   WorktreeDeletionPreferences &
   ClaudeAccountSwitchSettings &

@@ -27,6 +27,7 @@ export function NewWorktreeFormSheet(props: {
   visible: boolean
   interactive: boolean
   loading: boolean
+  projectsReady: boolean
   hasRepos: boolean
   project: Selection | null
   runTarget: (Selection & { hostId: string }) | null
@@ -97,6 +98,7 @@ export function NewWorktreeFormSheet(props: {
       ) : (
         <>
           <NewWorktreeProjectTargetFields
+            disabled={!props.projectsReady}
             project={props.project}
             runTarget={props.runTarget}
             projectBadgeColor={props.projectBadgeColor}

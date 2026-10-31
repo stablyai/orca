@@ -1,3 +1,5 @@
+import { renderSidebarFeedRows } from './sidebar-feed-section-rows'
+export { renderSidebarFeedRows } from './sidebar-feed-section-rows'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getWorktreeExecutionHostId,
@@ -34,13 +36,8 @@ import {
   filterReposForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from './host-filtering'
-import { deferHostSectionCollapse, scopeHostSectionCollapse } from './host-section-collapse'
 import { orderHostSectionOptions } from './host-section-order'
-import {
-  addHostSectionRows,
-  type HostSectionOption,
-  type HostSectionRow
-} from './host-section-rows'
+import type { HostSectionOption, HostSectionRow } from './host-section-rows'
 import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
@@ -92,6 +89,7 @@ export type SidebarFeedRows = {
 
 /** What only the desktop window adds over the inputs: transient reveals and its own cards. */
 export type SidebarFeedWindowExtras = {
+  creationHostById?: ReadonlyMap<string, string>
   forcedVisibleWorktreeIds?: readonly string[]
   importedWorktreesByRepo?: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo?: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
@@ -213,7 +211,13 @@ export function planSidebarFeedRows(
   const pendingCreations = [...domains.creations].flatMap(([creationId, creation]) =>
     creation.worktreeId !== undefined && listed.has(creation.worktreeId)
       ? []
-      : [{ creationId, repoId: creation.repoId }]
+      : [
+          {
+            creationId,
+            repoId: creation.repoId,
+            hostId: extras.creationHostById?.get(creationId) ?? 'local'
+          }
+        ]
   )
   const hostOptions = buildFeedHostOptions(domains, repos, view)
   const placeholderRepoIds = getEmptyProjectPlaceholderRepoIds({
@@ -228,6 +232,7 @@ export function planSidebarFeedRows(
   const plan = planSidebarRows({
     groupBy,
     worktrees: visibleWorktrees,
+    repos,
     repoMap,
     repoOfWorktree: index.repoOf,
     prGroupOf: (worktree) =>
@@ -265,34 +270,6 @@ export function planSidebarFeedRows(
     hostScoped:
       view.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE || view.visibleWorkspaceHostIds !== null
   }
-}
-
-/** The planned rows under `collapsedGroups`, wrapped in host sections. */
-export function renderSidebarFeedRows(
-  planned: SidebarFeedPlan,
-  view: SidebarFeedView,
-  collapsedGroups: ReadonlySet<string>,
-  forceCollapseHosts = false
-): Pick<SidebarFeedRows, 'rows' | 'sectionRows'> {
-  const collapsed = new Set(collapsedGroups)
-  const rows = planned.plan.render(
-    planned.hostScoped ? deferHostSectionCollapse(collapsed) : collapsed
-  )
-  const sectioned = addHostSectionRows({
-    rows,
-    hostOptions: planned.orderedHostOptions,
-    workspaceHostScope: view.workspaceHostScope,
-    visibleWorkspaceHostIds: view.visibleWorkspaceHostIds,
-    defaultHostId: view.defaultHostId,
-    localHostLabel: view.localHostLabel,
-    collapsedHostKeys: collapsed,
-    forceCollapseHosts,
-    preferProjectGrouping: true
-  })
-  const sectionRows = planned.hostScoped
-    ? scopeHostSectionCollapse({ rows: sectioned, collapsedGroups: collapsed })
-    : sectioned
-  return { rows, sectionRows }
 }
 
 /** Build from published host inputs through shared filters/grouping without a clock; transient window overlays/cards stay outside. */

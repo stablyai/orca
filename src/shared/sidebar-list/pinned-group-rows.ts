@@ -1,3 +1,4 @@
+import { getRepoHostIdentity, getRepoHostIdentityForParts } from '../repo-host-identity'
 import type { WorktreeOccurrencePlan } from '../worktree-occurrence-plan'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeExecutionHostId } from '../execution-host'
@@ -33,9 +34,9 @@ export function emitPinnedGroup(
     const hostIds = hostWorktreeIds.get(hostId) ?? []
     hostIds.push(worktree.id)
     hostWorktreeIds.set(hostId, hostIds)
-    if (!seenPinnedRepoIds.has(worktree.repoId)) {
-      pinnedRepoOrder.push(worktree.repoId)
-      seenPinnedRepoIds.add(worktree.repoId)
+    if (!seenPinnedRepoIds.has(getRepoHostIdentityForParts(worktree.repoId, hostId))) {
+      pinnedRepoOrder.push(getRepoHostIdentityForParts(worktree.repoId, hostId))
+      seenPinnedRepoIds.add(getRepoHostIdentityForParts(worktree.repoId, hostId))
     }
   }
 
@@ -64,35 +65,44 @@ export function emitPinnedGroup(
     return
   }
 
-  const firstItemIndex = result.length
-  appendWorktreeRows(result, repoOf, occurrencePlan, {
+  const pinnedRows: Row[] = []
+  appendWorktreeRows(pinnedRows, repoOf, occurrencePlan, {
     collapsedGroups,
     groupDepth: 0,
     sectionKey: PINNED_GROUP_KEY,
     hostContextLabelByWorktreeIdentity
   })
-  if (!allowImportedFallback) {
-    return
-  }
-  // Insert imported fallbacks after the repo’s last row, backwards to avoid shifting later targets.
-  const lastResultIndexByRepoId = new Map<string, number>()
-  for (let index = firstItemIndex; index < result.length; index++) {
-    const row = result[index]
-    if (row?.type === 'item') {
-      lastResultIndexByRepoId.set(row.worktree.repoId, index)
+  const lastIndexByOwner = new Map<string, number>()
+  for (let index = 0; index < pinnedRows.length; index++) {
+    const row = pinnedRows[index]
+    if (row.type === 'item') {
+      lastIndexByOwner.set(
+        getRepoHostIdentityForParts(
+          row.worktree.repoId,
+          getWorktreeExecutionHostId(row.worktree, repoOf(row.worktree), defaultHostId)
+        ),
+        index
+      )
     }
   }
-  const inserts = [...lastResultIndexByRepoId.entries()].sort((left, right) => right[1] - left[1])
-  for (const [repoId, index] of inserts) {
-    const candidate = importedWorktreesByRepo.get(repoId)
-    if (candidate && !renderedNaturalAnchorRepoIds.has(repoId)) {
-      result.splice(
-        index + 1,
-        0,
+  const fallbackByIndex = new Map<number, ImportedWorktreesCardCandidate>()
+  if (allowImportedFallback) {
+    for (const [owner, index] of lastIndexByOwner) {
+      const candidate = importedWorktreesByRepo.get(owner)
+      if (candidate && !renderedNaturalAnchorRepoIds.has(owner)) {
+        fallbackByIndex.set(index, candidate)
+      }
+    }
+  }
+  for (let index = 0; index < pinnedRows.length; index++) {
+    result.push(pinnedRows[index])
+    const candidate = fallbackByIndex.get(index)
+    if (candidate) {
+      result.push(
         buildImportedWorktreesCardRow(
           candidate,
           'pinned-fallback',
-          noticeHostContextLabelByRepoId?.get(repoId)
+          noticeHostContextLabelByRepoId?.get(getRepoHostIdentity(candidate.repo))
         )
       )
     }

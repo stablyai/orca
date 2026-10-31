@@ -1,8 +1,9 @@
 import type { RpcClient } from '../../transport/rpc-client'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
+import { BridgeNativeVerbRefusedError } from '../bridge-host-errors'
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
-import type { BridgeNativeVerb } from './bridge-native-verbs'
+import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge-native-verbs'
 import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
 import { createFakeRpcClient, type FakeRpcClient } from '../bridge-host-test-fakes'
 import {
@@ -140,8 +141,12 @@ function readAll<TMessage>(
   })
 }
 
-// Keep a valid default reply per verb table row so unconfigured native calls do not fail as malformed shell results.
-function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
+// Each verb has a declared reply or an explicit no-device refusal, never a malformed result.
+function defaultVerbAnswer(
+  verb: BridgeNativeVerb,
+  params: unknown,
+  storage: Readonly<Record<string, string>>
+): unknown {
   switch (verb) {
     case 'native.clipboard.write':
       return { written: true }
@@ -161,6 +166,13 @@ function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
       return { base64: '', droppedBytes: 0, recording: true, interruption: null }
     case 'native.audio.stop':
       return { stopped: true, base64: '', droppedBytes: 0 }
+    case 'native.storage.read':
+      return { value: storage[storageReadParamsSchema.parse(params).key] ?? null }
+    case 'native.pdf.view':
+      throw new BridgeNativeVerbRefusedError(
+        'native_verb_failed',
+        'no PDF viewer exists in this pair'
+      )
   }
 }
 
@@ -210,9 +222,10 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     onNavigate: (href) => navigations.push(href),
     onExternalLink: (url) => externalLinks.push(url),
     onHaptic: (kind) => haptics.push(kind),
-    // No device exists in this pair; answer each native verb with its declared shape and prove it was not forwarded.
+    // No device exists in this pair; native replies/refusals stay on the shell without desktop forwarding.
     serveNativeVerb: (verb, params) =>
-      options.serveNativeVerb?.(verb, params) ?? Promise.resolve(defaultVerbAnswer(verb)),
+      options.serveNativeVerb?.(verb, params) ??
+      Promise.resolve(defaultVerbAnswer(verb, params, options.storage ?? {})),
     onNavigateBack: () => {
       backPops.push('popped')
       return 'popped'

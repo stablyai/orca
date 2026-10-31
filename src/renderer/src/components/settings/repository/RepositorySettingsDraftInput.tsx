@@ -4,21 +4,16 @@ import { Input } from '../../ui/input'
 
 type RepoTextDraft = { repoId: string; text: string }
 
-// Async store echoes reset Hangul composition; keep local drafts and persist keystrokes only outside composition.
-export function RepoSettingsDraftInput({
+export function useRepoSettingsTextDraft({
   repoId,
   storeValue,
-  onTextChange,
-  onBlur,
-  onCompositionStart,
-  onCompositionEnd,
-  ...inputProps
+  onTextChange
 }: {
   repoId: string
-  storeValue: string
+  storeValue: string | undefined
   onTextChange: (text: string) => void
-} & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'>): React.JSX.Element {
-  const [draft, setDraft] = useState<RepoTextDraft>({ repoId, text: storeValue })
+}) {
+  const [draft, setDraft] = useState<RepoTextDraft>({ repoId, text: storeValue ?? '' })
   const pendingStoreEchoesRef = useRef<string[]>([])
   // Hold unconfirmed IME input until compositionend; mid-composition persistence echoes can cancel conversion.
   const composingRef = useRef(false)
@@ -34,14 +29,25 @@ export function RepoSettingsDraftInput({
   }
 
   // Decide after commit, not in render or a setDraft updater: React may re-run both, and the echo queue is consumed.
+  const lastStoreValueRef = useRef(storeValue)
   const syncDraftFromStore = useEffectEvent((): void => {
+    if (storeValue === undefined) {
+      return
+    }
+    if (draft.repoId === repoId && storeValue === lastStoreValueRef.current) {
+      return
+    }
+    lastStoreValueRef.current = storeValue
     if (draft.repoId !== repoId) {
       pendingStoreEchoesRef.current = []
       composingRef.current = false
       skipNextChangeRef.current = null
       lastPersistedRef.current = storeValue
       // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
-      setDraft({ repoId, text: storeValue })
+      setDraft({ repoId, text: storeValue ?? '' })
+      return
+    }
+    if (composingRef.current) {
       return
     }
     if (storeValue === draft.text) {
@@ -61,18 +67,22 @@ export function RepoSettingsDraftInput({
     skipNextChangeRef.current = null
     lastPersistedRef.current = storeValue
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
-    setDraft({ repoId, text: storeValue })
+    setDraft({ repoId, text: storeValue ?? '' })
   })
   useEffect(() => syncDraftFromStore(), [repoId, storeValue])
 
-  const text = draft.repoId === repoId ? draft.text : storeValue
+  const text = draft.repoId === repoId ? draft.text : (storeValue ?? '')
 
   // Blur/unmount may omit compositionend; flush the visible draft so abandoned composition text is not lost.
   const flushRef = useRef<() => void>(() => {})
   // Publish after commit so discarded renders cannot install a flush for uncommitted drafts.
   useEffect(() => {
     flushRef.current = (): void => {
-      if (draft.repoId !== repoId || draft.text === lastPersistedRef.current) {
+      if (
+        draft.repoId !== repoId ||
+        lastPersistedRef.current === undefined ||
+        draft.text === lastPersistedRef.current
+      ) {
         return
       }
       composingRef.current = false
@@ -82,40 +92,83 @@ export function RepoSettingsDraftInput({
   })
   useEffect(() => () => flushRef.current(), [])
 
+  return {
+    value: text,
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+      const nextText = e.target.value
+      setDraft({ repoId, text: nextText })
+      if (composingRef.current) {
+        return
+      }
+      if (skipNextChangeRef.current === nextText) {
+        skipNextChangeRef.current = null
+        return
+      }
+      skipNextChangeRef.current = null
+      persist(nextText)
+    },
+    onBlur: () => {
+      flushRef.current()
+    },
+    onCompositionStart: () => {
+      composingRef.current = true
+      skipNextChangeRef.current = null
+    },
+    onCompositionEnd: (e: React.CompositionEvent<HTMLInputElement>) => {
+      composingRef.current = false
+      const nextText = e.currentTarget.value
+      setDraft({ repoId, text: nextText })
+      persist(nextText)
+      // Suppress the final duplicate change some IMEs emit after compositionend.
+      skipNextChangeRef.current = nextText
+    }
+  }
+}
+
+type DraftInputProps = {
+  repoId: string
+  storeValue: string
+  onTextChange: (text: string) => void
+  controller?: ReturnType<typeof useRepoSettingsTextDraft>
+} & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'>
+export function RepoSettingsDraftInput(props: DraftInputProps): React.JSX.Element {
+  return props.controller ? (
+    <DraftInputView {...props} controller={props.controller} />
+  ) : (
+    <LocalDraftInput {...props} />
+  )
+}
+function LocalDraftInput(props: DraftInputProps): React.JSX.Element {
+  const controller = useRepoSettingsTextDraft(props)
+  return <DraftInputView {...props} controller={controller} />
+}
+function DraftInputView({
+  repoId: _repoId,
+  storeValue: _storeValue,
+  onTextChange: _onTextChange,
+  controller,
+  onBlur,
+  onCompositionStart,
+  onCompositionEnd,
+  ...props
+}: DraftInputProps & {
+  controller: ReturnType<typeof useRepoSettingsTextDraft>
+}): React.JSX.Element {
   return (
     <Input
-      {...inputProps}
-      value={text}
-      onChange={(e) => {
-        const nextText = e.target.value
-        setDraft({ repoId, text: nextText })
-        if (composingRef.current) {
-          return
-        }
-        if (skipNextChangeRef.current === nextText) {
-          skipNextChangeRef.current = null
-          return
-        }
-        skipNextChangeRef.current = null
-        persist(nextText)
+      {...props}
+      {...controller}
+      onBlur={(event) => {
+        controller.onBlur()
+        onBlur?.(event)
       }}
-      onBlur={(e) => {
-        flushRef.current()
-        onBlur?.(e)
+      onCompositionStart={(event) => {
+        controller.onCompositionStart()
+        onCompositionStart?.(event)
       }}
-      onCompositionStart={(e) => {
-        composingRef.current = true
-        skipNextChangeRef.current = null
-        onCompositionStart?.(e)
-      }}
-      onCompositionEnd={(e) => {
-        composingRef.current = false
-        const nextText = e.currentTarget.value
-        setDraft({ repoId, text: nextText })
-        persist(nextText)
-        // Suppress the final duplicate change some IMEs emit after compositionend.
-        skipNextChangeRef.current = nextText
-        onCompositionEnd?.(e)
+      onCompositionEnd={(event) => {
+        controller.onCompositionEnd(event)
+        onCompositionEnd?.(event)
       }}
     />
   )

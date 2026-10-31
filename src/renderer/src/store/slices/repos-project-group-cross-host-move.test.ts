@@ -168,3 +168,20 @@ describe('moving one twin of a repo id on a paired server (server-local and serv
     ])
   })
 })
+
+it('does not confirm null when an old owner returns an unchanged grouped row, and reports one generic transport failure', async () => {
+  const store = storeWith([group('remote-group', REMOTE_HOST)])
+  runtimeMoveReturns(remoteRepo)
+  await expect(store.getState().moveProjectToGroup(remoteRepo, null)).resolves.toBe(false)
+  expect(store.getState().repos[0]?.projectGroupId).toBe('remote-group')
+  expect(toast.error).toHaveBeenCalledTimes(1)
+  vi.mocked(toast.error).mockClear()
+  runtimeCall.mockRejectedValueOnce(new Error('disconnected'))
+  const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    await expect(store.getState().moveProjectToGroup(remoteRepo, null)).resolves.toBe(false)
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith('Could not move project to group')
+  } finally {
+    quiet.mockRestore()
+  }
+})

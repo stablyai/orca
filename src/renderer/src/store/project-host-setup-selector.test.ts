@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
-import { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
+import {
+  getProjectHostSetupProjectionFromState,
+  getProjectGroupingIndexFromState
+} from './project-host-setup-selector'
 
 type CollectionCounters = {
   map: number
@@ -74,6 +77,49 @@ function makeSetup(repoId: string, projectId: string): ProjectHostSetup {
 }
 
 describe('project host setup selector', () => {
+  it.each([100, 1000])(
+    'does no catalog traversal on unrelated notifications with %i registrations',
+    (count) => {
+      const repos = countCollectionReads(
+        Array.from({ length: count }, (_, i) => makeRepo(`repo-${i}`))
+      )
+      const state = {
+        repos: repos.value,
+        settings: {
+          projectGroupingMode: 'repository' as const,
+          projectGroupingOverrides: { 'repo:repo-0': 'repository' as const }
+        }
+      }
+      const index = getProjectGroupingIndexFromState(state)
+      expect(index.groups).toHaveLength(count)
+      Object.assign(repos.counters, { map: 0, flatMap: 0, iterator: 0, length: 0 })
+      for (let i = 0; i < count; i++) {
+        expect(
+          getProjectGroupingIndexFromState({
+            ...state,
+            settings: {
+              ...state.settings,
+              projectGroupingOverrides: { ...state.settings.projectGroupingOverrides }
+            }
+          })
+        ).toBe(index)
+      }
+      expect(repos.counters).toEqual({ map: 0, flatMap: 0, iterator: 0, length: 0 })
+      expect(
+        getProjectGroupingIndexFromState({
+          ...state,
+          settings: {
+            ...state.settings,
+            projectGroupingOverrides: { 'repo:repo-0': 'folder' }
+          }
+        })
+      ).not.toBe(index)
+      expect(
+        getProjectGroupingIndexFromState({ ...state, settings: { projectGroupingMode: 'folder' } })
+      ).not.toBe(index)
+    }
+  )
+
   it('does not rescan stable catalog collections across 1,000 reads', () => {
     const repos = Array.from({ length: 100 }, (_, index) => makeRepo(`repo-${index}`))
     const projects = repos.map((repo) => makeProject(`repo:${repo.id}`, repo.id))

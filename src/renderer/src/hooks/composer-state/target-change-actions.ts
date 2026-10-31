@@ -59,7 +59,6 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     folderSourceRepos,
     hostOptions,
     linkedWorkItem,
-    projectHostSetupOptions,
     repoId,
     selectedRepoProjectId,
     setBaseBranch,
@@ -238,20 +237,17 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
         candidate: Pick<ProjectHostSetupOption, 'id' | 'hostId'>
       ): boolean =>
         candidate.id === setupId || getProjectHostSetupSelectionKey(candidate) === setupId
-      const option = projectHostSetupOptions.find(matchesSelection)
-      // Rebuild new setups through normal eligibility/host/dedupe policy before selecting; raw records can retarget away from the chosen location.
-      const target =
-        option?.kind === 'ready'
-          ? option
-          : buildProjectHostSetupOptions({
-              projectId: selectedRepoProjectId,
-              projectHostSetups: useAppStore.getState().projectHostSetups,
-              eligibleRepos: getComposerEligibleRepos(useAppStore.getState().repos),
-              hosts: hostOptions
-            }).find(
-              (candidate): candidate is ReadyProjectHostSetupOption =>
-                matchesSelection(candidate) && candidate.kind === 'ready'
-            )
+      // Revalidate ready rows and newly completed setups against the current catalog before selecting.
+      const state = useAppStore.getState()
+      const target = buildProjectHostSetupOptions({
+        projectId: selectedRepoProjectId,
+        projectHostSetups: state.projectHostSetups,
+        eligibleRepos: getComposerEligibleRepos(state.repos),
+        hosts: hostOptions
+      }).find(
+        (candidate): candidate is ReadyProjectHostSetupOption =>
+          matchesSelection(candidate) && candidate.kind === 'ready'
+      )
       if (!target) {
         return
       }
@@ -266,7 +262,6 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     [
       handleRepoChange,
       hostOptions,
-      projectHostSetupOptions,
       selectedRepoProjectId,
       setSelectedProjectHostSetupOverrideId,
       setSelectedProjectHostSetupOverrideHostId

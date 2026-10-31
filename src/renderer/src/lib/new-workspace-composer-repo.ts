@@ -4,7 +4,12 @@ import {
   resolveNewWorkspaceDialogGitRepoId,
   resolveNewWorkspaceDialogRepoId
 } from '../../../shared/new-workspace-dialog-repo'
-import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
+import type { ProjectGroupingSettings } from '../../../shared/project-grouping'
+import {
+  buildRepoProjectGroupingIndex,
+  getProjectGroupForRepo,
+  type ProjectGroupingIndex
+} from '../../../shared/project-section-grouping'
 import type { Repo } from '../../../shared/repo-types'
 
 export function getComposerEligibleRepos(repos: readonly Repo[]): Repo[] {
@@ -15,7 +20,9 @@ export function getComposerEligibleRepos(repos: readonly Repo[]): Repo[] {
 export function resolveComposerActiveRepoId(
   repos: readonly Repo[],
   eligibleRepos: readonly Repo[],
-  activeRepoId: string | null | undefined
+  activeRepoId: string | null | undefined,
+  settings?: ProjectGroupingSettings | null,
+  grouping?: ProjectGroupingIndex
 ): string | null {
   if (!activeRepoId) {
     return activeRepoId ?? null
@@ -24,8 +31,13 @@ export function resolveComposerActiveRepoId(
   if (!activeRepo || !isRuntimeOwnedSshTargetId(activeRepo.connectionId)) {
     return activeRepoId
   }
-  const projectKey = getProjectIdentityKey(activeRepo)
-  const sibling = eligibleRepos.find((repo) => getProjectIdentityKey(repo) === projectKey)
+  const projectIndex = grouping ?? buildRepoProjectGroupingIndex(repos, settings)
+  const projectKey =
+    getProjectGroupForRepo(projectIndex, activeRepo)?.key ?? `project:repo:${activeRepo.id}`
+  const sibling = eligibleRepos.find(
+    (repo) =>
+      (getProjectGroupForRepo(projectIndex, repo)?.key ?? `project:repo:${repo.id}`) === projectKey
+  )
   return sibling?.id ?? activeRepoId
 }
 

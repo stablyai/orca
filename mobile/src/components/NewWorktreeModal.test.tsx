@@ -13,7 +13,7 @@ const asyncStorage = vi.hoisted(() => ({
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
-  AppState: { currentState: 'active' },
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   FlatList: 'FlatList',
   Image: 'Image',
   Keyboard: { dismiss: vi.fn() },
@@ -48,6 +48,7 @@ vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'MobileSwitch' }))
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
 vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: 'TaskProviderLogo' }))
 
+import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../src/shared/mobile-project-sections-contract'
 import { setCachedRepos } from '../cache/repo-cache'
 import { recordHostDescriptor } from '../transport/host-descriptor-store'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
@@ -92,7 +93,11 @@ function sourceInputs(renderer: ReactTestRenderer) {
 
 function requestsOnly(sendRequest: RpcClient['sendRequest']): RpcClient {
   const client = new FakeSession('connected')
-  client.sendRequest.mockImplementation(sendRequest)
+  client.sendRequest.mockImplementation((method, ...args) =>
+    method === MOBILE_PROJECT_SECTIONS_METHOD
+      ? replied({ catalog: null })
+      : sendRequest(method, ...args)
+  )
   return client
 }
 
@@ -487,9 +492,11 @@ describe('NewWorktreeModal project targets', () => {
                 { hostId: 'runtime:vm', label: 'scratch-vm', health: 'available', relay: 'ready' }
               ]
             }
-          : method === 'repo.list'
-            ? { repos: relayed === 'runtime:vm' ? [serverRepo] : repos }
-            : {}
+          : method === MOBILE_PROJECT_SECTIONS_METHOD
+            ? { catalog: null }
+            : method === 'repo.list'
+              ? { repos: relayed === 'runtime:vm' ? [serverRepo] : repos }
+              : {}
       return { id: 'reply', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
     })
     const listCalls = () =>
@@ -576,7 +583,7 @@ describe('NewWorktreeModal project targets', () => {
     await act(async () => picker.props.onSelect(picker.props.items[1]))
     await flushUpdates()
 
-    expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1')
+    expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1::repo-1')
     expect(
       renderer.root.find((node) => node.props.runTarget !== undefined).props.runTarget.detail
     ).toBe('/srv/orca')

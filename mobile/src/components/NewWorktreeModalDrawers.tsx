@@ -93,7 +93,11 @@ export function NewWorktreeModalDrawers(props: {
         visible={props.visible && props.drawerView === 'runTarget'}
         title={t('components.newWorktreeModalDrawers.runOn', 'Run on')}
         items={props.runTargetPickerItems}
-        selectedId={props.selectedRepo ? getRepoExecutionHostId(props.selectedRepo) : ''}
+        selectedId={
+          props.selectedRepo
+            ? `${getRepoExecutionHostId(props.selectedRepo)}::${props.selectedRepo.id}`
+            : ''
+        }
         onSelect={(item) => props.onRepoChange(item.repo)}
         onClose={props.onTransitionToForm}
         renderIcon={(item) => <HostKindIcon hostId={item.hostId} size={18} />}

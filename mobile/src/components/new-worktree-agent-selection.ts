@@ -1,10 +1,11 @@
+import type { ProjectGroupingSettings } from '../../../src/shared/project-grouping'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { translate } from '../i18n/mobile-i18n'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
 import { pickWorkspaceAgent } from '../tasks/workspace-agent-selection'
 
-export type NewWorktreeRuntimeSettings = {
+export type NewWorktreeRuntimeSettings = ProjectGroupingSettings & {
   defaultTuiAgent?: TuiAgent | 'blank' | null
   disabledTuiAgents?: TuiAgent[]
 }

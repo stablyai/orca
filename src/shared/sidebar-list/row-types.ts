@@ -1,3 +1,4 @@
+import type { GroupingSetup } from '../project-grouping'
 import type { WorktreeOccurrence } from '../worktree-occurrence-plan'
 import type { FolderWorkspace } from '../folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
@@ -37,6 +38,14 @@ export type GroupHeaderRow = {
   count: number
   icon: SidebarHeaderIcon
   repo?: Repo
+  contextRepo?: Repo
+  displayRepo?: Repo
+  projectScope?: {
+    catalogHostId?: ExecutionHostId
+    key: string
+    registrations: readonly GroupingSetup[]
+    context?: { repoId: string; hostId: ExecutionHostId; setupId?: string }
+  }
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
   hostId?: ExecutionHostId
@@ -116,7 +125,7 @@ export type FolderWorkspaceRow = {
 }
 
 /** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */
-export type PendingCreationRef = { creationId: string; repoId: string }
+export type PendingCreationRef = { creationId: string; repoId: string; hostId?: string }
 
 export type Row =
   | GroupHeaderRow
@@ -130,3 +139,7 @@ export type Row =
 export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {
   return row.repeated ? undefined : (row.anchorRepo ?? row.repo)
 }
+
+export type ProjectSectionNotice =
+  | { kind: 'imported'; candidate: ImportedWorktreesCardCandidate }
+  | { kind: 'external'; candidate: NewExternalWorktreesInboxCandidate }

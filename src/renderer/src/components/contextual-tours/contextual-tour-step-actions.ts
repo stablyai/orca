@@ -11,6 +11,7 @@ export function performContextualTourStepAction(args: {
   setSidebarOpen: (open: boolean) => void
   openTaskPage: () => void
   openModal: (modal: 'setup-guide', data?: Record<string, unknown>) => void
+  openProjectGroupingSettings: () => void
   openClientHostedBrowserSettings: () => void
   openWorkspaceComposer: () => void
   dispatchTerminalPaneSplit: (detail: RequestActiveTerminalPaneSplitDetail) => void
@@ -25,6 +26,10 @@ export function performContextualTourStepAction(args: {
   }
 
   switch (args.action.kind) {
+    case 'open-project-grouping-settings':
+      args.finishTour()
+      args.openProjectGroupingSettings()
+      return
     case 'next':
       advanceOrFinish()
       return

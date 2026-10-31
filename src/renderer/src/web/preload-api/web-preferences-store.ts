@@ -231,6 +231,7 @@ export async function syncRuntimeBackedSettings(
           15_000
         )
         const runtimeSettings = stripRetiredWebChatSettings(result.settings)
+        delete runtimeSettings.defaultRepoSelection
         delete runtimeSettings.agentDefaultSurface
         delete runtimeSettings.nativeChatProviders
         delete runtimeSettings.activeRuntimeEnvironmentId

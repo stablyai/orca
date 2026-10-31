@@ -43,6 +43,7 @@ const repoSchema = z.object({
 })
 
 const setupSchema = z.object({
+  groupKey: salvagedOptional('groupKey', z.string()),
   id: z.string(),
   projectId: z.string(),
   hostId: hostIdSchema,

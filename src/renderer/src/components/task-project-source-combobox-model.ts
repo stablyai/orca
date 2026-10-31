@@ -1,3 +1,4 @@
+import { getRepoHostIdentity } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { TaskProjectPickerGroup } from './task-page/task-page-default-repo-selection'
@@ -6,20 +7,32 @@ export function selectedTaskProjectGroups(
   groups: readonly TaskProjectPickerGroup[],
   selected: ReadonlySet<string>
 ): TaskProjectPickerGroup[] {
-  return groups.filter((group) => group.sources.some((source) => selected.has(source.id)))
+  return groups.filter((group) => isTaskProjectGroupSelected(group, selected))
 }
 
 export function isTaskProjectGroupSelected(
   group: TaskProjectPickerGroup,
   selected: ReadonlySet<string>
 ): boolean {
-  return group.sources.some((source) => selected.has(source.id))
+  return (
+    group.sources.some(
+      (source) => selected.has(getRepoHostIdentity(source)) || selected.has(source.id)
+    ) ||
+    (group.selectionKeys?.some((key) => selected.has(key)) ?? false)
+  )
 }
 
 export function getSelectedTaskProjectSource(
   group: TaskProjectPickerGroup,
   selected: ReadonlySet<string>
-): Repo {
+): Repo | null {
+  const exact = group.sources.find((source) => selected.has(getRepoHostIdentity(source)))
+  if (exact) {
+    return exact
+  }
+  if (group.selectionKeys?.some((key) => selected.has(key))) {
+    return null
+  }
   return group.sources.find((source) => selected.has(source.id)) ?? group.repo
 }
 
@@ -37,5 +50,9 @@ export function hasMultipleTaskProjectHosts(groups: readonly TaskProjectPickerGr
 }
 
 export function hasMultipleTaskProjectHostsInGroup(group: TaskProjectPickerGroup): boolean {
-  return hasMultipleTaskProjectHosts([group])
+  return getRepoSourceHostCount(group.sources) > 1
+}
+
+export function getRepoSourceHostCount(sources: readonly Repo[]): number {
+  return new Set(sources.map(getRepoExecutionHostId)).size
 }

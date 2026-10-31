@@ -1,3 +1,7 @@
+import {
+  workspaceProjectFilterSelection,
+  toggleProjectFilter
+} from '../worktree/workspace-filter-repos'
 import { useState, type ComponentType } from 'react'
 import { View } from 'react-native'
 import { MobileSearchField } from '../components/MobileSearchField'
@@ -116,13 +120,36 @@ function HostsPage({ controller, hosts }: WorkspaceOptionProps) {
 function projectsValue({ controller }: WorkspaceOptionProps, t: Translate): string {
   const repos = controller.sectionsResult.uniqueRepos
   const selected = controller.state.view.filters.filterRepoIds
-  const checked = selected.length === 0 ? repos : repos.filter((repo) => selected.includes(repo.id))
-  return checklistValue(
-    checked.map((repo) => repo.name),
-    repos.length,
-    t('hostScreen.workspaceOptionControls.allProjects', 'All projects'),
-    t
+  const selection = workspaceProjectFilterSelection(
+    repos,
+    selected,
+    controller.settings.projectRepoFilterMeaning
   )
+  if (!selection.active) {
+    return t('hostScreen.workspaceOptionControls.allProjects', 'All projects')
+  }
+  if (!selection.matchingKeys.length) {
+    return t(
+      'hostScreen.workspaceOptionControls.savedProjectUnavailable',
+      'Saved project selection · Unavailable projects'
+    )
+  }
+  const labels = repos.filter((repo) => selection.matching.has(repo.key)).map((repo) => repo.name)
+  const label =
+    labels.length === 1
+      ? labels[0]
+      : t('hostScreen.workspaceOptionControls.projectCount', '{{count}} projects', {
+          count: labels.length
+        })
+  const details = [
+    ...(selection.partialKeys.length
+      ? [t('hostScreen.workspaceOptionControls.partiallySelected', 'Partially selected')]
+      : []),
+    ...(selection.unresolved.length
+      ? [t('hostScreen.workspaceOptionControls.unavailableProjects', 'Unavailable projects')]
+      : [])
+  ]
+  return [label, ...details].join(' · ')
 }
 
 function ProjectsPage({ controller }: WorkspaceOptionProps) {
@@ -132,6 +159,12 @@ function ProjectsPage({ controller }: WorkspaceOptionProps) {
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
   const selected = state.view.filters.filterRepoIds
+  const selection = workspaceProjectFilterSelection(
+    controller.sectionsResult.uniqueRepos,
+    selected,
+    settings.projectRepoFilterMeaning
+  )
+  const checkedKeys = selection.full
   const repos = controller.sectionsResult.uniqueRepos.filter(
     (repo) => !needle || repo.name.toLowerCase().includes(needle)
   )
@@ -155,15 +188,40 @@ function ProjectsPage({ controller }: WorkspaceOptionProps) {
         <CheckRow
           key="all"
           label={t('hostScreen.workspaceOptionControls.allProjects', 'All projects')}
+          detail={
+            selection.unresolved.length
+              ? t(
+                  'hostScreen.workspaceOptionControls.savedProjectUnavailable',
+                  'Saved project selection · Unavailable projects'
+                )
+              : undefined
+          }
+          disabled={settings.projectRepoFiltersReady === false}
           checked={selected.length === 0}
           onPress={() => settings.setFilter('filterRepoIds', [])}
         />
         {repos.map((repo) => (
           <CheckRow
             key={repo.key}
+            disabled={settings.projectRepoFiltersReady === false}
             label={repo.name}
-            checked={selected.includes(repo.id)}
-            onPress={() => settings.toggleRepoFilter(repo.id)}
+            checked={checkedKeys.has(repo.key)}
+            detail={
+              selection.partial.has(repo.key)
+                ? t('hostScreen.workspaceOptionControls.partiallySelected', 'Partially selected')
+                : undefined
+            }
+            onPress={() =>
+              settings.setFilter(
+                'filterRepoIds',
+                toggleProjectFilter(
+                  repo,
+                  selected,
+                  controller.sectionsResult.uniqueRepos,
+                  settings.projectRepoFilterMeaning
+                )
+              )
+            }
             leading={<View style={[styles.filterRepoDot, { backgroundColor: repo.color }]} />}
           />
         ))}

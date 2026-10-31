@@ -3,7 +3,10 @@ import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import { carryProjectStateThroughIdentityChange } from '../../../shared/project-identity-succession'
+import {
+  carryProjectStateThroughIdentityChange,
+  carryProjectGroupingOverrides
+} from '../../../shared/project-identity-succession'
 
 export function projectHostSetupCompatibilityStateEqual(
   state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
@@ -47,9 +50,11 @@ function projectHostKey(setup: Pick<ProjectHostSetup, 'projectId' | 'hostId'>): 
 }
 
 export function mergeProjectHostSetupCompatibilityState(
-  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
+  state: Pick<PersistedState, 'projects' | 'projectHostSetups'> &
+    Partial<Pick<PersistedState, 'settings'>>,
   repos: readonly Repo[]
-): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
+): Pick<PersistedState, 'projects' | 'projectHostSetups'> &
+  Partial<Pick<PersistedState, 'settings'>> {
   const projection = projectHostSetupProjectionFromRepos(repos)
   const succession = carryProjectStateThroughIdentityChange(
     projection.projects,
@@ -84,6 +89,17 @@ export function mergeProjectHostSetupCompatibilityState(
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
   return {
+    ...(state.settings
+      ? {
+          settings: {
+            ...state.settings,
+            projectGroupingOverrides: carryProjectGroupingOverrides(
+              state.settings.projectGroupingOverrides ?? {},
+              succession.remappedProjectIds
+            )
+          }
+        }
+      : {}),
     projects: [...succession.projects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
   }

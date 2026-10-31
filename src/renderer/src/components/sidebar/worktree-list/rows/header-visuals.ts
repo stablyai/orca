@@ -1,5 +1,7 @@
 import { CircleX, FolderTree, List, Pin } from 'lucide-react'
-import type React from 'react'
+import { createElement, type ComponentType } from 'react'
+import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import type { Repo } from '../../../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { PRGroupKey } from '../../../../../../shared/workspace-view/workspace-pr-groups'
 import type { SidebarHeaderIcon } from '../../../../../../shared/sidebar-list/row-types'
@@ -15,7 +17,7 @@ const PR_GROUP_META: Record<
   PRGroupKey,
   {
     label: string
-    icon: React.ComponentType<{ className?: string }>
+    icon: ComponentType<{ className?: string }>
     tone: string
   }
 > = {
@@ -71,7 +73,7 @@ const ALL_GROUP_META = {
 } as const
 
 type SidebarHeaderVisual = {
-  icon: React.ComponentType<{ className?: string }>
+  icon: ComponentType<{ className?: string }>
   tone: string
   /** Set for headers the builder leaves unnamed: Pinned, All and the PR lanes. */
   label?: string
@@ -80,7 +82,8 @@ type SidebarHeaderVisual = {
 /** What the window draws for a header's icon key; read at paint so labels follow the locale. */
 export function getSidebarHeaderVisual(
   icon: SidebarHeaderIcon,
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  workspaceStatuses: readonly WorkspaceStatusDefinition[],
+  workspaceStatusById?: ReadonlyMap<string, WorkspaceStatusDefinition>
 ): SidebarHeaderVisual {
   switch (icon.kind) {
     case 'pinned':
@@ -93,9 +96,26 @@ export function getSidebarHeaderVisual(
       return PR_GROUP_META[icon.prGroup]
     case 'workspace-status': {
       const { icon: statusIcon, tone } = getWorkspaceStatusVisualMeta(
-        workspaceStatuses.find((status) => status.id === icon.status) ?? icon.status
+        (workspaceStatusById
+          ? workspaceStatusById.get(icon.status)
+          : workspaceStatuses.find((status) => status.id === icon.status)) ?? icon.status
       )
       return { icon: statusIcon, tone }
     }
   }
+}
+
+export function renderSidebarHeaderGlyph(
+  repo: Pick<Repo, 'repoIcon'> | undefined,
+  color: string | undefined,
+  fallbackIcon: ComponentType<{ className?: string }>
+) {
+  return repo
+    ? createElement(RepoIconGlyph, {
+        repoIcon: repo.repoIcon,
+        color,
+        className: 'size-4',
+        iconClassName: 'size-3.5'
+      })
+    : createElement(fallbackIcon, { className: 'size-3' })
 }

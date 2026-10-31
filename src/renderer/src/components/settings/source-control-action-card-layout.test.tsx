@@ -177,6 +177,7 @@ it.each(['', null, '--verbose', undefined])(
     render(
       <TooltipProvider>
         <RepositorySourceControlAiActionRows
+          repo={useAppStore.getState().repos[0]}
           repoId="repo"
           repoAi={repoAi}
           source={source}

@@ -1,3 +1,4 @@
+import { getWorktreeExecutionHostId } from '../execution-host'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
@@ -18,19 +19,23 @@ export function getGroupKeyForWorktree(
   /** Null reads every worktree as having no PR, which is the in-progress lane. */
   prGroupOf: SidebarPRGroupReader | null,
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
-  projectGrouping?: ProjectSectionModel
+  projectGrouping?: ProjectSectionModel,
+  workspaceStatusById?: ReadonlyMap<string, WorkspaceStatusDefinition>
 ): string | null {
   if (groupBy === 'none') {
     return ALL_GROUP_KEY
   }
   if (groupBy === 'workspace-status') {
-    return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
+    return getWorkspaceStatusGroupKey(
+      getWorkspaceStatus(worktree, workspaceStatuses, workspaceStatusById)
+    )
   }
   if (groupBy === 'repo') {
     return getProjectGroupingForRepo(
       worktree.repoId,
       repoMap,
-      buildProjectGroupingIndex(projectGrouping)
+      buildProjectGroupingIndex(projectGrouping),
+      getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId))
     ).key
   }
   return getPRLaneKey(prGroupOf?.(worktree) ?? 'in-progress')

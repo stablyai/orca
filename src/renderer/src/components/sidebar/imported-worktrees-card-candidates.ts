@@ -1,3 +1,14 @@
+import { getProjectRepoFilterHost } from '../../../../shared/project-repo-filter-selection'
+import {
+  getRepoHostIdentity,
+  getRepoHostIdentityForParts
+} from '../../../../shared/repo-host-identity'
+import { getRepoHostSummaries } from '@/store/slices/worktrees/listing/worktree-host-ownership'
+import {
+  getDetectedWorktreeOwnerHost,
+  partitionDetectedWorktreesByHost
+} from './worktree-visibility-host-target'
+import { projectRepoFilterMatcher } from '../../../../shared/project-grouping'
 import type {
   GlobalSettings,
   WorktreeVisibilityDefaults
@@ -22,6 +33,8 @@ export function getHiddenImportedWorktrees(
 
 export function buildImportedWorktreesCardCandidates(args: {
   repos: readonly Repo[]
+  allRepos?: readonly Repo[]
+  detectedWorktreesByHost?: ReadonlyMap<string, DetectedWorktreeListResult>
   visibleWorktrees?: readonly Worktree[]
   detectedWorktreesByRepo: Readonly<Record<string, DetectedWorktreeListResult | undefined>>
   filterRepoIds?: readonly string[]
@@ -29,16 +42,28 @@ export function buildImportedWorktreesCardCandidates(args: {
   settings?: Pick<GlobalSettings, 'worktreeVisibilityDefaults'> | null
   visibilityDefaultsByHost?: Partial<Record<ExecutionHostId, WorktreeVisibilityDefaults | null>>
 }): Map<string, ImportedWorktreesCardCandidate> {
+  const allRepos = args.allRepos ?? args.repos
+  const summaries = getRepoHostSummaries(allRepos)
+  const detectedByHost =
+    args.detectedWorktreesByHost ??
+    partitionDetectedWorktreesByHost(allRepos, args.detectedWorktreesByRepo)
   const visibleRepoIds = args.visibleWorktrees
-    ? new Set(args.visibleWorktrees.map((worktree) => worktree.repoId))
+    ? new Set(
+        args.visibleWorktrees.map((worktree) =>
+          getRepoHostIdentityForParts(
+            worktree.repoId,
+            getDetectedWorktreeOwnerHost(worktree, summaries.get(worktree.repoId))
+          )
+        )
+      )
     : null
-  const filterRepoIds = args.filterRepoIds?.length ? new Set(args.filterRepoIds) : null
+  const matchesRepo = projectRepoFilterMatcher(args.filterRepoIds ?? [])
   const candidates = new Map<string, ImportedWorktreesCardCandidate>()
   for (const repo of args.repos) {
-    if (filterRepoIds && !filterRepoIds.has(repo.id)) {
+    if (!matchesRepo(repo.id, getProjectRepoFilterHost(repo))) {
       continue
     }
-    if (visibleRepoIds && !visibleRepoIds.has(repo.id)) {
+    if (visibleRepoIds && !visibleRepoIds.has(getRepoHostIdentity(repo))) {
       continue
     }
     if (!isGitRepoKind(repo)) {
@@ -56,12 +81,14 @@ export function buildImportedWorktreesCardCandidates(args: {
         args.visibilityDefaultsByHost ?? {}
       )
     )
-    if (visibility !== 'hide' && !args.forceVisibleRepoIds?.has(repo.id)) {
+    if (visibility !== 'hide' && !args.forceVisibleRepoIds?.has(getRepoHostIdentity(repo))) {
       continue
     }
-    const hiddenWorktrees = getHiddenImportedWorktrees(args.detectedWorktreesByRepo[repo.id])
+    const hiddenWorktrees = getHiddenImportedWorktrees(
+      detectedByHost.get(getRepoHostIdentity(repo))
+    )
     if (hiddenWorktrees.length > 0) {
-      candidates.set(repo.id, { repo, hiddenWorktrees })
+      candidates.set(getRepoHostIdentity(repo), { repo, hiddenWorktrees })
     }
   }
   return candidates

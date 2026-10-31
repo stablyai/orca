@@ -162,7 +162,7 @@ export function useSettingsPageEffects(
       return
     }
 
-    const paneSectionId = getSettingsSectionId(
+    let paneSectionId = getSettingsSectionId(
       settingsNavigationTarget.pane,
       settingsNavigationTarget.repoId,
       repoIdToRepresentative
@@ -177,15 +177,20 @@ export function useSettingsPageEffects(
       settingsNavigationTarget,
       repoIdToHostSelection.keys()
     )
+    const targetEntry = settingsProjectList.find(
+      (entry) => settingsNavigationTarget.sectionId === `repo-${entry.selectionKey}`
+    )
     if (targetRepoId) {
       const hostSelection = settingsNavigationTarget.hostId
         ? getSettingsTargetHostSelection(
             settingsProjectList,
             targetRepoId,
-            settingsNavigationTarget.hostId
+            settingsNavigationTarget.hostId,
+            targetEntry?.selectionKey
           )
         : repoIdToHostSelection.get(targetRepoId)
       if (hostSelection) {
+        paneSectionId = `repo-${hostSelection.selectionKey}`
         setSettingsProjectHostSelection(
           hostSelection.selectionKey,
           hostSelection.hostId,
@@ -197,9 +202,13 @@ export function useSettingsPageEffects(
       setSettingsHostChoice(settingsNavigationTarget.hostScope)
     }
     pendingNavSectionRef.current = paneSectionId
-    pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    pendingScrollTargetRef.current =
+      settingsNavigationTarget.sectionId === `repo-${targetRepoId}`
+        ? paneSectionId
+        : (settingsNavigationTarget.sectionId ?? paneSectionId)
     setHighlightedSettingsTargetId(
-      settingsNavigationTarget.pane === 'developer-permissions'
+      settingsNavigationTarget.pane === 'developer-permissions' ||
+        settingsNavigationTarget.sectionId === 'general-projects'
         ? (settingsNavigationTarget.sectionId ?? null)
         : null
     )

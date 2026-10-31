@@ -6,7 +6,10 @@ import {
   normalizeProjectHostSetupRows,
   normalizeProjectRows
 } from '../../shared/project-catalog-row-normalization'
-import { carryProjectStateThroughIdentityChange } from '../../shared/project-identity-succession'
+import {
+  carryProjectStateThroughIdentityChange,
+  carryProjectGroupingOverrides
+} from '../../shared/project-identity-succession'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
@@ -255,6 +258,13 @@ export function rebuildRepoBackedProjectState(state: TransferProfileState): Tran
     }))
   return {
     ...state,
+    settings: {
+      ...state.settings,
+      projectGroupingOverrides: carryProjectGroupingOverrides(
+        state.settings.projectGroupingOverrides ?? {},
+        succession.remappedProjectIds
+      )
+    },
     projects: [...succession.projects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
   }

@@ -1,6 +1,15 @@
+import * as workspaceLookups from './native-chat-resume-workspace-lookups'
+import * as folderHostResolution from '../../../shared/folder-workspace-execution-host'
+import { getProjectGroupingIndexFromState } from '../store/project-host-setup-selector'
+import * as rawGroupIndex from '../lib/worktree-runtime-owner-index'
+import * as workspaceDisplay from './native-chat-resume-workspace-display'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import * as resumeGrouping from './native-chat-resume-on-restart-grouping'
+import { selectProjectCloneUrlPrefill } from '../lib/project-clone-url-prefill'
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as worktreeIds from '../../../shared/worktree/id'
@@ -40,6 +49,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount())
+  vi.clearAllMocks()
   vi.restoreAllMocks()
   container.remove()
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -335,4 +345,477 @@ it('lists every chat when workspace lineage loops', () => {
 
   expect(chatBox('in-a')).toBeTruthy()
   expect(chatBox('in-b')).toBeTruthy()
+})
+
+it('keeps mounted resume rows and clone-prefill consumers quiet on unrelated writes, with a relevant update control', () => {
+  const candidates = seedTree()
+  const base = useAppStore.getState().repos[0]
+  const remote = {
+    ...base,
+    id: 'remote',
+    path: '/remote',
+    executionHostId: 'runtime:server' as const
+  }
+  useAppStore.setState({ repos: [base, remote] })
+  const groupPass = vi.spyOn(resumeGrouping, 'groupResumeWorkspacesByRepo')
+  const commits = vi.fn()
+  let cloneRenders = 0
+  function Prefill() {
+    cloneRenders++
+    const value = useAppStore((state) =>
+      selectProjectCloneUrlPrefill(
+        state,
+        getProjectGroupingIndexFromState(state).groupByRepoHost.get('local\0repo-1')?.key ?? null
+      )
+    )
+    return <output>{value}</output>
+  }
+  act(() =>
+    root.render(
+      <>
+        <Profiler id="resume" onRender={commits}>
+          <Harness candidates={candidates} />
+        </Profiler>
+        <Prefill />
+      </>
+    )
+  )
+  const initialCloneRenders = cloneRenders
+  commits.mockClear()
+  groupPass.mockClear()
+  act(() => useAppStore.setState({ activeRepoId: 'irrelevant' }))
+  expect(commits).not.toHaveBeenCalled()
+  expect(cloneRenders).toBe(initialCloneRenders)
+  act(() =>
+    useAppStore.setState({
+      settings: { ...useAppStore.getState().settings!, terminalFontSize: 20 }
+    })
+  )
+  expect(commits).not.toHaveBeenCalled()
+  expect(cloneRenders).toBe(initialCloneRenders)
+  act(() =>
+    useAppStore.setState({ repos: [base, { ...remote, displayName: 'other host changed' }] })
+  )
+  expect(groupPass).not.toHaveBeenCalled()
+  expect(commits).not.toHaveBeenCalled()
+  expect(cloneRenders).toBe(initialCloneRenders)
+  act(() => useAppStore.setState({ repos: [{ ...base, displayName: 'renamed' }, remote] }))
+  expect(container.textContent).toContain('renamed')
+  expect(commits).toHaveBeenCalled()
+  act(() =>
+    useAppStore.setState({
+      repos: [
+        {
+          ...base,
+          gitRemoteIdentity: {
+            canonicalKey: 'gitlab.com/org/app',
+            remoteName: 'origin',
+            remoteUrl: 'https://gitlab.com/org/app.git'
+          }
+        },
+        remote
+      ]
+    })
+  )
+  expect(cloneRenders).toBeGreaterThan(initialCloneRenders)
+  expect(container.querySelector('output')?.textContent).toBe('https://gitlab.com/org/app.git')
+})
+
+function rawFolderGroup(id: string, name = id): ProjectGroup {
+  return {
+    id,
+    name,
+    parentPath: null,
+    parentGroupId: null,
+    createdFrom: 'manual',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 0,
+    updatedAt: 0
+  }
+}
+function folderRow(index: number, groupId: string): FolderWorkspace {
+  return {
+    id: `f-${index}`,
+    projectGroupId: groupId,
+    name: `Workspace ${index}`,
+    folderPath: `/folder/${index}`,
+    executionHostId: index % 2 ? 'runtime:server' : 'local',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    createdAt: 0,
+    updatedAt: 0
+  }
+}
+
+it.each([
+  ['git', 100],
+  ['git', 1000],
+  ['folder', 100],
+  ['folder', 1000]
+] as const)(
+  'bounds %s resume display indexing at N=%i with independently replaced G=100/1000',
+  (kind, count) => {
+    // Known main #31617 qualified-folder cost is measured separately, not bounded here.
+    let readSource: 'display' | 'qualified' | null = null
+    let reads = 0
+    let qualifiedReads = 0
+    let unattributedReads = 0
+    let totalReads = 0
+    let qualifiedResolutions = 0
+    const originalQualified = folderHostResolution.resolveQualifiedFolderWorkspaceResult
+    vi.spyOn(folderHostResolution, 'resolveQualifiedFolderWorkspaceResult').mockImplementation(
+      (state, id, host) => {
+        qualifiedResolutions++
+        const previous = readSource
+        readSource = 'qualified'
+        try {
+          return originalQualified(state, id, host)
+        } finally {
+          readSource = previous
+        }
+      }
+    )
+    const originalDisplay = rawGroupIndex.findIndexedProjectGroupDisplay
+    const query = vi
+      .spyOn(rawGroupIndex, 'findIndexedProjectGroupDisplay')
+      .mockImplementation((groups, id) => {
+        const previous = readSource
+        readSource = 'display'
+        try {
+          return originalDisplay(groups, id)
+        } finally {
+          readSource = previous
+        }
+      })
+    let offerReads = 0
+    let offerQueries = 0
+    const observed = new WeakMap<
+      readonly resumeGrouping.ResumeWorkspaceGroup[],
+      readonly resumeGrouping.ResumeWorkspaceGroup[]
+    >()
+    const originalLookup = workspaceLookups.useRepoIdByWorkspace
+    vi.spyOn(workspaceLookups, 'useRepoIdByWorkspace').mockImplementation((workspaces) => {
+      let counted = observed.get(workspaces)
+      if (!counted) {
+        counted = [...workspaces]
+        workspaces.forEach((group, index) => {
+          Object.defineProperty(counted, index, {
+            configurable: true,
+            enumerable: true,
+            get() {
+              offerReads++
+              return group
+            }
+          })
+        })
+        observed.set(workspaces, counted)
+      }
+      const lookup = originalLookup(counted)
+      return (group) => {
+        offerQueries++
+        return lookup(group)
+      }
+    })
+    const groupsFor = (size: number) =>
+      Array.from({ length: size }, (_, i) => ({
+        ...rawFolderGroup(`unselected-${i}`),
+        get id() {
+          totalReads++
+          if (readSource === 'display') {
+            reads++
+          } else if (readSource === 'qualified') {
+            qualifiedReads++
+          } else {
+            unattributedReads++
+          }
+          return `unselected-${i}`
+        }
+      }))
+    const rows = Array.from({ length: count }, (_, i) =>
+      worktree(`w-${i}`, {
+        repoId: `git-${i}`,
+        hostId: i % 2 ? 'runtime:server' : 'local'
+      })
+    )
+    const folders = Array.from({ length: count }, (_, i) => folderRow(i, `missing-${i}`))
+    const candidates =
+      kind === 'git'
+        ? rows.map((row, i) => candidate(`chat-${i}`, row))
+        : folders.map((row, i): ResumeCandidate => ({
+            sessionId: `chat-${i}`,
+            workspaceId: `folder:${row.id}`,
+            workspaceKind: 'folder',
+            agent: 'codex',
+            trigger: 'quit',
+            latestPrompt: `Prompt chat-${i}`,
+            recordedAt: 0,
+            executionHostId: row.executionHostId ?? 'local'
+          }))
+    const repos = rows.map((row) => ({
+      id: row.repoId,
+      path: `/git/${row.repoId}`,
+      displayName: row.repoId,
+      executionHostId: row.hostId,
+      badgeColor: '',
+      addedAt: 0
+    }))
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings(''),
+        projectGroupingMode: 'folder',
+        projectGroupingOverrides: {}
+      },
+      repos: kind === 'git' ? repos : [],
+      projectGroups: groupsFor(100),
+      folderWorkspaces: kind === 'folder' ? folders : [],
+      worktreesByRepo:
+        kind === 'git' ? Object.fromEntries(rows.map((row) => [row.repoId, [row]])) : {}
+    })
+    const headers = vi.spyOn(resumeGrouping, 'resolveResumeGroupHeader')
+    const workspaceNames = vi.spyOn(workspaceDisplay, 'resolveNames')
+    render({ candidates })
+    expect(container.querySelectorAll('[role="treeitem"][aria-level="2"]').length).toBe(count)
+    expect(container.querySelectorAll('[aria-label*="Prompt chat-"]').length).toBe(count)
+    expect(reads).toBe(kind === 'git' ? 0 : 100)
+    expect(offerReads).toBeLessThanOrEqual(12 * count)
+    expect(offerQueries).toBeGreaterThanOrEqual(count)
+    expect(offerQueries).toBeLessThanOrEqual(12 * count)
+    const record = (stage: string, groupCount: number) => {
+      expect(unattributedReads).toBe(0)
+      expect(totalReads).toBe(reads + qualifiedReads + unattributedReads)
+      const measurement = {
+        kind,
+        count,
+        groupCount,
+        stage,
+        displayReads: reads,
+        qualifiedReads,
+        unattributedReads,
+        totalReads,
+        qualifiedResolutions,
+        offerReads,
+        offerQueries,
+        displayQueries: query.mock.calls.length,
+        headers: headers.mock.calls.length,
+        workspaceNames: workspaceNames.mock.calls.length,
+        workspaceOutputs: container.querySelectorAll('[role="treeitem"][aria-level="2"]').length,
+        promptOutputs: container.querySelectorAll('[aria-label*="Prompt chat-"]').length
+      }
+      process.stdout.write(`PG6-SCOPED ${JSON.stringify(measurement)}\n`)
+    }
+    record('mount', 100)
+    let coldReads = reads
+    const reset = () => {
+      reads = 0
+      qualifiedReads = 0
+      unattributedReads = 0
+      totalReads = 0
+      qualifiedResolutions = 0
+      offerReads = 0
+      offerQueries = 0
+      query.mockClear()
+      headers.mockClear()
+      workspaceNames.mockClear()
+    }
+    for (const groupCount of [100, 1000]) {
+      if (groupCount === 1000) {
+        reset()
+        act(() => useAppStore.setState({ projectGroups: groupsFor(groupCount) }))
+        expect(reads).toBe(kind === 'git' ? 0 : groupCount)
+        expect(headers.mock.calls.length).toBe(0)
+        expect(workspaceNames.mock.calls.length).toBe(0)
+        record('source-replacement', groupCount)
+        coldReads = reads
+      }
+      for (const [patchIndex, patch] of [
+        { activeRepoId: `unrelated-${groupCount}` },
+        { settings: { ...useAppStore.getState().settings!, terminalFontSize: groupCount } },
+        {
+          repos: [
+            ...useAppStore.getState().repos,
+            {
+              id: `other-${groupCount}`,
+              path: '/other',
+              displayName: 'Other',
+              executionHostId: 'runtime:other' as const,
+              badgeColor: '',
+              addedAt: 0
+            }
+          ]
+        },
+        { settings: { ...useAppStore.getState().settings!, projectGroupingOverrides: {} } }
+      ].entries()) {
+        reset()
+        act(() => useAppStore.setState(patch))
+        expect(reads).toBe(0)
+        expect(offerReads).toBeLessThanOrEqual(12 * count)
+        expect(offerQueries).toBeLessThanOrEqual(12 * count)
+        expect(query.mock.calls.length).toBeLessThanOrEqual(kind === 'git' ? 0 : 4 * count)
+        expect(headers.mock.calls.length).toBe(0)
+        expect(workspaceNames.mock.calls.length).toBe(0)
+        record(
+          ['active-repo', 'font', 'other-host-repo', 'equal-overrides'][patchIndex],
+          groupCount
+        )
+      }
+      reset()
+      const current = useAppStore.getState().projectGroups
+      const replaced = [
+        ...current.slice(0, -1),
+        {
+          ...rawFolderGroup(`unselected-${groupCount - 1}`, 'Other host renamed'),
+          executionHostId: 'runtime:other'
+        }
+      ]
+      act(() => useAppStore.setState({ projectGroups: replaced }))
+      expect(reads).toBe(kind === 'git' ? 0 : groupCount - 1)
+      expect(query.mock.calls.length).toBeLessThanOrEqual(kind === 'git' ? 0 : 4 * count)
+      expect(headers.mock.calls.length).toBe(0)
+      expect(workspaceNames.mock.calls.length).toBe(0)
+      record('last-row-replacement', groupCount)
+      process.stdout.write(
+        `PG6-C ${JSON.stringify({ kind, count, groupCount, coldReads, replacementReads: reads, replacementQueries: query.mock.calls.length })}\n`
+      )
+    }
+  }
+)
+
+it('preserves first raw folder naming, fallback, ticks, order and unaffected sibling rows through real updates', () => {
+  const first = rawFolderGroup('same', 'First')
+  const later = { ...rawFolderGroup('same', 'Later'), executionHostId: 'runtime:server' }
+  const other = rawFolderGroup('other', 'Other')
+  const folders = [folderRow(0, 'same'), folderRow(2, 'other')]
+  const candidates: ResumeCandidate[] = folders.map((row, i) => ({
+    sessionId: `chat-${i}`,
+    workspaceId: `folder:${row.id}`,
+    workspaceKind: 'folder',
+    agent: 'codex',
+    trigger: 'quit',
+    latestPrompt: `Prompt chat-${i}`,
+    recordedAt: 0,
+    executionHostId: 'local'
+  }))
+  useAppStore.setState({ projectGroups: [first, later, other], folderWorkspaces: folders })
+  const names = vi.spyOn(workspaceDisplay, 'resolveNames')
+  render({ candidates })
+  expect(nodeBox('First').getAttribute('aria-checked')).toBe('true')
+  const before = treeOutline()
+  names.mockClear()
+  act(() =>
+    useAppStore.setState({
+      projectGroups: [first, { ...later, name: 'Ignored later rename' }, other]
+    })
+  )
+  expect(names).not.toHaveBeenCalled()
+  expect(treeOutline()).toEqual(before)
+  act(() => useAppStore.setState({ projectGroups: [{ ...first, name: '' }, later, other] }))
+  expect(nodeBox('')).toBeTruthy()
+  expect(names.mock.calls.every((call) => call[2] === 'folder:f-0')).toBe(true)
+  names.mockClear()
+  act(() => useAppStore.setState({ projectGroups: [later, first, other] }))
+  expect(nodeBox('Later')).toBeTruthy()
+  expect(names.mock.calls.every((call) => call[2] === 'folder:f-0')).toBe(true)
+  act(() => useAppStore.setState({ projectGroups: [other] }))
+  expect(nodeBox('same')).toBeTruthy()
+  expect(chatBox('chat-0')).toBeTruthy()
+  act(() => nodeBox('same').click())
+  expect(chatBox('chat-0').getAttribute('aria-checked')).toBe('false')
+  expect(chatBox('chat-1').getAttribute('aria-checked')).toBe('true')
+  act(() => useAppStore.setState({ projectGroups: [first, other] }))
+  expect(nodeBox('First')).toBeTruthy()
+  const disclosure = itemOf(nodeBox('First')).querySelector<HTMLButtonElement>(
+    'button[aria-expanded]'
+  )!
+  act(() => disclosure.click())
+  expect(container.querySelector('[aria-label*="Prompt chat-0"]')).toBeNull()
+  act(() => disclosure.click())
+  expect(chatBox('chat-0').getAttribute('aria-checked')).toBe('false')
+})
+
+it('keeps offered-object identity, missing/null and current host ownership in the real lookup hook', () => {
+  const row = worktree('same', { repoId: 'local-repo', hostId: 'local' })
+  const remote = worktree('same', { repoId: 'server-repo', hostId: 'runtime:server' })
+  const offered = { workspaceId: row.id, candidates: [candidate('local-chat', row)] }
+  const other = { workspaceId: remote.id, candidates: [candidate('server-chat', remote)] }
+  const missing = { ...offered }
+  const workspaces = [offered, other, offered]
+  useAppStore.setState({ worktreesByRepo: { 'local-repo': [row], 'server-repo': [remote] } })
+  function Probe() {
+    const lookup = workspaceLookups.useRepoIdByWorkspace(workspaces)
+    return <output>{JSON.stringify([lookup(offered), lookup(other), lookup(missing)])}</output>
+  }
+  act(() => root.render(<Probe />))
+  expect(container.textContent).toBe('["local-repo","server-repo",null]')
+  act(() => useAppStore.setState({ worktreesByRepo: { 'server-repo': [remote] } }))
+  expect(container.textContent).toBe('[null,"server-repo",null]')
+  act(() =>
+    useAppStore.setState({
+      worktreesByRepo: { 'local-repo': [{ ...row, repoId: 'late' }], 'server-repo': [remote] }
+    })
+  )
+  expect(container.textContent).toBe('["late","server-repo",null]')
+})
+
+it('keeps the real resume route host-qualified and raw folder fallbacks exact through late data and reentry', () => {
+  const local = worktree('local', { repoId: 'twin', hostId: 'local' })
+  const server = worktree('server', { repoId: 'twin', hostId: 'runtime:server' })
+  const blank = worktree('blank', { repoId: 'folder-workspace:', hostId: 'local' })
+  const malformed = worktree('malformed', { repoId: 'folder-workspace:%', hostId: 'local' })
+  const repos = [
+    {
+      id: 'twin',
+      path: '/local',
+      displayName: 'Local checkout',
+      badgeColor: '',
+      addedAt: 0,
+      repoIcon: { type: 'emoji' as const, emoji: '🌿' }
+    },
+    {
+      id: 'twin',
+      path: '/server',
+      displayName: 'Server checkout',
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: 'runtime:server' as const,
+      repoIcon: { type: 'emoji' as const, emoji: '🛰️' }
+    },
+    {
+      id: 'folder-workspace:',
+      path: '/empty',
+      displayName: 'Empty prefix is Git',
+      badgeColor: '',
+      addedAt: 0
+    }
+  ]
+  const candidates = [local, server, blank, malformed].map((row, i) => candidate(`route-${i}`, row))
+  useAppStore.setState({
+    repos,
+    worktreesByRepo: {
+      twin: [local, server],
+      'folder-workspace:': [blank],
+      'folder-workspace:%': [malformed]
+    },
+    projectGroups: []
+  })
+  render({ candidates })
+  expect(nodeBox('Local checkout')).toBeTruthy()
+  expect(nodeBox('Server checkout')).toBeTruthy()
+  expect(container.textContent).toContain('🌿')
+  expect(container.textContent).toContain('🛰️')
+  expect(nodeBox('Empty prefix is Git')).toBeTruthy()
+  expect(nodeBox('%')).toBeTruthy()
+  act(() => useAppStore.setState({ projectGroups: [rawFolderGroup('%', 'Late exact')] }))
+  expect(nodeBox('Late exact')).toBeTruthy()
+  act(() => root.render(null))
+  act(() => useAppStore.setState({ repos: [repos[1]!, repos[0]!, repos[2]!] }))
+  render({ candidates })
+  expect(nodeBox('Local checkout')).toBeTruthy()
+  expect(nodeBox('Server checkout')).toBeTruthy()
 })

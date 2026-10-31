@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '../store/project-host-setup-selector'
 import { useEffect } from 'react'
 import { getSystemPrefersDarkSnapshot } from '../components/terminal-pane/use-system-prefers-dark'
 import {
@@ -61,7 +62,11 @@ export function useRuntimeGraphSync(): void {
           state.repos !== previousState.repos ||
           state.projects !== previousState.projects ||
           state.projectHostSetups !== previousState.projectHostSetups ||
-          state.projectOrderBy !== previousState.projectOrderBy
+          state.projectOrderBy !== previousState.projectOrderBy ||
+          state.localRepoCatalogHydrated !== previousState.localRepoCatalogHydrated ||
+          state.projectGroupingSettingsHydrated !== previousState.projectGroupingSettingsHydrated ||
+          getProjectGroupingIndexFromState(state) !==
+            getProjectGroupingIndexFromState(previousState)
         ) {
           scheduleRuntimeGraphSync()
         }

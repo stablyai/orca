@@ -1,3 +1,9 @@
+import type { Repo } from '../../../shared/repo-types'
+import type { ProjectGroupingSettings } from '../../../shared/project-grouping'
+import {
+  buildRepoProjectGroupingIndex,
+  type ProjectGroupingIndex
+} from '../../../shared/project-section-grouping'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AgentSessionWorkspaceKind } from '../../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
@@ -96,12 +102,24 @@ export function groupResumeCandidates(
 /** Group by owner in first-seen order; unresolved workspaces share one null group. */
 export function groupResumeWorkspacesByRepo(
   workspaces: readonly ResumeWorkspaceGroup[],
-  repoIdFor: (workspaceId: string) => string | null
+  repoIdFor: (workspaceId: string) => string | null,
+  repos: readonly Repo[] = [],
+  settings?: ProjectGroupingSettings | null,
+  grouping?: ProjectGroupingIndex,
+  groupKeys?: readonly string[]
 ): ResumeRepoGroup[] {
+  const projectIndex = groupKeys
+    ? null
+    : (grouping ?? buildRepoProjectGroupingIndex(repos, settings))
   const groups = new Map<string, ResumeRepoGroup>()
-  for (const workspace of workspaces) {
+  for (const [position, workspace] of workspaces.entries()) {
     const repoId = repoIdFor(workspace.workspaceId)
-    const key = repoId ?? '\0none'
+    const hostId = workspace.candidates[0]?.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+    const key =
+      groupKeys?.[position] ??
+      projectIndex?.groupByRepoHost.get(`${hostId}\0${repoId}`)?.key ??
+      repoId ??
+      '\0none'
     const existing = groups.get(key)
     if (existing) {
       existing.workspaces.push(workspace)
@@ -216,4 +234,13 @@ export function resolveResumeGroupHeader(
 
 export function allResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
   return candidates.map((candidate) => candidate.sessionId)
+}
+
+export function resumeWorkspaceLookup(workspaces: readonly ResumeWorkspaceGroup[]) {
+  const byId = new Map(workspaces.map((group) => [group.workspaceId, group]))
+  return <T>(read: (group: ResumeWorkspaceGroup) => T, fallback: T) =>
+    (id: string): T => {
+      const group = byId.get(id)
+      return group ? read(group) : fallback
+    }
 }

@@ -151,4 +151,41 @@ describe('startRuntimeStatusProbe', () => {
     expect(calls()).toBe(2)
     expect(requests()).toEqual([['status.get'], ['status.get']])
   })
+  it.each([100, 1000])(
+    'coalesces %i installed wake signals, recovers an undecodable reply and disposes late work',
+    async (count) => {
+      let answer!: (reply: RpcResponse) => void
+      const client = {
+        sendRequest: vi
+          .fn<UnvalidatedRpcRequestPort['sendRequest']>()
+          .mockResolvedValueOnce(ok(null))
+          .mockImplementation(
+            () =>
+              new Promise((resolve) => {
+                answer = resolve
+              })
+          )
+      }
+      const seen: (HostStatusReply | null)[] = []
+      const probe = startRuntimeStatusProbe(client, (status) => seen.push(status))
+      cancelProbe = probe
+      await flushMicrotasks()
+      expect(seen).toEqual([null])
+      probe.wake()
+      for (let n = 0; n < count; n++) {
+        probe.wake()
+      }
+      expect(client.sendRequest).toHaveBeenCalledTimes(2)
+      const first = answer
+      first(ok({ capabilities: ['ui.project-repo-filter-exact.v1'] }))
+      await flushMicrotasks()
+      expect(client.sendRequest).toHaveBeenCalledTimes(3)
+      expect(seen.at(-1)?.capabilities).toEqual(['ui.project-repo-filter-exact.v1'])
+      probe()
+      answer(ok({ capabilities: [] }))
+      await flushMicrotasks()
+      expect(seen).toHaveLength(2)
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
 })

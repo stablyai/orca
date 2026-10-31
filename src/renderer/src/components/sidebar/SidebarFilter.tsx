@@ -1,3 +1,4 @@
+import { useProjectFilterOptions } from './use-project-filter-options'
 import React, { useCallback, useMemo, useState } from 'react'
 import {
   CalendarClock,
@@ -69,7 +70,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
   )
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
-  const repos = useAppStore((s) => s.repos)
+  const { repos, selection, edit, ready } = useProjectFilterOptions(filterRepoIds)
   const addRepo = useAppStore((s) => s.addRepo)
 
   const [open, setOpen] = useState(false)
@@ -89,28 +90,18 @@ const SidebarFilter = React.memo(function SidebarFilter({
 
   const handleToggleRepo = useCallback(
     (repoId: string) => {
-      setFilterRepoIds(
-        filterRepoIds.includes(repoId)
-          ? filterRepoIds.filter((id) => id !== repoId)
-          : [...filterRepoIds, repoId]
-      )
+      if (!ready) {
+        return
+      }
+      setFilterRepoIds(edit(selection.full.has(repoId) ? 'remove' : 'complete', [repoId]))
     },
-    [filterRepoIds, setFilterRepoIds]
+    [selection.full, edit, setFilterRepoIds, ready]
   )
 
-  const canFilterRepos = repos.length > 1
-  // Ignore removed repo IDs so they cannot inflate counts or imply an active filter.
-  const selectedRepoIdSet = useMemo(() => {
-    const set = new Set<string>()
-    for (const r of repos) {
-      if (filterRepoIds.includes(r.id)) {
-        set.add(r.id)
-      }
-    }
-    return set
-  }, [repos, filterRepoIds])
-  const selectedCount = selectedRepoIdSet.size
-  const hasRepoFilter = selectedCount > 0
+  const canFilterRepos = repos.length > 1 || selection.active
+  const selectedRepoIdSet = selection.full
+  const selectedCount = selection.matchingKeys.length
+  const hasRepoFilter = selection.active
   const { hasAnyFilter, activeFilterCount } = useWorkspaceOptionsFilterBadge()
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
@@ -118,7 +109,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     commandValueOverride && filteredRepos.some((repo) => repo.id === commandValueOverride)
       ? commandValueOverride
       : (filteredRepos[0]?.id ?? '')
-  const allSelected = canFilterRepos && selectedCount === repos.length
+  const allSelected = canFilterRepos && selection.fullKeys.length === repos.length
 
   const clearAll = useCallback(() => {
     const store = useAppStore.getState()
@@ -127,8 +118,13 @@ const SidebarFilter = React.memo(function SidebarFilter({
 
   // Use current repos so Select All includes projects added while the popover stays open.
   const selectAllRepos = useCallback(() => {
-    setFilterRepoIds(repos.map((r) => r.id))
-  }, [repos, setFilterRepoIds])
+    setFilterRepoIds(
+      edit(
+        'complete',
+        repos.map((r) => r.id)
+      )
+    )
+  }, [repos, edit, setFilterRepoIds])
 
   const clearRepos = useCallback(() => setFilterRepoIds([]), [setFilterRepoIds])
 
@@ -240,13 +236,21 @@ const SidebarFilter = React.memo(function SidebarFilter({
           onChange={setHideDetachedHeadWorkspaces}
         />
 
+        {selection.unresolved.length > 0 && (
+          <span className="px-2 text-xs text-muted-foreground">
+            {translate(
+              'projects.savedUnavailable',
+              'Saved project selection · Unavailable projects'
+            )}
+          </span>
+        )}
         {canFilterRepos && (
           <>
             <DropdownMenuSeparator />
             <div className="flex items-center justify-between px-2 py-1">
               <span className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">
                 {translate('auto.components.sidebar.SidebarFilter.5f7085a077', 'Projects')}
-                {hasRepoFilter && (
+                {hasRepoFilter && selectedCount > 0 && (
                   <span className="ml-1.5 normal-case tracking-normal font-medium text-foreground">
                     · {selectedCount}
                   </span>
@@ -257,7 +261,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                   type="button"
                   onClick={selectAllRepos}
                   className="rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent"
-                  disabled={allSelected}
+                  disabled={!ready || allSelected}
                 >
                   {translate('auto.components.sidebar.SidebarFilter.139877b384', 'Select all')}
                 </button>
@@ -265,7 +269,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                   type="button"
                   onClick={clearRepos}
                   className="rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent"
-                  disabled={!hasRepoFilter}
+                  disabled={!ready || !hasRepoFilter}
                 >
                   {translate('auto.components.sidebar.SidebarFilter.779b7ba05d', 'Clear')}
                 </button>
@@ -307,6 +311,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                   return (
                     <CommandItem
                       key={r.id}
+                      disabled={!ready}
                       value={r.id}
                       onSelect={() => handleToggleRepo(r.id)}
                       className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
@@ -324,6 +329,9 @@ const SidebarFilter = React.memo(function SidebarFilter({
                           </span>
                         )}
                       </span>
+                      {selection.partial.has(r.id) && (
+                        <span>{translate('projects.partiallySelected', 'Partially selected')}</span>
+                      )}
                       {checked && (
                         <Check className="size-3 shrink-0 text-primary" strokeWidth={3} />
                       )}

@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { track } from '@/lib/telemetry'
@@ -213,7 +214,11 @@ export async function openProjectDefaultCheckout({
         result: 'revealed_project',
         reason: revealLinkedFailureReason
       })
-      finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
+      finalizeImportedRepoAfterSkip(
+        useAppStore.getState(),
+        repoId,
+        getProjectGroupingIndexFromState(useAppStore.getState())
+      )
       return
     }
     // Onboarding must reveal its default checkout even when the normal sidebar preference hides it.
@@ -243,7 +248,11 @@ export async function openProjectDefaultCheckout({
     result: 'revealed_project',
     reason
   })
-  finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
+  finalizeImportedRepoAfterSkip(
+    useAppStore.getState(),
+    repoId,
+    getProjectGroupingIndexFromState(useAppStore.getState())
+  )
 }
 
 export async function finishProjectAddWithDefaultCheckout({

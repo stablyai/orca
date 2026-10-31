@@ -1,19 +1,30 @@
+import type { SectionAppendContext } from './section-append-context'
+import type {
+  Row,
+  ImportedWorktreesCardCandidate,
+  NewExternalWorktreesInboxCandidate
+} from './row-types'
+import type { WorktreeGroupEntry, OrderedGroupEntry } from './worktree-group-entry'
+
+import { getRepoHostIdentity, getRepoHostIdentityForParts } from '../repo-host-identity'
+import {
+  getRepoExecutionHostId,
+  getRepoExecutionHostIdOrDefault,
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../execution-host'
+import { getProjectGroupingForRepo } from '../project-section-grouping'
 import type { Repo } from '../repo-types'
-import type { WorktreeOccurrencePlan } from '../worktree-occurrence-plan'
-import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
-import type { ExecutionHostId } from '../execution-host'
+
 import { getWorkspaceStatusFromGroupKey } from '../workspace-statuses'
 import type { PRGroupKey } from './group-keys'
-import type { NoticeHostContext } from './host-labels'
 import {
-  getHostWorktreeIds,
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
   getMixedHostContextLabels,
-  getProjectHeaderHostRepos
+  getProjectHeaderHostScope
 } from './host-labels'
-import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
-import type { ProjectGroupingIndex } from '../project-section-grouping'
+
 import {
   appendWorktreeRows,
   buildFolderWorkspaceRow,
@@ -21,61 +32,157 @@ import {
   buildNewExternalWorktreesInboxRow,
   buildPendingCreationRow
 } from './row-builders'
-import type {
-  ImportedWorktreesCardCandidate,
-  NewExternalWorktreesInboxCandidate,
-  PendingCreationRef,
-  GroupHeaderRow,
-  RepoOfWorktree,
-  Row,
-  WorktreeGroupBy
-} from './row-types'
 
-/** Everything section emission reads that stays fixed for one planSidebarRows call. */
-export type SectionAppendContext = {
-  result: Row[]
-  groupBy: WorktreeGroupBy
-  collapsedGroups: Set<string>
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  repoMap: Map<string, Repo>
-  repoOf: RepoOfWorktree
-  defaultHostId: ExecutionHostId
-  hostLabelById: ReadonlyMap<string, string> | undefined
-  projectIndex: ProjectGroupingIndex | null
-  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
-  newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
-  pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
-  mixedWorktreeHostContextLabels: Map<string, string> | undefined
-  noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
-  occurrencePlan: WorktreeOccurrencePlan<Worktree>
-}
+export type { SectionAppendContext } from './section-append-context'
 
-function getProjectHeaderHostScope(
-  ctx: SectionAppendContext,
-  group: WorktreeGroupEntry
-): Pick<GroupHeaderRow, 'hostRepos' | 'hostWorktreeCounts' | 'hostWorktreeIds'> {
-  const hostRepos = getProjectHeaderHostRepos({
-    group,
-    repoMap: ctx.repoMap,
-    repoOf: ctx.repoOf,
-    noticeRepoOf: (repoId) =>
-      [
-        ctx.importedWorktreesByRepo.get(repoId)?.repo,
-        ctx.newExternalWorktreesInboxByRepo.get(repoId)?.repo
-      ].filter((repo) => repo !== undefined),
-    hasPendingCreation: (repoId) => ctx.pendingByRepo.has(repoId),
-    defaultHostId: ctx.defaultHostId
-  })
-  if (!hostRepos) {
-    return {}
+function prepareProjectSection(ctx: SectionAppendContext, key: string, group: WorktreeGroupEntry) {
+  const registrations = ctx.projectIndex?.groupByKey.get(key)?.registrations
+  const owns = (repo: Repo) => {
+    const indexedOwner = ctx.projectIndex?.groupByRepoHost.get(getRepoHostIdentity(repo))
+    if (indexedOwner) {
+      return indexedOwner.key === key
+    }
+    return (
+      !registrations &&
+      getProjectGroupingForRepo(
+        repo.id,
+        ctx.repoMap,
+        ctx.projectIndex,
+        getRepoExecutionHostId(repo),
+        ctx.repoByHost
+      ).key === key
+    )
   }
-  const hostWorktreeIds = getHostWorktreeIds(group.items, ctx.repoOf, ctx.defaultHostId)
+  const firstRepoByHost = new Map<ExecutionHostId, Repo>()
+  const retainFirstRepoForHost = (repo: Repo) => {
+    const host = getRepoExecutionHostIdOrDefault(repo, ctx.defaultHostId)
+    if (!firstRepoByHost.has(host)) {
+      firstRepoByHost.set(host, repo)
+    }
+  }
+  const offer = (repo: Repo | undefined) => {
+    if (repo && owns(repo)) {
+      retainFirstRepoForHost(repo)
+    }
+  }
+  const observedHostIds = new Set<ExecutionHostId>()
+  offer(group.repo)
+  for (const worktree of group.items) {
+    const repo = ctx.repoOf(worktree)
+    observedHostIds.add(getWorktreeExecutionHostId(worktree, repo, ctx.defaultHostId))
+    offer(repo)
+  }
+  const repoIds =
+    group.repoIds.size > 0
+      ? [...group.repoIds]
+      : group.repo
+        ? [group.repo.id]
+        : key.startsWith('repo:')
+          ? [key.slice('repo:'.length)]
+          : []
+  const pendingKeys = registrations
+    ? registrations.map((setup) => getRepoHostIdentityForParts(setup.repoId, setup.hostId))
+    : (group.pendingBucketRefs ?? [])
+  const pendingRows: Row[] = []
+  const pendingHostsByRepo = new Map<string, ExecutionHostId[]>()
+  for (const identity of new Set(pendingKeys)) {
+    for (const creation of ctx.pendingByRepo.get(identity) ?? []) {
+      const row = buildPendingCreationRow(creation, ctx.repoMap, ctx.repoByHost)
+      pendingRows.push(row)
+      const hosts = pendingHostsByRepo.get(creation.repoId) ?? []
+      hosts.push(getRepoExecutionHostIdOrDefault(row.repo, ctx.defaultHostId))
+      pendingHostsByRepo.set(creation.repoId, hosts)
+    }
+  }
+  const importedRows: Row[] = []
+  const externalRows: Row[] = []
+  const importedById = new Map<string, ImportedWorktreesCardCandidate[]>()
+  const externalById = new Map<string, NewExternalWorktreesInboxCandidate[]>()
+  for (const ref of group.noticeRefs ?? []) {
+    if (ref.kind === 'imported') {
+      const candidates = importedById.get(ref.candidate.repo.id) ?? []
+      candidates.push(ref.candidate)
+      importedById.set(ref.candidate.repo.id, candidates)
+    } else {
+      const candidates = externalById.get(ref.candidate.repo.id) ?? []
+      candidates.push(ref.candidate)
+      externalById.set(ref.candidate.repo.id, candidates)
+    }
+  }
+  for (const id of repoIds) {
+    offer(ctx.repoMap.get(id))
+    for (const host of pendingHostsByRepo.get(id) ?? []) {
+      observedHostIds.add(host)
+    }
+    pendingHostsByRepo.delete(id)
+    for (const imported of importedById.get(id) ?? []) {
+      importedRows.push(
+        buildImportedWorktreesCardRow(
+          imported,
+          'repo-group',
+          ctx.noticeHostContextLabelByRepoId?.get(getRepoHostIdentity(imported.repo))
+        )
+      )
+      observedHostIds.add(getRepoExecutionHostIdOrDefault(imported.repo, ctx.defaultHostId))
+      retainFirstRepoForHost(imported.repo)
+    }
+    for (const external of externalById.get(id) ?? []) {
+      externalRows.push(
+        buildNewExternalWorktreesInboxRow(
+          external,
+          ctx.noticeHostContextLabelByRepoId?.get(getRepoHostIdentity(external.repo))
+        )
+      )
+      observedHostIds.add(getRepoExecutionHostIdOrDefault(external.repo, ctx.defaultHostId))
+      retainFirstRepoForHost(external.repo)
+    }
+  }
+  for (const hosts of pendingHostsByRepo.values()) {
+    for (const host of hosts) {
+      observedHostIds.add(host)
+    }
+  }
+  for (const setup of registrations ?? []) {
+    const raw = ctx.repoMap.get(setup.repoId)
+    offer(
+      ctx.repoByHost?.get(getRepoHostIdentityForParts(setup.repoId, setup.hostId)) ??
+        (raw && getRepoExecutionHostId(raw) === setup.hostId ? raw : undefined)
+    )
+  }
+  for (const row of pendingRows) {
+    if (row.type === 'pending-creation') {
+      offer(row.repo)
+    }
+  }
   return {
-    hostRepos,
-    hostWorktreeCounts: hostWorktreeIds
-      ? new Map([...hostWorktreeIds].map(([hostId, ids]) => [hostId, ids.length]))
+    repo: group.repo && owns(group.repo) ? group.repo : undefined,
+    displayRepo: group.displayRepo,
+    contextRepo: firstRepoByHost.values().next().value,
+    projectScope: registrations
+      ? {
+          key,
+          catalogHostId: group.repo ? getRepoExecutionHostId(group.repo) : undefined,
+          registrations,
+          context: (() => {
+            const context = firstRepoByHost.values().next().value
+            if (!context) {
+              return undefined
+            }
+            const hostId = getRepoExecutionHostId(context)
+            const setup = ctx.projectIndex?.setupByRepoHost.get(getRepoHostIdentity(context))
+            return { repoId: context.id, hostId, ...(setup ? { setupId: setup.id } : {}) }
+          })()
+        }
       : undefined,
-    hostWorktreeIds
+    anchorHostId: getRepoExecutionHostIdOrDefault(group.repo, ctx.defaultHostId),
+    observedHostIds,
+    labelHostIds: new Set([
+      ...(registrations?.map((setup) => setup.hostId) ?? []),
+      ...firstRepoByHost.keys(),
+      ...observedHostIds
+    ]),
+    firstRepoByHost,
+    rows: importedRows.concat(externalRows, pendingRows)
   }
 }
 
@@ -89,20 +196,17 @@ export function appendOrderedGroups(
     groupBy,
     collapsedGroups,
     workspaceStatuses,
-    repoMap,
+    workspaceStatusById,
     repoOf,
     defaultHostId,
     hostLabelById,
-    projectIndex,
-    importedWorktreesByRepo,
-    newExternalWorktreesInboxByRepo,
-    pendingByRepo,
     mixedWorktreeHostContextLabels,
     occurrencePlan
   } = ctx
   for (const [key, group] of groupsToAppend) {
     const isCollapsed = collapsedGroups.has(key)
-    const repo = group.repo
+    const section = groupBy === 'repo' ? prepareProjectSection(ctx, key, group) : undefined
+    const repo = section ? section.repo : group.repo
     const folderPairs = group.folderWorkspaces ?? []
     const header =
       groupBy === 'repo'
@@ -113,16 +217,21 @@ export function appendOrderedGroups(
             count: group.items.length,
             icon: { kind: 'project' as const },
             repo,
+            displayRepo: section?.displayRepo,
+            contextRepo: section?.contextRepo,
+            projectScope: section?.projectScope,
             projectGroupDepth,
-            ...getProjectHeaderHostScope(ctx, group)
+            ...(section ? getProjectHeaderHostScope(ctx, group, section) : {})
           }
         : groupBy === 'workspace-status'
           ? (() => {
               const workspaceStatus =
-                getWorkspaceStatusFromGroupKey(key, workspaceStatuses) ??
+                getWorkspaceStatusFromGroupKey(key, workspaceStatuses, workspaceStatusById) ??
                 workspaceStatuses[0]?.id ??
                 'in-progress'
-              const definition = workspaceStatuses.find((status) => status.id === workspaceStatus)
+              const definition = workspaceStatusById
+                ? workspaceStatusById.get(workspaceStatus)
+                : workspaceStatuses.find((status) => status.id === workspaceStatus)
               return {
                 type: 'header' as const,
                 key,
@@ -169,54 +278,18 @@ export function appendOrderedGroups(
 
     result.push(header)
     if (!isCollapsed) {
-      if (groupBy === 'repo') {
-        const repoIds =
-          group.repoIds.size > 0
-            ? [...group.repoIds]
-            : repo
-              ? [repo.id]
-              : key.startsWith('repo:')
-                ? [key.slice('repo:'.length)]
-                : []
-        for (const repoId of repoIds) {
-          const candidate = importedWorktreesByRepo.get(repoId)
-          if (candidate) {
-            result.push(
-              buildImportedWorktreesCardRow(
-                candidate,
-                'repo-group',
-                ctx.noticeHostContextLabelByRepoId?.get(repoId)
-              )
-            )
-          }
-        }
-        for (const repoId of repoIds) {
-          const candidate = newExternalWorktreesInboxByRepo.get(repoId)
-          if (candidate) {
-            result.push(
-              buildNewExternalWorktreesInboxRow(
-                candidate,
-                ctx.noticeHostContextLabelByRepoId?.get(repoId)
-              )
-            )
-          }
-        }
-        // Place in-progress creates atop their own repo so the workspace appears where it will land.
-        for (const repoId of repoIds) {
-          for (const creation of pendingByRepo.get(repoId) ?? []) {
-            result.push(buildPendingCreationRow(creation, repoMap))
-          }
-        }
+      for (const row of section?.rows ?? []) {
+        result.push(row)
       }
-      const hostContextLabelByRepoId =
-        groupBy === 'repo'
-          ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
-          : undefined
+      const hostContextLabelByHostId = section
+        ? getMixedHostContextLabels(section.labelHostIds, hostLabelById)
+        : undefined
       appendWorktreeRows(result, repoOf, occurrencePlan, {
         collapsedGroups,
         groupDepth: projectGroupDepth,
         sectionKey: key,
-        hostContextLabelByRepoId,
+        hostContextLabelByHostId,
+        defaultHostId,
         hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
       })
       for (const pair of folderPairs) {

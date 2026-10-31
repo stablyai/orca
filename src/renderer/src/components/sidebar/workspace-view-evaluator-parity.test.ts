@@ -264,7 +264,7 @@ describe('the shared Workspace options evaluator matches the sidebar it replaced
           hideSleepingWorkspaces: !t.showSleepingWorkspaces,
           visibleHostIds: t.visibleWorkspaceHostIds
         },
-        repos.map((repo) => repo.id)
+        repos.filter((repo) => t.filterRepoIds.includes(repo.id)).length
       )
       expect(count, JSON.stringify(t)).toBe(previousDesktopFilterCount(t))
     }

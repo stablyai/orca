@@ -1,10 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
-import { shallow } from 'zustand/shallow'
-import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
 import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
@@ -23,6 +19,7 @@ import {
   scopeHostSectionCollapse
 } from '../../../../../../shared/sidebar-list/host-section-collapse'
 import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-section-rows'
+import { collectHeaderRevealPlacements } from '../../../../../../shared/sidebar-list/header-reveal-placement'
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import {
   mergeDraggedHostSectionOrder,
@@ -30,57 +27,11 @@ import {
 } from '../../../../../../shared/sidebar-list/host-section-order'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
 import {
-  type SidebarHostOption,
-  buildSidebarHostOptions,
-  sidebarHostSemantics,
+  createSidebarHostOptionsSelector,
   createSidebarHostLabelsSelector
 } from '../../sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-
-function createSidebarHostOptionsSelector() {
-  let inputs: readonly unknown[] = []
-  let result: SidebarHostOption[] = []
-  return (
-    state: AppState,
-    repos: readonly Repo[],
-    settings: AppState['settings'],
-    hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
-  ): SidebarHostOption[] => {
-    const nextInputs = [
-      repos,
-      state.sshTargetLabels,
-      state.sshConnectionStates,
-      settings,
-      state.runtimeStatusByEnvironmentId,
-      state.runtimeEnvironments,
-      hostLabelOverrides,
-      state.wslHostStatuses,
-      settings?.experimentalWslHosts === true,
-      state.wslHostServerFiles === 'missing'
-    ]
-    if (shallow(inputs, nextInputs)) {
-      return result
-    }
-    inputs = nextInputs
-    const next = buildSidebarHostOptions({
-      repos,
-      sshTargetLabels: state.sshTargetLabels,
-      sshConnectionStates: state.sshConnectionStates,
-      settings,
-      runtimeEnvironments: state.runtimeEnvironments,
-      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
-      hostLabelOverrides,
-      wslHostStatuses: state.wslHostStatuses,
-      wslHostsEnabled: settings?.experimentalWslHosts === true,
-      wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
-    })
-    if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
-      result = next
-    }
-    return result
-  }
-}
 
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
@@ -116,7 +67,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         const separator = key.indexOf(' ')
         return {
           creationId: key.slice(0, separator),
-          repoId: key.slice(separator + 1)
+          repoId: key.slice(key.indexOf('\0', separator) + 1),
+          hostId: key.slice(separator + 1, key.indexOf('\0', separator))
         }
       }),
     [pendingCreationKeys]
@@ -145,6 +97,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         groupBy: args.groupBy,
         worktrees,
         repoMap,
+        repos,
         repoOfWorktree,
         prGroupOf: createSidebarPRGroupReader(repoMap, args.prCache),
         repoOrder,
@@ -167,6 +120,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       }),
     [
       args.groupBy,
+      repos,
       worktrees,
       repoMap,
       repoOfWorktree,
@@ -236,6 +190,28 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       ),
     [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
   )
+  const headerRevealPlacements = useMemo(
+    () =>
+      collectHeaderRevealPlacements(
+        addHostSectionRows({
+          rows: rowPlan.render(new Set()),
+          hostOptions: orderedHostOptions,
+          workspaceHostScope: args.workspaceHostScope,
+          visibleWorkspaceHostIds: args.visibleWorkspaceHostIds,
+          defaultHostId,
+          localHostLabel: getLocalExecutionHostLabel(),
+          preferProjectGrouping: true
+        }),
+        rowPlan.headerRevealPaths
+      ),
+    [
+      rowPlan,
+      orderedHostOptions,
+      args.workspaceHostScope,
+      args.visibleWorkspaceHostIds,
+      defaultHostId
+    ]
+  )
   const sectionRows = useMemo(() => {
     const sectioned = addHostSectionRows({
       rows,
@@ -273,6 +249,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   const headerHostOptions: readonly ExecutionHostRegistryEntry[] = hostOptions
   return {
     occurrencePlan: rowPlan.occurrencePlan,
+    headerRevealPlacements,
     hostOptions: headerHostOptions,
     effectiveCollapsedGroups,
     rows,

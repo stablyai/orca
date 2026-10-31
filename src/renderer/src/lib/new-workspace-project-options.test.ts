@@ -65,6 +65,18 @@ function group(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
 }
 
 describe('buildNewWorkspaceProjectOptions', () => {
+  it('offers a physical group when only its alias registration is eligible', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [project(), project({ id: 'repo:alias' })],
+      projectHostSetups: [
+        setup({ id: 'canonical', repoId: 'canonical' }),
+        setup({ id: 'alias', repoId: 'alias', projectId: 'repo:alias' })
+      ],
+      eligibleRepos: [repo('alias')]
+    })
+    expect(options.map((option) => option.id)).toEqual(['project:github:stablyai/orca'])
+  })
+
   it('deduplicates a logical project across local and SSH setups', () => {
     const options = buildNewWorkspaceProjectOptions({
       projects: [project()],
@@ -77,9 +89,9 @@ describe('buildNewWorkspaceProjectOptions', () => {
 
     expect(options).toEqual([
       {
-        id: 'github:stablyai/orca',
+        id: 'project:github:stablyai/orca',
         kind: 'project',
-        projectId: 'github:stablyai/orca',
+        projectId: 'project:github:stablyai/orca',
         displayName: 'orca',
         badgeColor: '#111111',
         detail: 'stablyai/orca'
@@ -102,7 +114,7 @@ describe('buildNewWorkspaceProjectOptions', () => {
       eligibleRepos: [repo('local-repo'), repo('other-repo')]
     })
 
-    expect(options.map((option) => option.id)).toEqual(['github:stablyai/orca'])
+    expect(options.map((option) => option.id)).toEqual(['project:github:stablyai/orca'])
   })
 
   it('excludes projects configured only on removed hosts', () => {
@@ -130,7 +142,7 @@ describe('buildNewWorkspaceProjectOptions', () => {
     })
 
     expect(options).toEqual([
-      expect.objectContaining({ id: 'github:stablyai/orca', detail: 'stablyai/orca' })
+      expect.objectContaining({ id: 'project:github:stablyai/orca', detail: 'stablyai/orca' })
     ])
   })
 
@@ -167,11 +179,11 @@ describe('buildNewWorkspaceProjectOptions', () => {
 
     expect(options).toEqual([
       expect.objectContaining({
-        id: 'project:merchant-b',
+        id: 'project:project:merchant-b',
         detail: '/workspace/admin/merchant'
       }),
       expect.objectContaining({
-        id: 'project:merchant-a',
+        id: 'project:project:merchant-a',
         detail: '/workspace/storefront/merchant'
       })
     ])
@@ -407,8 +419,8 @@ describe('buildNewWorkspaceCreateTargetOptions', () => {
     })
 
     expect(options.map((option) => option.id).sort()).toEqual([
-      'github:stablyai/orca',
-      'project-group:folder-group'
+      'project-group:folder-group',
+      'project:github:stablyai/orca'
     ])
     expect(options.find((option) => option.id === 'project-group:folder-group')).toMatchObject({
       kind: 'project-group',

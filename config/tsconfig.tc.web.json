@@ -9,6 +9,7 @@
   ],
   "include": [
     "../src/renderer/src/env.d.ts",
+    "../src/types/build-constants.d.ts",
     "../src/renderer/src/**/*",
     "../src/renderer/src/**/*.tsx",
     "../src/preload/api-types.ts",

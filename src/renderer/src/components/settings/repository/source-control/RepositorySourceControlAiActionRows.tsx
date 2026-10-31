@@ -65,6 +65,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host
 
 export function RepositorySourceControlAiActionRows({
   repoId,
+  repo,
   repoAi,
   source,
   defaultTuiAgent,
@@ -80,7 +81,6 @@ export function RepositorySourceControlAiActionRows({
   onActionSave
 }: RepositorySourceControlAiActionRowsProps): React.JSX.Element {
   useSourceControlActionAgentInventory()
-  const repo = useAppStore((state) => state.repos.find((repo) => repo.id === repoId) ?? null)
   const rows = sourceControlRepoAgentRows(repo)
   const observation = useAgentMenuObservation(rows.target, true, rows.detectionTarget)
   const canSaveSurface = canSaveSourceControlActionSurface(rows.target)

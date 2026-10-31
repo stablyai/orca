@@ -18,6 +18,7 @@ import {
 import { buildFilterRepos, type WorkspaceSectionRepo } from './workspace-filter-repos'
 
 export function useWorkspaceSections(args: {
+  exactProjectRepoFilters?: boolean
   displayWorktrees: Worktree[]
   sortMode: WorkspaceSortBy
   filters: FilterState
@@ -55,8 +56,13 @@ export function useWorkspaceSections(args: {
   } = args
 
   const uniqueRepos = useMemo(
-    () => buildFilterRepos(filterCatalogRepos, displayWorktrees),
-    [filterCatalogRepos, displayWorktrees, t]
+    () =>
+      buildFilterRepos(
+        filterCatalogRepos,
+        displayWorktrees,
+        args.exactProjectRepoFilters ? projectCatalog.grouping : undefined
+      ),
+    [filterCatalogRepos, displayWorktrees, projectCatalog.grouping, args.exactProjectRepoFilters, t]
   )
 
   const repoById = useMemo(

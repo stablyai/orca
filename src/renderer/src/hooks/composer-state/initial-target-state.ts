@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import type { ComposerModel } from './composer-model'
 import type { ComposerInitialTargetModel } from './initial-target-model'
 
@@ -10,6 +12,7 @@ type ComposerInitialTargetStateInput = Pick<
   | 'initialRepoId'
   | 'initialTaskSourceContext'
   | 'initialWorkspaceTarget'
+  | 'initialProjectScope'
   | 'initialWorkspaceStatus'
   | 'newWorkspaceDraft'
   | 'persistDraft'
@@ -29,6 +32,7 @@ import { findActionableFolderProjectGroup } from '@/lib/new-workspace-project-op
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 
 export function useComposerInitialTargetState(input: ComposerInitialTargetStateInput) {
+  const grouping = useAppStore(getProjectGroupingIndexFromState)
   const {
     actionableHostIds,
     decisions,
@@ -37,6 +41,7 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     initialRepoId,
     initialTaskSourceContext,
     initialWorkspaceTarget,
+    initialProjectScope,
     initialWorkspaceStatus,
     newWorkspaceDraft,
     persistDraft,
@@ -79,6 +84,7 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
   )
 
   const resolvedInitialWorkspaceTarget = resolveWorkspaceCreationTarget({
+    grouping,
     eligibleRepos,
     projects,
     projectHostSetups,
@@ -86,6 +92,7 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     initialRepoId,
     activeRepoId: seedActiveRepoId,
     projectId: initialRunSeed.projectId,
+    projectScope: initialRunSeed.projectId ? undefined : initialProjectScope,
     hostId: initialRunSeed.hostId,
     projectHostSetupId: initialRunSeed.projectHostSetupId,
     projectHostSetupHostId: initialWorkspaceTarget ? initialRunSeed.hostId : null,
@@ -103,8 +110,12 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
   const [pendingInitialWorkspaceTarget, setPendingInitialWorkspaceTarget] = useState<
     ComposerInitialTargetModel['initialRunSeed'] | null
   >(
-    initialWorkspaceTarget && resolvedInitialWorkspaceTarget.status === 'unavailable'
-      ? initialRunSeed
+    (initialWorkspaceTarget || initialProjectScope) &&
+      resolvedInitialWorkspaceTarget.status === 'unavailable'
+      ? {
+          ...initialRunSeed,
+          projectId: initialRunSeed.projectId ?? initialProjectScope?.key ?? null
+        }
       : null
   )
 

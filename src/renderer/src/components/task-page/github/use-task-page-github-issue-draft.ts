@@ -1,3 +1,4 @@
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import type { TaskPageGitHubCacheReconciliationModel } from './use-task-page-github-cache-reconciliation'
 import { useState, useMemo, useEffect } from 'react'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
@@ -24,7 +25,10 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
 
   // Why: fall back to the first selected repo if the chosen id drops from the selection mid-dialog, so submit always has a valid target.
   const newIssueTargetRepo = useMemo(
-    () => selectedRepos.find((r) => r.id === newIssueRepoId) ?? selectedRepos[0] ?? null,
+    () =>
+      selectedRepos.find((r) => getRepoHostIdentity(r) === newIssueRepoId) ??
+      selectedRepos[0] ??
+      null,
     [selectedRepos, newIssueRepoId]
   )
   const newIssueSourceContext = useMemo(
@@ -43,7 +47,11 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
     if (target.kind !== 'environment') {
       return null
     }
-    return repos.some((repo) => repo.id === newIssueTargetRepo.id) ? target : null
+    return repos.some(
+      (repo) => getRepoHostIdentity(repo) === getRepoHostIdentity(newIssueTargetRepo)
+    )
+      ? target
+      : null
   }, [newIssueSourceContext, newIssueTargetRepo, repos, settings])
   const newIssueRepoLabels = useRepoLabels(
     newIssueOpen ? (newIssueTargetRepo?.path ?? null) : null,
@@ -60,7 +68,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
   useEffect(() => {
     const reset = resolveVanishedNewIssueRepoReset(
       newIssueRepoId,
-      selectedRepos.map((r) => r.id)
+      selectedRepos.map(getRepoHostIdentity)
     )
     if (!reset) {
       return

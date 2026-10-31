@@ -7,6 +7,7 @@ import {
 import { useAppStore } from '@/store'
 
 const TOUR_SOURCES = {
+  'project-grouping-upgrade': 'merged_project_header',
   'workspace-board': 'workspace_board_visible',
   'workspace-agent-sessions': 'workspace_agent_sessions_visible',
   browser: 'browser_visible',
@@ -65,6 +66,7 @@ export function useContextualTour(
   const requestContextualTour = useAppStore((s) => s.requestContextualTour)
   const suppressContextualTour = useAppStore((s) => s.suppressContextualTour)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const upgradeAudience = useAppStore((state) => state.projectGroupingUpgradeTipAudience)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const activeModal = useAppStore((s) => s.activeModal)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
@@ -163,7 +165,8 @@ export function useContextualTour(
       typeof window === 'undefined' ||
       typeof document === 'undefined' ||
       !persistedUIReady ||
-      contextualToursAutoEligible !== true ||
+      (contextualToursAutoEligible !== true &&
+        !(id === 'project-grouping-upgrade' && upgradeAudience?.membership === 'eligible')) ||
       contextualToursOnboardingVisible ||
       contextualToursBlockingSurfaceVisible ||
       activeContextualTourId !== null ||
@@ -248,6 +251,7 @@ export function useContextualTour(
     contextualToursBlockingSurfaceVisible,
     activeModal,
     contextualToursAutoEligible,
+    upgradeAudience,
     contextualTourShownThisSession,
     contextualToursOnboardingVisible,
     contextualToursSeenIds,

@@ -1,3 +1,4 @@
+import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -29,7 +30,10 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
-import { pruneDeregisteredRepoUiResidue } from './repo-lifecycle-ui-residue'
+import {
+  pruneDeregisteredRepoUiResidue,
+  retireRemovedProjectGroupingState
+} from './repo-lifecycle-ui-residue'
 import { isWslMoveProjectSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -85,6 +89,15 @@ export class RepoLifecycleOperations {
   }
 
   removeProjectForHost(target: RepoHostTarget): void {
+    const state = this[repoLifecycleOperationsContext].runtime.state
+    const removedProjectIds = new Set(
+      state.repos
+        .filter(
+          (repo) =>
+            repo.id === target.id && getRepoExecutionHostId(repo) === getRepoExecutionHostId(target)
+        )
+        .map(getProjectIdentityKey)
+    )
     const id = target.id
     const hostId = getRepoExecutionHostId(target)
     const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
@@ -107,6 +120,7 @@ export class RepoLifecycleOperations {
       delete this[repoLifecycleOperationsContext].runtime.state.retiredWorktreeNamesByRepo?.[id]
     }
     syncProjectHostSetupCompatibilityState(this)
+    retireRemovedProjectGroupingState(state, removedProjectIds)
     // Paired repos may be absent locally while same-ID rows remain on another host; prune only this host.
     const pairedHost = parseExecutionHostId(hostId)?.kind === 'runtime'
     pruneWorktreeStateForRepo(this, id, idStillPresent || pairedHost ? hostId : null)
@@ -267,6 +281,9 @@ export function syncProjectHostSetupCompatibilityState(owner: RepoLifecycleOpera
     owner[repoLifecycleOperationsContext].runtime.state,
     owner[repoLifecycleOperationsContext].runtime.state.repos
   )
+  if (compatibilityState.settings) {
+    owner[repoLifecycleOperationsContext].runtime.state.settings = compatibilityState.settings
+  }
   owner[repoLifecycleOperationsContext].runtime.state.projects = compatibilityState.projects
   owner[repoLifecycleOperationsContext].runtime.state.projectHostSetups =
     compatibilityState.projectHostSetups

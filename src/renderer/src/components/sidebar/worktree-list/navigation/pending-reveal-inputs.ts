@@ -1,3 +1,4 @@
+import type { HeaderRevealPlacement } from '../../../../../../shared/sidebar-list/header-reveal-placement'
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
@@ -28,6 +29,7 @@ export const MAX_REVEAL_RETRIES = 8
 
 export type PendingSidebarRevealArgs = {
   occurrencePlan?: WorktreeOccurrencePlan<Worktree>
+  headerRevealPlacements?: ReadonlyMap<string, HeaderRevealPlacement>
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
   clearPendingRevealWorktreeId: (expected?: PendingSidebarWorktreeReveal | null) => void

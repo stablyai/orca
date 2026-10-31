@@ -33,6 +33,7 @@ type DashboardLaunchCatalog = {
   foldersById: Map<string, AppState['folderWorkspaces'][number]>
   groupsById: Map<string, AppState['projectGroups'][number]>
   reposById: Map<string, AppState['repos'][number]>
+  repoIdByWorktreeId: Map<string, string>
   worktreesByRepoAndId: Map<string, Map<string, AppState['worktreesByRepo'][string][number]>>
 }
 
@@ -41,6 +42,11 @@ function buildDashboardLaunchCatalog(state: DashboardLaunchOptionState): Dashboa
     foldersById: new Map((state.folderWorkspaces ?? []).map((folder) => [folder.id, folder])),
     groupsById: new Map((state.projectGroups ?? []).map((group) => [group.id, group])),
     reposById: new Map((state.repos ?? []).map((repo) => [repo.id, repo])),
+    repoIdByWorktreeId: new Map(
+      Object.entries(selectWorktreesByRepo(state) ?? {}).flatMap(([repoId, worktrees]) =>
+        worktrees.map((worktree) => [worktree.id, repoId] as const)
+      )
+    ),
     worktreesByRepoAndId: new Map(
       Object.entries(selectWorktreesByRepo(state) ?? {}).map(([repoId, worktrees]) => [
         repoId,
@@ -82,6 +88,8 @@ function detectedAgentsForWorktree(
     return connectionId ? (state.remoteDetectedAgentIds?.[connectionId] ?? []) : []
   }
 
+  // Snapshot project keys identify groups; launch detection needs the workspace's own checkout.
+  repoId = catalog.repoIdByWorktreeId.get(worktreeId) ?? repoId
   const worktree = catalog.worktreesByRepoAndId.get(repoId)?.get(worktreeId)
   const repo = catalog.reposById.get(worktree?.repoId ?? repoId)
   const host = parseExecutionHostId(worktree?.hostId ?? repo?.executionHostId)

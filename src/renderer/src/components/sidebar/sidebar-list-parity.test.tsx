@@ -6,6 +6,9 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { makeRepo, makeWorktree } from './worktree-list-lineage-card-test-fixtures'
 import { SidebarInputsFeed } from '../../../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
 import { TestPhone } from '../../../../main/runtime/sidebar-inputs/sidebar-inputs-feed.test-fixture'
 import { isActiveSidebarWorkspace } from '../../../../shared/sidebar-list/active-workspace'
@@ -89,11 +92,13 @@ function desktopActiveRowKeys(rows: readonly HostSectionRow[], state: AppState):
 
 function desktopList(
   state: Partial<AppState>,
-  useListModel?: Parameters<typeof useGoldenSidebarPipeline>[0]
+  useListModel?: Parameters<typeof useGoldenSidebarPipeline>[0],
+  inspect?: (model: ReturnType<typeof useGoldenSidebarPipeline>) => void
 ): string[] {
   useAppStore.setState(state)
   const { result, unmount } = renderHook(() => useGoldenSidebarPipeline(useListModel))
   const { sectionRows } = result.current.rowModel
+  inspect?.(result.current)
   const lines = projectParityRows(
     sectionRows,
     desktopActiveRowKeys(sectionRows, useAppStore.getState())
@@ -134,11 +139,14 @@ function worldState(view: GoldenView, extra: Partial<AppState> = {}): Partial<Ap
   return { ...base, ...parityWorldOverrides(base), ...extra }
 }
 
-async function windowFeedList(state: Partial<AppState>): Promise<string[]> {
+async function windowFeedList(
+  state: Partial<AppState>,
+  inspect?: (model: ReturnType<typeof useGoldenSidebarPipeline>) => void
+): Promise<string[]> {
   const { installed } = await installFeed(state)
   windowFeed = { domains: readFeedDomainsSwitchedOn(installed), readId: 1 }
   try {
-    return desktopList(state, useMainSidebarListModel)
+    return desktopList(state, useMainSidebarListModel, inspect)
   } finally {
     windowFeed = null
   }
@@ -187,6 +195,79 @@ describe('sidebar list parity: desktop window and feed reader', () => {
     useAppStore.setState(initialState, true)
     vi.useRealTimers()
   })
+
+  it.each(['repository', 'host', 'folder'] as const)(
+    'keeps the populated local and empty same-ID server header concrete through both desktop callers in %s mode',
+    async (mode) => {
+      const local = {
+        ...makeRepo(),
+        id: 'same',
+        displayName: 'App',
+        path: '/local/app',
+        executionHostId: 'local' as const,
+        upstream: { owner: 'org', repo: 'app' }
+      }
+      const server = { ...local, path: '/server/app', executionHostId: 'runtime:env-1' as const }
+      const plain = {
+        ...makeRepo(),
+        id: 'plain',
+        displayName: 'Plain',
+        kind: 'folder' as const,
+        path: '/plain'
+      }
+      const repos = [local, server, plain]
+      const projection = projectHostSetupProjectionFromRepos(repos)
+      const row = {
+        ...makeWorktree({
+          id: 'same::/local/feature',
+          displayName: 'Feature',
+          branch: 'feature',
+          sortOrder: 1,
+          instanceId: 'local'
+        }),
+        repoId: 'same',
+        hostId: 'local' as const
+      }
+      const state: Partial<AppState> = {
+        ...initialState,
+        repos,
+        projects: [...projection.projects],
+        projectHostSetups: [...projection.setups],
+        worktreesByRepo: { same: [row] },
+        settings: { ...getDefaultSettings(''), projectGroupingMode: mode },
+        groupBy: 'repo',
+        sortBy: 'manual',
+        projectOrderBy: 'manual',
+        visibleWorkspaceHostIds: null,
+        workspaceHostScope: 'all'
+      }
+      const inspect = (model: ReturnType<typeof useGoldenSidebarPipeline>) => {
+        const headers = model.rowModel.rows.filter(
+          (candidate): candidate is Extract<typeof candidate, { type: 'header' }> =>
+            candidate.type === 'header' && candidate.icon.kind === 'project'
+        )
+        expect(headers).toHaveLength(mode === 'repository' ? 2 : 3)
+        expect(headers.find((header) => header.key === 'project:repo:plain')?.repo?.path).toBe(
+          '/plain'
+        )
+        if (mode !== 'repository') {
+          const remote = headers.find((header) => header.repo?.executionHostId === 'runtime:env-1')
+          expect(remote?.repo?.path).toBe('/server/app')
+          expect(remote?.count).toBe(0)
+          expect(headers.find((header) => header.repo?.executionHostId === 'local')?.count).toBe(1)
+        }
+        expect(
+          model.rowModel.rows
+            .filter((candidate) => candidate.type === 'item')
+            .map((item) => item.worktree.hostId)
+        ).toEqual(['local'])
+      }
+      const windowRows = desktopList(state, undefined, inspect)
+      useAppStore.setState(initialState, true)
+      const feedRows = await windowFeedList(state, inspect)
+      expect(feedRows).toEqual(windowRows)
+    }
+  )
 
   for (const groupBy of GROUP_BYS) {
     it(`agrees for groupBy=${groupBy} across sort, project order, pinned policy and collapse`, async () => {

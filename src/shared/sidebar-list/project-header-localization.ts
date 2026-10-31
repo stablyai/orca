@@ -14,6 +14,7 @@ export function localizeProjectHeader(
   return {
     ...projectHeader,
     repo,
+    contextRepo: repo,
     anchorRepo: row.repo,
     hostId,
     count: row.hostWorktreeCounts?.get(hostId) ?? 0,

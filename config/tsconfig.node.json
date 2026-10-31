@@ -16,6 +16,7 @@
     "./scripts/vitest-node-runtime-pool.ts",
     "./scripts/vitest-module-cache-resolution-key.ts",
     "../src/main/**/*",
+    "../mobile/src/worktree/project-sections-owner-recovery.test.ts",
     "../src/cli/runtime/transport.ts",
     "../src/cli/runtime/envelope-schema.ts",
     "../src/cli/runtime/types.ts",

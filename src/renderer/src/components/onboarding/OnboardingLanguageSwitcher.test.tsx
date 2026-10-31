@@ -271,8 +271,11 @@ describe('onboarding language request', () => {
           finishSave = resolve
         })
         const settings = useAppStore.getState().settings
-        if (settings && (change.uiLanguage === 'zh' || change.uiLanguage === 'zh-Hant')) {
-          useAppStore.setState({ settings: { ...settings, uiLanguage: change.uiLanguage } })
+        if (settings) {
+          const updates = typeof change === 'function' ? change(settings) : change
+          if (updates.uiLanguage === 'zh' || updates.uiLanguage === 'zh-Hant') {
+            useAppStore.setState({ settings: { ...settings, uiLanguage: updates.uiLanguage } })
+          }
         }
       }
     )

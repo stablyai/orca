@@ -1,3 +1,5 @@
+import type { SettingsUpdate } from '@/store/slices/settings'
+import { ProjectGroupingSetting } from './ProjectGroupingSetting'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { OpenInMenuSetting } from './OpenInMenuSetting'
@@ -9,14 +11,16 @@ import { GlobalWorktreeVisibilitySourcesSetting } from './GlobalWorktreeVisibili
 import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 
 type GeneralWorkspaceSettingsSectionProps = {
+  highlightedSettingId?: string | null
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: SettingsUpdate) => void
   updateSettingsOrThrow?: (updates: Partial<GlobalSettings>) => void | Promise<void>
   defaultsSupported?: boolean
   sourceDefaultsSupported?: boolean
 }
 
 export function GeneralWorkspaceSettingsSection({
+  highlightedSettingId,
   settings,
   updateSettings,
   updateSettingsOrThrow = updateSettings,
@@ -35,6 +39,18 @@ export function GeneralWorkspaceSettingsSection({
           'Configure where new workspaces are created.'
         )}
       />
+
+      <div
+        id="general-projects"
+        data-settings-section="general-projects"
+        data-highlighted={highlightedSettingId === 'general-projects' ? 'true' : undefined}
+        className="scroll-mt-6 rounded-md transition-[background-color,box-shadow] duration-500 data-[highlighted=true]:bg-accent data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-inset data-[highlighted=true]:ring-ring/50 motion-reduce:transition-none"
+      >
+        <SettingsSubsectionHeader
+          title={translate('settings.projectGrouping.projects', 'Projects')}
+        />
+        <ProjectGroupingSetting settings={settings} updateSettings={updateSettings} />
+      </div>
 
       <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
 

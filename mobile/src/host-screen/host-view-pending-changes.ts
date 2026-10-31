@@ -1,3 +1,4 @@
+import { WORKSPACE_ROW_FILTER_UI_FIELDS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import type {
   MobileViewPatch,
   MobileViewState,
@@ -6,7 +7,13 @@ import type {
 
 // Show the desired value until the desktop answers; a slow response is not a refusal.
 export type PendingViewChange = { opId: number; sentAt: number } & (
-  | { kind: 'view'; patch: MobileViewPatch; payload: WorkspaceViewSettings }
+  | {
+      kind: 'view'
+      patch: MobileViewPatch
+      payload: WorkspaceViewSettings
+      filterRepoIdsMode?: 'exact'
+      dispatched?: true
+    }
   | { kind: 'collapse'; key: string; collapsed: boolean }
 )
 
@@ -61,7 +68,42 @@ export function addPendingViewChange(
 ): PendingViewChange[] {
   const writes = writesOf(change)
   return [
-    ...pending.filter((earlier) => [...writesOf(earlier).keys()].some((key) => !writes.has(key))),
+    ...pending.flatMap<PendingViewChange>((earlier) => {
+      if (earlier.kind === 'collapse') {
+        return writes.has(`collapse:${earlier.key}`) ? [] : [earlier]
+      }
+      if (![...writesOf(earlier).keys()].some((key) => writes.has(key))) {
+        return [earlier]
+      }
+      const payload = Object.fromEntries(
+        Object.entries(earlier.payload).filter(([key]) => !writes.has(key))
+      )
+      if (!Object.keys(payload).length) {
+        return []
+      }
+      const filters =
+        earlier.patch.filters &&
+        Object.fromEntries(
+          Object.entries(earlier.patch.filters).filter(
+            ([key]) =>
+              !Object.entries(WORKSPACE_ROW_FILTER_UI_FIELDS).some(
+                ([filter, field]) => filter === key && writes.has(field)
+              )
+          )
+        )
+      const patch = Object.fromEntries(
+        Object.entries(earlier.patch).filter(([key]) => key !== 'filters' && !writes.has(key))
+      )
+      const { filterRepoIdsMode, ...rest } = earlier
+      return [
+        {
+          ...rest,
+          payload,
+          patch: { ...patch, ...(filters && Object.keys(filters).length ? { filters } : {}) },
+          ...(payload.filterRepoIds !== undefined && filterRepoIdsMode ? { filterRepoIdsMode } : {})
+        }
+      ]
+    }),
     change
   ]
 }
@@ -73,7 +115,10 @@ export function reconcilePendingViewChanges(
   sentByOpId: number
 ): PendingViewChange[] {
   return pending.filter((change, index) => {
-    if (change.opId > sentByOpId) {
+    if (
+      change.opId > sentByOpId ||
+      (change.kind === 'view' && change.filterRepoIdsMode === 'exact' && !change.dispatched)
+    ) {
       return true
     }
     const later = new Set(pending.slice(index + 1).flatMap((next) => [...writesOf(next).keys()]))

@@ -71,12 +71,18 @@ export function SwitchRow(props: {
   )
 }
 
-export function DrillRow(props: { label: string; value: string; onPress: () => void }) {
+export function DrillRow(props: {
+  label: string
+  value: string
+  onPress: () => void
+  disabled?: boolean
+}) {
   return (
     <ListRow
       title={props.label}
       value={props.value || undefined}
       navigates
+      disabled={props.disabled}
       onPress={props.onPress}
     />
   )

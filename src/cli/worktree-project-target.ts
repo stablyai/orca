@@ -1,3 +1,5 @@
+import { selectProjectGroupTarget } from '../shared/project-grouping'
+import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import { normalizeExecutionHostId, type ParsedExecutionHost } from '../shared/execution-host'
 import type { ProjectHostSetup } from '../shared/project-types'
 import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host-flag'
@@ -37,18 +39,32 @@ export function assertWorkspaceTargetFlagsCompatible(flags: Map<string, string |
 function selectSetupOnHost(
   candidates: readonly ProjectHostSetup[],
   host: ParsedExecutionHost | undefined,
-  selectorLabel: string
+  selectorLabel: string,
+  path?: string
 ): ProjectHostSetup | undefined {
+  const matching = path
+    ? candidates.filter(
+        (candidate) =>
+          normalizeRuntimePathForComparison(candidate.path) ===
+          normalizeRuntimePathForComparison(path)
+      )
+    : candidates
   if (host) {
     return (
-      candidates.find((candidate) => normalizeExecutionHostId(candidate.hostId) === host.id) ??
-      candidates.find((candidate) => hostFilterMatchesHostId(host, candidate.hostId))
+      matching.find((candidate) => normalizeExecutionHostId(candidate.hostId) === host.id) ??
+      matching.find((candidate) => hostFilterMatchesHostId(host, candidate.hostId))
     )
   }
   // Infer a sole host, but never choose between multiple hosts without an explicit selector.
-  const hostIds = new Set(candidates.map(setupHostId))
+  const hostIds = new Set(matching.map(setupHostId))
   if (hostIds.size <= 1) {
-    return candidates[0]
+    if (!matching[0]) {
+      return undefined
+    }
+    return selectProjectGroupTarget(
+      { key: '', label: '', members: [...matching], representative: matching[0] },
+      { path }
+    )
   }
   throw new RuntimeClientError(
     'invalid_argument',

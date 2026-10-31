@@ -11,14 +11,20 @@ export const MOBILE_PROJECT_SECTIONS_METHODS = [
     permission: 'workspace',
     params: null,
     // Switch point: for a page that predates the feed's projectCatalog domain, main's own catalog.
-    handler: (_params, { runtime }) =>
-      ORCA_SIDEBAR_INPUTS_IS_MAIN
-        ? {
-            catalog: readSidebarProjectCatalog(
-              runtime.requireStore(),
-              requireSwitchedOn(runtime.pairedServerRows).catalogs()
-            )
-          }
-        : readMobileProjectSections()
+    handler: (_params, { runtime }) => {
+      if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+        return {
+          catalog: readSidebarProjectCatalog(
+            runtime.requireStore(),
+            requireSwitchedOn(runtime.pairedServerRows).catalogs()
+          )
+        }
+      }
+      const result = readMobileProjectSections()
+      if (!result.catalog && !runtime.shouldRelayTerminalBrowserOpens()) {
+        throw new Error('runtime_unavailable')
+      }
+      return result
+    }
   })
 ]

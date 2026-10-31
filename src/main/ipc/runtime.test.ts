@@ -76,7 +76,10 @@ describe('registerRuntimeHandlers', () => {
   })
 
   it("serves the authoritative window's sidebar catalog to paired phones, and keeps it when omitted", () => {
-    const runtime = { syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }) }
+    const runtime = {
+      syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }),
+      notifyReposChangedForRemoteClients: vi.fn()
+    }
     registerRuntimeHandlers(runtime as never)
     const handler = handleMock.mock.calls.find(
       ([channel]) => channel === 'runtime:syncWindowGraph'
@@ -88,6 +91,11 @@ describe('registerRuntimeHandlers', () => {
 
     handler(event, { ...graph, projectSectionCatalog: PROJECT_SECTION_PARITY_SERVED })
     handler(event, graph)
+    handler(event, {
+      ...graph,
+      projectSectionCatalog: structuredClone(PROJECT_SECTION_PARITY_SERVED)
+    })
+    expect(runtime.notifyReposChangedForRemoteClients).toHaveBeenCalledTimes(1)
 
     expect(readMobileProjectSections()).toEqual({ catalog: PROJECT_SECTION_PARITY_SERVED })
   })

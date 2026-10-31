@@ -1,3 +1,4 @@
+import { readMobileProjectSections } from '../mobile-project-sections-snapshot'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
 import {
   getRepoExecutionHostId,
@@ -54,6 +55,10 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     ResolveBrowserNetworkExecutionHostForWorktreeMethods['resolveBrowserNetworkExecutionHostForWorktree']
   >
 
+  shouldRelayTerminalBrowserOpens(): boolean {
+    return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
+  }
+
   protected transitionGraphReloadToTerminalState(windowId: number): void {
     if (this.shouldRestoreHeadlessGraph(windowId)) {
       this.restoreHeadlessGraphAuthority()
@@ -77,6 +82,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
   }
 
   protected restoreHeadlessGraphAuthority(): void {
+    const wasHeadless = this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
     this.rendererGraphEpoch += 1
     this.authoritativeWindowId = HEADLESS_RUNTIME_WINDOW_ID
     this.graphStatus = 'ready'
@@ -94,6 +100,9 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       this.headlessGraphFallbackAvailable = true
       startedMainTerminalSurfaces(this)?.republish({ force: true })
+    }
+    if (!wasHeadless && !readMobileProjectSections().catalog) {
+      this.notifyReposChangedForRemoteClients()
     }
   }
 

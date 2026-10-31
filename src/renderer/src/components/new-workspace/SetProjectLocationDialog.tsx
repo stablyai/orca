@@ -71,6 +71,7 @@ export function SetProjectLocationDialog({
         {activeOption ? (
           <SetProjectLocationDialogBody
             key={activeOption.id}
+            open={open}
             option={activeOption}
             projectName={projectName}
             projectKind={projectKind}
@@ -85,6 +86,7 @@ export function SetProjectLocationDialog({
 }
 
 function SetProjectLocationDialogBody({
+  open,
   option,
   projectName,
   projectKind,
@@ -92,6 +94,7 @@ function SetProjectLocationDialogBody({
   exitHostBrowser,
   onReady
 }: {
+  open: boolean
   option: NeedsSetupProjectHostOption
   projectName: string
   projectKind: RepoKind
@@ -105,18 +108,19 @@ function SetProjectLocationDialogBody({
   const [browseField, setBrowseField] = useState<BrowseField>('existing')
   const [setupPath, setSetupPath] = useState('')
   const [setupKind, setSetupKind] = useState<RepoKind>(projectKind)
-  const [cloneUrl, setCloneUrl] = useState(defaultCloneUrl)
+  const [editedCloneUrl, setCloneUrl] = useState<string | null>(null)
+  const cloneUrl = editedCloneUrl ?? defaultCloneUrl
   const [cloneDestination, setCloneDestination] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   // Clones may finish long after dismissal; do not retarget a composer the user has since moved to another host.
   const abandoned = useRef(false)
   useEffect(() => {
     // Reset on mount because StrictMode’s setup/cleanup/setup would otherwise permanently abandon this dialog.
-    abandoned.current = false
+    abandoned.current = !open
     return () => {
       abandoned.current = true
     }
-  }, [])
+  }, [open])
   const parsedHost = parseExecutionHostId(option.hostId)
   const remoteHost =
     parsedHost?.kind === 'ssh' || parsedHost?.kind === 'runtime' ? parsedHost : null

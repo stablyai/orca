@@ -75,6 +75,29 @@ describe('orca cli worktree awareness', () => {
     spawnMock
   })
 
+  it('runs the real create command against the exact second-checkout path', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('setups', {
+        setups: [
+          buildSetup({ id: 'first', hostId: 'local', repoId: 'a', path: '/src/first' }),
+          buildSetup({ id: 'second', hostId: 'local', repoId: 'b', path: '/src/second' })
+        ]
+      }),
+      okFixture('created', { worktree: buildWorktree('/src/second/new', 'new', 'abc', 'b') })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(
+      ['worktree', 'create', '--project', '/src/second', '--name', 'new', '--no-parent', '--json'],
+      '/src/first'
+    )
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:b', repoHostId: 'local', name: 'new' })
+    )
+  })
+
   it('passes --branch as the branch name, separate from the workspace name and base ref', async () => {
     queueFixtures(
       callMock,

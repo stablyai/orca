@@ -1,3 +1,7 @@
+import { getProjectHostSetupProjectionFromState } from '../project-host-setup-selector'
+import { buildProjectGroupingIndex } from '../../../../shared/project-section-grouping'
+import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
+import type { ProjectGroupingSettings } from '../../../../shared/project-grouping'
 import type { AppState } from '../types'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -49,17 +53,29 @@ export async function fetchRepoCatalogForTarget(
 
 export function mergeFetchedRepoCatalog(
   catalog: FetchedRepoCatalog,
-  currentRepos: readonly Repo[]
+  currentRepos: readonly Repo[],
+  settings?: ProjectGroupingSettings | null,
+  previous?: Pick<AppState, 'projects' | 'projectHostSetups'>
 ): {
   repos: readonly Repo[]
   projectHostSetupCompatibility: ProjectHostSetupProjection
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
-  const repos = mergeFetchedReposForHost(
-    currentRepos,
-    withoutPendingRuntimeRepoRemovals(catalog.repos, catalog.hostId),
-    catalog.hostId
-  )
+  const fetched = withoutPendingRuntimeRepoRemovals(catalog.repos, catalog.hostId)
+  const combinedRepos = [...currentRepos, ...fetched]
+  const rows = mergeFetchedHostProjectCatalog({
+    previous: previous ?? { projects: [], projectHostSetups: [] },
+    fetched: catalog.projectHostSetupCompatibility,
+    repos: combinedRepos,
+    hostId: catalog.hostId
+  })
+  const projection = getProjectHostSetupProjectionFromState({ repos: combinedRepos, ...rows })
+  const grouping = buildProjectGroupingIndex({
+    projects: projection.projects,
+    projectHostSetups: projection.setups,
+    settings
+  })
+  const repos = mergeFetchedReposForHost(currentRepos, fetched, catalog.hostId, settings, grouping)
   return {
     repos,
     projectHostSetupCompatibility: catalog.projectHostSetupCompatibility,

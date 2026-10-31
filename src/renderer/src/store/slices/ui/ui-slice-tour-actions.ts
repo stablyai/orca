@@ -47,11 +47,20 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
       ),
     requestContextualTour: (id, source, wasFeaturePreviouslyInteracted, options) =>
       set((s) => {
-        const tour = getContextualTour(id)
+        const tour = getContextualTour(
+          id,
+          s.projectGroupingUpgradeTipAudience?.membership === 'eligible'
+            ? s.projectGroupingUpgradeTipAudience.projectId
+            : undefined
+        )
         const decision = getContextualTourRequestDecision({
           tour,
           persistedUIReady: s.persistedUIReady,
-          autoEligible: options?.force === true || s.contextualToursAutoEligible === true,
+          autoEligible:
+            options?.force === true ||
+            s.contextualToursAutoEligible === true ||
+            (id === 'project-grouping-upgrade' &&
+              s.projectGroupingUpgradeTipAudience?.membership === 'eligible'),
           onboardingVisible: s.contextualToursOnboardingVisible,
           seenIds: options?.force === true ? [] : s.contextualToursSeenIds,
           sessionConsumed: options?.force === true ? false : s.contextualTourShownThisSession,

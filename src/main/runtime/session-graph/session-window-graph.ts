@@ -1,7 +1,8 @@
+import { assertUniqueRuntimeGraphTabIds } from './runtime-graph-tab-identity'
+import { readMobileProjectSections } from '../mobile-project-sections-snapshot'
 import { OrcaRuntimeWithAttachWindow } from './session-graph-promotion'
 import type {
   RuntimeRendererSyncWindowGraph,
-  RuntimeSyncedTab,
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
 } from '../../../shared/runtime-session-contracts'
@@ -11,17 +12,6 @@ import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 type Graph = RuntimeSyncWindowGraph
-
-/** The runtime indexes graph tabs by bare id, so duplicate ids cannot be routed safely. */
-function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void {
-  const seen = new Set<string>()
-  for (const tab of tabs) {
-    if (seen.has(tab.tabId)) {
-      throw new Error('duplicate_runtime_tab_id')
-    }
-    seen.add(tab.tabId)
-  }
-}
 
 export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow {
   /** Layout-owner builds: main's panes in place of the window's (session-tabs-inventory.ts). */
@@ -39,10 +29,6 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       this.controllerKnowsPtyIsLive(ptyId) &&
       this.getPtyLivenessVerdict(ptyId)?.status !== 'exited'
     )
-  }
-
-  shouldRelayTerminalBrowserOpens(): boolean {
-    return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
   }
 
   syncWindowGraph(
@@ -283,7 +269,16 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       }
     }
     const isAuthoritativeGraphPublisher = windowId === this.authoritativeWindowId
+    const wasReadyHeadless =
+      this.graphStatus === 'ready' && this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
     this.markGraphReady(windowId)
+    if (
+      windowId === HEADLESS_RUNTIME_WINDOW_ID &&
+      !wasReadyHeadless &&
+      !readMobileProjectSections().catalog
+    ) {
+      this.notifyReposChangedForRemoteClients()
+    }
     if (
       isAuthoritativeGraphPublisher &&
       (windowId === HEADLESS_RUNTIME_WINDOW_ID || graph.mobileSessionTabs !== undefined)

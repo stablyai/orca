@@ -183,6 +183,9 @@ it('publishes real chat options to main and popout, retaining card candidates an
     return useLiveDashboardSnapshot()
   })
   await vi.waitFor(() => expect(transport.subscribe).toHaveBeenCalledOnce())
+  expect(view.result.current.repoIconsByRepoId).toEqual({
+    'project:repo:repo-1': { type: 'lucide', name: 'Rocket' }
+  })
   await act(async () =>
     transport.subscribe.mock.calls[0][3].onEvent({
       type: 'availability',

@@ -1,5 +1,4 @@
-import type { RpcClient } from './rpc-client'
-import type { RpcResponse } from './types'
+import type { RpcClient, RpcResponse } from './types'
 
 type Deferred = {
   promise: Promise<RpcResponse>

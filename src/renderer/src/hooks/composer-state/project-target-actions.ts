@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import { useAppStore } from '@/store'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -14,6 +15,9 @@ type ProjectTargetActionsInput = Pick<
   | 'projectGroups'
   | 'projectHostSetups'
   | 'projects'
+  | 'settings'
+  | 'setSelectedProjectHostSetupOverrideId'
+  | 'setSelectedProjectHostSetupOverrideHostId'
   | 'repos'
   | 'setBaseBranch'
   | 'setBranchNameOverride'
@@ -48,19 +52,19 @@ import {
 } from '@/lib/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
 import { getFolderSourceRepos } from '@/components/sidebar/folder-workspace-composer-helpers'
-import { resolveWorkspaceCreationRepoId } from '@/lib/project-host-workspace-target'
+import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
+import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 
 export function useProjectTargetActions(input: ProjectTargetActionsInput) {
   const {
     actionableHostIds,
-    eligibleRepos,
     handleRepoChange,
     initialProjectGroupAppliedRef,
     isProjectGroupTarget,
     linkedWorkItem,
     projectGroups,
-    projectHostSetups,
-    projects,
+    setSelectedProjectHostSetupOverrideId,
+    setSelectedProjectHostSetupOverrideHostId,
     repos,
     setBaseBranch,
     setBranchNameOverride,
@@ -191,29 +195,33 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       const preferredHostId =
         selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null
       // Prefer focusedHostScope rather than hard-pin hostId, so projects available only on another host remain selectable.
-      const nextRepoId = resolveWorkspaceCreationRepoId({
-        eligibleRepos,
-        projects,
-        projectHostSetups,
+      const state = useAppStore.getState()
+      const next = resolveWorkspaceCreationTarget({
+        grouping: getProjectGroupingIndexFromState(state),
+        settings: state.settings,
+        eligibleRepos: getComposerEligibleRepos(state.repos),
+        projects: state.projects,
+        projectHostSetups: state.projectHostSetups,
         projectId,
         focusedHostScope: preferredHostId ?? workspaceHostScope,
         actionableHostIds
       })
-      if (!nextRepoId) {
+      if (next.status !== 'ready') {
         return
       }
-      handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })
+      handleRepoChange(next.target.repoId, { forceResetStartFrom: isProjectGroupTarget })
+      setSelectedProjectHostSetupOverrideId(next.target.projectHostSetupId)
+      setSelectedProjectHostSetupOverrideHostId(next.target.hostId)
     },
     [
       applyProjectGroupSelection,
-      eligibleRepos,
       actionableHostIds,
       handleRepoChange,
       isProjectGroupTarget,
       projectGroups,
-      projectHostSetups,
-      projects,
       repos,
+      setSelectedProjectHostSetupOverrideId,
+      setSelectedProjectHostSetupOverrideHostId,
       selectedWorkspaceTarget,
       workspaceHostScope,
       initialProjectGroupAppliedRef,

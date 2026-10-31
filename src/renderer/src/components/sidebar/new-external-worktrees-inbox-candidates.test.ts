@@ -1,3 +1,4 @@
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { describe, expect, it } from 'vitest'
 
 import type { Repo } from '../../../../shared/repo-types'
@@ -73,7 +74,7 @@ describe('buildNewExternalWorktreesInboxCandidates', () => {
         repos: [repo],
         visibleWorktrees: [visibleWorktree],
         detectedWorktreesByRepo
-      }).get(repo.id)
+      }).get(getRepoHostIdentity(repo))
     ).toMatchObject({
       repo: { id: repo.id },
       inboxWorktrees: [{ id: 'repo-1::/scratch/new-one' }]

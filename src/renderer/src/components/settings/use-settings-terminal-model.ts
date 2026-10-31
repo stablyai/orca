@@ -82,7 +82,7 @@ export function useSettingsTerminalModel(
   const neededRepos = useMemo(() => {
     const reposByHostIdentity = new Map<string, Repo>()
     for (const settingsProject of model.settingsProjectList) {
-      if (!navigation.neededSectionIds.has(`repo-${settingsProject.representativeRepoId}`)) {
+      if (!navigation.neededSectionIds.has(`repo-${settingsProject.selectionKey}`)) {
         continue
       }
       const hostSelection = getSettingsEntryHostSelection(

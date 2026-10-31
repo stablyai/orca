@@ -1,12 +1,14 @@
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { useAppStore } from '@/store'
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import type { TaskPageStoreBindingsModel } from './use-task-page-store-bindings'
-import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import {
   getTaskEligibleRepos,
   normalizeTaskRepoSelection,
   getDefaultTaskRepoSelection,
   getTaskProjectPickerGroups
 } from '@/components/task-page/task-page-default-repo-selection'
-import { areStringSetsEqual } from '@/components/task-page/task-page-string-set-equality'
 import { buildSelectedReposKey } from '@/components/task-page/task-page-work-item-pagination'
 import {
   normalizeVisibleTaskProviders,
@@ -41,60 +43,42 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     preflightStatusCurrent,
     linearConnected
   } = model
+  const grouping = useAppStore(getProjectGroupingIndexFromState)
   const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
 
-  // Explicit repo preselection overrides saved defaults so repo-scoped entry points stay single-repo.
-  const resolvedInitialSelection = useMemo<ReadonlySet<string>>(() => {
+  const persistedSelection = settings?.defaultRepoSelection
+  const sourceIntent = useMemo<ReadonlySet<string> | null>(() => {
     const preferred = pageData.preselectedRepoId
-    if (preferred && eligibleRepos.some((repo) => repo.id === preferred)) {
-      return new Set([preferred])
+    const source = pageData.openGitHubSourceContext
+    if (preferred) {
+      return new Set([
+        source?.repoId === preferred ? `${source.hostId}\0${source.repoId}` : preferred
+      ])
     }
-    const persisted = settings?.defaultRepoSelection
-    if (Array.isArray(persisted)) {
-      return normalizeTaskRepoSelection(eligibleRepos, new Set(persisted))
-    }
-    return getDefaultTaskRepoSelection(eligibleRepos)
-  }, [eligibleRepos, pageData.preselectedRepoId, settings?.defaultRepoSelection])
-  const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(resolvedInitialSelection)
+    return Array.isArray(persistedSelection) ? new Set(persistedSelection) : null
+  }, [pageData.preselectedRepoId, pageData.openGitHubSourceContext, persistedSelection])
+  const [selectionIntent, setRepoSelection] = useState<ReadonlySet<string> | null>(sourceIntent)
+  useEffect(() => {
+    setRepoSelection(sourceIntent)
+  }, [sourceIntent])
+  const repoSelection = useMemo(
+    () =>
+      selectionIntent === null
+        ? getDefaultTaskRepoSelection(eligibleRepos, undefined, grouping)
+        : normalizeTaskRepoSelection(eligibleRepos, selectionIntent, undefined, grouping),
+    [eligibleRepos, selectionIntent, grouping]
+  )
   const taskPickerGroups = useMemo(
-    () => getTaskProjectPickerGroups(eligibleRepos, repoSelection),
-    [eligibleRepos, repoSelection]
+    () => getTaskProjectPickerGroups(eligibleRepos, repoSelection, undefined, grouping),
+    [eligibleRepos, repoSelection, grouping]
   )
   const taskPickerRepos = useMemo(
     () => taskPickerGroups.map((group) => group.repo),
     [taskPickerGroups]
   )
 
-  // Prune removed repos while preserving sticky-all and unchanged Set identity to avoid fetch churn.
-  const prevTaskPickerCountRef = useRef(taskPickerRepos.length)
-  useEffect(() => {
-    const prevCount = prevTaskPickerCountRef.current
-    prevTaskPickerCountRef.current = taskPickerRepos.length
-    const eligibleIds = new Set(eligibleRepos.map((r) => r.id))
-    const wasAll = repoSelection.size === prevCount && prevCount > 0
-    const pruned = new Set<string>()
-    for (const id of repoSelection) {
-      if (eligibleIds.has(id)) {
-        pruned.add(id)
-      }
-    }
-    if (wasAll) {
-      const allNow = new Set(taskPickerRepos.map((repo) => repo.id))
-      if (!areStringSetsEqual(allNow, repoSelection)) {
-        setRepoSelection(allNow)
-      }
-      return
-    }
-    if (pruned.size === 0 && eligibleIds.size === 0) {
-      return
-    }
-    const normalized = normalizeTaskRepoSelection(eligibleRepos, pruned)
-    if (!areStringSetsEqual(normalized, repoSelection)) {
-      setRepoSelection(normalized)
-    }
-  }, [eligibleRepos, repoSelection, taskPickerRepos])
   const selectedRepos = useMemo(
-    () => eligibleRepos.filter((r) => repoSelection.has(r.id)),
+    () => eligibleRepos.filter((repo) => repoSelection.has(getRepoHostIdentity(repo))),
     [eligibleRepos, repoSelection]
   )
 
@@ -188,12 +172,10 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   // Seed preset/query synchronously to avoid a throwaway initial empty-query request.
   const nextModel = model as typeof model & {
     eligibleRepos: typeof eligibleRepos
-    resolvedInitialSelection: typeof resolvedInitialSelection
     repoSelection: typeof repoSelection
     setRepoSelection: typeof setRepoSelection
     taskPickerGroups: typeof taskPickerGroups
     taskPickerRepos: typeof taskPickerRepos
-    prevTaskPickerCountRef: typeof prevTaskPickerCountRef
     selectedRepos: typeof selectedRepos
     selectedReposKey: typeof selectedReposKey
     primaryRepo: typeof primaryRepo
@@ -220,12 +202,10 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     hideTaskSource: typeof hideTaskSource
   }
   nextModel.eligibleRepos = eligibleRepos
-  nextModel.resolvedInitialSelection = resolvedInitialSelection
   nextModel.repoSelection = repoSelection
   nextModel.setRepoSelection = setRepoSelection
   nextModel.taskPickerGroups = taskPickerGroups
   nextModel.taskPickerRepos = taskPickerRepos
-  nextModel.prevTaskPickerCountRef = prevTaskPickerCountRef
   nextModel.selectedRepos = selectedRepos
   nextModel.selectedReposKey = selectedReposKey
   nextModel.primaryRepo = primaryRepo

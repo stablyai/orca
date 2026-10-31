@@ -48,13 +48,15 @@ export function getProjectHeaderHostContexts(args: {
   const canonicalHostId = (hostId: ExecutionHostId): ExecutionHostId =>
     hostsById.get(hostId)?.id ?? hostId
   const projectIndex = buildProjectGroupingIndex(args.projectGrouping)
-  const repoHostId = (repo: Repo): ExecutionHostId =>
-    canonicalHostId(
-      projectIndex?.setupByRepoId.get(repo.id)?.hostId ?? getRepoExecutionHostId(repo)
-    )
+  const repoHostId = (repo: Repo): ExecutionHostId => canonicalHostId(getRepoExecutionHostId(repo))
   const hostsByProjectKey = new Map<string, Set<ExecutionHostId>>()
   for (const repo of args.repoMap.values()) {
-    const key = getProjectGroupingForRepo(repo.id, args.repoMap, projectIndex).key
+    const key = getProjectGroupingForRepo(
+      repo.id,
+      args.repoMap,
+      projectIndex,
+      getRepoExecutionHostId(repo)
+    ).key
     const hostId = repoHostId(repo)
     const projectHosts = hostsByProjectKey.get(key) ?? new Set<ExecutionHostId>()
     projectHosts.add(hostId)
@@ -78,8 +80,11 @@ export function getProjectHeaderHostContexts(args: {
     const labelHosts = hostsByLabel.get(label) ?? new Set<ExecutionHostId>()
     hostsByLabel.set(label, labelHosts)
     let ownerHostId: ExecutionHostId
-    if (row.repo) {
-      const projectHosts = hostsByProjectKey.get(row.key)
+    const displayRepo = row.displayRepo ?? row.repo
+    if (displayRepo) {
+      const projectHosts = row.projectScope
+        ? new Set(row.projectScope.registrations.map((setup) => canonicalHostId(setup.hostId)))
+        : hostsByProjectKey.get(row.key)
       if (projectHosts && projectHosts.size > 1) {
         const visibleRepoIds = args.visibleProjectRepoIdsBySection?.get(row.key)
         const visibleProjectHosts = visibleRepoIds
@@ -93,7 +98,7 @@ export function getProjectHeaderHostContexts(args: {
         }
         continue
       }
-      ownerHostId = projectHosts?.values().next().value ?? getRepoExecutionHostId(row.repo)
+      ownerHostId = projectHosts?.values().next().value ?? getRepoExecutionHostId(displayRepo)
     } else if (
       row.projectGroup &&
       'createdFrom' in row.projectGroup &&

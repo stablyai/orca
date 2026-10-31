@@ -13,6 +13,9 @@ import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const state = {
+  repos: [],
+  projects: [],
+  projectHostSetups: [],
   unifiedTabsByWorktree: {},
   updateWorktreeMeta: vi.fn(),
   setWorktreesPinnedAndReveal: vi.fn(),

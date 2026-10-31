@@ -1,6 +1,7 @@
 import type { FeatureInteractionId } from './feature-interactions'
 
 export type ContextualTourId =
+  | 'project-grouping-upgrade'
   | 'workspace-board'
   | 'workspace-agent-sessions'
   | 'browser'
@@ -23,6 +24,7 @@ export type ContextualTourStepActionKind =
   | 'open-tasks'
   | 'open-getting-started'
   | 'open-client-hosted-browser-settings'
+  | 'open-project-grouping-settings'
 
 export type ContextualTourStepAction = {
   kind: ContextualTourStepActionKind
@@ -55,6 +57,20 @@ export type ContextualTour = {
 }
 
 export const CONTEXTUAL_TOURS = [
+  {
+    id: 'project-grouping-upgrade',
+    steps: [
+      {
+        id: 'project-grouping-upgrade',
+        title: 'One project for every checkout',
+        body: '',
+        targetSelector: '[data-project-grouping-key]',
+        requiredForStart: true,
+        preferredPlacement: 'right',
+        primaryAction: { kind: 'complete', label: 'Got it' }
+      }
+    ]
+  },
   {
     id: 'workspace-board',
     steps: [
@@ -246,8 +262,17 @@ export function isContextualTourId(value: unknown): value is ContextualTourId {
   return typeof value === 'string' && CONTEXTUAL_TOUR_IDS.includes(value as ContextualTourId)
 }
 
-export function getContextualTour(id: ContextualTourId): ContextualTour {
-  return CONTEXTUAL_TOURS.find((tour) => tour.id === id)!
+export function getContextualTour(id: ContextualTourId, projectId?: string): ContextualTour {
+  const tour = CONTEXTUAL_TOURS.find((tour) => tour.id === id)!
+  return id === 'project-grouping-upgrade'
+    ? {
+        ...tour,
+        steps: tour.steps.map((step) => ({
+          ...step,
+          targetSelector: `[data-project-grouping-key=${JSON.stringify(`project:${projectId ?? ''}`)}]`
+        }))
+      }
+    : tour
 }
 
 export function normalizeContextualTourIds(value: unknown): ContextualTourId[] {

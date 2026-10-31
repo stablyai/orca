@@ -227,6 +227,7 @@ export function useHostWorktreeCatalog(args: {
       if (!embedded) {
         return startWorktreeRefresh()
       }
+      return undefined
     }, [embedded, startWorktreeRefresh])
   )
 
@@ -235,6 +236,7 @@ export function useHostWorktreeCatalog(args: {
     if (embedded) {
       return startWorktreeRefresh()
     }
+    return undefined
   }, [embedded, startWorktreeRefresh])
 
   // Refresh on transition to connected; steady polls can miss the stalest post-sleep cache (#8498).

@@ -1,3 +1,4 @@
+import { retainValidFilterRepoIds } from '../repo-filter-selection'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
 import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
@@ -152,7 +153,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           filterRepoIds:
             validRepoIds.size === 0
               ? persistedFilterRepoIds
-              : persistedFilterRepoIds.filter((repoId) => validRepoIds.has(repoId)),
+              : retainValidFilterRepoIds(persistedFilterRepoIds, validRepoIds),
           agentsVisibleHostIds: preserveStringArrayIdentity(
             s.agentsVisibleHostIds,
             normalizeVisibleExecutionHostIds(ui.agentsVisibleHostIds)
@@ -161,7 +162,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             s.agentsFilterRepoIds,
             validRepoIds.size === 0
               ? persistedAgentsFilterRepoIds
-              : persistedAgentsFilterRepoIds.filter((repoId) => validRepoIds.has(repoId))
+              : retainValidFilterRepoIds(persistedAgentsFilterRepoIds, validRepoIds)
           ),
           agentsHideWorkspacesFromOtherDevices: ui.agentsHideWorkspacesFromOtherDevices === true,
           agentsHideAutomationGeneratedWorkspaces:

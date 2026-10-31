@@ -4,7 +4,10 @@ import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { BaseRefPicker } from '../../BaseRefPicker'
-import { RepoSettingsDraftInput } from '../RepositorySettingsDraftInput'
+import {
+  RepoSettingsDraftInput,
+  type useRepoSettingsTextDraft
+} from '../RepositorySettingsDraftInput'
 import { SearchableSetting } from '../../SearchableSetting'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
@@ -18,6 +21,7 @@ type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktre
 }
 
 type RepositoryWorktreeDefaultsSectionProps = {
+  locationInput?: ReturnType<typeof useRepoSettingsTextDraft>
   repo: Repo
   settings: Pick<GlobalSettings, 'workspaceDir' | 'worktreeVisibilityDefaults'> | null
   updateRepo: (
@@ -30,6 +34,7 @@ type RepositoryWorktreeDefaultsSectionProps = {
 
 export function RepositoryWorktreeDefaultsSection({
   repo,
+  locationInput,
   settings,
   updateRepo,
   refreshRepo,
@@ -180,6 +185,7 @@ export function RepositoryWorktreeDefaultsSection({
           ) : null}
         </div>
         <RepoSettingsDraftInput
+          controller={locationInput}
           repoId={repo.id}
           storeValue={repo.worktreeBasePath ?? ''}
           placeholder={settings?.workspaceDir ?? ''}

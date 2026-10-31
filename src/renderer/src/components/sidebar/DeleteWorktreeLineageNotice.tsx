@@ -1,3 +1,4 @@
+import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import { Workflow } from 'lucide-react'
 import { useMemo, type JSX } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
@@ -34,19 +35,31 @@ export function DeleteWorktreeLineageNotice({
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
   const projects = useAppStore((s) => s.projects)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
+  const settings = useAppStore((s) => s.settings)
   const projectIndex = useMemo(
     () =>
       buildProjectGroupingIndex({
         projects: projects ?? [],
-        projectHostSetups: projectHostSetups ?? []
+        projectHostSetups: projectHostSetups ?? [],
+        settings
       }),
-    [projects, projectHostSetups]
+    [projects, projectHostSetups, settings]
   )
   const projectLabels = new Map<string, string>()
   if (parent && repoMap) {
-    const parentGroup = getProjectGroupingForRepo(parent.repoId, repoMap, projectIndex)
+    const parentGroup = getProjectGroupingForRepo(
+      parent.repoId,
+      repoMap,
+      projectIndex,
+      getWorktreeExecutionHostId(parent, repoMap.get(parent.repoId))
+    )
     for (const child of descendants) {
-      const childGroup = getProjectGroupingForRepo(child.repoId, repoMap, projectIndex)
+      const childGroup = getProjectGroupingForRepo(
+        child.repoId,
+        repoMap,
+        projectIndex,
+        getWorktreeExecutionHostId(child, repoMap.get(child.repoId))
+      )
       if (childGroup.key !== parentGroup.key) {
         projectLabels.set(child.id, childGroup.label)
       }

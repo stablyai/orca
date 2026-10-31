@@ -212,6 +212,9 @@ export function connectMobileRelayRpcSession(args: {
       await settleMobileRuntimeCapabilities((method, params) =>
         sendRpc(method, params, requestTimeoutMs, true)
       )
+      if (closed) {
+        return
+      }
       livenessWatchdog.start(livenessIdentity)
       publishState('connected')
     } catch (error) {

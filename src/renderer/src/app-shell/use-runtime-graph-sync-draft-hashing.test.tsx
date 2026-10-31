@@ -36,6 +36,8 @@ vi.mock('../runtime/sync-runtime-graph/editor-draft-hash', async (importOriginal
   }
 })
 
+import { getProjectSectionCatalogFromState } from '../runtime/sync-runtime-graph/project-section-catalog'
+import { getDefaultSettings } from '../../../shared/constants'
 import { useRuntimeGraphSync } from './use-runtime-graph-sync'
 import { graphState } from '../runtime/sync-runtime-graph/graph-state'
 import { buildMobileSessionTabSnapshots } from '../runtime/sync-runtime-graph/mobile-session-snapshots'
@@ -113,6 +115,45 @@ describe('runtime graph draft hashing at publication', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+  })
+
+  it('publishes hydrated empty input after degraded startup and schedules settings-only grouping changes', async () => {
+    const catalogs: ReturnType<typeof getProjectSectionCatalogFromState>[] = []
+    mocks.publish.mockImplementation(async () => {
+      catalogs.push(getProjectSectionCatalogFromState(store.getState()))
+    })
+    await render()
+    await flush()
+    expect(catalogs).toEqual([null])
+    await act(async () =>
+      store.setState({ settings: getDefaultSettings(''), projectGroupingSettingsHydrated: true })
+    )
+    await flush()
+    expect(catalogs.at(-1)).toBeNull()
+    await act(async () => store.setState({ localRepoCatalogHydrated: true }))
+    await flush()
+    expect(catalogs.at(-1)).toMatchObject({ repos: [], setups: [] })
+    const before = mocks.publish.mock.calls.length
+    await act(async () =>
+      store.setState({ settings: { ...store.getState().settings!, projectGroupingMode: 'folder' } })
+    )
+    await flush()
+    expect(mocks.publish).toHaveBeenCalledTimes(before + 1)
+    expect(catalogs.at(-1)).not.toBeNull()
+    const afterGrouping = mocks.publish.mock.calls.length
+    await act(async () =>
+      store.setState({
+        settings: {
+          ...store.getState().settings!,
+          projectGroupingOverrides: { ...store.getState().settings!.projectGroupingOverrides }
+        }
+      })
+    )
+    await flush()
+    expect(mocks.publish).toHaveBeenCalledTimes(afterGrouping)
+    await act(async () => store.setState({ settings: null }))
+    await flush()
+    expect(catalogs.at(-1)).toBeNull()
   })
 
   it.each([40_000, 400_000])(

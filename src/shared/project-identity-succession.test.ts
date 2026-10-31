@@ -82,7 +82,10 @@ describe('carryProjectStateThroughIdentityChange', () => {
       kind: 'wsl',
       distro: 'Ubuntu'
     })
-    expect([...result.remappedProjectIds.keys()]).toEqual(['git:host/acme/wide'])
+    expect([...result.remappedProjectIds.keys()]).toEqual([
+      'git:host/acme/wide',
+      'git:host/acme/narrow'
+    ])
   })
 
   it('breaks an equal-overlap tie by newest updatedAt, then lowest prior id', () => {
@@ -113,7 +116,7 @@ describe('carryProjectStateThroughIdentityChange', () => {
     ]) {
       const result = carryProjectStateThroughIdentityChange([projected], previous)
       expect(result.projects[0]?.localWindowsRuntimePreference).toEqual({ kind: 'windows-host' })
-      expect([...result.remappedProjectIds.keys()]).toEqual(['git:host/acme/a'])
+      expect([...result.remappedProjectIds.keys()]).toEqual(['git:host/acme/a', 'git:host/acme/b'])
     }
   })
 
@@ -149,8 +152,8 @@ describe('carryProjectStateThroughIdentityChange', () => {
     )
     const result = carryProjectStateThroughIdentityChange(projected, previous)
     expect(reads).toBe(1000)
-    expect([...result.remappedProjectIds]).toEqual(
-      previous.map((row, i) => [row.id, projected[i].id])
+    expect(result.remappedProjectIds).toEqual(
+      new Map(previous.map((row, i) => [row.id, projected[i].id]))
     )
     expect(
       result.projects.every((row) => row.localWindowsRuntimePreference?.kind === 'windows-host')

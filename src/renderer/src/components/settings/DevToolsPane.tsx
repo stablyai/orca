@@ -8,7 +8,7 @@ import { showLocalBaseRefUpdateSuggestionToast } from '../sidebar/local-base-ref
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
 
 const LONG_WORKSPACE_NAME = 'feature/dev-toast-layout-with-a-long-workspace-name'
@@ -74,7 +74,7 @@ function showNativeActionToast(): void {
 }
 
 function showBehindBaseRefToast(): void {
-  let enabled = false
+  let settings = { ...getDefaultSettings('/tmp'), refreshLocalBaseRefOnWorktreeCreate: false }
   showLocalBaseRefUpdateSuggestionToast(
     {
       baseRef: 'origin/canary',
@@ -82,13 +82,11 @@ function showBehindBaseRefToast(): void {
       behind: 2
     },
     {
-      updateSettings: async (updates) => {
-        enabled = updates.refreshLocalBaseRefOnWorktreeCreate === true
+      updateSettings: async (update) => {
+        const updates = typeof update === 'function' ? update(settings) : update
+        settings = { ...settings, ...updates }
       },
-      getSettings: () =>
-        ({
-          refreshLocalBaseRefOnWorktreeCreate: enabled
-        }) as AppState['settings'],
+      getSettings: () => settings,
       openSettingsPage: () => {},
       openSettingsTarget: () => {}
     }

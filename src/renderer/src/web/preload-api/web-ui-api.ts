@@ -1,6 +1,5 @@
+import { createWebHostUiWriter } from './web-host-ui-writer'
 import { subscribeWebWorkspaceSleep } from './web-workspace-sleep-notices'
-import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
-import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { savePastedTextAsWebAgentSessionAttachment } from './web-pasted-text-upload'
 import { createWebExplorerRootSync } from './web-explorer-root-sync'
 import { createWebJiraFilterStateApi } from './web-jira-filter-state-api'
@@ -13,9 +12,8 @@ import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fi
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
 import {
   clipboardHasImage,
-  readClipboardImagePngBase64,
   readClipboardImageThumbnail,
-  saveClipboardImageAsTempFileInRuntime,
+  saveWebClipboardImageAsTempFile,
   writeWebClipboardText
 } from './web-clipboard-api'
 import {
@@ -40,6 +38,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     explorerRoots.prepare(environmentId, hostUpdates)
     return { environmentId, hostUpdates }
   }
+  const writeHostUI = createWebHostUiWriter()
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
     ...createWebJiraFilterStateApi(),
@@ -76,26 +75,26 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
     },
     /** Persists locally first and attempts the host write without propagating offline failures to fire-and-forget callers. */
-    set: async (updates) => {
+    set: async (updates, context) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
       // Older hosts lack stripping; sending browser runtime:web-* keys would overwrite desktop order.
       const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       try {
-        await callRuntimeResult('ui.set', hostUpdates, 15_000)
+        await writeHostUI(hostUpdates, context)
         explorerRoots.acknowledge(environmentId, hostUpdates)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
     },
     /** Rejects failed or stripped host updates so the diff writer cannot acknowledge preferences the host never received. */
-    setWithAck: async (updates) => {
+    setWithAck: async (updates, context) => {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
       const { environmentId, hostUpdates } = prepareHostUpdates(updates)
-      await callRuntimeResult('ui.set', hostUpdates, 15_000)
+      await writeHostUI(hostUpdates, context)
       explorerRoots.acknowledge(environmentId, hostUpdates)
       if (
         updates.explorerDisplayRootByWorktree !== undefined &&
@@ -151,29 +150,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       ),
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    saveClipboardImageAsTempFile: async (args?: {
-      connectionId?: string | null
-      runtimeEnvironmentId?: string | null
-      agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
-    }) => {
-      if (!requireActiveEnvironmentOrNull()) {
-        return null
-      }
-      const contentBase64 = await readClipboardImagePngBase64()
-      if (!contentBase64) {
-        return null
-      }
-      if (args?.agentSessionAttachment) {
-        if (!args.runtimeEnvironmentId) {
-          throw new Error('A chat attachment needs the server the chat runs on.')
-        }
-        return saveClipboardImageAsWebAgentSessionAttachment(contentBase64, {
-          ...args.agentSessionAttachment,
-          environmentId: args.runtimeEnvironmentId
-        })
-      }
-      return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
-    },
+    saveClipboardImageAsTempFile: saveWebClipboardImageAsTempFile,
     savePastedTextAsFile: savePastedTextAsWebAgentSessionAttachment,
     clipboardHasImage,
     // Browsers expose copied files only inside a paste event.

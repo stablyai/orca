@@ -1,3 +1,5 @@
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
+import { useOptionalHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useCallback, useRef } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -28,10 +30,7 @@ import type {
 import { getWorktreeCardModeUpdates } from '../../../src/shared/worktree/card-properties'
 import type { HostScreenState } from './use-host-screen-state'
 import { applyCollapse, withPendingViewChanges } from './host-view-pending-changes'
-import {
-  useSwitchedHostPendingViewChanges,
-  type PendingViewStatus
-} from './use-host-pending-view-changes'
+import { useHostPendingViewChanges, type PendingViewStatus } from './use-host-pending-view-changes'
 import type { FilterState } from '../worktree/workspace-list-types'
 
 const REFUSED_NOTE = 'The desktop did not take that change.'
@@ -46,8 +45,20 @@ export function useHostViewSettings(args: {
   const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef } = state
 
   const localEditsRef = useRef(0)
-  const pendingViewChanges = useSwitchedHostPendingViewChanges(client)
-  const pendingChanges = pendingViewChanges?.controls ?? null
+  const gates = useOptionalHostProtocolGates()
+  const support =
+    gates?.projectRepoFilterSupport ??
+    (gates?.statusReadable ? (gates.exactProjectRepoFilters ? 'exact' : 'legacy') : 'unknown')
+  const projectRepoFilterMeaning: 'exact' | 'legacy' =
+    support === 'exact' || gates?.exactProjectRepoFilters === true ? 'exact' : 'legacy'
+  const pendingViewChanges = useHostPendingViewChanges(client, support, gates?.statusGeneration)
+  const pendingChanges =
+    ORCA_SIDEBAR_INPUTS_IS_MAIN ||
+    pendingViewChanges.status.pending.some(
+      (change) => change.kind === 'view' && change.filterRepoIdsMode === 'exact'
+    )
+      ? pendingViewChanges.controls
+      : null
 
   const applyViewState = useCallback((next: MobileViewState) => {
     viewRef.current = next
@@ -133,15 +144,27 @@ export function useHostViewSettings(args: {
       if (Object.keys(payload).length === 0) {
         return
       }
-      if (pendingChanges) {
-        void pendingChanges
-          .sendView(patch, payload)
+      const filterRepoIdsMode =
+        payload.filterRepoIds !== undefined && projectRepoFilterMeaning === 'exact'
+          ? 'exact'
+          : undefined
+      const writer = pendingChanges ?? (filterRepoIdsMode ? pendingViewChanges.controls : null)
+      if (writer) {
+        void writer
+          .sendView(patch, payload, filterRepoIdsMode)
           .then((outcome) => outcome === 'refused' && refused())
         return
       }
       void hostViewSettingsWrite.request(client, payload).catch(() => {})
     },
-    [client, applyViewState, pendingChanges, refused]
+    [
+      client,
+      applyViewState,
+      pendingChanges,
+      pendingViewChanges.controls,
+      projectRepoFilterMeaning,
+      refused
+    ]
   )
 
   const handleSortChange = useCallback(
@@ -266,6 +289,8 @@ export function useHostViewSettings(args: {
 
   return {
     clearFilters,
+    projectRepoFilterMeaning,
+    projectRepoFiltersReady: !gates || support !== 'unknown',
     pendingViewChanges: pendingViewChanges?.status ?? NOTHING_PENDING,
     setAgentActivityDisplayMode,
     setCardLayout,

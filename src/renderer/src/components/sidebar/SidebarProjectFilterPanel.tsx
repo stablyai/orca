@@ -14,6 +14,8 @@ import { searchRepos } from '@/lib/repo-search'
 import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 
+const emptyPartialKeys: ReadonlySet<string> = new Set()
+
 function projectCommandFilter(_value: string, search: string, keywords?: string[]): number {
   const query = search.trim().toLowerCase()
   if (!query) {
@@ -38,8 +40,10 @@ type SidebarProjectFilterPanelProps = {
   availableRepos: Repo[]
   selectedRepos: Repo[]
   hasRepoFilter: boolean
-  filterRepoIds: readonly string[]
-  setFilterRepoIds: (ids: string[]) => void
+  partialKeys?: ReadonlySet<string>
+  unavailable?: boolean
+  onComplete: (id: string) => void
+  onRemove: (id: string) => void
 }
 
 /** Mount search state with the submenu so reopening cannot inherit a stale query. */
@@ -47,8 +51,10 @@ export function SidebarProjectFilterPanel({
   availableRepos,
   selectedRepos,
   hasRepoFilter,
-  filterRepoIds,
-  setFilterRepoIds
+  partialKeys = emptyPartialKeys,
+  unavailable = false,
+  onComplete,
+  onRemove
 }: SidebarProjectFilterPanelProps): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [highlightedRepoId, setHighlightedRepoId] = useState('')
@@ -62,19 +68,17 @@ export function SidebarProjectFilterPanel({
 
   const handleSelectRepo = useCallback(
     (repoId: string) => {
-      if (!filterRepoIds.includes(repoId)) {
-        setFilterRepoIds([...filterRepoIds, repoId])
-      }
+      onComplete(repoId)
       setQuery('')
     },
-    [filterRepoIds, setFilterRepoIds]
+    [onComplete]
   )
 
   const handleRemoveProject = useCallback(
     (repoId: string) => {
-      setFilterRepoIds(filterRepoIds.filter((id) => id !== repoId))
+      onRemove(repoId)
     },
-    [filterRepoIds, setFilterRepoIds]
+    [onRemove]
   )
 
   const handleInputKeyDown = useCallback(
@@ -124,7 +128,16 @@ export function SidebarProjectFilterPanel({
       onValueChange={setHighlightedRepoId}
       className="bg-transparent"
     >
-      <SelectedProjectPills selectedRepos={selectedRepos} onRemoveProject={handleRemoveProject} />
+      <SelectedProjectPills
+        selectedRepos={selectedRepos}
+        partialKeys={partialKeys}
+        onRemoveProject={handleRemoveProject}
+      />
+      {unavailable && (
+        <span className="px-2 text-xs text-muted-foreground">
+          {translate('projects.savedUnavailable', 'Saved project selection · Unavailable projects')}
+        </span>
+      )}
       <CommandInput
         ref={inputRef}
         placeholder={
@@ -190,9 +203,11 @@ export function SidebarProjectFilterPanel({
 
 function SelectedProjectPills({
   selectedRepos,
+  partialKeys,
   onRemoveProject
 }: {
   selectedRepos: Repo[]
+  partialKeys: ReadonlySet<string>
   onRemoveProject: (repoId: string) => void
 }) {
   if (selectedRepos.length === 0) {
@@ -213,6 +228,9 @@ function SelectedProjectPills({
             className="max-w-[8rem]"
             badgeClassName="size-1.5"
           />
+          {partialKeys.has(repo.id) && (
+            <span>{translate('projects.partiallySelected', 'Partially selected')}</span>
+          )}
           <Button
             type="button"
             variant="ghost"

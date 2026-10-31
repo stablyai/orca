@@ -1,3 +1,4 @@
+import { registerProjectGroupingPersistenceTests } from './project-grouping-persistence.spec'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -89,6 +90,8 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
+
+  registerProjectGroupingPersistenceTests(createStore)
 
   it('defaults new users to compact status bar usage', async () => {
     const store = await createStore()

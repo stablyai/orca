@@ -62,6 +62,7 @@ export function renderGeneralSettingsSection(context: SettingsRenderContext): Re
     >
       {view.isSectionMounted('general') ? (
         <GeneralPane
+          highlightedSettingId={model.highlightedSettingsTargetId}
           settings={model.settings}
           updateSettings={model.updateSettings}
           updateSettingsOrThrow={model.updateSettingsOrThrow}
