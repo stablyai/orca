@@ -6,9 +6,14 @@ import { PluginCategoryBadges } from '../list/PluginCategoryBadge'
 import { pluginFilterKinds } from '../list/plugin-list-filter'
 import { DetailSection } from './PluginDetailSections'
 import { formatPluginReleaseDate } from '../presentation/plugin-release-date'
+import {
+  formatPluginInstallCount,
+  usePluginInstallCount
+} from '../presentation/plugin-install-count'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 import {
+  pluginListingRepositoryUrl,
   pluginReadmePageUrl,
   pluginRepositoryPageUrl
 } from '../../../../../shared/plugins/catalog/plugin-repository-link'
@@ -66,19 +71,24 @@ export function PluginDetailInfo({
   const rollbackVersion = usePluginRollbackVersion(
     plugin?.source?.kind === 'marketplace' ? plugin.pluginKey : null
   )
+  const installCount = usePluginInstallCount(entry)
   const updated = formatPluginReleaseDate(listing?.updatedAt)
   const license = plugin?.license ?? listing?.license
-  // Why only the install source: manifest and catalog `repository`/`homepage` are author text.
-  const sourceUrl =
-    listing?.source.url ?? (plugin?.source?.kind === 'git' ? plugin.source.reference : null)
+  // Why never the manifest's `repository`/`homepage`: author text; Orca rebuilds every link.
+  const sourceUrl = listing
+    ? pluginListingRepositoryUrl(listing)
+    : plugin?.source?.kind === 'git'
+      ? plugin.source.reference
+      : null
   const repository = sourceUrl ? pluginRepositoryPageUrl(sourceUrl) : null
-  const readme = listing?.release
-    ? pluginReadmePageUrl({
-        gitUrl: listing.source.url,
-        commit: listing.release.commit,
-        path: listing.source.path
-      })
-    : null
+  const readme =
+    listing?.release && sourceUrl
+      ? pluginReadmePageUrl({
+          gitUrl: sourceUrl,
+          commit: listing.release.commit,
+          path: listing.source.path
+        })
+      : null
 
   return (
     <aside className="mt-6">
@@ -108,6 +118,12 @@ export function PluginDetailInfo({
           <InfoRow
             label={translate('auto.components.settings.PluginDetailInfo.updated', 'Updated')}
             value={updated}
+          />
+        ) : null}
+        {installCount !== null ? (
+          <InfoRow
+            label={translate('auto.components.settings.PluginDetailInfo.installs', 'Installs')}
+            value={formatPluginInstallCount(installCount)}
           />
         ) : null}
         {entry.minimumOrca ? (

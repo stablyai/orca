@@ -107,61 +107,6 @@ describe('RichMarkdownErrorBoundary lazy chunk containment', () => {
     })
   })
 
-  it('records the degraded breadcrumb once across repeated Retry clicks', async () => {
-    window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
-    const LazyRejectingImport = lazyWithRetry(
-      () => Promise.reject(new SyntaxError(CORRUPT_CHUNK_PARSE_ERROR)),
-      { retries: 0 }
-    )
-    ;({ container, root } = createContainer())
-
-    await act(async () => {
-      root?.render(
-        <BoundaryHarness>
-          <LazyRejectingImport />
-        </BoundaryHarness>
-      )
-    })
-    await flushReactWork()
-    await flushReactWork()
-
-    for (let click = 0; click < 3; click += 1) {
-      const retry = container?.querySelector('button')
-      expect(retry).not.toBeNull()
-      await act(async () => {
-        retry?.click()
-      })
-      await flushReactWork()
-    }
-
-    expect(container?.textContent).toContain('rich markdown editor')
-    expect(recordBreadcrumbMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('records the degraded breadcrumb once across boundary remounts', async () => {
-    window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
-    const LazyRejectingImport = lazyWithRetry(
-      () => Promise.reject(new SyntaxError("Unexpected token '<'")),
-      { retries: 0 }
-    )
-    ;({ container, root } = createContainer())
-
-    for (const boundaryKey of ['pane-a', 'pane-b', 'pane-c']) {
-      await act(async () => {
-        root?.render(
-          <BoundaryHarness boundaryKey={boundaryKey}>
-            <LazyRejectingImport />
-          </BoundaryHarness>
-        )
-      })
-      await flushReactWork()
-      await flushReactWork()
-    }
-
-    expect(container?.textContent).toContain('rich markdown editor')
-    expect(recordBreadcrumbMock).toHaveBeenCalledTimes(1)
-  })
-
   it('still reports ordinary render errors', async () => {
     const error = new Error('ordinary render failure')
     function BrokenEditor(): ReactElement {

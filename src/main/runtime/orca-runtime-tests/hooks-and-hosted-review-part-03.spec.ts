@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, gitRunner, setPlatform } from '../orca-runtime-test-mocks.spec'
+import { readHostedReviewForBranch } from '../../source-control/hosted-review'
+import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -113,4 +115,39 @@ describe('OrcaRuntimeService', () => {
       asyncGitSpy.mockRestore()
     }
   })
+
+  const mr: HostedReviewInfo = {
+    provider: 'gitlab',
+    number: 7,
+    title: 'MR',
+    url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+    state: 'open',
+    status: 'success',
+    mergeable: 'MERGEABLE',
+    updatedAt: '2026-10-30'
+  }
+  it.each([
+    { reportReadOutcome: true, review: mr, label: 'a review' },
+    { reportReadOutcome: true, review: null, label: 'a definitive null' },
+    { reportReadOutcome: false, review: mr, label: 'a review' },
+    { reportReadOutcome: undefined, review: null, label: 'a definitive null' }
+  ])(
+    'answers $label with the read outcome only when asked (reportReadOutcome=$reportReadOutcome)',
+    async ({ reportReadOutcome, review }) => {
+      vi.mocked(readHostedReviewForBranch).mockResolvedValueOnce({
+        review,
+        readOutcome: 'provider'
+      })
+      const runtime = new OrcaRuntimeService(store)
+
+      const reply = await runtime.getHostedReviewForBranch({
+        repoSelector: `id:${TEST_REPO_ID}`,
+        branch: 'feature',
+        userRefresh: true,
+        ...(reportReadOutcome === undefined ? {} : { reportReadOutcome })
+      })
+
+      expect(reply).toEqual(reportReadOutcome ? { review, readOutcome: 'provider' } : review)
+    }
+  )
 })

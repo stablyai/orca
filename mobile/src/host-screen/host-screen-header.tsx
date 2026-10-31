@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
+  CalendarClock,
   ChevronLeft,
   List,
   MoreHorizontal,
@@ -101,6 +102,14 @@ export function HostScreenHeader({
       disabled: disconnected,
       closeBeforePress: true,
       onPress: () => actions.navigateFromHostList(`${hostPath}/tasks`)
+    },
+    {
+      id: 'automations',
+      label: t('hostScreen.hostScreenHeader.automations', 'Automations'),
+      icon: CalendarClock,
+      disabled: disconnected,
+      closeBeforePress: true,
+      onPress: () => actions.navigateFromHostList(`${hostPath}/automations`)
     },
     {
       id: 'accounts',

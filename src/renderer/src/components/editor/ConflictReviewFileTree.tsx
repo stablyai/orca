@@ -1,7 +1,7 @@
 import React from 'react'
-import { ChevronDown, Folder, FolderOpen, PanelLeftClose } from 'lucide-react'
+import { ChevronDown, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import { cn } from '@/lib/utils'
 import {
   buildSourceControlTree,
@@ -152,11 +152,7 @@ function ConflictReviewFileTreeRow({
         <ChevronDown
           className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
         />
-        {isCollapsed ? (
-          <Folder className="size-3 shrink-0" />
-        ) : (
-          <FolderOpen className="size-3 shrink-0" />
-        )}
+        <FolderIcon folderPath={node.name} open={!isCollapsed} className="size-3 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{node.name}</span>
         <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">
           {node.fileCount}

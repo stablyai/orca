@@ -216,6 +216,9 @@ export type PluginsApi = {
   getAutoUpdateState: () => Promise<PluginAutoUpdateState>
   /** Held updates not yet told to the user, each returned once per version; never approves. */
   takeUpdateReviewNotices: () => Promise<PluginUpdateReviewNotice[]>
+  /** Public install counts by plugin key, display only; empty when unknown. Older hosts reject. */
+  getInstallCounts: () => Promise<Record<string, number>>
+  onInstallCountsChanged: (callback: () => void) => () => void
   /** Fires after each automatic update pass, with the plugins it just updated. */
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
 }

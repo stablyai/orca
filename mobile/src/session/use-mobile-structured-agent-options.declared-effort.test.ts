@@ -15,8 +15,9 @@ it('renders trustworthy context through the phone consumer while capturing only 
   for (const input of ['low', 'max', 'opencode', 'absent'] as const) {
     const { agent, model, display, live, resting, catalog } = await recordedEffortCase(input)
     for (const answer of [live, resting]) {
+      let response = Promise.resolve(answer)
       const { client } = optionsClient(
-        async () => answer,
+        () => response,
         async () => catalog
       )
       const harness = await mountOptions({
@@ -34,6 +35,12 @@ it('renders trustworthy context through the phone consumer while capturing only 
         expect(effort).toBeUndefined()
       }
       expect(effort?.kind.currentValue).toBe(display ?? undefined)
+      expect(harness.current().sendSelection()).toEqual({ selection: { model } })
+      response = new Promise(() => {})
+      await harness.rerender({ fence: 2 })
+      expect(descriptorFor(harness.current().optionSnapshot, 'effort')?.kind.currentValue).toBe(
+        display ?? undefined
+      )
       expect(harness.current().sendSelection()).toEqual({ selection: { model } })
       await harness.unmount()
     }

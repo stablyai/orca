@@ -40,8 +40,7 @@ export function useAutomationsPageRefresh({
     isLoading,
     automationHostTargetKey,
     setRelativeNow,
-    runHistoryReloadToken,
-    workspaceNameCacheRef
+    runHistoryReloadToken
   } = local
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
@@ -134,20 +133,15 @@ export function useAutomationsPageRefresh({
     refresh,
     runtimeEnvironments
   ])
-  useEffect(() => {
-    for (const [workspaceId, worktree] of store.worktreeMap) {
-      const displayName = worktree.displayName.trim()
-      if (displayName) {
-        workspaceNameCacheRef.current.set(workspaceId, displayName)
-      }
-    }
-  }, [store.worktreeMap, workspaceNameCacheRef])
   useSelectedAutomationRunHistory({
     selected: selectedRow,
+    selection: { automationId: store.selectedId, rowKey: local.selectedRowKey },
+    retained: local.selectedAutomationRuns,
     context: destination.automationDispatchContext,
     legacyTarget: automationHostTargetFor,
     navigation: pendingAutomationRunNavigation,
     reloadToken: runHistoryReloadToken,
+    acquisitionToken: local.runHistoryAcquisitionToken,
     onSettled: local.setSelectedAutomationRuns
   })
   useEffect(() => {

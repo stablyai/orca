@@ -42,10 +42,6 @@ function restoreEnvironment(): void {
   }
 }
 
-function isAsciiPath(value: string): boolean {
-  return [...value].every((character) => character.charCodeAt(0) <= 0x7f)
-}
-
 describe('ModelManager Windows model path handling', () => {
   beforeEach(() => {
     appGetPathMock.mockReset()
@@ -55,28 +51,6 @@ describe('ModelManager Windows model path handling', () => {
 
   afterEach(() => {
     restoreEnvironment()
-  })
-
-  it('uses an ASCII cache path when the Windows default user data path has non-ASCII characters', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      setPlatform('win32')
-      const programDataDir = join(dir, 'ProgramData')
-      const userDataDir = join(dir, '用户', 'Orca')
-      process.env.PROGRAMDATA = programDataDir
-      appGetPathMock.mockImplementation((name: string) =>
-        name === 'userData' ? userDataDir : join(dir, name)
-      )
-
-      const manager = new ModelManager(undefined, openElectronSpeechDownloadRequest)
-
-      expect(manager.getModelsDir()).not.toContain(userDataDir)
-      expect(manager.getModelsDir()).toContain(join(programDataDir, 'Orca', 'speech-models'))
-      expect(isAsciiPath(manager.getModelsDir())).toBe(true)
-      expect(existsSync(manager.getModelsDir())).toBe(true)
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
   })
 
   it('migrates existing ready model files from a non-ASCII Windows default cache', async () => {

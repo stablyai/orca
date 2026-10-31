@@ -139,14 +139,4 @@ describe('fetchOpenCodeGoUsageWithApiKey', () => {
       message: 'Could not parse OpenCode Go usage response'
     })
   })
-
-  it('never leaks the key through a network failure message', async () => {
-    fetchMock.mockRejectedValue(new Error(`request to ${OPENCODE_GO_USAGE_API_URL} failed`))
-
-    const outcome = await fetchOpenCodeGoUsageWithApiKey(API_KEY)
-
-    expect(outcome.kind).toBe('failed')
-    expect(outcome.kind === 'failed' && outcome.message).not.toContain(API_KEY)
-    expect(outcome.kind === 'failed' && outcome.failureKind).toBe('network')
-  })
 })

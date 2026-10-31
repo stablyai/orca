@@ -48,12 +48,10 @@
       "untitledSession": "제목 없는 세션"
     },
     "sessionHistoryList": {
-      "assistantRole": "어시스턴트",
       "currentWorktree": "현재 워크트리",
       "messages_one": "메시지 {{count}}개",
       "messages_other": "메시지 {{count}}개",
-      "resumeSession": "에이전트 세션 재개",
-      "userRole": "사용자"
+      "resumeSession": "에이전트 세션 재개"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "호스트에 연결할 수 없습니다.",
@@ -188,7 +186,11 @@
       "cancelEditing": "편집 취소",
       "placeholder": "무엇이든 물어보세요. @로 파일 참조, /로 명령어 실행",
       "saveEditedMessage": "수정한 메시지 저장",
-      "sendMessage": "메시지 보내기"
+      "sendMessage": "메시지 보내기",
+      "sendQueue": "대기열에 추가",
+      "sendSteer": "지금 보내기",
+      "sendQueueHint": "현재 턴이 끝난 뒤 실행됩니다",
+      "sendSteerHint": "Agent가 지금 하고 있는 작업에 들어갑니다"
     },
     "composerAttachments": {
       "attachedImage": "첨부된 이미지",
@@ -279,7 +281,10 @@
       "compaction": "컨텍스트가 압축됨",
       "contextCleared": "컨텍스트 지워짐",
       "plan": "계획",
-      "stoppedManually": "수동으로 중지됨"
+      "stoppedManually": "수동으로 중지됨",
+      "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
+      "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
+      "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."
     },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
@@ -359,7 +364,6 @@
     "sessionOptionPickers": {
       "agentWorking": "에이전트 작업 중",
       "backToModels": "모델 목록으로 돌아가기",
-      "closePicker": "선택 창 닫기",
       "dispatchUnconfirmed": "에이전트에 전송됨 — 확인되지 않음",
       "modelFullAccessLabel": "모델, {{value}}, 전체 액세스",
       "modelLabel": "모델, {{value}}",
@@ -763,11 +767,6 @@
       "moveUp": "위로 이동",
       "reorderHint": "드래그하지 않고 순서를 바꾸려면 '위로 이동'과 '아래로 이동' 동작을 사용하세요."
     },
-    "homeQuickActions": {
-      "newWorkspace": "새 워크스페이스",
-      "pairDesktop": "데스크탑 페어링",
-      "title": "빠른 작업"
-    },
     "hostCard": {
       "hostActions": "{{title}} 관련 작업",
       "openHost": "{{title}} 열기",
@@ -825,12 +824,10 @@
       "blankTerminal": "빈 Terminal"
     },
     "newWorktreeFormSheet": {
-      "advanced": "고급",
       "agent": "에이전트",
       "connectTarget": "대상 연결",
       "connectTargetFirst": "먼저 대상에 연결하세요",
       "createWorktree": "작업 트리 만들기",
-      "nameOrCreateFrom": "이름 또는 '다음에서 만들기'",
       "noProjectsFound": "프로젝트를 찾을 수 없습니다.",
       "note": "메모",
       "notePlaceholder": "메모 쓰기",
@@ -921,12 +918,10 @@
       "noResults": "검색 결과가 없습니다.",
       "searchPlaceholder": "이름 입력 또는 소스 검색",
       "switchRepo": "{{repoName}}(으)로 전환",
-      "title": "이름 또는 '다음에서 만들기'",
       "typeWorkspaceName": "아래 입력란에 워크스페이스 이름을 입력하세요."
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "선택한 소스 열기",
-      "optional": "[선택 사항]",
       "searchPlaceholder": "이름 입력 또는 소스 검색"
     },
     "smartWorkspaceSourceRow": {
@@ -1298,17 +1293,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "계정 사용량",
-      "sessionWindow": "5시간",
-      "systemDefault": "시스템 기본값",
-      "weeklyWindow": "7일"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} 업데이트 알림 닫기",
       "title": "Orca {{version}} 업데이트 가능",
-      "updateAccessibilityLabel": "Orca {{version}} 업데이트가 있습니다. 탭하여 업데이트하세요.",
-      "updateHint": "탭하여 업데이트하세요"
+      "updateAccessibilityLabel": "Orca {{version}} 업데이트가 있습니다. 탭하여 업데이트하세요."
     },
     "emptyState": {
       "connectedDescription": "데스크톱이 여기에 표시됩니다. 모든 데이터는 종단 간 암호화로 보호됩니다.",
@@ -1316,26 +1304,16 @@
       "description": "컴퓨터의 Orca와 페어링하여 에이전트 상태를 확인하고, 원하는 터미널에 접속하고, 휴대폰으로 작업을 진행하세요.",
       "openDesktopDescription": "설정 → 모바일에서 페어링 QR 코드를 생성하세요.",
       "openDesktopTitle": "Orca 데스크톱 앱 열기",
-      "pairDesktop": "데스크탑 페어링",
-      "scanCodeDescription": "위의 버튼을 탭해 스캐너를 여세요. 데스크톱 화면의 QR 코드에 카메라를 맞추세요.",
       "scanCodeTitle": "코드 스캔",
-      "stepsHeading": "사용 방법",
       "title": "데스크톱을 연결하세요"
     },
     "listFooter": {
       "hostPickerTitle": "작업을 열 호스트",
-      "resumeHeading": "재개",
-      "tasksHeading": "작업"
+      "automationsHeading": "자동화",
+      "automationsHostPickerTitle": "자동화를 열 호스트"
     },
     "listHeader": {
-      "agentTime": "Agent 시간",
-      "agentsSpawned": "시작된 Agents",
-      "daysHours": "{{days}}일 {{hours}}시간",
-      "desktopsHeading": "데스크탑",
-      "hoursMinutes": "{{hours}}시간 {{minutes}}분",
-      "minutes": "{{minutes}}분",
-      "prsCreated": "생성된 PR",
-      "title": "다시 오신 것을 환영합니다"
+      "desktopsHeading": "데스크탑"
     },
     "screen": {
       "pairingCheckFailed": "페어링 확인 실패",
@@ -1343,11 +1321,6 @@
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "removeHostTitle": "호스트 제거",
       "tryAgain": "다시 시도하세요."
-    },
-    "tasksCard": {
-      "noSources": "연결된 작업 소스 없음",
-      "openProviderTasks": "{{provider}} 작업 열기",
-      "title": "작업"
     }
   },
   "hooks": {
@@ -1396,7 +1369,8 @@
       "floatingWorkspace": "플로팅 워크스페이스",
       "hideSidebar": "사이드바 숨기기",
       "reconnect": "다시 연결",
-      "tasks": "작업"
+      "tasks": "작업",
+      "automations": "자동화"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "\"{{name}}\" ({{branch}})을(를) 삭제하시겠습니까?",
@@ -1501,7 +1475,8 @@
       "sourceControl": "소스 제어",
       "tasks": "작업",
       "terminal": "터미널",
-      "workspace": "워크스페이스"
+      "workspace": "워크스페이스",
+      "automations": "자동화"
     }
   },
   "newWorkspace": {
@@ -3381,7 +3356,6 @@
       "changeStatus": "상태 변경",
       "copyGitHubLink": "GitHub 링크 복사",
       "copyLinearLink": "Linear 링크 복사",
-      "createWorkspace": "워크스페이스 만들기",
       "creating": "만드는 중…",
       "mergeConflicts": "GitHub에서 병합 충돌이 보고되었습니다.",
       "mergeMergeRequest": "MR 병합",
@@ -3389,8 +3363,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "하위 이슈 추가",
-      "assignee": "담당자",
-      "assignees": "담당자",
       "checks": "체크",
       "description": "설명",
       "discussion": "토론",
@@ -3402,13 +3374,10 @@
       "pipeline": "파이프라인",
       "pipelineJobs_one": "작업 {{count}}개",
       "pipelineJobs_other": "작업 {{count}}개",
-      "project": "프로젝트",
       "rerunAll": "모두 재실행",
       "rerunFailed": "실패한 체크 재실행",
-      "status": "상태",
       "subIssueTitle": "하위 이슈 제목",
-      "subIssues": "하위 이슈",
-      "type": "유형"
+      "subIssues": "하위 이슈"
     },
     "itemDetailDrawer": {
       "refreshDetails": "상세 정보 새로고침"
@@ -3761,19 +3730,14 @@
       "addRepository": "Linear 워크스페이스를 생성하기 전에 Git 리포지토리를 추가하세요.",
       "advanced": "고급",
       "agent": "에이전트",
-      "connect": "연결",
       "connectFirst": "먼저 리포지토리를 연결하세요",
       "connectRepository": "리포지토리 연결",
-      "connecting": "연결 중…",
-      "createFrom": "{{branch}} 기준으로 생성",
       "defaultBranch": "기본 브랜치",
       "detectingAgents": "에이전트 감지 중…",
-      "optional": "[선택 사항]",
       "remoteRepository": "원격 리포지토리",
       "repository": "리포지토리",
       "repositoryNotFound": "리포지토리를 찾을 수 없습니다.",
       "selectRepository": "리포지토리 선택",
-      "sshConnection": "SSH 연결",
       "startFrom": "시작 기준",
       "title": "워크스페이스 생성",
       "workspaceName": "워크스페이스 이름"
@@ -3896,7 +3860,6 @@
       "existing": "기존 브랜치",
       "existingHint": "새 커밋이 이 브랜치에 추가됩니다.",
       "hostUpdateRequired": "브랜치를 재사용하거나 별도의 브랜치를 명시적으로 생성하려면 워크스페이스 호스트의 Orca를 업데이트하세요.",
-      "new": "새 브랜치",
       "newHint": "새 로컬 브랜치 만들기",
       "newName": "새 브랜치 이름",
       "title": "이 워크트리의 브랜치"
@@ -3949,6 +3912,213 @@
       "right": "방향 패드 오른쪽",
       "down": "방향 패드 아래",
       "hint": "방향키를 보냅니다. 길게 눌러 반복합니다."
+    }
+  },
+  "automations": {
+    "mobile": {
+      "extraAgentArguments": "추가 에이전트 인수",
+      "allAutomations": "모든 자동화",
+      "schedule": "일정",
+      "nextRun": "다음 실행",
+      "agent": "에이전트",
+      "project": "프로젝트",
+      "unavailable": "사용할 수 없음",
+      "workspace": "워크스페이스",
+      "edit": "편집",
+      "deleteAutomation": "자동화 삭제",
+      "editAutomation": "자동화 편집",
+      "cancel": "취소",
+      "name": "이름",
+      "back": "뒤로",
+      "continue": "계속",
+      "createAutomation": "자동화 생성",
+      "automations": "자동화",
+      "runs": "실행",
+      "refresh": "새로고침",
+      "automation": "자동화",
+      "inProgress": "진행 중",
+      "completed": "완료됨",
+      "skipped": "건너뛰었습니다.",
+      "started": "시작됨",
+      "trigger": "트리거",
+      "run": "실행",
+      "output": "출력",
+      "noOutput": "사용 가능한 출력 내용이 없습니다.",
+      "loadingRuns": "실행 로드 중…",
+      "loading": "로드 중…",
+      "hourly": "매시간",
+      "daily": "매일",
+      "weekdays": "평일",
+      "weekly": "주간",
+      "cadence": "반복 주기",
+      "day": "일",
+      "host": "호스트",
+      "pending": "대기 중",
+      "starting": "시작 중",
+      "baseBranchOptional": "기준 브랜치(선택 사항)",
+      "workspaceSetupScript": "작업 공간 설정 스크립트",
+      "useProjectSettings": "프로젝트 설정 사용",
+      "runSetupScript": "설정 스크립트 실행",
+      "skipSetupScript": "설정 스크립트 건너뛰기",
+      "reuseAgentSession": "에이전트 세션 재사용",
+      "precheckCommandOptional": "사전 검사 명령(선택 사항)",
+      "precheckTimeoutSeconds": "사전 검사 제한 시간(초)",
+      "missedRunGraceMinutes": "누락된 실행 유예(분)",
+      "choose": "선택…",
+      "runOnSchedule": "{{name}} 일정에 따라 실행",
+      "noNextScheduledRun": "다음 예약 실행 없음",
+      "newWorkspacePerRun": "실행마다 새 작업 공간",
+      "instructions": "지침",
+      "runNow": "지금 실행",
+      "viewAllRuns": "모든 실행 보기",
+      "savedAgent": "{{agent}}(저장됨)",
+      "chooseAProjectSetUpOnThisHost": "이 호스트에 설정된 프로젝트를 선택하세요.",
+      "newAutomation": "새 자동화",
+      "editorStep": "{{step}}/3 · {{section}}",
+      "retryProjectLoading": "프로젝트 다시 불러오기",
+      "loadingProjects": "프로젝트 불러오는 중…",
+      "projectAndHostSetup": "프로젝트 및 호스트 설정",
+      "savedTarget": "저장된 대상",
+      "useAnExistingWorkspace": "기존 작업 공간 사용",
+      "existingWorkspace": "기존 작업 공간",
+      "savedWorkspace": "저장된 작업 공간",
+      "loadMoreWorkspaces": "작업 공간 더 불러오기",
+      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "이 호스트의 작업 공간 목록이 불완전합니다. 새로 고치거나 작업 공간을 더 불러오세요.",
+      "agentDetecting": "에이전트 · 감지 중…",
+      "installAndEnableAnAgentOnThisHostThenRetry": "이 호스트에 에이전트를 설치하고 활성화한 후 다시 시도하세요.",
+      "hideAdvancedOptions": "고급 옵션 숨기기",
+      "advancedOptions": "고급 옵션",
+      "chooseAnAgent": "에이전트 선택",
+      "saveChanges": "변경 사항 저장",
+      "loadingAutomations": "자동화 불러오는 중…",
+      "letYourAgentsWorkOnASchedule": "에이전트가 일정에 따라 작업하도록 하세요",
+      "createAnAutomationToRunATaskOnThisHost": "이 호스트에서 작업을 실행할 자동화를 만드세요.",
+      "nextDate": "다음: {{date}}",
+      "lastResult": "최근: {{status}} · {{date}}",
+      "latestResultNotReported": "최근 결과가 보고되지 않음",
+      "sshTarget": " · SSH {{target}}",
+      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "새로 고치거나 변경하려면 이 호스트에 다시 연결하세요. 저장된 정보는 아래에서 계속 확인할 수 있습니다.",
+      "recentRuns": "최근 실행",
+      "outcome": "결과",
+      "allOutcomes": "모든 결과",
+      "couldNotStart": "시작하지 못함",
+      "deleteAutomationTitle": "자동화를 삭제할까요?",
+      "deleteRetained": "“{{name}}” 및 보관된 실행을 삭제할까요?",
+      "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "원래 에이전트 창을 확인하지 못했습니다. 다시 연결한 후 시도하세요.",
+      "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "원래 에이전트 창을 더 이상 열 수 없습니다. 저장된 출력은 여기에 유지됩니다.",
+      "allRuns": "모든 실행",
+      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "이 실행은 더 이상 호스트의 보관 기록에 없습니다. 마지막으로 저장된 정보는 아래에 유지됩니다.",
+      "scheduledFor": "예약 시간",
+      "notCreated": "생성되지 않음",
+      "projectHost": "프로젝트 호스트",
+      "notRecorded": "기록되지 않음",
+      "capturedTruncated": "캡처: {{date}} · 호스트가 출력을 잘랐습니다",
+      "capturedDate": "캡처: {{date}}",
+      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "원래 에이전트 창을 사용할 수 없습니다. 저장된 출력은 여기에 유지됩니다.",
+      "openAgent": "에이전트 열기",
+      "retryHistory": "기록 다시 불러오기",
+      "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "불러온 기록에 일치하는 실행이 없습니다. 계속하려면 더 불러오세요.",
+      "noMatchingRunsYet": "아직 일치하는 실행이 없습니다.",
+      "runSummary": "{{title}}, {{status}}, {{date}}",
+      "scheduled": "예약됨",
+      "loadMoreRuns": "실행 더 불러오기",
+      "customCronOrRRULE": "사용자 지정 Cron 또는 RRULE",
+      "cronOrRRULE": "Cron 또는 RRULE",
+      "minuteFromHHMM": "분(HH:MM에서)",
+      "timeHHMM24Hour": "시간(HH:MM, 24시간제)",
+      "useATimeSuchAs0900": "09:00과 같은 시간을 사용하세요.",
+      "timeZone": "시간대",
+      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "선택한 호스트에서 실행됩니다. 예약된 시간에 해당 호스트를 사용할 수 있도록 하세요.",
+      "pairedHost": "페어링된 호스트",
+      "selectedServerUnavailable": "선택한 서버(사용 불가)",
+      "addANameInstructionsAndAnAgent": "이름, 지침, 에이전트를 추가하세요.",
+      "chooseAnExistingWorkspace": "기존 작업 공간을 선택하세요.",
+      "checkTheExtraAgentArguments": "추가 에이전트 인수를 확인하세요.",
+      "enterAValidCronOrRRULESchedule": "유효한 Cron 또는 RRULE 일정을 입력하세요.",
+      "enterAValidTimeZoneSuchAsAmericaLosAngeles": "America/Los_Angeles와 같은 유효한 시간대를 입력하세요.",
+      "missedRunGraceMustBeZeroOrAPositiveNumberOfMinutes": "유예 시간은 0 또는 양수의 분이어야 합니다.",
+      "precheckTimeoutRange": "사전 검사 제한 시간은 1~{{maximum}}초여야 합니다.",
+      "outcomeUnknown": "호스트가 이 작업을 적용했을 수 있습니다. 다시 시도하기 전에 새로 고쳐 확인하세요.",
+      "ownerChanged": "이 자동화의 호스트가 변경되었습니다. 계속하기 전에 다시 불러오세요.",
+      "targetRemoved": "이 자동화의 SSH 호스트가 제거되어 실행할 수 없습니다. 자동화를 삭제하거나 해당 호스트를 다시 추가하세요.",
+      "fencingRequired": "이 자동화는 SSH 호스트에 고정되어 있으므로 요청에 예상 호스트를 지정해야 합니다.",
+      "invalidDestination": "이 관리 주체에서 해당 호스트를 더 이상 사용할 수 없습니다. 호스트를 선택하고 다시 시도하세요.",
+      "agentDiscoveryUnavailable": "이 프로젝트 호스트에서 에이전트 검색을 사용할 수 없습니다. 저장된 선택은 유지됩니다.",
+      "agentVerificationUnavailable": "이 호스트는 이 프로젝트의 에이전트를 확인할 수 없습니다. 호스트를 업데이트하고 다시 시도하세요.",
+      "hostUnavailable": "이 호스트에서 자동화를 사용할 수 없습니다. 해당 호스트의 Orca를 업데이트하고 다시 연결하세요.",
+      "hostUnreachable": "이 호스트에 연결하지 못했습니다. 다시 연결한 후 새로 고쳐 현재 상태를 확인하세요.",
+      "actionFailed": "호스트에서 이 작업을 완료하지 못했습니다. 새로 고친 후 다시 시도하세요.",
+      "dispatched": "전송됨",
+      "skippedPrecheck": "건너뜀 · 사전 검사",
+      "skippedMissedSchedule": "건너뜀 · 예약 시간 지남",
+      "skippedHostUnavailable": "건너뜀 · 호스트 사용 불가",
+      "skippedSignInNeeded": "건너뜀 · 로그인 필요",
+      "unknownResult": "알 수 없는 결과",
+      "notReported": "보고되지 않음",
+      "searchOptions": "옵션 검색",
+      "scheduleAgentWorkAndViewRuns": "에이전트 작업 예약 및 실행 보기",
+      "task": "작업",
+      "review": "확인"
+    },
+    "orphanIssues": {
+      "hostReselection": "실행하기 전에 이 자동화를 편집하고 호스트를 다시 선택하세요.",
+      "malformed": "저장된 호스트 기록이 불완전합니다.",
+      "projectMissing": "프로젝트가 더 이상 존재하지 않아 호스트를 확인할 수 없습니다.",
+      "projectUnverified": "여기에서 프로젝트를 확인할 수 없어 호스트가 확인되지 않았습니다.",
+      "scheduledElsewhere": "여기에 저장되어 있지만 원격 런타임에서 실행되도록 예약되어 있습니다.",
+      "targetMissing": "SSH 호스트가 더 이상 등록되어 있지 않습니다.",
+      "targetReplaced": "SSH 호스트가 삭제된 후 다시 추가되었으므로 이 자동화를 다시 인계받아야 합니다.",
+      "workspaceHostAmbiguous": "작업 공간이 여러 호스트에 걸쳐 있어 소유자를 하나로 정할 수 없습니다."
+    },
+    "runFailures": {
+      "noDispatchHost": "자동화를 시작할 수 있는 Orca 창이 없었습니다.",
+      "unevaluableSchedule": "Orca가 이 자동화를 평가할 수 없어 이번 실행을 건너뛰었습니다.",
+      "noRunnableHost": "이 자동화에는 실행할 호스트가 없습니다.",
+      "wslMoveInProgress": "이 자동화의 프로젝트를 WSL 호스트로 옮기는 중이어서 Orca가 이번 실행을 건너뛰었습니다. 이동이 끝나면 실행이 재개됩니다.",
+      "wslMoveOwnedByHost": "이 자동화의 프로젝트는 이제 WSL 호스트에서 실행되며, 해당 호스트가 그곳에서 이 자동화를 실행합니다. Orca는 더 이상 이 로컬 사본을 실행하지 않습니다.",
+      "missedGraceWindow": "Orca가 다시 확인했을 때 이 실행을 보충할 수 있는 유예 시간이 이미 지나 있었습니다.",
+      "targetMissing": "자동화 호스트가 더 이상 등록되어 있지 않아 이 자동화를 실행할 곳이 없습니다.",
+      "targetReplaced": "자동화 호스트가 제거된 후 다시 등록되었으므로, 이 자동화를 실행하려면 다시 연결해야 합니다.",
+      "workspaceHostAmbiguous": "자동화 워크스페이스가 여러 호스트에 걸쳐 있어 Orca가 어느 호스트에서 실행해야 할지 판단할 수 없습니다.",
+      "legacyTwinHosts": "이 자동화는 Orca가 실행 호스트를 기록하기 전에 저장되었으며, 프로젝트가 여러 호스트에 있습니다. 자동화를 열고 실행할 호스트를 선택하세요.",
+      "targetUnavailable": "자동화 실행 대상을 더 이상 사용할 수 없습니다.",
+      "remoteSchedulingUnavailable": "이 Orca 클라이언트에서는 아직 원격 서버의 자동화 예약을 사용할 수 없습니다. 원격 서버에서 이 자동화를 실행하거나, 영속적인 원격 예약 기능이 제공되면 Orca를 업데이트하세요.",
+      "projectSetupMissing": "선택한 자동화 호스트에 프로젝트가 더 이상 설정되어 있지 않습니다.",
+      "targetSetupMismatch": "자동화 실행 대상이 프로젝트에서 선택한 호스트 설정과 더 이상 일치하지 않습니다.",
+      "repoUnavailable": "선택한 자동화 호스트의 리포지토리를 더 이상 사용할 수 없습니다.",
+      "repoDetached": "리포지토리가 선택한 자동화 호스트에 더 이상 연결되어 있지 않습니다.",
+      "projectPathChanged": "선택한 자동화 호스트의 프로젝트 경로가 변경되었습니다.",
+      "automationChanged": "이번 실행이 시작되기 전에 자동화가 변경되었습니다.",
+      "destinationChanged": "이번 실행이 시작되기 전에 자동화의 실행 위치가 변경되었습니다.",
+      "hooksReviewBlocked": "에이전트가 새로 추가되거나 변경된 훅을 누군가 검토하기를 기다리고 있습니다(\"Hooks need review\"). 이 실행을 열고 해당 훅을 신뢰하거나 제거하세요. 예약된 실행은 계속되며, 검토할 항목이 없어지면 성공합니다.",
+      "agentNeverStarted": "프롬프트를 제출한 후 자동화 에이전트가 시작되지 않았습니다.",
+      "agentNoCompletion": "자동화 에이전트가 완료를 보고하지 않았습니다.",
+      "watchTimedOut": "완료 신호 없이 6시간이 지나 Orca가 이 실행의 모니터링을 중단했습니다.",
+      "projectSetupState": {
+        "notSetUp": "선택한 자동화 호스트에 프로젝트가 설정되어 있지 않습니다.",
+        "settingUp": "선택한 자동화 호스트에서 아직 프로젝트를 설정 중입니다.",
+        "error": "선택한 자동화 호스트에서 프로젝트 설정에 실패했습니다.",
+        "unsupported": "선택한 자동화 호스트가 이 프로젝트를 지원하지 않습니다."
+      },
+      "wslDistroStopped": "WSL 배포판 {{distro}}이(가) 중지되어 있어 이 예약 실행에서 시작하지 않았습니다. 배포판을 시작하거나 지금 실행을 사용하세요. 실행 중인 동안에는 이후 실행이 진행됩니다."
+    }
+  },
+  "auto": {
+    "components": {
+      "automations": {
+        "automation": {
+          "schedule": {
+            "label": {
+              "086a5a9fe2": "잘못된 일정",
+              "ba20c92073": "사용자 지정 일정",
+              "a95afb7483": "매시간 :{{minute}}",
+              "280ccd2701": "매일 {{time}}",
+              "3f1422adc1": "평일 {{time}}",
+              "cc71e252ba": "매주 {{day}} {{time}}"
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -171,7 +171,8 @@ export async function saveEditorBytesDraft(
   context: RuntimeFileOperationArgs,
   trigger: EditorSaveTrigger,
   /** A Don't Save since the request; checked at the last moment before the write. */
-  discarded: () => boolean
+  discarded: () => boolean,
+  assertWriterCurrent?: () => void
 ): Promise<EditorSaveResult> {
   const box = bytesDocumentBoxes.get(file.id)
   const document = box?.current
@@ -198,6 +199,7 @@ export async function saveEditorBytesDraft(
         ? {}
         : { expectedSha256: document.savedSha256, allowMissing: trigger !== 'autosave' },
       () => {
+        assertWriterCurrent?.()
         if (discarded()) {
           throw new EditorSaveDiscardedError()
         }

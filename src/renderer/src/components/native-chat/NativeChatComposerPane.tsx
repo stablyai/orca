@@ -56,10 +56,11 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       readTerminalScreen,
       launchSeed,
       structuredTransport,
-      steerQueued,
+      steerHead,
       recallSource,
       inputOwnedByCard = false,
-      notices: chatNotices
+      notices: chatNotices,
+      workspacePending: pending = false
     },
     ref
   ): React.JSX.Element {
@@ -103,6 +104,10 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const [hasPty, disabled] = structuredTransport
       ? [true, !canSend || unavailableHint !== undefined]
       : [targetPtyId !== null, targetPtyId === null || !canSend || inputOwnedByCard]
+    const attachDisabled =
+      disabled ||
+      pending ||
+      (structuredTransport?.runtime === 'remote' && structuredTransport.sessionPending === true)
 
     const { picker, resume } = useNativeChatComposerCommandPicker({
       editing: editSession !== undefined,
@@ -112,7 +117,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       draft,
       caret,
       recalledFromHistory: recall.active,
-      disabled,
+      disabled: disabled || pending,
       isComposing: imeEnterGesture.isComposing,
       structuredTransport,
       editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
@@ -184,7 +189,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       terminalTabId,
       structuredWorktreeId: structuredTransport?.worktreeId,
       structuredSession: structuredTransport,
-      disabled,
+      disabled: disabled || pending,
       attachResolvedPaths,
       pendingChips: attachments.pendingChips,
       setNotice
@@ -220,7 +225,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       resolvePendingImageAttachment: attachments.pendingChips.resolve,
       revealPendingImageAttachment: attachments.revealPendingImageAttachment,
       dropPendingImageAttachment: attachments.dropPendingImageAttachment,
-      pastedTextEditor: structuredTransport ? attachments.scopeEditor : null,
+      pastedTextEditor: structuredTransport && !pending ? attachments.scopeEditor : null,
       setNotice
     })
 
@@ -298,7 +303,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       disabled,
       sendPty,
       sendStructured,
-      consumeOrcaCommand: resume.consume,
+      consumeOrcaCommand: pending ? undefined : resume.consume,
       setDraft,
       setCaret
     })
@@ -344,7 +349,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       interrupt: editSession?.cancel ?? interrupt,
       send,
       hasAttachments: imageAttachments.length > 0,
-      ...(!editSession && steerQueued ? { steerQueued } : {}),
+      ...(!editSession && steerHead ? { steerHead } : {}),
       setActiveSuggestion,
       setDraft,
       setCaret
@@ -383,11 +388,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           isWorking={isWorking}
           isStopping={isStopping}
           afterStop={afterStop}
-          attachDisabled={
-            disabled ||
-            (structuredTransport?.runtime === 'remote' &&
-              structuredTransport.sessionPending === true)
-          }
+          attachDisabled={attachDisabled}
           dictationDisabled={dictation.dictationDisabled}
           isDictating={dictation.isDictating}
           isDictationHoldMode={dictation.isDictationHoldMode}

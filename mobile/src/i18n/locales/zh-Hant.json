@@ -48,12 +48,10 @@
       "untitledSession": "未命名的工作階段"
     },
     "sessionHistoryList": {
-      "assistantRole": "助理",
       "currentWorktree": "目前工作樹",
       "messages_one": "{{count}} 則訊息",
       "messages_other": "{{count}} 則訊息",
-      "resumeSession": "恢復代理程式工作階段",
-      "userRole": "使用者"
+      "resumeSession": "恢復代理程式工作階段"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "無法連上主機",
@@ -188,7 +186,11 @@
       "cancelEditing": "取消編輯",
       "placeholder": "隨心輸入，@ 引用檔案，/ 使用命令",
       "saveEditedMessage": "儲存編輯後的訊息",
-      "sendMessage": "傳送訊息"
+      "sendMessage": "傳送訊息",
+      "sendQueue": "加入佇列",
+      "sendSteer": "引導",
+      "sendQueueHint": "在目前回合結束後執行",
+      "sendSteerHint": "加入代理程式目前正在進行的工作"
     },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",
@@ -279,7 +281,10 @@
       "compaction": "已壓縮上下文",
       "contextCleared": "上下文已清除",
       "plan": "計畫",
-      "stoppedManually": "已手動停止"
+      "stoppedManually": "已手動停止",
+      "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
+      "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
+      "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。"
     },
     "orcaStop": {
       "canContinue": "您可以在此對話中繼續。",
@@ -359,7 +364,6 @@
     "sessionOptionPickers": {
       "agentWorking": "代理程式正在執行",
       "backToModels": "返回模型清單",
-      "closePicker": "關閉選擇器",
       "dispatchUnconfirmed": "已傳送給代理程式 — 尚未確認",
       "modelFullAccessLabel": "模型，{{value}}，完整存取權",
       "modelLabel": "模型，{{value}}",
@@ -763,11 +767,6 @@
       "moveUp": "上移",
       "reorderHint": "使用「上移」和「下移」動作即可調整順序，無須拖曳"
     },
-    "homeQuickActions": {
-      "newWorkspace": "新工作區",
-      "pairDesktop": "配對電腦",
-      "title": "快速操作"
-    },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
       "openHost": "開啟 {{title}}",
@@ -825,12 +824,10 @@
       "blankTerminal": "空白終端機"
     },
     "newWorktreeFormSheet": {
-      "advanced": "進階",
       "agent": "代理程式",
       "connectTarget": "連線至目標",
       "connectTargetFirst": "請先連線至目標",
       "createWorktree": "建立工作樹",
-      "nameOrCreateFrom": "名稱或「建立來源」",
       "noProjectsFound": "找不到專案",
       "note": "備註",
       "notePlaceholder": "寫備註",
@@ -921,12 +918,10 @@
       "noResults": "找不到結果。",
       "searchPlaceholder": "輸入名稱或搜尋來源",
       "switchRepo": "切換至 {{repoName}}",
-      "title": "名稱或「建立來源」",
       "typeWorkspaceName": "請在下方欄位輸入工作區名稱。"
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "開啟所選來源",
-      "optional": "[可選]",
       "searchPlaceholder": "輸入名稱或搜尋來源"
     },
     "smartWorkspaceSourceRow": {
@@ -1298,17 +1293,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "帳戶用量",
-      "sessionWindow": "5 小時",
-      "systemDefault": "系統預設",
-      "weeklyWindow": "7 天"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "關閉 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已推出",
-      "updateAccessibilityLabel": "Orca {{version}} 已推出，點一下即可更新",
-      "updateHint": "點一下即可更新"
+      "updateAccessibilityLabel": "Orca {{version}} 已推出，點一下即可更新"
     },
     "emptyState": {
       "connectedDescription": "您的電腦會顯示在這裡。所有資料皆採端對端加密。",
@@ -1316,26 +1304,16 @@
       "description": "與電腦上的 Orca 配對，即可用手機查看代理程式狀態、開啟任何終端機，並推進工作。",
       "openDesktopDescription": "前往「設定」→「行動版」，產生配對用的 QR Code。",
       "openDesktopTitle": "開啟 Orca 桌面版",
-      "pairDesktop": "配對電腦",
-      "scanCodeDescription": "點一下上方按鈕開啟掃描器，對準電腦螢幕上的 QR Code。",
       "scanCodeTitle": "掃描 QR Code",
-      "stepsHeading": "使用方式",
       "title": "連線至您的電腦"
     },
     "listFooter": {
       "hostPickerTitle": "選擇開啟任務的主機",
-      "resumeHeading": "繼續",
-      "tasksHeading": "任務"
+      "automationsHeading": "自動化",
+      "automationsHostPickerTitle": "選擇主機以開啟自動化"
     },
     "listHeader": {
-      "agentTime": "代理程式時間",
-      "agentsSpawned": "已啟動代理程式",
-      "daysHours": "{{days}} 天 {{hours}} 小時",
-      "desktopsHeading": "電腦",
-      "hoursMinutes": "{{hours}} 小時 {{minutes}} 分鐘",
-      "minutes": "{{minutes}} 分鐘",
-      "prsCreated": "已建立 PR",
-      "title": "歡迎回來"
+      "desktopsHeading": "電腦"
     },
     "screen": {
       "pairingCheckFailed": "無法檢查配對狀態",
@@ -1343,11 +1321,6 @@
       "removeHostMessage": "要移除「{{name}}」嗎？之後可重新配對。",
       "removeHostTitle": "移除主機",
       "tryAgain": "請再試一次。"
-    },
-    "tasksCard": {
-      "noSources": "尚未連結任務來源",
-      "openProviderTasks": "開啟 {{provider}} 任務",
-      "title": "任務"
     }
   },
   "hooks": {
@@ -1396,7 +1369,8 @@
       "floatingWorkspace": "浮動工作區",
       "hideSidebar": "隱藏側邊欄",
       "reconnect": "重新連線",
-      "tasks": "任務"
+      "tasks": "任務",
+      "automations": "自動化"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要刪除「{{name}}」（{{branch}}）嗎？",
@@ -1501,7 +1475,8 @@
       "sourceControl": "原始碼控制",
       "tasks": "任務",
       "terminal": "終端機",
-      "workspace": "工作區"
+      "workspace": "工作區",
+      "automations": "自動化"
     }
   },
   "newWorkspace": {
@@ -3381,7 +3356,6 @@
       "changeStatus": "更改狀態",
       "copyGitHubLink": "複製 GitHub 連結",
       "copyLinearLink": "複製 Linear 連結",
-      "createWorkspace": "建立工作區",
       "creating": "建立中…",
       "mergeConflicts": "GitHub 回報有合併衝突。",
       "mergeMergeRequest": "合併 MR",
@@ -3389,8 +3363,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "新增子議題",
-      "assignee": "負責人",
-      "assignees": "負責人",
       "checks": "檢查項目",
       "description": "描述",
       "discussion": "討論",
@@ -3402,13 +3374,10 @@
       "pipeline": "管線",
       "pipelineJobs_one": "{{count}} 項作業",
       "pipelineJobs_other": "{{count}} 項作業",
-      "project": "專案",
       "rerunAll": "全部重新執行",
       "rerunFailed": "重新執行失敗項目",
-      "status": "狀態",
       "subIssueTitle": "子議題標題",
-      "subIssues": "子議題",
-      "type": "類型"
+      "subIssues": "子議題"
     },
     "itemDetailDrawer": {
       "refreshDetails": "重新整理詳細資訊"
@@ -3761,19 +3730,14 @@
       "addRepository": "請先新增 Git 存放庫，再建立 Linear 工作區。",
       "advanced": "進階",
       "agent": "代理程式",
-      "connect": "連線",
       "connectFirst": "請先連線存放庫",
       "connectRepository": "連線存放庫",
-      "connecting": "正在連線…",
-      "createFrom": "從 {{branch}} 建立",
       "defaultBranch": "預設分支",
       "detectingAgents": "正在偵測代理程式…",
-      "optional": "[可選]",
       "remoteRepository": "遠端存放庫",
       "repository": "存放庫",
       "repositoryNotFound": "找不到存放庫。",
       "selectRepository": "選擇存放庫",
-      "sshConnection": "SSH 連線",
       "startFrom": "起始來源",
       "title": "建立工作區",
       "workspaceName": "工作區名稱"
@@ -3896,7 +3860,6 @@
       "existing": "現有分支",
       "existingHint": "新提交會加入此分支。",
       "hostUpdateRequired": "請更新工作區主機上的 Orca，才能重複使用分支或明確選擇建立獨立分支。",
-      "new": "新分支",
       "newHint": "建立新的本機分支",
       "newName": "新分支名稱",
       "title": "此工作樹的分支"
@@ -3949,6 +3912,213 @@
       "right": "方向控制鍵右",
       "down": "方向控制鍵下",
       "hint": "傳送方向鍵。按住以重複。"
+    }
+  },
+  "automations": {
+    "mobile": {
+      "extraAgentArguments": "額外的代理程式引數",
+      "allAutomations": "全部自動化",
+      "schedule": "排程",
+      "nextRun": "下次執行",
+      "agent": "代理程式",
+      "project": "專案",
+      "unavailable": "不可用",
+      "workspace": "工作區",
+      "edit": "編輯",
+      "deleteAutomation": "刪除自動化",
+      "editAutomation": "編輯自動化",
+      "cancel": "取消",
+      "name": "名稱",
+      "back": "返回",
+      "continue": "繼續",
+      "createAutomation": "建立自動化",
+      "automations": "自動化",
+      "runs": "執行",
+      "refresh": "重新整理",
+      "automation": "自動化",
+      "inProgress": "進行中",
+      "completed": "已完成",
+      "skipped": "已略過",
+      "started": "開始",
+      "trigger": "觸發",
+      "run": "執行",
+      "output": "輸出",
+      "noOutput": "沒有可用的輸出內容。",
+      "loadingRuns": "正在載入執行...",
+      "loading": "載入中…",
+      "hourly": "每小時",
+      "daily": "每天",
+      "weekdays": "工作日",
+      "weekly": "每週",
+      "cadence": "執行頻率",
+      "day": "日",
+      "host": "主機",
+      "pending": "待處理",
+      "starting": "正在啟動",
+      "baseBranchOptional": "基底分支（選填）",
+      "workspaceSetupScript": "工作區設定指令碼",
+      "useProjectSettings": "使用專案設定",
+      "runSetupScript": "執行設定指令碼",
+      "skipSetupScript": "略過設定指令碼",
+      "reuseAgentSession": "重複使用代理程式工作階段",
+      "precheckCommandOptional": "預先檢查命令（選填）",
+      "precheckTimeoutSeconds": "預先檢查逾時（秒）",
+      "missedRunGraceMinutes": "錯過執行的寬限時間（分鐘）",
+      "choose": "選擇…",
+      "runOnSchedule": "依排程執行 {{name}}",
+      "noNextScheduledRun": "沒有下次排定的執行",
+      "newWorkspacePerRun": "每次執行建立新工作區",
+      "instructions": "指示",
+      "runNow": "立即執行",
+      "viewAllRuns": "查看所有執行",
+      "savedAgent": "{{agent}}（已儲存）",
+      "chooseAProjectSetUpOnThisHost": "請選擇此主機上已設定的專案。",
+      "newAutomation": "新增自動化",
+      "editorStep": "第 {{step}} 步，共 3 步 · {{section}}",
+      "retryProjectLoading": "重試載入專案",
+      "loadingProjects": "正在載入專案…",
+      "projectAndHostSetup": "專案與主機設定",
+      "savedTarget": "已儲存的目標",
+      "useAnExistingWorkspace": "使用現有工作區",
+      "existingWorkspace": "現有工作區",
+      "savedWorkspace": "已儲存的工作區",
+      "loadMoreWorkspaces": "載入更多工作區",
+      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "此主機的工作區清單不完整。請重新整理或載入更多工作區。",
+      "agentDetecting": "代理程式 · 偵測中…",
+      "installAndEnableAnAgentOnThisHostThenRetry": "請在此主機上安裝並啟用代理程式，然後再試。",
+      "hideAdvancedOptions": "隱藏進階選項",
+      "advancedOptions": "進階選項",
+      "chooseAnAgent": "選擇代理程式",
+      "saveChanges": "儲存變更",
+      "loadingAutomations": "正在載入自動化…",
+      "letYourAgentsWorkOnASchedule": "讓代理程式依排程工作",
+      "createAnAutomationToRunATaskOnThisHost": "建立自動化以在此主機上執行任務。",
+      "nextDate": "下次：{{date}}",
+      "lastResult": "上次：{{status}} · {{date}}",
+      "latestResultNotReported": "未回報最新結果",
+      "sshTarget": " · SSH {{target}}",
+      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "請重新連線至此主機以重新整理或變更。已儲存的資訊仍可在下方查看。",
+      "recentRuns": "最近執行",
+      "outcome": "結果",
+      "allOutcomes": "所有結果",
+      "couldNotStart": "無法啟動",
+      "deleteAutomationTitle": "刪除自動化？",
+      "deleteRetained": "刪除「{{name}}」及其保留的執行？",
+      "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "無法驗證原始代理程式窗格。請重新連線後再試。",
+      "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "原始代理程式窗格已無法開啟。已儲存的輸出仍保留在此處。",
+      "allRuns": "所有執行",
+      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "此執行已不在主機保留的歷程記錄中。最後儲存的資訊仍保留在下方。",
+      "scheduledFor": "排定時間",
+      "notCreated": "未建立",
+      "projectHost": "專案主機",
+      "notRecorded": "未記錄",
+      "capturedTruncated": "擷取於 {{date}} · 輸出已由主機截斷",
+      "capturedDate": "擷取於 {{date}}",
+      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "原始代理程式窗格無法使用。已儲存的輸出仍保留在此處。",
+      "openAgent": "開啟代理程式",
+      "retryHistory": "重試歷程記錄",
+      "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "已載入的歷程記錄中沒有符合的執行。請載入更多以繼續。",
+      "noMatchingRunsYet": "尚無符合的執行。",
+      "runSummary": "{{title}}，{{status}}，{{date}}",
+      "scheduled": "已排定",
+      "loadMoreRuns": "載入更多執行",
+      "customCronOrRRULE": "自訂 Cron 或 RRULE",
+      "cronOrRRULE": "Cron 或 RRULE",
+      "minuteFromHHMM": "分鐘（來自 HH:MM）",
+      "timeHHMM24Hour": "時間（HH:MM，24 小時制）",
+      "useATimeSuchAs0900": "請使用 09:00 這樣的時間。",
+      "timeZone": "時區",
+      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "在所選主機上執行。請確保該主機在排定時間可用。",
+      "pairedHost": "已配對主機",
+      "selectedServerUnavailable": "所選伺服器（無法使用）",
+      "addANameInstructionsAndAnAgent": "請新增名稱、指示和代理程式。",
+      "chooseAnExistingWorkspace": "請選擇現有工作區。",
+      "checkTheExtraAgentArguments": "請檢查額外的代理程式引數。",
+      "enterAValidCronOrRRULESchedule": "請輸入有效的 Cron 或 RRULE 排程。",
+      "enterAValidTimeZoneSuchAsAmericaLosAngeles": "請輸入有效的時區，例如 America/Los_Angeles。",
+      "missedRunGraceMustBeZeroOrAPositiveNumberOfMinutes": "寬限時間必須為零或正數分鐘。",
+      "precheckTimeoutRange": "預先檢查逾時必須介於 1 到 {{maximum}} 秒之間。",
+      "outcomeUnknown": "主機可能已套用此操作。請先重新整理確認，再重試。",
+      "ownerChanged": "此自動化的主機已變更。請重新載入後繼續。",
+      "targetRemoved": "此自動化的 SSH 主機已移除，因此無法執行。請刪除自動化或重新新增該主機。",
+      "fencingRequired": "此自動化已固定至 SSH 主機，因此要求必須指定預期的主機。",
+      "invalidDestination": "此管理端不再提供該主機。請選擇主機後再試。",
+      "agentDiscoveryUnavailable": "此專案主機無法探索代理程式。已儲存的代理程式選擇會保留。",
+      "agentVerificationUnavailable": "此主機無法驗證此專案的代理程式。請更新主機後再試。",
+      "hostUnavailable": "此主機無法使用自動化。請更新該主機上的 Orca 後重新連線。",
+      "hostUnreachable": "無法連線至此主機。請重新連線並重新整理以檢查其目前狀態。",
+      "actionFailed": "無法在主機上完成此操作。請重新整理後再試。",
+      "dispatched": "已派送",
+      "skippedPrecheck": "已略過 · 預先檢查",
+      "skippedMissedSchedule": "已略過 · 錯過排程",
+      "skippedHostUnavailable": "已略過 · 主機無法使用",
+      "skippedSignInNeeded": "已略過 · 需要登入",
+      "unknownResult": "未知結果",
+      "notReported": "未回報",
+      "searchOptions": "搜尋選項",
+      "scheduleAgentWorkAndViewRuns": "排定代理程式工作並查看執行",
+      "task": "任務",
+      "review": "檢查"
+    },
+    "orphanIssues": {
+      "hostReselection": "執行此自動化之前，請先編輯它並重新選擇主機。",
+      "malformed": "其儲存的主機記錄不完整。",
+      "projectMissing": "其專案已不存在，因此無法確定其主機。",
+      "projectUnverified": "無法從此處檢查其專案，因此其主機尚未確認。",
+      "scheduledElsewhere": "它儲存在此處，但排程在遠端執行階段執行。",
+      "targetMissing": "其 SSH 主機已不再註冊。",
+      "targetReplaced": "其 SSH 主機已被移除並重新新增，因此需要重新接管此自動化。",
+      "workspaceHostAmbiguous": "其工作區跨越多個主機，因此沒有唯一的擁有者。"
+    },
+    "runFailures": {
+      "noDispatchHost": "沒有可用來啟動自動化的 Orca 視窗。",
+      "unevaluableSchedule": "Orca 無法評估此自動化，已略過此次執行。",
+      "noRunnableHost": "此自動化沒有可供執行的主機。",
+      "wslMoveInProgress": "此自動化的專案正在移至其 WSL 主機，因此 Orca 略過了此次執行。移動完成後便會恢復執行。",
+      "wslMoveOwnedByHost": "此自動化的專案現在在其 WSL 主機上執行，自動化本身也由該主機執行。Orca 不再執行這個本機副本。",
+      "missedGraceWindow": "Orca 再次檢查時，此次執行的補執行寬限期已過。",
+      "targetMissing": "自動化主機已不在註冊清單中，因此已無處執行此自動化。",
+      "targetReplaced": "自動化主機已被移除並重新註冊，因此必須為此自動化重新建立關聯後才能執行。",
+      "workspaceHostAmbiguous": "自動化工作區橫跨多個主機，因此 Orca 無法判斷應在哪個主機上執行。",
+      "legacyTwinHosts": "此自動化是在 Orca 開始記錄執行主機之前儲存的，且其專案位於多個主機上。請開啟自動化，選擇應執行它的主機。",
+      "targetUnavailable": "自動化執行目標已無法使用。",
+      "remoteSchedulingUnavailable": "此 Orca 用戶端尚無法設定遠端伺服器上的自動化排程。請在遠端伺服器上執行此自動化，或等支援持久性遠端排程後再更新 Orca。",
+      "projectSetupMissing": "所選自動化主機上已沒有此專案的設定。",
+      "targetSetupMismatch": "自動化執行目標與專案所選主機的設定已不相符。",
+      "repoUnavailable": "所選自動化主機的存放庫已無法使用。",
+      "repoDetached": "存放庫已不再連結至所選自動化主機。",
+      "projectPathChanged": "所選自動化主機上的專案路徑已變更。",
+      "automationChanged": "此次執行啟動前，自動化已變更。",
+      "destinationChanged": "此次執行啟動前，自動化的執行位置已變更。",
+      "hooksReviewBlocked": "代理程式正在等待有人審查新增或變更的鉤子（「Hooks need review」）。請開啟此次執行，信任這些鉤子或將其移除。排定的執行會持續進行，等沒有需要審查的項目後便會成功。",
+      "agentNeverStarted": "送出提示詞後，自動化代理程式始終未啟動。",
+      "agentNoCompletion": "自動化代理程式未回報完成。",
+      "watchTimedOut": "6 小時內未收到完成訊號，Orca 已停止監看此次執行。",
+      "projectSetupState": {
+        "notSetUp": "專案尚未在所選自動化主機上完成設定。",
+        "settingUp": "專案仍在所選自動化主機上進行設定。",
+        "error": "專案在所選自動化主機上設定失敗。",
+        "unsupported": "所選自動化主機不支援此專案。"
+      },
+      "wslDistroStopped": "WSL 發行版 {{distro}} 已停止，因此這次排程執行沒有啟動它。請啟動該發行版或使用「立即執行」；它執行期間，之後的排程會照常進行。"
+    }
+  },
+  "auto": {
+    "components": {
+      "automations": {
+        "automation": {
+          "schedule": {
+            "label": {
+              "086a5a9fe2": "排程無效",
+              "ba20c92073": "自訂排程",
+              "a95afb7483": "每小時 :{{minute}}",
+              "280ccd2701": "每日 {{time}}",
+              "3f1422adc1": "工作日 {{time}}",
+              "cc71e252ba": "每{{day}} {{time}}"
+            }
+          }
+        }
+      }
     }
   }
 }

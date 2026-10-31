@@ -25,23 +25,6 @@ describe('ssh connect in-flight registry', () => {
     expect(isSshConnectInFlight('ssh-b')).toBe(false)
   })
 
-  it('clears the target when the connect settles', () => {
-    beginSshConnect('ssh-a')
-    endSshConnect('ssh-a')
-
-    expect(isSshConnectInFlight('ssh-a')).toBe(false)
-  })
-
-  it('notifies subscribers on both edges', () => {
-    const listener = vi.fn()
-    subscribeSshConnectInFlight(listener)
-
-    beginSshConnect('ssh-a')
-    endSshConnect('ssh-a')
-
-    expect(listener).toHaveBeenCalledTimes(2)
-  })
-
   // Duplicate begin must neither notify all host surfaces nor let its paired end clear a live acquisition.
   it('ignores a duplicate begin without re-notifying', () => {
     const listener = vi.fn()

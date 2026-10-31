@@ -1,4 +1,5 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../src/shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
@@ -13,7 +14,10 @@ import type {
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatAwaitingInput } from '../../../src/shared/native-chat/native-chat-terminal-turn'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
-import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type {
+  MobileNativeChatSendIntent,
+  MobileNativeChatSendOutcome
+} from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatCommandRefusalCauses } from './native-chat/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
@@ -54,6 +58,8 @@ export type MobileNativeChatController = {
   nativeChatActionablePromptIds: readonly string[] | undefined
   nativeChatCommandRefusalCauses: MobileNativeChatCommandRefusalCauses
   nativeChatCanStop: boolean
+  /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
+  nativeChatSendFollowUp: NativeChatSendFollowUp | null
   nativeChatStreamingText?: string
   nativeChatPermission: MobileChatPermission | null
   // A new prompt occurrence resets local card submission state only.
@@ -97,7 +103,8 @@ export type MobileNativeChatController = {
     images?: string[],
     deadline?: number,
     attachments?: readonly StructuredMobileSendAttachment[],
-    sentAt?: number
+    sentAt?: number,
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
   // Read parked TUI launch text to clear one line per Ctrl+U before pasting images.
   readSeededLaunchDraft: () => string | null
