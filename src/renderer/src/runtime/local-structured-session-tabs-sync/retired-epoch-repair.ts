@@ -1,6 +1,7 @@
 import { createSessionTabsAuthorityRepairLane } from '../web-session-tabs-sync/session-tabs-authority-repair'
 import {
   isCurrentLocalStructuredSessionGeneration,
+  isUnresolvedLocalSourceAddress,
   localStructuredSessionEpochHistoryByWorktree,
   localStructuredSessionGeneration
 } from './inventory-generation-fence'
@@ -11,9 +12,11 @@ const localRepairLane = createSessionTabsAuthorityRepairLane({
   generation: localStructuredSessionGeneration,
   isCurrent: isCurrentLocalStructuredSessionGeneration,
   isStillRetired: (worktreeId, publicationEpoch) =>
-    localStructuredSessionEpochHistoryByWorktree
+    isUnresolvedLocalSourceAddress(worktreeId) ||
+    (localStructuredSessionEpochHistoryByWorktree
       .get(worktreeId)
-      ?.retired.includes(publicationEpoch) ?? false
+      ?.retired.includes(publicationEpoch) ??
+      false)
 })
 
 export const scheduleRetiredEpochRepair = localRepairLane.schedule

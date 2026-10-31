@@ -4,6 +4,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import { refreshLocalRuntimeCapabilities } from '../local-runtime-capabilities'
 import {
   isCurrentLocalStructuredSessionGeneration,
+  localSourceAddressRevision,
   localStructuredSessionGeneration,
   retireLocalStructuredSessionGeneration
 } from './inventory-generation-fence'
@@ -79,6 +80,7 @@ export async function startLocalStructuredSessionTabsSync(args: {
       return
     }
     const generation = ++subscriptionGeneration
+    const addressRevision = localSourceAddressRevision()
     let handle: { unsubscribe: () => void } | null = null
     handle = await window.api.runtime.subscribe(
       { method: 'session.tabs.subscribeAll', params: {} },
@@ -100,6 +102,7 @@ export async function startLocalStructuredSessionTabsSync(args: {
         if (event.type === 'snapshots') {
           applyStructuredSessionTabSnapshots(event.snapshots, undefined, {
             ...REPAIR_DROPPED_EPOCHS,
+            sourceAddressRevision: addressRevision,
             authoritative: event.authoritative === true
           })
           // Each subscription opens with one census: the host is reachable again.

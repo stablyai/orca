@@ -77,17 +77,12 @@ export function refreshLocalStructuredSessionTabs(
         )
       }
       if (isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
-        applyStructuredSessionTabSnapshots(
-          snapshots.filter((snapshot) =>
-            isCurrentLocalSourceAddress(snapshot.worktree, addressRevision)
-          ),
-          undefined,
-          {
-            ...options,
-            authoritative: options.authoritative === true || result.authoritative === true,
-            authoritativeInventory
-          }
-        )
+        applyStructuredSessionTabSnapshots(snapshots, undefined, {
+          ...options,
+          sourceAddressRevision: addressRevision,
+          authoritative: options.authoritative === true || result.authoritative === true,
+          authoritativeInventory
+        })
       }
       return snapshots
     })
@@ -113,6 +108,9 @@ export async function refreshLocalStructuredSessionWorktreeTabs(
   ) {
     return null
   }
-  applyStructuredSessionTabSnapshots([snapshot], undefined, options)
+  applyStructuredSessionTabSnapshots([snapshot], undefined, {
+    ...options,
+    sourceAddressRevision: addressRevision
+  })
   return snapshot
 }

@@ -1,5 +1,5 @@
 import { workspaceReadState } from '@/store/workspace-source-state'
-import { workspaceAdmittedFiles } from '@/store/workspace-admitted-files'
+import { workspaceAdmittedFiles, workspaceFileDisplayId } from '@/store/workspace-admitted-files'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
@@ -32,6 +32,10 @@ export function createCloseFileAction(
       const closesDisplayedFile =
         displayedWorkspaceId !== null &&
         workspaceAdmittedFiles(get(), displayedWorkspaceId).some((file) => file.id === fileId)
+      const historyWorkspaceId = preClose ? workspaceFileDisplayId(get(), preClose) : undefined
+      const closedPosition = historyWorkspaceId
+        ? getRecentlyClosedTabPosition(workspaceReadState(get()), historyWorkspaceId, fileId)
+        : undefined
       // Why: stale same-owner records survive tab close; retain other owners and pending drafts.
       const fileIdsToClose = new Set(
         preClose
@@ -79,10 +83,6 @@ export function createCloseFileAction(
       }
 
       // Switch point: the tab's place is read before main's frame drops the tab.
-      const closedPosition =
-        ORCA_LAYOUT_OWNER_IS_MAIN && preClose
-          ? getRecentlyClosedTabPosition(get(), preClose.worktreeId, fileId)
-          : undefined
       const cleanUp = (): void => {
         set((s) => {
           // Switch point: the frame that dropped the tab may have dropped its record already.
@@ -217,7 +217,7 @@ export function createCloseFileAction(
 
           let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
           let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
-          const wtRecent = closedFile?.worktreeId
+          const wtRecent = historyWorkspaceId
           // Exclude deleted empty placeholders, ephemeral previews and chat visuals from undo; they have no useful reopen target.
           if (
             closedFile &&
@@ -233,9 +233,7 @@ export function createCloseFileAction(
               ...snap
             } = closedFile
             const stack = s.recentlyClosedEditorTabsByWorktree[wtRecent] ?? []
-            const position = ORCA_LAYOUT_OWNER_IS_MAIN
-              ? closedPosition
-              : getRecentlyClosedTabPosition(s, wtRecent, fileId)
+            const position = closedPosition
             nextRecentlyClosed = {
               ...s.recentlyClosedEditorTabsByWorktree,
               [wtRecent]: [

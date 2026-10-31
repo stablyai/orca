@@ -78,6 +78,7 @@ export type SetBrowserPageUrlOptions = {
 }
 
 export type ClosedBrowserWorkspaceSnapshot = {
+  sourceHostId?: ExecutionHostId
   workspace: BrowserWorkspace
   pages: BrowserPage[]
   position?: RecentlyClosedTabPosition

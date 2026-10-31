@@ -1,7 +1,4 @@
-import { toast } from 'sonner'
 import { workspaceReadState } from '../../../workspace-source-state'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
 import type { AppState } from '../../../types'
 import {
@@ -9,14 +6,8 @@ import {
   MAX_RECENT_CLOSED_EDITOR_TABS,
   type OpenFile
 } from '../types/open-file'
-import {
-  canReuseLocalWslAlias,
-  getReusableOpenFileModes,
-  isSameEditorOwner,
-  matchesEditorMode,
-  resolveEditorFileIdForOwner,
-  shouldRequestExistingFileContentReload
-} from '../file-ids/editor-file-ids'
+import { shouldRequestExistingFileContentReload } from '../file-ids/editor-file-ids'
+import { resolveEditorOpenResource } from './editor-open-resource'
 import {
   buildEditorActiveResult,
   resolveEditorLinkOpenPlacement,
@@ -37,6 +28,7 @@ export type OpenFileApplyScratch = {
   editorItemIsPreview: boolean
   /** Set when a link's explicit target failed revalidation; state was left untouched. */
   refused: boolean
+  replacedPreviewFileId?: string
 }
 
 export function applyOpenFileToState(
@@ -46,48 +38,15 @@ export function applyOpenFileToState(
   scratch: OpenFileApplyScratch,
   linkIntent: EditorOpenLinkIntent | null = null
 ): Partial<AppState> | AppState {
-  const worktreeId = file.worktreeId
-  let operationProvenance = file.operationProvenance
-  if (!operationProvenance && file.mode === 'edit' && file.readOnly !== true) {
-    try {
-      operationProvenance = captureEditorFileOperationProvenance(
-        s,
-        worktreeId,
-        options?.suppressActiveRuntimeFallback ? null : file.runtimeEnvironmentId,
-        options?.suppressActiveRuntimeFallback === true || file.runtimeEnvironmentId !== undefined
-      )
-    } catch (error) {
-      toast.error(extractIpcErrorMessage(error, 'Failed to resolve file owner.'))
-      // Why: mirrored tabs can arrive before their graph row; allow convergence while mutation paths still fail closed without provenance.
-    }
-  }
-  const runtimeEnvironmentId = operationProvenance
-    ? operationProvenance.generation.route.runtimeEnvironmentId
-    : file.runtimeEnvironmentId === null
-      ? null
-      : (file.runtimeEnvironmentId ??
-        (options?.suppressActiveRuntimeFallback
-          ? null
-          : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined)))
-  const reusableOpenFileModes = getReusableOpenFileModes(file.mode)
-  const existing = s.openFiles.find(
-    (f) =>
-      matchesEditorMode(f, reusableOpenFileModes) &&
-      isSameEditorOwner(f, worktreeId, runtimeEnvironmentId) &&
-      (f.filePath === file.filePath || canReuseLocalWslAlias(s, f, file, runtimeEnvironmentId))
-  )
-  // Already-open owner tabs outrank stale reopenId shapes; bare/namespaced drift otherwise points selection at no OpenFile.
-  const id = existing
-    ? existing.id
-    : options?.reopenId && !s.openFiles.some((candidate) => candidate.id === options.reopenId)
-      ? options.reopenId
-      : resolveEditorFileIdForOwner(
-          s,
-          file.filePath,
-          worktreeId,
-          runtimeEnvironmentId,
-          reusableOpenFileModes
-        )
+  const worktreeId = options?.displayWorkspaceId ?? file.worktreeId
+  const {
+    file: resource,
+    existing,
+    id,
+    runtimeEnvironmentId,
+    operationProvenance
+  } = resolveEditorOpenResource(s, file, options)
+  file = resource
   const presentation = workspaceReadState(s)
   const linkPlacement =
     linkIntent &&
@@ -194,6 +153,7 @@ export function applyOpenFileToState(
     const existingPreviewIdx = s.openFiles.findIndex((f) => f.id === replaceablePreviewId)
     if (existingPreviewIdx !== -1) {
       const replacedPreview = s.openFiles[existingPreviewIdx]
+      scratch.replacedPreviewFileId = replacedPreview.id
       // Why: reuse the shared eviction helper so per-file cursor/draft/visibility cleanup stays in one place.
       const {
         editorDrafts: nextEditorDrafts,
@@ -236,7 +196,7 @@ export function applyOpenFileToState(
           ...snap
         } = replacedPreview
         const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
-        const position = getRecentlyClosedTabPosition(s, worktreeId, replacedPreview.id)
+        const position = getRecentlyClosedTabPosition(presentation, worktreeId, replacedPreview.id)
         nextRecentlyClosed = {
           ...s.recentlyClosedEditorTabsByWorktree,
           [worktreeId]: [

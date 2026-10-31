@@ -84,16 +84,6 @@ export function buildWorktreeRenameState(
         }
       : renamedValue
   }
-  renameKey(
-    'recentlyClosedBrowserTabsByWorktree',
-    s.recentlyClosedBrowserTabsByWorktree,
-    (snapshots) =>
-      snapshots.map((snapshot) => ({
-        ...snapshot,
-        workspace: withNewBrowserWorktreeId(snapshot.workspace),
-        pages: snapshot.pages.map(withNewBrowserWorktreeId)
-      }))
-  )
   renameKey('fileSearchStateByWorktree', s.fileSearchStateByWorktree, (searchState) => ({
     ...searchState,
     resultOwner: searchState.resultOwner ? withNewWorktreeId(searchState.resultOwner) : null
@@ -119,20 +109,55 @@ export function buildWorktreeRenameState(
   if (visitRecencyChanged) {
     renamed.lastVisitedAtByWorktreeId = nextVisitRecency
   }
-  // Re-key on rename so a renamed worktree keeps its editor-undo + push/pull state.
-  renameKey(
+  // Context keys move independently of the recorded resource's source.
+  const renameHistory = <T>(
+    key: string,
+    map: Record<string, T[]> | undefined,
+    update: (entry: T, context: string) => T
+  ): void => {
+    let changed = false
+    const next: Record<string, T[]> = {}
+    for (const [context, entries] of Object.entries(map ?? {})) {
+      const updated = entries.map((entry) => update(entry, context))
+      const target = context === oldWorktreeId ? newWorktreeId : context
+      changed ||= target !== context || updated.some((entry, at) => entry !== entries[at])
+      next[target] = [...(next[target] ?? []), ...updated]
+    }
+    if (changed) {
+      renamed[key] = next
+    }
+  }
+  renameHistory(
+    'recentlyClosedBrowserTabsByWorktree',
+    s.recentlyClosedBrowserTabsByWorktree,
+    (entry) => {
+      const workspace = withNewBrowserWorktreeId(entry.workspace)
+      const pages = entry.pages.map(withNewBrowserWorktreeId)
+      return workspace === entry.workspace && pages.every((page, at) => page === entry.pages[at])
+        ? entry
+        : { ...entry, workspace, pages }
+    }
+  )
+  renameHistory(
     'recentlyClosedEditorTabsByWorktree',
     s.recentlyClosedEditorTabsByWorktree,
-    (files: { worktreeId: string }[]) => files.map(withNewWorktreeId)
+    withNewWorktreeId
   )
-  // Remap absolute startupCwd in reopen snapshots or Cmd+Shift+T spawns into the vanished old directory.
-  renameKey(
+  renameHistory(
     'recentlyClosedTerminalTabsByWorktree',
     s.recentlyClosedTerminalTabsByWorktree,
-    (snapshots: ClosedTerminalTabSnapshot[]) =>
-      oldWorktreePath && newWorktreePath
-        ? remapClosedTerminalTabSnapshotCwds(snapshots, oldWorktreePath, newWorktreePath)
-        : snapshots
+    (entry: ClosedTerminalTabSnapshot, context) => {
+      if ((entry.sourceWorkspaceId ?? context) !== oldWorktreeId) {
+        return entry
+      }
+      const updated =
+        oldWorktreePath && newWorktreePath
+          ? remapClosedTerminalTabSnapshotCwds([entry], oldWorktreePath, newWorktreePath)[0]
+          : entry
+      return entry.sourceWorkspaceId === oldWorktreeId
+        ? { ...updated, sourceWorkspaceId: newWorktreeId }
+        : updated
+    }
   )
   renameKey('remoteStatusesByWorktree', s.remoteStatusesByWorktree)
 

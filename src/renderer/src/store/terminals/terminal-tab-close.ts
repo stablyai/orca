@@ -1,4 +1,9 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import {
+  workspaceReadState,
+  workspaceTabDisplayId,
+  workspaceSourceOccurrence
+} from '../workspace-source-state'
 import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
 import {
   getRecentlyClosedTabPosition,
@@ -104,9 +109,17 @@ export function createTerminalTabCloseActions(
                 }
               : s.closedTerminalTabTombstonesByTabId
           // Why: only explicit user closes feed the Cmd+Shift+T reopen stack; cleanup/PTY-exit closes must not pollute undo history.
-          const closedPosition =
+          const historyWorkspaceId =
             closedWorktreeId && closedTab
-              ? getRecentlyClosedTabPosition(s, closedWorktreeId, closedTab.id)
+              ? workspaceTabDisplayId(s, closedWorktreeId, closedTab.id)
+              : closedWorktreeId
+          const closedPosition =
+            historyWorkspaceId && closedTab
+              ? getRecentlyClosedTabPosition(
+                  workspaceReadState(s),
+                  historyWorkspaceId,
+                  closedTab.id
+                )
               : undefined
           const capturedSnapshot =
             closeReason === 'user' &&
@@ -114,6 +127,13 @@ export function createTerminalTabCloseActions(
             closedTab &&
             closedWorktreeId
               ? {
+                  ...(closedWorktreeId !== historyWorkspaceId
+                    ? {
+                        sourceWorkspaceId: closedWorktreeId,
+                        sourceHostId: workspaceSourceOccurrence(s, closedTab.id, closedWorktreeId)
+                          ?.source.hostId
+                      }
+                    : {}),
                   ...(closedTab.startupCwd ? { startupCwd: closedTab.startupCwd } : {}),
                   ...(closedTab.shellOverride ? { shellOverride: closedTab.shellOverride } : {}),
                   ...(closedTab.customTitle ? { customTitle: closedTab.customTitle } : {}),
@@ -229,16 +249,16 @@ export function createTerminalTabCloseActions(
             tabBarOrderByWorktree: nextTabBarOrderByWorktree,
             pendingSnapshotByPtyId: nextSnapshots,
             pendingColdRestoreByPtyId: nextColdRestores,
-            ...(capturedSnapshot && closedWorktreeId
+            ...(capturedSnapshot && historyWorkspaceId
               ? {
                   recentlyClosedTerminalTabsByWorktree: pushClosedTerminalTabSnapshot(
                     s.recentlyClosedTerminalTabsByWorktree,
-                    closedWorktreeId,
+                    historyWorkspaceId,
                     capturedSnapshot
                   ),
                   recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
                     s.recentlyClosedTabKindsByWorktree,
-                    closedWorktreeId,
+                    historyWorkspaceId,
                     'terminal'
                   )
                 }

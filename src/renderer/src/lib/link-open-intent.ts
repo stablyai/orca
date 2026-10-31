@@ -1,3 +1,4 @@
+import { workspacePresentationFor } from '@/store/workspace-source-state'
 import type { AppState } from '@/store/types'
 import type { Tab } from '../../../shared/tab-types'
 import type { EditorOpenLinkIntent } from '@/store/slices/editor/types/editor-open-link-intent'
@@ -6,7 +7,9 @@ import { collectTabGroupLayoutGroupIds } from '../../../shared/workspace-layout/
 export type LinkOpenIntent = EditorOpenLinkIntent & { initialGroupId?: string }
 export type LinkSourceTab = Pick<Tab, 'id' | 'entityId' | 'groupId'> &
   Partial<Pick<Tab, 'contentType' | 'executionHostId'>>
-export type LinkSourceState = { unifiedTabsByWorktree?: Record<string, LinkSourceTab[]> }
+export type LinkSourceState = { unifiedTabsByWorktree?: Record<string, LinkSourceTab[]> } & Partial<
+  Pick<AppState, 'workspacePresentations'>
+>
 
 export type LinkPlacementState = Pick<
   AppState,
@@ -34,6 +37,7 @@ export function captureLinkOpenIntent(
   if (!sourceTabId) {
     return null
   }
+  workspaceId = workspacePresentationFor(state, workspaceId)?.displayWorkspaceId ?? workspaceId
   const tab = findLinkSourceTab(state.unifiedTabsByWorktree?.[workspaceId] ?? [], sourceTabId)
   if (!tab) {
     return null
@@ -74,6 +78,7 @@ export function canOpenLinkInSourceGroup(
   workspaceId: string,
   sourceTabId: string | null | undefined
 ): boolean {
+  workspaceId = workspacePresentationFor(state, workspaceId)?.displayWorkspaceId ?? workspaceId
   const tab = sourceTabId
     ? findLinkSourceTab(state.unifiedTabsByWorktree?.[workspaceId] ?? [], sourceTabId)
     : undefined

@@ -21,6 +21,7 @@ import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { afterPendingTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 import type { AppState } from '../../../types'
+import { workspaceReadState } from '../../../workspace-source-state'
 
 export function createRecentlyClosedEditorTabs(
   set: EditorSet,
@@ -42,14 +43,22 @@ export function createRecentlyClosedEditorTabs(
       const { position, reopenId, ...file } = next
       // Switch point: main opens a new tab at its old place in one command.
       const restoredFileId = get().openFile(file, {
+        displayWorkspaceId: worktreeId,
         targetGroupId: position?.groupId,
         reopenId,
         ...(ORCA_LAYOUT_OWNER_IS_MAIN && position?.groupIndex !== undefined
           ? { groupIndex: position.groupIndex }
           : {})
       })
-      restoreRecentlyClosedTabPosition(get, worktreeId, restoredFileId, position)
-      return true
+      const view = () => workspaceReadState(get())
+      restoreRecentlyClosedTabPosition(view, worktreeId, restoredFileId, position)
+      return Boolean(
+        view().unifiedTabsByWorktree?.[worktreeId]?.some(
+          (tab) => tab.entityId === restoredFileId
+        ) ||
+        hasPendingEntityTab(worktreeId, restoredFileId) ||
+        (!get().createUnifiedTab && get().openFiles.some((file) => file.id === restoredFileId))
+      )
     },
 
     closeAllFiles: () => {

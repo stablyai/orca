@@ -1,6 +1,7 @@
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
 import { useAppStore } from '@/store'
+import { workspaceTabDisplayId } from '@/store/workspace-source-state'
 import { structuredChatTabBySessionId } from '@/lib/structured-chat-tab-index'
 import { useStructuredConversationName } from '@/runtime/structured-conversation-name'
 
@@ -11,7 +12,7 @@ export function useAiVaultSessionDisplayTitle(session: AiVaultSession): string {
     const tab = owner
       ? structuredChatTabBySessionId(
           state.unifiedTabsByWorktree,
-          owner.workspaceId,
+          workspaceTabDisplayId(state, owner.workspaceId, owner.sessionId),
           owner.sessionId
         )
       : undefined

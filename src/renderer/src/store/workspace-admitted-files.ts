@@ -12,7 +12,6 @@ import { workspacePresentationFor } from './workspace-source-state'
 type FileState = { openFiles: readonly OpenFile[] } & Partial<
   Pick<
     AppState,
-    | 'fetchWorktrees'
     | 'workspacePresentations'
     | 'worktreesByRepo'
     | 'folderWorkspaces'
@@ -23,6 +22,26 @@ type FileState = { openFiles: readonly OpenFile[] } & Partial<
 const indexes = new WeakMap<readonly OpenFile[], Map<string, OpenFile[]>>()
 const results = new WeakMap<object, Map<string, { inputs: unknown[]; files: OpenFile[] }>>()
 const empty: OpenFile[] = []
+
+type FileSequence = { next: WeakMap<OpenFile, FileSequence>; files?: OpenFile[] }
+const fileSequences: FileSequence = { next: new WeakMap() }
+
+// Equal current member objects share output without rooting any obsolete inventory or file.
+function currentFileSequence(files: OpenFile[]): OpenFile[] {
+  if (!files.length) {
+    return empty
+  }
+  let sequence = fileSequences
+  for (const file of files) {
+    let next = sequence.next.get(file)
+    if (!next) {
+      next = { next: new WeakMap() }
+      sequence.next.set(file, next)
+    }
+    sequence = next
+  }
+  return (sequence.files ??= files)
+}
 
 /** Legacy files and unified editors use the same positive owning-host membership. */
 export function workspaceAdmittedFiles(state: FileState, workspaceId: string): OpenFile[] {
@@ -44,9 +63,8 @@ export function workspaceAdmittedFiles(state: FileState, workspaceId: string): O
     state.activeWorktreeId === workspaceId ? state.activeWorkspaceExecutionHostId : undefined
   const folders = selectFolderWorkspaces(state)
   const inputs = [state.openFiles, saved?.baseline, rows, folders, activeHost]
-  const owner = state.fetchWorktrees ?? saved ?? rows ?? state.openFiles
-  const cache = results.get(owner) ?? new Map()
-  results.set(owner, cache)
+  const cache = results.get(state) ?? new Map()
+  results.set(state, cache)
   const prior = cache.get(workspaceId)
   if (prior && inputs.every((input, at) => input === prior.inputs[at])) {
     return prior.files
@@ -86,12 +104,7 @@ export function workspaceAdmittedFiles(state: FileState, workspaceId: string): O
       getOpenFileExecutionHostId(file) === (activeHost ?? 'local')
     )
   })
-  const value =
-    prior &&
-    files.length === prior.files.length &&
-    files.every((file, at) => file === prior.files[at])
-      ? prior.files
-      : files
+  const value = currentFileSequence(files)
   cache.set(workspaceId, { inputs, files: value })
   return value
 }

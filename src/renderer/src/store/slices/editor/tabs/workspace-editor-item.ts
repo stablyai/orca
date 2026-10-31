@@ -1,4 +1,5 @@
-import { workspaceReadState } from '../../../workspace-source-state'
+import { workspaceReadState, workspacePresentationFor } from '../../../workspace-source-state'
+import { workspaceAdmittedFiles } from '../../../workspace-admitted-files'
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
@@ -50,11 +51,8 @@ export function openWorkspaceEditorItem(
     }
   }
   const drawHere = (id?: string): Tab | undefined => {
-    const file =
-      contentType === 'editor'
-        ? state.openFiles.find((entry) => entry.id === fileId && entry.worktreeId === worktreeId)
-        : undefined
-    return state.createUnifiedTab?.(worktreeId, contentType, {
+    const file = workspaceAdmittedFiles(state, worktreeId).find((entry) => entry.id === fileId)
+    return state.createUnifiedTab?.(file?.worktreeId ?? worktreeId, contentType, {
       ...(id ? { id } : {}),
       entityId: fileId,
       label,
@@ -85,7 +83,8 @@ export function openWorkspaceEditorItem(
   return drawHere()?.id ?? fileId
 }
 export function getReplaceablePreviewFileId(
-  state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree' | 'settings'>,
+  state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree' | 'settings'> &
+    Partial<Pick<AppState, 'workspacePresentations'>>,
   worktreeId: string,
   targetGroupId: string | undefined
 ): string | null {
@@ -93,6 +92,9 @@ export function getReplaceablePreviewFileId(
   if (!areEditorPreviewTabsEnabled(state)) {
     return null
   }
+  const files = workspacePresentationFor(state, worktreeId)
+    ? workspaceAdmittedFiles(state, worktreeId)
+    : state.openFiles.filter((file) => file.worktreeId === worktreeId)
   const tabsForWorktree = state.unifiedTabsByWorktree?.[worktreeId] ?? []
   if (targetGroupId) {
     const previewTab = tabsForWorktree.find(
@@ -112,16 +114,9 @@ export function getReplaceablePreviewFileId(
     if (isSharedEntity) {
       return null
     }
-    return (
-      state.openFiles.find(
-        (file) =>
-          file.id === previewTab.entityId && file.worktreeId === worktreeId && file.isPreview
-      )?.id ?? null
-    )
+    return files.find((file) => file.id === previewTab.entityId && file.isPreview)?.id ?? null
   }
-  return (
-    state.openFiles.find((file) => file.worktreeId === worktreeId && file.isPreview)?.id ?? null
-  )
+  return files.find((file) => file.isPreview)?.id ?? null
 }
 
 export function removeEditorStateForReplacedPreview(

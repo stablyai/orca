@@ -35,6 +35,8 @@ import type {
 } from './restored-editor-owner'
 
 export type OpenFileOptions = {
+  /** Gesture placement may differ from the genuine file owner (notably undo). */
+  displayWorkspaceId?: string
   preview?: boolean
   targetGroupId?: string
   recordReplacedPreview?: boolean

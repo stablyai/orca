@@ -14,6 +14,12 @@ export function isCurrentLocalSourceAddress(workspace: string, revision: number)
   return (retiredSourceAddresses.get(workspace) ?? 0) <= revision
 }
 
+export function isUnresolvedLocalSourceAddress(workspace: string): boolean {
+  return (
+    retiredSourceAddresses.has(workspace) && !localStructuredSessionVersionByWorktree.has(workspace)
+  )
+}
+
 export function retireLocalSourceAddress(workspace: string): void {
   retiredSourceAddresses.set(workspace, ++sourceAddressRevision)
   const version = localStructuredSessionVersionByWorktree.get(workspace)

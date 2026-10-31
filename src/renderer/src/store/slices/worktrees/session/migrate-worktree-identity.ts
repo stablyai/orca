@@ -27,7 +27,7 @@ export function createMigrateWorktreeIdentity(
       const source = saved?.baseline.find(
         (base) => base.source.workspaceId === oldWorktreeId
       )?.source
-      if (source && s.workspacePresentations && s.unifiedTabsByWorktree[oldWorktreeId]) {
+      if (source && s.workspacePresentations) {
         if (source.hostId === 'local') {
           retireLocalSourceAddress(oldWorktreeId)
         } else if (source.hostId.startsWith('runtime:')) {

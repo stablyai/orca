@@ -1,4 +1,4 @@
-import { workspaceReadState } from '../../../workspace-source-state'
+import { workspaceReadState, workspacePresentationFor } from '../../../workspace-source-state'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
@@ -25,14 +25,34 @@ export function createOpenFileAction(
     /** The view once it is drawn; null when none was. */
     onShown?: (result: EditorOpenResult | null) => void
   ): { fileId: string; result: EditorOpenResult | null } => {
-    const editorItemWorktreeId = file.worktreeId
+    const editorItemWorktreeId =
+      options?.displayWorkspaceId ??
+      workspacePresentationFor(get(), file.worktreeId)?.displayWorkspaceId ??
+      file.worktreeId
     const scratch: OpenFileApplyScratch = {
       editorItemFileId: file.filePath,
       editorItemTargetGroupId: options?.targetGroupId,
       editorItemIsPreview: false,
       refused: false
     }
-    set((s) => applyOpenFileToState(s, file, options, scratch, linkIntent))
+    set((s) =>
+      applyOpenFileToState(
+        s,
+        file,
+        { ...options, displayWorkspaceId: editorItemWorktreeId },
+        scratch,
+        linkIntent
+      )
+    )
+    if (scratch.replacedPreviewFileId) {
+      for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
+        for (const tab of tabs) {
+          if (tab.entityId === scratch.replacedPreviewFileId) {
+            get().closeUnifiedTab?.(tab.id)
+          }
+        }
+      }
+    }
     if (scratch.refused) {
       return { fileId: scratch.editorItemFileId, result: null }
     }
@@ -106,7 +126,12 @@ export function createOpenFileAction(
       open(file, { ...options, focusEditor: true }, intent, (result) => {
         // Why: created and reused views must land identically; creating in another group leaves focus behind.
         if (result) {
-          get().focusGroup?.(file.worktreeId, result.groupId)
+          get().focusGroup?.(
+            options?.displayWorkspaceId ??
+              workspacePresentationFor(get(), file.worktreeId)?.displayWorkspaceId ??
+              file.worktreeId,
+            result.groupId
+          )
         }
         onShown?.(result)
       }).result

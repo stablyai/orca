@@ -5,6 +5,11 @@ import type {
   RemoteBrowserPageHandle
 } from './browser-slice-contract'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import {
+  workspaceReadState,
+  workspaceTabDisplayId,
+  workspaceSourceOccurrence
+} from '../../workspace-source-state'
 import { findWorkspace } from '../browser-page-records'
 import { pickNeighbor } from '../tab-group-state'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../recently-closed-tabs'
@@ -31,6 +36,14 @@ export function createBrowserCloseActions(
       forgetDesktopCreatedServerTab(tabId)
       // Cleanup unwinds unfinished creation: no host page close and no user reopen history.
       const isCleanup = options?.reason === 'cleanup'
+      const source = findWorkspace(get().browserTabsByWorktree, tabId)
+      const sourceHostId = source
+        ? workspaceSourceOccurrence(get(), tabId, source.worktreeId)?.source.hostId
+        : undefined
+      const contextId = source ? workspaceTabDisplayId(get(), source.worktreeId, tabId) : undefined
+      const contextPosition = contextId
+        ? getRecentlyClosedTabPosition(workspaceReadState(get()), contextId, tabId)
+        : undefined
       const closeHere = (drawn?: DrawnBrowserTab): void => {
         let remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
         // Collect grants outside reducer: revocation is main work and closed docs must become unreadable even if reduction bails.
@@ -125,15 +138,15 @@ export function createBrowserCloseActions(
           const nextRecentlyClosedBrowserTabsByWorktree = {
             ...s.recentlyClosedBrowserTabsByWorktree
           }
+          const historyWorkspaceId = contextId ?? owningWorktreeId
           if (!isCleanup) {
             const existingSnapshots =
-              nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] ?? []
-            const position = drawn
-              ? drawn.position
-              : getRecentlyClosedTabPosition(s, owningWorktreeId, tabId)
-            nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] = [
+              nextRecentlyClosedBrowserTabsByWorktree[historyWorkspaceId] ?? []
+            const position = contextPosition ?? drawn?.position
+            nextRecentlyClosedBrowserTabsByWorktree[historyWorkspaceId] = [
               {
                 workspace: closedWorkspace,
+                ...(contextId !== owningWorktreeId ? { sourceHostId } : {}),
                 pages: closedPages,
                 ...(position ? { position } : {})
               },
@@ -144,7 +157,7 @@ export function createBrowserCloseActions(
             ? s.recentlyClosedTabKindsByWorktree
             : pushRecentlyClosedTabKind(
                 s.recentlyClosedTabKindsByWorktree,
-                owningWorktreeId,
+                historyWorkspaceId,
                 'browser'
               )
 

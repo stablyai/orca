@@ -6,6 +6,8 @@ import { sendLayoutApply, type WindowLayoutCommand } from '@/runtime/layout-appl
 import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
 import type { AppState } from '../../../types'
+import { workspaceAdmittedFiles } from '../../../workspace-admitted-files'
+import { workspaceReadState, workspaceSourceGroup } from '../../../workspace-source-state'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
 import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
 import { restorableEditorFile } from './editor-tab-layout-owner'
@@ -43,7 +45,7 @@ export function editorTabContent(
 }
 
 function openFileOf(state: AppState, worktreeId: string, fileId: string): OpenFile | undefined {
-  return state.openFiles.find((file) => file.id === fileId && file.worktreeId === worktreeId)
+  return workspaceAdmittedFiles(state, worktreeId).find((file) => file.id === fileId)
 }
 
 /** A live group of the window's, else its active one, else a root group frames then draw. */
@@ -78,38 +80,56 @@ export function openEditorTabThroughLayoutOwner(
   }
   const tabId = createBrowserUuid()
   const groupId = placementGroupId(state, worktreeId, open.groupId)
+  const sourceGroup = workspaceSourceGroup(state, file.worktreeId, groupId)
   const command: WindowLayoutCommand = {
     type: 'openEditorTab',
     tabId,
     fileId,
     contentType: open.contentType,
     ...editorTabContent(file),
-    ...(groupId ? { groupId, ...newGroupSplitOf(state, worktreeId, groupId, tabId) } : {}),
+    ...(sourceGroup
+      ? { groupId: sourceGroup, ...newGroupSplitOf(state, file.worktreeId, sourceGroup, tabId) }
+      : {}),
     ...(open.index !== undefined ? { index: open.index } : {}),
     // Main stamps the tab's time (ledger L186); the frame draws it.
     ...(open.isPreview ? { preview: true } : {})
   }
   const settle = beginPendingTab(tabId, worktreeId, fileId, { kind: 'open', groupId })
-  const sent = sendLayoutApply(state, worktreeId, command, {
-    apply: (result) => {
-      const shownId = result.tabId ?? tabId
-      // A throwing selection must not leave the tab pending: its waiters would never run.
-      try {
-        selectDrawnEditorTab(state, worktreeId, shownId, open.selection)
-      } finally {
-        settle(shownId)
-      }
+  const sent = sendLayoutApply(
+    state,
+    file.worktreeId,
+    {
+      ...command,
+      groupId: workspaceSourceGroup(state, file.worktreeId, groupId)
     },
-    asToday: () => {
-      let shownId: string | null = null
-      try {
-        shownId = open.drawHere(tabId)?.id ?? null
-      } finally {
-        settle(shownId)
-      }
-    },
-    refused: () => settle(null)
-  })
+    {
+      apply: (result) => {
+        const shownId = result.tabId ?? tabId
+        // A throwing selection must not leave the tab pending: its waiters would never run.
+        try {
+          const view = workspaceReadState(state)
+          if (groupId) {
+            view.moveUnifiedTabToGroup?.(shownId, groupId, {
+              activate: open.selection !== 'none',
+              recordInteraction: false
+            })
+          }
+          selectDrawnEditorTab(view, worktreeId, shownId, open.selection)
+        } finally {
+          settle(shownId)
+        }
+      },
+      asToday: () => {
+        let shownId: string | null = null
+        try {
+          shownId = open.drawHere(tabId)?.id ?? null
+        } finally {
+          settle(shownId)
+        }
+      },
+      refused: () => settle(null)
+    }
+  )
   if (!sent) {
     settle(null)
     return null
@@ -176,7 +196,7 @@ export function sendReusedEditorTabToLayoutOwner(
       fileId: tab.entityId,
       contentType: tab.contentType,
       ...content,
-      groupId: tab.groupId
+      groupId: workspaceSourceGroup(state, file.worktreeId, tab.groupId)
     },
     { apply: keep, asToday: keep }
   )

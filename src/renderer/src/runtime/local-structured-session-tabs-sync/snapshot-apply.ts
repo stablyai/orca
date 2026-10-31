@@ -15,6 +15,8 @@ import {
 } from '../web-session-tabs-sync/publisher-identity-fences'
 import {
   localStructuredSessionEpochHistoryByWorktree,
+  isUnresolvedLocalSourceAddress,
+  isCurrentLocalSourceAddress,
   localStructuredSessionVersionByWorktree
 } from './inventory-generation-fence'
 import { projectLocalStructuredSessionTabs } from './snapshot-projection'
@@ -44,6 +46,8 @@ function isWorktreeRetraction(
 }
 
 export type StructuredSessionSnapshotApplyOptions = {
+  /** Address order captured before a real inventory operation starts. */
+  sourceAddressRevision?: number
   /** Authority census replies answer a just-issued listAll, so exempt them from retired-epoch fencing of delayed dead-generation stream frames. */
   authoritative?: boolean
   /** Re-applies a publication at the version already applied: the window removed a chat early. */
@@ -65,6 +69,16 @@ export function applyStructuredSessionTabSnapshots(
   owner = LOCAL_STRUCTURED_SESSION_OWNER,
   options: StructuredSessionSnapshotApplyOptions = {}
 ): void {
+  const receivedCount = snapshots.length
+  if (options.sourceAddressRevision !== undefined) {
+    const revision = options.sourceAddressRevision
+    snapshots = snapshots.filter((snapshot) =>
+      isCurrentLocalSourceAddress(snapshot.worktree, revision)
+    )
+    if (receivedCount > 0 && snapshots.length === 0) {
+      return
+    }
+  }
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
   const drawnChatLabels: DrawnChatLabel[] = []
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
@@ -103,7 +117,11 @@ export function applyStructuredSessionTabSnapshots(
     )
   }
   // A chat missing from an inventory that cannot list chats is not proof the host dropped it.
-  if (options.authoritative && snapshots.every(hostSnapshotAffirmsAgentSessions)) {
+  if (
+    options.authoritative &&
+    snapshots.length === receivedCount &&
+    snapshots.every(hostSnapshotAffirmsAgentSessions)
+  ) {
     retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
       new Set(
         snapshots.flatMap((snapshot) =>
@@ -128,12 +146,27 @@ export function applyLocalStructuredSessionTabSnapshots<
 ): State {
   let next = state
   for (const snapshot of snapshots) {
+    if (
+      options.sourceAddressRevision !== undefined &&
+      !isCurrentLocalSourceAddress(snapshot.worktree, options.sourceAddressRevision)
+    ) {
+      continue
+    }
     // Local inventory must not rewrite paired/SSH panes; execution hosts own their tabs.
     if (getExecutionHostIdForWorktree(next, snapshot.worktree) !== 'local') {
       continue
     }
     // Forced none-epoch placeholders prove no absence: neither apply nor record, which would retire the renderer epoch. Retain cursor to fence genuinely stale frames.
     if (!hostSnapshotAffirmsWorktreeContents(snapshot)) {
+      continue
+    }
+    // A never-observed epoch cannot prove that a retired address has returned.
+    if (
+      !options.authoritative &&
+      options.sourceAddressRevision === undefined &&
+      isUnresolvedLocalSourceAddress(snapshot.worktree)
+    ) {
+      options.onRetiredEpochDrop?.(snapshot.worktree, snapshot.publicationEpoch)
       continue
     }
     const prior = localStructuredSessionVersionByWorktree.get(snapshot.worktree)

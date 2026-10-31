@@ -1,3 +1,4 @@
+import { purgeClosedWorkspaceSources } from './closed-workspace-source-purge'
 import type { AppState } from '../../../types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -252,6 +253,13 @@ export function buildHostTwinPurgeState(
       },
       changedPaneKeys
     ),
-    ...twinSelectionPatch(s, twinHostIds, hostId)
+    ...twinSelectionPatch(s, twinHostIds, hostId),
+    ...purgeClosedWorkspaceSources(
+      s,
+      (sourceId, sourceHost) =>
+        twinIds.has(sourceId) &&
+        sourceHost !== undefined &&
+        canonical(sourceId)(sourceHost) === hostId
+    )
   }
 }

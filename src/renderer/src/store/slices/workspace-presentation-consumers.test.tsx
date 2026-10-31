@@ -2,15 +2,18 @@ import { useAppStore } from '@/store'
 import type * as AppStoreModule from '../index'
 // @vitest-environment happy-dom
 import { createElement } from 'react'
-import { act, cleanup, render, renderHook } from '@testing-library/react'
+import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import type { StoreApi } from 'zustand'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { seed, O, D, C1 } from './workspace-presentation-test-fixture'
-import { makeOpenFile, makeUnifiedTab } from './store-test-helpers'
+import { makeOpenFile, makeUnifiedTab, makeWorktree, createTestStore } from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 import { rawWorkspaceState } from '../workspace-source-state'
 import { workspaceAdmittedFiles } from '../workspace-admitted-files'
+import { useMarkdownDocuments } from '../../components/editor/useMarkdownDocuments'
+import { useAiVaultSessionDisplayTitle } from '../../components/right-sidebar/use-ai-vault-session-display-title'
+import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { useWorktreeFiles } from '../../components/terminal/use-worktree-files'
 import { closeTerminalTabsToRight } from '../../components/terminal/terminal-tab-bulk-actions'
 import { deriveActiveSurfaceForWorktree } from './tabs/tabs-surface'
@@ -33,6 +36,10 @@ import {
 import { requestEditorFileClose } from '../../components/editor/editor-autosave'
 import { ensureWorktreeHasInitialTerminal } from '../../lib/worktree-initial-terminal-seeding'
 import { useTerminalWatcherEffects } from '../../components/use-terminal-watcher-effects'
+import { useFileExplorerHandlers } from '../../components/right-sidebar/useFileExplorerHandlers'
+import { captureEditorFileOperationProvenance } from '../../lib/editor-file-operation-owner'
+import { buildWorktreePurgeState } from './worktrees/teardown/worktree-purge-state'
+import { activateBrowserWorkspaceTab } from '../../lib/browser-workspace-tab-activation'
 import { activateAndRevealWorktree } from '../../lib/worktree-activation'
 
 const confirmation = vi.hoisted(() => vi.fn(async () => true))
@@ -348,3 +355,415 @@ it('saves and closes the recovered dirty file through the real autosave owner, w
     stop()
   }
 })
+
+it('reuses the genuine dirty resource through an actual Explorer click and link update, then restores a clean close through the display shortcut', async () => {
+  const store = editors()
+  const path = 'C:/repo/a.ts'
+  const provenance = captureEditorFileOperationProvenance(store.getState(), O, null, true)
+  store.setState((raw) => ({
+    openFiles: raw.openFiles.map((file) =>
+      file.id === 'owned'
+        ? {
+            ...file,
+            filePath: path,
+            relativePath: 'a.ts',
+            isPreview: false,
+            operationProvenance: provenance
+          }
+        : file
+    )
+  }))
+  const explorer = renderHook(() =>
+    useFileExplorerHandlers({
+      activeWorktreeId: D,
+      openFile: store.getState().openFile,
+      makePreviewFilePermanent: store.getState().makePreviewFilePermanent,
+      toggleDir: vi.fn(),
+      loadDir: vi.fn(async () => false),
+      statPath: vi.fn(async () => ({ isDirectory: false })),
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath: vi.fn(),
+      scrollRef: { current: null }
+    })
+  )
+  await act(async () =>
+    explorer.result.current.handleClick({
+      name: 'a.ts',
+      path,
+      relativePath: 'a.ts',
+      depth: 0,
+      isDirectory: false,
+      operationOwner: { kind: 'local' }
+    })
+  )
+  expect(store.getState().openFiles).toHaveLength(2)
+  expect(store.getState().openFiles.find((file) => file.id === 'owned')).toMatchObject({
+    worktreeId: O,
+    isDirty: true,
+    isPreview: false,
+    operationProvenance: provenance
+  })
+  expect(store.getState().editorDrafts.owned).toBe('unsaved original')
+  expect(
+    store.getState().unifiedTabsByWorktree[D].filter((tab) => tab.entityId === 'owned')
+  ).toHaveLength(1)
+  expect(store.getState().activeFileId).toBe('owned')
+  expect(store.getState().pendingEditorFocusRequest).toMatchObject({
+    fileId: 'owned',
+    worktreeId: D,
+    viewStateId: 'editor'
+  })
+  let settled: string | undefined
+  act(() =>
+    store.getState().openFileForLink(
+      {
+        worktreeId: D,
+        filePath: path,
+        relativePath: 'a.ts',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { preview: false },
+      null,
+      (shown) => {
+        settled = shown?.viewStateId
+      }
+    )
+  )
+  expect(settled).toBe('editor')
+  expect(store.getState().openFiles.find((file) => file.id === 'owned')?.operationProvenance).toBe(
+    provenance
+  )
+  // A normal clean close is captured under gesture D while the snapshot still names O.
+  act(() => {
+    store.getState().clearEditorDraft('owned')
+    store.getState().markFileDirty('owned', false)
+  })
+  const queue = closeSurface(store)
+  act(() => requestEditorFileClose('owned'))
+  expect(queue.result.current.saveDialogFileId).toBeNull()
+  expect(store.getState().openFiles.some((file) => file.id === 'owned')).toBe(false)
+  expect(store.getState().recentlyClosedEditorTabsByWorktree[D][0]).toMatchObject({
+    worktreeId: O,
+    reopenId: 'owned',
+    position: { groupId: 'left' }
+  })
+  let reopened = false
+  act(() => {
+    reopened = store.getState().reopenClosedTab(D)
+  })
+  expect(reopened).toBe(true)
+  expect(store.getState().openFiles.find((file) => file.id === 'owned')?.worktreeId).toBe(O)
+  expect(
+    store.getState().unifiedTabsByWorktree[D].find((tab) => tab.entityId === 'owned')
+  ).toMatchObject({ worktreeId: O, groupId: 'left' })
+  expect(store.getState().activeFileId).toBe('owned')
+  expect(store.getState().activeWorktreeId).toBe(D)
+  act(() => store.getState().closeFile('owned'))
+  // Independent U removal cannot make a cross-context snapshot survive genuine source purge.
+  act(() => store.setState({ workspacePresentations: {} }))
+  act(() => {
+    store.getState().clearEditorDraft('foreign')
+    store.getState().markFileDirty('foreign', false)
+    store.getState().closeFile('foreign')
+    store.setState({
+      worktreesByRepo: {
+        r: [
+          ...store.getState().worktreesByRepo.r,
+          makeWorktree({ id: O, repoId: 'r', path: 'C:/repo', hostId: 'local' }),
+          makeWorktree({ id: O, repoId: 'r', path: 'C:/repo', hostId: 'runtime:box' })
+        ]
+      }
+    })
+    store.setState(buildWorktreePurgeState(store.getState(), [{ id: O, hostId: 'local' }]))
+  })
+  expect(
+    store
+      .getState()
+      .recentlyClosedEditorTabsByWorktree[O]?.some((file) => file.runtimeEnvironmentId === 'box')
+  ).toBe(true)
+  expect(store.getState().recentlyClosedEditorTabsByWorktree[D] ?? []).toEqual([])
+  expect(store.getState().reopenClosedTab(D)).toBe(false)
+})
+
+it('settles actual browser activation/page notification, source-owned close/undo and profile deletion through the composed context', async () => {
+  const store = editors()
+  const notify = vi.fn(async () => {})
+  Object.assign(window.api, {
+    browser: { notifyActiveTabChanged: notify, sessionDeleteProfile: vi.fn(async () => true) }
+  })
+  const workspace = store.getState().createBrowserTab(O, 'https://example.com/one', {
+    targetGroupId: 'left',
+    sessionProfileId: 'profile',
+    activate: false
+  })
+  const second = store
+    .getState()
+    .createBrowserPage(workspace.id, 'https://example.com/two', { activate: false })
+  expect(second).toBeTruthy()
+  act(() => {
+    expect(
+      activateBrowserWorkspaceTab({ worktreeId: D, workspaceId: workspace.id, pageId: second!.id })
+    ).toBe(true)
+  })
+  expect(store.getState().activeGroupIdByWorktree[D]).toBe('left')
+  expect(store.getState().activeBrowserTabId).toBe(workspace.id)
+  expect(
+    store.getState().browserPagesByWorkspace[workspace.id].find((page) => page.id === second!.id)
+      ?.worktreeId
+  ).toBe(O)
+  expect(
+    store.getState().browserTabsByWorktree[D].find((tab) => tab.id === workspace.id)?.activePageId
+  ).toBe(second!.id)
+  expect(notify).toHaveBeenCalledWith({ browserPageId: second!.id })
+  act(() => store.getState().closeBrowserTab(workspace.id))
+  expect(store.getState().recentlyClosedBrowserTabsByWorktree[D][0]).toMatchObject({
+    workspace: { worktreeId: O, sessionProfileId: 'profile' },
+    position: { groupId: 'left' }
+  })
+  let reopened = false
+  act(() => {
+    reopened = store.getState().reopenClosedTab(D)
+  })
+  expect(reopened).toBe(true)
+  const restored = store
+    .getState()
+    .browserTabsByWorktree[D].find((tab) => tab.sessionProfileId === 'profile')!
+  expect(restored.worktreeId).toBe(O)
+  expect(store.getState().browserPagesByWorkspace[restored.id].map((page) => page.url)).toEqual([
+    'https://example.com/one',
+    'https://example.com/two'
+  ])
+  expect(
+    store.getState().unifiedTabsByWorktree[D].find((tab) => tab.entityId === restored.id)?.groupId
+  ).toBe('left')
+  act(() => store.getState().switchBrowserTabProfile(restored.id, 'other-profile', 'persist:other'))
+  expect(
+    rawWorkspaceState(store.getState()).browserTabsByWorktree[O].find(
+      (tab) => tab.id === restored.id
+    )
+  ).toMatchObject({ sessionProfileId: 'other-profile', sessionPartition: 'persist:other' })
+  const pages = store.getState().browserPagesByWorkspace[restored.id]
+  act(() => store.getState().closeBrowserPage(pages[1].id))
+  expect(store.getState().browserPagesByWorkspace[restored.id].map((page) => page.id)).toEqual([
+    pages[0].id
+  ])
+  act(() => store.getState().closeBrowserTab(restored.id))
+  expect(store.getState().browserTabsByWorktree[D] ?? []).not.toContainEqual(
+    expect.objectContaining({ id: restored.id })
+  )
+  expect(rawWorkspaceState(store.getState()).browserTabsByWorktree[O] ?? []).not.toContainEqual(
+    expect.objectContaining({ id: restored.id })
+  )
+  await act(async () => {
+    expect(await store.getState().deleteBrowserSessionProfile('profile')).toBe(true)
+  })
+  expect(window.api.browser.sessionDeleteProfile).toHaveBeenCalledWith({ profileId: 'profile' })
+  expect(store.getState().browserSessionProfiles.some((profile) => profile.id === 'profile')).toBe(
+    false
+  )
+})
+
+it('routes recovered Markdown document metadata and actual editor/preview outputs to the genuine source without moving display context', async () => {
+  const store = editors()
+  const active = {
+    ...store.getState().openFiles[0],
+    filePath: 'C:/repo/README.md',
+    relativePath: 'README.md',
+    language: 'markdown',
+    runtimeEnvironmentId: null
+  }
+  store.setState({ openFiles: [active] })
+  const document = {
+    filePath: 'C:/repo/docs/guide.md',
+    relativePath: 'docs/guide.md',
+    basename: 'guide.md',
+    name: 'Guide'
+  }
+  const list = vi.fn(async () => [document])
+  const stat = vi.fn(async () => ({ isDirectory: false, size: 100, mtime: 1 }))
+  Object.assign(window.api, { fs: { ...window.api.fs, listMarkdownDocuments: list, stat } })
+  const hook = renderHook(() => useMarkdownDocuments(active, true, 'rich', async () => true))
+  await waitFor(() => expect(hook.result.current.markdownDocuments).toEqual([document]))
+  expect(list).toHaveBeenCalledWith({ rootPath: 'C:\\repo', connectionId: undefined })
+  await act(async () => {
+    await hook.result.current.openMarkdownDocument(document)
+  })
+  expect(stat).toHaveBeenCalledWith(expect.objectContaining({ filePath: document.filePath }))
+  const opened = store
+    .getState()
+    .openFiles.find((file) => file.filePath === document.filePath && file.mode === 'edit')!
+  expect(opened.worktreeId).toBe(O)
+  expect(store.getState().activeWorktreeId).toBe(D)
+  expect(
+    store.getState().unifiedTabsByWorktree[D].find((tab) => tab.entityId === opened.id)
+  ).toMatchObject({ worktreeId: O, groupId: 'left' })
+  await act(async () => {
+    await hook.result.current.openMarkdownDocument(document, { anchor: 'heading' })
+  })
+  const preview = store.getState().openFiles.find((file) => file.mode === 'markdown-preview')!
+  expect(preview).toMatchObject({
+    worktreeId: O,
+    markdownPreviewSourceFileId: opened.id,
+    markdownPreviewAnchor: 'heading'
+  })
+  expect(
+    store.getState().unifiedTabsByWorktree[D].find((tab) => tab.entityId === preview.id)
+  ).toMatchObject({ worktreeId: O, groupId: 'left' })
+  expect(store.getState().activeFileId).toBe(preview.id)
+  hook.unmount()
+})
+
+it('renders Session History saved names without mounting the chat or terminal surface', () => {
+  const store = seed()
+  holder.store = store
+  const session: AiVaultSession = {
+    id: 'history',
+    executionHostId: 'local',
+    agent: 'codex',
+    sessionId: 'chat1',
+    title: 'Scanned title',
+    cwd: 'C:/repo',
+    branch: null,
+    model: null,
+    filePath: '',
+    codexHome: null,
+    createdAt: null,
+    updatedAt: null,
+    modifiedAt: '',
+    messageCount: 0,
+    totalTokens: 0,
+    previewMessages: [],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
+    resumeCommand: '',
+    subagent: null,
+    structuredSession: { sessionId: 'chat1', workspaceId: O }
+  }
+  function History() {
+    return createElement('div', null, useAiVaultSessionDisplayTitle(session))
+  }
+  const row = render(createElement(History))
+  expect(row.container.textContent).toBe('Saved name')
+  act(() => store.getState().setTabCustomLabel(C1, 'History edit'))
+  expect(row.container.textContent).toBe('History edit')
+  row.unmount()
+})
+
+it('replaces source-owned previews through real close and restores a supported fresh shell in the displayed group', () => {
+  const store = seed()
+  holder.store = store
+  const old = store.getState().openFile(
+    {
+      worktreeId: O,
+      filePath: 'C:/repo/first.ts',
+      relativePath: 'first.ts',
+      language: 'typescript',
+      mode: 'edit'
+    },
+    { preview: true, targetGroupId: 'left' }
+  )
+  expect(
+    store.getState().unifiedTabsByWorktree[D].find((tab) => tab.entityId === old)?.worktreeId
+  ).toBe(O)
+  const next = store.getState().openFile(
+    {
+      worktreeId: D,
+      filePath: 'C:/repo/next.ts',
+      relativePath: 'next.ts',
+      language: 'typescript',
+      mode: 'edit'
+    },
+    { preview: true, targetGroupId: 'left', recordReplacedPreview: true }
+  )
+  expect(store.getState().openFiles.some((file) => file.id === old)).toBe(false)
+  expect(
+    rawWorkspaceState(store.getState()).unifiedTabsByWorktree[O].some((tab) => tab.entityId === old)
+  ).toBe(false)
+  expect(store.getState().unifiedTabsByWorktree[D].some((tab) => tab.entityId === next)).toBe(true)
+  expect(store.getState().recentlyClosedEditorTabsByWorktree[D][0]).toMatchObject({
+    worktreeId: O,
+    reopenId: old
+  })
+  const shell = store.getState().createTab(O, 'left', 'pwsh', { startupCwd: 'C:/repo/subdir' })
+  store.getState().closeTab(shell.id)
+  expect(store.getState().recentlyClosedTerminalTabsByWorktree[D][0]).toMatchObject({
+    sourceWorkspaceId: O,
+    startupCwd: 'C:/repo/subdir',
+    position: { groupId: 'left' }
+  })
+  expect(store.getState().reopenClosedTab(D)).toBe(true)
+  const restored = rawWorkspaceState(store.getState()).tabsByWorktree[O].find(
+    (tab) => tab.id !== shell.id
+  )!
+  expect(restored).toMatchObject({
+    worktreeId: O,
+    startupCwd: 'C:/repo/subdir',
+    shellOverride: 'pwsh',
+    ptyId: null
+  })
+  expect(
+    store.getState().unifiedTabsByWorktree[D].find((tab) => tab.entityId === restored.id)?.groupId
+  ).toBe('left')
+})
+
+it.each([10, 100])(
+  'releases no-history file derivation roots with replaceable inputs after %i real closes/purges',
+  async (count) => {
+    const { workspaceAdmittedFiles } = await import('../workspace-admitted-files')
+    const store = createTestStore()
+    const files = Array.from({ length: count }, (_, at) =>
+      makeOpenFile({
+        id: `released-${at}`,
+        worktreeId: `release::/folder-${at}`,
+        filePath: `/folder-${at}/file.ts`
+      })
+    )
+    store.setState({ openFiles: files, activeWorktreeId: null, activeFileId: null })
+    // Observe weak-root ownership, not GC timing. Keeping receipts here deliberately prevents collection.
+    const roots: { key: object; value: Map<string, { inputs: unknown[]; files: unknown[] }> }[] = []
+    const original = WeakMap.prototype.set
+    WeakMap.prototype.set = function (
+      this: WeakMap<WeakKey, unknown>,
+      key: WeakKey,
+      value: unknown
+    ) {
+      if (value instanceof Map && typeof key !== 'symbol') {
+        roots.push({ key, value })
+      }
+      return original.call(this, key, value)
+    }
+    try {
+      for (const file of files) {
+        expect(
+          workspaceAdmittedFiles(store.getState(), file.worktreeId).map((row) => row.id)
+        ).toEqual([file.id])
+        store.getState().closeFile(file.id, { captureRecentlyClosed: false })
+      }
+      store.setState(
+        buildWorktreePurgeState(
+          store.getState(),
+          files.map((file) => ({ id: file.worktreeId, hostId: 'local' }))
+        )
+      )
+      expect(store.getState().openFiles).toEqual([])
+      expect(workspaceAdmittedFiles(store.getState(), files[0].worktreeId)).toEqual([])
+    } finally {
+      WeakMap.prototype.set = original
+    }
+    const caches = roots.filter(({ value }) =>
+      [...value.values()].some((row) => Array.isArray(row?.inputs))
+    )
+    expect(caches.length).toBeGreaterThanOrEqual(count)
+    for (const { key, value } of caches) {
+      expect(typeof key).toBe('object')
+      for (const row of value.values()) {
+        if (Array.isArray(row?.inputs)) {
+          // A stable action/owner may never root an obsolete inventory. Each root dies with its exact state.
+          expect(Reflect.get(key, 'openFiles')).toBe(row.inputs[0])
+        }
+      }
+    }
+    expect(store.getState().recentlyClosedEditorTabsByWorktree).toEqual({})
+  }
+)

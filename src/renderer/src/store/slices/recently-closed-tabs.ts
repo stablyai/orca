@@ -1,5 +1,8 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { resolveOwner } from '@/lib/resolve-owner'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { workspaceReadState } from '../workspace-source-state'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import {
   isWindowsAbsolutePathLike,
@@ -23,6 +26,8 @@ export type {
 
 /** Reopen user-closed terminals as fresh shells at original cwd, never old PTYs, scrollback or agent sessions (Ghostty semantics). */
 export type ClosedTerminalTabSnapshot = {
+  sourceWorkspaceId?: string
+  sourceHostId?: ExecutionHostId
   startupCwd?: string
   shellOverride?: string
   customTitle?: string
@@ -115,7 +120,18 @@ export const createRecentlyClosedTabsSlice: StateCreator<
 
   reopenClosedTerminalTab: (worktreeId) => {
     // Skip local reopen for runtime-owned terminals: phantom shells race host snapshots; dispatcher falls through to browser/editor. Direct import avoids store cycle. Local/SSH are supported; remote terminal reopen remains deferred.
-    const owner = runtimeEnvironmentIdForWorkspaceOwner(get(), { workspaceId: worktreeId })
+    const pending = get().recentlyClosedTerminalTabsByWorktree[worktreeId]?.[0]
+    const sourceId = pending?.sourceWorkspaceId ?? worktreeId
+    const currentOwner = resolveOwner(get(), { workspaceId: sourceId })
+    if (
+      pending?.sourceHostId &&
+      currentOwner.kind === 'resolved' &&
+      (currentOwner.owner.endpoint.kind === 'environment' ||
+        currentOwner.owner.at !== pending.sourceHostId)
+    ) {
+      return false
+    }
+    const owner = runtimeEnvironmentIdForWorkspaceOwner(get(), { workspaceId: sourceId })
     // Why: a twin's reopen would spawn a local shell for a tab that may have lived on the other host.
     if (owner.kind === 'ambiguous' || owner.environmentId?.trim()) {
       return false
@@ -139,7 +155,7 @@ export const createRecentlyClosedTabsSlice: StateCreator<
       return false
     }
 
-    const tab = get().createTab(worktreeId, snapshot.position?.groupId, snapshot.shellOverride, {
+    const tab = get().createTab(sourceId, snapshot.position?.groupId, snapshot.shellOverride, {
       ...(snapshot.startupCwd ? { startupCwd: snapshot.startupCwd } : {}),
       activate: true
     })
@@ -150,7 +166,12 @@ export const createRecentlyClosedTabsSlice: StateCreator<
       get().setTabColor(tab.id, snapshot.color)
     }
     get().setActiveTabType('terminal', worktreeId)
-    restoreRecentlyClosedTabPosition(get, worktreeId, tab.id, snapshot.position)
+    restoreRecentlyClosedTabPosition(
+      () => workspaceReadState(get()),
+      worktreeId,
+      tab.id,
+      snapshot.position
+    )
     return true
   },
 

@@ -1,3 +1,4 @@
+import { workspacePresentationFor } from '../../../workspace-source-state'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
@@ -69,6 +70,9 @@ export function createMarkdownPreviewActions(
 
     openMarkdownPreview: (file, options) => {
       const initialState = get()
+      const displayId =
+        workspacePresentationFor(initialState, file.worktreeId)?.displayWorkspaceId ??
+        file.worktreeId
       const resolvedRuntimeEnvironmentId =
         file.runtimeEnvironmentId === null
           ? null
@@ -94,9 +98,8 @@ export function createMarkdownPreviewActions(
       const anchor = options?.anchor || undefined
       set((s) => {
         const existing = s.openFiles.find((openFile) => openFile.id === id)
-        const worktreeId = file.worktreeId
         const runtimeEnvironmentId = resolvedRuntimeEnvironmentId
-        const activeResult = buildEditorActiveResult(s, worktreeId, id)
+        const activeResult = buildEditorActiveResult(s, displayId, id)
 
         if (existing) {
           // Why: a fresh grant means the file was re-resolved; cached bytes may predate it.
@@ -165,7 +168,7 @@ export function createMarkdownPreviewActions(
       void openWorkspaceEditorItem(
         get(),
         id,
-        file.worktreeId,
+        displayId,
         `${file.relativePath} (preview)`,
         'editor',
         false,

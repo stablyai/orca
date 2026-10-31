@@ -74,6 +74,18 @@ export function workspaceSourceOccurrence(
 export function workspaceSourceTab(state: SourceTabState, tabId: string, workspaceId: string) {
   return workspaceSourceOccurrence(state, tabId, workspaceId)?.tab
 }
+
+/** The gesture context and the resource's literal source are independent. */
+export function workspaceTabDisplayId(
+  state: SourceTabState,
+  sourceId: string,
+  tabId: string
+): string {
+  const saved = workspacePresentationFor(state, sourceId)
+  return saved && workspaceSourceTab(state, tabId, saved.displayWorkspaceId)
+    ? saved.displayWorkspaceId
+    : sourceId
+}
 type WriteScope = {
   sources?: readonly string[]
   documents?: readonly string[]

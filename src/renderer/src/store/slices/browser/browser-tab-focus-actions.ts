@@ -9,6 +9,7 @@ import { restoreRecentlyClosedTabPosition } from '../recently-closed-tabs'
 import { isLocalBrowserPageOwner } from './browser-host-state'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import { afterPendingEntityTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import { workspaceReadState } from '../../workspace-source-state'
 
 export function createBrowserTabFocusActions(
   set: BrowserSliceSet,
@@ -36,10 +37,12 @@ export function createBrowserTabFocusActions(
       if (!entryToRestore) {
         return null
       }
+      const sourceId = entryToRestore.workspace.worktreeId
+      const view = () => workspaceReadState(get())
       /** The restored record; a layout-owner build's, before main's frame drew it, as proposed. */
       const restoredRecord = (restored: BrowserWorkspace): BrowserWorkspace | null =>
-        get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ??
-        (hasPendingEntityTab(worktreeId, restored.id) ? restored : null)
+        get().browserTabsByWorktree[sourceId]?.find((tab) => tab.id === restored.id) ??
+        (hasPendingEntityTab(sourceId, restored.id) ? restored : null)
 
       const snap = entryToRestore.workspace
       const pages = entryToRestore.pages
@@ -47,7 +50,7 @@ export function createBrowserTabFocusActions(
       const sessionPartition = snap.sessionPartition ?? null
 
       if (pages.length === 0) {
-        const restored = get().createBrowserTab(worktreeId, snap.url, {
+        const restored = get().createBrowserTab(sourceId, snap.url, {
           title: snap.title,
           activate: true,
           sessionProfileId,
@@ -57,15 +60,15 @@ export function createBrowserTabFocusActions(
         })
         const position = entryToRestore.position
         // A layout-owner build's tab moves once main's frame drew it.
-        afterPendingEntityTabs(worktreeId, restored.id, () =>
-          restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, position)
+        afterPendingEntityTabs(sourceId, restored.id, () =>
+          restoreRecentlyClosedTabPosition(view, worktreeId, restored.id, position)
         )
         return restoredRecord(restored)
       }
 
       // Why: append remaining pages in original order so multi-page workspaces preserve their page sequence.
       const [firstPage, ...restPages] = pages
-      const restored = get().createBrowserTab(worktreeId, firstPage.url, {
+      const restored = get().createBrowserTab(sourceId, firstPage.url, {
         title: firstPage.title,
         activate: true,
         sessionProfileId,
@@ -88,10 +91,11 @@ export function createBrowserTabFocusActions(
           }
         }
 
-        restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, position)
+        get().setActiveBrowserTab(restored.id, worktreeId)
+        restoreRecentlyClosedTabPosition(view, worktreeId, restored.id, position)
       }
       // A layout-owner build adds the pages once main drew the tab, and selects once it added them.
-      afterPendingEntityTabs(worktreeId, restored.id, () => {
+      afterPendingEntityTabs(sourceId, restored.id, () => {
         for (const p of restPages) {
           get().createBrowserPage(restored.id, p.url, {
             activate: false,
@@ -100,7 +104,7 @@ export function createBrowserTabFocusActions(
             ...(p.docLocation ? { docLocation: p.docLocation } : {})
           })
         }
-        afterPendingEntityTabs(worktreeId, restored.id, selectRestoredPage)
+        afterPendingEntityTabs(sourceId, restored.id, selectRestoredPage)
       })
       return restoredRecord(restored)
     },
