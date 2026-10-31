@@ -22514,6 +22514,7 @@
       "browserFocusAddressBar": "Focar Barra de Endereço do Navegador",
       "browserGrabElement": "Capturar Elemento da Página",
       "browserAnnotateElement": "Anotar Elemento da Página",
+      "editorCommandPalette": "Paleta de comandos",
       "editorFind": "Localizar no editor",
       "editorReplace": "Substituir no editor",
       "editorSave": "Salvar Arquivo",

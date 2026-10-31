@@ -22523,6 +22523,7 @@
       "browserFocusAddressBar": "Placer le focus sur la barre d'adresse du navigateur",
       "browserGrabElement": "Capturer un élément de la page",
       "browserAnnotateElement": "Annoter un élément de la page",
+      "editorCommandPalette": "Palette de commandes",
       "editorFind": "Rechercher dans l'éditeur",
       "editorReplace": "Remplacer dans l'éditeur",
       "editorSave": "Enregistrer le fichier",

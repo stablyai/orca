@@ -21844,6 +21844,7 @@
       "browserFocusAddressBar": "ブラウザのアドレスバーにフォーカス",
       "browserGrabElement": "ページ要素を取得",
       "browserAnnotateElement": "ページ要素に注釈を付ける",
+      "editorCommandPalette": "コマンド パレット",
       "editorFind": "エディター内を検索",
       "editorReplace": "エディター内で置換",
       "editorSave": "ファイルを保存",

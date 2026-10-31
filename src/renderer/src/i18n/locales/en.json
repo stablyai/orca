@@ -22484,6 +22484,7 @@
       "browserFocusAddressBar": "Focus Browser Address Bar",
       "browserGrabElement": "Grab Page Element",
       "browserAnnotateElement": "Annotate Page Element",
+      "editorCommandPalette": "Command Palette",
       "editorFind": "Find in editor",
       "editorReplace": "Replace in editor",
       "editorSave": "Save File",
