@@ -18,18 +18,25 @@ import { ComposerUsageClientContext } from './composer-usage-client-context'
 import { useComposerUsageWindow } from './composer-usage-window-preference'
 import { ComposerUsageSheet } from './ComposerUsageSheet'
 
-type Props = { agent: string | null | undefined }
+type Props = {
+  agent: string | null | undefined
+  /** The chat composer spans the Duo's status column, so its sheet does too; the terminal's keeps clear of the rail. */
+  spanSideStrip?: boolean
+}
 
 /** The composer action row's flexible gap, with the agent's usage meter centered in it. */
-export function ComposerUsageSlot({ agent }: Props): React.JSX.Element {
+export function ComposerUsageSlot({ agent, spanSideStrip }: Props): React.JSX.Element {
   return (
     <View style={[composerInputStyles.actionSpacer, styles.slot]}>
-      <ComposerUsageMeter agent={agent} />
+      <ComposerUsageMeter agent={agent} spanSideStrip={spanSideStrip} />
     </View>
   )
 }
 
-export function ComposerUsageMeter({ agent }: Props): React.JSX.Element | null {
+export function ComposerUsageMeter({
+  agent,
+  spanSideStrip = false
+}: Props): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const client = useContext(ComposerUsageClientContext)
@@ -70,7 +77,12 @@ export function ComposerUsageMeter({ agent }: Props): React.JSX.Element | null {
           {`${used}%`}
         </Text>
       </Pressable>
-      <ComposerUsageSheet visible={open} onClose={() => setOpen(false)} usage={usage} />
+      <ComposerUsageSheet
+        visible={open}
+        onClose={() => setOpen(false)}
+        usage={usage}
+        spanSideStrip={spanSideStrip}
+      />
     </>
   )
 }

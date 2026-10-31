@@ -9,14 +9,14 @@ import { USAGE_PROVIDER_NAMES, type AgentUsage } from './agent-usage-provider'
 import { ComposerUsageWindowPicker } from './ComposerUsageWindowPicker'
 import { ComposerUsageWindowRow } from './ComposerUsageWindowRow'
 
-type Props = { visible: boolean; onClose: () => void; usage: AgentUsage }
+type Props = { visible: boolean; onClose: () => void; usage: AgentUsage; spanSideStrip: boolean }
 
-export function ComposerUsageSheet({ visible, onClose, usage }: Props) {
+export function ComposerUsageSheet({ visible, onClose, usage, spanSideStrip }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const now = useNow(30_000, visible)
   return (
-    <BottomDrawer visible={visible} onClose={onClose}>
+    <BottomDrawer visible={visible} onClose={onClose} spanReleasedSide={spanSideStrip}>
       <View testID="composer-usage-sheet">
         <Text style={styles.heading}>
           {t('composerUsage.sheet.title', '{{provider}} usage', {
