@@ -5,6 +5,7 @@ import {
   pushClosedTerminalTabSnapshot,
   pushRecentlyClosedTabKind
 } from '../slices/recently-closed-tabs'
+import { extractClosedTerminalAgentResume } from '../slices/closed-terminal-agent-resume'
 // Use store-free registry to avoid reentering slice creation through terminal-parked-tab-watchers.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
@@ -108,6 +109,15 @@ export function createTerminalTabCloseActions(
             closedWorktreeId && closedTab
               ? getRecentlyClosedTabPosition(s, closedWorktreeId, closedTab.id)
               : undefined
+          // Capture resumable agent identity before sleeping/status retirement so Cmd+Shift+T can resume (#10377).
+          const agentResume =
+            closedTab &&
+            extractClosedTerminalAgentResume({
+              tabId: closedTab.id,
+              agentStatusByPaneKey: s.agentStatusByPaneKey,
+              sleepingAgentSessionsByPaneKey: s.sleepingAgentSessionsByPaneKey,
+              agentLaunchConfigByPaneKey: s.agentLaunchConfigByPaneKey
+            })
           const capturedSnapshot =
             closeReason === 'user' &&
             opts?.captureRecentlyClosed !== false &&
@@ -118,7 +128,14 @@ export function createTerminalTabCloseActions(
                   ...(closedTab.shellOverride ? { shellOverride: closedTab.shellOverride } : {}),
                   ...(closedTab.customTitle ? { customTitle: closedTab.customTitle } : {}),
                   ...(closedTab.color ? { color: closedTab.color } : {}),
-                  ...(closedPosition ? { position: closedPosition } : {})
+                  ...(closedPosition ? { position: closedPosition } : {}),
+                  ...(agentResume
+                    ? {
+                        agent: agentResume.agent,
+                        providerSession: agentResume.providerSession,
+                        ...(agentResume.launchConfig ? { launchConfig: agentResume.launchConfig } : {})
+                      }
+                    : {})
                 }
               : null
           const nextExpanded = omitByTabId(s.expandedPaneByTabId)
