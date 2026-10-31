@@ -212,10 +212,12 @@ describe('a follow-up to a finished terminal worker', () => {
     expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
   })
 
-  it('continues mail a follow-up reported without reading on the follow-up after it', async () => {
+  it('asks the coordinator instead of restarting a follow-up that reported without reading its mail', async () => {
     h.setup()
     const { taskId, dispatchId } = await h.startWorker()
     await send(dispatchId, 'DO NOT PUSH')
+    // Sent before the follow-up starts, as anything it takes is.
+    h.db.db.prepare("UPDATE messages SET created_at = datetime('now', '-1 minute')").run()
     h.settle(taskId, dispatchId, 'succeeded')
     vi.mocked(h.runtime.sendTerminalAgentPrompt).mockImplementationOnce(async (handle) => {
       const followUp = getFollowUpDispatch(h.db, dispatchId)!
@@ -226,13 +228,22 @@ describe('a follow-up to a finished terminal worker', () => {
     continueAllUnreadWorkerMail(h.runtime, h.db)
 
     await vi.waitFor(() =>
-      expect(getFollowUpDispatch(h.db, getFollowUpDispatch(h.db, dispatchId)!.id)).toBeDefined()
+      expect(h.db.getUnreadMessages(`run:${h.activeRunId}`)).toMatchObject([
+        { type: 'escalation', subject: 'Mail did not reach the finished worker' }
+      ])
     )
-    const next = getFollowUpDispatch(h.db, getFollowUpDispatch(h.db, dispatchId)!.id)!
+    const followUp = getFollowUpDispatch(h.db, dispatchId)!
+    expect(getFollowUpDispatch(h.db, followUp.id)).toBeUndefined()
+    expect(h.db.getUnreadMessages(`dispatch:${followUp.id}`)).toMatchObject([
+      { body: 'DO NOT PUSH' }
+    ])
+
+    // Mail newer than that follow-up still continues it, carrying the unread mail along.
+    await send(followUp.id, 'and the docs')
+    const next = getFollowUpDispatch(h.db, followUp.id)!
     await vi.waitFor(() =>
       expect(h.db.getUnreadMessages(`dispatch:${next.id}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
     )
-    expect(h.db.getUnreadMessages(`run:${h.activeRunId}`)).toHaveLength(0)
   })
 
   it('keeps the mail a failed follow-up took when a replayed report ran during its start', async () => {

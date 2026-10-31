@@ -5,6 +5,7 @@ import {
   clearFollowUpMail,
   markUnreadFollowUpMail,
   getFollowUpDispatch,
+  hasNewUnreadFollowUpMail,
   FOLLOW_UP_MESSAGE_TYPES,
   listDispatchesWithFollowUpMail
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
@@ -61,6 +62,16 @@ async function continueUnreadMail(
   const first = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
   if (!first) {
     clearFollowUpMail(db, dispatchId)
+    return
+  }
+  if (custodyOf(db, dispatchId) === 'reported' && !hasNewUnreadFollowUpMail(db, dispatchId)) {
+    // Kept marked, so the coordinator's next send carries it; another short Task would only repeat this one.
+    noticeUnreadMailNotContinued(
+      runtime,
+      db,
+      dispatchId,
+      'its follow-up reported without reading the mail it was started for'
+    )
     return
   }
   let plan: ReturnType<typeof planWorkerFollowUp> = undefined

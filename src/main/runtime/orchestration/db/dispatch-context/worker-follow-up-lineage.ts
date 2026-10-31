@@ -172,6 +172,19 @@ export function takeFollowUpMail(
     .run(`dispatch:${toDispatchId}`, `dispatch:${fromDispatchId}`)
 }
 
+/** Mail a follow-up held from before it started is what its Task pointed at; only newer mail starts another. */
+export function hasNewUnreadFollowUpMail(db: OrchestrationDb, dispatchId: string): boolean {
+  return Boolean(
+    db.db
+      .prepare(
+        `SELECT 1 FROM dispatch_contexts WHERE id = ? AND EXISTS (${UNREAD_FOLLOW_UP_MAIL_SQL}
+           AND (dispatch_contexts.follow_up_of_dispatch_id IS NULL
+             OR messages.created_at >= dispatch_contexts.created_at))`
+      )
+      .get(dispatchId)
+  )
+}
+
 export function clearFollowUpMail(db: OrchestrationDb, dispatchId: string): void {
   db.db
     .prepare('UPDATE dispatch_contexts SET follow_up_mail_at = NULL WHERE id = ?')
