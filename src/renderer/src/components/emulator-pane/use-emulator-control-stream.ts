@@ -18,9 +18,11 @@ export type EmulatorControlStream = {
   sendTouch: (touch: ServeSimTouchFrame) => boolean
 }
 
+// Android has no serve-sim socket: its touches go to main, which owns the scrcpy control socket.
 export function useEmulatorControlStream(
   wsUrl: string | undefined,
-  enabled: boolean
+  enabled: boolean,
+  scrcpyDeviceId: string | null = null
 ): EmulatorControlStream {
   const wsRef = useRef<WebSocket | null>(null)
   const keyboardTimerIdsRef = useRef<Set<number>>(new Set())
@@ -144,6 +146,18 @@ export function useEmulatorControlStream(
 
   const sendTouch = useCallback(
     (touch: ServeSimTouchFrame): boolean => {
+      if (scrcpyDeviceId) {
+        if (!enabled) {
+          return false
+        }
+        window.api.emulator.sendScrcpyTouch({
+          deviceId: scrcpyDeviceId,
+          type: touch.type,
+          x: touch.x,
+          y: touch.y
+        })
+        return true
+      }
       const ws = getOpenSocket()
       if (!ws) {
         return false
@@ -155,7 +169,7 @@ export function useEmulatorControlStream(
         return false
       }
     },
-    [getOpenSocket]
+    [enabled, getOpenSocket, scrcpyDeviceId]
   )
 
   const sendKeyboardFrames = useCallback(

@@ -29,6 +29,7 @@ import {
 import { PhoneHardwareButtons } from './emulator-phone-hardware-buttons'
 import { EmulatorScreenSurface } from './emulator-screen-surface'
 import { useEmulatorControlStream } from './use-emulator-control-stream'
+import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { useEmulatorPaneSize } from './use-emulator-pane-size'
 import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
 import { useEmulatorStreamWindowVisible } from './use-emulator-stream-window-visibility'
@@ -89,7 +90,8 @@ export function EmulatorDeviceFrame({
   const canInteract = isLive && !loading && !streamError
   const { cancelKeyboardFrames, sendKeyboardFrames, sendTouch } = useEmulatorControlStream(
     wsUrl,
-    canInteract
+    canInteract,
+    scrcpyDeviceIdFromStreamUrl(previewUrl)
   )
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
     useEmulatorScreenKeyboard({
