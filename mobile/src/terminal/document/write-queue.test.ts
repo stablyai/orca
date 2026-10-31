@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createTerminalDocumentScope } from './document-scope'
 import * as writeQueue from './write-queue'
+import { TERMINAL_WRITE_SLICE_UNITS } from './write-queue'
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
 
 type QueueSnapshot = { slots: unknown[]; head: number }
 
 type WriteQueueRuntime = {
-  enqueue: (data: string) => void
+  enqueue: (data: string | undefined) => void
   enqueueBoundary: (callback: () => void) => void
   next: () => unknown
   pump: () => void
@@ -91,7 +92,7 @@ describe('terminal WebView write queue', () => {
 
   // Count queue-reachable string units, not heap bytes; xterm may still retain submitted chunks.
   it('retains only the pending chunk after 127 of 128 dequeues', () => {
-    const CHUNK_CODE_UNITS = 65_536
+    const CHUNK_CODE_UNITS = TERMINAL_WRITE_SLICE_UNITS
     const CHUNK_COUNT = 128
     const chunks = distinctChunks(CHUNK_COUNT, CHUNK_CODE_UNITS)
     const measure = (): number => {
@@ -132,6 +133,36 @@ describe('terminal WebView write queue', () => {
     expect(shipped.slots).toBe(backlog)
     // Only pending string contents remain reachable from the queue.
     expect(shipped.codeUnits).toBe((backlog - dequeues) * 64)
+  })
+
+  it('slices a large write in order without splitting a surrogate pair', () => {
+    const queue = createWriteQueue()
+    // The emoji straddles the first slice boundary.
+    const input = 'a'.repeat(TERMINAL_WRITE_SLICE_UNITS - 1) + '\u{1f600}' + 'b'.repeat(32)
+    queue.enqueue(input)
+    drain(queue)
+
+    expect(queue.writes.join('')).toBe(input)
+    expect(queue.writes).toHaveLength(2)
+    expect(queue.writes.every((chunk) => chunk.length <= TERMINAL_WRITE_SLICE_UNITS)).toBe(true)
+    expect(queue.writes[1]?.codePointAt(0)).toBe(0x1f600)
+  })
+
+  it('hands xterm the text-presentation status dot below and above the slice limit', () => {
+    const queue = createWriteQueue()
+    const large = 'a'.repeat(TERMINAL_WRITE_SLICE_UNITS)
+    queue.enqueue('\u23fa small')
+    queue.enqueue(`\u23fa ${large}`)
+    drain(queue)
+
+    expect(queue.writes[0]).toBe('\u23fa\ufe0e small')
+    expect(queue.writes.slice(1).join('')).toBe(`\u23fa\ufe0e ${large}`)
+  })
+
+  it('queues a write frame that carries no text instead of throwing', () => {
+    const queue = createWriteQueue()
+    expect(() => queue.enqueue(undefined)).not.toThrow()
+    expect(queue.snapshot().slots).toEqual([undefined])
   })
 
   it('drains writes in FIFO order', () => {
