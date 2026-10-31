@@ -14,7 +14,7 @@ import type {
 import {
   isSyntheticInterruptedTurn,
   isUnexplainedInterruptedTurn,
-  turnRecordReplaceable
+  revisedTurnRecord
 } from './structured-agent-session-synthetic-turn'
 
 export type PreparedSwitchRead = Extract<PreparedLegacyImport, { ok: true }>
@@ -115,20 +115,29 @@ export function planSwitchTranscriptAdditions(input: {
   return additions
 }
 
-/** Each addition the chat lacks, or a turn record its newer evidence may replace. */
+/**
+ * Each addition the chat lacks, or what a saved turn record takes from it (`revisedTurnRecord`):
+ * every direct batch of turn records goes through here, so none erases or moves an opener.
+ */
 export function switchTranscriptMutations(
   journal: AgentSessionJournal,
   additions: readonly JournalReplacementItem[],
   revise?: (item: JournalReplacementItem, current?: AgentJournalItemBody) => JournalReplacementItem
 ) {
+  const savedRow = (key: string) => {
+    const id = journal.canonicalItemId(key)
+    return journal.item(id) ? id : undefined
+  }
   return additions.flatMap((addition) => {
     const current = journal.item(journal.canonicalItemId(agentJournalItemKey(addition.identity)))
     const item = revise?.(addition, current?.body) ?? addition
-    return !current || turnRecordReplaceable(current.body, item.body)
+    const body = current ? revisedTurnRecord(current, item.body, savedRow) : item.body
+    return body
       ? [
           {
             kind: 'item' as const,
             ...item,
+            body,
             turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
           }
         ]

@@ -162,14 +162,13 @@ export async function commitSwitchStoppedCliTurn(input: {
   if (!piHistoryCut(journal, stopped, input.resumeCursor).mergeable) {
     throw transcriptUnreadable()
   }
+  const prompt =
+    stopped.agent === 'codex'
+      ? codexRestingPromptKey(journal, stopped.sessionId, stopped.userItemKey)
+      : stopped.userItemKey
   const additions =
     stopped.agent === 'codex'
-      ? [
-          stoppedTurnRecord(
-            stopped,
-            codexRestingPromptKey(journal, stopped.sessionId, stopped.userItemKey)
-          )
-        ]
+      ? [stoppedTurnRecord(stopped, prompt)]
       : planSwitchTranscriptAdditions({
           journal,
           source: stopped,
@@ -186,7 +185,7 @@ export async function commitSwitchStoppedCliTurn(input: {
       // An interruption saved without its verdict keeps its record and takes this one.
       mutations: switchTranscriptMutations(journal, additions, (item, current) =>
         agentJournalItemKey(item.identity) === record && isUnexplainedInterruptedTurn(current)
-          ? { ...item, body: { ...current, outcome: 'cancellation' } }
+          ? { ...item, body: { ...current, outcome: 'cancellation', userItemId: prompt } }
           : item
       )
     })

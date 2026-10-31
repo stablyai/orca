@@ -453,6 +453,63 @@ describe('Codex: a Stop and switch into the chat after Codex wrote its own abort
     expectInterruptedOnCOnly(reopened, stopped.turnId, prompts)
   })
 
+  /** The chat's A, then what the CLI wrote after it, imported at rest. */
+  async function importedAfterA(name: string, cli: string[]) {
+    const rows = await recording()
+    const thread = payload(rows[0]!, 'id')
+    const journal = await open(name, 'codex', thread)
+    await chatSentTurn(journal, thread, rows.slice(1, 7))
+    await writeFile(filePath, `${[...rows.slice(0, 7), ...cli].join('\n')}\n`)
+    await refresh(journal, { agent: 'codex', sessionId: thread, filePath })
+    const key = (row: string) =>
+      agentJournalItemKey({
+        provider: 'legacy',
+        agent: 'codex',
+        sessionId: thread,
+        recordId: String(dig(json(row), 'payload', 'item', 'id'))
+      })
+    const record = (turnId: string) =>
+      agentJournalItemKey({
+        provider: 'legacy',
+        agent: 'codex',
+        sessionId: thread,
+        recordId: `turn-lifecycle:${turnId}`
+      })
+    return { rows, journal, key, record }
+  }
+
+  it('keeps a steer under the prompt that opened its turn', async () => {
+    const rows = await recording()
+    const steer = rows[9]!.replace('01a192d6-8bcd-7e90-b4b8-850b900b68d7', 'b-steer-item')
+    const { journal, key, record } = await importedAfterA('codex-steer', [
+      ...rows.slice(7, 10),
+      steer,
+      ...rows.slice(10, 12)
+    ])
+    const b = key(rows[9]!)
+    expect(journal.item(record(payload(rows[7]!, 'turn_id')))?.body).toMatchObject({
+      userItemId: b
+    })
+    const shown = shownTurns(journal)
+    expect([key(steer), key(rows[10]!)].map(shown.turnOf)).toEqual([b, b])
+  })
+
+  it('keys work the provider started with no prompt to its own record', async () => {
+    const rows = await recording()
+    const resumed = [rows[17]!, rows[20]!, rows[21]!].map((row) =>
+      row.replaceAll(payload(rows[17]!, 'turn_id'), 'resumed-turn').replace('d-reply', 'e-reply')
+    )
+    const { journal, key, record } = await importedAfterA('codex-resumed', [
+      ...rows.slice(7, 12),
+      ...resumed
+    ])
+    const own = record('resumed-turn')
+    expect(journal.item(own)?.body).toMatchObject({ userItemId: own })
+    const shown = shownTurns(journal)
+    expect(shown.turnOf(key(resumed[1]!))).toBe(own)
+    expect(shown.turnOf(key(rows[10]!))).toBe(key(rows[9]!))
+  })
+
   it('heals a journal saved without the prompts: the next import names them', async () => {
     const { source, journal, stopped, prompts } = await stopAndSwitchDuringC('codex-3807-saved')
     // What the earlier build saved: B's and C's records with no prompt, C's ahead of B's rows.
@@ -478,10 +535,23 @@ describe('Codex: a Stop and switch into the chat after Codex wrote its own abort
       })
     })
     expect(turns(journal).filter((body) => body.userItemId === undefined)).toHaveLength(2)
-    expect(shownTurns(journal).turnOf(prompts.c)).not.toBe(prompts.c)
+    // A current chat already reads C's record by the prompt scoped to it, not by position.
+    expectInterruptedOnCOnly(journal, stopped.turnId, prompts)
+    const before = journal.snapshot().items
 
+    // The next import names each record's prompt in place; nothing else about it changes.
     await refresh(journal, source)
     expectInterruptedOnCOnly(journal, stopped.turnId, prompts)
+    const after = journal.snapshot().items
+    for (const { itemId } of unanchored) {
+      const was = before.find((item) => item.itemId === itemId)!
+      const now = after.find((item) => item.itemId === itemId)!
+      expect(after.indexOf(now)).toBe(before.indexOf(was))
+      expect({ ...now.body, userItemId: undefined }).toEqual({ ...was.body, userItemId: undefined })
+      expect(now.body.kind === 'turn' && now.body.userItemId).toBe(
+        now.body.kind === 'turn' && now.body.turnId === stopped.turnId ? prompts.c : prompts.b
+      )
+    }
   })
 })
 

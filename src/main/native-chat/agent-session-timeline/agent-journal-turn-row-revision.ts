@@ -16,7 +16,10 @@ import {
   type AgentJournalItemIdentity,
   type AgentJournalTurnItem
 } from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import {
+  readAgentJournalTurn,
+  revisedAgentJournalTurnAnchor
+} from '../../../shared/agent-session-turn-record'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionEventSink,
@@ -171,15 +174,31 @@ export function resolveAgentJournalTurnRowWrite(
     return null
   }
   const identity = known ?? (row ? parseAgentJournalItemKey(row.itemId) : null)
-  const body = reviseTurnBody(row?.body ?? null, withFallbackWindow(journal, write))
-  if (!identity || !body) {
+  const revised = reviseTurnBody(row?.body ?? null, withFallbackWindow(journal, write))
+  if (!identity || !revised) {
     return null
   }
-  if (estimateStructuredAgentSessionItemBytes(identity, body) <= reservedBytes) {
+  // A lifecycle write owns the turn's state, never which opener the record names.
+  const anchored = (body: AgentJournalTurnItem): AgentJournalTurnItem => {
+    const userItemId =
+      row &&
+      revisedAgentJournalTurnAnchor(row.itemId, row.body.userItemId, body.userItemId, (key) =>
+        journal.item(key) ? key : undefined
+      )
+    return userItemId ? { ...body, userItemId } : body
+  }
+  const fits = (body: AgentJournalTurnItem) =>
+    estimateStructuredAgentSessionItemBytes(identity, body) <= reservedBytes
+  const body = anchored(revised)
+  if (fits(body)) {
     return { identity, body }
   }
   // Unknown fields can exceed the bound; preserve lifecycle delivery anyway.
-  return write.lifecycle ? { identity, body: write.lifecycle } : null
+  if (!write.lifecycle) {
+    return null
+  }
+  const lifecycle = anchored(write.lifecycle)
+  return { identity, body: fits(lifecycle) ? lifecycle : write.lifecycle }
 }
 
 /** Lifecycle writes may create rows; context writes only revise. Nonreading sinks receive lifecycle only. */

@@ -31,12 +31,8 @@ import {
   providerItemId,
   savedCodexPrompts
 } from './structured-agent-session-codex-turns'
-import {
-  isSyntheticInterruptedTurn,
-  isUnexplainedInterruptedTurn,
-  turnRecordReplaceable,
-  withNamedPrompt
-} from './structured-agent-session-synthetic-turn'
+import { turnRecordRevisitable } from './structured-agent-session-synthetic-turn'
+import { switchTranscriptMutations } from './structured-agent-session-switch-import-plan'
 
 type CodexTurn = {
   id: string
@@ -44,7 +40,7 @@ type CodexTurn = {
   messages: boolean
   /** Its rows are saved: only its record is derived here (its outcome, or the prompt it lacks). */
   baseline: boolean
-  /** The turn's prompt row, so its record anchors to its own prompt wherever it sits. */
+  /** The row that opened the turn, so its record anchors to its own prompt wherever it sits. */
   opener?: string
   /** The turn's existing record that a later boundary may still replace, explain or anchor. */
   recorded?: Extract<AgentJournalItemBody, { kind: 'turn' }>
@@ -93,9 +89,11 @@ export async function catchUpStructuredSessionAtRest(input: {
     }
     items.push(item)
   }
-  const saved = (turnId: string) =>
-    journal.item(journal.canonicalItemId(agentJournalItemKey(lifecycleIdentity(threadId, turnId))))
-      ?.body
+  const saved = (turnId: string) => {
+    const key = agentJournalItemKey(lifecycleIdentity(threadId, turnId))
+    const body = journal.item(journal.canonicalItemId(key))?.body
+    return body?.kind === 'turn' ? body : undefined
+  }
   let prompts: Map<string, string> | undefined
   let turn: CodexTurn | undefined
   let baseline: JournalReplacementItem | undefined
@@ -107,14 +105,15 @@ export async function catchUpStructuredSessionAtRest(input: {
       ownerFence: 0,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }
-    // A record names its own prompt; one already saved keeps the prompt it names.
-    const anchor = target.recorded?.userItemId ?? target.opener
-    const anchored = anchor ? { ...body, userItemId: anchor } : body
+    // A record names its opener (the commit keeps one already saved), or itself when the turn has
+    // no prompt: work the provider started on its own.
+    const anchor =
+      target.opener ?? target.recorded?.userItemId ?? agentJournalItemKey(item.identity)
     if (target.messages || target.recorded) {
-      retain({ ...item, body: anchored })
+      retain({ ...item, body: { ...body, userItemId: anchor } })
     } else if (target.baseline) {
       // No saved prompt row to anchor to: write nothing rather than a dangling opener.
-      baseline = target.opener ? { ...item, body: anchored } : undefined
+      baseline = target.opener ? { ...item, body: { ...body, userItemId: anchor } } : undefined
     }
   }
   const close = (target: CodexTurn) => {
@@ -171,15 +170,15 @@ export async function catchUpStructuredSessionAtRest(input: {
       // A known turn is settled unless Orca settled it or its interruption still lacks a verdict;
       // a settled record an earlier import saved without its prompt only takes the prompt.
       const current = saved(id)
-      const revisited = isSyntheticInterruptedTurn(current) || isUnexplainedInterruptedTurn(current)
-      const unanchored = !revisited && current?.kind === 'turn' && !current.userItemId
+      const revisited = turnRecordRevisitable(current)
+      const unanchored = !revisited && current !== undefined && !current.userItemId
       const open = revisited || !view.known.has(id)
       turn = id
         ? {
             id,
             messages: !imported && open,
             baseline: (imported && open) || unanchored,
-            ...(current?.kind === 'turn' && (revisited || unanchored) ? { recorded: current } : {}),
+            ...(current && (revisited || unanchored) ? { recorded: current } : {}),
             ended: false
           }
         : undefined
@@ -222,13 +221,13 @@ export async function catchUpStructuredSessionAtRest(input: {
       continue
     }
     const identity = tracker.identify(line, currentLineIndex)
-    if (message.role === 'user') {
-      // The turn's last prompt, as the stop's own read names it: saved under either import's
-      // scheme, or the row this import writes.
+    if (!turn.opener && message.role === 'user') {
+      // The turn's first prompt (a steer stays under it): saved under either import's scheme, or
+      // the row this import writes.
       prompts ??= savedCodexPrompts(journal, threadId)
       turn.opener =
         prompts.get(providerItemId(parsed) ?? '') ??
-        (turn.messages ? agentJournalItemKey(identity) : turn.opener)
+        (turn.messages ? agentJournalItemKey(identity) : undefined)
     }
     if (turn.baseline) {
       continue
@@ -296,23 +295,7 @@ export async function catchUpStructuredSessionAtRest(input: {
       }
       return {
         dispatches: [],
-        mutations: items.flatMap((item) => {
-          const current = journal.item(journal.canonicalItemId(agentJournalItemKey(item.identity)))
-          const body =
-            !current || turnRecordReplaceable(current.body, item.body)
-              ? item.body
-              : withNamedPrompt(current.body, item.body)
-          return body
-            ? [
-                {
-                  kind: 'item' as const,
-                  ...item,
-                  body,
-                  turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
-                }
-              ]
-            : []
-        })
+        mutations: switchTranscriptMutations(journal, items)
       }
     }
   })

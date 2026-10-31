@@ -94,3 +94,18 @@ export function legacyAgentJournalTurnStatusBody(
   const name = agent === null ? 'Agent' : (tuiAgentDisplayName(agent) ?? agent)
   return { kind: 'status', text: agentTurnLifecycleText(name, turn.state), turnLifecycle: turn }
 }
+
+/**
+ * The opener a turn record names once a write revises it, for every writer. A record keeps the
+ * saved row it names (aliases resolved), so a write naming none or another row never erases or
+ * moves it; a write may refine a record naming itself, or a row not saved yet, to its opener.
+ */
+export function revisedAgentJournalTurnAnchor(
+  recordItemId: string,
+  saved: string | undefined,
+  next: string | undefined,
+  savedRow: (key: string) => string | undefined
+): string | undefined {
+  const row = saved === undefined || saved === recordItemId ? undefined : savedRow(saved)
+  return row ?? next ?? saved
+}

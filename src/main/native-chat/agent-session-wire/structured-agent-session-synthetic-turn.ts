@@ -1,4 +1,5 @@
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
+import { revisedAgentJournalTurnAnchor } from '../../../shared/agent-session-turn-record'
 
 type TurnBody = Extract<AgentJournalItemBody, { kind: 'turn' }>
 
@@ -42,12 +43,29 @@ export function turnRecordReplaceable(
   )
 }
 
-/** A record an earlier import saved without its prompt takes the one a later read names, unchanged otherwise. */
-export function withNamedPrompt(
-  current: AgentJournalItemBody,
-  next: AgentJournalItemBody
-): TurnBody | undefined {
-  return current.kind === 'turn' && !current.userItemId && next.kind === 'turn' && next.userItemId
-    ? { ...current, userItemId: next.userItemId }
-    : undefined
+/** Orca settled it, or its interruption still lacks a verdict: a later read may still end it. */
+export function turnRecordRevisitable(body: AgentJournalItemBody | undefined): boolean {
+  return isSyntheticInterruptedTurn(body) || isUnexplainedInterruptedTurn(body)
+}
+
+/**
+ * What a direct batch writes over a saved row: a turn record its newer evidence may replace, keeping
+ * the opener the record names (`revisedAgentJournalTurnAnchor`), or a saved record that only learns
+ * or canonicalizes its opener. Anything else stays.
+ */
+export function revisedTurnRecord(
+  current: { itemId: string; body: AgentJournalItemBody },
+  next: AgentJournalItemBody,
+  savedRow: (key: string) => string | undefined
+): AgentJournalItemBody | undefined {
+  if (current.body.kind !== 'turn' || next.kind !== 'turn') {
+    return undefined
+  }
+  const saved = current.body.userItemId
+  const userItemId = revisedAgentJournalTurnAnchor(current.itemId, saved, next.userItemId, savedRow)
+  const anchored = (body: TurnBody): TurnBody => (userItemId ? { ...body, userItemId } : body)
+  if (turnRecordReplaceable(current.body, next)) {
+    return anchored(next)
+  }
+  return userItemId !== saved ? anchored(current.body) : undefined
 }
