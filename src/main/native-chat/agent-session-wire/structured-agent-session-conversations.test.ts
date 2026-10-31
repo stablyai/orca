@@ -315,8 +315,27 @@ describe('internal publication lifetime, independently of presentation', () => {
       // Old journal is closed and its slots are detached.
       first.stopMarks.settled({ settling: true }, 'old')
       expect(events).toHaveLength(oldEvents)
+      const priorCursor = second.cursor()
       await second.replaceEpochItems('handle_forked', 1, [])
-      expect(events.at(-1)?.kind).toBe('reset')
+      const replacedCursor = second.cursor()
+      expect(events.at(-1)).toMatchObject({
+        kind: 'commit',
+        journal: second,
+        cursor: replacedCursor
+      })
+      expect(events.at(-1)?.rows?.[0]).toMatchObject({
+        kind: 'epoch',
+        reason: 'handle_forked',
+        fence: 1,
+        seq: priorCursor.sequence + 1
+      })
+      expect(replacedCursor.epoch).not.toBe(priorCursor.epoch)
+      expect(second.readSince(priorCursor)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(second.readSince(replacedCursor)).toEqual({
+        ok: true,
+        rows: [],
+        cursor: replacedCursor
+      })
       const plain: Map<string, StructuredAgentSessionHostSession> = sessions
       plain.clear()
       expect(events.at(-1)).toMatchObject({ kind: 'detach', journal: null })
