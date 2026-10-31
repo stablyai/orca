@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AndroidCommandResult, AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import {
+  captureAndroidLogcat,
   dumpAndroidAccessibilityTree,
   installAndroidApk,
   launchAndroidApp
@@ -15,6 +16,38 @@ const SDK: AndroidSdkPaths = {
 }
 
 const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code: 0 })
+
+describe('captureAndroidLogcat', () => {
+  it('keeps process identity for same-tag entries and preserves buffer headers', async () => {
+    const runner = vi.fn<AndroidCommandRunner>().mockResolvedValue(
+      ok(`--------- beginning of main
+06-26 12:00:00.123  1234  5678 E MyTag: first: failure
+
+06-26 12:00:01.456  4321  8765 I MyTag: second process
+`)
+    )
+
+    await expect(captureAndroidLogcat(runner, SDK, 'emulator-5554')).resolves.toEqual([
+      { message: '--------- beginning of main' },
+      {
+        timestamp: '06-26 12:00:00.123',
+        pid: 1234,
+        tid: 5678,
+        level: 'E',
+        tag: 'MyTag',
+        message: 'first: failure'
+      },
+      {
+        timestamp: '06-26 12:00:01.456',
+        pid: 4321,
+        tid: 8765,
+        level: 'I',
+        tag: 'MyTag',
+        message: 'second process'
+      }
+    ])
+  })
+})
 
 function runnerReturning(map: Record<string, AndroidCommandResult>): AndroidCommandRunner {
   return (async (_binary: string, args: readonly string[]) =>
