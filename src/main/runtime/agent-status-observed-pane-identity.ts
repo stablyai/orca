@@ -7,7 +7,7 @@ import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server
 import type { OrcaRuntimeService } from './orca-runtime'
 
 type ObservedStatusRuntime = AgentStatusRuntimeEnrichment &
-  Partial<Pick<OrcaRuntimeService, 'recordCliWriterConversation'>>
+  Partial<Pick<OrcaRuntimeService, 'recordCliWriterConversation' | 'observeAgentSenderHook'>>
 
 /** Bounded like the hook server's own per-pane maps; eviction only degrades a row to `unobserved`. */
 const MAX_OBSERVED_PANES = 1024
@@ -70,6 +70,7 @@ export function recordObservedAgentStatusPaneIdentity(
 ): void {
   runtime?.recordCliWriterConversation?.(event)
   const binding = resolveAgentStatusBinding(event.paneKey, runtime)
+  runtime?.observeAgentSenderHook?.(event, binding.kind === 'worker' ? binding.dispatchId : null)
   identities.record(
     event.paneKey,
     binding.kind === 'unresolved'

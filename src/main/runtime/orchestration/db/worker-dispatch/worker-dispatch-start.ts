@@ -190,6 +190,7 @@ export function createStartingWorkerDispatch(
       followUpOfDispatchId: params.followUpOf ?? null,
       ...recordedCreatorIdentity(params.creator)
     })
+    this.recordDispatchCreatorIdentity(id, params.creator)
     this.db
       .prepare(
         `INSERT INTO worker_dispatches (

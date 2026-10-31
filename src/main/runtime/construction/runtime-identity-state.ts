@@ -68,7 +68,6 @@ import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualif
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
-  abstract getE2EEPublicKey(): string | null
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
   protected readonly runtimeId = randomUUID()
 

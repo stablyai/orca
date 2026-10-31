@@ -86,7 +86,6 @@ let cache:
       source: AppState['agentSenderPublicationsByHost']
       aliasesKey: string
       index: Map<string, LocatedAgentSender | null>
-      hosts: Set<string>
     }
   | undefined
 let builds = 0
@@ -156,11 +155,9 @@ function senderIndex(state: AppState) {
   }
   builds++
   const index = new Map<string, LocatedAgentSender | null>()
-  const hosts = new Set<string>()
   const publications = Object.entries(state.agentSenderPublicationsByHost ?? EMPTY)
   const execution = new Map<string, { host: string; publication: AgentSenderPublication }[]>()
   for (const [host, scopes] of publications) {
-    hosts.add(host)
     for (const publication of scopes['*'] ? [scopes['*']] : Object.values(scopes)) {
       if (publication.peerFingerprint) {
         const bucket = execution.get(publication.peerFingerprint) ?? []
@@ -188,7 +185,7 @@ function senderIndex(state: AppState) {
           const principal = key(peer, row.homePeerFingerprint)
           const bucket = attachments.get(principal) ?? new Map()
           attachments.set(principal, bucket)
-          unique(bucket, row.address, location)
+          unique(bucket, row.identity, location)
         }
       }
     }
@@ -200,7 +197,7 @@ function senderIndex(state: AppState) {
         visits++
         const location = locate(host, row)
         if (location) {
-          unique(index, key(host, row.address), location)
+          unique(index, key(host, row.identity), location)
         }
       }
     }
@@ -211,12 +208,12 @@ function senderIndex(state: AppState) {
       )
     )
     for (const principal of principals) {
-      for (const [address, location] of attachments.get(principal) ?? []) {
+      for (const [identity, location] of attachments.get(principal) ?? []) {
         visits++
         if (location) {
-          unique(index, key(host, address), location)
+          unique(index, key(host, identity), location)
         } else {
-          index.set(key(host, address), null)
+          index.set(key(host, identity), null)
         }
       }
     }
@@ -247,13 +244,72 @@ function senderIndex(state: AppState) {
       index.set(id, previous)
     }
   }
-  cache = { inputs, source: state.agentSenderPublicationsByHost, aliasesKey, index, hosts }
+  cache = { inputs, source: state.agentSenderPublicationsByHost, aliasesKey, index }
   return cache
+}
+
+/** What a card's sender is on its host now; avatar, label and click all read this one answer. */
+export type AgentSenderResolution =
+  | { kind: 'located'; location: LocatedAgentSender }
+  /** Two hosts or rows claim it: no live link, and never a guess between them. */
+  | { kind: 'ambiguous' }
+  /** Its identity is known but runs nowhere visible; a chat can still be reopened by its session. */
+  | { kind: 'gone'; chat: boolean }
+  /** A card saved without an identity the host can prove (written before sender records). */
+  | { kind: 'unproved' }
+  /** The host publishes nothing: an older Orca, read through its own lookup. */
+  | { kind: 'legacy' }
+
+/** Switch point for unproved senders' clicks (product decision): 'unavailable' says the agent is no
+ *  longer available; 'legacy-lookup' asks the host's old lookup, which may find a replacement. */
+export const UNPROVED_SENDER_CLICK: 'unavailable' | 'legacy-lookup' = 'unavailable'
+
+const AMBIGUOUS: AgentSenderResolution = Object.freeze({ kind: 'ambiguous' })
+const UNPROVED: AgentSenderResolution = Object.freeze({ kind: 'unproved' })
+const LEGACY: AgentSenderResolution = Object.freeze({ kind: 'legacy' })
+
+/** The identities a card names its sender by, most specific first: the Dispatch a Started-worker
+ *  card records, the identity saved when Orca accepted the event, the chat session, a federated
+ *  Dispatch address. A terminal handle alone is never one: handles outlive their agents. */
+function senderIdentities(sender: AgentMessageSender, dispatchId: string | undefined): string[] {
+  const { address, orcaSessionId } = sender.party
+  return [
+    dispatchId ? `dispatch:${dispatchId}` : undefined,
+    sender.identity,
+    orcaSessionId ? `orca_session_id:${orcaSessionId}` : undefined,
+    address.startsWith('dispatch:') ? address : undefined
+  ].filter((identity): identity is string => Boolean(identity))
+}
+
+/** Undefined publication is old-host compatibility; an authoritative miss never falls back. */
+export function resolveAgentMessageSender(
+  state: AppState,
+  host: string,
+  sender: AgentMessageSender,
+  dispatchId?: string
+): AgentSenderResolution {
+  if (!state.agentSenderPublicationsByHost?.[host]) {
+    return LEGACY
+  }
+  const { index } = senderIndex(state)
+  const identities = senderIdentities(sender, dispatchId)
+  for (const identity of identities) {
+    const location = index.get(key(host, identity))
+    if (location === null) {
+      return AMBIGUOUS
+    }
+    if (location) {
+      return { kind: 'located', location }
+    }
+  }
+  return identities.length === 0
+    ? UNPROVED
+    : { kind: 'gone', chat: Boolean(sender.party.orcaSessionId) }
 }
 
 /** Undefined publication is old-host compatibility; an authoritative miss never falls back. */
 export function hasAgentSenderPublication(state: AppState, host: string): boolean {
-  return senderIndex(state).hosts.has(host)
+  return Boolean(state.agentSenderPublicationsByHost?.[host])
 }
 export function selectAgentSenderAssociation(
   state: AppState,
@@ -261,17 +317,6 @@ export function selectAgentSenderAssociation(
   sender: AgentMessageSender,
   dispatchId?: string
 ): LocatedAgentSender | undefined {
-  const { index } = senderIndex(state)
-  return (
-    (dispatchId ? index.get(key(host, `dispatch:${dispatchId}`)) : undefined) ??
-    index.get(
-      key(
-        host,
-        sender.party.orcaSessionId
-          ? `orca_session_id:${sender.party.orcaSessionId}`
-          : sender.party.address
-      )
-    ) ??
-    undefined
-  )
+  const resolution = resolveAgentMessageSender(state, host, sender, dispatchId)
+  return resolution.kind === 'located' ? resolution.location : undefined
 }

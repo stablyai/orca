@@ -1,3 +1,4 @@
+import type { EnrichedAgentHookEventPayload } from '../../agent-hooks/server/server-types'
 import type { OrcaRuntimeWithGetTerminalInteractiveWait as GetTerminalInteractiveWaitMethods } from '../terminal/wait/terminal-interactive-wait'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -15,6 +16,30 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
   abstract getTerminalWorktreeIdForPaneKey(
     ...args: Parameters<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
   ): ReturnType<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
+
+  /** A hook names its pane's conversation; sender bookkeeping never fails the hook. */
+  setAgentSenderPeerKey(read: () => string | null): void {
+    this.agentProjections.setPeerKey(read)
+  }
+
+  observeAgentSenderHook(event: EnrichedAgentHookEventPayload, dispatchId: string | null): void {
+    const agent = event.payload.agentType
+    const session = event.providerSession?.id
+    if (event.structuredHost || !agent || !session) {
+      return
+    }
+    try {
+      this.agentProjections.senders.observeHook(this.getOrchestrationDbIfAvailable(), {
+        paneKey: event.paneKey,
+        agent,
+        session,
+        process: event.agentPresence?.process,
+        dispatchId
+      })
+    } catch (error) {
+      console.warn('[runtime] Sender conversation observation failed', error)
+    }
+  }
 
   /** Republish only worktrees whose sender scope differs from the one their last frame carried. */
   refreshAgentSenderAssociations(): void {

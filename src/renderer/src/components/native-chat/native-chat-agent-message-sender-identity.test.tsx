@@ -225,7 +225,13 @@ it.each([false, true])(
     const link = screen.getByText('Original sender')
     expect(link).toBeInTheDocument()
     fireEvent.click(link)
-    expect(openAgentMessageSender).toHaveBeenCalledWith(from, from.senders[0], RECIPIENT)
+    expect(openAgentMessageSender).toHaveBeenCalledWith(
+      from,
+      from.senders[0],
+      RECIPIENT,
+      undefined,
+      undefined
+    )
     expect(feeds.get('local')!.activations).toBe(0)
   }
 )
@@ -237,7 +243,7 @@ it('uses the same published /clear successor for the live sender label', () => {
   useAppStore.getState().setAgentSenderPublication('local', {
     associations: [
       {
-        address: `orca_session_id:${ROOT}`,
+        identity: `orca_session_id:${ROOT}`,
         sessionId: live,
         paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(live), live),
         worktreeId: SENDER

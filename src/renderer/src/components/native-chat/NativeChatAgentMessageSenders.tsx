@@ -44,7 +44,7 @@ export function NativeChatAgentMessageSenders({
         <span className={queued ? 'px-2' : 'px-2.5'}>{unnamedSenderLabel()}</span>
       ) : null}
       {shown.map((sender, index) => (
-        <Fragment key={sender.party.address}>
+        <Fragment key={JSON.stringify([sender.party.address, sender.identity])}>
           <SenderName
             dispatchId={dispatchId}
             from={from}
@@ -97,11 +97,7 @@ function SenderName({
       title={
         queued ? label : translate('components.native-chat.agentMessage.goToAgent', 'Go to agent')
       }
-      onClick={() =>
-        void (target
-          ? openAgentMessageSender(from, sender, chatWorktreeId, target)
-          : openAgentMessageSender(from, sender, chatWorktreeId))
-      }
+      onClick={() => void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId)}
     >
       <span className="max-w-48 truncate">{label}</span>
       {!queued ? <ArrowUpRight className="size-3" aria-hidden /> : null}

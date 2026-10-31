@@ -32,6 +32,8 @@ class OrchestrationDbCore {
   workerTerminalAutoReleaseListener: (() => void) | undefined
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
+  /** The runtime's sender identity for a terminal address and pane, read when Orca accepts the event. */
+  agentSenderIdentityOf: ((address: string, paneKey: string | null) => string | null) | undefined
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)

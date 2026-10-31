@@ -9,13 +9,14 @@ import type { RuntimeConstructionServices } from './runtime-construction-service
 type SenderHost = Pick<
   RuntimeConstructionServices,
   'getExistingOrchestrationDb' | 'resolveOrchestrationWorkerServer'
-> & { getE2EEPublicKey(): string | null }
+>
 
 export function createRuntimeAgentProjections(
   host: SenderHost,
   dependencies: RuntimeAgentOrchestrationDependencies
 ) {
   let historyChecked = false
+  let peerKey: () => string | null = () => null
   const senders = new RuntimeAgentSenderAssociations({
     ...dependencies,
     getDb: () => {
@@ -33,7 +34,7 @@ export function createRuntimeAgentProjections(
       }
     },
     peerFingerprint: () => {
-      const key = host.getE2EEPublicKey()
+      const key = peerKey()
       return key ? fingerprintOrchestrationPeer(key) : undefined
     },
     principal: (environmentId) => {
@@ -46,5 +47,12 @@ export function createRuntimeAgentProjections(
       }
     }
   })
-  return { orchestration: new RuntimeAgentOrchestrationProjection(dependencies), senders }
+  return {
+    orchestration: new RuntimeAgentOrchestrationProjection(dependencies),
+    senders,
+    /** The RPC server owns the pairing key clients authenticate this host by. */
+    setPeerKey: (read: () => string | null) => {
+      peerKey = read
+    }
+  }
 }

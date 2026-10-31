@@ -49,6 +49,7 @@ export function resetAll(this: OrchestrationDb): void {
     DELETE FROM tasks;
     DELETE FROM messages;
     DELETE FROM run_coordinator_handles;
+    DELETE FROM agent_sender_identities;
     DELETE FROM runs;
     DELETE FROM removed_orchestration_work;
     INSERT INTO runs (id, objective, home_database, consumer_generation, legacy)
@@ -80,6 +81,7 @@ export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined 
     DELETE FROM worker_dispatches;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;
+    DELETE FROM agent_sender_identities WHERE subject NOT LIKE 'message:%';
   `)
   this.hasAnyDispatchContextsCache = undefined
   return summarizeRemovedWorkSince(this.db, watermark)
@@ -92,6 +94,7 @@ export function resetMessages(this: OrchestrationDb): void {
     DELETE FROM question_threads;
     DELETE FROM deliveries;
     DELETE FROM messages;
+    DELETE FROM agent_sender_identities WHERE subject LIKE 'message:%';
     DELETE FROM structured_pointer_operations;
   `)
 }

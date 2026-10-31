@@ -15,6 +15,8 @@ export type AgentMessageSender = Readonly<{
   name: string | null
   /** Its agent when Orca wrote, so the card keeps its icon once the agent is gone; absent when unknown. */
   agent?: AgentType
+  /** Who sent it, as the storing host captured when it accepted the event; never a pane or handle. */
+  identity?: string
   relation?: 'worker' | 'coordinator' | 'none'
 }>
 
@@ -61,6 +63,9 @@ export function agentMessageSenderName(value: unknown): string | null {
   return normalizeAgentSessionConversationName(value)
 }
 
+/** Host identity keys are short prefixed digests or ids; anything longer is not one. */
+const AGENT_SENDER_IDENTITY_MAX_LENGTH = 256
+
 const orcaSessionIdSchema = z.custom<OrcaSessionId>(
   (value) => typeof value === 'string' && isOrcaSessionId(value)
 )
@@ -87,6 +92,7 @@ const senderSchema = z.object({
   }),
   // Any bounded string: a kind a newer build knows still draws as its first letter.
   agent: salvagedOptional('agent', z.string().min(1).max(AGENT_TYPE_MAX_LENGTH)),
+  identity: salvagedOptional('identity', z.string().min(1).max(AGENT_SENDER_IDENTITY_MAX_LENGTH)),
   relation: salvagedOptional('relation', z.enum(['worker', 'coordinator', 'none'])),
   name: z.unknown().transform(agentMessageSenderName)
 })

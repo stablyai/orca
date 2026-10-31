@@ -12,8 +12,8 @@ import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 
 const conversationNames = vi.hoisted(() => new Map<string, string>())
 vi.mock('@/runtime/structured-conversation-name', () => ({
-  useStructuredChatTabConversationName: (tab: { entityId: string } | undefined) =>
-    (tab && conversationNames.get(tab.entityId)) ?? null
+  useStructuredConversationName: (_host: string | null, sessionId: string | null | undefined) =>
+    (sessionId && conversationNames.get(sessionId)) ?? null
 }))
 vi.mock('@/lib/open-agent-message-sender', () => ({ openAgentMessageSender: vi.fn() }))
 

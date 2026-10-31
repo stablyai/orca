@@ -29,15 +29,21 @@ const publication = (
   associations: AgentSenderPublication['associations'] = []
 ): AgentSenderPublication => ({ associations, principals: [], attachments: [] })
 const association = (i: number) => ({
-  address: `term_${i}`,
+  identity: `conversation:${i}`,
   paneKey: status(i).paneKey,
   worktreeId: 'workspace'
 })
-const sender = (address: string): AgentMessageSender => ({
-  party: { address, terminalHandle: address, orcaSessionId: null },
-  name: 'Sender',
-  agent: 'codex'
-})
+// A federated sender is named by its Dispatch address; any other by the identity saved with it.
+const sender = (identity: string): AgentMessageSender =>
+  identity.startsWith('dispatch:')
+    ? { party: { address: identity, terminalHandle: null, orcaSessionId: null }, name: 'Sender' }
+    : {
+        party: { address: 'term_sender', terminalHandle: 'term_sender', orcaSessionId: null },
+        identity,
+        name: 'Sender',
+        agent: 'codex'
+      }
+const proved = { ...from.senders[0], identity: 'conversation:0' }
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(2_000_000)
@@ -58,9 +64,7 @@ it('finds title/process-only terminal rows and uses their sidebar dot before a h
     runtimePaneTitlesByTabId: { 'tab-0': { 1: '✳ Claude Code' } }
   })
   useAppStore.getState().setAgentSenderPublication('local', publication([association(0)]))
-  const hook = renderHook(() =>
-    useAgentMessageSenderView(from.senders[0], 'workspace', { kind: 'local' })
-  )
+  const hook = renderHook(() => useAgentMessageSenderView(proved, 'workspace', { kind: 'local' }))
   expect(hook.result.current).toMatchObject({ agentType: 'claude', dot: 'idle' })
 })
 it('finds a chat before tab hydration and follows its canonical /clear successor', () => {
@@ -77,7 +81,7 @@ it('finds a chat before tab hydration and follows its canonical /clear successor
     .setAgentSenderPublication(
       'local',
       publication([
-        { address: `orca_session_id:${root}`, paneKey, worktreeId: 'workspace', sessionId: live }
+        { identity: `orca_session_id:${root}`, paneKey, worktreeId: 'workspace', sessionId: live }
       ])
     )
   const hook = renderHook(() =>
@@ -98,7 +102,7 @@ it('resolves Started-worker dispatches after restart; old-host absence and autho
     .getState()
     .setAgentSenderPublication(
       'local',
-      publication([{ ...association(0), address: 'dispatch:worker' }])
+      publication([{ ...association(0), identity: 'dispatch:worker' }])
     )
   const hook = renderHook(() =>
     useAgentMessageSenderView(saved, 'workspace', { kind: 'local' }, 'worker')
@@ -126,7 +130,7 @@ it('qualifies federation by both execution peer and the attachment home principa
           ...publication(),
           peerFingerprint: 'execution',
           attachments: [
-            { ...association(0), address: 'dispatch:same', homePeerFingerprint: 'home-b' }
+            { ...association(0), identity: 'dispatch:same', homePeerFingerprint: 'home-b' }
           ]
         }
       }
@@ -139,16 +143,22 @@ it('qualifies federation by both execution peer and the attachment home principa
     agentSenderPublicationPatch(useAppStore.getState(), 'runtime:remote', 'workspace', {
       ...publication(),
       peerFingerprint: 'execution',
-      attachments: [{ ...association(0), address: 'dispatch:same', homePeerFingerprint: 'home-a' }]
+      attachments: [{ ...association(0), identity: 'dispatch:same', homePeerFingerprint: 'home-a' }]
     })
   )
   expect(read()?.host).toBe('runtime:remote')
+  // The home's card draws the dot of the worker running on its paired host.
+  expect(
+    renderHook(() =>
+      useAgentMessageSenderView(sender('dispatch:same'), 'workspace', { kind: 'local' })
+    ).result.current.dot
+  ).toBe('working')
   // The same execution peer reached as a second host makes the match ambiguous, not a pick.
   useAppStore.setState(
     agentSenderPublicationPatch(useAppStore.getState(), 'runtime:other', 'workspace', {
       ...publication(),
       peerFingerprint: 'execution',
-      attachments: [{ ...association(1), address: 'dispatch:same', homePeerFingerprint: 'home-a' }]
+      attachments: [{ ...association(1), identity: 'dispatch:same', homePeerFingerprint: 'home-a' }]
     })
   )
   expect(read()).toBeUndefined()
@@ -166,12 +176,16 @@ it('a worktree removal frame drops only its own scope and keeps the host authori
   })
   const apply = (snapshot: Parameters<typeof applyWebSessionTabsSnapshot>[1]) =>
     useAppStore.setState(applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, 'remote'))
-  const worker = { ...association(0), address: 'worker', worktreeId: 'w3' }
+  const worker = { ...association(0), identity: 'conversation:worker', worktreeId: 'w3' }
   apply(frame('w2', publication()))
   apply(frame('w3', publication([worker])))
   apply({ ...frame('w1', publication([{ ...association(1), worktreeId: 'w1' }])) })
   const located = () =>
-    selectAgentSenderAssociation(useAppStore.getState(), 'runtime:remote', sender('worker'))
+    selectAgentSenderAssociation(
+      useAppStore.getState(),
+      'runtime:remote',
+      sender('conversation:worker')
+    )
   expect(located()?.worktreeId).toBe('w3')
   apply({ ...frame('w1'), removed: true } as Parameters<typeof applyWebSessionTabsSnapshot>[1])
   apply(frame('w2', publication()))
@@ -183,7 +197,7 @@ it('a worktree removal frame drops only its own scope and keeps the host authori
   apply(frame('w2'))
   apply({ ...frame('w3'), removed: true } as Parameters<typeof applyWebSessionTabsSnapshot>[1])
   const view = renderHook(() =>
-    useAgentMessageSenderView(sender('worker'), 'w2', {
+    useAgentMessageSenderView(sender('conversation:worker'), 'w2', {
       kind: 'environment',
       environmentId: 'remote'
     })
@@ -209,7 +223,7 @@ it('a located chat keeps its tab agent icon for a card saved without one', () =>
     .setAgentSenderPublication(
       'local',
       publication([
-        { address: `orca_session_id:${sessionId}`, paneKey, worktreeId: 'workspace', sessionId }
+        { identity: `orca_session_id:${sessionId}`, paneKey, worktreeId: 'workspace', sessionId }
       ])
     )
   const { agent: _saved, ...unsaved } = sender(`orca_session_id:${sessionId}`)
@@ -238,15 +252,24 @@ it('receives an authoritative remote publication on the same snapshot path as re
     activeTabId: null,
     activeTabType: null,
     tabs: [],
-    agentSenderAssociations: publication([{ ...association(0), address: 'same-session' }])
+    agentSenderAssociations: publication([
+      { ...association(0), identity: 'conversation:same-session' }
+    ])
   } as const
   useAppStore.setState(applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, 'remote'))
   expect(
-    selectAgentSenderAssociation(useAppStore.getState(), 'runtime:remote', sender('same-session'))
-      ?.host
+    selectAgentSenderAssociation(
+      useAppStore.getState(),
+      'runtime:remote',
+      sender('conversation:same-session')
+    )?.host
   ).toBe('runtime:remote')
   expect(
-    selectAgentSenderAssociation(useAppStore.getState(), 'local', sender('same-session'))
+    selectAgentSenderAssociation(
+      useAppStore.getState(),
+      'local',
+      sender('conversation:same-session')
+    )
   ).toBeUndefined()
 })
 it.each([100, 1000])(
@@ -272,11 +295,12 @@ it.each([100, 1000])(
     let renders = 0
     const hook = renderHook(() => {
       renders++
-      return useAgentMessageSenderView(from.senders[0], 'workspace', { kind: 'local' })
+      return useAgentMessageSenderView(proved, 'workspace', { kind: 'local' })
     })
     for (let i = 0; i < n; i++) {
       expect(
-        selectAgentSenderAssociation(useAppStore.getState(), 'local', sender(`term_${i}`))?.paneKey
+        selectAgentSenderAssociation(useAppStore.getState(), 'local', sender(`conversation:${i}`))
+          ?.paneKey
       ).toBe(status(i).paneKey)
     }
     expect(agentSenderIndexWorkForTest()).toEqual({
@@ -313,7 +337,7 @@ it.each([100, 1000])(
           useAppStore.getState(),
           'runtime:other',
           'other',
-          publication([{ address: 'unrelated', paneKey: 'other', worktreeId: 'other' }])
+          publication([{ identity: 'unrelated', paneKey: 'other', worktreeId: 'other' }])
         )
       )
     )
@@ -356,7 +380,7 @@ it('keeps equal session ids on two hosts separate and rejects an unqualified pan
     }
   }
   const row = {
-    address: identity.party.address,
+    identity: identity.party.address,
     paneKey: 'canonical',
     sessionId,
     worktreeId: 'workspace'

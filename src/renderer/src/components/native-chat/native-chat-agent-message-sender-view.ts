@@ -19,6 +19,7 @@ export function useAgentMessageSenderView(
   const address = sender?.party.address
   const sessionId = sender?.party.orcaSessionId
   const handle = sender?.party.terminalHandle
+  const savedIdentity = sender?.identity
   const targetKind = target?.kind
   const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
   const stableTarget = useMemo<RuntimeClientTarget | undefined>(
@@ -37,7 +38,8 @@ export function useAgentMessageSenderView(
       }
       const identity = {
         party: { address, orcaSessionId: sessionId ?? null, terminalHandle: handle ?? null },
-        name: null
+        name: null,
+        ...(savedIdentity ? { identity: savedIdentity } : {})
       }
       const owner = agentMessageSenderOwner(state, chatWorktreeId, stableTarget)
       if (!owner) {
@@ -50,7 +52,7 @@ export function useAgentMessageSenderView(
       // A located chat's own tab names its agent for cards saved before the agent kind was.
       return located && { ...located, agentType: located.tab?.agentSessionAgent }
     },
-    [address, sessionId, handle, chatWorktreeId, stableTarget, dispatchId]
+    [address, sessionId, handle, savedIdentity, chatWorktreeId, stableTarget, dispatchId]
   )
   return useAgentMessageSenderSource(locate, sender?.agent)
 }

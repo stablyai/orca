@@ -1,4 +1,4 @@
-// Open the sender through chat or terminal-handle routes; choose feedback from the answering host’s evidence, never the sender’s address shape.
+// Open the sender the card resolved; an older host's lookup chooses feedback from its own evidence, never the sender's address shape.
 
 import { toast } from 'sonner'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
@@ -23,6 +23,14 @@ import {
 } from './activate-ai-vault-structured-session'
 import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
 import {
+  resolveAgentMessageSender,
+  UNPROVED_SENDER_CLICK,
+  type LocatedAgentSender
+} from '@/runtime/agent-sender-associations'
+import { agentMessageSenderOwner } from '@/components/native-chat/native-chat-agent-message-sender-label'
+import { activateWorktreeAgentPane } from '@/components/sidebar/use-worktree-agent-activation'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
+import {
   executionHostIdForStructuredTarget,
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,
@@ -44,14 +52,32 @@ const TERMINAL_GONE_CODES = new Set([
 
 const opensInFlight = new Map<string, Promise<void>>()
 
-/** Route all sender lookups to the host of the chat displaying the message. */
+/** Open what the card's own sender resolution names; only an older host, or a chat the host can
+ *  still reopen, goes back to the host lookup. */
 export function openAgentMessageSender(
   source: AgentMessageSource,
   sender: Sender,
   chatWorktreeId: string,
-  target?: RuntimeClientTarget
+  target?: RuntimeClientTarget,
+  dispatchId?: string
 ): Promise<void> {
   const state = useAppStore.getState()
+  const owner = agentMessageSenderOwner(state, chatWorktreeId, target)
+  // Read at click time, so a stale render cannot open what the host has since rejected.
+  const resolution = owner
+    ? resolveAgentMessageSender(state, owner, sender, dispatchId)
+    : { kind: 'legacy' as const }
+  if (resolution.kind === 'located') {
+    return openLocatedSender(resolution.location)
+  }
+  const hostLookup =
+    resolution.kind === 'legacy' ||
+    (resolution.kind === 'gone' && resolution.chat) ||
+    (resolution.kind === 'unproved' && UNPROVED_SENDER_CLICK === 'legacy-lookup')
+  if (!hostLookup) {
+    showAgentPaneUnavailable()
+    return Promise.resolve()
+  }
   const host =
     target ??
     (getKnownExecutionHostIdForWorktree(state, chatWorktreeId)
@@ -63,7 +89,7 @@ export function openAgentMessageSender(
     showLookupFailure('unreachable')
     return Promise.resolve()
   }
-  const key = `${executionHostIdForStructuredTarget(host)}\0${chatWorktreeId}\0${sender.party.address}`
+  const key = `${executionHostIdForStructuredTarget(host)}\0${chatWorktreeId}\0${sender.party.address}\0${dispatchId ?? ''}`
   const inFlight = opensInFlight.get(key)
   if (inFlight) {
     return inFlight
@@ -77,6 +103,28 @@ export function openAgentMessageSender(
     .finally(() => opensInFlight.delete(key))
   opensInFlight.set(key, opening)
   return opening
+}
+
+/** The located pane or chat itself, through the same activation its sidebar row uses. */
+async function openLocatedSender(location: LocatedAgentSender): Promise<void> {
+  if (location.sessionId) {
+    const host = structuredAgentSessionTargetForHost(location.host)
+    if (!host) {
+      showLookupFailure('unreachable')
+      return
+    }
+    const session = {
+      structuredSession: { workspaceId: location.worktreeId, sessionId: location.sessionId }
+    }
+    await activateAiVaultStructuredSession(session, undefined, host)
+    return
+  }
+  const tabId = parsePaneKey(location.paneKey)?.tabId
+  if (!tabId) {
+    showAgentPaneUnavailable()
+    return
+  }
+  activateWorktreeAgentPane(location.worktreeId, tabId, location.paneKey)
 }
 
 async function openSender(
