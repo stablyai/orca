@@ -28,10 +28,6 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
       if (signal?.aborted) {
         return
       }
-      // A pane a switch stopped is gone for good: the definitive exit, with no mount or PTY wait.
-      if (runtime.isStoppedSwitchSourceHandle?.(params.terminal)) {
-        throw new Error('terminal_exited')
-      }
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const serializerGenerationBeforeAnyMount = isMobile
         ? (runtime.getRendererTerminalSerializerGenerationForHandle?.(params.terminal) ?? 0)

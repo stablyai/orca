@@ -9,6 +9,7 @@ import type { RpcContext } from '../core'
 import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
 import { projectSessionTabFileHosts } from './session-tab-file-host-projection'
+import { projectSessionTabStoppedSources } from './session-tab-stopped-source-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
@@ -33,7 +34,11 @@ export function projectSessionTabsForClient(
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabBrowserPlacements(
     projectSessionTabFileHosts(
-      projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+      projectSessionTabAgentStatus(
+        projectSessionTabStoppedSources(snapshot, clientKind),
+        clientKind,
+        clientCapabilities
+      ),
       clientKind
     ),
     clientCapabilities

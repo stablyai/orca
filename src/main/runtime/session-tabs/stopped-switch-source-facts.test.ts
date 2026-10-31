@@ -10,9 +10,6 @@ import {
   sendDesktopMultiplexSubscribe,
   startDesktopMultiplexSubscribe
 } from '../rpc/terminal-multiplex-test-harness'
-import { RpcDispatcher } from '../rpc/dispatcher'
-import { TERMINAL_METHODS } from '../rpc/methods/terminal'
-import type { OrcaRuntimeService } from '../orca-runtime'
 
 const pane = { worktreeId: 'w', tabId: 'tab', leafId: 'leaf' }
 const fact = (agent: 'claude' | 'codex'): StoppedSwitchSourceFact => ({
@@ -125,42 +122,4 @@ it('answers an attach to a stopped source with the definitive exit', async () =>
   )
   expect(harness.messages.join('\n')).toContain('terminal_exited')
   expect(resolveLiveLeafForHandle).not.toHaveBeenCalled()
-})
-
-it('answers a phone or legacy subscribe to a stopped source with the definitive exit, mounting nothing', async () => {
-  const runtime = {
-    getRuntimeId: () => 'test-runtime',
-    isStoppedSwitchSourceHandle: (handle: string) => handle === 'terminal-1',
-    resolveLeafForHandle: vi.fn(),
-    requestRendererTerminalTabMount: vi.fn(() => true),
-    waitForLeafPtyId: vi.fn()
-  }
-  const dispatcher = new RpcDispatcher({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the refusal reads only these runtime members.
-    runtime: runtime as unknown as OrcaRuntimeService,
-    methods: TERMINAL_METHODS
-  })
-  const sent: string[] = []
-  await dispatcher.dispatchStreaming(
-    {
-      id: 'req-1',
-      authToken: 'tok',
-      method: 'terminal.subscribe',
-      params: {
-        terminal: 'terminal-1',
-        client: { id: 'phone-1', type: 'mobile' },
-        capabilities: { terminalBinaryStream: 1 }
-      }
-    },
-    (message) => sent.push(message),
-    {
-      connectionId: 'conn-phone',
-      sendBinary: vi.fn(),
-      registerBinaryStreamHandler: vi.fn(() => vi.fn())
-    }
-  )
-  expect(sent.join('\n')).toContain('terminal_exited')
-  expect(runtime.resolveLeafForHandle).not.toHaveBeenCalled()
-  expect(runtime.requestRendererTerminalTabMount).not.toHaveBeenCalled()
-  expect(runtime.waitForLeafPtyId).not.toHaveBeenCalled()
 })
