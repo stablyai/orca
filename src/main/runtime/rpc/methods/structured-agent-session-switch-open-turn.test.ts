@@ -244,3 +244,52 @@ it.each([
     expect(prepare).toHaveBeenCalledTimes(fromStart ? 0 : 1)
   }
 )
+
+it('reads the process table for a paused agent while the transcript is prepared, not after', async () => {
+  await openCliTurn()
+  const { runtime } = setupMainOwnedWorkspace()
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
+  if (!source.presentation) {
+    throw new Error('missing captured source')
+  }
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => false,
+    stopAndWait: vi.fn(async () => false),
+    getForegroundProcess: async () => 'codex'
+  })
+  // The read answers only once preparation has begun: a read awaited first would never finish.
+  let answerRead: (paused: boolean) => void = () => {}
+  vi.spyOn(runtime, 'terminalAgentPaused').mockReturnValue(
+    new Promise((resolve) => {
+      answerRead = resolve
+    })
+  )
+  const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
+  const readable = prepare.getMockImplementation()!
+  prepare.mockImplementation(async (...args) => {
+    answerRead(true)
+    return readable(...args)
+  })
+  const answer = await executeStructuredSessionSwitch(
+    {
+      sessionId: id,
+      execution: {
+        invocationId: 'paused-read-overlaps',
+        source: {
+          terminal: source.handle,
+          expectedIncarnationId: incarnationId,
+          originalPresentation: source.presentation
+        }
+      }
+    },
+    { runtime },
+    'chat'
+  )
+  expect(answer).toMatchObject({
+    status: 'refused',
+    refusal: { details: { reason: 'agentPaused' } }
+  })
+})
