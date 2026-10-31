@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
   return { source, resolve: vi.fn(), run: vi.fn(), pending: false }
 })
 vi.mock('../tab-bar/cli-chat-resume-source', () => ({
-  useCliChatResumeCapability: (_worktreeId: string, agent: string) => agent === 'codex',
+  useCliChatResumeCapability: (_worktreeId: string, agent: string) => agent !== 'omp',
   resolveCliChatResumeSource: (_state: unknown, args: unknown) => {
     mocks.resolve(args)
     return mocks.source
@@ -47,7 +47,9 @@ beforeEach(() => {
 
 it.each([
   ['claude', 'Switch to Chat UI'],
-  ['codex', 'Switch to Chat UI']
+  ['codex', 'Switch to Chat UI'],
+  // The route that opens the chat beside the pane keeps main's label.
+  ['omp', 'Continue in Chat UI']
 ] as const)('offers the %s action for the exact pane and shares pending', (agent, label) => {
   mocks.source.agent = agent
   if (agent === 'claude') {

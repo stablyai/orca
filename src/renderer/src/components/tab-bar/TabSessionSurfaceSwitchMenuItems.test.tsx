@@ -50,7 +50,7 @@ vi.mock('./tab-session-history-switch', async (importOriginal) => ({
 }))
 
 vi.mock('./cli-chat-resume-source', () => ({
-  useCliChatResumeCapability: (_worktreeId: string, agent: string) => agent === 'codex',
+  useCliChatResumeCapability: (_worktreeId: string, agent: string) => agent !== 'omp',
   resolveCliChatResumeSource: () => mocks.cliSource
 }))
 vi.mock('@/lib/conversation-surface-switch', () => ({
@@ -150,7 +150,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     mocks.subject = CHAT_SUBJECT
     renderItemsNow('orca-chat-1', 'omp')
     expect(screen.queryByRole('menuitem', { name: 'Switch to CLI' })).toBeNull()
-    fireEvent.click(screen.getByRole('menuitem'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' }))
     expect(mocks.runNativeChatCliFork).toHaveBeenCalledWith(
       expect.objectContaining({ subject: CHAT_SUBJECT, agent: 'omp' })
     )
@@ -174,6 +174,20 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     const item = screen.getByRole('menuitem', { name: 'Switch to CLI' })
     expect(item.getAttribute('data-disabled')).not.toBeNull()
     expect(mocks.runNativeChatCliFork).not.toHaveBeenCalled()
+  })
+
+  it("keeps main's label where the terminal's chat opens beside it", () => {
+    mocks.cliSource = {
+      tabId: 'tab-1',
+      workspaceId: 'wt-1',
+      paneKey: 'tab-1:leaf',
+      agent: 'omp',
+      providerSessionId: 'provider-1',
+      executionHostId: 'local'
+    }
+    renderItemsNow()
+    expect(screen.queryByRole('menuitem', { name: 'Switch to Chat UI' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: 'Continue in Chat UI' })).toBeTruthy()
   })
 
   it('offers and dispatches a CLI identity while History never answers', async () => {

@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
-import { resolveCliChatResumeSource } from './cli-chat-resume-source'
+import { resolveCliChatResumeSource, useCliChatResumeCapability } from './cli-chat-resume-source'
 
 export function CliChatResumeMenuItems({
   tab,
@@ -18,6 +18,7 @@ export function CliChatResumeMenuItems({
 }): React.JSX.Element | null {
   const source = useAppStore(useShallow((state) => resolveCliChatResumeSource(state, { tab })))
   const confirm = useConfirmationDialog()
+  const capability = useCliChatResumeCapability(tab.worktreeId, source?.agent)
   const readiness = useConversationSwitchReadiness(
     source ? { direction: 'chat', ...source, source } : null
   )
@@ -29,6 +30,7 @@ export function CliChatResumeMenuItems({
       {leadingSeparator ? <ContextMenuSeparator /> : null}
       <AiVaultSessionSurfaceSwitchMenuItems
         action="switch"
+        switchesInPlace={capability !== false}
         switchLoading={!readiness.ready}
         switchExplanation={readiness.explanation}
         menuKind="context"

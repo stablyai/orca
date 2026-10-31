@@ -24,7 +24,8 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
   session,
   originalPaneTarget,
   switchExplanation,
-  switchLoading = false
+  switchLoading = false,
+  switchesInPlace = inPlaceAgent !== undefined
 }: {
   session?: AiVaultSession
   originalPaneTarget?: AiVaultOriginalPaneTarget | null
@@ -39,6 +40,8 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
   /** The agent whose conversation switches in place on its host; unset keeps the new-tab entries. */
   switchLoading?: boolean
   inPlaceAgent?: AiVaultAgent
+  /** Whether a switch replaces in place; otherwise it opens beside the source, as main's Continue did. */
+  switchesInPlace?: boolean
 }): React.JSX.Element {
   const chat = useConversationSwitchReadiness(
     session ? historyConversationSwitch(session, 'chat', undefined, originalPaneTarget) : null
@@ -48,7 +51,7 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
   )
   const heldChat = session && inPlaceAgent ? chat : null
   const heldCli = session?.structuredSession && inPlaceAgent ? cli : null
-  const inPlace = inPlaceAgent !== undefined
+  const inPlace = switchesInPlace
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   return (
     <>
@@ -60,12 +63,17 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
           aria-busy={chatPending || undefined}
         >
           <MessagesSquare className="size-3.5" />
-          {action === 'resume' && !inPlace
-            ? translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-                'Resume in New Chat'
-              )
-            : translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')}
+          {inPlace
+            ? translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')
+            : action === 'resume'
+              ? translate(
+                  'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
+                  'Resume in New Chat'
+                )
+              : translate(
+                  'components.tab.bar.SortableTabContextMenu.continueInChatView',
+                  'Continue in Chat UI'
+                )}
         </Item>
       ) : null}
       {onResumeInNewCli ? (
@@ -84,10 +92,15 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
               )}
               {inPlace
                 ? translate('components.tab.bar.switch.toCli', 'Switch to CLI')
-                : translate(
-                    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-                    'Resume in New Terminal'
-                  )}
+                : action === 'resume'
+                  ? translate(
+                      'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
+                      'Resume in New Terminal'
+                    )
+                  : translate(
+                      'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
+                      'Continue with Terminal Agent'
+                    )}
             </Item>
           </TooltipTrigger>
           <TooltipContent side={tooltipSide} sideOffset={8}>

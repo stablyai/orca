@@ -121,7 +121,7 @@ export function conversationSwitchSourceKept(agent: AiVaultAgent): string {
 export function conversationSwitchUnsupportedText(agent: AiVaultAgent): string {
   return translate(
     'components.tab.bar.switch.hostCannotSwitch',
-    'Orca on this host cannot switch {{agent}} in place. Update Orca there, or open a copy with Continue with Terminal Agent.',
+    "Orca on this host cannot switch {{agent}} in place. Update Orca there, or open a copy with Continue with Terminal Agent in this tab's menu.",
     { agent: agentLabel(agent) }
   )
 }

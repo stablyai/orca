@@ -20678,7 +20678,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Продолжить с агентом в терминале",
-          "switchToChatView": "Продолжить в чате",
+          "continueInChatView": "Продолжить в чате",
+          "switchToChatView": "Показать как чат",
           "showAsTerminal": "Показать как терминал",
           "allowAutoClose": "Разрешить автоматическое закрытие"
         },

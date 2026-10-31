@@ -20052,6 +20052,7 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continuer avec l’agent de terminal",
+          "continueInChatView": "Continuer dans l’interface de chat",
           "switchToChatView": "Afficher en chat",
           "showAsTerminal": "Afficher en terminal",
           "allowAutoClose": "Autoriser la fermeture automatique"

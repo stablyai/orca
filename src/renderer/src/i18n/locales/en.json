@@ -20137,6 +20137,7 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continue with Terminal Agent",
+          "continueInChatView": "Continue in Chat UI",
           "switchToChatView": "Show as chat",
           "showAsTerminal": "Show as terminal",
           "allowAutoClose": "Allow Auto-Close"
@@ -20165,7 +20166,7 @@
           "sourceKept": "{{agent}} opened successfully. The original tab was kept; continue in the new tab.",
           "changeInProgress": "{{agent}} is still finishing another change to this conversation. Try again in a moment.",
           "conversationMissing": "Orca could not find this {{agent}} conversation. Open it from Session History, then try again.",
-          "hostCannotSwitch": "Orca on this host cannot switch {{agent}} in place. Update Orca there, or open a copy with Continue with Terminal Agent."
+          "hostCannotSwitch": "Orca on this host cannot switch {{agent}} in place. Update Orca there, or open a copy with Continue with Terminal Agent in this tab's menu."
         },
         "BrowserTab": {
           "closeOthers": "Close Others",

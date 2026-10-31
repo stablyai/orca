@@ -11,9 +11,16 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { TerminalPaneResumeInChatButton } from './TerminalPaneResumeInChatButton'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { IN_PLACE_SWITCH_RUNTIME_CAPABILITIES } from '../../../../shared/structured-agent-cli-conversation-adoption'
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
-  ensureLocalRuntimeCapabilities: async () => [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
-  readLocalRuntimeCapabilitiesOrUnknown: () => [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+  ensureLocalRuntimeCapabilities: async () => [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    ...IN_PLACE_SWITCH_RUNTIME_CAPABILITIES
+  ],
+  readLocalRuntimeCapabilitiesOrUnknown: () => [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    ...IN_PLACE_SWITCH_RUNTIME_CAPABILITIES
+  ],
   subscribeLocalRuntimeCapabilityObservation: () => () => {}
 }))
 afterEach(cleanup)

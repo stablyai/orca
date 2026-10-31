@@ -19703,7 +19703,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "使用終端機代理程式繼續",
-          "switchToChatView": "在聊天介面中繼續",
+          "continueInChatView": "在聊天介面中繼續",
+          "switchToChatView": "以聊天顯示",
           "showAsTerminal": "以終端機顯示",
           "allowAutoClose": "允許自動關閉"
         },

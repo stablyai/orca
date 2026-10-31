@@ -19298,6 +19298,7 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "ターミナル Agent で続ける",
+          "continueInChatView": "チャット UI で続ける",
           "switchToChatView": "チャットとして表示",
           "showAsTerminal": "ターミナルとして表示",
           "allowAutoClose": "自動終了を許可"

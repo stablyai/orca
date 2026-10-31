@@ -19994,7 +19994,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Terminal ajanıyla devam et",
-          "switchToChatView": "Sohbet arayüzünde devam et",
+          "continueInChatView": "Sohbet arayüzünde devam et",
+          "switchToChatView": "Sohbet olarak göster",
           "showAsTerminal": "Terminal olarak göster",
           "allowAutoClose": "Otomatik Kapatmaya İzin Ver"
         },

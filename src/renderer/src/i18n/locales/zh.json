@@ -19264,6 +19264,7 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "使用终端智能体继续",
+          "continueInChatView": "在聊天界面中继续",
           "switchToChatView": "以聊天显示",
           "showAsTerminal": "以终端显示",
           "allowAutoClose": "允许自动关闭"

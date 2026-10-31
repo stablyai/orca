@@ -36,7 +36,14 @@ export function TerminalPaneResumeInChatButton({
   )
   const busy = useConversationSwitchBusy(readiness.pending)
 
-  const label = translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')
+  // An older host or an agent that can't switch opens the chat beside the pane, as main's Continue did.
+  const label =
+    capability === false
+      ? translate(
+          'components.tab.bar.SortableTabContextMenu.continueInChatView',
+          'Continue in Chat UI'
+        )
+      : translate('components.tab.bar.switch.toNativeChat', 'Switch to Chat UI')
   const updateRequired = source?.hostUpdateRequired === true
   const tooltip = updateRequired
     ? translate(
