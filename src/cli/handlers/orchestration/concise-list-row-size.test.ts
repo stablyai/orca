@@ -126,7 +126,7 @@ async function printed(command: string, flags: [string, string][], result: unkno
   await ORCHESTRATION_HANDLERS[`orchestration ${command}`](
     orchestrationTestContext(callMock, new Map(flags), json)
   )
-  return log.mock.calls.map(([line]) => String(line).replaceAll(CONTENT, '')).join('\n')
+  return log.mock.calls.map(([line]) => String(line)).join('\n')
 }
 
 describe('concise orchestration list output', () => {
@@ -143,17 +143,24 @@ describe('concise orchestration list output', () => {
   it.each(LISTS)(
     'keeps each %s row short when stored text is huge',
     async (command, flags, key, result) => {
-      const text = await printed(command, flags, result, false)
+      const rawText = await printed(command, flags, result, false)
       const json: { result: Record<string, { body?: string }[]> } = JSON.parse(
         await printed(command, flags, result, true)
       )
       // request-show is one receipt, not a list.
       const items = key ? json.result[key] : [json.result]
-      const rows = [...text.split('\n'), ...items.map((row) => JSON.stringify(row))]
-      expect(rows.length).toBeGreaterThan(1)
-      for (const item of items) {
-        expect(item.body?.length ?? 0).toBeLessThanOrEqual(MAX_PREVIEW_CHARS)
+      if (command === 'check') {
+        expect(rawText).toContain(CONTENT)
+        expect(items[0]?.body).toBe(CONTENT)
+      } else {
+        for (const item of items) {
+          expect(item.body?.length ?? 0).toBeLessThanOrEqual(MAX_PREVIEW_CHARS)
+        }
       }
+      const rows = [rawText, ...items.map((row) => JSON.stringify(row))].flatMap((output) =>
+        output.replaceAll(CONTENT, '').split('\n')
+      )
+      expect(rows.length).toBeGreaterThan(1)
       for (const row of rows) {
         expect(row.length).toBeLessThan(MAX_ROW_CHARS)
       }

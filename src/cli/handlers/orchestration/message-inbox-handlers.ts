@@ -91,12 +91,21 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
 
 const INBOX_BODY_PREVIEW_CHARS = 200
 
+// A sender can put anything under an id key; only short strings are ids.
+function isShortId(value: unknown): boolean {
+  return typeof value === 'string' && value.length <= 64
+}
+
 // inbox is history, not delivery: rows preview the body and keep only payload ids; check and --full print it whole.
 function inboxRowView(view: MessageView): MessageView {
   const { body, payload, ...rest } = view
   const ids =
     payload && typeof payload === 'object'
-      ? Object.entries(payload).filter(([key, value]) => /Ids?$/.test(key) && value !== undefined)
+      ? Object.entries(payload).filter(
+          ([key, value]) =>
+            /Ids?$/.test(key) &&
+            (isShortId(value) || (Array.isArray(value) && value.every(isShortId)))
+        )
       : []
   return {
     ...rest,

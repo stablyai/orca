@@ -491,7 +491,7 @@ describe('orchestration agent views', () => {
             subject: 'Done',
             body: huge,
             type: 'worker_done',
-            payload: JSON.stringify({ taskId: 'task_1', notes: huge })
+            payload: JSON.stringify({ taskId: 'task_1', dispatchId: { spec: huge }, notes: huge })
           }
         ],
         count: 1
@@ -525,6 +525,7 @@ describe('orchestration agent views', () => {
         method: 'orchestration.taskCreate',
         receipt: {
           messageId: 'msg_ask',
+          state: 'outcome_unknown',
           accepted: { dispatchId: 'ctx_1', taskId: 'task_1', note: huge },
           run: { id: 'run_1', objective: huge },
           gate: { id: 'gate_1', question: huge },
@@ -540,6 +541,7 @@ describe('orchestration agent views', () => {
       method: 'orchestration.taskCreate',
       receipt: {
         messageId: 'msg_ask',
+        state: 'outcome_unknown',
         accepted: { dispatchId: 'ctx_1', taskId: 'task_1' },
         run: { id: 'run_1' },
         gate: { id: 'gate_1' },
@@ -547,5 +549,20 @@ describe('orchestration agent views', () => {
       },
       interpretation: 'Request req_1 already took effect.'
     })
+
+    const full = await run(
+      'request-show',
+      [
+        ['request', 'req_1'],
+        ['full', true]
+      ],
+      {
+        requestId: 'req_1',
+        state: 'completed',
+        receipt: { task: { id: 'task_1' } },
+        interpretation: 'Done.'
+      }
+    )
+    expect(full.stdout).toContain('"id": "task_1"')
   })
 })
