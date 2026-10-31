@@ -1,12 +1,14 @@
 import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { MessageRow } from '../../../../orchestration/types'
 import {
   clearFollowUpMail,
   markUnreadFollowUpMail,
   restoreFollowUpMail,
   FOLLOW_UP_MESSAGE_TYPES,
-  listDispatchesWithFollowUpMail
+  listDispatchesWithFollowUpMail,
+  listMarkedFollowUpAncestors
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveOrcaSessionParty } from '../../../../orchestration/orchestration-party'
@@ -47,12 +49,30 @@ export function continueUnreadWorkerMail(
   })
 }
 
+// One Task takes a bounded batch, well inside the ~1.2 MB spec budget; the rest follows as mail once it is ready.
+const FOLLOW_UP_MAIL_BATCH = 20
+const FOLLOW_UP_MAIL_MAX_BYTES = 200 * 1024
+
+function followUpMailBatch(unread: MessageRow[]): MessageRow[] {
+  let bytes = 0
+  return unread.filter((message, index) => {
+    bytes += Buffer.byteLength(message.subject) + Buffer.byteLength(message.body ?? '')
+    return index === 0 || bytes <= FOLLOW_UP_MAIL_MAX_BYTES
+  })
+}
+
 async function continueUnreadMail(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   dispatchId: string
 ): Promise<void> {
-  const unread = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])
+  const unread = followUpMailBatch(
+    db.getUnreadMessages(
+      `dispatch:${dispatchId}`,
+      [...FOLLOW_UP_MESSAGE_TYPES],
+      FOLLOW_UP_MAIL_BATCH
+    )
+  )
   const first = unread[0]
   if (!first) {
     clearFollowUpMail(db, dispatchId)
@@ -134,17 +154,8 @@ export function passHeldWorkerMail(
     return
   }
   const worker = db.getWorkerDispatch(followUpId)
-  const seen = new Set([followUpId])
-  let source = db.getDispatchContextById(followUpId)?.follow_up_of_dispatch_id
-  for (
-    ;
-    source && !seen.has(source);
-    source = db.getDispatchContextById(source)?.follow_up_of_dispatch_id
-  ) {
-    seen.add(source)
-    const first = db.getDispatchContextById(source)?.follow_up_mail_at
-      ? db.getUnreadMessages(`dispatch:${source}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
-      : undefined
+  for (const source of listMarkedFollowUpAncestors(db, followUpId)) {
+    const first = db.getUnreadMessages(`dispatch:${source}`, [...FOLLOW_UP_MESSAGE_TYPES], 1)[0]
     if (first) {
       if (custody === 'failed') {
         const reason = worker?.last_error ?? worker?.state ?? 'unknown'
@@ -155,7 +166,9 @@ export function passHeldWorkerMail(
         page = db.routeUnreadDirectMessagesToDispatchMailbox(
           followUpId,
           first.run_id,
-          `dispatch:${source}`
+          `dispatch:${source}`,
+          undefined,
+          true
         )
         for (const type of custody === 'failed' ? [] : page.types) {
           runtime.notifyMessageArrived(`dispatch:${followUpId}`, type)

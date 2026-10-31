@@ -33,28 +33,31 @@ function runBatchedMessageMutation(
 export function getUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
-  types?: MessageType[]
+  types?: MessageType[],
+  limit = -1
 ): MessageRow[] {
   if (types && types.length > 0) {
     const placeholders = types.map(() => '?').join(',')
     return exposeMessageListTimestamps(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages is exactly its row shape.
       this.db
         .prepare(
           `SELECT * FROM messages
            WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
-             AND type IN (${placeholders}) ORDER BY sequence`
+             AND type IN (${placeholders}) ORDER BY sequence LIMIT ?`
         )
-        .all(toHandle, ...types) as MessageRow[]
+        .all(toHandle, ...types, limit) as MessageRow[]
     )
   }
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages is exactly its row shape.
     this.db
       .prepare(
         `SELECT * FROM messages
          WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
-         ORDER BY sequence`
+         ORDER BY sequence LIMIT ?`
       )
-      .all(toHandle) as MessageRow[]
+      .all(toHandle, limit) as MessageRow[]
   )
 }
 
