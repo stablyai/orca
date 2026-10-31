@@ -190,22 +190,31 @@ for (const agent of ['claude', 'codex'] as const) {
     )
 
     it('never waits for an unresolved account on passive reads, including after the original deadline', async () => {
+      vi.useFakeTimers({ now: 1000 })
+      onTestFinished(() => vi.useRealTimers())
       const home = Promise.withResolvers<AgentSessionAccountHome>()
-      const resolveAccountHome = vi.fn(() => home.promise)
+      const homeRequested = Promise.withResolvers<void>()
+      const resolveAccountHome = vi.fn(() => {
+        homeRequested.resolve()
+        return home.promise
+      })
       const h = harness(agent, { resolveAccountHome })
       const deadline = Date.now() + 50
       const demand = h.service.demand({ agent, workspacePath: '/cold', deadline })
-      await vi.waitFor(() => expect(resolveAccountHome).toHaveBeenCalledTimes(1))
+      await homeRequested.promise
       expect(await h.service.read({ agent, workspacePath: '/cold' })).toMatchObject({
         origin: 'unknown'
       })
       expect(resolveAccountHome).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(50)
       await demand
       expect(
         await h.service.read({ agent, workspacePath: '/cold', waitForListing: true, deadline })
       ).toMatchObject({ origin: 'unknown' })
       expect(resolveAccountHome).toHaveBeenCalledTimes(1)
       home.resolve(HOME)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(h.resolve).not.toHaveBeenCalled()
       expect(h.runs).toEqual([])
     })
 
