@@ -47,7 +47,9 @@ describe('a pane-issued handle names its PTY incarnation, not the pane', () => {
       status: 'running'
     })
     await expect(harness.runtime.showTerminal(listed)).resolves.toBeDefined()
-    await expect(harness.runtime.sendTerminal(listed, { text: 'ls' }, {})).resolves.toBeDefined()
+    await expect(
+      harness.runtime.sendTerminal(listed, { text: 'ls' }, { inputKind: 'driving' })
+    ).resolves.toBeDefined()
     // The process exits before the delayed wait arrives, after another graph sync.
     harness.removeVictimFromInventory()
     harness.runtime.onPtyExit(PTY_ID, 0)
@@ -56,7 +58,9 @@ describe('a pane-issued handle names its PTY incarnation, not the pane', () => {
     await expect(harness.runtime.readTerminal(listed)).resolves.toMatchObject({ status: 'exited' })
     await expect(harness.runtime.showTerminal(listed)).resolves.toBeDefined()
     for (const exited of [handle, listed]) {
-      await expect(harness.runtime.sendTerminal(exited, { text: 'ls' }, {})).rejects.toThrow()
+      await expect(
+        harness.runtime.sendTerminal(exited, { text: 'ls' }, { inputKind: 'driving' })
+      ).rejects.toThrow()
       await expect(harness.runtime.focusTerminal(exited)).rejects.toThrow()
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads the runtime's own mail-target lookup.

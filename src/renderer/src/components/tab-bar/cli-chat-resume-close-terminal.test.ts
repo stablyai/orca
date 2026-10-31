@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
   close: vi.fn(),
@@ -60,7 +61,7 @@ beforeEach(() => {
     options.beforeClose()
   })
 })
-it.each(['local', 'runtime:paired'])(
+it.each<ExecutionHostId>(['local', 'runtime:paired'])(
   'pins every split PTY before ordinary tab close on %s and waits for all exits',
   async (executionHostId) => {
     const exit = deferred<{

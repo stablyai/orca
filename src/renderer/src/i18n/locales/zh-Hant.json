@@ -19304,8 +19304,6 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "請更新此主機上的 Orca，以便在聊天介面中繼續。",
-        "exitUnconfirmedFromTerminal": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，再從「工作階段歷史記錄」開啟此對話。",
-        "exitUnconfirmed": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，再從「工作階段歷史記錄」開啟此對話。",
         "notSavedYet": "{{agent}} 尚未儲存此對話。請在它回覆後重試。"
       },
       "state": {

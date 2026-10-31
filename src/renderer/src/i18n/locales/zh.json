@@ -18775,9 +18775,7 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "请更新此主机上的 Orca 以在聊天界面中继续。",
-        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。",
-        "exitUnconfirmed": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后从会话历史记录中打开此对话。",
-        "exitUnconfirmedFromTerminal": "{{agent}} 已在另一个终端中运行此对话。请退出那里的 {{agent}} 或关闭该终端，然后从会话历史记录中打开此对话。"
+        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。"
       },
       "state": {
         "loading": {
