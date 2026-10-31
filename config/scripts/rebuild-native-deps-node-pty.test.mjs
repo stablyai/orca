@@ -376,7 +376,8 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         )
 
         const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['node-pty'])
+        // The patched-artifacts path rebuilds every listed module, not only node-pty.
+        expect(rebuildCall.onlyModules).toEqual(['@orca/history-filesystem', 'node-pty'])
         expect(rebuildCall.ignoreModules).toEqual(['cpu-features'])
         expect(rebuildCall.force).toBe(true)
       } finally {

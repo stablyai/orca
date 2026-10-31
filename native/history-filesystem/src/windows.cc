@@ -7,6 +7,9 @@
 #include <cstring>
 #include <limits>
 
+// ntifs.h declaration; winternl.h exposes only NtCreateFile.
+extern "C" NTSTATUS NTAPI NtSetInformationFile(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, FILE_INFORMATION_CLASS);
+
 namespace history {
 static Failure failure(const char* op, DWORD value = GetLastError()) {
   const char* code = "EIO";
@@ -124,13 +127,16 @@ Move Directory::move(const std::string& name, Directory& destination, const std:
   } catch (const Failure& error) { if (error.code == "ENOENT") return Move::Missing; throw; }
   if (directoryOnly) requireDirectory(source.get());
   auto text = wide(target);
-  // The kernel rejects buffers shorter than the struct, which a one-character name would be.
+  // FILE_RENAME_INFO has FILE_RENAME_INFORMATION's layout. The kernel rejects buffers shorter than the struct, which a one-character name would be.
   std::vector<BYTE> bytes(std::max(sizeof(FILE_RENAME_INFO), offsetof(FILE_RENAME_INFO, FileName) + text.size() * sizeof(wchar_t)));
   auto* rename = reinterpret_cast<FILE_RENAME_INFO*>(bytes.data());
   rename->ReplaceIfExists = FALSE; rename->RootDirectory = native(destination); rename->FileNameLength = static_cast<DWORD>(text.size() * sizeof(wchar_t));
   std::memcpy(rename->FileName, text.data(), rename->FileNameLength);
-  if (SetFileInformationByHandle(source.get(), FileRenameInfo, rename, static_cast<DWORD>(bytes.size()))) return Move::Moved;
-  auto error = failure("FileRenameInfo");
+  // The Win32 wrapper rejects a RootDirectory-relative name with ERROR_INVALID_PARAMETER; the native rename accepts it.
+  IO_STATUS_BLOCK status;
+  NTSTATUS code = NtSetInformationFile(source.get(), &status, rename, static_cast<ULONG>(bytes.size()), static_cast<FILE_INFORMATION_CLASS>(10 /* FileRenameInformation */));
+  if (code >= 0) return Move::Moved;
+  auto error = failure("FileRenameInformation", RtlNtStatusToDosError(code));
   if (error.code == "EEXIST") return Move::Collision;
   throw error;
 }

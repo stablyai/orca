@@ -7,7 +7,7 @@
 #include <unistd.h>
 #ifdef __linux__
 #include <sys/syscall.h>
-// Raw syscalls keep the slot under its glibc floor (glibc 2.33 versioned fstat/fstatat) and need no kernel headers.
+// Raw syscalls keep the slot under its glibc floor and need no kernel headers.
 #ifndef RENAME_NOREPLACE
 #define RENAME_NOREPLACE (1 << 0)
 #endif
@@ -49,9 +49,12 @@ static Failure failure(const char* op, int code = errno) {
   return Failure(op, name, code);
 }
 static int fd(Directory& directory) { return static_cast<int>(directory.handle()); }
-// The 64-bit Linux targets share the kernel's struct stat layout with glibc and musl.
+// glibc 2.33 versioned fstat/fstatat, so the glibc slots call the kernel; x86_64 and aarch64 share its struct stat layout.
+#if defined(__linux__) && defined(__GLIBC__) && (defined(__x86_64__) || defined(__aarch64__))
+#define HISTORY_RAW_STAT 1
+#endif
 static int statAt(int descriptor, const char* name, struct stat* value, int flags) {
-#ifdef __linux__
+#ifdef HISTORY_RAW_STAT
   return static_cast<int>(syscall(SYS_newfstatat, descriptor, name, value, flags));
 #else
   return fstatat(descriptor, name, value, flags);
@@ -59,7 +62,7 @@ static int statAt(int descriptor, const char* name, struct stat* value, int flag
 }
 static struct stat info(Directory& directory) {
   struct stat value;
-#ifdef __linux__
+#ifdef HISTORY_RAW_STAT
   int result = static_cast<int>(syscall(SYS_fstat, fd(directory), &value));
 #else
   int result = fstat(fd(directory), &value);
@@ -105,7 +108,8 @@ Kind Directory::kind(const std::string& name) {
   return S_ISREG(value.st_mode) ? Kind::File : Kind::Other;
 }
 void Directory::mkdir(const std::string& name, Directory* like) {
-  mode_t mode = like ? info(*like).st_mode & 07777 : 0777;
+  // The owner must be able to fill the directory, whatever bits the source carried.
+  mode_t mode = (like ? info(*like).st_mode & 07777 : 0777) | S_IRWXU;
   if (mkdirat(fd(*this), name.c_str(), mode) != 0) throw failure("mkdirat");
 }
 Move Directory::move(const std::string& name, Directory& destination, const std::string& target, bool /*directoryOnly*/) {
