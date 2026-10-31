@@ -110,9 +110,9 @@ describe('worker release of an agent that is slow to exit after its terminal clo
     const harness = await startLateExitHarness()
     try {
       const subprocess = harness.subprocess
-      subprocess.forceKill.mockImplementation(() => {
+      subprocess.forceKill = () => {
         setTimeout(() => subprocess._simulateExit(0), SLOW_EXIT_MS)
-      })
+      }
       const startedAt = Date.now()
       const { receipt, fallbackKill } = await closeThroughDaemon(harness)
       expect(Date.now() - startedAt).toBeGreaterThanOrEqual(SLOW_EXIT_MS)
@@ -148,7 +148,7 @@ describe('worker release of an agent that is slow to exit after its terminal clo
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       // A wedged agent ignores SIGKILL, so only the close deadline can end the kill.
-      harness.subprocess.forceKill.mockImplementation(() => {})
+      harness.subprocess.forceKill = () => {}
       let budgetMs = 0
       const expiringStop: typeof stopAndWaitPtyFromRuntimeController = async (deps, id, opts) => {
         const deadlineMs = opts?.deadlineMs ?? 0
