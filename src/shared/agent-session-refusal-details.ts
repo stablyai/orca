@@ -1,6 +1,5 @@
 // Codes span situations with different next steps (cleared chat versus busy command). Name only a listed reason; otherwise omit it for the code fallback, as older hosts do.
 
-import type { AgentSessionReplyRefusalDetails } from './agent-session-reply-refusal-facts'
 import type { AgentSessionAccountKind } from './agent-session-availability'
 import type { AgentJournalResolution } from './agent-session-journal-types'
 import {
@@ -294,7 +293,7 @@ export function isAgentSessionRefusalReason<C extends AgentSessionWireRefusalCod
 export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusalCode>(
   code: C,
   value: unknown
-): AgentSessionReplyRefusalDetails<C> | undefined {
+): AgentSessionRefusalDetails<C> | undefined {
   if (!isRecord(value)) {
     return undefined
   }
@@ -329,11 +328,6 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
     ...(isAgentSessionRefusalReason(code, value.reason) ? { reason: value.reason } : {}),
     ...facts,
     ...(owner ? { owner } : {}),
-    ...((code === 'agent_session_conflict' || code === 'agent_session_ownership_unknown') &&
-    value.reason === 'conversationHeldElsewhere' &&
-    value.source === true
-      ? { source: true as const }
-      : {}),
     ...(code === 'agent_session_operation_invalid' &&
     value.reason === 'notSignedIn' &&
     (value.account === 'managed' || value.account === 'system')
@@ -349,7 +343,7 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
     ...(codexInstallation ? { codexInstallation } : {})
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reason was checked against `code`'s list and only the facts `code` lists (plus the verdict every code may carry) were kept.
-  return Object.keys(read).length > 0 ? (read as AgentSessionReplyRefusalDetails<C>) : undefined
+  return Object.keys(read).length > 0 ? (read as AgentSessionRefusalDetails<C>) : undefined
 }
 
 /** The loose fields released clients read, taken from details; the one place they are written. */

@@ -143,6 +143,12 @@ async function switchToChat(
   const paneKey = close ? `${close.source.tabId}:${close.source.leafId}` : undefined
   const row = paneKey ? ctx.runtime.agentTransitions.latestRow(paneKey) : null
   const adopt = createIdentity?.adopt
+  // Admission before anything stops: only a live agent the status store shows holding this
+  // conversation outside the pane being closed refuses, so a refusal leaves the source running.
+  const agent = create?.agent ?? host.deps.store.getRecord(sessionId)?.provider
+  if (agent && providerSessionId) {
+    await ctx.runtime.assertNoCliWriterOutsideSwitchSource(agent, providerSessionId, paneKey)
+  }
   const retainedSource =
     !adopt && source
       ? await prepareSwitchCliTranscript(
@@ -242,16 +248,8 @@ async function switchToChat(
       true
     )
     check()
-    // An open turn settles only when nothing can still write it: no CLI writer (a live one refuses
-    // here, on every path, before the import) and a structured owner at rest.
-    if (providerSessionId) {
-      await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
-        record.provider,
-        providerSessionId,
-        create?.resumeFrom?.cliSource ??
-          (close && paneKey ? { workspaceId: close.source.worktreeId, paneKey } : undefined)
-      )
-    }
+    // An open turn settles only when nothing can still write it: no CLI writer (admitted before
+    // the stop) and a structured owner at rest.
     const lease = providerSessionId ? host.deps.store.getRecord(sessionId)?.lease : undefined
     await host.refreshSwitchTranscript(
       sessionId,

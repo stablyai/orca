@@ -18,23 +18,17 @@ export function conversationSwitchFailureText(
   const reason = reasonOverride ?? failure?.details?.reason
   const values = { agent: agentLabel(args.agent) }
   if (reason === 'conversationHeldElsewhere') {
-    return failure?.source
+    return failure?.owner
       ? translate(
-          'components.tab.bar.switch.sourceExitUnconfirmed',
-          'Orca could not confirm {{agent}} stopped in this terminal. Quit {{agent}} here, then try this action again.',
+          'components.tab.bar.switch.openElsewhere',
+          '{{agent}} is open in another chat or terminal. Continue there, then try switching again.',
           values
         )
-      : failure?.owner
-        ? translate(
-            'components.tab.bar.switch.openElsewhere',
-            '{{agent}} is open in another chat or terminal. Continue there, then try switching again.',
-            values
-          )
-        : translate(
-            'components.tab.bar.switch.writerUnconfirmed',
-            'Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try this action again.',
-            values
-          )
+      : translate(
+          'components.tab.bar.switch.writerUnconfirmed',
+          'Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try this action again.',
+          values
+        )
   }
   if (reason === 'ownerUnproven' || reason === 'previousExitUnverifiable') {
     return translate(

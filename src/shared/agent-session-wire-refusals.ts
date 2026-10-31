@@ -4,17 +4,12 @@
 import {
   agentSessionLegacyRefusalFields,
   readAgentSessionRefusalDetails,
+  type AgentSessionAnyRefusalDetails,
   type AgentSessionLegacyRefusalFields,
   type AgentSessionRefusalDetails,
   type AgentSessionRefusalDetailsByCode,
   type AgentSessionRefusalFacts
 } from './agent-session-refusal-details'
-import {
-  savedAgentSessionRefusalDetails,
-  type AgentSessionAnyReplyRefusalDetails,
-  type AgentSessionReplyOnlyFacts,
-  type AgentSessionReplyRefusalDetails
-} from './agent-session-reply-refusal-facts'
 
 export type {
   AgentSessionAnyRefusalDetails,
@@ -65,7 +60,7 @@ export type AgentSessionRefusalOf<C extends AgentSessionWireRefusalCode> = {
     /** For logs and released clients, which print it; newer clients choose words from details. */
     message: string
     /** Absent from older hosts. */
-    details?: AgentSessionReplyRefusalDetails<K>
+    details?: AgentSessionRefusalDetails<K>
     /** This create attempt refused before commit; earlier attempts may still have committed. */
     createAttemptRefusedBeforeCommit?: true
   } & AgentSessionLegacyRefusalFields
@@ -80,7 +75,7 @@ export type AgentSessionRefusalReference = {
 
 function buildRefusal(
   code: AgentSessionWireRefusalCode,
-  details: AgentSessionAnyReplyRefusalDetails | undefined,
+  details: AgentSessionAnyRefusalDetails | undefined,
   message: string
 ): AgentSessionWireRefusal {
   const kept = details && Object.keys(details).length > 0 ? details : undefined
@@ -97,7 +92,7 @@ function buildRefusal(
 /** Require a reason listed for code; copy legacy top-level fields only here from details. */
 export function refuse<C extends AgentSessionWireRefusalCode>(
   code: C,
-  details: NoInfer<AgentSessionRefusalDetailsByCode[C] & AgentSessionReplyOnlyFacts<C>>,
+  details: NoInfer<AgentSessionRefusalDetailsByCode[C]>,
   message: string
 ): AgentSessionWireRefusal {
   return buildRefusal(code, details, message)
@@ -155,14 +150,9 @@ export function readAgentSessionRefusalReference(
 
 function buildReference(
   code: AgentSessionWireRefusalCode,
-  replyDetails: AgentSessionAnyReplyRefusalDetails | undefined
+  details: AgentSessionAnyRefusalDetails | undefined
 ): AgentSessionRefusalReference {
-  // A reference may be saved: it never keeps what only a live reply may say.
-  const details = replyDetails && savedAgentSessionRefusalDetails(replyDetails)
-  const reference = {
-    code,
-    ...(details && Object.keys(details).length > 0 ? { details } : {})
-  }
+  const reference = { code, ...(details ? { details } : {}) }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `details` is the refusal's own, or was read against `code`.
   return reference as AgentSessionRefusalReference
 }
@@ -181,7 +171,7 @@ export class AgentSessionRefusalError extends Error {
 /** A store or host refusal thrown under its situation; the error's message stays the code. */
 export function agentSessionRefusalError<C extends AgentSessionWireRefusalCode>(
   code: C,
-  details: NoInfer<AgentSessionRefusalDetailsByCode[C] & AgentSessionReplyOnlyFacts<C>>,
+  details: NoInfer<AgentSessionRefusalDetailsByCode[C]>,
   message: string = code
 ): AgentSessionRefusalError {
   return new AgentSessionRefusalError(refuse(code, details, message))

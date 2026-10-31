@@ -23,20 +23,14 @@ import {
 } from '../../main-owned-workspace-runtime-fixture'
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
 import * as legacyImport from '../../../native-chat/agent-session-journal/journal-legacy-import'
-import * as cliWriters from '../../structured-agent-cli-writers'
-
-// A job the user left running beside the agent (`npm run dev &`): the shell is never alone.
-vi.mock('../../structured-agent-cli-writers', async (load) => ({
-  ...(await load<typeof cliWriters>()),
-  posixCliWriterShellAlone: vi.fn(async () => false)
-}))
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 vi.mock('../../../native-chat/agent-session-journal/journal-legacy-import', async (load) => {
   const actual = await load<typeof legacyImport>()
   return { ...actual, prepareLegacyTranscriptImport: vi.fn(actual.prepareLegacyTranscriptImport) }
 })
 
 // A terminal whose CLI turn never recorded its end (killed, crashed, or stopped before the write):
-// once the census proves no CLI writer is left and the chat's own owner is at rest, the chat
+// once admission found no CLI writer elsewhere and the chat's own owner is at rest, the chat
 // shows that turn as over, so it never reads as replying forever.
 
 let rig: RestTestRig
@@ -110,7 +104,7 @@ async function openCliTurn() {
   })
 }
 
-it('settles a CLI turn left open once no writer is left, after the census', async () => {
+it('settles a CLI turn left open once no writer is left, admitted before the stop', async () => {
   await openCliTurn()
   const { runtime } = setupMainOwnedWorkspace()
   const incarnationId = '11111111-1111-4111-8111-111111111111'
@@ -124,6 +118,7 @@ it('settles a CLI turn left open once no writer is left, after the census', asyn
     write: written,
     kill: () => false,
     stopAndWait: async () => {
+      order.push('stop')
       await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
       return true
     },
@@ -131,9 +126,13 @@ it('settles a CLI turn left open once no writer is left, after the census', asyn
     getForegroundProcess: async () => 'codex'
   })
   const order: string[] = []
-  const census = vi
-    .spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited')
-    .mockImplementation(async () => void order.push('census'))
+  const admission = runtime.assertNoCliWriterOutsideSwitchSource.bind(runtime)
+  const admitted = vi
+    .spyOn(runtime, 'assertNoCliWriterOutsideSwitchSource')
+    .mockImplementation(async (...args) => {
+      order.push('admission')
+      await admission(...args)
+    })
   const refresh = rig.host.refreshSwitchTranscript
   let legacyParses = 0
   const refreshed = vi
@@ -161,9 +160,9 @@ it('settles a CLI turn left open once no writer is left, after the census', asyn
     'chat'
   )
   expect(answer).toEqual({ status: 'completed', sessionId: id })
-  expect(order).toEqual(['census', 'import'])
+  expect(order).toEqual(['admission', 'stop', 'import'])
   expect(written).not.toHaveBeenCalled()
-  expect(census).toHaveBeenCalledWith('codex', expect.any(String), expect.anything())
+  expect(admitted).toHaveBeenCalledWith('codex', expect.any(String), `${TAB_ID}:${LEAF_A}`)
   expect(refreshed.mock.calls[0]?.[5]).toBe(true)
   // Codex's resting importer is its one reader: no second, unused parse of the whole transcript.
   expect(legacyParses).toBe(0)
@@ -197,7 +196,6 @@ it.each([false, true])(
       stopAndWait: stopped,
       getForegroundProcess: async () => 'codex'
     })
-    vi.spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited').mockResolvedValue()
     const sent = vi.spyOn(runtime, 'sendTerminal')
     // Idle when the request arrives and replying by the time the stop is admitted, or replying
     // already: either way the switch stops the reply.
@@ -245,66 +243,78 @@ it.each([false, true])(
   }
 )
 
-// POSIX job control: Windows reads a pane's processes through its provider instead.
-it.skipIf(process.platform === 'win32')(
-  'closes the whole source terminal, background job included, and opens the chat',
-  async () => {
-    await openCliTurn()
-    const { runtime, session } = setupMainOwnedWorkspace()
-    const incarnationId = '11111111-1111-4111-8111-111111111111'
-    runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
-    const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
-    if (!source.presentation) {
-      throw new Error('missing captured source')
+// Admission reads only the status store: a live agent it shows in another pane refuses before
+// anything stops; the source pane's own agent, about to be closed, never does.
+it.each([
+  { holder: 'source' as const, completes: true },
+  { holder: 'other' as const, completes: false }
+])('admits by the status store alone: a live holder in the $holder pane', async (c) => {
+  await openCliTurn()
+  const nativeId = rig.store.getRecord(id)!.providerHandleChain.at(-1)!.handle.nativeId
+  const holder: AgentStatusIpcPayload = {
+    paneKey: c.holder === 'source' ? `${TAB_ID}:${LEAF_A}` : 'other-tab:other-leaf',
+    worktreeId: WORKTREE_ID,
+    connectionId: null,
+    agentType: 'codex',
+    receivedAt: 1,
+    stateStartedAt: 1,
+    state: 'done',
+    prompt: '',
+    providerSession: { key: 'session_id', id: nativeId }
+  }
+  const { runtime, session } = setupMainOwnedWorkspace({
+    runtimeDeps: {
+      readHookCliWriterObservation: () => ({
+        current: () => true,
+        presence: async () => 'live',
+        topology: 'pane-owned'
+      })
     }
-    // The terminal's stop ends its process tree, the job with the agent, as closing the tab does.
-    const stopped = vi.fn(async (_ptyId: string) => {
-      await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
-      return true
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => false,
-      stopAndWait: stopped,
-      getForegroundProcess: async () => 'codex',
-      listProcesses: async () => [
-        {
-          id: PTY_A,
-          incarnationId,
-          rootProcessId: 10,
-          cwd: rig.root,
-          title: 'codex',
-          worktreeId: WORKTREE_ID
+  })
+  vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue([holder])
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
+  if (!source.presentation) {
+    throw new Error('missing captured source')
+  }
+  const stopped = vi.fn(async (_ptyId: string) => {
+    await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+    return true
+  })
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => false,
+    stopAndWait: stopped,
+    getForegroundProcess: async () => 'codex'
+  })
+  const answer = await executeStructuredSessionSwitch(
+    {
+      sessionId: id,
+      execution: {
+        invocationId: `store-${c.holder}`,
+        source: {
+          terminal: source.handle,
+          expectedIncarnationId: incarnationId,
+          originalPresentation: source.presentation
         }
-      ]
-    })
-    // The real writer census: while the terminal runs, its job holds the conversation; the switch
-    // ends the terminal first, so nothing is left to refuse it.
-    const paneSource = { workspaceId: WORKTREE_ID, paneKey: `${TAB_ID}:${LEAF_A}` }
-    const nativeId = rig.store.getRecord(id)!.providerHandleChain.at(-1)!.handle.nativeId
-    await expect(
-      runtime.assertStructuredAdoptionTerminalWritersExited('codex', nativeId, paneSource)
-    ).rejects.toMatchObject({ refusal: { details: { reason: 'conversationHeldElsewhere' } } })
-    expect(cliWriters.posixCliWriterShellAlone).toHaveBeenCalledWith(10)
-    const answer = await executeStructuredSessionSwitch(
-      {
-        sessionId: id,
-        execution: {
-          invocationId: 'background-job',
-          source: {
-            terminal: source.handle,
-            expectedIncarnationId: incarnationId,
-            originalPresentation: source.presentation
-          }
-        }
-      },
-      { runtime },
-      'chat'
-    )
+      }
+    },
+    { runtime },
+    'chat'
+  )
+  const sourceTab = session().tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === TAB_ID)
+  if (c.completes) {
     expect(answer).toEqual({ status: 'completed', sessionId: id })
     expect(stopped).toHaveBeenCalledExactlyOnceWith(PTY_A, expect.anything())
-    expect(session().tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === TAB_ID)).toBe(false)
-    expect(rig.store.getRecord(id)?.location.workspaceId).toBe(WORKTREE_ID)
-    expect(cliWriters.posixCliWriterShellAlone).toHaveBeenCalledOnce()
+    expect(sourceTab).toBe(false)
+  } else {
+    expect(answer).toMatchObject({
+      status: 'refused',
+      refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
+    })
+    // Refused up front: the source terminal keeps running in its tab.
+    expect(stopped).not.toHaveBeenCalled()
+    expect(sourceTab).toBe(true)
   }
-)
+})
