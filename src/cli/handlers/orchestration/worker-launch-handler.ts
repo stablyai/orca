@@ -112,7 +112,12 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     if (keepOpenState && keepOpenState !== 'retained') {
       const dispatchId = result.result.dispatchId
       // The worker runs either way, so the next step never starts it again.
-      const verb = keepOpenState === 'already_released' ? 'worker-read' : 'worker-keep-open'
+      const verb =
+        keepOpenState === 'already_released'
+          ? 'worker-read'
+          : keepOpenState.startsWith('release_')
+            ? 'worker-show'
+            : 'worker-keep-open'
       reportOrchestrationFailure({
         code: 'not_kept_open',
         message: `${dispatchId} started but was not kept open (${keepOpenState}). Run ${renderOrchestrationArgv(['orchestration', verb, '--dispatch', dispatchId])}.`
