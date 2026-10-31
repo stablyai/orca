@@ -311,7 +311,6 @@ export function NativeChatResolvedView({
     onFind: find.open
   })
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
-
   return (
     <div
       ref={rootRef}
