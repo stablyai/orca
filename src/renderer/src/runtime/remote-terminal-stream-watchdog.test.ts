@@ -31,6 +31,25 @@ describe('remote terminal stream watchdog delivery deadline', () => {
     expect(onStall.mock.calls[0]?.[0]).toMatchObject({ reason: 'delivery-credit-timeout' })
   })
 
+  it('stays quiet while continuous output keeps settling and acknowledging', () => {
+    const onStall = vi.fn()
+    const watchdog = createRemoteTerminalStreamWatchdog(onStall)
+
+    // Each chunk parses 50ms and is acked 100ms after it lands, so bytes are always in flight.
+    for (
+      let elapsedMs = 0;
+      elapsedMs < REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS * 4;
+      elapsedMs += 20
+    ) {
+      const settle = watchdog.beginOutputDelivery(1_000)
+      setTimeout(settle, 50)
+      setTimeout(() => watchdog.recordOutputAcknowledged(1_000), 100)
+      vi.advanceTimersByTime(20)
+    }
+
+    expect(onStall).not.toHaveBeenCalled()
+  })
+
   it('stays armed while parsed bytes remain unacknowledged to the host', () => {
     const onStall = vi.fn()
     const watchdog = createRemoteTerminalStreamWatchdog(onStall)
