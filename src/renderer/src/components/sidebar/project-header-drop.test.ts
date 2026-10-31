@@ -7,6 +7,7 @@ import {
   computeProjectHeaderDropPreview,
   getProjectGroupOrderForSidebarDrop,
   getProjectHeaderDragBucketKey,
+  getProjectHeaderDragRepoById,
   getSidebarOrderedRepoHeaderIdsByBucket,
   mapSidebarProjectHeaderDropIndexToSiblingInsertIndex,
   mapSidebarRepoDropIndexToAllRepoInsertAt
@@ -80,6 +81,38 @@ describe('getSidebarOrderedRepoHeaderIdsByBucket', () => {
     expect(getSidebarOrderedRepoHeaderIdsByBucket(rows)).toEqual(
       new Map([['ungrouped', ['p-local', 'q']]])
     )
+  })
+})
+
+describe('getProjectHeaderDragRepoById', () => {
+  it("ranks a host copy by the row that placed it, under its anchor's id", () => {
+    const repo = (id: string, projectGroupId?: string): Repo => ({
+      id,
+      path: `/${id}`,
+      displayName: id,
+      badgeColor: '#000000',
+      addedAt: 0,
+      projectGroupId
+    })
+    const placedBy = repo('p-paired', 'group-1')
+    const sibling = repo('q', 'group-1')
+    const rows: Row[] = [
+      {
+        type: 'header',
+        key: 'project:p',
+        count: 1,
+        icon: { kind: 'project' },
+        repo: repo('p-ssh'),
+        anchorRepo: repo('p-local'),
+        projectGroupRepo: placedBy,
+        hostId: 'ssh:b'
+      }
+    ]
+
+    const repoById = getProjectHeaderDragRepoById(rows, new Map([['q', sibling]]))
+
+    expect(repoById.get('p-local')).toBe(placedBy)
+    expect(repoById.get('q')).toBe(sibling)
   })
 })
 

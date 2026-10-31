@@ -18,7 +18,10 @@ import {
 } from '../../worktree-header-section-boundaries'
 import { useHostHeaderDrag } from '../../host-header-drag'
 import { useRepoHeaderDrag } from '../../project-header-drag'
-import { getSidebarOrderedRepoHeaderIdsByBucket } from '../../project-header-drop'
+import {
+  getProjectHeaderDragRepoById,
+  getSidebarOrderedRepoHeaderIdsByBucket
+} from '../../project-header-drop'
 import { useProjectGroupHeaderDrag } from '../../project-group-header-drag'
 import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from '../../project-group-header-drop'
 import { USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS } from '../viewport/use-scroll-suppression'
@@ -165,17 +168,14 @@ export function useWorktreeSidebarHeaderDrag(args: {
     },
     [moveProjectToGroup]
   )
-  // Why: a header drawn in a group through another host's row ranks among its siblings by that row.
-  const repoByHeaderIdForDrag = useMemo(() => {
-    let byHeaderId: Map<string, Repo> | null = null
-    for (const row of rows) {
-      if (row.type === 'header' && row.repo && row.projectGroupRepo) {
-        byHeaderId ??= new Map(repoMap)
-        byHeaderId.set(row.repo.id, row.projectGroupRepo)
-      }
-    }
-    return byHeaderId ?? repoMap
-  }, [repoMap, rows])
+  const repoByHeaderIdForDrag = useMemo(
+    () =>
+      getProjectHeaderDragRepoById(
+        rows.filter((row): row is Row => row.type !== 'host-header'),
+        repoMap
+      ),
+    [repoMap, rows]
+  )
   const commitProjectGroupHeaderOrder = useCallback(
     (groupId: string, tabOrder: number) => {
       if (!Number.isFinite(tabOrder)) {
