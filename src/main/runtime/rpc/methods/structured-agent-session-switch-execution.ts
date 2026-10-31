@@ -33,7 +33,8 @@ import {
 } from './structured-agent-session-switch-source'
 import { executeStructuredSessionTerminalSwitch } from './structured-agent-session-switch-terminal-execution'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
-import { interruptWorkingAgent } from '../../terminal-agent-interrupt'
+import { stopStructuredSwitchTerminalSource } from './structured-agent-session-switch-terminal-stop'
+import { agentSessionLeasePossiblyWriting } from '../../../../shared/agent-session-lease-adjudication'
 import { mainAgentState } from '../../../../shared/main-agent-status'
 import { captureSwitchStoppedCliTurn } from '../../../native-chat/agent-session-wire/structured-agent-session-switch-import'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
@@ -182,37 +183,19 @@ async function switchToChat(
     : undefined
   deadline.check()
   if (close && paneKey) {
-    await interruptWorkingAgent(
-      ctx.runtime,
-      (key) => ctx.runtime.agentTransitions.latestRow(key),
+    await stopStructuredSwitchTerminalSource({
+      ctx,
+      host,
+      sessionId,
+      close,
       paneKey,
-      { signal: deadline.signal, beforeWrite: async () => deadline.check() }
-    )
-    // Only a tab the chat will replace keeps its exited pane shown for that write; a source in
-    // another workspace, or a pane in a split, exits as any pane does.
-    const destination =
-      host.deps.store.getRecord(sessionId)?.location.workspaceId ??
-      create?.worktree.replace(/^id:/, '')
-    const replacing =
-      destination !== undefined &&
-      worktreeIdsEqual(close.source.worktreeId, destination) &&
-      close.wholeTab()
-    // Shutdown already accepted must finish even when the observing request expires.
-    try {
-      await host.trackSwitchPhysical(sessionId, close.stop(replacing))
-      // The window decides whether the stopped pane is still there; a chat that replaced it is
-      // named so the window waits for that replace's own pass.
-      keepSource(() => close.settleStoppedSource(replacedBy))
-    } catch {
-      host.deps.logger.warn('switch source exit was not confirmed', {
-        scope: 'session-switch',
-        sessionId,
-        direction: 'chat',
-        source: 'terminal',
-        exactIncarnation: true
-      })
-      throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'ownerUnproven' })
-    }
+      deadline,
+      destination:
+        host.deps.store.getRecord(sessionId)?.location.workspaceId ??
+        create?.worktree.replace(/^id:/, ''),
+      boundary: before && stopped ? { source: before, stopped } : undefined,
+      keepSource: (settle) => keepSource(() => settle(replacedBy))
+    })
   }
   deadline.check()
   if (create) {
@@ -264,12 +247,24 @@ async function switchToChat(
         reason: 'transcriptUnreadable'
       })
     }
+    // An open turn settles only when nothing can still write it: no CLI writer (a live one refuses
+    // here, on every path, before the import) and a structured owner at rest.
+    if (providerSessionId) {
+      await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
+        record.provider,
+        providerSessionId,
+        create?.resumeFrom?.cliSource ??
+          (close && paneKey ? { workspaceId: close.source.worktreeId, paneKey } : undefined)
+      )
+    }
+    const lease = providerSessionId ? host.deps.store.getRecord(sessionId)?.lease : undefined
     await host.refreshSwitchTranscript(
       sessionId,
       transcript.cliForkSource,
       deadline,
       stopped,
-      check
+      check,
+      lease !== undefined && !agentSessionLeasePossiblyWriting(lease)
     )
   }
   const revealed = await host.revealSession(sessionId)

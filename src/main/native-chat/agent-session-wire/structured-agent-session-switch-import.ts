@@ -10,12 +10,19 @@ import type { AgentType } from '../../../shared/agent-status-types'
 import { getSystemCodexHomePath } from '../../codex/codex-home-paths'
 import type { AdoptedTranscriptSource } from '../agent-session-journal/adopted-transcript-source'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../shared/agent-session-journal-types'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import type { AgentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { prepareLegacyTranscriptImport } from '../agent-session-journal/journal-legacy-import'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
+import {
+  isSyntheticInterruptedTurn,
+  turnRecordReplaceable
+} from './structured-agent-session-synthetic-turn'
 
 export type SwitchTranscriptSource = {
   agent: AgentType
@@ -91,6 +98,8 @@ export async function catchUpSwitchedCliTranscript(input: {
   fence: number
   deadline: AgentSessionSwitchDeadline
   stopped?: SwitchStoppedCliTurn
+  /** The CLI writer census passed and the structured owner is at rest: an open turn is over. */
+  settleAbandoned?: boolean
   check?: () => void
   resumeCursor?: string
 }) {
@@ -130,30 +139,58 @@ export async function catchUpSwitchedCliTranscript(input: {
       : items.filter((item) => !covered.has(agentJournalItemKey(item.identity)))
   const ended =
     latest && latest.state !== 'working' ? { ...latest, state: latest.state } : undefined
-  const turnId = interrupted ? input.stopped?.turnId : ended?.turnId
-  if (turnId && userKey && !covered.has(userKey)) {
-    additions.push({
-      identity: {
-        provider: 'legacy',
-        agent: input.source.agent,
-        sessionId: input.source.sessionId,
-        recordId: `turn-lifecycle:${turnId}`
-      },
-      ownerFence: 0,
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE,
-      body: {
+  // No writer is left and the turn never ended: it is over. Unknown evidence (no lifecycle, or a
+  // reply only a legacy format calls complete) gets no label rather than a guessed one.
+  const abandoned =
+    !interrupted &&
+    input.settleAbandoned === true &&
+    latest?.state === 'working' &&
+    !prepared.latestTurnAmbiguous
+  const turnId = interrupted ? input.stopped?.turnId : abandoned ? latest?.turnId : ended?.turnId
+  // Codex's turn records have one writer, the resting importer, which anchors them to saved rows.
+  if (input.source.agent !== 'codex' && turnId && userKey && !covered.has(userKey)) {
+    additions.push(
+      lifecycleRecord(input.source, turnId, {
         kind: 'turn',
         turnId,
         userItemId: userKey,
-        state: interrupted ? 'interrupted' : ended!.state,
+        state: interrupted || abandoned ? 'interrupted' : ended!.state,
         ...(interrupted
           ? { outcome: 'cancellation' as const }
           : ended?.outcome
             ? { outcome: ended.outcome }
             : {}),
         ...(ended?.timestamp == null ? {} : { completedAt: ended.timestamp })
+      })
+    )
+  }
+  // An earlier turn Orca settled whose real boundary has since been recorded takes that boundary.
+  if (input.source.agent !== 'codex') {
+    // Grok's latest turn comes from its sidecar, not the transcript rows.
+    const states = new Map(prepared.turnStates)
+    if (latest) {
+      states.set(latest.turnId, latest)
+    }
+    for (const [id, state] of states) {
+      const body = input.journal.item(
+        input.journal.canonicalItemId(
+          agentJournalItemKey(lifecycleRecord(input.source, id).identity)
+        )
+      )?.body
+      if (id !== turnId && state.state !== 'working' && isSyntheticInterruptedTurn(body)) {
+        const outcome = state.outcome ?? (state.state === 'interrupted' ? body.outcome : undefined)
+        additions.push(
+          lifecycleRecord(input.source, id, {
+            kind: 'turn',
+            turnId: id,
+            ...(body.userItemId ? { userItemId: body.userItemId } : {}),
+            state: state.state,
+            ...(outcome ? { outcome } : {}),
+            ...(state.timestamp == null ? {} : { completedAt: state.timestamp })
+          })
+        )
       }
-    })
+    }
   }
   const digest = createHash('sha256').update(JSON.stringify(additions)).digest('hex')
   await input.journal.appendPlannedLifecycleBatch({
@@ -169,12 +206,7 @@ export async function catchUpSwitchedCliTranscript(input: {
             const current = input.journal.item(
               input.journal.canonicalItemId(agentJournalItemKey(item.identity))
             )
-            return (
-              !current ||
-              (item.body.kind === 'turn' &&
-                current.body.kind === 'turn' &&
-                current.body.state === 'running')
-            )
+            return !current || turnRecordReplaceable(current.body, item.body)
           })
           .map((item) => ({
             kind: 'item' as const,
@@ -184,4 +216,22 @@ export async function catchUpSwitchedCliTranscript(input: {
       }
     }
   })
+}
+
+function lifecycleRecord(
+  source: SwitchTranscriptSource,
+  turnId: string,
+  body?: Extract<AgentJournalItemBody, { kind: 'turn' }>
+): JournalReplacementItem {
+  return {
+    identity: {
+      provider: 'legacy',
+      agent: source.agent,
+      sessionId: source.sessionId,
+      recordId: `turn-lifecycle:${turnId}`
+    },
+    ownerFence: 0,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+    body: body ?? { kind: 'turn', turnId, state: 'running' }
+  }
 }

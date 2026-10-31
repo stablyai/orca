@@ -6,7 +6,10 @@ import {
   sameCodexHistoryJournalView
 } from '../../codex/codex-history-journal-view'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../shared/agent-session-journal-types'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import type { AgentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -22,8 +25,34 @@ import {
   isCodexVisibleHistoryRecord
 } from '../transcript-line-decoders-codex'
 import { decodeCodexTurnLifecycle } from '../transcript-turn-lifecycle'
+import {
+  codexChildTurn,
+  lifecycleIdentity,
+  providerItemId,
+  savedCodexPrompts
+} from './structured-agent-session-codex-turns'
+import {
+  isSyntheticInterruptedTurn,
+  turnRecordReplaceable
+} from './structured-agent-session-synthetic-turn'
 
-/** Refresh a retained read owner without starting a provider or replacing native submissions. */
+type CodexTurn = {
+  id: string
+  /** Started after the last import: its rows are imported here. */
+  messages: boolean
+  /** Started before the import with no lifecycle record: only its outcome is derived here. */
+  baseline: boolean
+  /** The saved row that opened a baseline turn, so its record anchors to the real prompt. */
+  opener?: string
+  ended: boolean
+}
+
+/**
+ * Refresh a retained read owner without starting a provider or replacing native submissions. The
+ * one writer of this thread's Codex turn records: turns started since the last import, and the
+ * latest turn the import itself brought in. With no writer left (`settleAbandoned`), a turn the
+ * provider never ended is over and settles as interrupted, as Codex's own thread reader reports it.
+ */
 export async function catchUpStructuredSessionAtRest(input: {
   journal: AgentSessionJournal
   threadId: string
@@ -31,6 +60,10 @@ export async function catchUpStructuredSessionAtRest(input: {
   fence: number
   deadline: AgentSessionSwitchDeadline
   stoppedTurnId?: string
+  /** The saved prompt of the turn this switch stopped, for a transcript that never started it. */
+  stoppedUserItemKey?: string
+  /** The CLI writer census passed and the structured owner is at rest. */
+  settleAbandoned?: boolean
   check?: () => void
 }): Promise<void> {
   const { journal, threadId, deadline } = input
@@ -56,8 +89,48 @@ export async function catchUpStructuredSessionAtRest(input: {
     }
     items.push(item)
   }
-  let turn: string | undefined
-  let include = false
+  const settled = (turnId: string) => {
+    const current = journal.item(
+      journal.canonicalItemId(agentJournalItemKey(lifecycleIdentity(threadId, turnId)))
+    )
+    return view.known.has(turnId) && !isSyntheticInterruptedTurn(current?.body)
+  }
+  let prompts: Map<string, string> | undefined
+  let turn: CodexTurn | undefined
+  let baseline: JournalReplacementItem | undefined
+  const children = new Set<string>()
+  const started = new Set<string>()
+  const record = (target: CodexTurn, body: Extract<AgentJournalItemBody, { kind: 'turn' }>) => {
+    const item = {
+      identity: lifecycleIdentity(threadId, target.id),
+      ownerFence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
+    if (target.messages) {
+      retain({ ...item, body })
+    } else if (target.baseline) {
+      // No saved prompt row to anchor to: write nothing rather than a dangling opener.
+      baseline = target.opener
+        ? { ...item, body: { ...body, userItemId: target.opener } }
+        : undefined
+    }
+  }
+  const close = (target: CodexTurn) => {
+    target.ended = true
+    if (input.settleAbandoned || target.id === input.stoppedTurnId) {
+      record(target, {
+        kind: 'turn',
+        turnId: target.id,
+        state: 'interrupted',
+        ...(target.id === input.stoppedTurnId ? { outcome: 'cancellation' as const } : {})
+      })
+    } else if (target.messages) {
+      // A writer may still be adding to it: stay retryable rather than declare it covered.
+      throw agentSessionRefusalError('agent_session_operation_invalid', {
+        reason: 'messagesUnsettled'
+      })
+    }
+  }
   let identityConfirmed = false
   let paginated = false
   let index = 0
@@ -65,9 +138,9 @@ export async function catchUpStructuredSessionAtRest(input: {
   for await (const { line } of splitTranscriptStreamLines(stream, 16 * 1024 * 1024)) {
     deadline.check()
     const currentLineIndex = index++
-    const record = parseJsonObject(line)
-    const payload = asRecord(record?.payload)
-    if (record?.type === 'session_meta') {
+    const parsed = parseJsonObject(line)
+    const payload = asRecord(parsed?.payload)
+    if (parsed?.type === 'session_meta') {
       if (payload?.id !== threadId) {
         throw agentSessionRefusalError('agent_session_identity_required', {
           reason: 'transcriptUnreadable'
@@ -78,73 +151,85 @@ export async function catchUpStructuredSessionAtRest(input: {
     }
     const lifecycle = decodeCodexTurnLifecycle(line, '')
     if (lifecycle?.state === 'working') {
-      if (include) {
-        throw agentSessionRefusalError('agent_session_operation_invalid', {
-          reason: 'messagesUnsettled'
-        })
+      if (codexChildTurn(payload)) {
+        children.add(lifecycle.turnId)
+        continue
       }
-      turn = lifecycle.turnId || undefined
-      include = Boolean(
-        turn &&
-        !view.known.has(turn) &&
-        lifecycle.timestamp !== null &&
-        (view.importedAt === null || lifecycle.timestamp > view.importedAt)
-      )
-    }
-    if (!include || !turn) {
+      if (turn && !turn.ended) {
+        close(turn)
+      }
+      const id = lifecycle.turnId
+      started.add(id)
+      const imported =
+        lifecycle.timestamp === null ||
+        (view.importedAt !== null && lifecycle.timestamp <= view.importedAt)
+      if (imported) {
+        baseline = undefined
+      }
+      turn = id
+        ? {
+            id,
+            messages: !imported && !settled(id),
+            baseline: imported && !settled(id),
+            ended: false
+          }
+        : undefined
       continue
     }
-    if (lifecycle && lifecycle.state !== 'working') {
-      if (lifecycle.turnId !== turn) {
-        throw agentSessionRefusalError('agent_session_operation_invalid', {
-          reason: 'messagesUnsettled'
-        })
+    if (!turn || turn.ended || (!turn.messages && !turn.baseline)) {
+      continue
+    }
+    if (lifecycle) {
+      if (children.has(lifecycle.turnId)) {
+        continue
       }
-      retain({
-        identity: {
-          provider: 'legacy',
-          agent: 'codex',
-          sessionId: threadId,
-          recordId: `turn-lifecycle:${turn}`
-        },
-        body: {
-          kind: 'turn',
-          turnId: turn,
-          state: lifecycle.state,
-          ...(lifecycle.outcome
-            ? { outcome: lifecycle.outcome }
-            : lifecycle.state === 'interrupted' && turn === input.stoppedTurnId
-              ? { outcome: 'cancellation' as const }
-              : {}),
-          ...(lifecycle.timestamp === null ? {} : { completedAt: lifecycle.timestamp })
-        },
-        ownerFence: 0,
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      if (lifecycle.turnId !== turn.id) {
+        if (turn.messages) {
+          throw agentSessionRefusalError('agent_session_operation_invalid', {
+            reason: 'messagesUnsettled'
+          })
+        }
+        continue
+      }
+      turn.ended = true
+      record(turn, {
+        kind: 'turn',
+        turnId: turn.id,
+        state: lifecycle.state,
+        ...(lifecycle.outcome
+          ? { outcome: lifecycle.outcome }
+          : lifecycle.state === 'interrupted' && turn.id === input.stoppedTurnId
+            ? { outcome: 'cancellation' as const }
+            : {}),
+        ...(lifecycle.timestamp === null ? {} : { completedAt: lifecycle.timestamp })
       })
-      include = false
       continue
     }
-    if (!isCodexVisibleHistoryRecord(record, paginated)) {
+    if (!isCodexVisibleHistoryRecord(parsed, paginated)) {
       continue
     }
     const message = decodeCodexTranscriptLine(line, `#${currentLineIndex}`, { historyImport: true })
-    if (message) {
-      retain({
-        identity: tracker.identify(line, currentLineIndex),
-        body: legacyItemBody(message, LEGACY_IMPORT_BLOCK_LIMITS),
-        ownerFence: 0,
-        turnScope: {
-          kind: 'turn',
-          turnItemId: agentJournalItemKey({
-            provider: 'legacy',
-            agent: 'codex',
-            sessionId: threadId,
-            recordId: `turn-lifecycle:${turn}`
-          })
-        },
-        ...(message.timestamp === null ? {} : { observedAt: message.timestamp })
-      })
+    if (!message) {
+      continue
     }
+    if (turn.baseline) {
+      const id = turn.opener || message.role !== 'user' ? null : providerItemId(parsed)
+      if (id) {
+        prompts ??= savedCodexPrompts(journal, threadId)
+        turn.opener = prompts.get(id)
+      }
+      continue
+    }
+    retain({
+      identity: tracker.identify(line, currentLineIndex),
+      body: legacyItemBody(message, LEGACY_IMPORT_BLOCK_LIMITS),
+      ownerFence: 0,
+      turnScope: {
+        kind: 'turn',
+        turnItemId: agentJournalItemKey(lifecycleIdentity(threadId, turn.id))
+      },
+      ...(message.timestamp === null ? {} : { observedAt: message.timestamp })
+    })
   }
   deadline.check()
   if (!identityConfirmed) {
@@ -152,10 +237,33 @@ export async function catchUpStructuredSessionAtRest(input: {
       reason: 'transcriptUnreadable'
     })
   }
-  // Incomplete source turns must remain retryable rather than being declared covered.
-  if (include && turn !== input.stoppedTurnId) {
-    throw agentSessionRefusalError('agent_session_operation_invalid', {
-      reason: 'messagesUnsettled'
+  if (turn && !turn.ended) {
+    close(turn)
+  }
+  if (baseline) {
+    retain(baseline)
+  }
+  // A rollout with no turn events still names the prompt the switch stopped: the stop lands there.
+  const stoppedPrompt =
+    input.stoppedUserItemKey && journal.canonicalItemId(input.stoppedUserItemKey)
+  if (
+    input.stoppedTurnId &&
+    !started.has(input.stoppedTurnId) &&
+    !view.known.has(input.stoppedTurnId) &&
+    stoppedPrompt &&
+    journal.item(stoppedPrompt)
+  ) {
+    retain({
+      identity: lifecycleIdentity(threadId, input.stoppedTurnId),
+      ownerFence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+      body: {
+        kind: 'turn',
+        turnId: input.stoppedTurnId,
+        userItemId: stoppedPrompt,
+        state: 'interrupted',
+        outcome: 'cancellation'
+      }
     })
   }
   if (!items.length) {
@@ -176,7 +284,12 @@ export async function catchUpStructuredSessionAtRest(input: {
       return {
         dispatches: [],
         mutations: items
-          .filter((item) => !journal.item(agentJournalItemKey(item.identity)))
+          .filter((item) => {
+            const current = journal.item(
+              journal.canonicalItemId(agentJournalItemKey(item.identity))
+            )
+            return !current || turnRecordReplaceable(current.body, item.body)
+          })
           .map((item) => ({
             kind: 'item' as const,
             ...item,

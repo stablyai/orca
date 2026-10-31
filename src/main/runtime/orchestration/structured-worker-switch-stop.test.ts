@@ -13,9 +13,12 @@ import {
   foundRestTestChat,
   REST_TEST_SESSION as id,
   REST_TEST_CALLER as caller,
+  REST_TEST_THREAD,
   type RestTestRig
 } from '../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
 import { agentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { STOP_NOTE_CANCELLATION_REQUESTED } from '../../native-chat/agent-session-wire/structured-agent-session-turn-stop-notes'
 
 let rig: RestTestRig
 let db: OrchestrationDb
@@ -91,5 +94,28 @@ it.each([false, true])(
     expect(db.getWorkerDispatch(dispatch.id)?.state).toBe(proven ? 'stopped' : 'stop_unknown')
     expect(forgetStructuredSessionMail).toHaveBeenCalledWith(id)
     expect(db.getDispatchContextById(dispatch.id)?.status).toBe(proven ? 'failed' : 'dispatched')
+  }
+)
+
+it.each([false, true])(
+  'sends the switch’s Stop only to a chat that is replying=%s, so an idle chat gets no Stop note',
+  async (replying) => {
+    await foundRestTestChat(rig)
+    const events = rig.adapter.acquire.mock.calls.at(-1)![0].events
+    for (const state of replying ? (['running'] as const) : (['running', 'completed'] as const)) {
+      events.appendItem(
+        { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'turn', ordinal: 50 },
+        { kind: 'turn', turnId: 'turn', state },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    }
+    await rig.host.flushStreamedEvents(id)
+    const cancel = vi.spyOn(rig.host, 'cancel')
+    await rig.host.stopForSwitch(id, caller, deadline)
+    expect(cancel).toHaveBeenCalledTimes(replying ? 1 : 0)
+    const { journal } = await rig.host.collaboratorsForTests().lifetime.conversation(id)
+    expect(
+      JSON.stringify(journal.snapshot().items).includes(STOP_NOTE_CANCELLATION_REQUESTED)
+    ).toBe(replying)
   }
 )

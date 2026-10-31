@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentSessionLeasePossiblyWriting } from '../../../shared/agent-session-lease-adjudication'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import {
   AgentSessionRefusalError,
   agentSessionRefusalError
@@ -21,7 +22,7 @@ import type { StructuredAgentSessionConversationLifetime } from './structured-ag
 import type { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 type SwitchSourceContext = Pick<
   StructuredAgentSessionHost,
-  'deps' | 'cancel' | 'switchGeneration' | 'guardSwitchWork'
+  'deps' | 'cancel' | 'switchGeneration' | 'guardSwitchWork' | 'currentWork'
 > & {
   now: () => number
   startFlights: Pick<StructuredAgentSessionStartFlights, 'physicalExit'>
@@ -52,7 +53,7 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
       deadline: AgentSessionSwitchDeadline
     ) => {
       deadline.check()
-      await context.lifetime.conversation(sessionId)
+      const conversation = await context.lifetime.conversation(sessionId)
       deadline.check()
       let child = context.sessions.get(sessionId)?.child ?? null
       let admitted = context.deps.store.admittedSendCount(sessionId)
@@ -79,26 +80,38 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
           sessionId
         })
       }
+      // A Stop with no turn running and nothing queued stops nothing (the common pattern makes it a
+      // no-op, so no Stop note is written); the process stop below still ends the agent with proof.
+      const work = context.currentWork(sessionId, conversation.journal)
+      const stops =
+        work === undefined ||
+        work.working() ||
+        conversation.journal.submissions().some(isQueuedAgentJournalSubmission)
       let proven = false
       try {
-        const answer = await context.cancel(caller, {
-          envelope: {
-            sessionId,
-            clientOperationId: createStructuredAgentSessionOperationId(randomUUID, context.now()),
-            expectedRuntimeFence: record.lease.runtimeFence,
-            payloadFingerprint: computeAgentSessionPayloadFingerprint({
-              method: 'agentSession.cancel',
-              sessionId,
-              fields: {}
+        const answer = !stops
+          ? ({ ok: true } as const)
+          : await context.cancel(caller, {
+              envelope: {
+                sessionId,
+                clientOperationId: createStructuredAgentSessionOperationId(
+                  randomUUID,
+                  context.now()
+                ),
+                expectedRuntimeFence: record.lease.runtimeFence,
+                payloadFingerprint: computeAgentSessionPayloadFingerprint({
+                  method: 'agentSession.cancel',
+                  sessionId,
+                  fields: {}
+                })
+              },
+              onAccepted: (captured) => {
+                child = captured
+                admitted = context.deps.store.admittedSendCount(sessionId)
+                accepted = true
+              },
+              waitForShutdown: true
             })
-          },
-          onAccepted: (captured) => {
-            child = captured
-            admitted = context.deps.store.admittedSendCount(sessionId)
-            accepted = true
-          },
-          waitForShutdown: true
-        })
         if (!answer.ok) {
           throw new AgentSessionRefusalError(answer.refusal)
         }
@@ -192,7 +205,8 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
       },
       deadline: AgentSessionSwitchDeadline,
       stopped?: SwitchStoppedCliTurn,
-      check: () => void = deadline.check
+      check: () => void = deadline.check,
+      settleAbandoned = false
     ) => {
       const session = await context.lifetime.conversation(sessionId)
       const transcript = { ...source, agent: source.agent ?? session.params.agent }
@@ -204,6 +218,8 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
           fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
           deadline,
           stoppedTurnId: stopped?.turnId,
+          stoppedUserItemKey: stopped?.userItemKey,
+          settleAbandoned,
           check
         })
       }
@@ -216,6 +232,7 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
         fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
         deadline,
         stopped,
+        settleAbandoned,
         check
       })
       context.subscribers.publish(sessionId, session.journal)

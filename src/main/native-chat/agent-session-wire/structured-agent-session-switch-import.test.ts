@@ -61,6 +61,22 @@ const claudeRecording = await readFile(
   'utf8'
 )
 const claudeRecordingId: string = JSON.parse(claudeRecording.split('\n')[0]!).sessionId
+/** The production refresh: Codex's resting import (its one turn-record writer), then the shared one. */
+async function refresh(input: Parameters<typeof catchUpSwitchedCliTranscript>[0]) {
+  if (input.source.agent === 'codex') {
+    await catchUpStructuredSessionAtRest({
+      journal: input.journal,
+      threadId: input.source.sessionId,
+      filePath: input.source.filePath,
+      fence: input.fence,
+      deadline: input.deadline,
+      stoppedTurnId: input.stopped?.turnId,
+      stoppedUserItemKey: input.stopped?.userItemKey,
+      settleAbandoned: input.settleAbandoned
+    })
+  }
+  await catchUpSwitchedCliTranscript(input)
+}
 it.each([
   ['claude', claudeRecordingId],
   ['codex', '01a183db-b8d6-7170-af39-e004651c1e1e'],
@@ -144,7 +160,7 @@ it.each([
         )
     await install(false)
     const historical = await imported('historical-recording')
-    await catchUpSwitchedCliTranscript({ journal: historical, source, fence: 1, deadline })
+    await refresh({ journal: historical, source, fence: 1, deadline })
     expect(turns(historical)).toEqual([])
     const stopped = await captureSwitchStoppedCliTurn(source, true, deadline)
     expect(stopped).toMatchObject({ sessionId: source.sessionId })
@@ -154,7 +170,7 @@ it.each([
       content.filter(({ body }) => body.kind === 'message' && body.role === 'user')
     ).toHaveLength(1)
     expect(blocks(journal)).toContain('tool-call')
-    await catchUpSwitchedCliTranscript({ journal, source, fence: 1, deadline, stopped })
+    await refresh({ journal, source, fence: 1, deadline, stopped })
     expect(turns(journal)).toEqual([
       expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
     ])
@@ -175,7 +191,7 @@ it.each([
       ...recordedOptions,
       identity: { ...recordedOptions.identity, sessionId: 'switched-recording' }
     })
-    await catchUpSwitchedCliTranscript({ journal, source, fence: 1, deadline, stopped })
+    await refresh({ journal, source, fence: 1, deadline, stopped })
     expect(journal.snapshot()).toEqual(interrupted)
     if (agent === 'claude') {
       const prefix = await readFile(filePath, 'utf8')
@@ -196,7 +212,7 @@ it.each([
         })}\n`
       )
       const historyWithMarker = await imported('historical-interruption-marker')
-      await catchUpSwitchedCliTranscript({ journal: historyWithMarker, source, fence: 1, deadline })
+      await refresh({ journal: historyWithMarker, source, fence: 1, deadline })
       const [historicalTurn] = turns(historyWithMarker)
       expect(historicalTurn).toMatchObject({ state: 'interrupted', turnId: stopped!.turnId })
       expect(historicalTurn!.outcome).toBeUndefined()
@@ -204,7 +220,7 @@ it.each([
       const historyItems = historyWithMarker.snapshot().items
       expect(withNativeChatCutTurnNotices(historyItems)).toHaveLength(historyItems.length + 1)
       const stoppedWithMarker = await imported('stopped-interruption-marker')
-      await catchUpSwitchedCliTranscript({
+      await refresh({
         journal: stoppedWithMarker,
         source,
         fence: 1,
@@ -221,7 +237,7 @@ it.each([
       const stoppedItems = stoppedWithMarker.snapshot().items
       expect(withNativeChatCutTurnNotices(stoppedItems)).toBe(stoppedItems)
       const stoppedSnapshot = stoppedWithMarker.snapshot()
-      await catchUpSwitchedCliTranscript({
+      await refresh({
         journal: stoppedWithMarker,
         source,
         fence: 1,
@@ -287,7 +303,7 @@ it.each([
           completedAt: Date.parse(started.timestamp) + 1
         })
         expect(retained.snapshot().items.slice(0, nativeItems.length)).toEqual(nativeItems)
-        await catchUpSwitchedCliTranscript({
+        await refresh({
           journal: retained,
           source,
           fence: 1,
@@ -323,7 +339,7 @@ it.each([
           stoppedTurnId: stopped!.turnId,
           check: deadline.check
         })
-        await catchUpSwitchedCliTranscript({
+        await refresh({
           journal: retained,
           source,
           fence: 1,
@@ -336,11 +352,11 @@ it.each([
     }
     await install(true)
     const completed = await imported('completed-recording')
-    await catchUpSwitchedCliTranscript({ journal: completed, source, fence: 1, deadline, stopped })
+    await refresh({ journal: completed, source, fence: 1, deadline, stopped })
     expect(turns(completed)).toEqual([expect.objectContaining({ state: 'completed' })])
     expect(blocks(completed)).toContain('tool-result')
     const final = completed.snapshot()
-    await catchUpSwitchedCliTranscript({ journal: completed, source, fence: 1, deadline, stopped })
+    await refresh({ journal: completed, source, fence: 1, deadline, stopped })
     expect(completed.snapshot()).toEqual(final)
   }
 )
@@ -394,7 +410,7 @@ it.each(['adopted-active', 'retained-archive'] as const)(
       { blocks: [{ text: 'current' }] },
       { blocks: [{ text: 'current answer' }] }
     ])
-    await catchUpSwitchedCliTranscript({ journal, source, fence: 1, deadline, stopped })
+    await refresh({ journal, source, fence: 1, deadline, stopped })
     expect(journal.snapshot().items.filter(({ body }) => body.kind !== 'turn')).toEqual(messages)
     expect(
       journal
@@ -403,7 +419,7 @@ it.each(['adopted-active', 'retained-archive'] as const)(
         .map(({ body }) => body)
     ).toEqual([expect.objectContaining({ state: 'interrupted', turnId: stopped!.turnId })])
     const refreshed = journal.snapshot()
-    await catchUpSwitchedCliTranscript({ journal, source, fence: 1, deadline })
+    await refresh({ journal, source, fence: 1, deadline })
     expect(journal.snapshot()).toEqual(refreshed)
     await expect(
       captureSwitchStoppedCliTurn(

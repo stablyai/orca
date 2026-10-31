@@ -97,25 +97,28 @@ export async function prepareLegacyTranscriptImport(input: {
   }
 
   try {
-    const { items, consumedBytes, latestTurn } = await decodeReplacementItems({
-      filePath,
-      piAfterEntry: input.piAfterEntry,
-      transcriptAgent,
-      agent: input.agent,
-      sessionId: input.sessionId,
-      source: options.source,
-      codexSessionsDirs: options.source?.conversationStore
-        ? [options.source.conversationStore]
-        : options.codexSessionsDirs,
-      signal: options.signal,
-      decodedMessageIdentities: options.decodedMessageIdentities,
-      limits
-    })
+    const { items, consumedBytes, latestTurn, turnStates, latestTurnAmbiguous } =
+      await decodeReplacementItems({
+        filePath,
+        piAfterEntry: input.piAfterEntry,
+        transcriptAgent,
+        agent: input.agent,
+        sessionId: input.sessionId,
+        source: options.source,
+        codexSessionsDirs: options.source?.conversationStore
+          ? [options.source.conversationStore]
+          : options.codexSessionsDirs,
+        signal: options.signal,
+        decodedMessageIdentities: options.decodedMessageIdentities,
+        limits
+      })
     return {
       ok: true,
       items,
       sourceEmpty: consumedBytes === 0,
-      ...(latestTurn ? { latestTurn } : {})
+      turnStates,
+      ...(latestTurn ? { latestTurn } : {}),
+      ...(latestTurnAmbiguous ? { latestTurnAmbiguous } : {})
     }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -186,6 +189,8 @@ async function decodeReplacementItems(input: {
   items: JournalReplacementItem[]
   consumedBytes: number
   latestTurn?: NativeChatTurnLifecycle
+  turnStates: ReadonlyMap<string, NativeChatTurnLifecycle>
+  latestTurnAmbiguous?: true
 }> {
   const source = input.source
     ? adoptedTranscriptSourceObserver({
@@ -209,11 +214,20 @@ async function decodeReplacementItems(input: {
       ? decodePiTurnLifecycle
       : nativeChatTurnLifecycleDecoderForAgent(input.agent, true)
   let latestTurn: NativeChatTurnLifecycle | undefined
+  const turnStates = new Map<string, NativeChatTurnLifecycle>()
+  // A legacy Claude reply may omit its stop reason: an open turn ending on such prose may be done.
+  const loose =
+    input.agent === 'claude' ? nativeChatTurnLifecycleDecoderForAgent(input.agent, false) : null
+  let latestTurnAmbiguous = false
   const observe = (line: string, fallbackId: string) => {
     const next = lifecycle?.(line, fallbackId)
     if (next) {
       latestTurn =
         next.state === 'working' || !latestTurn ? next : { ...next, turnId: latestTurn.turnId }
+      turnStates.set(latestTurn.turnId, latestTurn)
+      latestTurnAmbiguous = false
+    } else if (loose && latestTurn?.state === 'working') {
+      latestTurnAmbiguous ||= loose(line, fallbackId)?.state === 'completed'
     }
   }
   const pi =
@@ -285,7 +299,14 @@ async function decodeReplacementItems(input: {
         latestTurn = undefined
       }
     }
-    return { items: retained.items(), consumedBytes, ...(latestTurn ? { latestTurn } : {}) }
+    const ambiguous = latestTurnAmbiguous && latestTurn?.state === 'working'
+    return {
+      items: retained.items(),
+      consumedBytes,
+      turnStates,
+      ...(latestTurn ? { latestTurn } : {}),
+      ...(ambiguous ? { latestTurnAmbiguous: true as const } : {})
+    }
   } finally {
     pi?.close()
   }

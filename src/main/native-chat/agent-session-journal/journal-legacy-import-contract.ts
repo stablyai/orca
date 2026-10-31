@@ -28,5 +28,9 @@ export type PreparedLegacyImport =
       items: JournalReplacementItem[]
       sourceEmpty: boolean
       latestTurn?: NativeChatTurnLifecycle
+      /** Each turn's last lifecycle state, so a later import can replace an Orca-settled record. */
+      turnStates?: ReadonlyMap<string, NativeChatTurnLifecycle>
+      /** The open latest turn ended on a row only a legacy format calls complete: outcome unknown. */
+      latestTurnAmbiguous?: true
     }
   | { ok: false; error: string }
