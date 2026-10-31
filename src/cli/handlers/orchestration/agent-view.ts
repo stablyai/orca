@@ -104,7 +104,8 @@ export function formatAgentFieldsText(fields: AgentViewFields): string {
   return withReceiptNext([head.join(' '), ...rows].filter(Boolean).join('\n') || 'none', { next })
 }
 
-function formatFieldPairs(fields: AgentViewFields, prefix = ''): string {
+/** `name=value` pairs with no `Next:` line, for sender-written data. */
+export function formatFieldPairs(fields: AgentViewFields, prefix = ''): string {
   return Object.entries(fields)
     .filter(([, value]) => value !== undefined)
     .map(([key, value]) =>

@@ -43,6 +43,8 @@ export const CheckParams = z
     compatibilityAck: OptionalString,
     compatibilityQuestionAck: OptionalString,
     compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
+    // The executable --format Reply hints name; absent keeps `orca` (older CLIs and --full).
+    replyCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
     run: OptionalString,
     wait: OptionalBoolean,
     timeoutMs: OptionalFiniteNumber

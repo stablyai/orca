@@ -53,6 +53,7 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
         format: flags.has('format') ? true : undefined,
         inject: flags.has('inject') ? true : undefined,
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
+        replyCliCommand: flags.has('full') ? undefined : resolveCompatibilityCliCommand(),
         run: getOptionalStringFlag(flags, 'run'),
         ack: getOptionalStringFlag(flags, 'ack'),
         wait: wait ? true : undefined,

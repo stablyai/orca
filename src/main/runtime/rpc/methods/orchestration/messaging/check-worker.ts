@@ -201,7 +201,7 @@ export async function checkWorkerMailbox(args: {
   }
   const formatted = (messages: MessageRow[]) =>
     params.format || params.inject
-      ? { formatted: formatCheckBanners(messages, params.compatibilityCliCommand) }
+      ? { formatted: formatCheckBanners(messages, params.replyCliCommand) }
       : {}
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const readPeek = () => db.getUnreadMessages(address, typeFilter)
@@ -211,7 +211,7 @@ export async function checkWorkerMailbox(args: {
       batch,
       acknowledged: acknowledged?.delivery.id ?? args.runAcknowledged,
       format: params.format === true || params.inject === true,
-      cliCommand: params.compatibilityCliCommand
+      cliCommand: params.replyCliCommand
     })
   // The receipt commits with the take, so --retry-request can always replay a handed-over batch.
   const takeDelivery = (wakeTypes?: MessageType[]) => {

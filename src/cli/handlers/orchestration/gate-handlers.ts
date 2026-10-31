@@ -18,7 +18,8 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       result,
       { flags, json },
       {
-        fields: (value) => value,
+        // The row echoes the question and options the caller just sent.
+        fields: (value) => gateReceipt(value.gate),
         fullText: (value) =>
           `Gate ${value.gate.id} created for task ${value.gate.task_id} [${value.gate.status}]`
       }
@@ -37,7 +38,7 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       result,
       { flags, json },
       {
-        fields: (value) => value,
+        fields: (value) => gateReceipt(value.gate),
         fullText: (value) => `Gate ${value.gate.id} resolved: ${value.gate.resolution}`
       }
     )
@@ -75,4 +76,8 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       }
     )
   }
+}
+
+function gateReceipt(gate: { id: string; task_id: string; status: string }) {
+  return { gateId: gate.id, taskId: gate.task_id, status: gate.status }
 }

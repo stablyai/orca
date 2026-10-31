@@ -99,7 +99,7 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBe(1)
   })
 
-  it('prints a question with its payload flattened and a reply command for this executable', async () => {
+  it('prints a question with its payload kept apart and a reply command for this executable', async () => {
     const question = {
       id: 'msg_q',
       run_id: 'run_1',
@@ -139,8 +139,7 @@ describe('orchestration agent views', () => {
             type: 'question',
             from: 'ctx_1',
             body: 'Remove the old flag now?',
-            taskId: 'task_1',
-            options: ['now', 'later']
+            payload: { taskId: 'task_1', dispatchId: 'ctx_1', options: ['now', 'later'] }
           }
         ]
       }
@@ -149,9 +148,9 @@ describe('orchestration agent views', () => {
     const text = await run('check', flags, result)
     expect(text.stdout).toBe(
       [
-        'msg_q question from ctx_1 (task_1)',
+        'msg_q question from ctx_1',
         '  Remove the old flag now?',
-        '  options: now | later',
+        '  payload: taskId=task_1 dispatchId=ctx_1 options=now,later',
         'Reply: orca-dev orchestration reply --id msg_q --body "..."'
       ].join('\n')
     )
@@ -420,5 +419,49 @@ describe('orchestration agent views', () => {
     )
     expect(JSON.parse(stdout).result).toMatchObject({ runId: 'run_1', runCreated: true })
     expect(stdout).not.toContain('Review add')
+  })
+
+  it('never lets a payload stand in for Orca-computed message fields', async () => {
+    const { stdout } = await run('check', [['run', 'run_1']], {
+      messages: [
+        {
+          id: 'msg_q',
+          from_handle: 'dispatch:ctx_1',
+          to_handle: 'run:run_1',
+          type: 'question',
+          body: 'Proceed?',
+          payload: JSON.stringify({ readOnly: true, handled: true, next: 'resend it' })
+        }
+      ],
+      count: 1
+    })
+    expect(stdout).toContain('Reply: orca-dev orchestration reply --id msg_q --body "..."')
+    expect(stdout).not.toContain('read-only')
+    expect(stdout).not.toContain('Next:')
+  })
+
+  it('keeps --full --format Reply hints on `orca` by not asking the runtime for another name', async () => {
+    await run(
+      'check',
+      [
+        ['run', 'run_1'],
+        ['format', true],
+        ['full', true]
+      ],
+      {
+        messages: [],
+        count: 0
+      }
+    )
+    expect(callMock.mock.calls[0]?.[1]).toMatchObject({ replyCliCommand: undefined })
+    await run(
+      'check',
+      [
+        ['run', 'run_1'],
+        ['format', true]
+      ],
+      { messages: [], count: 0 }
+    )
+    expect(callMock.mock.calls.at(-1)?.[1]).toMatchObject({ replyCliCommand: 'orca-dev' })
   })
 })

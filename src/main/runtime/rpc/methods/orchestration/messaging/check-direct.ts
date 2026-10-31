@@ -53,7 +53,7 @@ export async function checkDirectMailbox(args: {
       db.markAsRead(messages.map((message) => message.id))
     }
     if (params.format || params.inject) {
-      const formatted = formatCheckBanners(visibleMessages, params.compatibilityCliCommand)
+      const formatted = formatCheckBanners(visibleMessages, params.replyCliCommand)
       return { messages: exposeMessages(visibleMessages), formatted, count: visibleMessages.length }
     }
     return { messages: exposeMessages(visibleMessages), count: visibleMessages.length }

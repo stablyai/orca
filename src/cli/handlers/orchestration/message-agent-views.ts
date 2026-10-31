@@ -7,13 +7,14 @@ import {
 } from '../../../shared/orchestration-check-output'
 import { escapeTerminalControlCharacters } from '../../../shared/terminal-control-character-escape'
 import {
+  formatFieldPairs,
   orchestrationCliName,
   resolveOrcaCommandsInText,
   type OrchestrationAgentView
 } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
 
-/** A message as the agent acts on it: payload flattened, routing and storage columns dropped. */
+/** A message as the agent acts on it: storage columns dropped, the payload parsed but kept apart. */
 export type MessageView = {
   id: string
   type: string
@@ -24,33 +25,19 @@ export type MessageView = {
   priority?: string
   readOnly?: true
   handled?: boolean
-  [payloadField: string]: unknown
+  // Kept nested so sender-written payload can never stand in for Orca's own fields.
+  payload?: Record<string, unknown> | string
 }
-
-// `payload` is reserved too: payload fields that collide with view keys are kept under it.
-const MESSAGE_VIEW_KEYS = new Set([
-  'id',
-  'type',
-  'from',
-  'to',
-  'subject',
-  'body',
-  'priority',
-  'payload'
-])
 
 export function toMessageView(
   message: OrchestrationMessageSummary,
   options: { legacyCompatibilityActive?: boolean; recipient?: boolean } = {}
 ): MessageView {
-  const payload = parsePayload(message.payload)
   const type = message.type ?? 'status'
-  const dispatchId = typeof payload?.dispatchId === 'string' ? payload.dispatchId : undefined
-  const view: MessageView = {
+  return {
     id: message.id,
     type,
-    // A worker's report names it by Dispatch, not by the terminal that sent it.
-    from: dispatchId ?? message.from_handle.replace(/^dispatch:/, ''),
+    from: message.from_handle.replace(/^dispatch:/, ''),
     ...(options.recipient && message.to_handle ? { to: message.to_handle } : {}),
     // ask stores a fixed subject; the body is the question.
     ...(message.subject && !(type === 'question' && message.subject === 'Question')
@@ -61,44 +48,31 @@ export function toMessageView(
     ...(isLegacyReadOnlyMessage(message, options.legacyCompatibilityActive)
       ? { readOnly: true as const }
       : {}),
-    ...(options.recipient && message.read !== undefined ? { handled: message.read === 1 } : {})
+    ...(options.recipient && message.read !== undefined ? { handled: message.read === 1 } : {}),
+    ...payloadView(message)
   }
-  if (payload === undefined) {
-    return message.payload ? { ...view, payload: message.payload } : view
-  }
-  const collisions: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(payload)) {
-    if (
-      (key === 'dispatchId' && value === dispatchId) ||
-      (key === 'question' && value === message.body)
-    ) {
-      continue
-    }
-    if (MESSAGE_VIEW_KEYS.has(key) || key in view) {
-      collisions[key] = value
-    } else {
-      view[key] = value
-    }
-  }
-  return Object.keys(collisions).length ? { ...view, payload: collisions } : view
 }
 
-function parsePayload(payload: string | null | undefined): Record<string, unknown> | undefined {
-  if (!payload) {
-    return undefined
+// ask repeats the question in its payload; drop that copy, keep everything else as sent.
+function payloadView(message: OrchestrationMessageSummary): Pick<MessageView, 'payload'> {
+  if (!message.payload) {
+    return {}
   }
   try {
-    const parsed: unknown = JSON.parse(payload)
-    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? Object.fromEntries(Object.entries(parsed))
-      : undefined
+    const parsed: unknown = JSON.parse(message.payload)
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { payload: message.payload }
+    }
+    const entries = Object.entries(parsed).filter(
+      ([key, value]) => !(key === 'question' && value === message.body)
+    )
+    return entries.length ? { payload: Object.fromEntries(entries) } : {}
   } catch {
-    return undefined
+    return { payload: message.payload }
   }
 }
 
 export function formatMessageViewText(view: MessageView, replyCommand?: string): string {
-  const status = view.outcome ?? view.stopReason
   const flags = [
     view.priority === 'urgent' || view.priority === 'high'
       ? `[${view.priority.toUpperCase()}]`
@@ -107,7 +81,7 @@ export function formatMessageViewText(view: MessageView, replyCommand?: string):
     view.handled === false ? '[unhandled]' : ''
   ].filter(Boolean)
   const lines = [
-    `${view.id} ${view.type} from ${view.from}${view.to ? ` to ${view.to}` : ''}${typeof view.taskId === 'string' ? ` (${view.taskId})` : ''}${typeof status === 'string' ? `: ${status}` : ''}${flags.length ? ` ${flags.join(' ')}` : ''}`
+    `${view.id} ${view.type} from ${view.from}${view.to ? ` to ${view.to}` : ''}${flags.length ? ` ${flags.join(' ')}` : ''}`
   ]
   const indent = (text: string): string =>
     escapeTerminalControlCharacters(text)
@@ -120,28 +94,17 @@ export function formatMessageViewText(view: MessageView, replyCommand?: string):
   if (view.body) {
     lines.push(indent(view.body))
   }
-  for (const [key, value] of Object.entries(view)) {
-    if (MESSAGE_VIEW_KEYS.has(key) || PRINTED_PAYLOAD_KEYS.has(key)) {
-      continue
-    }
-    lines.push(indent(`${key}: ${formatPayloadValue(value)}`))
+  if (view.payload !== undefined) {
+    lines.push(
+      indent(
+        `payload: ${typeof view.payload === 'string' ? view.payload : formatFieldPairs(view.payload)}`
+      )
+    )
   }
   if (replyCommand) {
     lines.push(`Reply: ${replyCommand}`)
   }
   return lines.join('\n')
-}
-
-const PRINTED_PAYLOAD_KEYS = new Set(['taskId', 'outcome', 'stopReason', 'readOnly', 'handled'])
-
-function formatPayloadValue(value: unknown): string {
-  if (typeof value === 'string') {
-    return value
-  }
-  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
-    return value.join(' | ')
-  }
-  return JSON.stringify(value)
 }
 
 /** Only a question awaits `reply`; reports and escalations name their own follow-up. */
