@@ -6,6 +6,7 @@ const DUO_CHAT_EXPANDED_KEY = 'orca:duoChatExpanded'
 // One choice for every chat, kept across relaunches; expanded until the user collapses it.
 let expanded = true
 let hydrated = false
+let toggled = false
 const listeners = new Set<() => void>()
 
 function notify(): void {
@@ -20,7 +21,7 @@ function subscribe(listener: () => void): () => void {
     hydrated = true
     void AsyncStorage.getItem(DUO_CHAT_EXPANDED_KEY)
       .then((raw) => {
-        if (raw === 'false' && expanded) {
+        if (raw === 'false' && expanded && !toggled) {
           expanded = false
           notify()
         }
@@ -33,6 +34,7 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function toggleDuoChatExpanded(): void {
+  toggled = true
   expanded = !expanded
   void AsyncStorage.setItem(DUO_CHAT_EXPANDED_KEY, String(expanded)).catch(() => {})
   notify()

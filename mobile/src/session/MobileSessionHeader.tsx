@@ -18,7 +18,6 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { useTopChromeSpace } from '../layout/use-top-chrome-space'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
 import { useReleasedSideInset } from '../layout/released-side-inset'
-import { sideStripPadding } from './session-side-strip-inset'
 
 export function MobileSessionHeader({
   controller,
@@ -123,6 +122,12 @@ export function MobileSessionHeader({
       />
     </>
   )
+  // Why: keep the larger of the strip and the top-chrome clearance so controls stay off the clock/camera.
+  const releasedStripPadding = releasedStrip
+    ? releasedStrip.side === 'right'
+      ? { paddingRight: Math.max(releasedStrip.width, topChrome.space?.right ?? 0) }
+      : { paddingLeft: Math.max(releasedStrip.width, topChrome.space?.left ?? 0) }
+    : null
   return (
     <View ref={topChrome.ref} onLayout={topChrome.onLayout}>
       <SafeAreaView
@@ -134,7 +139,7 @@ export function MobileSessionHeader({
             minHeight: topChrome.space.minHeight
           },
           // The background reaches the Duo's status column; tabs and buttons stay clear of it.
-          sideStripPadding(releasedStrip)
+          releasedStripPadding
         ]}
         edges={topChrome.space ? [] : ['top']}
       >
