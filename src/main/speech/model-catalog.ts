@@ -78,6 +78,20 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     modelingUnit: 'cjkchar'
   },
   {
+    // Why: the recommended Parakeet multilingual set is European-only; Korean users need a local offline transducer (#10103).
+    id: 'zipformer-korean-2024-06-24',
+    label: 'Zipformer Korean',
+    description:
+      'Korean only. Offline int8 transducer from k2-fsa; accurate dictation on modest CPUs.',
+    type: 'transducer',
+    provider: 'local',
+    language: 'ko',
+    ...getSpeechModelDownloadMetadata('zipformer-korean-2024-06-24'),
+    sampleRate: 16000,
+    streaming: false,
+    modelingUnit: 'bpe'
+  },
+  {
     id: 'zipformer-streaming-korean',
     label: 'Zipformer Streaming KO',
     description: 'Korean only. Low-latency real-time streaming.',
