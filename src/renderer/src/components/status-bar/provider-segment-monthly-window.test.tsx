@@ -39,7 +39,7 @@ describe('ProviderSegment monthly window', () => {
       session: windowOf(10, 300),
       weekly: windowOf(20, 10080),
       monthly: windowOf(30, 43200),
-      updatedAt: Date.now(),
+      updatedAt: 0,
       error: null,
       status: 'ok'
     }
@@ -62,7 +62,7 @@ describe('ProviderSegment monthly window', () => {
         { ...windowOf(25, 300), name: 'Flash' },
         { ...windowOf(80, 300), name: 'Pro' }
       ],
-      updatedAt: Date.now(),
+      updatedAt: 0,
       error: null,
       status: 'ok'
     }
@@ -85,7 +85,7 @@ describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
   const partialProvider = {
     provider: 'codex',
     weekly: windowOf(42, 10080),
-    updatedAt: Date.now(),
+    updatedAt: 0,
     error: null,
     status: 'ok'
   } as unknown as ProviderRateLimits // `session` omitted -> undefined at runtime

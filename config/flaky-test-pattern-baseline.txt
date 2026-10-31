@@ -956,7 +956,7 @@
 2 test-no-wall-clock:src/main/rate-limits/service-cursor-usage.test.ts
 12 test-no-wall-clock:src/main/rate-limits/service-minimax-usage.test.ts
 38 test-no-wall-clock:src/main/rate-limits/service-refresh-orchestration.test.ts
-6 test-no-wall-clock:src/main/rate-limits/service-zcode-usage.test.ts
+4 test-no-wall-clock:src/main/rate-limits/service-zcode-usage.test.ts
 1 test-no-wall-clock:src/main/runtime/agent-session/ownership/agent-session-process-identity-probe.test.ts
 1 test-no-wall-clock:src/main/runtime/agent-state-rules/agent-state-rules-engine.test.ts
 1 test-no-wall-clock:src/main/runtime/antigravity-readiness-transcripts.test.ts
@@ -1106,7 +1106,6 @@
 1 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeList.lineage-agent-expansion-coupling.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeList.lineage-child-real-card.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/sidebar/use-workspace-reference-details.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/status-bar/RuntimeHostStatusRow.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/status-bar/inline-usage-bars.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/status-bar/provider-segment-balance.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
