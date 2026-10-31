@@ -8,8 +8,8 @@ import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /**
  * The WSL hosts with visible work: the active workspace's, and those of workspaces focused earlier
- * in this window that still have tabs (their panes stay mounted). Saved tabs alone never count, so
- * a launch boots only the focused host (E9).
+ * in this window that still have tabs (their panes stay mounted). Saved tabs alone never count, and
+ * a launch boots none: the focused host connects only if its distro already runs (E9).
  */
 export function selectWslHostsWithVisibleWork(
   state: AppState,

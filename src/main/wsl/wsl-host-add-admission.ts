@@ -31,12 +31,12 @@ export function wslHostNotConnectedMessage(distro: string): string {
 }
 
 export function wslHostStoppedMessage(distro: string): string {
-  return `${distro} was stopped. Switch to one of its projects, or reconnect it in Settings → Remote Orca Servers, to start it again.`
+  return `${distro} is stopped. To start it, click Start or open a new terminal in one of its projects.`
 }
 
 /** Shown on a paired phone once a stop is confirmed: only the desktop starts a distro. */
 export function wslHostStoppedForPhoneMessage(distro: string): string {
-  return `The WSL host ${distro} isn’t running. Open one of its projects on your computer to start it.`
+  return `The WSL host ${distro} is stopped. To start it, click Start or open a new terminal in one of its projects on your computer.`
 }
 
 /** Shown on a paired phone while WSL hosts are switched off, or this one is being removed. */

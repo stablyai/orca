@@ -124,7 +124,7 @@ test.describe('native chat on a WSL host', () => {
               ),
             { timeout: 30_000 }
           )
-          .toContain('Ubuntu was stopped')
+          .toContain('Ubuntu is stopped')
         return connects
       }
       const stoppedNotice = chat.getByText('Ubuntu is stopped', { exact: true })
@@ -382,7 +382,7 @@ test.describe('native chat on a WSL host', () => {
             ),
           { timeout: 30_000 }
         )
-        .toContain('Ubuntu was stopped')
+        .toContain('Ubuntu is stopped')
       const stoppedNotice = chat.getByText('Ubuntu is stopped', { exact: true })
       await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
       // Send waits for Start rather than failing against a stopped distro; while held, the button is
