@@ -260,5 +260,12 @@ function markEnvironmentUsedFromResponse(
 }
 
 function shouldUseCachedRequestConnection(method: string): boolean {
-  return method === 'terminal.send' || method === 'terminal.updateViewport'
+  return (
+    method === 'terminal.send' ||
+    method === 'terminal.updateViewport' ||
+    // Artifact sessions retain disconnect cleanup, so every chunk must share the start socket.
+    method === 'github.startActionsArtifactDownload' ||
+    method === 'github.readActionsArtifactChunk' ||
+    method === 'github.releaseActionsArtifactDownload'
+  )
 }

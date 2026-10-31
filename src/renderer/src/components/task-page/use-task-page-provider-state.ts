@@ -8,6 +8,7 @@ import type {
 import type { GitLabWorkItem, GitLabTodo } from '../../../../shared/gitlab-types'
 import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 import { isGitLabIssueFilter, isGitLabMRFilter } from './task-page-source-context'
+/** Keep Actions as a local GitHub mode while preserving provider selection and resume policy. */
 export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel) {
   const {
     settings,
@@ -56,7 +57,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   }, [settings?.defaultTaskSource, taskSource, visibleTaskProviders, setTaskSource])
 
   const projectModeVisible = taskSource === 'github'
-  const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
+  const [githubMode, setGithubMode] = useState<'items' | 'project' | 'actions'>('items')
 
   // Like Linear, fetch GitLab directly for the primary repo without GitHub’s workItemsCache/aggregation path.
   const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter | GitLabIssueFilter>('opened')

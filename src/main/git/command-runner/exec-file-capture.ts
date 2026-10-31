@@ -44,7 +44,12 @@ export async function execFileCaptureToTermination(
     options.onChildTerminated?.()
     throw error
   }
-  const captureBytes = options.encoding === 'buffer'
+  const encoding = options.encoding
+  if (encoding && encoding !== 'buffer' && !Buffer.isEncoding(encoding)) {
+    options.onChildTerminated?.()
+    throw new TypeError(`Unknown encoding: ${encoding}`)
+  }
+  const captureBytes = encoding != null && encoding !== 'utf8' && encoding !== 'utf-8'
   const pending = runProcess({
     program,
     args,
@@ -60,13 +65,21 @@ export async function execFileCaptureToTermination(
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
   const result = await pending
-  const stdout = captureBytes ? (result.stdoutBytes ?? Buffer.alloc(0)) : result.stdout
+  const decode = (bytes: Buffer): string | Buffer => {
+    if (encoding && Buffer.isEncoding(encoding)) {
+      return bytes.toString(encoding)
+    }
+    return bytes
+  }
+  const stdout = captureBytes ? decode(result.stdoutBytes ?? Buffer.alloc(0)) : result.stdout
   const stderrBytes = result.stderrBytes ?? Buffer.alloc(0)
   const stderr = captureBytes
-    ? termination
-      ? // Why: Latin-1 strips ASCII control markers without changing arbitrary bytes.
-        Buffer.from(termination.stripControlOutput(stderrBytes.toString('latin1')), 'latin1')
-      : stderrBytes
+    ? decode(
+        termination
+          ? // Why: Latin-1 strips ASCII control markers without changing arbitrary bytes.
+            Buffer.from(termination.stripControlOutput(stderrBytes.toString('latin1')), 'latin1')
+          : stderrBytes
+      )
     : (termination?.stripControlOutput(result.stderr) ?? result.stderr)
   if (
     result.code === 0 &&

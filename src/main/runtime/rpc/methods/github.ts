@@ -5,7 +5,10 @@ import { GITHUB_PULL_REQUEST_METHODS } from './github-pull-request-methods'
 import { GITHUB_PULL_REQUEST_UPDATE_METHODS } from './github-pull-request-update-methods'
 import { GITHUB_REPO_WORK_ITEM_METHODS } from './github-repo-work-item-methods'
 
+import { GITHUB_ACTIONS_METHODS } from './github-actions-methods'
+
 export const GITHUB_METHODS = [
+  ...GITHUB_ACTIONS_METHODS,
   ...GITHUB_REPO_WORK_ITEM_METHODS,
   ...GITHUB_ACCOUNT_BINDING_METHODS,
   ...GITHUB_ISSUE_METHODS,

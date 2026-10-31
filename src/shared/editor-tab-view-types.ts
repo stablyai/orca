@@ -1,3 +1,4 @@
+import type { ActionsRequestContext } from './github/actions-types'
 // Share nonplain editor views with runtime layout records and renderer open files.
 
 import type {
@@ -73,6 +74,8 @@ export type CombinedDiffSkippedConflict = {
 }
 
 export type OpenCheckRunDetailsState = {
+  actionsAttempt?: number | null
+  actionsContext?: ActionsRequestContext
   contextKey: string
   check: PRCheckDetail
   requestId?: number
