@@ -12,11 +12,11 @@ import {
   type ClaudeProfileSurfaceOutcome
 } from './claude-profile-report'
 import {
-  CLAUDE_PROFILE_MERGE_SUFFIX,
   crossFilesystem,
   lstatIfPresent,
   mergeClaudeProfilePromptHistory
 } from './claude-profile-prompt-history'
+import { CLAUDE_PROFILE_MERGE_SUFFIX } from './claude-profile-prompt-history-pending'
 
 // Exclude `sessions`: its live-process registry belongs to each folder's daemon.
 export const CLAUDE_PROFILE_HISTORY_DIRS = [

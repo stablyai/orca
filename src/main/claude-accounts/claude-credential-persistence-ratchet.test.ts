@@ -62,9 +62,7 @@ const fsAllowances: Record<string, readonly string[]> = {
     'open',
     'openSync',
     'unlink',
-    'unlinkSync',
-    'write',
-    'writeFileSync'
+    'write'
   ],
   'claude-accounts/claude-profile-provisioning.ts': [
     'publishFileWithoutOverwrite',

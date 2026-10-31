@@ -6,7 +6,11 @@ export type HistoryDirectory = {
   open(name: string): HistoryDirectory
   /** POSIX gives the new directory `like`'s permission bits. */
   mkdir(name: string, like?: HistoryDirectory): void
-  /** `directoryOnly` refuses a non-directory source atomically on Windows; POSIX callers reclassify what they staged. */
+  /**
+   * Never replaces: an occupied target is a collision that keeps both names, except on Windows
+   * when the target is the same file (a hard link), where the move completes with the bytes intact.
+   * `directoryOnly` refuses a non-directory source atomically on Windows; POSIX callers reclassify what they staged.
+   */
   move(
     name: string,
     destination: HistoryDirectory,

@@ -15,13 +15,17 @@ import { loadHistoryFilesystem, type HistoryDirectory } from '../../shared/histo
 import { runFileOperationWithWindowsRetry } from '../../shared/windows-retry-file-operations'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
-  absentAs,
-  CLAIM,
-  claimPending,
-  drainHistory,
+  claim,
+  CONFLICT,
+  drainClaim,
+  drainPending,
   HISTORY,
-  legacyPending,
-  retireProved
+  recoverPending,
+  retireProved,
+  setAside,
+  settleClaim,
+  type Claim,
+  type Proof
 } from './claude-profile-prompt-history-pending'
 import {
   ClaudeProfileSurfaceError,
@@ -30,9 +34,6 @@ import {
   type ClaudeProfileSurfaceOutcome
 } from './claude-profile-report'
 
-export const CLAUDE_PROFILE_MERGE_SUFFIX = '.orca-profile-merge'
-const PENDING = `${HISTORY}${CLAUDE_PROFILE_MERGE_SUFFIX}`
-const CONFLICT = `${HISTORY}.orca-profile-conflict`
 // Track Windows hardlink identity to detect replacement of the shared file.
 const LINK_RECORD = `${HISTORY}.orca-profile-link`
 
@@ -47,27 +48,14 @@ export function lstatIfPresent(file: string): Stats | undefined {
   }
 }
 
-function pendingGeneration(name: string): number | null {
-  if (name === PENDING) {
-    return 0
-  }
-  const suffix = name.slice(PENDING.length + 1)
-  return name.startsWith(`${PENDING}-`) && /^\d+$/.test(suffix) ? Number(suffix) : null
+// New copies are staged in private claims, so no delayed step of another setup can reach a later
+// copy staged under a repeated name. An older build does not merge a claim a crash left behind;
+// the next newer build does.
+function stageHistory(parent: HistoryDirectory): Claim | undefined {
+  return claim(parent, HISTORY)
 }
 
-// An occupied generation is a collision, never a replacement; try the next one exclusively.
-// Staged copies keep the names older builds recover after an interrupted setup.
-function stageHistory(parent: HistoryDirectory, base: string, first: number): string | undefined {
-  for (let generation = first; ; generation++) {
-    const name = generation === 0 ? base : `${base}-${generation}`
-    const moved = runFileOperationWithWindowsRetry(() => parent.move(HISTORY, parent, name))
-    if (moved !== 'collision') {
-      return moved === 'moved' ? name : undefined
-    }
-  }
-}
-
-// A collision keeps both; a staged pending copy is merged by the next setup.
+// A collision keeps both; the conflict copy stays where it is.
 function restoreHistory(
   parent: HistoryDirectory,
   aside: string
@@ -101,45 +89,8 @@ function readLinkRecord(profile: string): string | null {
   }
 }
 
-type Proof = (directory: HistoryDirectory, name: string) => boolean
-
-// One bounded pass: drain surviving copies, and retire what is proved redundant (a moved-aside
-// publication, a cursor whose copy is gone). Unknown entries and retained originals stay.
-function recoverPending(
-  parent: HistoryDirectory,
-  profile: string,
-  isPublication: Proof,
-  report: ClaudeProfileReport
-): { legacy: string[]; claims: string[] } {
-  const names = new Set(parent.entries())
-  const legacy: { name: string; generation: number }[] = []
-  const claims: string[] = []
-  for (const name of names) {
-    const generation = pendingGeneration(name)
-    const copy = name.endsWith('.offset') ? name.slice(0, -'.offset'.length) : undefined
-    try {
-      if (generation !== null) {
-        if (isPublication(parent, name)) {
-          retireProved(parent, name, (claimed) => isPublication(claimed, HISTORY))
-        } else if (parent.kind(name) === 'file') {
-          legacy.push({ name, generation })
-        }
-      } else if (name.startsWith(CLAIM) && parent.kind(name) === 'directory') {
-        claims.push(name)
-      } else if (copy && pendingGeneration(copy) !== null && !names.has(copy)) {
-        // Left by a drain that finished after another retired its copy; a new copy under that
-        // name must not inherit it.
-        if (parent.kind(name) === 'file') {
-          absentAs(() => parent.unlink(name), undefined)
-        }
-      }
-    } catch (error) {
-      warnClaudeProfile(report, HISTORY, error)
-    }
-  }
-  // Directory enumeration order does not preserve prompt chronology.
-  legacy.sort((left, right) => left.generation - right.generation)
-  return { legacy: legacy.map(({ name }) => join(profile, name)), claims }
+function retained(detail: string): ClaudeProfileSurfaceError {
+  return new ClaudeProfileSurfaceError('retained-conflict', detail)
 }
 
 /** Use a same-volume hardlink on Windows to avoid requiring symlink privileges. */
@@ -158,6 +109,8 @@ export function mergeClaudeProfilePromptHistory(
   const filesystem = loadHistoryFilesystem()
   const parent = filesystem.openDirectory(profile, false)
   const homeDirectory = filesystem.openDirectory(home, true)
+  // The original staged from H, once this setup moved it aside.
+  let aside: Claim | undefined
   try {
     // A publication is exactly our link to the shared file: a symlink to it, or on Windows another name of it.
     const isPublication: Proof = (directory, name) =>
@@ -165,39 +118,16 @@ export function mergeClaudeProfilePromptHistory(
         ? directory.kind(name) === 'file' &&
           directory.identity(name) === homeDirectory.identity(HISTORY)
         : directory.kind(name) === 'link' && directory.readLink(name) === destination
-    const { legacy, claims } = recoverPending(parent, profile, isPublication, report)
+    const pending = recoverPending(parent, isPublication, report)
     // Check volumes before draining to keep prompts private when linking is refused.
-    if (platform === 'win32' && legacy.length + claims.length > 0) {
+    if (platform === 'win32' && pending.legacy.length + pending.claims.length > 0) {
       if (statSync(profile).dev !== statSync(destination).dev) {
         throw crossFilesystem()
       }
     }
-    for (const path of legacy) {
-      try {
-        drainHistory(legacyPending(path), destination, shared)
-      } catch (error) {
-        // A failed drain must not prevent linking the profile.
-        warnClaudeProfile(report, HISTORY, error)
-      }
-    }
-    for (const name of claims) {
-      try {
-        const claimed = { name, directory: parent.open(name) }
-        try {
-          const pending = claimPending(parent, claimed)
-          if (isPublication(claimed.directory, HISTORY)) {
-            pending.retire()
-          } else {
-            drainHistory(pending, destination, shared)
-          }
-        } finally {
-          claimed.directory.close()
-        }
-      } catch (error) {
-        warnClaudeProfile(report, HISTORY, error)
-      }
-    }
+    drainPending(parent, pending, profile, destination, shared, isPublication, report)
 
+    const record = join(profile, LINK_RECORD)
     // What H holds now: a publication is done, a different link or entry is the user's.
     const settled = (): ClaudeProfileSurfaceOutcome | undefined => {
       const current = parent.kind(HISTORY)
@@ -207,20 +137,22 @@ export function mergeClaudeProfilePromptHistory(
       if (current !== null && current !== 'file') {
         return 'user-owned'
       }
-      return current && isPublication(parent, HISTORY) ? 'unchanged' : undefined
+      if (!current || !isPublication(parent, HISTORY)) {
+        return undefined
+      }
+      if (platform === 'win32') {
+        const sharedIdentity = fileIdentity(statSync(destination, { bigint: true }))
+        if (readLinkRecord(profile) !== sharedIdentity) {
+          writeFileAtomically(record, `${sharedIdentity}\n`, { mode: 0o600 })
+        }
+      }
+      return 'unchanged'
     }
     const done = settled()
     if (done) {
-      if (done === 'unchanged' && platform === 'win32' && parent.kind(HISTORY) === 'file') {
-        const sharedIdentity = fileIdentity(statSync(destination, { bigint: true }))
-        if (readLinkRecord(profile) !== sharedIdentity) {
-          writeFileAtomically(join(profile, LINK_RECORD), `${sharedIdentity}\n`, { mode: 0o600 })
-        }
-      }
       return done
     }
     const current = parent.kind(HISTORY)
-    const record = join(profile, LINK_RECORD)
     let sharedIdentity: string | undefined
     let replaced = false
     if (platform === 'win32') {
@@ -233,30 +165,48 @@ export function mergeClaudeProfilePromptHistory(
         current !== null &&
         fileIdentity(lstatSync(source, { bigint: true })) === readLinkRecord(profile)
     }
-    let aside: string | undefined
+    let conflict: string | undefined
     if (current) {
-      aside = replaced
-        ? stageHistory(parent, CONFLICT, 0)
-        : stageHistory(parent, PENDING, Date.now())
-      // A rival may have published its link after the check; that link is not an original.
-      if (aside && (parent.kind(aside) !== 'file' || isPublication(parent, aside))) {
-        const restored = restoreHistory(parent, aside)
-        if (restored === 'collision' && isPublication(parent, aside)) {
-          retireProved(parent, aside, (claimed) => isPublication(claimed, HISTORY))
+      // A rival may have published its link after the check: that link is redundant, and a
+      // different link or entry put there is the user's.
+      if (replaced) {
+        conflict = setAside(parent, HISTORY, CONFLICT)
+        if (conflict && isPublication(parent, conflict)) {
+          retireProved(parent, conflict, (claimed) => isPublication(claimed, HISTORY))
+          conflict = undefined
         }
-        if (restored === 'moved' || parent.kind(HISTORY) !== null) {
-          const now = settled()
-          if (now) {
-            return now
-          }
-          throw new ClaudeProfileSurfaceError(
-            'retained-conflict',
-            `Prompt history changed during setup; a later setup merges ${source}`
+      } else {
+        aside = stageHistory(parent)
+        const original = (staged: HistoryDirectory) =>
+          staged.kind(HISTORY) === 'file' && !isPublication(staged, HISTORY)
+        if (aside && !original(aside.directory)) {
+          const outcome = settleClaim(parent, aside, HISTORY, (claimed) =>
+            isPublication(claimed, HISTORY)
           )
+          if (outcome === 'kept') {
+            const detail = `Prompt history changed during setup; it is kept at ${join(profile, aside.name)}`
+            warnClaudeProfile(report, HISTORY, retained(detail))
+          }
+          aside.directory.close()
+          aside = undefined
         }
-        // The moved-aside link was consumed and nothing took its place: publish.
-        aside = undefined
       }
+      if (!aside && !conflict && parent.kind(HISTORY) !== null) {
+        const now = settled()
+        if (now) {
+          return now
+        }
+        throw retained(`Prompt history changed during setup; a later setup merges ${source}`)
+      }
+    }
+    const finish = (outcome: ClaudeProfileSurfaceOutcome): ClaudeProfileSurfaceOutcome => {
+      if (conflict) {
+        const detail = `Shared prompt history was replaced; the old copy is kept at ${join(profile, conflict)}`
+        warnClaudeProfile(report, HISTORY, retained(detail))
+      } else if (aside) {
+        drainClaim(parent, aside, destination, shared)
+      }
+      return outcome
     }
     try {
       if (sharedIdentity === undefined) {
@@ -277,8 +227,7 @@ export function mergeClaudeProfilePromptHistory(
                 claimed.kind(HISTORY) === 'file' && claimed.identity(HISTORY) === published
             )
             if (undone === 'kept') {
-              throw new ClaudeProfileSurfaceError(
-                'retained-conflict',
+              throw retained(
                 `Prompt history replaced during setup is kept for a later merge in ${profile}`
               )
             }
@@ -289,28 +238,30 @@ export function mergeClaudeProfilePromptHistory(
         }
       }
     } catch (error) {
-      if (aside) {
-        try {
-          if (restoreHistory(parent, aside) === 'collision') {
-            throw new ClaudeProfileSurfaceError(
-              'retained-conflict',
-              `Prompt history kept at ${join(profile, aside)}`
-            )
-          }
-        } catch (restoreError) {
-          warnClaudeProfile(report, HISTORY, restoreError)
+      try {
+        if (aside && settleClaim(parent, aside, HISTORY, () => false) !== 'kept') {
+          aside.directory.close()
+          aside = undefined
         }
+        if (conflict && restoreHistory(parent, conflict) !== 'collision') {
+          conflict = undefined
+        }
+        // Another setup may have shared H meanwhile; then only the copy set aside is left to merge.
+        if (settled() === 'unchanged') {
+          return finish('unchanged')
+        }
+        const kept = aside ? aside.name : conflict
+        if (kept) {
+          throw retained(`Prompt history kept at ${join(profile, kept)}`)
+        }
+      } catch (restoreError) {
+        warnClaudeProfile(report, HISTORY, restoreError)
       }
       throw new ClaudeProfileSurfaceError('link-failed', String(error))
     }
-    if (aside && replaced) {
-      const detail = `Shared prompt history was replaced; the old copy is kept at ${join(profile, aside)}`
-      warnClaudeProfile(report, HISTORY, new ClaudeProfileSurfaceError('retained-conflict', detail))
-    } else if (aside) {
-      drainHistory(legacyPending(join(profile, aside)), destination, shared)
-    }
-    return 'linked'
+    return finish('linked')
   } finally {
+    aside?.directory.close()
     homeDirectory.close()
     parent.close()
   }

@@ -61,6 +61,8 @@ static OwnedHandle child(Directory& parent, const std::string& name, ACCESS_MASK
   // FILE_OPEN_REPARSE_POINT is type-neutral: inspect the opened entry before traversal.
   NTSTATUS code = NtCreateFile(&result, access | SYNCHRONIZE, &attributes, &status, nullptr,
       FILE_ATTRIBUTE_NORMAL, share, disposition, options | (reparse ? 0x00200000 : 0) | 0x00000020, nullptr, 0);
+  // A removed entry, or one inside a removed directory, still held open elsewhere is gone, not denied.
+  if (code == static_cast<NTSTATUS>(0xC0000056L) /* STATUS_DELETE_PENDING */) throw Failure("NtCreateFile", "ENOENT", code);
   if (code < 0) throw failure("NtCreateFile", RtlNtStatusToDosError(code));
   return OwnedHandle(result);
 }

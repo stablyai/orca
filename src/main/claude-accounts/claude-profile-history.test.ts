@@ -2,7 +2,7 @@ import { loadHistoryFilesystem } from '../../shared/history-filesystem'
 import { observeHistoryFilesystem } from '../../shared/history-filesystem-test-boundary'
 import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 vi.mock('node:fs', async (original) => {
@@ -29,11 +29,13 @@ function fixture() {
   const share = (platform: NodeJS.Platform = 'linux') =>
     shareClaudeProfileHistory({ profileHome, userHome, platform })
   const history = (): string => fs.readFileSync(join(defaultHome, 'history.jsonl'), 'utf8')
+  // Copies waiting to merge, each in its claim directory beside its cursor.
   const staged = (): string[] =>
     fs
       .readdirSync(profileHome)
-      .filter((name) => /^history\.jsonl\.orca-profile-merge(-\d+)?$/.test(name))
-      .map((name) => join(profileHome, name))
+      .filter((name) => name.startsWith('history.jsonl.orca-profile-claim-'))
+      .map((name) => join(profileHome, name, 'history.jsonl'))
+      .filter((path) => fs.existsSync(path))
   return { profileHome, userHome, defaultHome, share, history, staged }
 }
 afterEach(() => {
@@ -200,13 +202,12 @@ describe('Claude profile history sharing', () => {
     fs.writeFileSync(join(f.profileHome, 'history.jsonl'), 'p1\n')
     await f.share()
     const [pending] = f.staged()
-    expect(fs.existsSync(`${pending}.offset`)).toBe(true)
+    expect(fs.existsSync(join(dirname(pending), 'offset'))).toBe(true)
     fs.appendFileSync(pending, 'late\n')
     await f.share()
     expect(fs.existsSync(pending)).toBe(true)
     await f.share()
-    expect(fs.existsSync(pending)).toBe(false)
-    expect(fs.existsSync(`${pending}.offset`)).toBe(false)
+    expect(fs.existsSync(dirname(pending))).toBe(false)
     expect(f.history()).toBe('p1\nlate\n')
   })
   itLinks('drains retained generations in numeric order', async () => {
@@ -222,13 +223,26 @@ describe('Claude profile history sharing', () => {
     expect(f.history()).toBe('g0\ng1\ng2\ng10\ng11\n')
   })
   itLinks(
-    'drains a copy left by an interrupted share without replaying the shared history',
+    "merges an older build's unmarked copy and keeps a marked one aside unimported",
     async () => {
       const f = fixture()
       fs.writeFileSync(join(f.defaultHome, 'history.jsonl'), 'd1\nd2\n')
       fs.writeFileSync(join(f.profileHome, 'history.jsonl.orca-profile-merge'), 'd1\nd2\nnew\n')
+      // The marker may belong to an earlier copy under this name, and the user may have deleted
+      // what it says was imported.
+      const marked = join(f.profileHome, 'history.jsonl.orca-profile-merge-1')
+      fs.writeFileSync(marked, 'd1\ndeleted\n')
+      fs.writeFileSync(`${marked}.offset`, '11\n')
+      const report = await f.share()
+      expect(f.history()).toBe('d1\nd2\nnew\n')
+      expect(report.warnings).toEqual([
+        expect.objectContaining({ surface: 'history.jsonl', code: 'retained-conflict' })
+      ])
+      const kept = join(f.profileHome, 'history.jsonl.orca-profile-conflict')
+      expect(fs.readFileSync(kept, 'utf8')).toBe('d1\ndeleted\n')
       await f.share()
       expect(f.history()).toBe('d1\nd2\nnew\n')
+      expect(fs.existsSync(`${marked}.offset`)).toBe(false)
     }
   )
   itLinks('still links a session tree when its old leftover cannot be read', async () => {
@@ -252,7 +266,6 @@ describe('Claude profile history sharing', () => {
     fs.chmodSync(old, 0)
     fs.writeFileSync(join(f.profileHome, 'history.jsonl'), 'private\n')
     const report = await f.share()
-    fs.chmodSync(old, 0o600)
     expect(report.warnings).toContainEqual(expect.objectContaining({ surface: 'history.jsonl' }))
     expect(fs.lstatSync(join(f.profileHome, 'history.jsonl')).isSymbolicLink()).toBe(true)
     expect(f.history()).toBe('private\n')
@@ -385,41 +398,48 @@ describe('consuming publication interleavings with the actual addon', () => {
     }
   })
 
-  itLinks(
-    'never replaces a staged prompt original when a rival published its link first',
-    async () => {
-      const f = fixture(),
-        source = join(f.profileHome, 'history.jsonl')
-      fs.writeFileSync(source, 'private\n')
-      let rival: string | undefined
-      const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation, path, args) => {
-        if (
-          !rival &&
-          operation === 'move' &&
-          path === f.profileHome &&
-          args[0] === 'history.jsonl'
-        ) {
-          // The rival saw the same free generation, staged the original there and published.
-          rival = join(f.profileHome, String(args[2]))
-          fs.renameSync(source, rival)
-          fs.symlinkSync(join(f.defaultHome, 'history.jsonl'), source)
-        }
-      })
-      try {
-        const report = await f.share()
-        // The rival's link went back in place: this setup is done.
-        expect(report.surfaces['history.jsonl']).toBe('unchanged')
-        expect(report.warnings).toEqual([])
-      } finally {
-        stop()
+  // A rival claimed the original and published its link after this setup's check, so this
+  // setup stages the rival's link; `republish` has the rival publish again before it is retired.
+  const rivalRace = async (republish: boolean) => {
+    const f = fixture(),
+      source = join(f.profileHome, 'history.jsonl')
+    fs.writeFileSync(source, 'private\n')
+    const rival = join(f.profileHome, 'history.jsonl.orca-profile-claim-rival')
+    const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation, path, args) => {
+      if (
+        operation === 'move' &&
+        path === f.profileHome &&
+        args[0] === 'history.jsonl' &&
+        !fs.existsSync(rival)
+      ) {
+        fs.mkdirSync(rival)
+        fs.renameSync(source, join(rival, 'history.jsonl'))
+        fs.symlinkSync(join(f.defaultHome, 'history.jsonl'), source)
+      } else if (republish && operation === 'unlink' && path.startsWith(`${source}.`)) {
+        republish = false
+        fs.symlinkSync(join(f.defaultHome, 'history.jsonl'), source)
       }
-      expect(fs.readFileSync(rival!, 'utf8')).toBe('private\n')
-      expect(f.staged()).toEqual([rival])
-      expect(fs.lstatSync(source).isSymbolicLink()).toBe(true)
-      await f.share()
-      expect(f.history()).toBe('private\n')
-    }
-  )
+    })
+    const report = await f.share().finally(stop)
+    expect(report.warnings).toEqual([])
+    expect(f.staged()).toEqual([join(rival, 'history.jsonl')])
+    expect(
+      fs
+        .readdirSync(f.profileHome)
+        .filter((name) => name.startsWith('history'))
+        .sort()
+    ).toEqual(['history.jsonl', 'history.jsonl.orca-profile-claim-rival'])
+    expect(fs.realpathSync(source)).toBe(fs.realpathSync(join(f.defaultHome, 'history.jsonl')))
+    await f.share()
+    expect(f.history()).toBe('private\n')
+    return report.surfaces['history.jsonl']
+  }
+  itLinks("retires a rival's staged link and keeps the rival's original", async () => {
+    expect(await rivalRace(false)).toBe('linked')
+  })
+  itLinks('settles as shared when a rival publishes again before its link is retired', async () => {
+    expect(await rivalRace(true)).toBe('unchanged')
+  })
 
   itLinks(
     'keeps both prompt files when a new one appears before a failed link is undone',
@@ -442,35 +462,17 @@ describe('consuming publication interleavings with the actual addon', () => {
       expect(f.history()).toBe('private\nnative\n')
     }
   )
-  itLinks('publishes when another setup consumed the moved-aside link first', async () => {
+  itLinks('merges into a link another setup published while this one failed', async () => {
     const f = fixture(),
       source = join(f.profileHome, 'history.jsonl')
     fs.writeFileSync(source, 'private\n')
-    const rival = join(f.profileHome, 'history.jsonl.orca-profile-merge-1')
-    let consumed = false
-    const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation, path, args) => {
-      if (operation !== 'move' || path !== f.profileHome) {
-        return
-      }
-      if (args[0] === 'history.jsonl' && !fs.existsSync(rival)) {
-        // A rival staged the original and published its link after this setup's check.
-        fs.renameSync(source, rival)
-        fs.symlinkSync(join(f.defaultHome, 'history.jsonl'), source)
-      } else if (args[2] === 'history.jsonl' && !consumed) {
-        consumed = true
-        fs.unlinkSync(join(f.profileHome, String(args[0])))
-      }
+    vi.mocked(fs.symlinkSync).mockImplementationOnce((target, path) => {
+      fs.symlinkSync(target, path)
+      throw Object.assign(new Error('exists'), { code: 'EEXIST' })
     })
-    try {
-      const report = await f.share()
-      expect(consumed).toBe(true)
-      expect(report.surfaces['history.jsonl']).toBe('linked')
-      expect(report.warnings).toEqual([])
-    } finally {
-      stop()
-    }
-    expect(fs.realpathSync(source)).toBe(fs.realpathSync(join(f.defaultHome, 'history.jsonl')))
-    await f.share()
+    const report = await f.share()
+    expect(report.surfaces['history.jsonl']).toBe('unchanged')
+    expect(report.warnings).toEqual([])
     expect(f.history()).toBe('private\n')
   })
 

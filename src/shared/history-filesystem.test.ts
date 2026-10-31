@@ -37,33 +37,6 @@ function attempt(run: () => string): string {
     return `throws:${error instanceof Error && 'code' in error ? String(error.code) : String(error)}`
   }
 }
-// R3-4: the same-file postcondition is recorded before any expectation can stop the test.
-function observeAlias(
-  label: string,
-  root: string,
-  target: string,
-  result: string,
-  barrier?: string
-): void {
-  const entry = (path: string) => {
-    if (!existsSync(path)) {
-      return { exists: false }
-    }
-    const stats = statSync(path, { bigint: true })
-    return {
-      exists: true,
-      id: `${stats.dev}:${stats.ino}`,
-      links: Number(stats.nlink),
-      content: readFileSync(path, 'utf8')
-    }
-  }
-  const names = {
-    source: entry(join(root, 'source', 'entry')),
-    target: entry(join(root, 'destination', target))
-  }
-  const platform = `${process.platform}-${process.arch}`
-  console.log(JSON.stringify({ tag: 'R3-4-OBSERVE', platform, label, result, barrier, ...names }))
-}
 // Test-only barrier: a read-handle oplock on the source makes the move's rename wait for this
 // process, which creates the alias through its own handle and then acknowledges by closing.
 const OPLOCK_HOLDER = String.raw`param([string]$Source, [string]$Alias, [int]$Timeout)
@@ -169,23 +142,35 @@ afterEach(() => {
 })
 
 describe('actual history filesystem addon', () => {
-  it('consumes once, retains collisions including hardlink aliases, and restores roots exclusively', () => {
+  it('consumes once, retains a different file, and restores roots exclusively', () => {
     const f = fixture()
     try {
       const source = join(f.root, 'source'),
         target = join(f.root, 'destination')
+      const id = (path: string) => statSync(path, { bigint: true }).ino
       writeFileSync(join(source, 'entry'), 'A')
-      writeFileSync(join(target, 'entry'), 'B')
+      // A different file is retained even with the same bytes.
+      writeFileSync(join(target, 'entry'), 'A')
       expect(f.from.move('entry', f.to, 'entry')).toBe('collision')
-      expect(readFileSync(join(source, 'entry'), 'utf8')).toBe('A')
-      expect(readFileSync(join(target, 'entry'), 'utf8')).toBe('B')
+      expect(id(join(source, 'entry'))).not.toBe(id(join(target, 'entry')))
+      const identity = id(join(source, 'entry'))
       linkSync(join(source, 'entry'), join(target, 'alias'))
-      const aliased = attempt(() => f.from.move('entry', f.to, 'alias'))
-      observeAlias('pre-existing-alias', f.root, 'alias', aliased)
-      expect(aliased).toBe('collision')
-      const identity = statSync(join(source, 'entry')).ino
+      const aliased = f.from.move('entry', f.to, 'alias')
+      const alias = statSync(join(target, 'alias'), { bigint: true })
+      expect([alias.ino, readFileSync(join(target, 'alias'), 'utf8')]).toEqual([identity, 'A'])
+      if (process.platform === 'win32') {
+        // The platform rename completes onto another name of the same file, bytes intact.
+        expect(aliased).toBe('moved')
+        expect(existsSync(join(source, 'entry'))).toBe(false)
+        expect(alias.nlink).toBe(1n)
+        renameSync(join(target, 'alias'), join(source, 'entry'))
+      } else {
+        expect(aliased).toBe('collision')
+        expect(id(join(source, 'entry'))).toBe(identity)
+        expect(alias.nlink).toBe(2n)
+      }
       expect(f.from.move('entry', f.to, 'moved')).toBe('moved')
-      expect(statSync(join(target, 'moved')).ino).toBe(identity)
+      expect(id(join(target, 'moved'))).toBe(identity)
       expect(f.from.move('entry', f.to, 'other')).toBe('missing')
       if (process.platform !== 'win32') {
         chmodSync(source, 0o700)
@@ -335,13 +320,14 @@ describe('actual history filesystem addon', () => {
     expect(variants).toEqual(['A', 'B'])
   })
   it.runIf(process.platform === 'win32')(
-    'retains an alias created while the move holds its source',
+    'completes the move onto an alias created while it holds its source',
     async () => {
       const f = fixture()
       const holders: ChildProcess[] = []
       try {
         const source = join(f.root, 'source', 'entry')
         writeFileSync(source, 'A')
+        const identity = statSync(source, { bigint: true }).ino
         // Control: opening the source alone must not reach the barrier.
         const control = await holdOplock(
           f.root,
@@ -350,16 +336,17 @@ describe('actual history filesystem addon', () => {
           3_000
         )
         holders.push(control.child)
-        const refused = attempt(() => f.from.move('entry', f.to, 'early', true))
-        observeAlias('open-only-control', f.root, 'early', refused, await control.result)
+        expect(attempt(() => f.from.move('entry', f.to, 'early', true))).toBe('throws:ENOTDIR')
+        expect(JSON.parse(await control.result)).toEqual({ broken: false })
         const held = await holdOplock(f.root, source, join(f.root, 'destination', 'late'), 10_000)
         holders.push(held.child)
         const raced = attempt(() => f.from.move('entry', f.to, 'late'))
-        const barrier = await held.result
-        observeAlias('alias-during-held-move', f.root, 'late', raced, barrier)
-        expect(JSON.parse(barrier)).toMatchObject({ broken: true, link: 0 })
-        expect(raced).toBe('collision')
-        expect(statSync(source).ino).toBe(statSync(join(f.root, 'destination', 'late')).ino)
+        expect(JSON.parse(await held.result)).toMatchObject({ broken: true, link: 0 })
+        const late = statSync(join(f.root, 'destination', 'late'), { bigint: true })
+        expect(raced).toBe('moved')
+        expect(existsSync(source)).toBe(false)
+        expect([late.ino, late.nlink]).toEqual([identity, 1n])
+        expect(readFileSync(join(f.root, 'destination', 'late'), 'utf8')).toBe('A')
       } finally {
         for (const child of holders) {
           if (child.exitCode === null && child.signalCode === null) {
