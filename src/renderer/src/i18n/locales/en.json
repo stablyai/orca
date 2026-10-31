@@ -885,6 +885,48 @@
     "accounts": {
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
     },
+    "orchestration": {
+      "roles": {
+        "modelsUnavailable": "No models reported by this host.",
+        "unavailable": "Unavailable",
+        "notListed": "Not listed",
+        "checking": "Checking…",
+        "refreshingModels": "Refreshing models…",
+        "agent": "Agent",
+        "unconfigured": "Not configured",
+        "model": "Model",
+        "agentDefault": "Agent default",
+        "effort": "Reasoning effort",
+        "fast": "Fast",
+        "on": "On",
+        "off": "Off",
+        "title": "Worker roles",
+        "description": "Choose which agent handles each role, with a model and reasoning level for each. These profiles are saved on this Orca host.",
+        "catalog": "Agents keep their configured commands and permissions. Fast availability depends on the provider, account and workspace.",
+        "clear": "Clear profile",
+        "new": "Add a role",
+        "add": "Add",
+        "nameHint": "Use lowercase letters, digits and hyphens. Select an agent to save the role.",
+        "search": "Configure research, implementation and review agents, models, reasoning effort and Fast.",
+        "research": "Research",
+        "implementation": "Implementation",
+        "review": "Review",
+        "keyword": {
+          "role": "role",
+          "profile": "profile",
+          "research": "research",
+          "implementation": "implementation",
+          "review": "review",
+          "model": "model",
+          "effort": "effort",
+          "fast": "fast",
+          "provider": "provider"
+        },
+        "modelsFailed": "Could not load models.",
+        "modelErrorDetails": "Details",
+        "retryModels": "Retry"
+      }
+    },
     "sourceControl": {
       "actionModel": {
         "on": "On",

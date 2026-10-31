@@ -31,9 +31,13 @@ export function checkAgentLaunchModelPreferences(args: {
   createsWorktree?: boolean
   model?: string
   effort?: string
+  fastMode?: boolean
 }): AgentLaunchModelPreferenceCheck {
   if (args.effort && !args.model) {
     return refuse('invalid_argument', '--effort requires --model.')
+  }
+  if (args.fastMode !== undefined && !args.model) {
+    return refuse('invalid_argument', '--fast requires --model.')
   }
   if (!args.model) {
     return { preferences: undefined }
@@ -77,14 +81,29 @@ export function checkAgentLaunchModelPreferences(args: {
     }
   }
 
+  if (args.fastMode !== undefined) {
+    const option = findCatalogOption(findCatalogModel(catalog, args.model), 'fastMode')
+    if (
+      option?.kind.type !== 'boolean' ||
+      (!option.apply.launchArgs && !option.apply.composedIntoModel)
+    ) {
+      return refuse(
+        'capability_unsupported',
+        `Agent ${args.agent} model ${args.model} does not support Fast at launch.`
+      )
+    }
+  }
+
   const requested: AgentLaunchPreferences = {
     model: args.model,
-    ...(args.effort ? { effort: args.effort } : {})
+    ...(args.effort ? { effort: args.effort } : {}),
+    ...(args.fastMode !== undefined ? { fastMode: args.fastMode } : {})
   }
   const resolved = resolveAgentSessionOptionLaunch(args.agent, requested, [], false)
   if (
     resolved.appliedValues.model !== args.model ||
-    resolved.appliedValues.effort !== args.effort
+    resolved.appliedValues.effort !== args.effort ||
+    resolved.appliedValues.fastMode !== args.fastMode
   ) {
     return refuse(
       'invalid_argument',

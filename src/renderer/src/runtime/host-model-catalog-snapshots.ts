@@ -117,27 +117,47 @@ export function hostModelCatalogSnapshotAgents(target: RuntimeClientTarget): str
     .map((key) => key.slice(prefix.length))
 }
 
-/** Preload account-level lists per agent; failed reads prove no absence. Send savedOnly only when host advertises it, avoiding unsaved CLI listing. */
+/** Return the requested account reply; cross-workspace snapshot eligibility is a separate decision. */
+export async function loadHostModelCatalogSnapshot(
+  target: RuntimeClientTarget,
+  agent: string,
+  options: { savedOnly?: true; awaitListing?: true } = {}
+): Promise<AgentSessionModelCatalogResult | undefined> {
+  const hostKey = structuredAgentSessionHostKey(target)
+  const generation = generations.get(hostKey) ?? 0
+  let catalog = await callStructuredAgentSession<AgentSessionModelCatalogResult>(
+    target,
+    'agentSession.modelCatalog',
+    { agent, ...(options.savedOnly ? { savedOnly: true } : {}) }
+  )
+  if (
+    options.awaitListing &&
+    !options.savedOnly &&
+    catalog.listingInProgress &&
+    (generations.get(hostKey) ?? 0) === generation
+  ) {
+    catalog = await callStructuredAgentSession<AgentSessionModelCatalogResult>(
+      target,
+      'agentSession.modelCatalog',
+      { agent, waitForListing: true }
+    )
+  }
+  if ((generations.get(hostKey) ?? 0) !== generation) {
+    return undefined
+  }
+  recordHostModelCatalogSnapshot(target, agent, null, catalog)
+  return catalog
+}
+
+/** Preload saved lists only on capable hosts; failed reads prove no absence. */
 export async function preloadHostModelCatalogSnapshots(
   target: RuntimeClientTarget,
   agents: readonly string[],
-  options: { savedOnly?: true } = {}
+  options: { savedOnly?: true; awaitListing?: true } = {}
 ): Promise<void> {
-  const hostKey = structuredAgentSessionHostKey(target)
-  const generation = generations.get(hostKey) ?? 0
   await Promise.all(
     agents.map((agent) =>
-      callStructuredAgentSession<AgentSessionModelCatalogResult>(
-        target,
-        'agentSession.modelCatalog',
-        { agent, ...options }
-      )
-        .then((catalog) => {
-          if ((generations.get(hostKey) ?? 0) === generation) {
-            recordHostModelCatalogSnapshot(target, agent, null, catalog)
-          }
-        })
-        .catch(() => undefined)
+      loadHostModelCatalogSnapshot(target, agent, options).catch(() => undefined)
     )
   )
 }

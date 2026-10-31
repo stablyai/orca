@@ -2,21 +2,17 @@ import type { OrchestrationSessionCaller } from '../../../../orchestration/orche
 import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import {
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
-import { orchestrationMigrationData } from '../../../../../../shared/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { WorkerStartInput } from '../worker/worker-start-schema'
 import {
-  assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
   createPendingWorkerLaunchReceipt,
   resolveFederatedWorkerLaunchReceipt
@@ -35,6 +31,7 @@ import {
   isKnownRemoteStartFailure
 } from './federated-worker-start-receipts'
 import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-release'
+import { preflightFederatedWorkerLaunch } from './federated-worker-launch-preflight'
 import { withWorkerStartNext } from '../receipt-next'
 import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
 
@@ -79,10 +76,12 @@ export async function startFederatedWorker(args: {
   const createsWorktree = worktree === 'new-top-level'
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
-  const requestedLaunch = createPendingWorkerLaunchReceipt({
+  let requestedLaunch = createPendingWorkerLaunchReceipt({
     agent: isTuiAgent(params.agent) ? params.agent : null,
     model: params.model,
-    effort: params.effort
+    effort: params.effort,
+    fastMode: params.fastMode,
+    role: params.role
   })
   const server = runtime.resolveOrchestrationWorkerServer(params.on as string)
   const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
@@ -95,24 +94,14 @@ export async function startFederatedWorker(args: {
     undefined,
     pairingFence
   )) as RuntimeStatus
-  if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
-    throw new OrchestrationError(
-      'orchestration_migration_required',
-      `Connected server ${server.name} does not support the current orchestration contract. No effects were applied.`,
-      orchestrationMigrationData('runtime_capability_missing')
-    )
-  }
-  if (!status.capabilities?.includes(ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY)) {
-    throw new OrchestrationError(
-      'capability_unsupported',
-      `Connected server ${server.name} does not support orchestration federation.`
-    )
-  }
-  assertWorkerLaunchPreferencesRuntimeSupported({
-    model: params.model,
-    effort: params.effort,
-    capabilities: status.capabilities,
-    serverName: server.name
+  requestedLaunch = await preflightFederatedWorkerLaunch({
+    params,
+    runtime,
+    server,
+    status,
+    worktree,
+    preflightTimeoutMs: budgets.preflightTimeoutMs,
+    requestedLaunch
   })
   const supportsControlMail = status.capabilities?.includes(
     ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
@@ -198,8 +187,10 @@ export async function startFederatedWorker(args: {
             : undefined,
           terminal: params.terminal,
           agent: params.agent,
+          role: params.role,
           model: params.model,
           effort: params.effort,
+          fastMode: params.fastMode,
           timeoutMs: budgets.readinessTimeoutMs,
           devMode: params.devMode
         },
@@ -214,11 +205,6 @@ export async function startFederatedWorker(args: {
         'The worker server returned a different Dispatch attachment.'
       )
     }
-    const launch = resolveFederatedWorkerLaunchReceipt(
-      remote.launch,
-      requestedLaunch,
-      remote.state === 'ready'
-    )
     if (isReadyRemoteFederatedWorkerStartReceipt(remote)) {
       db.updateFederatedDispatchResources({
         dispatchId: started.dispatch.id,
@@ -226,6 +212,13 @@ export async function startFederatedWorker(args: {
         worktreeId: remote.worktreeId,
         terminalHandle: remote.terminalHandle
       })
+    }
+    const launch = resolveFederatedWorkerLaunchReceipt(
+      remote.launch,
+      requestedLaunch,
+      remote.state === 'ready'
+    )
+    if (isReadyRemoteFederatedWorkerStartReceipt(remote)) {
       db.recordWorkerStage({
         dispatchId: started.dispatch.id,
         stage: 'remote_input_accepted',

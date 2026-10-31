@@ -9,6 +9,16 @@ export type LegacyWorkerReadResult = {
 
 export type WorkerStartReceipt = {
   mode?: { detail: string }
+  launch?: {
+    role?: string
+    effective: {
+      agent: string | null
+      model: string | null
+      effort: string | null
+      fastMode?: boolean
+      serviceTier?: string
+    } | null
+  }
   run?: { id: string; objective: string; created: boolean }
   taskId: string
   dispatchId: string
@@ -31,6 +41,17 @@ export function formatWorkerStart(value: WorkerStartReceipt): string {
   // Show the mode that actually ran so a fallback from the user's default is visible.
   if (value.mode) {
     lines.push(value.mode.detail)
+  }
+  if (value.launch?.role) {
+    lines.push(`Role: ${value.launch.role}`)
+  }
+  if (value.launch) {
+    const selection = value.launch.effective
+    lines.push(
+      selection
+        ? `Launch configuration: agent=${selection.agent ?? 'unobserved'} model=${selection.model ?? 'agent-default'} effort=${selection.effort ?? 'agent-default'}${selection.fastMode === undefined ? '' : ` Fast=${selection.fastMode ? 'on' : 'off'}`}${selection.serviceTier ? ` serviceTier=${selection.serviceTier}` : ''}`
+        : 'Launch configuration: unverified'
+    )
   }
   const workspace = createdWorkspaceName(value.effects)
   if (workspace) {

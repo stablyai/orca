@@ -58,7 +58,7 @@ import {
 export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListManagedWorktrees {
   protected abstract toAgentSessionOptions(
     preferences: AgentLaunchPreferences | undefined
-  ): Record<string, string> | undefined
+  ): Record<string, string | boolean> | undefined
   protected abstract getWorktreeStartupReadinessHost(): WorktreeStartupReadinessHost
   protected abstract getWorktreeTerminalProvisioningHost(
     createdWorktree?: Worktree

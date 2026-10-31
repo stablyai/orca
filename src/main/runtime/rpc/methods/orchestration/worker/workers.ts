@@ -12,6 +12,9 @@ import {
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import { assertHelperStartScope, resolveWorkerStartRun } from './worker-start-authority'
 import { parseTaskDeps } from './task-deps-argument'
+import { resolveWorkerRoleParams } from '../../../../../../shared/orchestration-worker-roles'
+import { FederationWorkerLaunchParams } from '../federation/federation-start-schema'
+import { prepareFederationWorkerLaunchOnHost } from './worker-opencode-model-preflight'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
@@ -34,6 +37,25 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
     permission: 'workspace',
     params: WorkerStartParams,
     handler: async (params, ctx) => startWorker(params, ctx)
+  }),
+  defineMethod({
+    name: 'orchestration.workerLaunchPreflight',
+    permission: 'workspace',
+    params: FederationWorkerLaunchParams,
+    handler: async (params, { runtime }) => {
+      if (params.worktree === 'current' || params.worktree === 'new-child') {
+        throw new OrchestrationError(
+          'invalid_argument',
+          'Remote launch preflight requires an exact worktree selector or new-top-level.'
+        )
+      }
+      const { launch } = await prepareFederationWorkerLaunchOnHost({
+        params,
+        createsWorktree: params.worktree === 'new-top-level',
+        runtime
+      })
+      return { launch: { ...launch.receipt, effective: null } }
+    }
   })
 ]
 
@@ -48,6 +70,20 @@ export async function startWorker(
   }: WorkerStartContext,
   followUp?: WorkerFollowUp
 ): Promise<unknown> {
+  if (params.role) {
+    try {
+      params = resolveWorkerRoleParams(
+        params,
+        runtime.requireStore().getSettings().orchestrationWorkerRoles
+      )
+    } catch (error) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        error instanceof Error ? error.message : 'Invalid worker role profile.',
+        { effectsApplied: false }
+      )
+    }
+  }
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',

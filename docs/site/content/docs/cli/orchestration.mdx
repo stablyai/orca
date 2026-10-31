@@ -50,6 +50,31 @@ orca orchestration worker-start --task <taskId> --worktree current --agent claud
 
 `--agent` takes any Orca agent ID enabled on the worker server, for example `claude`, `codex`, `cursor`, `antigravity`, `muse`, `opencode`, or `opencode2`. `--model` accepts opaque provider model IDs for Claude, Codex, Cursor, Antigravity, Grok, and Muse (for example `--agent muse --model muse-spark-1.3`); OpenCode accepts a per-launch model only in an existing worktree, when the execution host verifies its CLI version and model availability; OpenCode effort remains unsupported. Other agents run the model from their own config. `--effort` requires `--model` and only applies when that agent/model supports the level. Neither flag can combine with `--terminal` (reuse an existing pane). Overrides apply to that launch only and show as `model` / `effort` in the start receipt (`--full --json` shows `launch.requested` / `launch.effective`). Federated starts need a worker host that advertises launch-preference support.
 
+### Saved worker roles
+
+Open **Settings → Orchestration → Worker roles** on the Run home. Assign an enabled agent to `research`, `implementation`, or `review`, then choose its model and supported options. Add a custom role using a lowercase name with digits or hyphens. Selecting an agent saves the profile; **Clear profile** removes the assignment. Model and option choices come from the existing catalogs, and an untouched model uses the agent's own configuration. These profiles do not change the provider CLI command, permissions, account, or workspace placement.
+
+A Claude coordinator can start a configured Codex implementation worker, and a Codex coordinator can start a configured Claude review worker:
+
+```bash
+orca orchestration worker-start --spec "Implement the approved change" --role implementation --worktree current --json
+orca orchestration worker-start --spec "Review the implementation" --role review --worktree current --json
+# Override one profile option for this launch:
+orca orchestration worker-start --task <taskId> --role review --effort high --json
+# Override the provider and its options for this launch:
+orca orchestration worker-start --task <taskId> --role research --agent codex --model <provider-model-id> --effort high --json
+```
+
+Explicit `--model`, `--effort`, and `--fast on|off` replace the corresponding profile value. An explicit different `--agent` replaces the provider and clears the profile's model, effort, and Fast values; repeat any options intended for the replacement provider. An explicit matching agent keeps the profile's options. Changing only the model retains the role's effort and Fast, which must remain valid for that model. Invalid choices are refused, never silently ignored. `--role` cannot combine with `--terminal`, because a role configures a fresh agent.
+
+Fast uses the existing provider path. For Claude and Codex it requires the user's configured **Chat UI** route, an existing workspace, and a verified saved catalog for that workspace that advertises Fast for the selected model and account. Refresh the model catalog in a chat in that workspace before retrying a preflight refusal. Claude receives its native Fast option; Codex receives the provider's listed Fast service tier. For terminal workers, Fast is available only where the existing launch catalog can emit it, currently supported Cursor models. There is no automatic switch of harness, provider, model, host, or account.
+
+The start receipt includes `launch.role`, the resolved `launch.requested`, and `launch.effective`. `effectiveSource: "launch_configuration"` identifies configuration sent through the normal launch or structured-session seed, not a provider billing or execution guarantee. `null` model or effort means no override was requested; `effective: null` means the execution host did not verify the launch configuration. A Codex Fast receipt also names the selected `serviceTier`.
+
+Role and Fast launches require `orchestration.worker-role-routing.v1` on the CLI's runtime and any selected execution server. `--on` keeps role resolution on the Run home, then performs read-only launch preflight on the named server before creating a Task or Dispatch. An older or unreachable host is refused without local fallback. A lost or mismatched attachment receipt preserves the one existing Dispatch as `outcome_unknown`; inspect it and follow recovery commands instead of launching another worker. Existing agent-only launches remain compatible with older hosts. Settings configuration is currently on desktop; mobile and CLI consumers use the same saved server policy. Folder workspaces use the same path as existing Git worktrees.
+
+Roles reuse existing nesting and concurrency controls. Provider quotas remain informational; role selection does not reserve capacity, guarantee spend or available limits, or retry on another account.
+
 After starting workers, end your turn. Orca wakes the coordinator when a worker reports, asks, or stops; run the `check` command the wake gives you and handle every message it prints:
 
 ```bash

@@ -75,6 +75,12 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           request.launchPreferences?.model ?? null,
           request.launchPreferences?.effort ?? null,
           request.launchPreferences?.mode ?? null,
+          ...(request.launchPreferences?.fastMode !== undefined
+            ? ['fastMode', request.launchPreferences.fastMode]
+            : []),
+          ...(request.launchPreferences?.serviceTier !== undefined
+            ? ['serviceTier', request.launchPreferences.serviceTier]
+            : []),
           request.startupCwd ?? null,
           request.presentation ?? null,
           request.placement?.tabId ?? null,
@@ -141,6 +147,12 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
             request.launchPreferences?.model ?? null,
             request.launchPreferences?.effort ?? null,
             request.launchPreferences?.mode ?? null,
+            ...(request.launchPreferences?.fastMode !== undefined
+              ? ['fastMode', request.launchPreferences.fastMode]
+              : []),
+            ...(request.launchPreferences?.serviceTier !== undefined
+              ? ['serviceTier', request.launchPreferences.serviceTier]
+              : []),
             startupCwd ?? null,
             request.presentation ?? null,
             request.placement?.tabId ?? null,

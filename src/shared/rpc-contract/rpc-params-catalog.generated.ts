@@ -454,7 +454,10 @@ import {
   FederationImportParams,
   FederationPullParams
 } from './orchestration-federation-relay-params'
-import { FederationAttachStartParams } from './orchestration-federation-start-params'
+import {
+  FederationAttachStartParams,
+  FederationWorkerLaunchParams
+} from './orchestration-federation-start-params'
 import {
   GateCreateParams,
   GateListParams,
@@ -1290,6 +1293,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
   'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,
+  'orchestration.workerLaunchPreflight': FederationWorkerLaunchParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,
   'orchestration.workerRelease': WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
