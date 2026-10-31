@@ -56,8 +56,8 @@ const currentDesktop = {
 
 it.each([
   // Being a phone is enough: no capability or param is asked of it.
-  ['a phone of any version', STRUCTURED_MOBILE_CLIENT, true, true],
-  ['an older paired desktop', STRUCTURED_CLIENT, false, false],
+  ['a phone of any version', STRUCTURED_MOBILE_CLIENT, true, true, false],
+  ['an older paired desktop', STRUCTURED_CLIENT, false, false, false],
   [
     'a desktop that only settles skipped sends',
     {
@@ -68,25 +68,34 @@ it.each([
       ]
     },
     false,
+    false,
     false
   ],
-  ['an updated paired desktop', currentDesktop, false, true],
-  ['an in-process reader', undefined, false, true]
-] as const)('subscribes %s with bounded frames: %s', async (_label, client, bounded, snapshot) => {
-  let input: AgentSessionSubscribeInput | undefined
-  hostCalls.subscribe.mockImplementation((opened: AgentSessionSubscribeInput) => {
-    input = opened
-    opened.emit({ type: 'end' })
-    return () => {}
-  })
-  await call('agentSession.subscribe', { sessionId: SESSION }, client)
-  expect(input?.boundedFrames === true).toBe(bounded)
-  expect(input?.snapshotCatchUp).toBe(snapshot)
-  const request = { sessionId: SESSION, direction: 'after', cursor: { epoch: 'e', sequence: 1 } }
-  await call('agentSession.history', request, client)
-  const replaceHistory = snapshot && input?.readsCurrentRequests === true
-  expect(hostCalls.history).toHaveBeenCalledWith(request, undefined, replaceHistory)
-})
+  ['an updated paired desktop', currentDesktop, false, true, false],
+  ['an in-process reader', undefined, false, true, true]
+] as const)(
+  'subscribes %s with bounded frames: %s',
+  async (_label, client, bounded, snapshot, settledBodies) => {
+    let input: AgentSessionSubscribeInput | undefined
+    hostCalls.subscribe.mockImplementation((opened: AgentSessionSubscribeInput) => {
+      input = opened
+      opened.emit({ type: 'end' })
+      return () => {}
+    })
+    await call('agentSession.subscribe', { sessionId: SESSION }, client)
+    expect(input?.boundedFrames === true).toBe(bounded)
+    expect(input?.snapshotCatchUp).toBe(snapshot)
+    const request = { sessionId: SESSION, direction: 'after', cursor: { epoch: 'e', sequence: 1 } }
+    await call('agentSession.history', request, client)
+    const replaceHistory = snapshot && input?.readsCurrentRequests === true
+    expect(hostCalls.history).toHaveBeenCalledWith(
+      request,
+      undefined,
+      replaceHistory,
+      settledBodies
+    )
+  }
+)
 
 it('allows the local desktop renderer to replace a missed gap with a snapshot', async () => {
   let input: AgentSessionSubscribeInput | undefined
