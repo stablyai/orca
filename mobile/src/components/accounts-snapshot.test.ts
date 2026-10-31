@@ -125,6 +125,110 @@ describe('decodeAccountsSnapshot', () => {
     expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
   })
 
+  it('keeps Grok weekly usage from hosts that report it', () => {
+    const raw = makeSnapshot() as { rateLimits: Record<string, unknown> }
+    raw.rateLimits.grok = {
+      provider: 'grok',
+      session: null,
+      weekly: {
+        usedPercent: 42,
+        windowMinutes: 10080,
+        resetsAt: 400,
+        resetDescription: 'Thu'
+      },
+      updatedAt: 100,
+      error: null,
+      status: 'ok',
+      usageMetadata: { authProvenance: 'Grok CLI session' }
+    }
+    raw.rateLimits.grokAuthConfigured = true
+
+    const snapshot = decodeAccountsSnapshot(raw)
+
+    expect(snapshot.rateLimits.grok).toMatchObject({
+      weekly: { usedPercent: 42 },
+      usageMetadata: { authProvenance: 'Grok CLI session' }
+    })
+    expect(snapshot.rateLimits.grokAuthConfigured).toBe(true)
+  })
+
+  it('keeps desktop provider usage and managed profiles when the host reports them', () => {
+    const raw = makeSnapshot() as {
+      opencode?: unknown
+      rateLimits: Record<string, unknown>
+    }
+    raw.opencode = {
+      accounts: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          label: 'Work',
+          integrations: ['github'],
+          createdAt: 10
+        }
+      ],
+      activeAccountId: null
+    }
+    raw.rateLimits.opencodeGo = {
+      provider: 'opencode-go',
+      session: null,
+      weekly: null,
+      monthly: { usedPercent: 33, windowMinutes: 43200, resetsAt: null, resetDescription: null },
+      updatedAt: 100,
+      error: null,
+      status: 'ok'
+    }
+    raw.rateLimits.zcode = {
+      provider: 'zcode',
+      session: { usedPercent: 10, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: null,
+      updatedAt: 100,
+      error: null,
+      status: 'ok'
+    }
+    raw.rateLimits.cursorAuthConfigured = true
+    raw.rateLimits.minimaxApiKeyConfigured = true
+
+    const snapshot = decodeAccountsSnapshot(raw)
+
+    expect(snapshot.opencode?.accounts[0]).toMatchObject({ label: 'Work' })
+    expect(snapshot.rateLimits.opencodeGo).toMatchObject({ monthly: { usedPercent: 33 } })
+    expect(snapshot.rateLimits.zcode).toMatchObject({
+      provider: 'zcode',
+      session: { usedPercent: 10 }
+    })
+    expect(snapshot.rateLimits.cursorAuthConfigured).toBe(true)
+    expect(snapshot.rateLimits.minimaxApiKeyConfigured).toBe(true)
+    expect(snapshot.devin).toBeUndefined()
+  })
+
+  it('rejects Grok limits that claim another provider', () => {
+    const snapshot = makeSnapshot()
+    setPath(snapshot, ['rateLimits', 'grok'], {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: 100,
+      error: null,
+      status: 'ok'
+    })
+
+    expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
+  })
+
+  it('rejects Zcode limits that claim another provider', () => {
+    const snapshot = makeSnapshot()
+    setPath(snapshot, ['rateLimits', 'zcode'], {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: 100,
+      error: null,
+      status: 'ok'
+    })
+
+    expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
+  })
+
   it('rejects a host target that smuggles a WSL distro', () => {
     const snapshot = makeSnapshot()
     setPath(snapshot, ['rateLimits', 'codexTarget', 'wslDistro'], 'Ubuntu')

@@ -103,6 +103,8 @@ vi.mock('../components/AgentIcons', () => ({
   OpenAIIcon: 'OpenAIIcon'
 }))
 
+vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
+
 const AVAILABLE_SNAPSHOT = {
   claude: { accounts: [], activeAccountId: null },
   codex: {
