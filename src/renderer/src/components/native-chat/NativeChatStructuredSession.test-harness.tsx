@@ -8,7 +8,7 @@ import type { AgentSessionUnavailable } from '../../../../shared/agent-session-a
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
 import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
-import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
+import type { NativeChatQuestionCardProps } from './native-chat-question-card-props'
 import type {
   NativeChatLaunchSeed,
   NativeChatStructuredComposerTransport

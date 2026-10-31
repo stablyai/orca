@@ -1,17 +1,17 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import { Textarea } from '@/components/ui/textarea'
-import { useRef, useState, type RefObject } from 'react'
+import { useRef, useState } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { AskAnswerSelection } from '../../../../shared/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
 import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
 import { isEditableTarget } from '@/lib/editable-target'
-import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session-journal-types'
+import type { NativeChatQuestionCardProps } from './native-chat-question-card-props'
+import { nativeChatAskDismissKey } from '../../../../shared/native-chat-ask-dismiss-key'
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
@@ -19,25 +19,6 @@ import {
   askTypedText,
   toggleAskOption
 } from '../../../../shared/native-chat-ask-card-rules'
-
-export type NativeChatQuestionCardProps = {
-  prompt: AskPrompt
-  /** Whether the snapshotted answer is still being delivered to the agent. */
-  isSubmitting?: boolean
-  isCancelling?: boolean
-  /** Deliver the chosen answer (per-question option indices + free text). */
-  onAnswer: (selections: AskAnswerSelection[]) => void
-  allowOther?: boolean | readonly boolean[]
-  freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
-  /** Dismiss the prompt (sends Escape to the agent). */
-  onCancel: () => void
-  /** Fold the card to a strip and give the input back, writing nothing; Escape does too. */
-  onCollapse?: () => void
-  /** Take focus when the card takes the input region; number keys pick while it holds. */
-  shouldFocus?: boolean
-  /** Paste target while the card replaces the composer. */
-  answerInputRef?: RefObject<HTMLInputElement | null>
-}
 
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
@@ -49,7 +30,16 @@ const CONFIRM_LABEL = {
 } as const
 
 /** Single-select advances after a pick; multi-select confirms explicitly, and multi-question prompts retain earlier answers. */
-export function NativeChatQuestionCard({
+export function NativeChatQuestionCard(
+  props: NativeChatQuestionCardProps
+): React.JSX.Element | null {
+  if (props.prompt.questions.length === 0) {
+    return null
+  }
+  return <NativeChatQuestionCardState key={nativeChatAskDismissKey(props.prompt)} {...props} />
+}
+
+function NativeChatQuestionCardState({
   prompt,
   isSubmitting = false,
   isCancelling = false,
