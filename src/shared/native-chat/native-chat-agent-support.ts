@@ -1,4 +1,4 @@
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from '../tui-agent'
 
 export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'opencode'
 
