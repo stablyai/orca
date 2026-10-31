@@ -7,9 +7,10 @@ import type {
   StableAutomationAuthorityRef
 } from '../../../../shared/automation-owner-ref'
 import { syncAutomationHostCatalogGenerations } from './automation-host-catalog-generation'
-import type {
-  AutomationHostCatalog,
-  AutomationHostCatalogEntry
+import {
+  automationAuthorityCatalogKey,
+  type AutomationHostCatalog,
+  type AutomationHostCatalogEntry
 } from './automation-host-catalog-types'
 import { createAutomationHostCache, type AutomationHostCache } from './automation-host-cache'
 import {
@@ -198,19 +199,8 @@ export function createAutomationHostQueryController(
       options.onSettled?.()
     },
     handleAuthorityEvent: invalidation.handle,
-    authorityOrphanCount: (authority) => {
-      let newest: { fetchedAt: number; orphanCount: number } | null = null
-      for (const key of cache.keysForAuthority(authority)) {
-        const entry = cache.getByKey(key)
-        if (!entry || entry.orphanCount === null || entry.fetchedAt === null) {
-          continue
-        }
-        if (!newest || entry.fetchedAt >= newest.fetchedAt) {
-          newest = { fetchedAt: entry.fetchedAt, orphanCount: entry.orphanCount }
-        }
-      }
-      return newest?.orphanCount ?? null
-    },
+    authorityOrphanCount: (authority) =>
+      cache.orphanCountsByAuthority().get(automationAuthorityCatalogKey(authority)) ?? null,
     isDisposed: () => disposed,
     dispose: () => {
       disposed = true

@@ -15,7 +15,10 @@ import type {
 import type { ScopedAutomationList } from './automation-scoped-list-client'
 import type { AutomationHostRow } from './automation-host-cache-types'
 import type { AutomationHostQueryController } from './automation-host-cache-controller'
-import type { AutomationHostCatalog } from './automation-host-catalog-types'
+import {
+  automationAuthorityCatalogKey,
+  type AutomationHostCatalog
+} from './automation-host-catalog-types'
 
 function ownerForItem(
   authority: AutomationAuthorityRef,
@@ -131,11 +134,14 @@ export function automationHostFailureSummary(
     }
   }
 
+  const orphans = controller.cache.orphanCountsByAuthority()
   return {
     count: unseenFailureCount,
     key: JSON.stringify([
       unseenFailureCount,
-      ...catalog.entries.map((entry) => controller.authorityOrphanCount(entry.stableRef.authority))
+      ...catalog.entries.map(
+        (entry) => orphans.get(automationAuthorityCatalogKey(entry.stableRef.authority)) ?? null
+      )
     ])
   }
 }

@@ -1,8 +1,11 @@
-import { afterEach, expect, vi } from 'vitest'
+import { afterEach, expect, vi, type Mock } from 'vitest'
 import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session-wire'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
-import { createStructuredAttentionMobileDelivery } from '../runtime/structured-agent-session-mobile-attention'
+import {
+  createStructuredAttentionMobileDelivery,
+  type StructuredAttentionMobileDeliveryDeps
+} from '../runtime/structured-agent-session-mobile-attention'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -32,7 +35,7 @@ export async function setup(agent?: 'claude') {
 
 export function listen(rig: QueuedMessageTestRig, subscribers = 3) {
   const events: AgentSessionTurnCompletionEvent[][] = Array.from({ length: subscribers }, () => [])
-  const phone = vi.fn()
+  const phone: Mock<StructuredAttentionMobileDeliveryDeps['dispatch']> = vi.fn()
   const delivery = createStructuredAttentionMobileDelivery({
     readNotificationSettings: () => ({
       enabled: true,

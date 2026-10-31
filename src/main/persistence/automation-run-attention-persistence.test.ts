@@ -12,6 +12,7 @@ import {
 } from './persistence-test-harness'
 import { buildProfileStateCutoverFixture } from './profile-state-cutover-fixture'
 import { Store } from './loading-store/store'
+import { createAutomationRunWriter } from '../automations/automation-run-writer'
 import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
 import { prepareLegacyProfileState } from './profile-state/legacy-json/profile-state-legacy-import'
 
@@ -204,4 +205,31 @@ it('carries a legacy frozen activation into its destination and preserves the sy
   } finally {
     await store.freezeWritesAsync()
   }
+})
+
+it('rechecks actual synchronous primary durability when commit precedes outcome installation', async () => {
+  const source = buildProfileStateCutoverFixture(testState.dir)
+  source.automationRuns[0].status = 'dispatched'
+  writeDataFile(source)
+  const store = createStore()
+  await store.flushPendingOrThrowAsync()
+  const update = store.updateAutomationRunWithTransition.bind(store)
+  vi.spyOn(store, 'updateAutomationRunWithTransition').mockImplementation((result) => {
+    const transition = update(result)
+    store.flushOrThrow()
+    expect(store.automationDurableWriteGeneration()).toBe(store.automationWriteGeneration())
+    return transition
+  })
+  const publish = vi.fn()
+  const writer = createAutomationRunWriter(store, publish)
+  await writer.updateRun({ runId: source.automationRuns[0].id, status: 'completed' })
+  expect(
+    readPersistedState().automationRuns.find((run) => run.id === source.automationRuns[0].id)
+      ?.status
+  ).toBe('completed')
+  expect(publish.mock.calls.filter(([event]) => event.settledRun)).toHaveLength(1)
+  store.updateSettings({ theme: 'dark' })
+  await store.flushPendingOrThrowAsync()
+  expect(publish.mock.calls.filter(([event]) => event.settledRun)).toHaveLength(1)
+  writer.dispose()
 })

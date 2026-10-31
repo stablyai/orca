@@ -527,3 +527,119 @@ it('observes a real cache commit between render and subscription attachment whil
   expect(view?.unseenFailureCount).toBe(2)
   expect(mocks.renders).toBeGreaterThan(renders)
 })
+
+it.each([10, 100])(
+  'bounds actual empty-host cache and catalog derivation at H=%i with equal render silence',
+  async (hosts) => {
+    mocks.failureCountOnly = true
+    const capabilities = [
+      AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
+      AUTOMATION_RUN_SEEN_CAPABILITY
+    ]
+    mocks.state = storeState([])
+    const environments = Array.from({ length: hosts }, (_, i) => ({
+      id: `env-${i}`,
+      name: `Host ${i}`,
+      createdAt: 1,
+      pairingRevision: 1
+    }))
+    mocks.state.runtimeEnvironments = environments
+    mocks.state.runtimeStatusByEnvironmentId = new Map(
+      environments.map(({ id }) => [id, { status: { capabilities } }])
+    )
+    mocks.getRuntimeEnvironmentStatus.mockResolvedValue({ capabilities })
+    let orphanCount = 0
+    mocks.callRuntimeRpc.mockImplementation(async () => ({
+      automations: [],
+      items: [],
+      orphanCount
+    }))
+    await renderCatalogWithState()
+    const controller = mocks.controller
+    if (!controller) {
+      throw new Error('Expected actual controller')
+    }
+    await act(async () => {
+      await controller.applyCatalog(view!.catalog)
+    })
+    const population = controller.cache.keys().length
+    let authorityReads = 0
+    for (const key of controller.cache.keys()) {
+      const record = controller.cache.getByKey(key)
+      if (!record) {
+        throw new Error('Expected actual cache record')
+      }
+      const authority = Object.getOwnPropertyDescriptor(record, 'authorityKey')?.value
+      if (typeof authority !== 'string') {
+        throw new Error('Expected canonical cache authority')
+      }
+      Object.defineProperty(record, 'authorityKey', {
+        configurable: true,
+        get: () => {
+          authorityReads++
+          return authority
+        }
+      })
+    }
+    const queries = vi.spyOn(controller.cache, 'orphanCountsByAuthority')
+    const beforeRenders = mocks.renders
+    const beforeRequests = mocks.callRuntimeRpc.mock.calls.length
+    await act(async () => {
+      view?.notifyAuthorityChange({
+        authority: { kind: 'runtime', environmentId: 'env-0' },
+        selector: { kind: 'self' },
+        reason: 'usage'
+      })
+    })
+    expect(mocks.callRuntimeRpc.mock.calls.length - beforeRequests).toBe(1)
+    expect(authorityReads).toBe(2 * population + 1)
+    expect(queries).toHaveBeenCalledTimes(2)
+    console.info('PF1 equal refresh', {
+      hosts,
+      population,
+      authorityReads,
+      derivations: queries.mock.calls.length,
+      renders: mocks.renders - beforeRenders
+    })
+    expect(mocks.renders).toBe(beforeRenders)
+    // Rebuild the actual catalog source; its per-authority lookups share one derived answer.
+    queries.mockClear()
+    authorityReads = 0
+    await act(async () => {
+      mocks.state = {
+        ...mocks.state,
+        automationHostFilter: {
+          kind: 'host',
+          host: {
+            authority: { kind: 'runtime', environmentId: 'env-0' },
+            selector: { kind: 'self' }
+          }
+        }
+      }
+      mocks.listeners.forEach((notify) => notify())
+    })
+    expect(queries.mock.calls.length).toBeGreaterThan(0)
+    expect(queries.mock.calls.length).toBeLessThanOrEqual(5)
+    expect(authorityReads).toBeLessThanOrEqual(5 * population)
+    console.info('PF1 catalog construction', {
+      hosts,
+      population,
+      authorityReads,
+      derivations: queries.mock.calls.length
+    })
+    const equalRenders = mocks.renders
+    orphanCount = 1
+    await act(async () => {
+      view?.notifyAuthorityChange({
+        authority: { kind: 'runtime', environmentId: 'env-0' },
+        selector: { kind: 'self' },
+        reason: 'run'
+      })
+    })
+    expect(mocks.renders).toBeGreaterThan(equalRenders)
+    expect(view?.catalog.entries.some((entry) => entry.stableRef.selector.kind === 'orphan')).toBe(
+      true
+    )
+    queries.mockRestore()
+  }
+)

@@ -13,7 +13,6 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { getHostSettingOverride } from '../../../../shared/host-setting-overrides'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import type { AutomationHostFilter } from '../../../../shared/automation-host-filter'
-import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { buildAutomationHostCatalog } from './automation-host-catalog'
 import { subscribeAutomationHostInvalidation } from './automation-host-invalidation-window-events'
 import { buildAutomationHostCatalogSource } from './automation-host-catalog-source'
@@ -29,9 +28,10 @@ import {
 import { automationHostFailureSummary } from './automation-host-cache-rows'
 import { automationHostCatalogEntryFingerprint } from './automation-host-catalog-generation'
 import type { AutomationAuthorityChangeEvent } from './automation-host-invalidation'
-import type {
-  AutomationHostCatalog,
-  AutomationHostCatalogEntry
+import {
+  automationAuthorityCatalogKey,
+  type AutomationHostCatalog,
+  type AutomationHostCatalogEntry
 } from './automation-host-catalog-types'
 import { automationHostFilterStableKey } from '../../../../shared/automation-host-filter'
 import {
@@ -129,10 +129,6 @@ export function useAutomationHostCatalog(
 
   const [cacheVersion, setCacheVersion] = useState(0)
 
-  const orphanCount = useCallback(
-    (authority: StableAutomationAuthorityRef) => controller.authorityOrphanCount(authority),
-    [controller]
-  )
   const sourceState = useAutomationHostCatalogSourceState({
     desktopSshGenerations,
     runtimeEnvironments
@@ -167,17 +163,19 @@ export function useAutomationHostCatalog(
   )
   const languageRevision = useUiLanguageRevision()
   const queryCatalog = useMemo(
-    () =>
-      buildAutomationHostCatalog(
+    () => {
+      const orphans = controller.cache.orphanCountsByAuthority()
+      return buildAutomationHostCatalog(
         buildAutomationHostCatalogSource({
           ...sourceState,
           desktopLabel,
-          orphanCount,
+          orphanCount: (authority) => orphans.get(automationAuthorityCatalogKey(authority)) ?? null,
           referencedStableKeys
         })
-      ),
+      )
+    },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the cache's change signal: orphan counts only exist in committed answers, so the catalog re-reads them when the cache moves. Ordering collates in the UI language.
-    [cacheVersion, desktopLabel, orphanCount, referencedStableKeys, sourceState, languageRevision]
+    [cacheVersion, controller, desktopLabel, referencedStableKeys, sourceState, languageRevision]
   )
 
   // Apply by complete generation/scheduler signature, not catalog identity; label/health changes must not cancel work.

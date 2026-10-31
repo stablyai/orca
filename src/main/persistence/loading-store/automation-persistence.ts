@@ -37,6 +37,7 @@ import {
   recordRepeatedAutomationSkip as recordRepeatedAutomationSkipOperation,
   snapshotAutomationRunWorkspaceDisplayName as snapshotAutomationRunWorkspaceDisplayNameOperation,
   updateAutomationRun as updateAutomationRunOperation,
+  updateAutomationRunWithTransition as updateAutomationRunWithTransitionOperation,
   type AutomationRunOperations
 } from '../scheduling-automations/automation-run-operations'
 import {
@@ -220,11 +221,7 @@ export class AutomationPersistence {
   }
 
   updateAutomationRunWithTransition(result: AutomationDispatchResult) {
-    let previousStatus: AutomationRun['status'] = result.status
-    const run = updateAutomationRunOperation(getAutomationRunOperations(this), result, (status) => {
-      previousStatus = status
-    })
-    return { run, previousStatus }
+    return updateAutomationRunWithTransitionOperation(getAutomationRunOperations(this), result)
   }
 
   markAutomationRunSeen(automationId: string, runId: string): boolean {

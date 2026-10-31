@@ -35,7 +35,7 @@ export function createAutomationRunWriter(
         | 'automationDurableWriteGeneration'
         | 'onDurableWrite'
         | 'hasAutomationRun'
-        | 'listAutomations'
+        | 'observeAutomationRunRemovals'
       >
     >,
   publish: PublishAutomationsChanged | null
@@ -62,6 +62,7 @@ export function createAutomationRunWriter(
     }
   }
   const unsubscribe = store.onDurableWrite?.(drain)
+  const releaseRemovals = store.observeAutomationRunRemovals?.((id) => pending.delete(id))
   // Scope to the run’s host; missing records fall back to an authority-wide event.
   const announce = (automationId: string, reason: 'run' | 'usage'): void => {
     if (!publish) {
@@ -74,6 +75,7 @@ export function createAutomationRunWriter(
     dispose: () => {
       disposed = true
       unsubscribe?.()
+      releaseRemovals?.()
       pending.clear()
     },
     advanceNextRun: async (id, now) => {
@@ -91,11 +93,12 @@ export function createAutomationRunWriter(
       const mutation = store.updateAutomationRunWithTransition?.(result)
       const run = mutation?.run ?? store.updateAutomationRun(result)
       if (
+        !disposed &&
         mutation &&
         !isFinalAutomationRunStatus(mutation.previousStatus) &&
         (run.status === 'completed' || run.status === 'dispatch_failed')
       ) {
-        const automation = store.listAutomations?.().find((row) => row.id === run.automationId)
+        const automation = mutation.automation
         pending.set(run.id, {
           generation: store.automationWriteGeneration?.() ?? 0,
           outcome: {
