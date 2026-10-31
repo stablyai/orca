@@ -23,6 +23,7 @@ const testState = vi.hoisted(() => ({
   replayPreHandlerPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn(),
+  getPtyKittyKeyboardFlags: vi.fn(),
   inspectRuntimeTerminalProcess: vi.fn(),
   subscribeToRuntimeTerminalData: vi.fn()
 }))
@@ -55,6 +56,10 @@ vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
   subscribeToRuntimeTerminalData: testState.subscribeToRuntimeTerminalData
+}))
+
+vi.mock('@/components/terminal-pane/terminal-pty-kitty-keyboard-flags', () => ({
+  getPtyKittyKeyboardFlags: testState.getPtyKittyKeyboardFlags
 }))
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
@@ -90,6 +95,8 @@ describe('post-paste submit retry Enter', () => {
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
+    testState.getPtyKittyKeyboardFlags.mockReset()
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(0)
     testState.inspectRuntimeTerminalProcess.mockReset()
     testState.subscribeToRuntimeTerminalData.mockReset()
   })
@@ -131,6 +138,30 @@ describe('post-paste submit retry Enter', () => {
     await expect(promise).resolves.toBe(true)
     expect(enterWrites()).toHaveLength(1)
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('uses Ctrl+Enter when configured and kitty keyboard reporting is active', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(1)
+
+    const promise = startCodexSubmit()
+    await signalCodexComposerReady()
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS)
+    await vi.advanceTimersByTimeAsync(CODEX_SUBMIT_RETRY_DELAY_MS)
+
+    await expect(promise).resolves.toBe(true)
+    expect(submitWrites('\x1b[13;5u')).toHaveLength(2)
+  })
+
+  it('falls back to Enter when Ctrl+Enter is configured without kitty keyboard reporting', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+
+    const promise = startCodexSubmit()
+    await signalCodexComposerReady()
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+
+    await expect(promise).resolves.toBe(true)
+    expect(enterWrites()).toHaveLength(2)
   })
 
   it('holds the PTY input transaction across the retry Enter', async () => {
@@ -178,7 +209,11 @@ describe('post-paste submit retry Enter', () => {
 })
 
 function enterWrites(): unknown[][] {
-  return testState.sendRuntimePtyInputVerified.mock.calls.filter((call) => call[1] === '\r')
+  return submitWrites('\r')
+}
+
+function submitWrites(input: string): unknown[][] {
+  return testState.sendRuntimePtyInputVerified.mock.calls.filter((call) => call[1] === input)
 }
 
 function startCodexSubmit(): Promise<boolean> {

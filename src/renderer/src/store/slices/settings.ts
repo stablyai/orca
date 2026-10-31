@@ -18,6 +18,7 @@ import { normalizeOpenInApplications } from '../../../../shared/open-in-applicat
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { isRuntimeCatalogListingStale } from './runtime-status-hydration'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { normalizeAgentPostPasteSubmitInputs } from '../../../../shared/tui-agent-post-paste-submit'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../../shared/tui-agent-launch-defaults'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
@@ -107,6 +108,11 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
+  if ('agentPostPasteSubmitInputs' in updates) {
+    sanitizedUpdates.agentPostPasteSubmitInputs = normalizeAgentPostPasteSubmitInputs(
+      updates.agentPostPasteSubmitInputs
+    )
+  }
   if ('uiLanguage' in updates) {
     sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
   }
