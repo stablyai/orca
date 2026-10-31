@@ -32,7 +32,11 @@ export function buildSidebarFeedCatalog(
     ? {
         repos: served.repos.map(catalogRepo),
         projectGroups: served.projectGroups ?? hostProjectGroups,
-        projectGrouping: { projects: served.projects, projectHostSetups: served.setups }
+        projectGrouping: {
+          projects: served.projects,
+          projectHostSetups: served.setups,
+          personalProjectOrder: served.personalProjectOrder
+        }
       }
     : {
         repos: hostRepos.map(catalogRepo),

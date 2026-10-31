@@ -1,3 +1,5 @@
+import { recordPersonalProjectRouteIntent } from '../worktree/personal-project-route-intent'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useEffect } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import { worktreeActivate } from '../host-screen/host-screen-operations'
@@ -7,6 +9,7 @@ import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keybo
 import type { RpcResponse } from '../transport/types'
 
 export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) {
+  const executionHost = useWorkspaceExecutionHost()
   const {
     hostId,
     worktreeId,
@@ -125,6 +128,14 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       // Interpret only actual replies; preserve absent activation replies as null rather than inventing refusals.
       const reportActivationOutcome = (response: RpcResponse | null): void => {
         const activation = response === null ? null : worktreeActivate.interpret(response)
+        if (activation?.accepted) {
+          void recordPersonalProjectRouteIntent({
+            intent: scope.projectOpen,
+            viewClient: scope.uiViewClient,
+            activation: activation.value,
+            executionHost
+          }).catch(() => {})
+        }
         if (
           !disposed &&
           activation?.accepted === true &&

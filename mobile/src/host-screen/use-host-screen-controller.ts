@@ -64,7 +64,6 @@ export function useHostScreenController({
   const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
   const state = useHostScreenState(hostId)
-  const settings = useHostViewSettings({ client, connState, state })
   const connectionVerdict = classifyConnection({
     state: connState,
     reconnectAttempts,
@@ -81,6 +80,17 @@ export function useHostScreenController({
   useHostScreenIdentity({ client, hostId, state })
   const fetchRepoMetadataOnly = useHostRepoMetadata({ client, connState, hostId, state })
   const sidebarFeed = useSwitchedHostSidebarFeed(client, hostId)
+  const projectCatalog =
+    sidebarFeed?.feed.kind === 'ready'
+      ? (sidebarFeed.feed.domains.projectCatalog ?? state.servedProjectSections)
+      : state.servedProjectSections
+  const settings = useHostViewSettings({
+    client,
+    connState,
+    state,
+    hostCapabilities,
+    projectCatalog
+  })
   // Read through a ref so the metadata refresh keeps its identity across installs.
   const feedRef = useRef(sidebarFeed?.feed)
   useEffect(() => {
@@ -120,6 +130,7 @@ export function useHostScreenController({
     connState,
     embedded,
     fetchWorktrees: catalog.fetchWorktrees,
+    projectCatalog,
     forgetHostClient,
     hostCapabilities,
     hostId,
@@ -160,6 +171,7 @@ export function useHostScreenController({
     collapsedGroups,
     feed,
     projectOrderBy,
+    projectCatalog,
     client,
     connectionVerdict,
     connState,

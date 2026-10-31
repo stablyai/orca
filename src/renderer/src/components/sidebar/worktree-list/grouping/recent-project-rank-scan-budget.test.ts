@@ -115,7 +115,9 @@ describe('recent project rank scan budget', () => {
         count: 32,
         icon: { kind: 'project' },
         repo: group.repo,
-        projectGroupDepth: 1
+        projectGroupDepth: 1,
+        projectPinned: false,
+        projectPreferenceKey: undefined
       }))
     )
     expect(readCount()).toBe(128 * 33)

@@ -32,6 +32,7 @@ export type UISlicePreferences = {
   setGroupBy: (g: UISlicePreferences['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlicePreferences['sortBy']) => void
+  personalProjectOrder?: PersistedUIState['personalProjectOrder']
   projectOrderBy: ProjectOrderBy
   setProjectOrderBy: (p: ProjectOrderBy) => void
   showActiveOnly: boolean

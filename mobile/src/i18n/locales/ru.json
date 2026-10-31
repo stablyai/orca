@@ -1519,11 +1519,13 @@
       "prMrLink": "Ссылка на PR/MR",
       "project": "Проект",
       "recent": "Недавние",
-      "recentProjectOrderDescription": "Недавняя активность рабочих пространств",
       "searchProjects": "Поиск проектов",
       "searchProjectsPlaceholder": "Поиск проектов…",
       "selectedCount": "{{count}} из {{total}}",
-      "status": "Статус"
+      "status": "Статус",
+      "recentProjectOpeningDescription": "Последние открытые вами проекты",
+      "frequentProjectOrderDescription": "Проекты, которые вы открываете чаще всего",
+      "frequent": "Часто используемые"
     },
     "workspaceOptionsSheet": {
       "backToOptions": "Вернуться к параметрам рабочих пространств",
@@ -1552,6 +1554,10 @@
       "thisComputer": "Этот компьютер",
       "waitingForDesktop": "Всё ещё ждём ответа компьютера",
       "workspaceOptions": "Параметры рабочих пространств"
+    },
+    "project": {
+      "pin": "Закрепить проект",
+      "unpin": "Открепить проект"
     }
   },
   "navigation": {
@@ -4340,5 +4346,8 @@
         }
       }
     }
+  },
+  "workspaceOptions": {
+    "recentActivity": "Последняя активность в рабочих папках"
   }
 }

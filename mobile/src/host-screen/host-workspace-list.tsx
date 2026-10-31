@@ -1,3 +1,6 @@
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { resolveProjectPreferenceKey } from '../../../src/shared/project-preference-identity'
+import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { useEffect, useMemo, type ReactElement } from 'react'
 import {
   ActivityIndicator,
@@ -43,6 +46,7 @@ export function HostWorkspaceList({
   /** The host name at the top of the list, folding into the bar as it scrolls. */
   pageTitle?: { element: ReactElement; collapsing: CollapsingTitle }
 }) {
+  const t = useMobileTranslation()
   const colorScheme = useMobileColorScheme()
   const {
     actions,
@@ -196,6 +200,17 @@ export function HostWorkspaceList({
                 : null
             const repoSectionColor = repoSectionLook?.color ?? null
             const repoSectionIcon = repoSectionLook?.icon ?? null
+            const projectKey =
+              section.repo && controller.projectCatalog
+                ? resolveProjectPreferenceKey(
+                    section.repo.id,
+                    controller.projectCatalog.setups,
+                    getRepoExecutionHostId(section.repo)
+                  )
+                : null
+            const projectPinned = projectKey
+              ? state.view.personalProjectOrder?.projects[projectKey]?.pinned === true
+              : false
             return (
               <>
                 <Pressable
@@ -231,6 +246,28 @@ export function HostWorkspaceList({
                   ) : null}
                   <Text style={styles.sectionTitle}>{section.title}</Text>
                   <Text style={styles.sectionCount}>{count}</Text>
+                  {projectKey && section.repo && settings.supportsPersonalProjectOrder ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        projectPinned
+                          ? t('hostScreen.project.unpin', 'Unpin project')
+                          : t('hostScreen.project.pin', 'Pin project')
+                      }
+                      hitSlop={8}
+                      onPress={(event) => {
+                        event.stopPropagation()
+                        if (section.repo) {
+                          void settings.toggleProjectPin(section.repo)
+                        }
+                      }}
+                    >
+                      <Pin
+                        size={14}
+                        color={projectPinned ? colors.textPrimary : colors.textMuted}
+                      />
+                    </Pressable>
+                  ) : null}
                   {pendingCollapseKeys.has(collapseKey) && (
                     <ActivityIndicator
                       size="small"

@@ -1,3 +1,5 @@
+import { canInspectAgentActivationInventory } from './worktree-activation-pty-inventory'
+import { capturePersonalProjectOpening } from './personal-project-opening'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { translate } from '@/i18n/i18n'
@@ -53,11 +55,6 @@ export type ActivateAndRevealResult = {
    *  `activeTabIdByWorktree`, which may point at another tab if setup/issue scripts opened their own. */
   primaryTabId: string | null
 }
-
-const canInspectAgentActivationInventory = (): boolean =>
-  typeof window !== 'undefined' &&
-  typeof window.api?.runtime?.call === 'function' &&
-  typeof window.api?.pty?.listSessions === 'function'
 
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
@@ -191,6 +188,8 @@ export function activateAndRevealWorktree(
     state.setActiveView('terminal')
     return { primaryTabId: null }
   }
+  const personalOpening = capturePersonalProjectOpening(state, wt.repoId, worktreeId, opts)
+  let activationAcknowledgement: Promise<boolean> = Promise.resolve(true)
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
@@ -209,7 +208,7 @@ export function activateAndRevealWorktree(
   }
   noteUserWorkspaceOpen(worktreeId, opts?.navigationIntent)
 
-  state.setActiveWorktree(
+  const activated = state.setActiveWorktree(
     worktreeId,
     opts?.executionHostId,
     buildActivationStateTransition(state, worktreeId, {
@@ -226,7 +225,7 @@ export function activateAndRevealWorktree(
       : runtimeEnvironmentIdOrLocalUnlessTwin(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
-    void activateWebRuntimeSessionWorktree({
+    activationAcknowledgement = activateWebRuntimeSessionWorktree({
       worktreeId,
       environmentId: ownerRuntimeEnvironmentId
     })
@@ -307,6 +306,7 @@ export function activateAndRevealWorktree(
     })
   }
 
+  personalOpening?.(activated, activationAcknowledgement)
   return { primaryTabId }
 }
 

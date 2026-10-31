@@ -6,6 +6,7 @@ import type { AssertNoMissingKeys, AssertNoMissingValues } from './ui-state-sche
 
 // Main-only UI fields never arrive from clients; parity checks enforce their deliberate omission from the strict schema.
 type MainOwnedUIState =
+  | 'personalProjectOrder'
   | 'jiraSavedFilterState'
   | 'jiraQuickFilterState'
   | '_explorerDisplayRootMigrated'

@@ -1429,7 +1429,6 @@
       "prMrLink": "PR/MR链接",
       "project": "项目",
       "recent": "最近的",
-      "recentProjectOrderDescription": "最近的工作区活动",
       "searchProjects": "搜索项目",
       "searchProjectsPlaceholder": "搜索项目…",
       "selectedCount": "{{count}} / {{total}}",

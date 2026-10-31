@@ -188,3 +188,37 @@ describe('createProjectHeaderDragSession', () => {
     expect(sessionFromRowPadding?.repo.id).toBe('repo-a')
   })
 })
+
+it.each([
+  ['group:remote', 'group:local'],
+  [JSON.stringify(['ungrouped', false]), JSON.stringify(['ungrouped', true])]
+])(
+  'uses the clicked row bucket %s rather than a same-id twin in %s',
+  (clickedBucket, twinBucket) => {
+    const handle = document.createElement('div')
+    handle.setAttribute('data-repo-header-drag-handle', '')
+    handle.setAttribute('data-repo-header-bucket', clickedBucket)
+    const container = document.createElement('div')
+    const session = createProjectHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 20,
+        target: handle,
+        currentTarget: handle
+      },
+      repo: {
+        ...createRepo('same', clickedBucket.startsWith('group:') ? 'remote' : null),
+        executionHostId: 'runtime:remote'
+      },
+      sidebarRepoHeaderIdsByBucket: new Map([
+        [twinBucket, ['same', 'local-sibling']],
+        [clickedBucket, ['same', 'remote-sibling']]
+      ]),
+      getScrollContainer: () => container
+    })
+    expect(session?.bucketKey).toBe(clickedBucket)
+    expect(session?.sidebarRepoHeaderIds).toEqual(['same', 'remote-sibling'])
+  }
+)

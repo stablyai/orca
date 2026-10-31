@@ -1429,7 +1429,6 @@
       "prMrLink": "PR/MR リンク",
       "project": "プロジェクト",
       "recent": "最近の",
-      "recentProjectOrderDescription": "最新のワークスペースアクティビティ",
       "searchProjects": "プロジェクトを検索する",
       "searchProjectsPlaceholder": "プロジェクトを検索…",
       "selectedCount": "{{total}} 件中 {{count}} 件",

@@ -1429,7 +1429,6 @@
       "prMrLink": "PR/MR 링크",
       "project": "프로젝트",
       "recent": "최근",
-      "recentProjectOrderDescription": "가장 최근의 워크스페이스 활동",
       "searchProjects": "프로젝트 검색",
       "searchProjectsPlaceholder": "프로젝트 검색…",
       "selectedCount": "{{total}}개 중 {{count}}개",

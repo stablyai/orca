@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getProjectGroupHeaderSectionEndByGroupId,
-  getRepoHeaderSectionEndByRepoId
+  getRepoHeaderSectionEndByKey
 } from './worktree-header-section-boundaries'
 import type { RenderRow } from './worktree-list/listing/render-row'
 
@@ -25,16 +25,16 @@ const rows = [repoHeader('a'), item, repoHeader('b'), item, repoHeader('c'), ite
 const startOfB = 28 + 116
 const startOfC = startOfB + 32 + 116
 
-describe('getRepoHeaderSectionEndByRepoId', () => {
+describe('getRepoHeaderSectionEndByKey', () => {
   it('ends a section at the successor from the header’s own bucket', () => {
-    const ends = getRepoHeaderSectionEndByRepoId({
+    const ends = getRepoHeaderSectionEndByKey({
       rows,
       firstHeaderIndex: 0,
-      sidebarRepoHeaderIdsByBucket: new Map([
+      sidebarRepoHeaderKeysByBucket: new Map([
         ['group:one', ['a', 'b']],
         ['group:two', ['a', 'c']]
       ]),
-      repoHeaderBucketByRepoId: new Map([
+      repoHeaderBucketByKey: new Map([
         ['a', 'group:two'],
         ['b', 'group:one'],
         ['c', 'group:two']
@@ -47,22 +47,22 @@ describe('getRepoHeaderSectionEndByRepoId', () => {
   })
 
   it('falls back to the next header when a bucket has no successor', () => {
-    const ends = getRepoHeaderSectionEndByRepoId({
+    const ends = getRepoHeaderSectionEndByKey({
       rows,
       firstHeaderIndex: 0,
-      sidebarRepoHeaderIdsByBucket: new Map([['ungrouped', ['a']]]),
-      repoHeaderBucketByRepoId: new Map([['a', 'ungrouped']])
+      sidebarRepoHeaderKeysByBucket: new Map([['ungrouped', ['a']]]),
+      repoHeaderBucketByKey: new Map([['a', 'ungrouped']])
     })
 
     expect(ends.get('a')).toBe(startOfB)
   })
 
   it('resolves a header id that renders twice to its first row, matching findIndex', () => {
-    const ends = getRepoHeaderSectionEndByRepoId({
+    const ends = getRepoHeaderSectionEndByKey({
       rows: [repoHeader('a'), item, repoHeader('b'), item, repoHeader('b')],
       firstHeaderIndex: 0,
-      sidebarRepoHeaderIdsByBucket: new Map([['ungrouped', ['a', 'b', 'b']]]),
-      repoHeaderBucketByRepoId: new Map([
+      sidebarRepoHeaderKeysByBucket: new Map([['ungrouped', ['a', 'b', 'b']]]),
+      repoHeaderBucketByKey: new Map([
         ['a', 'ungrouped'],
         ['b', 'ungrouped']
       ])
@@ -92,4 +92,43 @@ describe('getProjectGroupHeaderSectionEndByGroupId', () => {
 
     expect(ends.get('a')).toBe(startOfC)
   })
+})
+
+it('keeps section geometry distinct for same-id headers on different owners', () => {
+  const header = (id: string, owner: 'local' | 'runtime:remote'): RenderRow => ({
+    type: 'header',
+    key: `${owner}:${id}`,
+    count: 0,
+    icon: { kind: 'project' },
+    repo: {
+      id,
+      path: `/${id}`,
+      displayName: id,
+      badgeColor: '',
+      addedAt: 0,
+      executionHostId: owner
+    }
+  })
+  const ends = getRepoHeaderSectionEndByKey({
+    rows: [
+      header('same', 'local'),
+      header('next', 'local'),
+      header('same', 'runtime:remote'),
+      header('next', 'runtime:remote')
+    ],
+    firstHeaderIndex: 0,
+    sidebarRepoHeaderKeysByBucket: new Map([
+      ['group:local', ['local:same', 'local:next']],
+      ['group:remote', ['runtime:remote:same', 'runtime:remote:next']]
+    ]),
+    repoHeaderBucketByKey: new Map([
+      ['local:same', 'group:local'],
+      ['local:next', 'group:local'],
+      ['runtime:remote:same', 'group:remote'],
+      ['runtime:remote:next', 'group:remote']
+    ]),
+    keyOf: (row) => row.key
+  })
+  expect(ends.get('local:same')).toBe(28)
+  expect(ends.get('runtime:remote:same')).toBe(92)
 })

@@ -1429,7 +1429,6 @@
       "prMrLink": "PR/MR 連結",
       "project": "專案",
       "recent": "最近活動",
-      "recentProjectOrderDescription": "最近的工作區活動",
       "searchProjects": "搜尋專案",
       "searchProjectsPlaceholder": "搜尋專案…",
       "selectedCount": "{{count}} / {{total}}",

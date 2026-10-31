@@ -82,36 +82,42 @@ function findProjectGroupSectionEndIndex(
   return rows.length
 }
 
-export function getRepoHeaderSectionEndByRepoId(args: {
+export function getRepoHeaderSectionEndByKey(args: {
   rows: readonly RenderRow[]
   firstHeaderIndex: number
-  sidebarRepoHeaderIdsByBucket: ReadonlyMap<string, readonly string[]>
-  repoHeaderBucketByRepoId: ReadonlyMap<string, string>
+  sidebarRepoHeaderKeysByBucket: ReadonlyMap<string, readonly string[]>
+  repoHeaderBucketByKey: ReadonlyMap<string, string>
+  keyOf?: (row: GroupHeaderRow) => string | undefined
 }): Map<string, number> {
   const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
-  const repoHeaderIndexByRepoId = indexHeaderRenderRows(
-    args.rows,
-    (row) => getHeaderDragRepo(row)?.id
+  const keyOf = args.keyOf ?? ((row: GroupHeaderRow) => getHeaderDragRepo(row)?.id)
+  const repoHeaderIndexByBucketAndRepoId = indexHeaderRenderRows(args.rows, (row) =>
+    getHeaderDragRepo(row)
+      ? JSON.stringify([args.repoHeaderBucketByKey.get(keyOf(row) ?? ''), keyOf(row)])
+      : undefined
   )
-  const repoSuccessorsByBucket = indexBucketSuccessors(args.sidebarRepoHeaderIdsByBucket)
-  const sectionEndByRepoId = new Map<string, number>()
+  const repoSuccessorsByBucket = indexBucketSuccessors(args.sidebarRepoHeaderKeysByBucket)
+  const sectionEndByKey = new Map<string, number>()
   for (let index = 0; index < args.rows.length; index++) {
     const row = args.rows[index]
-    const repoId = row?.type === 'header' ? getHeaderDragRepo(row)?.id : undefined
-    if (!repoId) {
+    if (row?.type !== 'header' || !getHeaderDragRepo(row)?.id) {
       continue
     }
-    const bucketKey = args.repoHeaderBucketByRepoId.get(repoId)
-    const nextRepoId = bucketKey ? repoSuccessorsByBucket.get(bucketKey)?.get(repoId) : undefined
+    const rowKey = keyOf(row)
+    if (!rowKey) {
+      continue
+    }
+    const bucketKey = args.repoHeaderBucketByKey.get(rowKey)
+    const nextRepoId = bucketKey ? repoSuccessorsByBucket.get(bucketKey)?.get(rowKey) : undefined
     const endIndex = nextRepoId
-      ? (repoHeaderIndexByRepoId.get(nextRepoId) ?? -1)
+      ? (repoHeaderIndexByBucketAndRepoId.get(JSON.stringify([bucketKey, nextRepoId])) ?? -1)
       : findNextHeaderRenderRowIndex(args.rows, index + 1)
-    sectionEndByRepoId.set(
-      repoId,
+    sectionEndByKey.set(
+      rowKey,
       rowStarts[endIndex >= 0 ? endIndex : args.rows.length] ?? rowStarts[args.rows.length] ?? 0
     )
   }
-  return sectionEndByRepoId
+  return sectionEndByKey
 }
 
 export function getProjectGroupHeaderSectionEndByGroupId(args: {

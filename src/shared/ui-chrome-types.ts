@@ -105,7 +105,7 @@ export type RightSidebarTab =
 export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'
 
-export type ProjectOrderBy = 'manual' | 'recent'
+export type ProjectOrderBy = 'manual' | 'recent' | 'frequent' | 'name'
 export type WorkspaceHostScope = 'all' | 'local' | `ssh:${string}` | `runtime:${string}`
 export type VisibleWorkspaceHostIds = Exclude<WorkspaceHostScope, 'all'>[] | null
 export type WorkspaceHostOrder = Exclude<WorkspaceHostScope, 'all'>[]

@@ -115,3 +115,22 @@ export const worktreeActivate = bindDeferredRpcOperation(
     read: rpcResultVariant('worktree-activated', hostScreenUnreadReplySchema)
   })
 )
+
+export const projectOpenWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'ui.record-personal-project-open',
+    method: 'ui.recordProjectOpen',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('project-open-recorded', hostViewSettingsSchema)
+  })
+)
+export const projectPinWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'ui.set-project-pinned',
+    method: 'ui.setProjectPinned',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('project-pin-written', hostViewSettingsSchema)
+  })
+)

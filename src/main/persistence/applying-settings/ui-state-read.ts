@@ -1,3 +1,4 @@
+import { normalizePersonalProjectOrder } from '../../../shared/personal-project-order'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
@@ -43,6 +44,7 @@ export function getPersistedUI(
     ...uiState,
     groupBy: normalizeGroupBy(state.ui?.groupBy),
     sortBy: normalizeSortBy(state.ui?.sortBy),
+    personalProjectOrder: normalizePersonalProjectOrder(state.ui?.personalProjectOrder),
     projectOrderBy: normalizeProjectOrderBy(state.ui?.projectOrderBy),
     rightSidebarTab: normalizeRightSidebarTab(state.ui?.rightSidebarTab),
     rightSidebarExplorerView: normalizeRightSidebarExplorerView(

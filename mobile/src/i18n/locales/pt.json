@@ -1476,7 +1476,6 @@
       "prMrLink": "Link de PR/MR",
       "project": "Projeto",
       "recent": "Recente",
-      "recentProjectOrderDescription": "Atividade mais recente do espaço de trabalho",
       "searchProjects": "Buscar projetos",
       "searchProjectsPlaceholder": "Buscar projetos…",
       "selectedCount": "{{count}} de {{total}}",

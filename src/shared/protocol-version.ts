@@ -1,3 +1,4 @@
+import { PERSONAL_PROJECT_ORDER_CAPABILITY } from './personal-project-order'
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
 import * as agentLaunchCapabilities from './agent-launch-runtime-capability'
 import {
@@ -132,6 +133,8 @@ export const SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY =
 
 export const RUNTIME_CAPABILITIES = [
   SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
+  PERSONAL_PROJECT_ORDER_CAPABILITY,
+
   ...HOST_RUNTIME_CAPABILITIES,
   ...DEVICE_KEY_RUNTIME_CAPABILITIES,
   ...MOBILE_RUNTIME_CAPABILITIES,

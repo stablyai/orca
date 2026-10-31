@@ -12,7 +12,7 @@ import { compareCodePoints, compareSidebarText } from './text-order'
 import type { SectionAppendContext } from './group-sections'
 import type { OrderedGroupEntry } from './worktree-group-entry'
 import {
-  compareRecentRank,
+  compareProjectEntries,
   createRecentRankLookup,
   withRepoSectionDisplayLabels
 } from '../project-section-order'
@@ -40,22 +40,17 @@ export function appendProjectGroupSections(
     groupByProjectGroupId.set(projectGroupId, list)
   }
 
+  const rankForEntry = createRecentRankLookup<OrderedGroupEntry>()
   const sortRepoEntriesWithinGroup = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] => {
-    if (projectOrderBy === 'recent') {
-      if (entries.length < 2) {
-        return [...entries]
-      }
-      const getRecentRank = createRecentRankLookup()
-      return [...entries].sort((left, right) =>
-        compareRecentRank(getRecentRank(left), getRecentRank(right))
+    return withRepoSectionDisplayLabels(entries).sort((left, right) =>
+      compareProjectEntries(
+        left,
+        right,
+        projectOrderBy,
+        (entry) => getEffectiveProjectGroupManualRank(entry[1].repo, repoOrder),
+        rankForEntry
       )
-    }
-    // Use projectGroupOrder with repoOrder fallback so drag midpoint ranks match rendered order.
-    return [...entries].sort((left, right) => {
-      const leftRank = getEffectiveProjectGroupManualRank(left[1].repo, repoOrder)
-      const rightRank = getEffectiveProjectGroupManualRank(right[1].repo, repoOrder)
-      return leftRank - rightRank
-    })
+    )
   }
 
   const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))

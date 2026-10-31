@@ -1,3 +1,4 @@
+import { ProjectPinMenuItem } from '../../project-pin-menu-item'
 import { useTranslation } from 'react-i18next'
 import React from 'react'
 import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
@@ -134,6 +135,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
         onClick={stopRepoHeaderMenuEvent}
         onKeyDown={stopRepoHeaderMenuEvent}
       >
+        <ProjectPinMenuItem repo={repo} />
         <DropdownMenuItem onSelect={() => actions.onOpenRepoSettings(repo.id)}>
           <SlidersHorizontal className="size-3.5" />
           {translate('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}

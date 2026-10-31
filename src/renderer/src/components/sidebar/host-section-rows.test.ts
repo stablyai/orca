@@ -75,7 +75,8 @@ function pinnedHeader(
 function repoHeader(project: Repo): Extract<Row, { type: 'header' }> {
   return {
     ...header(`repo:${project.id}`, project.displayName),
-    repo: project
+    repo: project,
+    hostId: project.connectionId ? `ssh:${project.connectionId}` : 'local'
   }
 }
 

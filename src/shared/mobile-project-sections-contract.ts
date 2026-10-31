@@ -1,3 +1,4 @@
+import type { PersonalProjectOrder } from './personal-project-order'
 import type { ProjectGroup } from './project-group-types'
 import type { ProjectHostSetupProjection } from './project-host-setup-projection'
 import type { ProjectSectionProject, ProjectSectionSetup } from './project-section-grouping'
@@ -23,6 +24,7 @@ export type MobileProjectSectionCatalog = {
   projects: ProjectSectionProject[]
   setups: ProjectSectionSetup[]
   projectOrderBy: ProjectOrderBy
+  personalProjectOrder?: PersonalProjectOrder
   /** Every host's project groups, which a feed reader lists folder workspaces under; older desktops omit it. */
   projectGroups?: ProjectGroup[]
 }
@@ -56,7 +58,8 @@ export function buildMobileProjectSectionCatalog(
   repos: readonly Repo[],
   projection: ProjectHostSetupProjection,
   projectOrderBy: ProjectOrderBy,
-  projectGroups?: readonly ProjectGroup[]
+  projectGroups?: readonly ProjectGroup[],
+  personalProjectOrder?: PersonalProjectOrder
 ): MobileProjectSectionCatalog {
   return {
     repos: repos.map(sectionRepo),
@@ -74,6 +77,7 @@ export function buildMobileProjectSectionCatalog(
       ...(setup.executionHostId ? { executionHostId: setup.executionHostId } : {})
     })),
     projectOrderBy,
+    ...(personalProjectOrder ? { personalProjectOrder } : {}),
     ...(projectGroups ? { projectGroups: [...projectGroups] } : {})
   }
 }
