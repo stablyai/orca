@@ -3,6 +3,7 @@ import { act, createElement, type ReactNode } from 'react'
 import { create, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import type { Easing as ReanimatedEasing } from 'react-native-reanimated'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 
@@ -87,7 +88,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('react-native-reanimated', () => {
-  const Easing: Pick<typeof import('react-native-reanimated').Easing, 'bezier'> = {
+  const Easing: Pick<typeof ReanimatedEasing, 'bezier'> = {
     bezier: (_x1, _y1, _x2, _y2) => ({ factory: () => (t) => t })
   }
   return { Easing }

@@ -1,17 +1,20 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as quality from './check-changed-code-quality.mjs'
+import * as mobilePhase from './run-typecheck-projects-in-parallel.mjs'
 
 const processCalls = vi.hoisted(() => ({ execFileSync: vi.fn(), spawnSync: vi.fn() }))
 vi.mock('node:child_process', () => processCalls)
-vi.mock('./oxlint-cli-invocation.mjs', () => ({
+vi.mock('./oxlint-cli-invocation.mjs', async (importOriginal) => ({
+  ...(await importOriginal()),
   resolveOxlintInvocation: () => ({ command: 'fixture-oxlint', prefixArgs: [] })
 }))
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.clearAllMocks()
   vi.unstubAllEnvs()
 })
 
@@ -48,67 +51,132 @@ describe('moved-code matcher and changed-line gate', () => {
     expect(nextMatcher(['first()'])).toBe(false)
   })
 
-  it('reports a new added-line finding from every configured scan in main', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-moved-code-main-'))
-    const file = join(root, 'fixture.mjs')
-    writeFileSync(file, 'brandNewCall()\n')
-    vi.stubEnv('GITHUB_EVENT_NAME', '')
-    processCalls.execFileSync.mockImplementation((_command, args) => {
-      if (args[0] === 'rev-list') {
-        return 'head parent\n'
-      }
-      if (args[0] === 'merge-base') {
-        return 'baseline\n'
-      }
-      if (args[0] === 'ls-files') {
-        return ''
-      }
-      if (args.includes('--name-status')) {
-        return 'M\0fixture.mjs\0'
-      }
-      if (args.includes('--name-only')) {
-        return 'fixture.mjs\0'
-      }
-      if (args.includes('--unified=0')) {
-        return '@@ -0,0 +1 @@\n+brandNewCall()\n'
-      }
-      throw new Error(`Unexpected Git arguments: ${args.join(' ')}`)
-    })
-    const baseline = ['existingCall()']
-    const diagnostics = [
-      {
-        filename: file,
-        message: 'New code finding',
-        labels: [{ span: { line: 1, offset: 0, length: 14 } }]
-      }
-    ]
-    processCalls.spawnSync.mockImplementation((command, args) => {
-      if (command === 'git') {
-        return { status: 0, stdout: args[0] === 'show' ? baseline.join('\n') : '' }
-      }
-      if (args[0] === 'scan') {
-        return { status: 0, stdout: '', stderr: '' }
-      }
-      return { status: 1, stdout: JSON.stringify({ diagnostics }), stderr: '' }
-    })
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    try {
-      expect(quality.main(root, 'baseline')).toBe(1)
-      const scans = processCalls.spawnSync.mock.calls.filter(
-        ([command, args]) => command !== 'git' && args[0] !== 'scan'
-      )
-      expect(scans).toHaveLength(quality.OXLINT_SCANS.length)
-      const annotations = error.mock.calls
-        .map(([message]) => message)
-        .filter((message) => message.startsWith('::error '))
-      expect(annotations).toEqual(
-        Array(quality.OXLINT_SCANS.length).fill(
-          '::error file=fixture.mjs,line=1,title=oxlint::New code finding'
+  it.each([
+    [false, false],
+    [true, true],
+    [true, false]
+  ])(
+    'reports every configured scan with common moved filtering, opt-in=%s joined=%s',
+    async (mobileHostDeclarations, hasJoined) => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-moved-code-main-'))
+      const config = JSON.parse(
+        readFileSync(
+          new URL('../tsconfig.test.mobile-project-controls.json', import.meta.url),
+          'utf8'
         )
       )
-    } finally {
-      rmSync(root, { recursive: true, force: true })
+      const joined = config.files
+        .find((entry) => entry.endsWith('new-workspace-owner-controls.test.tsx'))
+        .slice(3)
+      const files = hasJoined ? ['fixture.mjs', joined] : ['fixture.mjs']
+      for (const entry of files) {
+        mkdirSync(join(root, entry, '..'), { recursive: true })
+        writeFileSync(join(root, entry), 'brandNewCall()\nexistingCall()\n')
+      }
+      mkdirSync(join(root, 'config'), { recursive: true })
+      writeFileSync(join(root, mobilePhase.MOBILE_JOINED_PROJECT), JSON.stringify(config))
+      vi.stubEnv('GITHUB_EVENT_NAME', '')
+      processCalls.execFileSync.mockImplementation((_command, args) => {
+        if (args[0] === 'rev-list') {
+          return 'head parent\n'
+        }
+        if (args[0] === 'merge-base') {
+          return 'baseline\n'
+        }
+        if (args[0] === 'ls-files') {
+          return ''
+        }
+        if (args.includes('--name-status')) {
+          return files.map((entry) => `M\0${entry}\0`).join('')
+        }
+        if (args.includes('--name-only')) {
+          return `${files.join('\0')}\0`
+        }
+        if (args.includes('--unified=0')) {
+          return '@@ -0,0 +1,2 @@\n+brandNewCall()\n+existingCall()\n'
+        }
+        throw new Error(`Unexpected Git arguments: ${args.join(' ')}`)
+      })
+      const baseline = ['existingCall()']
+      const diagnostics = (paths) =>
+        paths.flatMap((filename) => [
+          {
+            filename,
+            message: 'New code finding',
+            labels: [{ span: { line: 1, offset: 0, length: 14 } }]
+          },
+          {
+            filename,
+            message: 'Moved finding',
+            labels: [{ span: { line: 2 } }]
+          }
+        ])
+      processCalls.spawnSync.mockImplementation((command, args) => {
+        if (command === 'git') {
+          return { status: 0, stdout: args[0] === 'show' ? baseline.join('\n') : '' }
+        }
+        if (args[0] === 'scan') {
+          return { status: 0, stdout: '', stderr: '' }
+        }
+        return {
+          status: 1,
+          stdout: JSON.stringify({
+            diagnostics: diagnostics(files.filter((entry) => args.includes(entry)))
+          }),
+          stderr: ''
+        }
+      })
+      const analyzer = vi.fn(async () => ({
+        code: 1,
+        signal: null,
+        timedOut: false,
+        stdout: JSON.stringify({ diagnostics: diagnostics([joined]) }),
+        stderr: ''
+      }))
+      vi.spyOn(mobilePhase, 'selectTypecheckCompiler').mockReturnValue({
+        compiler: 'bun',
+        bunExecutable: 'fixture-bun'
+      })
+      const phase = vi
+        .spyOn(mobilePhase, 'runMobileHostTypecheck')
+        .mockImplementation(async (options) => {
+          await options.consumeDeclarations({
+            signal: new AbortController().signal,
+            runOwnedProcess: analyzer
+          })
+          return []
+        })
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      try {
+        expect(await quality.main(root, 'baseline', { mobileHostDeclarations })).toBe(1)
+        const scans = processCalls.spawnSync.mock.calls.filter(
+          ([command, args]) => command !== 'git' && args[0] !== 'scan'
+        )
+        expect(scans).toHaveLength(quality.OXLINT_SCANS.length)
+        for (const [, args] of scans) {
+          expect(files.filter((entry) => args.includes(entry))).toEqual(
+            hasJoined && args.includes('--type-aware') ? ['fixture.mjs'] : files
+          )
+        }
+        expect(phase).toHaveBeenCalledTimes(hasJoined ? 1 : 0)
+        expect(analyzer).toHaveBeenCalledTimes(hasJoined ? 1 : 0)
+        if (hasJoined) {
+          expect(files.filter((entry) => analyzer.mock.calls[0][0].args.includes(entry))).toEqual([
+            joined
+          ])
+        }
+        const annotations = error.mock.calls
+          .map(([message]) => message)
+          .filter((message) => message.startsWith('::error '))
+        expect(annotations).toEqual(
+          quality.OXLINT_SCANS.flatMap(() =>
+            files.map((entry) => `::error file=${entry},line=1,title=oxlint::New code finding`)
+          )
+        )
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
     }
-  })
+  )
 })

@@ -324,7 +324,7 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/check-changed-code-quality.mjs "${{ github.event.pull_request.base.sha }}"
+          node config/scripts/check-changed-code-quality.mjs "${{ github.event.pull_request.base.sha }}" --mobile-host-declarations
 
       - name: Verify locked audit tools
         if: needs.code_paths.outputs.static_analysis == 'true'

@@ -1,4 +1,5 @@
 import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
+import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section-catalog-schema'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { describe, expect, it } from 'vitest'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
@@ -157,12 +158,12 @@ it('keeps a local section label while an ordinary SSH raw twin has no exact Repo
   const ssh = { ...local, path: '/ssh/shared', connectionId: 'gpu-vm' }
   const projection = projectHostSetupProjectionFromRepos([local])
   const catalog = buildProjectSectionCatalog(
-    {
+    ProjectSectionCatalogSchema.parse({
       repos: [local],
       projects: [...projection.projects],
       setups: [...projection.setups],
       projectOrderBy: 'manual'
-    },
+    }),
     [],
     null,
     null

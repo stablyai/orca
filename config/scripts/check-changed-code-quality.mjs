@@ -6,7 +6,13 @@ import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
 import { scanAstGrep } from './ast-grep-scan.mjs'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
-import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
+import { parseOxlintOutput, resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
+import {
+  partitionMobileJoinedFiles,
+  runMobileJoinedOxlintScan
+} from './mobile-joined-code-quality.mjs'
+
+export { partitionMobileJoinedFiles, runMobileJoinedOxlintScan }
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
 const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
@@ -217,15 +223,6 @@ export function collectAddedLineRanges(
     rangesByFile.set(file, [{ start: 1, end: lineCount }])
   }
   return { comparisonBase, rangesByFile }
-}
-
-function parseOxlintOutput(stdout, label) {
-  const start = stdout.indexOf('{')
-  const end = stdout.lastIndexOf('}')
-  if (start === -1 || end === -1) {
-    throw new Error(`${label} did not return Oxlint JSON output.`)
-  }
-  return JSON.parse(stdout.slice(start, end + 1))
 }
 
 function normalizedDiagnosticPath(root, filename) {
@@ -535,6 +532,23 @@ function runOxlintScan(root, scan, files) {
   return parseOxlintOutput(result.stdout, scan.label).diagnostics ?? []
 }
 
+export function parseCodeQualityOptions(args) {
+  const options = { requestedBase: undefined, mobileHostDeclarations: false }
+  for (const argument of args) {
+    if (argument === '--') {
+      continue
+    }
+    if (argument === '--mobile-host-declarations') {
+      options.mobileHostDeclarations = true
+    } else if (argument.startsWith('--') || options.requestedBase !== undefined) {
+      throw new Error(`Unknown changed-code quality argument: ${argument}`)
+    } else {
+      options.requestedBase = argument
+    }
+  }
+  return options
+}
+
 /** ast-grep matches as Oxlint-shaped diagnostics; `info` flaky-test rules are owned by their ratchet. */
 export function runAstGrepScan(root, files) {
   return scanAstGrep(root, { minSeverity: 'warning', paths: files }).map((match) => ({
@@ -553,9 +567,10 @@ export function runAstGrepScan(root, files) {
   }))
 }
 
-export function main(
+export async function main(
   root = process.cwd(),
-  requestedBase = process.argv.slice(2).find((argument) => argument !== '--')
+  requestedBase,
+  { mobileHostDeclarations = false } = {}
 ) {
   const { comparisonBase, rangesByFile } = collectAddedLineRanges(root, requestedBase)
   const files = [...rangesByFile.keys()]
@@ -568,10 +583,29 @@ export function main(
 
   const baseBlocks = collectBaseLineBlocks(root, comparisonBase)
   const movedCodeMatcher = createMovedCodeMatcher(baseBlocks)
+  const partitions = mobileHostDeclarations ? partitionMobileJoinedFiles(root, files) : null
+  if (partitions) {
+    console.log(
+      `Mobile type-aware partitions: ${JSON.stringify({
+        joined: partitions.joined,
+        joinedCount: partitions.joined.length,
+        rest: partitions.rest,
+        restCount: partitions.rest.length,
+        totalCount: files.length
+      })}`
+    )
+  }
 
   let failures = 0
   for (const scan of OXLINT_SCANS) {
-    const diagnostics = runOxlintScan(root, scan, files).filter(
+    let findings
+    if (scan.label === 'type-aware code quality' && partitions?.joined.length) {
+      findings = partitions.rest.length ? runOxlintScan(root, scan, partitions.rest) : []
+      findings.push(...(await runMobileJoinedOxlintScan(root, scan, partitions.joined)))
+    } else {
+      findings = runOxlintScan(root, scan, files)
+    }
+    const diagnostics = findings.filter(
       (diagnostic) =>
         !isSuppressedDiagnostic(diagnostic, root) &&
         !isCastingDirectiveUnusedWarning(diagnostic, root) &&
@@ -618,5 +652,6 @@ export function main(
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(main())
+  const options = parseCodeQualityOptions(process.argv.slice(2))
+  process.exit(await main(process.cwd(), options.requestedBase, options))
 }

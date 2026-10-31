@@ -1,4 +1,5 @@
 import { runProcess, runProcessSync, spawnProcess } from '@orca/process-host'
+import { createHash } from 'node:crypto'
 import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { availableParallelism, totalmem } from 'node:os'
@@ -321,7 +322,7 @@ export async function runTypecheckProjects({
   return failures
 }
 
-const MOBILE_JOINED_PROJECT = 'config/tsconfig.test.mobile-project-controls.json'
+export const MOBILE_JOINED_PROJECT = 'config/tsconfig.test.mobile-project-controls.json'
 const MOBILE_HOST_DECLARATIONS_PROJECT = 'config/tsconfig.test.mobile-host-declarations.json'
 const MOBILE_HOST_DECLARATION_ROOTS = [
   'src/main/persistence/applying-settings/mobile-project-controls-host.test-fixture.d.ts',
@@ -338,6 +339,12 @@ export async function runMobileHostTypecheck(options) {
   if (!options.projects.some((project) => project.config === MOBILE_JOINED_PROJECT)) {
     throw new Error('--mobile-host-declarations requires the complete Mobile joined project')
   }
+  if (
+    options.consumeDeclarations &&
+    !options.projects.some((project) => project.config === 'mobile/tsconfig.json')
+  ) {
+    throw new Error('Mobile declaration consumer requires both primary and joined checks')
+  }
   const output = join(root, '.cache/typecheck/mobile-project-controls-host')
   const abort = new AbortController()
   const active = new Set()
@@ -346,7 +353,10 @@ export async function runMobileHostTypecheck(options) {
   process.on('SIGINT', onInterrupt)
   process.on('SIGTERM', onInterrupt)
 
-  async function runCompiler(command) {
+  const receipt = (phase, details = {}) =>
+    console.log(`Mobile host declarations: ${JSON.stringify({ phase, ...details })}`)
+
+  async function runOwnedProcess(command) {
     if (abort.signal.aborted) {
       throw new Error('Mobile typecheck interrupted')
     }
@@ -354,9 +364,10 @@ export async function runMobileHostTypecheck(options) {
     active.add(invocation)
     let terminated = false
     try {
-      const result = await runProcess({
+      receipt('process-start', { program: command.program, args: command.args })
+      invocation.completion = runProcess({
         ...command,
-        stdio: 'inherit',
+        stdio: command.stdio ?? 'inherit',
         timeoutMs: null,
         signal: abort.signal,
         terminationBarrier: true,
@@ -364,11 +375,14 @@ export async function runMobileHostTypecheck(options) {
           terminated = true
         }
       })
-      if (result.code !== 0 || result.signal) {
-        throw new Error(
-          `${command.program} ${command.args.join(' ')} exited with ${result.signal ?? result.code}`
-        )
-      }
+      const result = await invocation.completion
+      receipt('process-end', {
+        code: result.code,
+        signal: result.signal,
+        timedOut: result.timedOut,
+        terminationVerified: terminated
+      })
+      return result
     } finally {
       if (terminated) {
         active.delete(invocation)
@@ -378,11 +392,21 @@ export async function runMobileHostTypecheck(options) {
     }
   }
 
+  async function runCompiler(command) {
+    const result = await runOwnedProcess({ ...command, stdio: 'inherit' })
+    if (abort.signal.aborted || result.code !== 0 || result.signal || result.timedOut) {
+      throw new Error(
+        `${command.program} ${command.args.join(' ')} exited with ${result.signal ?? result.code}`
+      )
+    }
+  }
+
   try {
     rmSync(output, { recursive: true, force: true })
     mkdirSync(output, { recursive: true })
     let declarationsReady = false
     try {
+      receipt('emit-start', { project: MOBILE_HOST_DECLARATIONS_PROJECT })
       await runCompiler({
         program: process.execPath,
         args: [
@@ -392,6 +416,7 @@ export async function runMobileHostTypecheck(options) {
         ],
         cwd: root
       })
+      receipt('emit-end', { status: 'success' })
       for (const declaration of MOBILE_HOST_DECLARATION_ROOTS) {
         if (!statSync(join(output, declaration)).isFile()) {
           throw new Error(`Missing emitted Mobile host declaration: ${declaration}`)
@@ -400,11 +425,21 @@ export async function runMobileHostTypecheck(options) {
       const ambient = 'src/renderer/src/env.d.ts'
       mkdirSync(dirname(join(output, ambient)), { recursive: true })
       copyFileSync(join(root, ambient), join(output, ambient))
+      receipt('copy-complete', {
+        outputs: [...MOBILE_HOST_DECLARATION_ROOTS, ambient].map((file) => ({
+          file,
+          sha256: createHash('sha256')
+            .update(readFileSync(join(output, file)))
+            .digest('hex')
+        }))
+      })
       declarationsReady = true
     } catch (error) {
+      receipt('emit-copy-failed')
       failures.push(error)
     }
     if (!abort.signal.aborted) {
+      receipt('checks-start', { projects: options.projects.map((project) => project.config) })
       failures.push(
         ...(await runTypecheckProjects({
           ...options,
@@ -415,10 +450,26 @@ export async function runMobileHostTypecheck(options) {
           runCompiler
         }))
       )
+      receipt('checks-end', { status: failures.length === 0 ? 'success' : 'failed' })
+      if (
+        declarationsReady &&
+        failures.length === 0 &&
+        !abort.signal.aborted &&
+        options.consumeDeclarations
+      ) {
+        receipt('consumer-start')
+        await options.consumeDeclarations({ root, signal: abort.signal, runOwnedProcess })
+        receipt('consumer-end', { status: 'success' })
+      }
     }
   } catch (error) {
+    receipt('phase-failed')
     failures.push(error)
   } finally {
+    if (active.size > 0) {
+      abort.abort()
+      await Promise.allSettled([...active].map((invocation) => invocation.completion))
+    }
     process.removeListener('SIGINT', onInterrupt)
     process.removeListener('SIGTERM', onInterrupt)
     if (abort.signal.aborted) {
@@ -426,14 +477,22 @@ export async function runMobileHostTypecheck(options) {
     }
     if (active.size === 0) {
       try {
+        receipt('cleanup-start')
         rmSync(output, { recursive: true, force: true })
+        receipt('cleanup-end', { status: 'success' })
       } catch (error) {
+        receipt('cleanup-end', { status: 'failed' })
         failures.push(error)
       }
     } else {
+      receipt('cleanup-retained', { unverifiedChildren: active.size })
       failures.push(new Error(`Compiler child closure is unverifiable; retained ${output}`))
     }
   }
+  receipt('phase-end', {
+    status: failures.length === 0 ? 'success' : 'failed',
+    failures: failures.length
+  })
   return failures
 }
 

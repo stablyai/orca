@@ -1,6 +1,7 @@
 import { it, expect } from 'vitest'
 import { join } from 'node:path'
 import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
+import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section-catalog-schema'
 import { buildMobileProjectSectionCatalog } from '../../../src/shared/mobile-project-sections-contract'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { buildSections, type Worktree } from './workspace-list-sections'
@@ -53,7 +54,12 @@ it.each(['repository', 'host', 'folder'] as const)(
     const served = buildMobileProjectSectionCatalog(repos, projection, 'manual', undefined, {
       projectGroupingMode: mode
     })
-    const catalog = buildProjectSectionCatalog(served, [], null, null)
+    const catalog = buildProjectSectionCatalog(
+      ProjectSectionCatalogSchema.parse(served),
+      [],
+      null,
+      null
+    )
     const row = worktree({ repoId: 'same', repo: 'App', path: '/local/feature', hostId: 'local' })
     const build = (query = '') =>
       buildSections(
