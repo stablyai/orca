@@ -11,7 +11,6 @@ import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { MobileTerminalCommand } from '../../terminal/launch/mobile-terminal-startup'
 import { canonicalizeAgentSessionIdentity } from '../../agent-session/ownership/agent-session-claim-identity'
-import { agentSessionClaimKey } from '../../../../shared/claimed-agent-pty-owner-snapshot'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './get-agent-session-execution-namespace'
 
 export type SwitchTerminalSpawn = {
@@ -21,6 +20,8 @@ export type SwitchTerminalSpawn = {
   commandOverride?: string
   options?: Record<string, string>
   signal?: AbortSignal
+  /** The execution owner's answer the admission already took, so the spawn carries the same claim. */
+  resumeSupported?: boolean
 }
 
 export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
@@ -48,7 +49,8 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
     // retry after a lost reply there starts a second CLI, which the user can close.
     const claim =
       providerSession &&
-      (await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume', args.signal))
+      (args.resumeSupported ??
+        (await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume', args.signal)))
         ? this.switchTerminalClaim(workspace, args.agent, providerSession)
         : undefined
     if (args.signal?.aborted) {
@@ -77,34 +79,34 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
   }
 
   /**
-   * The pane of the live terminal this conversation's claim owns: the one a re-issued switch's
-   * create adopts. A first attempt whose answer was lost leaves it running for that retry.
+   * What a re-issued switch's create would adopt, asked of the registry that create adopts from:
+   * the live owner of this conversation's claim in this worktree's scope, only when the create will
+   * carry the claim. A first attempt whose answer was lost leaves that terminal for this retry.
+   * `resumeSupported` is the execution owner's one answer, which the spawn then reuses.
    */
-  async switchTerminalClaimOwnerPaneKey(
+  async switchTerminalAdoption(
     workspaceId: string,
     args: SwitchTerminalSpawn
-  ): Promise<string | undefined> {
-    if (!args.source) {
-      return undefined
+  ): Promise<{ resumeSupported?: boolean; ownerPaneKey?: string }> {
+    const { workspace, providerSession } = args.source
+      ? await this.switchTerminalLaunch(workspaceId, args)
+      : {}
+    if (!workspace || !providerSession) {
+      return {}
     }
-    const { workspace, providerSession } = await this.switchTerminalLaunch(workspaceId, args)
-    const claim =
-      providerSession && this.switchTerminalClaim(workspace, args.agent, providerSession)
-    const key = claim && agentSessionClaimKey(claim)
-    for (const pty of key ? this.ptysById.values() : []) {
-      const owner = pty.connected
-        ? pty.agentSessionOwners.find(
-            (candidate) =>
-              candidate.phase === 'live' &&
-              candidate.ptyId === pty.ptyId &&
-              agentSessionClaimKey(candidate.claim) === key
-          )
-        : undefined
-      if (owner) {
-        return `${owner.surface.tabId}:${owner.surface.leafId}`
-      }
+    const resumeSupported = await this.executionOwnerSupportsAgentSessionOperation(
+      workspace,
+      'resume',
+      args.signal
+    )
+    const claim = resumeSupported
+      ? this.switchTerminalClaim(workspace, args.agent, providerSession)
+      : undefined
+    const owner = claim ? this.ptyController?.findAgentSessionOwner?.(claim) : null
+    return {
+      resumeSupported,
+      ...(owner ? { ownerPaneKey: `${owner.surface.tabId}:${owner.surface.leafId}` } : {})
     }
-    return undefined
   }
 
   private async switchTerminalLaunch(workspaceId: string, args: SwitchTerminalSpawn) {

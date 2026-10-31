@@ -12,6 +12,7 @@ import type {
 } from '../../shared/host-spawn-admission'
 import type {
   AgentSessionExecutionClaim,
+  AgentSessionOwnerBinding,
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
@@ -157,6 +158,8 @@ export type RuntimePtyController = {
   /** Attach existing local daemon output without creating, resizing or focusing; refuse uncertain, SSH-scoped or non-daemon sessions. */
   attach?(ptyId: string): Promise<boolean>
   killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
+  /** The live owner a claimed create would adopt: same claim, same worktree scope. */
+  findAgentSessionOwner?: (claim: AgentSessionExecutionClaim) => AgentSessionOwnerBinding | null
   kill(ptyId: string): boolean
   /** `incarnationId` is the rejected spawn's; a same-id respawn since then is left alone. */
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean, incarnationId: string | undefined): void

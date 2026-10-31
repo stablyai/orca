@@ -41,13 +41,20 @@ export async function executeStructuredSessionTerminalSwitch(
   // shows holding this conversation (a CLI resumed by hand) refuses. The terminal this
   // conversation's claim owns is the one the create below adopts (an earlier attempt's), not
   // another writer.
+  const adoption = providerSessionId
+    ? await ctx.runtime.switchTerminalAdoption(record.location.workspaceId, {
+        agent,
+        source: saved,
+        commandOverride: execution?.commandOverride,
+        signal: deadline.signal
+      })
+    : {}
   if (providerSessionId) {
-    const claimed = await ctx.runtime.switchTerminalClaimOwnerPaneKey(record.location.workspaceId, {
+    await ctx.runtime.assertNoCliWriterOutsideSwitchSource(
       agent,
-      source: saved,
-      commandOverride: execution?.commandOverride
-    })
-    await ctx.runtime.assertNoCliWriterOutsideSwitchSource(agent, providerSessionId, claimed)
+      providerSessionId,
+      adoption.ownerPaneKey
+    )
   }
   deadline.check()
   const workCurrent = await host.stopForSwitch(
@@ -85,7 +92,9 @@ export async function executeStructuredSessionTerminalSwitch(
       source: prepared,
       commandOverride: execution?.commandOverride,
       options: record.options,
-      signal: deadline.signal
+      signal: deadline.signal,
+      // The answer the admission took: the spawn carries a claim exactly when that pane was spared.
+      resumeSupported: adoption.resumeSupported
     })
   )
   let placed: Awaited<ReturnType<typeof ctx.runtime.placeSwitchTerminal>>
