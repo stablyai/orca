@@ -39,12 +39,21 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
     if (preservedTabs.length === 0) {
       return snapshot
     }
-    const preservedActiveTab = preservedTabs.find(
-      (tab) => tab.id === existing.activeTabId && tab.isActive
+    const incomingGroup = snapshot.tabGroups?.find((group) => group.id === snapshot.activeGroupId)
+    // The window publishes chat selection in its groups, while main supplies the chat rows.
+    const incomingActiveChat = preservedTabs.find(
+      (tab) => tab.type === 'agent-session' && tab.id === incomingGroup?.activeTabId
     )
+    const preservedActiveTab =
+      incomingActiveChat ??
+      preservedTabs.find((tab) => tab.id === existing.activeTabId && tab.isActive)
     const hasIncomingActiveTab = snapshot.tabs.some((tab) => tab.isActive)
     const normalizedPreservedTabs = preservedTabs.map((tab) =>
-      hasIncomingActiveTab && !preservedActiveTab ? { ...tab, isActive: false } : tab
+      incomingActiveChat
+        ? { ...tab, isActive: tab.id === incomingActiveChat.id }
+        : hasIncomingActiveTab && !preservedActiveTab
+          ? { ...tab, isActive: false }
+          : tab
     )
     const normalizedIncomingTabs = preservedActiveTab
       ? snapshot.tabs.map((tab) => (tab.isActive ? { ...tab, isActive: false } : tab))
