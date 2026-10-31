@@ -581,7 +581,11 @@ it.each([false, true])(
     const key = getGitHubPRCacheKey(repo.path, repo.id, 'main')
     useAppStore.setState({ prCache: { [key]: { data: pr, fetchedAt: 1 } }, prRefreshStates: {} })
     const store = useAppStore.getState()
-    const shown = { checks: [] as unknown, comments: [] as unknown, checksLoading: false }
+    const shown: { checks: PRCheckDetail[]; comments: PRComment[]; checksLoading: boolean } = {
+      checks: [],
+      comments: [],
+      checksLoading: false
+    }
     const asyncResultKeyRef = {
       current: checksPanelAsyncResultKey(key, 'main', 42, pr.prRepo, 'head-a')
     }
@@ -608,8 +612,8 @@ it.each([false, true])(
       setCommentsError: vi.fn()
     }
     const { result } = renderHook(() => ({
-      polling: useChecksPanelPolling(panel as never),
-      reviewData: useChecksPanelReviewData(panel as never),
+      polling: useChecksPanelPolling(panel),
+      reviewData: useChecksPanelReviewData(panel),
       refresh: useChecksPanelManualRefresh(input)
     }))
     let entry: Promise<unknown> = Promise.resolve()

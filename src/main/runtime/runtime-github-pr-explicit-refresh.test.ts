@@ -3,6 +3,7 @@ import {
   PrForBranch,
   PullRequestChecks
 } from '../../shared/rpc-contract/github-pull-request-params'
+import { OrcaRuntimeService } from './orca-runtime'
 import { RuntimeHostedReviewCommands } from './runtime-hosted-review-commands'
 import { GITHUB_PULL_REQUEST_METHODS } from './rpc/methods/github-pull-request-methods'
 
@@ -37,8 +38,12 @@ it('forwards parsed intent through the existing RPC method and runtime command',
     reason: 'manual',
     userRefresh: true
   })
-  // SAFETY: this handler only reads runtime.getRepoPRForBranch; unrelated runtime services are not exercised.
-  await method.handler(params, { runtime: commands } as never)
+  // The real hosted-review command behind the runtime surface this handler reads.
+  const runtime = new OrcaRuntimeService()
+  vi.spyOn(runtime, 'getRepoPRForBranch').mockImplementation((...args) =>
+    commands.getRepoPRForBranch(...args)
+  )
+  await method.handler(params, { runtime })
   expect(lookup).toHaveBeenCalledWith('/repo', 'main', null, null, null, {
     localGitExecOptions: { admissionTier: 'interactive' },
     userRefresh: true
@@ -50,7 +55,6 @@ it('forwards parsed checks intent through the existing RPC method', async () => 
   if (!method) {
     throw new Error('missing existing checks operation')
   }
-  const getRepoPRChecks = vi.fn(async () => [])
   const params = PullRequestChecks.parse({
     repo: repo.id,
     prNumber: 12,
@@ -58,8 +62,9 @@ it('forwards parsed checks intent through the existing RPC method', async () => 
     noCache: true,
     userRefresh: true
   })
-  // SAFETY: this handler only reads runtime.getRepoPRChecks.
-  await method.handler(params, { runtime: { getRepoPRChecks } } as never)
+  const runtime = new OrcaRuntimeService()
+  const getRepoPRChecks = vi.spyOn(runtime, 'getRepoPRChecks').mockResolvedValue([])
+  await method.handler(params, { runtime })
   expect(getRepoPRChecks).toHaveBeenCalledWith(repo.id, 12, 'head-a', null, {
     noCache: true,
     userRefresh: true
