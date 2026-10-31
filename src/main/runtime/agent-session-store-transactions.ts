@@ -29,10 +29,7 @@ import {
   draftAgentSessionStoreState,
   type AgentSessionStoreRowWrites
 } from './agent-session-store-draft'
-import {
-  AgentSessionClearedFromIndex,
-  changesAgentSenderIdentity
-} from './agent-session-sender-identity-revision'
+import { changesAgentSenderIdentity } from './agent-session-sender-identity-revision'
 
 // Commit validated draft rows atomically before publication; failures discard the draft.
 // The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.
@@ -94,7 +91,6 @@ export class AgentSessionStoreTransactions {
   private published: AgentSessionStoreState
   /** Moves only when a commit changes what chat sender identity reads. */
   senderIdentityRevision = 0
-  readonly clearedFrom: AgentSessionClearedFromIndex
   /** Loaded takeover evidence; immutable for this runtime. */
   readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
 
@@ -109,7 +105,6 @@ export class AgentSessionStoreTransactions {
       ...loaded,
       runtimeEnds: readAgentSessionRuntimeEnds(journalDatabase.stateDirectory)
     }
-    this.clearedFrom = new AgentSessionClearedFromIndex(this.published)
     this.replacedRuntimes = agentSessionReplacedRuntimes(this.published, {
       hostId,
       incarnation: agentSessionRuntimeIncarnation()
@@ -237,10 +232,6 @@ export class AgentSessionStoreTransactions {
           freezeRows(draft, writes)
           if (changesAgentSenderIdentity(published, draft, writes)) {
             this.senderIdentityRevision++
-            this.clearedFrom.update(draft, [
-              ...writes.records.upsert.map(([sessionId]) => sessionId),
-              ...writes.records.remove
-            ])
           }
           this.published = draft
         }

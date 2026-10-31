@@ -1,4 +1,8 @@
-import { agentSessionRecordLineage } from './agent-session-record-lineage'
+import {
+  agentSessionRecordLineage,
+  agentSessionRecordPredecessorIds
+} from './agent-session-record-lineage'
+import { clearSuccessor } from './agent-session-sender-identity-revision'
 import type Database from '../sqlite/sync-database'
 import { createAgentSessionOwnerProof } from './agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
@@ -136,7 +140,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
-  listClearedFrom = (sessionId: string) => this.transactions.clearedFrom.predecessors(sessionId)
+  /** Sessions a committed /clear continued into this one, read through the clear-successor index;
+   *  each candidate is checked on its conversation, so unreadable leases still count. */
+  listClearedFrom = (sessionId: string): string[] =>
+    agentSessionRecordPredecessorIds(this.database, sessionId).filter(
+      (id) => clearSuccessor(this.getConversation(id)) === sessionId
+    )
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>
