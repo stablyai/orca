@@ -22507,6 +22507,8 @@
       "terminalExpandPane": "Expand / collapse pane",
       "terminalSetTitle": "Set Title…",
       "chatFind": "Find in chat",
+      "chatSplitTerminalRight": "Split chat right with a terminal",
+      "chatSplitTerminalDown": "Split chat down with a terminal",
       "terminalToggleNativeChat": "Switch between Chat UI and terminal",
       "sidebarChildWorkspacesToggle": "Toggle Child Workspaces",
       "terminalClearPaneTitle": "Clear Pane Title",

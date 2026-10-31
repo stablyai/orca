@@ -21,6 +21,22 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+J'])
   },
   {
+    id: 'chat.splitTerminalRight',
+    title: 'Split chat right with a terminal',
+    group: 'Chat',
+    scope: 'chat',
+    searchKeywords: ['shortcut', 'chat', 'split', 'right', 'terminal', 'shell'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'chat.splitTerminalDown',
+    title: 'Split chat down with a terminal',
+    group: 'Chat',
+    scope: 'chat',
+    searchKeywords: ['shortcut', 'chat', 'split', 'down', 'terminal', 'shell'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',
     group: 'Global',

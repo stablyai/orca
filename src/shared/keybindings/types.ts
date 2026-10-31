@@ -123,6 +123,8 @@ export type KeybindingActionId =
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
   | 'terminal.toggleNativeChat'
+  | 'chat.splitTerminalRight'
+  | 'chat.splitTerminalDown'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>
