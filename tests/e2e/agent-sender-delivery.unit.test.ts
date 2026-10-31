@@ -32,6 +32,7 @@ import {
   initialStore,
   resetSenderStore
 } from '@/components/native-chat/native-chat-agent-sender.test-fixture'
+import { makeTab } from '@/store/slices/store-test-helpers'
 
 beforeEach(() => {
   resetSenderStore()
@@ -183,6 +184,12 @@ it.each([100, 1000])(
         { kind: 'environment', environmentId: 'other' }
       )
     })
+    // This window's own terminal tabs, split over two worktrees, feed the sender aliases.
+    const windowTabs = (bucket: string) =>
+      Array.from({ length: n / 2 }, (_, i) =>
+        makeTab({ id: `${bucket}-tab-${i}::${leafOf(i)}`, worktreeId: bucket })
+      )
+    useAppStore.setState({ tabsByWorktree: { w1: windowTabs('w1'), w2: windowTabs('w2') } })
     h.deliverAll()
     expect(located(0)).toBe(`tab0:${leafOf(0)}`)
     const settled = {
@@ -194,10 +201,18 @@ it.each([100, 1000])(
       renders,
       otherRenders
     }
-    // Status and title changes, and repeats, alternating both transports.
+    // Status and title changes, and repeats, alternating both transports; and this window's
+    // unrelated writes, a switch between other workspaces and a settings write.
     for (let k = 0; k < 5; k++) {
       h.leaves[k].lastOutputAt = 100 + k
       h.deliverAll()
+      act(() =>
+        useAppStore.setState((state) => ({
+          sidebarBody: k % 2 ? 'agents' : 'files',
+          activeWorktreeId: `elsewhere-${k}`,
+          settings: state.settings ? { ...state.settings } : state.settings
+        }))
+      )
     }
     expect({
       revision: h.senders.publisher.current().revision,
@@ -208,6 +223,19 @@ it.each([100, 1000])(
       renders,
       otherRenders
     }).toEqual(settled)
+    // A title-only change rescans that one bucket and rebuilds no index.
+    act(() =>
+      useAppStore.setState((state) => ({
+        tabsByWorktree: {
+          ...state.tabsByWorktree,
+          w1: state.tabsByWorktree.w1.map((tab, i) => (i ? tab : { ...tab, title: 'renamed' }))
+        }
+      }))
+    )
+    act(() => h.applyGraph(h.graphReply()))
+    expect(agentSenderAliasWorkForTest()).toBe(settled.aliases + n / 2)
+    expect(agentSenderIndexWorkForTest()).toEqual(settled.index)
+    expect(renders).toBe(settled.renders)
 
     // One real change publishes once; its duplicate on the other transport changes nothing again.
     h.open(n, 'w2')
