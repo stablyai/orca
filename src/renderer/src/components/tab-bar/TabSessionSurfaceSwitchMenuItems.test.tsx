@@ -93,7 +93,7 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-function renderItemsNow(structuredSessionId?: string): void {
+function renderItemsNow(structuredSessionId?: string, agent = 'claude'): void {
   render(
     <TooltipProvider>
       <ContextMenu>
@@ -101,9 +101,7 @@ function renderItemsNow(structuredSessionId?: string): void {
         <ContextMenuContent>
           <TabSessionSurfaceSwitchMenuItems
             tab={{ id: 'tab-1', worktreeId: 'wt-1' }}
-            nativeChat={
-              structuredSessionId ? { sessionId: structuredSessionId, agent: 'claude' } : undefined
-            }
+            nativeChat={structuredSessionId ? { sessionId: structuredSessionId, agent } : undefined}
             leadingSeparator
           />
         </ContextMenuContent>
@@ -139,6 +137,17 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
         agent: 'claude'
       })
     )
+  })
+
+  it('keeps the copy-in-a-new-terminal item for a chat agent that cannot switch in place', async () => {
+    mocks.subject = CHAT_SUBJECT
+    renderItemsNow('orca-chat-1', 'omp')
+    expect(screen.queryByRole('menuitem', { name: 'Switch to CLI' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem'))
+    expect(mocks.runNativeChatCliFork).toHaveBeenCalledWith(
+      expect.objectContaining({ subject: CHAT_SUBJECT, agent: 'omp' })
+    )
+    expect(mocks.runNativeChatCliSwitch).not.toHaveBeenCalled()
   })
 
   it('offers and dispatches a CLI identity while History never answers', async () => {

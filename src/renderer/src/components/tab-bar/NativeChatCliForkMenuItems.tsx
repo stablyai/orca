@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   useConversationSwitchReadiness,
@@ -10,22 +11,37 @@ import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
 import {
   resolveNativeChatCliForkIdentity,
+  resolveTabSessionHistorySubject,
   type NativeChatTabSession
 } from './tab-session-history-switch'
+import { runNativeChatCliFork, useNativeChatCliForkPending } from './native-chat-cli-fork-run'
 import { inPlaceSwitchEnabled } from '../../../../shared/structured-agent-cli-conversation-adoption'
 
-/** Every supported chat switch uses the same consent and owning-host command. */
-export function NativeChatCliForkMenuItems({
-  tab,
-  nativeChat,
-  leadingSeparator,
-  onComplete
-}: {
+type NativeChatCliMenuItemsProps = {
   tab: { id: string; worktreeId: string }
   nativeChat: NativeChatTabSession
   leadingSeparator: boolean
   onComplete?: () => void
-}): React.JSX.Element | null {
+}
+
+/** An agent that switches in place moves the conversation; any other agent opens a copy in its CLI. */
+export function NativeChatCliForkMenuItems(
+  props: NativeChatCliMenuItemsProps
+): React.JSX.Element | null {
+  return inPlaceSwitchEnabled(props.nativeChat.agent) ? (
+    <NativeChatCliSwitchMenuItems {...props} />
+  ) : (
+    <NativeChatCliCopyMenuItems {...props} />
+  )
+}
+
+/** Every supported chat switch uses the same consent and owning-host command. */
+function NativeChatCliSwitchMenuItems({
+  tab,
+  nativeChat,
+  leadingSeparator,
+  onComplete
+}: NativeChatCliMenuItemsProps): React.JSX.Element | null {
   const chat = useAppStore(
     useShallow((state) => resolveNativeChatCliForkIdentity(state, { tab, nativeChat }))
   )
@@ -68,6 +84,41 @@ export function NativeChatCliForkMenuItems({
             chatTabId: tab.id,
             onComplete
           })
+        }}
+      />
+    </>
+  )
+}
+
+function NativeChatCliCopyMenuItems({
+  tab,
+  nativeChat,
+  leadingSeparator,
+  onComplete
+}: NativeChatCliMenuItemsProps): React.JSX.Element | null {
+  const [subject] = useState(() =>
+    resolveTabSessionHistorySubject(useAppStore.getState(), { tab, nativeChat })
+  )
+  const chat = subject?.kind === 'chat' ? subject : null
+  const pending = useNativeChatCliForkPending(
+    chat ? { executionHostScope: chat.request.executionHostScope, sessionId: chat.sessionId } : null
+  )
+  const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
+  const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
+  if (!chat || !agent) {
+    return null
+  }
+  return (
+    <>
+      {leadingSeparator ? <ContextMenuSeparator /> : null}
+      <AiVaultSessionSurfaceSwitchMenuItems
+        action="switch"
+        menuKind="context"
+        tooltipSide="right"
+        cliPending={pending}
+        onResumeInNewCli={(event) => {
+          event.preventDefault()
+          void runNativeChatCliFork({ subject: chat, tab, agent, commandOverrides, onComplete })
         }}
       />
     </>
