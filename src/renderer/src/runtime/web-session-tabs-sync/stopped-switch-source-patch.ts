@@ -1,5 +1,6 @@
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import type { AppState } from '@/store/types'
 import type { StoppedSwitchSourceFact } from '../../../../shared/stopped-switch-source'
 import type { TerminalSurface, WebSessionTabsSyncState } from './state'
@@ -52,8 +53,9 @@ export function buildMirroredStoppedSwitchSourcePatch(
       delete next[paneKey]
       continue
     }
-    const worktree = state.worktreesByRepo
-      ? getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
+    const worktreesByRepo = selectWorktreesByRepo(state)
+    const worktree = worktreesByRepo
+      ? getIndexedWorktreeMap(worktreesByRepo).get(worktreeId)
       : undefined
     const repo =
       worktree && state.repos ? getIndexedRepoMap(state.repos).get(worktree.repoId) : null
