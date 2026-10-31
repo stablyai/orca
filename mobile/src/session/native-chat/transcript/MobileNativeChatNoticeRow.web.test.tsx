@@ -5,12 +5,14 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
+import type * as ReactNative from 'react-native'
+import type * as ReactNativeSvg from 'react-native-svg'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 
-vi.mock('react-native', () => vi.importActual<typeof import('react-native')>('react-native-web'))
+vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 // Use the same SVG web host selected by the page bundler, overriding the native setup stand-in.
 vi.mock('react-native-svg', () =>
-  vi.importActual<typeof import('react-native-svg')>('react-native-svg/lib/module/elements.web.js')
+  vi.importActual<typeof ReactNativeSvg>('react-native-svg/lib/module/elements.web.js')
 )
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: () => null }))
 vi.mock('../../../components/MobileSourceCopyButton', () => ({
