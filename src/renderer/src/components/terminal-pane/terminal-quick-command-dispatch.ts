@@ -4,6 +4,7 @@ import {
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
+import { prepareTerminalQuickCommandForRun } from '@/lib/terminal-quick-command-placeholder-run'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import type { PtyTransport } from './pty-transport-types'
 
@@ -20,11 +21,13 @@ export function sendTerminalQuickCommandToPane({
   command,
   pane,
   tabId,
+  worktreeId,
   transport
 }: {
   command: TerminalQuickCommand
   pane: QuickCommandPane
   tabId: string
+  worktreeId: string
   transport: QuickCommandTransport | null | undefined
 }): boolean {
   if (isTerminalAgentQuickCommand(command)) {
@@ -33,9 +36,13 @@ export function sendTerminalQuickCommandToPane({
   if (!transport) {
     return false
   }
+  const prepared = prepareTerminalQuickCommandForRun(command, worktreeId)
+  if (!prepared) {
+    return false
+  }
 
   const sent = transport.sendInput(
-    buildTerminalQuickCommandInput(flattenTerminalQuickCommand(command)),
+    buildTerminalQuickCommandInput(flattenTerminalQuickCommand(prepared)),
     'driving'
   )
   if (sent) {
