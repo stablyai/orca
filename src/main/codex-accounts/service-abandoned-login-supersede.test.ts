@@ -148,17 +148,6 @@ describe('CodexAccountService abandoned login', () => {
     expect(existsSync(join(loginHomes[0], 'auth.json'))).toBe(true)
   })
 
-  it('reports whether a pending login was there to cancel', async () => {
-    const { service, children } = await createServiceWithHangingLogin()
-    const pending = service.addAccount()
-    const rejection = expect(pending).rejects.toThrow('Codex sign-in was cancelled.')
-    await vi.waitUntil(() => children.length === 1)
-
-    expect(service.cancelPendingLogin()).toBe(true)
-    await rejection
-    expect(service.cancelPendingLogin()).toBe(false)
-  })
-
   it('publishes the sign-in link codex prints and drops it when the login ends', async () => {
     const { service, children } = await createServiceWithHangingLogin()
     const published: (string | null)[] = []

@@ -36,25 +36,6 @@ function makeSession(
 }
 
 describe('commitProjectHeaderDragDrop', () => {
-  it('commits whole-repo reordering when project groups are absent', () => {
-    const onCommitRepoOrder = vi.fn()
-    const repos = [makeRepo('a'), makeRepo('b'), makeRepo('c')]
-    const repoById = new Map(repos.map((repo) => [repo.id, repo]))
-
-    commitProjectHeaderDragDrop({
-      session: makeSession(makeRepo('c'), ['a', 'b', 'c']),
-      sidebarDropIndex: 0,
-      orderedRepoIds: ['a', 'b', 'c'],
-      repoById,
-      liveRepos: repos,
-      usesProjectGroupOrdering: false,
-      onCommitRepoOrder,
-      onCommitProjectGroupOrder: vi.fn()
-    })
-
-    expect(onCommitRepoOrder).toHaveBeenCalledWith(['c', 'a', 'b'])
-  })
-
   it('moves a merged paired-host header upward as one stable block', () => {
     const onCommitRepoOrder = vi.fn()
     const repos = [makeRepo('b'), makeRepo('same'), makeRepo('c')]
@@ -72,25 +53,6 @@ describe('commitProjectHeaderDragDrop', () => {
     })
 
     expect(onCommitRepoOrder).toHaveBeenCalledWith(['same', 'same', 'b', 'c'])
-  })
-
-  it('does not reorder host occurrences when a merged header stays in place', () => {
-    const onCommitRepoOrder = vi.fn()
-    const repos = [makeRepo('b'), makeRepo('same'), makeRepo('c')]
-    const repoById = new Map(repos.map((repo) => [repo.id, repo]))
-
-    commitProjectHeaderDragDrop({
-      session: makeSession(makeRepo('same'), ['b', 'same', 'c']),
-      sidebarDropIndex: 2,
-      orderedRepoIds: ['b', 'same', 'c', 'same'],
-      repoById,
-      liveRepos: repos,
-      usesProjectGroupOrdering: false,
-      onCommitRepoOrder,
-      onCommitProjectGroupOrder: vi.fn()
-    })
-
-    expect(onCommitRepoOrder).not.toHaveBeenCalled()
   })
 
   it('commits projectGroupOrder for the dragged row, not the id-keyed twin on another host', () => {

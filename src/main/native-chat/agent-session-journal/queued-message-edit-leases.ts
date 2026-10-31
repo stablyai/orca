@@ -14,14 +14,18 @@ type EditLease = Pick<QueuedMessageRow, 'messageId' | 'fingerprint' | 'state' | 
 /** Closing the journal handle drops its leases. */
 export class QueuedMessageEditLeases {
   private readonly leases = new Map<string, EditLease>()
+  private readonly byId = new Map<string, Set<string>>()
   private timer: ReturnType<typeof setTimeout> | undefined
   private timerAt: number | null = null
   private wake: (() => void) | undefined
   private disposed = false
+  private revision = 0
 
   constructor(
     private readonly rows: () => readonly QueuedMessageRow[],
-    private readonly now: () => number = () => performance.now()
+    private readonly now: () => number = () => performance.now(),
+    private readonly get: (id: string) => QueuedMessageRow | null | undefined = (id) =>
+      this.rows().find((row) => row.messageId === id)
   ) {}
 
   /** Wake the queue even when no journal activity follows expiry. */
@@ -29,27 +33,70 @@ export class QueuedMessageEditLeases {
     this.wake = wake
   }
 
-  /** Transaction callers supply their own card snapshot. */
-  heldIds(rows: readonly QueuedMessageRow[] = this.rows()): ReadonlySet<string> {
-    if (this.leases.size === 0) {
-      return new Set()
+  version(): number {
+    this.expire()
+    return this.revision
+  }
+
+  isHeld(messageId: string): boolean {
+    this.expire()
+    if (!this.byId.has(messageId)) {
+      return false
     }
-    const byId = new Map(rows.map((row) => [row.messageId, row]))
-    const now = this.now()
-    let lapsed = false
+    const revision = this.revision
+    const row = this.get(messageId)
+    for (const key of this.byId.get(messageId) ?? []) {
+      const lease = this.leases.get(key)!
+      if (!row || !leaseMatchesRow(lease, row)) {
+        this.remove(key)
+      }
+    }
+    if (this.revision !== revision) {
+      this.schedule()
+    }
+    return this.byId.has(messageId)
+  }
+
+  /** Output enumeration revalidates only leased identities; selection uses exact-ID reads. */
+  heldIds(rows?: readonly QueuedMessageRow[]): ReadonlySet<string> {
+    this.expire()
+    const snapshot = rows && new Map(rows.map((row) => [row.messageId, row]))
     for (const [key, lease] of this.leases) {
-      const row = byId.get(lease.messageId)
-      lapsed ||= lease.until <= now
-      if (lease.until <= now || !row || !leaseMatchesRow(lease, row)) {
-        this.leases.delete(key)
+      const row = snapshot ? snapshot.get(lease.messageId) : this.get(lease.messageId)
+      if (!row || !leaseMatchesRow(lease, row)) {
+        this.remove(key)
       }
     }
     this.schedule()
-    // A pruned deadline cancels its timer; wake in that timer's place.
-    if (lapsed) {
-      this.wake?.()
+    return new Set(this.byId.keys())
+  }
+
+  private remove(key: string): void {
+    const lease = this.leases.get(key)
+    if (!lease) {
+      return
     }
-    return new Set([...this.leases.values()].map((lease) => lease.messageId))
+    this.leases.delete(key)
+    const keys = this.byId.get(lease.messageId)!
+    keys.delete(key)
+    if (keys.size === 0) {
+      this.byId.delete(lease.messageId)
+    }
+    this.revision++
+  }
+
+  private expire(): void {
+    if (this.timerAt === null || this.timerAt > this.now()) {
+      return
+    }
+    const now = this.now()
+    for (const [key, lease] of this.leases) {
+      if (lease.until <= now) {
+        this.remove(key)
+      }
+    }
+    this.schedule()
+    this.wake?.()
   }
 
   /** Repeated acquisition returns the same lease without extending it. */
@@ -57,14 +104,15 @@ export class QueuedMessageEditLeases {
     key: EditLeaseKey,
     input: { messageId: string; fingerprint: string }
   ): AgentSessionQueuedMessageEditHoldResult {
-    this.heldIds()
+    this.expire()
+    this.isHeld(this.leases.get(leaseKey(key))?.messageId ?? input.messageId)
     const existing = this.leases.get(leaseKey(key))
     if (existing) {
       return existing.messageId === input.messageId && existing.fingerprint === input.fingerprint
         ? this.answer(existing)
         : { status: 'changed' }
     }
-    const row = this.rows().find((entry) => entry.messageId === input.messageId)
+    const row = this.get(input.messageId)
     if (this.disposed || !row || !isUnsettledQueuedMessage(row)) {
       return { status: 'gone' }
     }
@@ -79,13 +127,17 @@ export class QueuedMessageEditLeases {
       until: this.now() + QUEUED_MESSAGE_EDIT_LEASE_MS
     }
     this.leases.set(leaseKey(key), lease)
+    const keys = this.byId.get(lease.messageId) ?? new Set<string>()
+    keys.add(leaseKey(key))
+    this.byId.set(lease.messageId, keys)
+    this.revision++
     this.schedule()
     return this.answer(lease)
   }
 
   /** Expired/invalidated editors must acquire a new lease. */
   renew(key: EditLeaseKey, messageId: string): AgentSessionQueuedMessageEditHoldResult {
-    this.heldIds()
+    this.isHeld(messageId)
     const lease = this.leases.get(leaseKey(key))
     if (!lease || lease.messageId !== messageId) {
       return { status: 'expired' }
@@ -98,16 +150,14 @@ export class QueuedMessageEditLeases {
   /** Release only the exact caller/edit pair. */
   release(key: EditLeaseKey, messageId: string): void {
     if (this.leases.get(leaseKey(key))?.messageId === messageId) {
-      this.leases.delete(leaseKey(key))
+      this.remove(leaseKey(key))
       this.schedule()
     }
   }
 
   retire(messageId: string): void {
-    for (const [key, lease] of this.leases) {
-      if (lease.messageId === messageId) {
-        this.leases.delete(key)
-      }
+    for (const key of this.byId.get(messageId) ?? []) {
+      this.remove(key)
     }
     this.schedule()
   }
@@ -115,6 +165,8 @@ export class QueuedMessageEditLeases {
   dispose(): void {
     this.disposed = true
     this.leases.clear()
+    this.byId.clear()
+    this.revision++
     this.schedule()
   }
 
@@ -146,7 +198,7 @@ export class QueuedMessageEditLeases {
         const now = this.now()
         for (const [key, lease] of this.leases) {
           if (lease.until <= now) {
-            this.leases.delete(key)
+            this.remove(key)
           }
         }
         this.schedule()

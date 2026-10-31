@@ -1,3 +1,4 @@
+import { selectedStructuredSubmission } from './structured-agent-session-input-selection'
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
 import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -145,16 +146,7 @@ export function acceptedNoLaterThan(
 export function oldestQueuedSubmission(
   session: Pick<StructuredAgentSessionHostSession, 'journal'>
 ): ReturnType<StructuredAgentSessionHostSession['journal']['submissions']>[number] | undefined {
-  let oldest: ReturnType<typeof oldestQueuedSubmission>
-  for (const submission of session.journal.submissions()) {
-    if (
-      isQueuedAgentJournalSubmission(submission) &&
-      (oldest === undefined || (submission.acceptedSequence ?? 0) < (oldest.acceptedSequence ?? 0))
-    ) {
-      oldest = submission
-    }
-  }
-  return oldest
+  return selectedStructuredSubmission(session.journal)
 }
 
 export async function recordStructuredAgentSessionDeliveryFailure(

@@ -1,5 +1,6 @@
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
+import { readNoChoiceOptionResult } from './structured-agent-session-option-observation'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
@@ -303,10 +304,7 @@ export function promptPlan(
   }
 }
 
-export function setOptionPlan(params: {
-  key: string
-  value: string
-}): MutationPlan<AgentSessionOptionResult> {
+export function setOptionPlan(params: { key: string; value: string }) {
   return {
     method: 'agentSession.setOption',
     fields: { key: params.key, value: params.value },
@@ -316,14 +314,19 @@ export function setOptionPlan(params: {
       ctx.publish()
       return { ok: true, value: { ...params, options } }
     },
-    // Only settled success replays directly; unsettled picks must run again.
-    replay: (ctx, outcome) =>
-      outcome.status === 'succeeded'
-        ? {
-            key: params.key,
-            value: params.value,
-            ...(ctx.persistedOptions ? { options: { ...ctx.persistedOptions } } : {})
-          }
-        : null
-  }
+    // Reapply unsettled picks; only a settled success can be replayed directly.
+    replay: (ctx, outcome) => {
+      if (outcome.status !== 'succeeded') {
+        return null
+      }
+      if (Object.hasOwn(outcome, 'optionResult')) {
+        return readNoChoiceOptionResult(outcome.optionResult, params)
+      }
+      return {
+        key: params.key,
+        value: params.value,
+        ...(ctx.persistedOptions ? { options: { ...ctx.persistedOptions } } : {})
+      }
+    }
+  } satisfies MutationPlan<AgentSessionOptionResult>
 }

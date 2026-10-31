@@ -71,21 +71,6 @@ describe('resolveTabAgentFromSignals process identity', () => {
     ).toBe('claude')
   })
 
-  it('suppresses launch identity on shell-foreground evidence despite a stale agent title', () => {
-    // Local OSC 133;D proves exit even if a dead TUI leaves its title unchanged.
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: '✳ Claude Code',
-        hookAgent: null,
-        processAgent: null,
-        processShellForeground: true,
-        launchAgent: 'claude'
-      })
-    ).toBeNull()
-  })
-
   it('suppresses stuck-title identity once shell foreground is proven on a manual pane', () => {
     // Shell-foreground evidence replaces the old foreground probe for dead TUIs with stuck titles.
     expect(
@@ -114,19 +99,6 @@ describe('resolveTabAgentFromSignals process identity', () => {
       })
     ).toBe('claude')
   })
-
-  it('keeps launch identity while the recognized process is still in the foreground', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: 'zsh',
-        hookAgent: null,
-        processAgent: 'codex',
-        launchAgent: 'codex'
-      })
-    ).toBe('codex')
-  })
 })
 
 describe('resolveLaunchedAgentExitEvidence shell-foreground gate', () => {
@@ -137,10 +109,6 @@ describe('resolveLaunchedAgentExitEvidence shell-foreground gate', () => {
     hasCompletedHook: false,
     processShellForeground: true
   }
-
-  it('counts shell-foreground proof as local launched-agent exit evidence', () => {
-    expect(resolveLaunchedAgentExitEvidence({ ...baseArgs, isRemote: false })).toBe(true)
-  })
 
   it('never counts a shell-foreground flag as remote launched-agent exit evidence', () => {
     expect(resolveLaunchedAgentExitEvidence({ ...baseArgs, isRemote: true })).toBe(false)

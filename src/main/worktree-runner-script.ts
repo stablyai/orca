@@ -88,10 +88,18 @@ function createWorktreeRunnerScript(args: {
   // Linked worktrees have .git files; resolve the per-worktree gitdir through Git.
   const runnerExtension = runnerShell.family === 'cmd' ? 'cmd' : 'sh'
   const gitRelPath = `orca/${runnerBaseName}.${runnerExtension}`
-  // With the D1c Git router, read the link: if WSL Git made the worktree, host Git can't.
-  const fromLink = isLocalGitRuntimeRouterInstalled()
-    ? readWorktreeGitPath(worktreePath, gitRelPath, knownWslAutomountRoots())
-    : null
+  // Read the link with the D1c Git router (if WSL Git made the worktree, host Git can't), and always
+  // for a worktree inside a distro: Git there would be a synchronous wsl.exe on the main thread.
+  const inDistro = isWslPath(worktreePath)
+  const fromLink =
+    isLocalGitRuntimeRouterInstalled() || inDistro
+      ? readWorktreeGitPath(worktreePath, gitRelPath, knownWslAutomountRoots())
+      : null
+  if (!fromLink && inDistro) {
+    throw new Error(
+      `Orca couldn't find this WSL worktree's Git folder to write its setup script. Check that ${worktreePath} is a Git worktree.`
+    )
+  }
   let runnerScriptPath = fromLink ?? getGitPath(worktreePath, gitRelPath)
 
   // Convert WSL Git's Linux path to a path Windows filesystem calls can reach.

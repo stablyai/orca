@@ -8672,7 +8672,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSIマゼンタ色",
-          "03c855d15f": "すべての色のオーバーライドをリセット",
           "63f8d9336e": "色のオーバーライド",
           "e86e09b5c7": "個々のターミナルの色をオーバーライドします。",
           "1d1920dc8a": "ターミナルに入力するときにマウスカーソルを非表示にします。",
@@ -8739,7 +8738,11 @@
           "cf37ff69f6": "ベース",
           "8abdab9f7c": "今すぐ再起動",
           "907131d741": "再起動中…",
-          "605a35d600": "ターミナルのレンダラーではまだ適用されません。xterm.js に太字用の色スロットがないためです。保存した値は保持されます。"
+          "605a35d600": "ターミナルのレンダラーではまだ適用されません。xterm.js に太字用の色スロットがないためです。保存した値は保持されます。",
+          "color_overrides_dark_description": "ダークターミナルテーマの個々の色をオーバーライドします。",
+          "color_overrides_light_description": "ライトターミナルテーマの個々の色をオーバーライドします。",
+          "reset_dark_color_overrides": "ダークテーマの色のオーバーライドをリセット",
+          "reset_light_color_overrides": "ライトテーマの色のオーバーライドをリセット"
         },
         "UIZoomControl": {
           "c2c64b24d0": "リセット"
@@ -18596,6 +18599,8 @@
       },
       "composer": {
         "send": "送信",
+        "alternateSteerHint": "{{shortcut}} で今すぐ送信",
+        "alternateQueueHint": "{{shortcut}} でキューに入れる",
         "noPty": "ライブターミナルがありません - 再接続するには元に切り替えてください。",
         "locked": "入力は別のデバイスによって保持されます。",
         "placeholder": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
@@ -19104,7 +19109,8 @@
         "stopped": "{{distro}} は停止しています",
         "start": "起動",
         "unverifiable": "Orca は {{distro}} が実行中かどうかを確認できませんでした",
-        "startToSend": "送信するには {{distro}} を開始してください。"
+        "startToSend": "送信するには {{distro}} を開始してください。",
+        "startDistro": "{{distro}} を開始"
       },
       "interruptedContinue": {
         "continue": "続行",
@@ -20974,7 +20980,7 @@
     },
     "claude": {
       "added": "アカウントを追加しました。次に起動する Claude で使用するには、これを選択してください。",
-      "nextLaunch": "{{value0}} → {{value1}}。次に起動する Claude はこれを使用します。実行中のセッションはそれぞれのアカウントを維持します。",
+      "nextLaunch": "{{value0}} → {{value1}}。次に起動する Claude ターミナルはこのアカウントを使用します。実行中の Claude ターミナルはそれぞれのアカウントを維持します。",
       "profileSwitching": "切り替えは、任意のタブで次に起動する Claude に適用されます。実行中のセッションはそれぞれのアカウントを維持します。",
       "systemDefault": "システムのデフォルト",
       "unnamedAccount": "Claude アカウント",
@@ -21005,8 +21011,8 @@
         "restartOne": "セッションを再起動",
         "keep": "そのままにする",
         "session": "Claude セッション",
-        "settingDescription": "再起動すると、新規アカウントで実行中の各会話が継続されます。",
-        "settingTitle": "Claude の実行中にアカウントを切り替える場合",
+        "settingDescription": "再起動すると、ターミナル内の各会話が新しいアカウントで継続されます。",
+        "settingTitle": "ターミナルで Claude を実行中にアカウントを切り替える場合",
         "restartingOne": "{{account}} で Claude セッションを 1 件再起動中",
         "restartingOther": "{{account}} で Claude セッションを {{count}} 件再起動中",
         "settingRestart": "常に再起動する",
