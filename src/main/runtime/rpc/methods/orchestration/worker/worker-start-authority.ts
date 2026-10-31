@@ -84,7 +84,11 @@ export function resolveWorkerStartRun(
 export function assertHelperStartScope(
   db: OrchestrationDb,
   creator: DispatchContextRow,
-  args: { task: TaskRow | undefined; params: { on?: string; terminal?: string } }
+  args: {
+    task: TaskRow | undefined
+    params: { on?: string; terminal?: string }
+    followUpOf?: string
+  }
 ): void {
   if (args.params.on || args.params.terminal) {
     // Remote reports reach the Run home mailbox, so a helper there could not report to its creator.
@@ -98,6 +102,26 @@ export function assertHelperStartScope(
     throw new OrchestrationError(
       'task_not_found',
       `Task ${args.task.id} was not last run by a helper of Dispatch ${creator.id}; start new helper work with --spec.`
+    )
+  }
+  if (args.followUpOf) {
+    const prior = db.getDispatchContextById(args.followUpOf)
+    const owner = prior?.creator_dispatch_id
+    const seen = new Set<string>()
+    let ancestor: DispatchContextRow | undefined = creator
+    while (owner && ancestor && ancestor.run_id === prior?.run_id && !seen.has(ancestor.id)) {
+      if (ancestor.id === owner) {
+        return
+      }
+      seen.add(ancestor.id)
+      ancestor = ancestor.follow_up_of_dispatch_id
+        ? db.getDispatchContextById(ancestor.follow_up_of_dispatch_id)
+        : undefined
+    }
+    throw new OrchestrationError(
+      'task_not_found',
+      `Dispatch ${args.followUpOf} was not last run by this worker's helper. No effects were applied.`,
+      { effectsApplied: false }
     )
   }
 }

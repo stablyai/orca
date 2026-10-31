@@ -12,7 +12,10 @@ import type { DispatchContextRow, MessageType } from '../../../../orchestration/
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
 import type { RpcContext } from '../../../core'
 import { startWorker } from '../worker/workers'
-import { chooseWorkerFollowUpPlacement } from '../worker/worker-follow-up-choice'
+import {
+  chooseWorkerFollowUpPlacement,
+  type WorkerFollowUpDelivery
+} from '../worker/worker-follow-up-choice'
 
 const ACTIVE_STATUSES: readonly string[] = ['pending', 'dispatched']
 
@@ -71,45 +74,48 @@ export async function startWorkerFollowUp(args: {
   const { ctx, db } = args
   const { latest, resource } = args.plan
   const { subject, body } = args.message
-  const placement = await chooseWorkerFollowUpPlacement(ctx.runtime, db, latest, resource)
-  const { reopen } = placement
+  let delivery: WorkerFollowUpDelivery = 'follow_up'
+  let reopening = false
   let freshInstead = false
-  const spec = [
-    body || subject,
-    placement.delivery === 'started_fresh' ? placement.earlierWork : undefined
-  ]
-    .filter(Boolean)
-    .join('\n\n')
   let receipt: unknown
   try {
     receipt = await startWorker(
       {
         from: args.from,
         run: latest.run_id,
-        spec,
-        taskTitle: subject,
-        worktree: `id:${placement.worktreeId}`,
-        ...(placement.terminal ? { terminal: placement.terminal } : {}),
-        ...(placement.agent ? { agent: placement.agent } : {}),
-        ...(placement.model ? { model: placement.model } : {}),
-        ...(placement.effort ? { effort: placement.effort } : {})
+        spec: body || subject,
+        taskTitle: subject
       },
       // The send's own receipt is already pending; the follow-up only names what it accepted.
       { ...ctx, orchestrationMutation: undefined },
       {
         of: latest.id,
+        place: async (assertCreatorCurrent) => {
+          const placement = await chooseWorkerFollowUpPlacement(
+            ctx.runtime,
+            db,
+            latest,
+            resource,
+            assertCreatorCurrent
+          )
+          delivery = placement.delivery
+          const { reopen } = placement
+          reopening = Boolean(reopen)
+          return {
+            ...placement,
+            ...(reopen
+              ? {
+                  reopen: async (dispatchId: string) => {
+                    const reopened = await reopen(dispatchId)
+                    freshInstead = reopened === null
+                    return reopened
+                  }
+                }
+              : {})
+          }
+        },
         ...(ctx.orchestrationMutation ? { acceptedBy: ctx.orchestrationMutation } : {}),
-        ...(args.consumesMessageIds ? { consumesMessageIds: args.consumesMessageIds } : {}),
-        ...(placement.earlierWork ? { earlierWork: placement.earlierWork } : {}),
-        ...(reopen
-          ? {
-              reopen: async (dispatchId: string) => {
-                const reopened = await reopen(dispatchId)
-                freshInstead = reopened === null
-                return reopened
-              }
-            }
-          : {})
+        ...(args.consumesMessageIds ? { consumesMessageIds: args.consumesMessageIds } : {})
       }
     )
   } catch (error) {
@@ -121,14 +127,14 @@ export async function startWorkerFollowUp(args: {
   }
   const started = {
     ...(receipt && typeof receipt === 'object' ? receipt : {}),
-    delivery: freshInstead ? 'started_fresh' : placement.delivery,
+    delivery: freshInstead ? 'started_fresh' : delivery,
     followUpOf: latest.id
   }
   if (
     resource &&
     'dispatchId' in started &&
     typeof started.dispatchId === 'string' &&
-    reopen &&
+    reopening &&
     !freshInstead
   ) {
     carryWorkerResumeSession(db, started.dispatchId, resource)

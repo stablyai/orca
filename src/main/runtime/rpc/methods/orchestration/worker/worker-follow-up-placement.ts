@@ -9,11 +9,14 @@ import {
   resolveStructuredWorkerIdentity,
   structuredWorkerSession
 } from '../../../../structured-worker-authority'
+import type { WorkerFollowUpPlacement } from './worker-follow-up-choice'
 
 /** What a follow-up continues, and for a closed worker how it comes back once the follow-up holds its Dispatch. */
 export type WorkerFollowUp = {
   /** The settled Dispatch whose worker this one continues. */
   of: string
+  /** The start owner admits the caller before resolving placement, which may release an owned shell. */
+  place: (assertCreatorCurrent: () => void) => Promise<WorkerFollowUpPlacement>
   /** Resolves null when the agent refused to resume before spawning anything; a fresh one starts instead. */
   reopen?: (dispatchId: string) => Promise<ReopenedWorker | null>
   /** The send this follow-up answers, whose pending receipt names the Dispatch it accepted. */

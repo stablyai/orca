@@ -21,6 +21,7 @@ import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration-session-caller-codes'
+import { resolveDispatchCreator } from '../runs/dispatch-creator'
 
 type WorkerStartContext = Pick<
   RpcContext,
@@ -107,11 +108,45 @@ export async function startWorker(
   if (helperCreator) {
     assertHelperStartScope(db, helperCreator, {
       task: existingTask,
-      params
+      params,
+      ...(followUp ? { followUpOf: followUp.of } : {})
     })
   }
   if (existingTask) {
     await assertWorkerStartTaskSpecWithinPromptBudget(existingTask.spec)
+  }
+  if (followUp) {
+    const placement = await followUp.place(() => {
+      if (
+        helperCreator &&
+        db.resolveCreatorDispatchId(
+          resolveDispatchCreator(runtime, params.from, orchestrationCaller)
+        ) !== helperCreator.id
+      ) {
+        throw new OrchestrationError(
+          'consumer_fenced',
+          `Dispatch ${helperCreator.id} is no longer this caller's active work. No effects were applied.`,
+          { effectsApplied: false }
+        )
+      }
+    })
+    const spec = [
+      params.spec,
+      placement.delivery === 'started_fresh' ? placement.earlierWork : undefined
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+    params = {
+      ...params,
+      worktree: `id:${placement.worktreeId}`,
+      ...(placement.terminal ? { terminal: placement.terminal } : {}),
+      ...(placement.agent ? { agent: placement.agent } : {}),
+      ...(placement.model ? { model: placement.model } : {}),
+      ...(placement.effort ? { effort: placement.effort } : {}),
+      spec
+    }
+    followUp = { ...followUp, reopen: placement.reopen, earlierWork: placement.earlierWork }
+    await assertWorkerStartTaskSpecWithinPromptBudget(spec)
   }
   const mode = decideWorkerStartMode({
     params,
