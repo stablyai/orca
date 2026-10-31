@@ -1,4 +1,5 @@
 import type { RepoKind } from '../repo-types'
+import type { GhAccountBinding } from './account-binding'
 import type { CheckStatus, PRInfo, PRMergeableState, PRState } from './pull-request-types'
 
 /** Classified failures drive stable empty-state copy. Auth/permission/repo_unavailable/gh_unavailable make existing-review lookup impossible and must hide Create. */
@@ -68,6 +69,7 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedMergeStateStatus?: string | null
   localGitOptions?: {
     wslDistro?: string
+    ghAccount?: GhAccountBinding
   }
 }
 
