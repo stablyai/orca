@@ -24,6 +24,8 @@ type ListRowProps = {
   onPress?: () => void
   onLongPress?: () => void
   disabled?: boolean
+  /** Working on a press: stops taking taps without the disabled dimming. */
+  busy?: boolean
   accessibilityLabel?: string
   accessibilityRole?: 'button' | 'radio' | 'checkbox' | 'switch'
   testID?: string
@@ -42,6 +44,7 @@ export function ListRow({
   onPress,
   onLongPress,
   disabled = false,
+  busy = false,
   accessibilityLabel,
   accessibilityRole,
   testID
@@ -83,6 +86,7 @@ export function ListRow({
       {navigates ? <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} /> : null}
     </>
   )
+  const inertState = { disabled: disabled || busy, ...(busy && { busy }) }
   if (onPress === undefined) {
     return (
       <View style={rowStyle} testID={testID}>
@@ -101,11 +105,11 @@ export function ListRow({
       }}
       onLongPress={onLongPress}
       delayLongPress={onLongPress ? 400 : undefined}
-      disabled={disabled}
+      disabled={inertState.disabled}
       accessibilityRole={accessibilityRole ?? (selected === undefined ? 'button' : 'radio')}
       accessibilityLabel={accessibilityLabel ?? (value ? `${title}, ${value}` : title)}
       accessibilityState={
-        selected === undefined ? { disabled } : { disabled, checked: selected, selected }
+        selected === undefined ? inertState : { ...inertState, checked: selected, selected }
       }
       testID={testID}
       style={({ pressed }) => [...rowStyle, pressed && styles.pressed]}

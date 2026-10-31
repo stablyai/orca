@@ -291,7 +291,8 @@
       "connecting": "Connecting to host…",
       "loadingAccounts": "Loading accounts…",
       "manageAccountsHint": "Add or re-authenticate accounts from desktop Settings → Accounts.",
-      "useReset": "Use reset"
+      "useReset": "Use reset",
+      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts."
     }
   },
   "agentHistory": {

@@ -95,7 +95,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     taskResumeRef,
     visibleProviders
   } = model
-  // Bumped by Retry when the capability probe itself failed, which leaves support unknown.
+  // Bumped by Retry after a failed hydration, which leaves support unknown.
   const [hydrationAttempt, setHydrationAttempt] = useState(0)
   useEffect(() => {
     if (!client || connState !== 'connected') {
@@ -319,6 +319,8 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
           ? err.message
           : translate('tasks.runtimeHydration.loadFailed', 'Failed to load Tasks settings')
       )
+      // Back to unknown so the error offers the hydration retry; loadTasks no-ops until hydrated.
+      setTasksSupportState({ kind: 'unknown', client })
       setTaskStateHydrated(false)
     })
 
