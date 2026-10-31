@@ -1,3 +1,5 @@
+import { observeAutomationTerminalPublication } from './automation-chat-terminal-publication'
+import type { AutomationAttentionCorrelation } from '../runtime/automation-attention-correlations'
 import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionLatestRequest } from '../../shared/structured-agent-session-latest-request'
 import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
@@ -23,6 +25,12 @@ type SessionClaims = {
 
 /** Exact causal interests belong to the journal publication lifetime, never the output observer. */
 export class AutomationChatInterests {
+  private attention: ((id: string) => AutomationAttentionCorrelation | undefined) | undefined
+
+  connectAttention(read: (id: string) => AutomationAttentionCorrelation | undefined): void {
+    this.attention = read
+  }
+
   private readonly runs = new Map<string, Claim>()
   private readonly sessions = new Map<string, SessionClaims>()
 
@@ -102,6 +110,9 @@ export class AutomationChatInterests {
   }
 
   clear(): void {
+    for (const claim of this.runs.values()) {
+      this.attention?.(claim.runId)?.observe(claim.sessionId, null, undefined, undefined, true)
+    }
     this.runs.clear()
     this.sessions.clear()
   }
@@ -140,6 +151,9 @@ export class AutomationChatInterests {
       return
     }
     if (hint.kind === 'end') {
+      for (const claim of new Set(session.messages.values())) {
+        observeAutomationTerminalPublication(this.attention?.(claim.runId), claim, hint, true)
+      }
       this.forgetSession(sessionId)
       return
     }
@@ -163,6 +177,9 @@ export class AutomationChatInterests {
         }
       }
       if (!journal) {
+        for (const claim of claims) {
+          observeAutomationTerminalPublication(this.attention?.(claim.runId), claim, hint, true)
+        }
         return
       }
       for (const submission of journal.submissions()) {
@@ -173,16 +190,23 @@ export class AutomationChatInterests {
           this.turn(session, journal, id, body)
         }
       })
+      for (const claim of claims) {
+        observeAutomationTerminalPublication(this.attention?.(claim.runId), claim, hint, true)
+      }
       return
     }
     if (!journal) {
       return
     }
+    const touched = new Set<Claim>()
     for (const row of hint.rows ?? []) {
       if (row.kind === 'submission' || row.kind === 'dispatch') {
         const submission = journal.submission(row.clientMessageId)
         if (submission) {
-          this.submission(session, journal, submission)
+          const claim = this.submission(session, journal, submission)
+          if (claim) {
+            touched.add(claim)
+          }
         }
       }
       const items = row.kind === 'lifecycle-batch' ? row.mutations : [row]
@@ -193,10 +217,14 @@ export class AutomationChatInterests {
         const id = journal.canonicalItemId(item.itemId)
         const current = journal.item(id)
         if (current && !current.agentId) {
-          this.turn(session, journal, id, current.body)
+          const claim = this.turn(session, journal, id, current.body) ?? session.users.get(id)
+          if (claim) {
+            touched.add(claim)
+          }
         } else if (!current) {
           const claim = session.roots.get(id)
           if (claim) {
+            touched.add(claim)
             session.requests.delete(`turn:${claim.turnId}`)
             session.roots.delete(id)
             claim.turnId = undefined
@@ -204,6 +232,9 @@ export class AutomationChatInterests {
           }
         }
       }
+    }
+    for (const claim of touched) {
+      observeAutomationTerminalPublication(this.attention?.(claim.runId), claim, hint, false)
     }
   }
 
@@ -216,7 +247,7 @@ export class AutomationChatInterests {
     session: SessionClaims,
     journal: AgentSessionJournal,
     submission: AgentJournalSubmission
-  ): void {
+  ): Claim | undefined {
     const claim =
       session.messages.get(submission.clientMessageId) ??
       (submission.queuedMessageId ? session.messages.get(submission.queuedMessageId) : undefined)
@@ -242,6 +273,7 @@ export class AutomationChatInterests {
         this.turn(session, journal, root.itemId, root.body, claim)
       }
     }
+    return claim
   }
 
   private turn(
@@ -250,7 +282,7 @@ export class AutomationChatInterests {
     itemId: string,
     body: Parameters<typeof readAgentJournalTurn>[0],
     answered?: Claim
-  ): void {
+  ): Claim | undefined {
     const turn = readAgentJournalTurn(body)
     if (!turn) {
       return
@@ -270,5 +302,6 @@ export class AutomationChatInterests {
       this.bind(session.roots, itemId, claim)
       this.bind(session.requests, `turn:${turn.turnId}`, claim)
     }
+    return claim
   }
 }

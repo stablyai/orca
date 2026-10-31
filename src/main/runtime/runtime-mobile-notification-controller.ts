@@ -1,3 +1,4 @@
+import { AutomationAttentionCorrelations } from './automation-attention-correlations'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import {
@@ -203,7 +204,12 @@ export class RuntimeMobileNotificationController {
     })
   }
 
+  private readonly automationAttention = new AutomationAttentionCorrelations()
+
+  createAutomationAttentionOwner = () => this.automationAttention.createOwner()
+
   retireStructuredAttention(read: StructuredAttentionRead): void {
+    this.automationAttention.acknowledge(read)
     for (const delivery of this.dismissalStore?.liveDeliveries() ?? []) {
       if (attentionOriginWasRead(delivery.structuredOrigin, read)) {
         this.retireDelivery(delivery)

@@ -1,3 +1,5 @@
+import type { AutomationAttentionCorrelation } from '../runtime/automation-attention-correlations'
+import { structuredAgentSessionRequestForItem } from '../../shared/structured-agent-session-latest-request'
 import { resolveChatAutomationRun } from './automation-chat-run-observation'
 export { chatAutomationRunObservation } from './automation-chat-run-observation'
 import type { JournalPublication } from '../native-chat/agent-session-wire/structured-agent-session-conversations'
@@ -16,7 +18,8 @@ import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
 export async function observeAutomationChatRun(
   runtime: OrcaRuntimeService,
   run: AutomationRun,
-  signal: AbortSignal
+  signal: AbortSignal,
+  attention?: AutomationAttentionCorrelation
 ): Promise<AutomationRunCompletionObservation> {
   await runtime.ensureStructuredAgentSessionHost()
   const host = getStructuredAgentSessionHost()
@@ -65,6 +68,7 @@ export async function observeAutomationChatRun(
       clearTimeout(deadline)
       signal.removeEventListener('abort', abort)
       release?.()
+      attention?.abandon()
       if (error) {
         reject(error)
       } else {
@@ -153,7 +157,37 @@ export async function observeAutomationChatRun(
           }
           fingerprint = interest()
           if (observation) {
-            finish(observation)
+            const request = turnItem
+              ? structuredAgentSessionRequestForItem(turnItem, submission)
+              : submission
+                ? (() => {
+                    const item = snapshot.items.find(
+                      (entry) =>
+                        entry.itemId === agentJournalSubmissionKey(submission.clientMessageId)
+                    )
+                    return item ? structuredAgentSessionRequestForItem(item, submission) : null
+                  })()
+                : null
+            const root =
+              turnItem?.itemId ??
+              (submission ? agentJournalSubmissionKey(submission.clientMessageId) : undefined)
+            const sealed =
+              request && root && submission && readingSource
+                ? attention?.seal({
+                    source: readingSource,
+                    epoch: snapshot.cursor.epoch,
+                    root,
+                    submission: submission.clientMessageId,
+                    request
+                  })
+                : undefined
+            finish({
+              ...observation,
+              presentation: {
+                ...observation.presentation,
+                ...(sealed ? { attention: sealed } : {})
+              }
+            })
             return
           }
         } while (dirty && !settled)

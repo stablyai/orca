@@ -1,15 +1,23 @@
+import {
+  readAutomationRunPresentation,
+  type AutomationRunOutcomeInput
+} from '../../shared/automation-run-outcome'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
+import type { AutomationAttentionDelivery } from '../runtime/automation-attention-correlations'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AutomationsChangedPayload } from '../../shared/runtime-client-events'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import { getRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
 import { notificationExecutionHostForOwner } from '../../shared/notification-source'
-import type { AutomationRunOutcome } from '../../shared/automation-run-outcome'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 
 export function automationOutcomeNotification(
-  outcome: AutomationRunOutcome,
+  outcome: AutomationRunOutcomeInput,
   context: {
     hostId?: ExecutionHostId
     notificationSourceId?: ExecutionHostId
@@ -17,6 +25,7 @@ export function automationOutcomeNotification(
   } = {}
 ): NotificationDispatchRequest | null {
   const { run } = outcome
+  const presentation = readAutomationRunPresentation(outcome)
   // STA-10142 supplies Terminal turn attribution before its outcome banner is enabled.
   if (
     run.sessionKind === 'terminal' &&
@@ -40,6 +49,19 @@ export function automationOutcomeNotification(
   ])
   return {
     source: 'agent-task-complete',
+    automationPresentation: presentation,
+    ...(presentation.assistantMessage
+      ? { agentLastAssistantMessage: presentation.assistantMessage }
+      : {}),
+    ...(presentation.origin ? { structuredOrigin: presentation.origin } : {}),
+    ...(run.sessionKind === 'chat' && run.chatSessionId
+      ? {
+          paneKey: structuredAgentSessionPaneKey(
+            structuredAgentSessionTabId(run.chatSessionId),
+            run.chatSessionId
+          )
+        }
+      : {}),
     notificationId: key,
     attentionKey: key,
     automationRun: {
@@ -62,9 +84,13 @@ export function automationOutcomeNotification(
 export function publishAutomationOutcome(
   runtime: OrcaRuntimeService,
   store: Store,
-  payload: AutomationsChangedPayload
+  payload: AutomationsChangedPayload,
+  attention?: AutomationAttentionDelivery
 ): void {
-  const request = payload.settledRun ? automationOutcomeNotification(payload.settledRun) : null
+  const request =
+    !attention?.covered() && payload.settledRun
+      ? automationOutcomeNotification(payload.settledRun)
+      : null
   if (request) {
     const settings = store.getSettings().notifications
     const options = buildNotificationOptions(
@@ -80,13 +106,17 @@ export function publishAutomationOutcome(
       agentState: 'done',
       notificationId: request.notificationId,
       attentionKey: request.attentionKey,
+      ...(request.paneKey ? { paneKey: request.paneKey } : {}),
+      ...(request.structuredOrigin ? { structuredOrigin: request.structuredOrigin } : {}),
       ...(request.worktreeId ? { worktreeId: request.worktreeId } : {}),
       ...(!(settings.enabled && settings.agentTaskComplete) ? { desktopAllowed: false } : {})
     })
   }
+  const { settledRun, ...change } = payload
   runtime.notifyAutomationsChanged({
-    ...payload,
-    ...(request && payload.settledRun
+    ...change,
+    ...(!attention?.covered() && settledRun ? { settledRun } : {}),
+    ...(!attention?.covered() && request && payload.settledRun
       ? { settledRun: { ...payload.settledRun, mobileDeliveredByHost: true } }
       : {})
   })

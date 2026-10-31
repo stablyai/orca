@@ -1,3 +1,5 @@
+import type { AutomationRunResult, PublishAutomationOutcome } from './automation-run-presentation'
+import type { AutomationAttentionOwner } from '../runtime/automation-attention-correlations'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import {
@@ -11,7 +13,6 @@ import type { Store } from '../persistence'
 import {
   isFinalAutomationRunStatus,
   type Automation,
-  type AutomationDispatchResult,
   type AutomationPrecheckResult,
   type AutomationRun
 } from '../../shared/automations-types'
@@ -39,10 +40,7 @@ import {
   recordRefusedAutomationRun,
   recordUnevaluableAutomation
 } from './dispatch-refusal'
-import type {
-  AutomationsChangedPayload,
-  PublishAutomationsChanged
-} from '../../shared/runtime-client-events'
+import type { AutomationsChangedPayload } from '../../shared/runtime-client-events'
 
 const DEFAULT_TICK_MS = 60 * 1000
 
@@ -66,7 +64,7 @@ export class AutomationService {
     | ((host: StructuredAgentSessionHost, records: AgentSessionRecordStore) => void)
     | null = null
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
-  private readonly publish: PublishAutomationsChanged | null
+  private readonly publish: PublishAutomationOutcome | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
   /** Desktop automation traffic holds this lease to defer queued external probes. */
@@ -82,7 +80,8 @@ export class AutomationService {
       headlessDispatcher?: HeadlessAutomationDispatcher
       chatDispatcher?: HeadlessAutomationDispatcher
       terminalObserver?: AutomationRunTerminalObserver
-      onAutomationsChanged?: PublishAutomationsChanged
+      onAutomationsChanged?: PublishAutomationOutcome
+      attention?: AutomationAttentionOwner
     } = {}
   ) {
     this.store = store
@@ -93,7 +92,7 @@ export class AutomationService {
     this.headlessDispatcher = opts.headlessDispatcher ?? null
     this.chatDispatcher = opts.chatDispatcher ?? null
     this.publish = opts.onAutomationsChanged ?? null
-    this.runs = createAutomationRunWriter(store, this.publish)
+    this.runs = createAutomationRunWriter(store, this.publish, opts.attention)
     this.completionWatcher = opts.terminalObserver
       ? new AutomationRunCompletionWatcher({
           observer: opts.terminalObserver,
@@ -180,7 +179,7 @@ export class AutomationService {
     )
   }
 
-  async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
+  async markDispatchResult(result: AutomationRunResult): Promise<AutomationRun> {
     const run = await this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {

@@ -1,6 +1,10 @@
+import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
 import { describe, expect, it, vi } from 'vitest'
 import { AutomationService } from './service'
-import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
+import type {
+  HeadlessAutomationDispatchLaunch,
+  HeadlessAutomationDispatcher
+} from './headless-dispatch'
 import * as automationContext from '../persistence/scheduling-automations/automation-context-migration'
 import { captureOutcomeLifetime } from './automation-outcome-lifetime.test-fixture'
 import { createAutomationRunWriter } from './automation-run-writer'
@@ -508,13 +512,20 @@ it.each([
     })
     const launch = Promise.withResolvers<HeadlessAutomationDispatchLaunch>()
     const completion = Promise.withResolvers<{ status: 'completed' }>()
-    const dispatcher = vi.fn(() => launch.promise)
+    const attention = new RuntimeMobileNotificationController().createAutomationAttentionOwner()
+    const admitted: string[] = []
+    const dispatcher = vi.fn<HeadlessAutomationDispatcher>((request) => {
+      attention.admit(request.run.id)
+      admitted.push(request.run.id)
+      return launch.promise
+    })
     const publish = vi.fn()
     const before = store['runtime'].durableWriteListeners.size
     const { owner: service, pendingIds } = captureOutcomeLifetime(
       () =>
         new AutomationService(store, {
           headlessDispatcher: dispatcher,
+          attention,
           onAutomationsChanged: publish
         })
     )
@@ -531,6 +542,11 @@ it.each([
     if (stopped) {
       service.stop()
       expect(store['runtime'].durableWriteListeners.size).toBe(before)
+    }
+    expect(admitted).toHaveLength(1)
+    expect(Boolean(attention.get(admitted[0]))).toBe(!stopped)
+    if (stopped) {
+      expect(attention.admit(admitted[0])).toBeUndefined()
     }
     const flush = vi.spyOn(store, 'flushPendingOrThrowAsync')
     const gate = authority.pause()
@@ -557,6 +573,7 @@ it.each([
     await store.flushPendingOrThrowAsync()
     expect(flush).toHaveBeenCalled()
     expect(pendingIds()).toEqual([])
+    expect(attention.get(run.id)).toBeUndefined()
     expect(publish.mock.calls.filter(([event]) => event.settledRun)).toHaveLength(stopped ? 0 : 1)
     expect(publish.mock.calls.some(([event]) => event.reason === 'run' && !event.settledRun)).toBe(
       true

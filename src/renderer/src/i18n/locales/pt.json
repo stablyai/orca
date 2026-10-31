@@ -379,6 +379,8 @@
     }
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} Revise a execução e tente novamente.",
+    "automationFailedAction": "{{agent}} não conseguiu concluir esta automação. Revise a execução e tente novamente.",
     "agentStatus": {
       "needsInput": "aguardando entrada",
       "working": "em execução",

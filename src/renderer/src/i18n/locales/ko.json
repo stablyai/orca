@@ -20051,6 +20051,8 @@
     }
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} 실행 내용을 확인하고 다시 시도하세요.",
+    "automationFailedAction": "{{agent}} 에이전트가 이 자동화를 완료하지 못했습니다. 실행 내용을 확인하고 다시 시도하세요.",
     "agentStatus": {
       "needsInput": "입력 필요",
       "working": "작업 중",

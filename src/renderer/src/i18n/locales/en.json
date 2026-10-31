@@ -21101,6 +21101,8 @@
     "launchFailedGenericDetail": "The system refused to start it. Free up memory or close other apps, then click Try Again. If this keeps happening, reinstall Orca."
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} Review the run and try again.",
+    "automationFailedAction": "{{agent}} could not complete this automation. Review the run and try again.",
     "agentStatus": {
       "needsInput": "needs input",
       "working": "working",

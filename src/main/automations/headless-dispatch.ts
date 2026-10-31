@@ -1,3 +1,4 @@
+import type { AutomationResultPresentation } from './automation-run-presentation'
 import type {
   Automation,
   AutomationRun,
@@ -19,6 +20,7 @@ export type HeadlessAutomationDispatchLaunch = {
   completion?: Promise<
     {
       status: 'completed' | 'dispatch_failed'
+      presentation?: AutomationResultPresentation
       outputSnapshot?: AutomationRunOutputSnapshot | null
       error?: string | null
     } & AutomationRunFailureCodeFields

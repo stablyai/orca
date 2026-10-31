@@ -27,8 +27,12 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-export async function setup(agent?: 'claude') {
-  const rig = await createQueuedMessageTestRig({ ...(agent ? { agent } : {}), restartable: true })
+export async function setup(agent?: 'claude', sessionId?: string) {
+  const rig = await createQueuedMessageTestRig({
+    ...(agent ? { agent } : {}),
+    ...(sessionId ? { sessionId } : {}),
+    restartable: true
+  })
   rigs.push(rig)
   return rig
 }
@@ -128,4 +132,58 @@ export async function ownedSend(rig: QueuedMessageTestRig, runId: string, queued
     )
   ).toMatchObject({ ok: true })
   return id
+}
+
+export async function finishReadExperimentTurn(
+  rig: QueuedMessageTestRig,
+  sessionId: string,
+  messageId: string,
+  turnId: string,
+  outcome: 'success' | 'failure' = 'success',
+  messages = ['Checking seven repositories.', 'Checked seven repositories; all passed.'],
+  beforeTerminal?: () => Promise<void>
+) {
+  await eventually(async () => {
+    if (rig.host.collaboratorsForTests().sessions.get(sessionId)?.child?.phase === 'starting') {
+      await rig.proveStart()
+    }
+    expect(
+      rig.host.collaboratorsForTests().sessions.get(sessionId)?.journal.submission(messageId)
+        ?.handedOverAt
+    ).toBeDefined()
+  })
+  await rig.settleAccepted(messageId, turnId)
+  const journal = rig.host.collaboratorsForTests().sessions.get(sessionId)!.journal
+  const userItemId = journal.submission(messageId)?.providerItemId
+  if (!userItemId) {
+    throw new Error('Expected actual accepted provider user item')
+  }
+  const sink = rig.providerEvents()
+  const identity = { provider: 'codex' as const, threadId: THREAD, turnId, ordinal: 1 }
+  const turnItemId = agentJournalItemKey(identity)
+  sink.appendItem(
+    identity,
+    { kind: 'turn', turnId, userItemId, state: 'running' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
+  )
+  for (const [i, text] of messages.entries()) {
+    sink.appendItem(
+      { ...identity, ordinal: i + 2 },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
+      { turnScope: { kind: 'turn', turnItemId } }
+    )
+  }
+  if (beforeTerminal) {
+    sink.publish({ lifecycle: true })
+    expect(await sink.written?.()).toEqual({ ok: true })
+    await beforeTerminal()
+  }
+  sink.appendItem(
+    identity,
+    { kind: 'turn', turnId, userItemId, state: 'completed', outcome },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
+  )
+  sink.publish({ lifecycle: true })
+  expect(await sink.written?.()).toEqual({ ok: true })
+  await rig.host.flushStreamedEvents(sessionId)
 }

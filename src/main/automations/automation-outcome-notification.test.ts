@@ -1,7 +1,11 @@
+import {
+  isAutomationRunOutcome,
+  type AutomationRunOutcome
+} from '../../shared/automation-run-outcome'
+import { buildNotificationOptions } from '../ipc/notification-options'
 import { fixture } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { stubRuntime } from '../runtime/rpc/terminal-multiplex-test-harness'
 import { describe, expect, it, vi } from 'vitest'
-import type { AutomationRunOutcome } from '../../shared/automation-run-outcome'
 import {
   automationOutcomeNotification,
   publishAutomationOutcome
@@ -199,3 +203,73 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
+
+it.each([
+  undefined,
+  {
+    failure: { errorCode: 'futureProviderCode', errorParams: { raw: 'PRIVATE provider detail' } },
+    assistantMessage: 'x'.repeat(201)
+  },
+  {
+    failure: { errorCode: 'projectSetupNotReady', errorParams: { setupState: 'PRIVATE unknown' } },
+    origin: { sessionId: 'chat' }
+  },
+  { failure: { errorCode: 'wslDistroStopped', errorParams: { distro: 'PRIVATE\nprovider' } } }
+])(
+  'keeps a valid base and safe actionable failure fallback for optional context %j',
+  (presentation) => {
+    const wire: unknown = {
+      ...outcome({
+        status: 'dispatch_failed',
+        dispatchedAt: null,
+        workspaceId: null,
+        chatSessionId: null
+      }),
+      presentation
+    }
+    expect(isAutomationRunOutcome(wire)).toBe(true)
+    if (!isAutomationRunOutcome(wire)) {
+      throw new Error('Expected valid base outcome')
+    }
+    const request = automationOutcomeNotification(wire)
+    if (!request) {
+      throw new Error('Missing pane-less failure request')
+    }
+    const options = buildNotificationOptions(request)
+    expect(options.body).toBe(
+      'Claude could not complete this automation. Review the run and try again.'
+    )
+    expect(request.structuredOrigin).toBeUndefined()
+    expect(request.agentLastAssistantMessage).toBeUndefined()
+    expect(options.body).not.toContain('PRIVATE')
+    expect(options.body).not.toContain('never started')
+  }
+)
+
+it('validates preview/origin correspondence without erasing a safe known coded reason', () => {
+  const current = outcome({ status: 'dispatch_failed' })
+  current.presentation = {
+    assistantMessage: 'Exact reply',
+    failure: { errorCode: 'agentNoCompletion' },
+    origin: {
+      scope: {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: 'other-workspace',
+        workspaceKind: 'folder'
+      },
+      sessionId: 'other-session',
+      journalCursor: { epoch: 'epoch', sequence: 8 },
+      cause: { kind: 'completion', requestId: 'turn' }
+    }
+  }
+  const request = automationOutcomeNotification(current)
+  if (!request) {
+    throw new Error('Expected failure request')
+  }
+  expect(request.structuredOrigin).toBeUndefined()
+  expect(buildNotificationOptions(request).body).toBe(
+    'Claude: Automation agent did not report completion. Review the run and try again.'
+  )
+  expect(request.agentLastAssistantMessage).toBe('Exact reply')
+})

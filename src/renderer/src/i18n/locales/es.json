@@ -20644,6 +20644,8 @@
     }
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} Revisa la ejecución e inténtalo de nuevo.",
+    "automationFailedAction": "{{agent}} no pudo completar esta automatización. Revisa la ejecución e inténtalo de nuevo.",
     "agentStatus": {
       "needsInput": "necesita información",
       "working": "trabajando",

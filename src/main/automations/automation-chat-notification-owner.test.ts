@@ -77,9 +77,13 @@ it.each(['success', 'returned', 'withdrawn'] as const)(
           })
         )
         expect(
-          listener.phone.mock.calls.every(
-            ([event]) => !event.attentionKey.includes('automation-root')
-          )
+          listener.phone.mock.calls.every(([event]) => {
+            expect(typeof event.attentionKey).toBe('string')
+            if (typeof event.attentionKey !== 'string') {
+              throw new Error('Missing attentionKey')
+            }
+            return !event.attentionKey.includes('automation-root')
+          })
         ).toBe(true)
       }
     }

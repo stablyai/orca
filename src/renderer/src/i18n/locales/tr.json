@@ -20780,6 +20780,8 @@
     "launchFailedGenericDetail": "Sistem süreci başlatmayı reddetti. Bellek boşaltın veya diğer uygulamaları kapatın, ardından Tekrar Dene'ye tıklayın. Bu durum sürerse Orca'yı yeniden yükleyin."
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} Çalıştırmayı inceleyip yeniden deneyin.",
+    "automationFailedAction": "{{agent}} bu otomasyonu tamamlayamadı. Çalıştırmayı inceleyip yeniden deneyin.",
     "agentStatus": {
       "needsInput": "girdi gerekiyor",
       "working": "çalışıyor",

@@ -1,5 +1,8 @@
 import { AUTOMATION_RUN_SEEN_CAPABILITY } from '../../shared/automation-runtime-capabilities'
-import { isAutomationRunOutcome } from '../../shared/automation-run-outcome'
+import {
+  isAutomationRunOutcome,
+  readAutomationRunPresentation
+} from '../../shared/automation-run-outcome'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { isRuntimeSubscriptionReplayResponse } from '../../shared/runtime-subscription-replay'
 import { notificationSourceForOwner } from '../../shared/notification-source'
@@ -156,7 +159,16 @@ export function startAutomationOutcomeNotifications(
               'settledRun' in value &&
               isAutomationRunOutcome(value.settledRun)
             ) {
-              deliver({ settledRun: value.settledRun }, id, snapshot.pairingRevision)
+              deliver(
+                {
+                  settledRun: {
+                    ...value.settledRun,
+                    presentation: readAutomationRunPresentation(value.settledRun)
+                  }
+                },
+                id,
+                snapshot.pairingRevision
+              )
             }
           },
           onClose: end

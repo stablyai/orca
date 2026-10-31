@@ -20736,6 +20736,8 @@
     "scanTooLarge": "L'analyse de l'ouverture rapide est trop volumineuse ({{reason}})."
   },
   "notifications": {
+    "automationFailedReason": "{{agent}} : {{reason}} Vérifiez cette exécution et réessayez.",
+    "automationFailedAction": "{{agent}} n’a pas pu terminer cette automatisation. Vérifiez cette exécution et réessayez.",
     "agentStatus": {
       "needsInput": "attend une réponse",
       "working": "en cours",

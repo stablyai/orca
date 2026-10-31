@@ -137,6 +137,40 @@ describe('exact automation chat turn', () => {
       outputSnapshot: { content: 'Automation output' }
     })
   })
+  it.each([false, true])(
+    'projects one bounded last meaningful message in the exact root (long=%s)',
+    (long) => {
+      const prose = long ? 'Result '.repeat(80) : 'Checked seven repositories; all passed.'
+      const toolOnly = answer('tool', 'own', '')
+      if (toolOnly.body.kind !== 'message') {
+        throw new Error('Expected message fixture')
+      }
+      toolOnly.body.blocks = [{ type: 'tool-result', output: 'tool only' }]
+      const view = snapshot([
+        turn('own', 'provider-user'),
+        answer('a', 'own', 'Checking seven repositories.'),
+        answer('b', 'own', `${prose}\n::orca-visual{file="report.html"}`),
+        answer('empty', 'own', '  '),
+        toolOnly,
+        { ...answer('child', 'own', 'child only'), agentId: 'child' },
+        answer('visual', 'own', '::orca-visual{file="only.html"}'),
+        turn('human', 'other'),
+        answer('later', 'human', 'HUMAN ONLY result.')
+      ])
+      const result = chatAutomationRunObservation(view, 'prompt', 'Codex')
+      expect(result?.presentation?.assistantMessage).toBe(long ? prose.slice(0, 200) : prose)
+      expect(result?.outputSnapshot?.content).toContain('Checking seven repositories.')
+      expect(result?.outputSnapshot?.content).not.toContain('HUMAN ONLY')
+      expect(result?.outputSnapshot?.content).not.toContain('child only')
+      expect(
+        chatAutomationRunObservation(
+          snapshot([turn('own', 'provider-user'), toolOnly]),
+          'prompt',
+          'Codex'
+        )?.presentation
+      ).toBeUndefined()
+    }
+  )
   it('accepts explicit start proof and never claims a steered or unlinked turn', () => {
     const view = snapshot([turn('own', 'different')])
     view.submissions = [{ ...submission, answeredInTurn: { turnItemId: 'own', via: 'steer' } }]

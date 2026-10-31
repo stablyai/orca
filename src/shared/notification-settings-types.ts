@@ -1,4 +1,4 @@
-import type { AutomationRunOpenTarget } from './automation-run-outcome'
+import type { AutomationRunPresentation, AutomationRunOpenTarget } from './automation-run-outcome'
 import type { StructuredAttentionRead, StructuredAttentionOrigin } from './agent-session-attention'
 import type { AgentStatusState, AgentType } from './agent-status-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
@@ -36,6 +36,7 @@ export type StructuredNotificationRead = StructuredAttentionRead & {
 }
 
 export type NotificationDispatchRequest = {
+  automationPresentation?: AutomationRunPresentation
   source: NotificationEventSource
   automationRun?: AutomationRunOpenTarget
   notificationId?: string

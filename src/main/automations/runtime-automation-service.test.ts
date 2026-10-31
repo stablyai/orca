@@ -1,3 +1,4 @@
+import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentLauncher from './automation-chat-agent-launch'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
@@ -62,6 +63,8 @@ function fixture(headless: boolean, definitionSurface: 'chat' | 'terminal' = 'ch
     })
   }
   const runtime = {
+    createAutomationAttentionOwner: new RuntimeMobileNotificationController()
+      .createAutomationAttentionOwner,
     setAutomationService: vi.fn(),
     notifyAutomationsChanged: vi.fn(),
     openAgentSessionRecordStore: async () => records,
@@ -286,6 +289,8 @@ function capturedOption<K extends keyof Options>(key: K): NonNullable<Options[K]
 describe('headless automation dispatch', () => {
   it('hands the launched run to its watcher instead of awaiting one tui-idle wait itself', async () => {
     const runtime = {
+      createAutomationAttentionOwner: new RuntimeMobileNotificationController()
+        .createAutomationAttentionOwner,
       setAutomationService: vi.fn(),
       notifyAutomationsChanged: vi.fn(),
       launchAgentTerminal: vi.fn(async () => ({

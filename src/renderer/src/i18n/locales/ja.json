@@ -20051,6 +20051,8 @@
     }
   },
   "notifications": {
+    "automationFailedReason": "{{agent}}: {{reason}} 実行内容を確認して、もう一度お試しください。",
+    "automationFailedAction": "{{agent}} はこの自動化を完了できませんでした。実行内容を確認して、もう一度お試しください。",
     "agentStatus": {
       "needsInput": "入力待ち",
       "working": "処理中",

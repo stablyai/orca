@@ -1,3 +1,4 @@
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import { AutomationChatInterests } from '../../automations/automation-chat-notification-owner'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
@@ -11,6 +12,7 @@ export type JournalPublication = {
   journal: AgentSessionJournal | null
   cursor?: AgentJournalCursor
   rows?: readonly JournalRow[]
+  scope?: AgentSessionExecutionLocation
 }
 type PublicationObserver = {
   next: (hint: JournalPublication) => void
@@ -176,6 +178,7 @@ export class StructuredAgentSessionConversations extends Map<
       source: source ?? null,
       journal: source?.journal ?? null,
       cursor: source?.journal.cursor(),
+      scope: this.get(sessionId)?.params.location,
       rows
     }
   }

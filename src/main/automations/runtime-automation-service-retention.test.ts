@@ -1,3 +1,4 @@
+import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../shared/automations-types'
 import { RUN_TERMINAL_GRACE_MS } from './headless-run-terminal-retention'
@@ -40,6 +41,8 @@ function firstRunOwnsWorkspace(worktreeId: string) {
 
 function build(headless: boolean) {
   const runtime = {
+    createAutomationAttentionOwner: new RuntimeMobileNotificationController()
+      .createAutomationAttentionOwner,
     setAutomationService: vi.fn(),
     notifyAutomationsChanged: vi.fn(),
     getTerminalHandleForPaneKey: vi.fn((paneKey: string) => `handle:${paneKey}`),
@@ -59,6 +62,7 @@ function build(headless: boolean) {
     )
   }
   const store = {
+    observeAutomationRunRemovals: () => () => {},
     listAutomationRuns: vi.fn(() => finishedRuns(5)),
     listAutomations: () => [],
     getWorktreeMeta: vi.fn(

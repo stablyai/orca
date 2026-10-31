@@ -68,30 +68,54 @@ export function latestStructuredAgentSessionRequest(
     ) {
       return null
     }
-    const turn = readAgentJournalTurn(item.body)
-    if (turn) {
-      return {
-        kind: 'turn',
-        id: turn.turnId,
-        turnState: turn.state,
-        outcome: readAgentJournalTurnOutcome(turn),
-        settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn)
-      }
+    const request = structuredAgentSessionRequestForItem(
+      item,
+      rejected.get(item.itemId),
+      commandTurns
+    )
+    if (request) {
+      return request
     }
-    const submission = rejected.get(item.itemId)
-    // Rejection relocates a refused steer to the thread, but its turn remains the request.
-    if (
-      submission &&
-      submission.answeredInTurn?.via !== 'steer' &&
-      classifyDispatchRejection(submission).verdict === 'failure'
-    ) {
-      return {
-        kind: 'refused-send',
-        id: item.itemId,
-        turnState: null,
-        outcome: 'failure',
-        settledAt: submission.resolvedAt ?? submission.submittedAt
-      }
+  }
+  return null
+}
+
+export function structuredAgentSessionRequestForItem(
+  item: AgentJournalRenderItem,
+  submission?: AgentJournalSubmission,
+  commandTurns: ReadonlySet<string> = new Set()
+): StructuredAgentSessionLatestRequest | null {
+  if (
+    !isRootAgentJournalItem(item) ||
+    isStructuredAgentSessionNonRequestRow(item, commandTurns) ||
+    (item.body.kind === 'message' &&
+      item.body.role === 'user' &&
+      item.turnScope?.kind === 'unknown')
+  ) {
+    return null
+  }
+  const turn = readAgentJournalTurn(item.body)
+  if (turn) {
+    return {
+      kind: 'turn',
+      id: turn.turnId,
+      turnState: turn.state,
+      outcome: readAgentJournalTurnOutcome(turn),
+      settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn)
+    }
+  }
+  // Rejection relocates a refused steer to the thread, but its turn remains the request.
+  if (
+    submission?.dispatchState === 'rejected' &&
+    submission.answeredInTurn?.via !== 'steer' &&
+    classifyDispatchRejection(submission).verdict === 'failure'
+  ) {
+    return {
+      kind: 'refused-send',
+      id: item.itemId,
+      turnState: null,
+      outcome: 'failure',
+      settledAt: submission.resolvedAt ?? submission.submittedAt
     }
   }
   return null
@@ -188,11 +212,15 @@ export function latestStructuredAgentSessionAssistantMessage(
     }
     if (body?.kind === 'message' && body.role === 'assistant') {
       // Visual directives belong only in the transcript, not plain-text previews.
-      const prose = withoutNativeChatVisualDirectiveLines(messageProse(body.blocks))
+      const prose = structuredAgentSessionAssistantProse(body.blocks)
       if (prose.trim()) {
         return prose
       }
     }
   }
   return ''
+}
+
+export function structuredAgentSessionAssistantProse(blocks: readonly NativeChatBlock[]): string {
+  return withoutNativeChatVisualDirectiveLines(messageProse(blocks))
 }

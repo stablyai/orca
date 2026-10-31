@@ -71,3 +71,51 @@ export function automationRunFailure(
       }
     : { error: template, errorCode }
 }
+
+export function isAutomationRunFailureCode(value: unknown): value is AutomationRunFailureCode {
+  return typeof value === 'string' && Object.hasOwn(AUTOMATION_RUN_FAILURE_COPY, value)
+}
+
+/** Only known, bounded reason parameters may cross the notification presentation boundary. */
+export function readAutomationRunFailure(value: unknown):
+  | {
+      errorCode: AutomationRunFailureCode
+      errorParams?: Record<string, string>
+    }
+  | undefined {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('errorCode' in value) ||
+    !isAutomationRunFailureCode(value.errorCode)
+  ) {
+    return undefined
+  }
+  const errorCode = value.errorCode
+  if (errorCode !== 'projectSetupNotReady' && errorCode !== 'wslDistroStopped') {
+    return { errorCode }
+  }
+  const params = 'errorParams' in value ? value.errorParams : undefined
+  if (!params || typeof params !== 'object') {
+    return undefined
+  }
+  if (
+    errorCode === 'projectSetupNotReady' &&
+    'setupState' in params &&
+    typeof params.setupState === 'string' &&
+    ['not-set-up', 'setting-up', 'error', 'unsupported'].includes(params.setupState)
+  ) {
+    return { errorCode, errorParams: { setupState: params.setupState } }
+  }
+  if (
+    errorCode === 'wslDistroStopped' &&
+    'distro' in params &&
+    typeof params.distro === 'string' &&
+    params.distro.trim().length > 0 &&
+    params.distro.length <= 120 &&
+    [...params.distro].every((char) => char.charCodeAt(0) >= 32)
+  ) {
+    return { errorCode, errorParams: { distro: params.distro } }
+  }
+  return undefined
+}
