@@ -2753,7 +2753,12 @@
       "triedFetch": "Tried to fetch",
       "searchingWeb": "Searching the web",
       "searchedWeb": "Searched the web",
-      "triedSearchWeb": "Tried to search the web"
+      "triedSearchWeb": "Tried to search the web",
+      "input": "Input",
+      "output": "Output",
+      "copyInput": "Copy input",
+      "showFullInput": "Show full input",
+      "inputUnavailable": "Input is not available in this transcript."
     },
     "nativeChatUserMessageFold": {
       "showLess": "Show less",

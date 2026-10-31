@@ -139,7 +139,7 @@ describe('ToolRun', () => {
       expect(textIn(tree.root).some((text) => text.includes('file_path'))).toBe(false)
     })
 
-    it('opens a call to its output, plus the whole command only when the row shortened it', () => {
+    it('opens calls to complete input and output, retaining the command fallback', () => {
       const command = `pnpm vitest run ${'src/session/'.repeat(10)}`
       const tree = render([
         { type: 'tool-call', name: 'Bash', input: { command } },
@@ -149,9 +149,39 @@ describe('ToolRun', () => {
       ])
       open(tree, 'ls')
       expect(textIn(tree.root)).toContain('a.ts')
-      expect(textIn(tree.root).some((text) => text.includes('"description"'))).toBe(false)
+      expect(textIn(tree.root)).toContain(
+        JSON.stringify({ command: 'ls', description: 'List' }, null, 2)
+      )
       open(tree, 'pnpm vitest run')
       expect(textIn(tree.root)).toEqual(expect.arrayContaining([command, 'ok']))
+    })
+
+    it('opens a running custom call to its full name and nested input before output exists', () => {
+      const name = 'mcp__review_tools__SubagentHandoffWithCompleteReport'
+      const input = { message: 'report\nwith details', options: { recipients: ['parent'] } }
+      const tree = render([
+        { type: 'tool-call', name, input: JSON.stringify(input), state: 'running' }
+      ])
+      open(tree, 'Review tools')
+      expect(textIn(tree.root)).toContain(name)
+      expect(textIn(tree.root)).toContain(JSON.stringify(input, null, 2))
+    })
+
+    it('reveals complete long input and copies it without truncation', () => {
+      const input = {
+        cmd: 'printf hello',
+        workdir: '/repo',
+        message: `${'x'.repeat(4500)}END_OF_INPUT`
+      }
+      const tree = render([{ type: 'tool-call', name: 'exec_command', input }])
+      open(tree, 'printf hello')
+      expect(textIn(tree.root).some((text) => text.includes('END_OF_INPUT'))).toBe(false)
+      open(tree, 'Show full input')
+      expect(textIn(tree.root)).toContain(JSON.stringify(input, null, 2))
+      const copy = tree.root
+        .findAll((node) => String(node.type) === 'CopyButton')
+        .find((node) => node.props.accessibilityLabel === 'Copy input')
+      expect(copy?.props.text).toBe(JSON.stringify(input, null, 2))
     })
 
     it('bounds an opened output before native text layout', () => {
@@ -221,11 +251,13 @@ describe('ToolRun', () => {
       expect(copies.map((node) => node.props.text)).toEqual(['cd mobile &&\n  pnpm test'])
     })
 
-    it('offers no caret on a row with nothing to show', () => {
+    it('offers input inspection before a subagent returns output', () => {
       const tree = render([{ type: 'tool-call', name: 'Agent', input: { description: 'Explore' } }])
       expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Subagent', 'Explore']))
-      expect(tree.root.findAll((node) => String(node.type) === 'ChevronRight')).toHaveLength(0)
-      expect(pressable(tree, 'Subagent').props.disabled).toBe(true)
+      expect(tree.root.findAll((node) => String(node.type) === 'ChevronRight')).toHaveLength(1)
+      expect(pressable(tree, 'Subagent').props.disabled).toBe(false)
+      open(tree, 'Subagent')
+      expect(textIn(tree.root)).toContain(JSON.stringify({ description: 'Explore' }, null, 2))
     })
   })
 

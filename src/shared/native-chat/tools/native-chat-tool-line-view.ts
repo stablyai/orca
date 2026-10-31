@@ -4,7 +4,6 @@ import {
   type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from '../../native-chat-types'
-import { diffFromToolCall } from './native-chat-diff'
 import { toolWebSearchResults, type NativeChatWebSearchResult } from './native-chat-tool-identity'
 import {
   nativeChatToolLineLabel,
@@ -14,7 +13,7 @@ import {
 export type NativeChatToolLineView = {
   call: NativeChatToolCallBlock | undefined
   label: NativeChatToolLineLabel | null
-  /** What the row opens to: a call's paired result, or a lone result itself. */
+  /** The paired result, or a lone result itself. */
   body: NativeChatToolResultBlock | undefined
   /** A lone result's first line, its row's only words. */
   resultPreview: string
@@ -37,12 +36,7 @@ export function nativeChatToolLineView(
   const lifecycle = call ? agentJournalToolCallLifecycle(call) : null
   const failed = lifecycle === 'failed' || (lifecycle !== 'interrupted' && result?.isError === true)
   const results = call ? toolWebSearchResults(call.webSearchResults) : NO_SEARCH_RESULTS
-  // An edit that has not landed has no output yet, but the change it proposes is worth opening.
-  const hasDetail =
-    body !== undefined ||
-    label?.commandDetail != null ||
-    results.length > 0 ||
-    (call !== undefined && diffFromToolCall(call.name, call.input) !== null)
+  const hasDetail = call !== undefined || body !== undefined
   const resultPreview = call ? '' : (body?.output.split('\n')[0]?.slice(0, 80) ?? '')
   return { call, label, body, resultPreview, failed, results, hasDetail }
 }

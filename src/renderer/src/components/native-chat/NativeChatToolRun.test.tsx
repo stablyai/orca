@@ -125,7 +125,9 @@ describe('NativeChatToolRun', () => {
 
     const editRow = screen.getByRole('button', { name: /^Edit Tried to edit \/repo\/a\.ts/ })
     expect(within(editRow).queryByText('Edited')).toBeNull()
-    const body = container.querySelector('pre')
+    const body = [...container.querySelectorAll('pre')].find(
+      (pre) => pre.textContent === 'String to replace not found in file.'
+    )
     expect(body).toHaveTextContent('String to replace not found in file.')
     expect(body).toHaveClass('text-destructive')
   })
