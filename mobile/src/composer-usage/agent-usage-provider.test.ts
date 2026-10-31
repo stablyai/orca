@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { decodeAccountsSnapshot } from '../components/accounts-snapshot'
-import { pickComposerUsageWindow, selectAgentUsage } from './agent-usage-provider'
+import {
+  composerUsageWindowToggleChoices,
+  pickComposerUsageWindow,
+  selectAgentUsage
+} from './agent-usage-provider'
 
 const window = (usedPercent: number, windowMinutes: number) => ({
   usedPercent,
@@ -44,5 +48,16 @@ describe('selectAgentUsage', () => {
     expect(pickComposerUsageWindow(claude, 'weekly')?.window.usedPercent).toBe(55)
     const opencode = selectAgentUsage(snapshot, 'opencode')?.windows ?? []
     expect(pickComposerUsageWindow(opencode, 'session')?.kind).toBe('monthly')
+  })
+
+  it('offers the 5-hour toggle only when that provider has a 5-hour window and a weekly window', () => {
+    const claude = selectAgentUsage(snapshot, 'claude')?.windows ?? []
+    expect(composerUsageWindowToggleChoices(claude)).toEqual(['session', 'weekly'])
+    expect(
+      composerUsageWindowToggleChoices(claude.filter((entry) => entry.kind !== 'session'))
+    ).toEqual([])
+    expect(
+      composerUsageWindowToggleChoices(claude.filter((entry) => entry.kind !== 'weekly'))
+    ).toEqual([])
   })
 })

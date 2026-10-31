@@ -32,7 +32,7 @@ export function ComposerUsageSheet({ visible, onClose, usage, spanSideStrip }: P
         {usage.windows.map((entry) => (
           <ComposerUsageWindowRow key={entry.id} entry={entry} now={now} />
         ))}
-        <ComposerUsageWindowPicker />
+        <ComposerUsageWindowPicker windows={usage.windows} />
       </View>
     </BottomDrawer>
   )

@@ -123,6 +123,15 @@ export function pickComposerUsageWindow(
   )
 }
 
+/** The 5-hour vs weekly choice. Hidden unless this usage includes a 5-hour window to switch to. */
+export function composerUsageWindowToggleChoices(
+  windows: readonly UsageWindowEntry[]
+): readonly ComposerUsageWindowChoice[] {
+  const hasSession = windows.some((entry) => entry.kind === 'session')
+  const hasWeekly = windows.some((entry) => entry.kind === 'weekly')
+  return hasSession && hasWeekly ? ['session', 'weekly'] : []
+}
+
 /** "5h", "7d", "30d": the window's length, which is what users call these limits. */
 export function formatUsageWindowLength(windowMinutes: number): string {
   return windowMinutes < 1440
