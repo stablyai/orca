@@ -75,7 +75,7 @@ export function submitOrchestrationMailboxPointer(
       const sameMailbox =
         terminal && deps.mailboxOwner.resolve(terminal, input.mailboxHandle) === input.mailboxHandle
       const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
-      if (!terminal || !sameMailbox) {
+      if (!terminal) {
         clearAndRedrive = true
       } else if (
         (terminal.lastAgentStatusObservedLive && terminal.lastAgentStatus === null) ||
@@ -106,6 +106,9 @@ export function submitOrchestrationMailboxPointer(
         // Unverifiable Enter stays attempted: neither delivery nor safe resend is proven.
         if (enterSettlement.outcome === 'refused') {
           releaseWithoutRedrive = true
+        } else if (submitted && !sameMailbox) {
+          // The typed line still gets its Enter after a rebind, but the mail goes on to its new owner.
+          clearAndRedrive = true
         }
       }
     })
