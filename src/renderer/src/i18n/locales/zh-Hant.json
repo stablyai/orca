@@ -22501,27 +22501,6 @@
       "statusStale": "代理程式狀態資訊已過期"
     }
   },
-  "agentPicker": {
-    "search": "搜尋代理程式和設定…",
-    "configure": "設定 {{agent}}",
-    "arguments": "引數",
-    "argumentsHint": "僅適用於 CLI 啟動。",
-    "launchChat": "啟動聊天",
-    "launchTerminal": "啟動終端機",
-    "setByArguments": "由引數設定",
-    "searchModels": "搜尋模型",
-    "noModels": "沒有符合搜尋條件的模型。",
-    "legacyModels": "舊版模型",
-    "toggleArguments": "切換引數顯示",
-    "argumentsTerminalHint": "僅適用於終端機（CLI）啟動",
-    "searchAgentModels": "搜尋 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 個模型",
-    "use": "使用",
-    "select": "選擇代理程式",
-    "openIn": "開啟方式",
-    "chat": "聊天",
-    "terminal": "終端機"
-  },
   "wslDistroHold": {
     "terminalStopped": "WSL 發行版 {{distro}} 已停止，因此 Orca 沒有啟動此終端機。請啟動該發行版後重試。",
     "terminalUnverifiable": "Orca 無法確認 WSL 發行版 {{distro}} 是否正在執行，因此沒有啟動此終端機。請啟動該發行版後重試。"
@@ -22540,6 +22519,11 @@
     "arguments": "引數",
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
-    "launchTerminal": "啟動終端機"
+    "launchTerminal": "啟動終端機",
+    "use": "使用",
+    "select": "選擇代理程式",
+    "openIn": "開啟方式",
+    "chat": "聊天",
+    "terminal": "終端機"
   }
 }

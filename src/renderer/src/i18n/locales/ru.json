@@ -23586,27 +23586,6 @@
       "statusStale": "Статус агента устарел"
     }
   },
-  "agentPicker": {
-    "search": "Поиск агентов и настроек…",
-    "configure": "Настроить {{agent}}",
-    "arguments": "Аргументы",
-    "argumentsHint": "Применяется только при запуске CLI.",
-    "launchChat": "Запустить чат",
-    "launchTerminal": "Запустить терминал",
-    "setByArguments": "Задано аргументами",
-    "searchModels": "Поиск моделей",
-    "noModels": "Нет моделей по вашему запросу.",
-    "legacyModels": "Предыдущие модели",
-    "toggleArguments": "Показать или скрыть аргументы",
-    "argumentsTerminalHint": "Только для запуска в терминале (CLI)",
-    "searchAgentModels": "Поиск моделей {{agent}}…",
-    "legacyModelCount": "Моделей: {{total}}",
-    "use": "Использовать",
-    "select": "Выбрать агента",
-    "openIn": "Открыть в",
-    "chat": "Чат",
-    "terminal": "Терминал"
-  },
   "wslDistroHold": {
     "terminalStopped": "Дистрибутив WSL {{distro}} остановлен, поэтому Orca не запустила этот терминал. Запустите дистрибутив и повторите попытку.",
     "terminalUnverifiable": "Orca не удалось проверить, запущен ли дистрибутив WSL {{distro}}, поэтому этот терминал не запущен. Запустите дистрибутив и повторите попытку."
@@ -23625,6 +23604,11 @@
     "arguments": "Аргументы",
     "argumentsHint": "Применяется только при запуске через CLI.",
     "launchChat": "Запустить чат",
-    "launchTerminal": "Запустить терминал"
+    "launchTerminal": "Запустить терминал",
+    "use": "Использовать",
+    "select": "Выбрать агента",
+    "openIn": "Открыть в",
+    "chat": "Чат",
+    "terminal": "Терминал"
   }
 }
