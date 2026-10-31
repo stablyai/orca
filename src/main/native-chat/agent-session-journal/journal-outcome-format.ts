@@ -1,49 +1,43 @@
 import type Database from '../../sqlite/sync-database'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import { readJournalSessionEpoch } from './journal-row-table'
 import { AgentSessionJournalError } from './journal-write-guards'
 import { JOURNAL_OUTCOME_FORMAT_1 } from './journal-outcome-format-1'
 import { JournalOutcomeDecodeError } from './journal-outcome-codec'
 
-// This versions stored meaning, independently of reducer implementation and cache codecs.
+/** The newest record format this build reads, and the one it writes. Each stored record carries its
+ * own format; older formats keep their frozen decoders and are never rewritten. */
 export const JOURNAL_OUTCOME_FORMAT = JOURNAL_OUTCOME_FORMAT_1
-export const JOURNAL_OUTCOME_SENTINEL_VERSION = 5
-/** A generation is its attempt's id: outcome rows carry it instead of session, epoch and a UUID. */
-export type JournalOutcomeSource = { generation: number; through: number; format: number }
+/** Builds before outcome records refuse a row of this version wherever it sits in the epoch. */
+export const JOURNAL_OUTCOME_MARKER_VERSION = 5
+/** `prefix` counts the epoch's frozen input rows; the marker row sits right after them and outcome
+ * records start at its sequence. `format` is the highest record format the epoch holds. */
+export type JournalOutcomeSource = {
+  generation: number
+  through: number
+  format: number
+  prefix: number
+}
 
 export function ensureJournalOutcomeTables(db: Database.Database): void {
-  db.exec(`CREATE TABLE IF NOT EXISTS journal_outcome_attempts (
+  db.exec(`CREATE TABLE IF NOT EXISTS journal_outcome_generations (
     generation INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, epoch TEXT NOT NULL
   );
-  CREATE INDEX IF NOT EXISTS journal_outcome_attempts_epoch
-    ON journal_outcome_attempts (session_id, epoch);
   CREATE TABLE IF NOT EXISTS journal_outcome_epochs (
     session_id TEXT PRIMARY KEY, epoch TEXT NOT NULL, generation INTEGER NOT NULL,
-    format INTEGER NOT NULL, through_seq INTEGER NOT NULL
+    format INTEGER NOT NULL, through_seq INTEGER NOT NULL, prefix_seq INTEGER NOT NULL
   );
   CREATE TABLE IF NOT EXISTS journal_outcomes (
     generation INTEGER NOT NULL, seq INTEGER NOT NULL, field TEXT NOT NULL,
-    entry_key TEXT NOT NULL, ordinal TEXT NOT NULL, value_json TEXT NOT NULL,
-    deleted INTEGER NOT NULL, PRIMARY KEY (generation, seq, field, entry_key)
+    entry_key TEXT NOT NULL, format INTEGER NOT NULL, ordinal TEXT NOT NULL,
+    value_json TEXT NOT NULL, deleted INTEGER NOT NULL,
+    PRIMARY KEY (generation, seq, field, entry_key)
   );
   CREATE INDEX IF NOT EXISTS journal_outcome_keys ON journal_outcomes
     (generation, field, entry_key, seq DESC)`)
 }
 
-/** Mints the attempt whose id names its outcome generation. */
-export function startJournalOutcomeGeneration(
-  db: Database.Database,
-  sessionId: string,
-  epoch: string
-): number {
-  return Number(
-    db
-      .prepare('INSERT INTO journal_outcome_attempts (session_id, epoch) VALUES (?, ?)')
-      .run(sessionId, epoch).lastInsertRowid
-  )
-}
-
-/** Every owning mutation calls this inside its transaction, before changing the epoch. */
+/** Every owning mutation calls this inside its transaction, before changing the epoch. Null means
+ * an input-only epoch, read as main reads it; a format this build does not know refuses as newer. */
 export function journalOutcomeSource(
   db: Database.Database,
   sessionId: string,
@@ -54,102 +48,96 @@ export function journalOutcomeSource(
   }
   const source = db
     .prepare(
-      `SELECT generation, format, through_seq FROM journal_outcome_epochs
+      `SELECT generation, format, through_seq, prefix_seq FROM journal_outcome_epochs
     WHERE session_id = ? AND epoch = ?`
     )
     .get(sessionId, epoch)
-  const founding = readFoundingRow(db, sessionId, epoch)
-  if (founding === 'unparseable') {
-    // An input epoch's unreadable first row is damage the row fold reports while it keeps looking
-    // for newer rows, as main does; a published fence row that is unreadable is outcome damage.
-    if (source) {
-      throw new JournalOutcomeDecodeError('unreadable journal outcome fence')
-    }
+  if (!source) {
     return null
   }
-  const marked = typeof founding === 'object' && founding !== null && 'outcomeFormat' in founding
-  if (!source && !marked) {
-    if (
-      typeof founding === 'object' &&
-      founding !== null &&
-      'v' in founding &&
-      typeof founding.v === 'number' &&
-      founding.v > AGENT_SESSION_JOURNAL_SCHEMA_VERSION
-    ) {
-      throw new AgentSessionJournalError('journal_read_only', 'the chat uses a newer row format')
-    }
-    return null
+  const { generation, format, through_seq: through, prefix_seq: prefix } = source
+  if (
+    typeof generation !== 'number' ||
+    typeof format !== 'number' ||
+    typeof through !== 'number' ||
+    typeof prefix !== 'number'
+  ) {
+    throw new JournalOutcomeDecodeError('invalid journal outcome source')
+  }
+  if (format > JOURNAL_OUTCOME_FORMAT) {
+    throw new AgentSessionJournalError('journal_read_only', 'the chat uses a newer outcome format')
+  }
+  // Only the marker follows the prefix: a row after it is no row this build writes.
+  const [marker, after] = db
+    .prepare(`SELECT seq, row_json FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq > ?
+      ORDER BY seq LIMIT 2`)
+    .all(sessionId, epoch, prefix)
+  if (after) {
+    throw new AgentSessionJournalError('journal_read_only', 'the chat holds a newer row')
   }
   if (
-    !source ||
-    typeof source.generation !== 'number' ||
-    source.format !== JOURNAL_OUTCOME_FORMAT ||
-    typeof source.through_seq !== 'number' ||
-    !marked ||
-    !('v' in founding) ||
-    founding.v !== JOURNAL_OUTCOME_SENTINEL_VERSION ||
-    founding.outcomeFormat !== source.format
+    marker?.seq !== prefix + 1 ||
+    markerVersion(marker.row_json) !== JOURNAL_OUTCOME_MARKER_VERSION
   ) {
-    throw new AgentSessionJournalError(
-      'journal_read_only',
-      'the chat uses an unsupported outcome format'
-    )
+    throw new JournalOutcomeDecodeError('missing journal outcome marker')
   }
-  return { generation: source.generation, format: source.format, through: source.through_seq }
+  return { generation, format, through, prefix }
 }
 
-function readFoundingRow(db: Database.Database, sessionId: string, epoch: string): unknown {
-  const anchor = db
-    .prepare(
-      `SELECT row_json FROM journal_rows
-    WHERE session_id = ? AND epoch = ? AND seq = 1`
-    )
-    .get(sessionId, epoch)
-  if (typeof anchor?.row_json !== 'string') {
+function markerVersion(json: unknown): unknown {
+  try {
+    const parsed: unknown = typeof json === 'string' ? JSON.parse(json) : null
+    return typeof parsed === 'object' && parsed !== null && 'v' in parsed ? parsed.v : null
+  } catch {
     return null
   }
-  try {
-    return JSON.parse(anchor.row_json)
-  } catch {
-    return 'unparseable'
-  }
 }
 
-export function publishJournalOutcomeSource(
+/** Starts an epoch's outcome records after `prefix` input rows, which stay byte for byte. The marker
+ * is appended, never written over an existing row, in the transaction of the first outcome. */
+export function startJournalOutcomeLog(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  generation: number,
-  through: number
-): void {
-  const row = db
-    .prepare(
-      `SELECT row_json FROM journal_rows
-    WHERE session_id = ? AND epoch = ? AND seq = 1`
-    )
+  prefix: number,
+  savedAt: number
+): JournalOutcomeSource {
+  const tip = db
+    .prepare('SELECT MAX(seq) AS seq FROM journal_rows WHERE session_id = ? AND epoch = ?')
     .get(sessionId, epoch)
-  if (typeof row?.row_json !== 'string') {
-    throw new Error('missing founding journal row')
+  if ((tip?.seq ?? 0) !== prefix) {
+    throw new Error('journal outcome log would not start at the input tip')
   }
-  const founding: unknown = JSON.parse(row.row_json)
-  if (typeof founding !== 'object' || founding === null) {
-    throw new Error('invalid founding journal row')
-  }
+  const generation = Number(
+    db
+      .prepare('INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)')
+      .run(sessionId, epoch).lastInsertRowid
+  )
+  const seq = prefix + 1
   db.prepare(
-    `UPDATE journal_rows SET row_json = ?
-    WHERE session_id = ? AND epoch = ? AND seq = 1`
+    'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
   ).run(
-    JSON.stringify({
-      ...founding,
-      v: JOURNAL_OUTCOME_SENTINEL_VERSION,
-      outcomeFormat: JOURNAL_OUTCOME_FORMAT
-    }),
     sessionId,
-    epoch
+    epoch,
+    seq,
+    savedAt,
+    JSON.stringify({ v: JOURNAL_OUTCOME_MARKER_VERSION, kind: 'outcomes', epoch, seq, ts: savedAt })
   )
   db.prepare(
-    `INSERT INTO journal_outcome_epochs VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(session_id) DO UPDATE SET epoch = excluded.epoch,
-    generation = excluded.generation, format = excluded.format, through_seq = excluded.through_seq`
-  ).run(sessionId, epoch, generation, JOURNAL_OUTCOME_FORMAT, through)
+    `INSERT INTO journal_outcome_epochs VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(session_id) DO UPDATE SET epoch = excluded.epoch, generation = excluded.generation,
+    format = excluded.format, through_seq = excluded.through_seq, prefix_seq = excluded.prefix_seq`
+  ).run(sessionId, epoch, generation, JOURNAL_OUTCOME_FORMAT, prefix, prefix)
+  return { generation, format: JOURNAL_OUTCOME_FORMAT, through: prefix, prefix }
+}
+
+/** Coverage advances with each write; the required format only ever rises. */
+export function advanceJournalOutcomeSource(
+  db: Database.Database,
+  sessionId: string,
+  epoch: string,
+  through: number
+): void {
+  db.prepare(`UPDATE journal_outcome_epochs SET through_seq = ?, format = MAX(format, ?)
+    WHERE session_id = ? AND epoch = ?`).run(through, JOURNAL_OUTCOME_FORMAT, sessionId, epoch)
 }

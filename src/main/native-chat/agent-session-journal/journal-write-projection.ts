@@ -12,8 +12,8 @@ import { logJournalProjectionFailure } from './journal-saved-state'
 // A full restore per check: development samples each chat so long streams stay responsive.
 const DEVELOPMENT_VERIFY_INTERVAL_MS = 60_000
 
-/** Writes outcomes with each append; a chat whose saved state lags (unconverted, or a cache behind
- * or failed) asks the database's maintenance runner, which owns all repair and its backoff. */
+/** Writes outcomes with each append; a chat whose cache lags (behind, or its savepoint failed) asks
+ * the database's maintenance runner, which owns all repair and its backoff. */
 export class JournalWriteProjection {
   /** Projection tests check the equality invariant after every commit and throw on divergence. */
   static verifyEachCommit = false
@@ -71,7 +71,8 @@ export class JournalWriteProjection {
     this.closed = true
   }
 
-  /** Every saved form (input fold, cache, or outcome rebuild) must restore the live state. */
+  /** Every saved form (input fold, prefix plus records, cache, or records alone) must restore the
+   * live state. */
   private checkEquivalent(): void {
     const live = this.deps.state()
     const loaded = restoreJournal(this.deps.database.db, live.sessionId)

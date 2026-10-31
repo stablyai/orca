@@ -3,10 +3,8 @@ import { unrefJournalProjectionTimer } from './journal-saved-state'
 
 export type JournalMaintenanceOwner = { release: () => void }
 const owners = new WeakMap<Database.Database, Set<string>>()
-/** Generations of conversions in flight; the retired-attempt sweep never deletes these. */
-export const activeJournalGenerations = new Set<number>()
 
-/** Conversion, cache rebuild and reclamation share this per-chat lease; user writes never take it. */
+/** Cache rebuild and reclamation share this per-chat lease; user writes never take it. */
 export function ownJournalMaintenance(
   database: Database.Database,
   sessionId: string,

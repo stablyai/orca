@@ -1,5 +1,5 @@
-// One maintenance runner per database converts and repairs chats one at a time, open or closed:
-// a chat that opens mid-conversion keeps the same runner, so no progress is handed over or lost.
+// One maintenance runner per database sweeps retired records and rebuilds lagging caches one chat
+// at a time, open or closed: a chat that opens mid-rebuild keeps the same runner.
 
 import type Database from '../../sqlite/sync-database'
 import { sweepJournalOutcomePage } from './journal-outcome-cleanup'
@@ -25,11 +25,12 @@ const PASS_INTERVAL_MS = 6 * 60 * 60_000
 const REQUEST_DELAY_MS = 1_000
 const MAX_RETRY_DELAY_MS = 60 * 60_000
 
-type Pending = { sessionId: string; epoch: string; lastSequence: number }
+type Pending = { sessionId: string; epoch: string; generation: number }
 
 export class JournalMaintenanceRunner {
-  /** Session to the epoch and newest sequence its content could not convert or cache; a new row
-   * changes the sequence and re-arms it. In memory: a relaunch tries once more. */
+  /** Session to the epoch and outcome generation whose records could not be cached. Records are
+   * only ever added, so a later write cannot repair the failure and never re-arms it; a new epoch
+   * does. In memory: a relaunch, perhaps a newer build, tries once more. */
   readonly parked = new Map<string, string>()
   private readonly retry = new Map<string, { failures: number; at: number }>()
   private readonly requested = new Set<string>()
@@ -143,7 +144,7 @@ export class JournalMaintenanceRunner {
 
   private async serve(database: JournalHostDatabase, pending: Pending): Promise<void> {
     const { sessionId, epoch } = pending
-    const attempt = `${epoch}\n${pending.lastSequence}`
+    const attempt = `${epoch}\n${pending.generation}`
     const retry = this.retry.get(sessionId)
     if (this.parked.get(sessionId) === attempt) {
       return
@@ -162,13 +163,13 @@ export class JournalMaintenanceRunner {
     }
     try {
       for (;;) {
-        if (!(await pacing.rest()) || (await catchUp.load(pacing)) === 'stopped') {
+        if (!(await pacing.rest()) || catchUp.load(pacing) === 'stopped') {
           // A busy, replaced or closing chat is skipped; the pass continues with the rest.
           return
         }
         const step = this.pace.work(() => catchUp.page())
-        if (step === 'parked' || step === 'failed') {
-          this.fail(sessionId, attempt, step === 'parked' ? null : catchUp.failure)
+        if (step === 'failed') {
+          this.fail(sessionId, attempt, catchUp.failure)
           return
         }
         // 'stale' means the load swept a retired page instead of taking the chat: try it again.
@@ -184,12 +185,10 @@ export class JournalMaintenanceRunner {
     }
   }
 
-  /** Content this build cannot convert parks until the chat's rows change; a storage failure, which
+  /** Content this build cannot cache parks until the chat's epoch changes; a storage failure, which
    * a retry can clear, backs off 1 s quadrupling to an hour. */
   private fail(sessionId: string, attempt: string, error: unknown): void {
-    if (error !== null) {
-      logJournalProjectionFailure(sessionId, error)
-    }
+    logJournalProjectionFailure(sessionId, error)
     const transient =
       isSqliteDriverError(error) ||
       (error instanceof AgentSessionJournalError && error.code === 'journal_closed')
@@ -244,24 +243,26 @@ export class JournalMaintenanceRunner {
   }
 }
 
-/** Chats without published outcomes, or whose cache is unstamped, behind, or of another codec. */
+const LAGGING = `SELECT e.session_id, e.epoch, e.generation FROM journal_outcome_epochs e
+  JOIN journal_sessions s ON s.session_id = e.session_id AND s.epoch = e.epoch
+  LEFT JOIN journal_state c ON c.session_id = e.session_id AND c.epoch = e.epoch
+  WHERE e.prefix_seq = 0 AND (c.generation IS NULL OR c.generation != e.generation
+    OR c.through_seq < e.through_seq OR c.version != ?)`
+
+/** A requested chat is looked up by its key alone, never by a scan of every chat. */
+export const JOURNAL_LAGGING_CHAT_SQL = `${LAGGING} AND e.session_id = ?`
+
+/** Outcome-only chats whose cache is unstamped, behind, or of another codec. */
 function lagging(db: Database.Database, sessionId?: string): Pending[] {
-  return db
-    .prepare(`SELECT s.session_id, s.epoch,
-      COALESCE(e.through_seq, (SELECT MAX(r.seq) FROM journal_rows r
-        WHERE r.session_id = s.session_id AND r.epoch = s.epoch)) AS last_seq
-    FROM journal_sessions s
-    LEFT JOIN journal_outcome_epochs e ON e.session_id = s.session_id AND e.epoch = s.epoch
-    LEFT JOIN journal_state c ON c.session_id = s.session_id AND c.epoch = s.epoch
-    WHERE (? IS NULL OR s.session_id = ?) AND (e.session_id IS NULL OR c.generation IS NULL
-      OR c.generation != e.generation OR c.through_seq < e.through_seq OR c.version != ?)
-    ORDER BY s.session_id`)
-    .all(sessionId ?? null, sessionId ?? null, JOURNAL_STATE_CODEC_VERSION)
-    .flatMap(({ session_id: id, epoch, last_seq: lastSequence }) =>
-      typeof id === 'string' && typeof epoch === 'string' && typeof lastSequence === 'number'
-        ? [{ sessionId: id, epoch, lastSequence }]
-        : []
-    )
+  const rows =
+    sessionId === undefined
+      ? db.prepare(`${LAGGING} ORDER BY e.session_id`).all(JOURNAL_STATE_CODEC_VERSION)
+      : db.prepare(JOURNAL_LAGGING_CHAT_SQL).all(JOURNAL_STATE_CODEC_VERSION, sessionId)
+  return rows.flatMap(({ session_id: id, epoch, generation }) =>
+    typeof id === 'string' && typeof epoch === 'string' && typeof generation === 'number'
+      ? [{ sessionId: id, epoch, generation }]
+      : []
+  )
 }
 
 /** The host's runner for its journal database; stopping it ends its timers. */

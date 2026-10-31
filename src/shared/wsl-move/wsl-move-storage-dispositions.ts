@@ -164,7 +164,7 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'journal_imports',
         'journal_outcomes',
         'journal_outcome_epochs',
-        'journal_outcome_attempts',
+        'journal_outcome_generations',
         'journal_entries',
         'journal_items',
         'journal_repairs',

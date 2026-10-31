@@ -18,7 +18,7 @@ import {
   readJournalRowsAfter,
   readJournalSessionEpoch
 } from './journal-row-table'
-import { parseJournalRow, type JournalRow } from './journal-row-schema'
+import { parseJournalRow } from './journal-row-schema'
 
 const FIRST_JOURNAL_SEQUENCE = 1
 
@@ -28,7 +28,7 @@ export type JournalDamage = {
 }
 
 export type JournalLoad = {
-  /** Zero when a complete projection has not been published. */
+  /** Zero when the chat's cache lags its outcome records; maintenance rebuilds it. */
   projectionThrough?: number
   state: JournalReducerState
   /** Future row versions/kinds require an updated reader. */
@@ -45,9 +45,10 @@ export function replayJournal(db: Database.Database, sessionId: string): Journal
   return foldJournalFromState(db, createJournalReducerState(sessionId, epoch))
 }
 
-/** The view is disposable; only validated outcomes can replace an unreadable cache. The read is
+/** The view is disposable; only admitted outcomes can replace an unreadable cache. The read is
  * synchronous, like main's replay: it blocks once for one chat's saved records (its cache, or else
- * its outcome log), never sleeps behind maintenance, and nothing can interleave with it. */
+ * its frozen input prefix and outcome log), never sleeps behind maintenance, and nothing can
+ * interleave with it. Admission comes first, so a newer chat's cache is never used. */
 export function restoreJournal(db: Database.Database, sessionId: string): JournalLoad | null {
   const epoch = readJournalSessionEpoch(db, sessionId)
   if (epoch === null) {
@@ -59,13 +60,22 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
     if (!source) {
       return foldJournalFromState(db, empty)
     }
+    if (source.prefix > 0) {
+      const prefix = foldJournalFromState(db, empty, source.prefix)
+      if (prefix.newer || prefix.damage || prefix.state.lastSequence !== source.prefix) {
+        const gap = { sequence: prefix.state.lastSequence + 1, cause: 'sequence-gap' as const }
+        return { ...prefix, damage: prefix.newer ? null : (prefix.damage ?? gap) }
+      }
+      const state = rebuildJournalOutcomes(db, sessionId, epoch, source, prefix.state)
+      return { state, newer: null, damage: null }
+    }
     if (journalCacheMatches(db, sessionId, epoch, source)) {
       const saved = readJournalSavedView(db, sessionId, epoch)
       if (typeof saved !== 'string') {
         return { state: saved, newer: null, damage: null, projectionThrough: source.through }
       }
     }
-    const state = rebuildJournalOutcomes(db, sessionId, epoch, source.generation, source.through)
+    const state = rebuildJournalOutcomes(db, sessionId, epoch, source)
     return { state, newer: null, damage: null, projectionThrough: 0 }
   } catch (error) {
     if (error instanceof AgentSessionJournalError && error.code === 'journal_read_only') {
@@ -79,7 +89,12 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
   }
 }
 
-function foldJournalFromState(db: Database.Database, state: JournalReducerState): JournalLoad {
+/** Folds input rows as main does, up to `through` when the epoch's outcome records follow them. */
+function foldJournalFromState(
+  db: Database.Database,
+  state: JournalReducerState,
+  through = Number.POSITIVE_INFINITY
+): JournalLoad {
   const { sessionId, epoch, lastSequence } = state
   const fold = startJournalRowFold({ sessionId, epoch }, state)
   for (const entry of iterateJournalEpochRows(
@@ -88,7 +103,7 @@ function foldJournalFromState(db: Database.Database, state: JournalReducerState)
     epoch,
     lastSequence === 0 ? Number.MIN_SAFE_INTEGER : lastSequence
   )) {
-    if (!fold.add(entry)) {
+    if (entry.seq > through || !fold.add(entry)) {
       break
     }
   }
@@ -166,7 +181,8 @@ export function journalRowsAfterReader(
   return (afterSequence) => readJournalRowsAfterCursor(db, sessionId, epoch, afterSequence, limit)
 }
 
-/** Stop replay at the first unreadable row; never serve a partial tail beyond it. */
+/** Stop replay at the first unreadable row; never serve a partial tail beyond it. A chat with an
+ * input prefix pages its rows, then its outcome groups, each sequence exactly once. */
 export function readJournalRowsAfterCursor(
   db: Database.Database,
   sessionId: string,
@@ -175,16 +191,32 @@ export function readJournalRowsAfterCursor(
   limit?: number
 ): JournalReadRow[] {
   const source = journalOutcomeSource(db, sessionId, epoch)
-  if (source) {
-    return readJournalOutcomeGroups(db, epoch, source, afterSequence, limit)
-  }
-  const rows: JournalRow[] = []
-  for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {
-    const parsed = parseJournalRow(stored.rowJson)
-    if (!parsed.ok) {
-      break
+  const prefix = source ? source.prefix : Number.POSITIVE_INFINITY
+  const rows: JournalReadRow[] = []
+  if (afterSequence < prefix) {
+    for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {
+      const parsed = stored.seq <= prefix ? parseJournalRow(stored.rowJson) : null
+      if (!parsed?.ok) {
+        // An unreadable prefix row ends the page; outcome groups never skip past it.
+        return parsed ? rows : [...rows, ...groupsAfter(prefix)]
+      }
+      rows.push(parsed.row)
     }
-    rows.push(parsed.row)
+    if (!source || (limit !== undefined && rows.length >= limit)) {
+      return rows
+    }
   }
-  return rows
+  return [...rows, ...groupsAfter(Math.max(afterSequence, prefix))]
+
+  function groupsAfter(after: number): JournalReadRow[] {
+    return source
+      ? readJournalOutcomeGroups(
+          db,
+          epoch,
+          source,
+          after,
+          limit === undefined ? undefined : limit - rows.length
+        )
+      : []
+  }
 }

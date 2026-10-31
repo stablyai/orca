@@ -109,7 +109,7 @@ export class AgentSessionJournal {
       cursor: this.cursor,
       adopt: (loaded) => {
         this.state = loaded.state
-        this.projection.opened(loaded.projectionThrough === loaded.state.lastSequence)
+        this.projection.opened(loaded.projectionThrough !== 0)
         this.onCommitted?.()
       },
       prepare: (db, rows, savedAt) => this.projection.prepare(db, rows, savedAt),

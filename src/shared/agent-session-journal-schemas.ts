@@ -302,6 +302,9 @@ export function isAdmissibleAgentJournalItemBody(value: unknown): value is Agent
   return AgentJournalItemBodySchema.safeParse(value).success
 }
 
+/** Stored outcomes compare a queued card body with what this schema keeps of it. */
+export const AgentJournalMessageBodySchema = MessageBody
+
 /** Submission rows may only carry a user-authored message body. */
 export function isAdmissibleAgentJournalMessageBody(
   value: unknown

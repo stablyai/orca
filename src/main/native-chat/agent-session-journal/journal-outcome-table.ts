@@ -9,8 +9,10 @@ import {
   encodeJournalOutcomes,
   journalOutcomeScalars,
   JournalOutcomeFold,
+  JOURNAL_PREFIX_ORDINAL,
   type JournalOutcome
 } from './journal-outcome-codec'
+import type { JournalOutcomeSource } from './journal-outcome-format'
 
 export const JOURNAL_OUTCOME_PAGE_ROWS = 32
 export const JOURNAL_OUTCOME_PAGE_BYTES = 1 << 20
@@ -27,7 +29,7 @@ export function readJournalOutcomePage(
   const values: JournalOutcome[] = []
   let bytes = 0
   for (const row of db
-    .prepare(`SELECT seq, field, entry_key, ordinal, value_json, deleted
+    .prepare(`SELECT seq, field, entry_key, format, ordinal, value_json, deleted
     FROM journal_outcomes WHERE generation = ?
     AND (seq, field, entry_key) > (?, ?, ?) AND seq <= ?
     ORDER BY seq, field, entry_key LIMIT ?`)
@@ -41,14 +43,15 @@ export function readJournalOutcomePage(
   return values
 }
 
+/** Folds the records over `baseline`, the chat's folded input prefix when it has one. */
 export function rebuildJournalOutcomes(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  generation: number,
-  through: number
+  source: JournalOutcomeSource,
+  baseline?: JournalReducerState
 ): JournalReducerState {
-  const pages = rebuildJournalOutcomePages(() => db, sessionId, epoch, generation, through)
+  const pages = rebuildJournalOutcomePages(() => db, sessionId, epoch, source, baseline)
   let step = pages.next()
   while (!step.done) {
     step = pages.next()
@@ -60,16 +63,16 @@ export function* rebuildJournalOutcomePages(
   database: () => Database.Database,
   sessionId: string,
   epoch: string,
-  generation: number,
-  through: number
+  source: JournalOutcomeSource,
+  baseline?: JournalReducerState
 ): Generator<void, JournalReducerState> {
   const fold = new JournalOutcomeFold()
   let after = JOURNAL_OUTCOME_START
   for (;;) {
-    const values = readJournalOutcomePage(database(), generation, after, through)
+    const values = readJournalOutcomePage(database(), source.generation, after, source.through)
     const last = values.at(-1)
     if (!last) {
-      return yield* fold.finishPages(sessionId, epoch, through)
+      return yield* fold.finishPages(sessionId, epoch, source.through, baseline)
     }
     for (const value of values) {
       fold.add(value)
@@ -79,56 +82,51 @@ export function* rebuildJournalOutcomePages(
   }
 }
 
-/** Runs inside the receipt transaction. Staging keeps only the latest contribution per key. A row
- * the reader would reject is refused, as an input insert refuses it; the caller rolls back. */
+/** Runs inside the receipt transaction and only inserts: no record is ever updated or rewritten. A
+ * row the reader would reject is refused, as an input insert refuses it; the caller rolls back. */
 export function persistJournalOutcomeRows(
   db: Database.Database,
   state: JournalReducerState,
-  generation: number,
+  source: Pick<JournalOutcomeSource, 'generation' | 'prefix'>,
   rows: readonly JournalRow[],
-  savedAt?: number | ((row: JournalRow) => number),
-  compact = false
+  savedAt?: number
 ): { state: JournalReducerState; values: JournalOutcome[]; adopt: () => JournalReducerState } {
   const values: JournalOutcome[] = []
   let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
   const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
     WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq DESC LIMIT 1`)
+  const insert = db.prepare(`INSERT INTO journal_outcomes
+    (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
   for (const row of rows) {
     journalRowReadBack(state.sessionId, row)
-    applyJournalRow(
-      transition.state,
-      row,
-      typeof savedAt === 'function' ? savedAt(row) : (savedAt ?? row.ts)
-    )
+    applyJournalRow(transition.state, row, savedAt ?? row.ts)
     const changes = transition.changes(true)
+    // Only this row's own transition is recorded, never a snapshot of a prefix value it left alone.
     const encoded = encodeJournalOutcomes(transition.state, changes, scalar)
     scalar = encoded.scalars
     for (const [index, value] of encoded.values.entries()) {
       const change = changes.find(
         (entry) => entry.path === value.field && JSON.stringify(entry.key) === value.key
       )
-      const kept = previous.get(generation, value.field, value.key)
-      // A new or re-created key takes its place in the row's touch order, as the live map does.
-      const ordinal =
-        !change?.reinsert && kept?.deleted === 0 && typeof kept.ordinal === 'string'
+      const kept = previous.get(source.generation, value.field, value.key)
+      // A new or re-created key takes its place in the row's touch order, as the live map does; a
+      // key that existed before this row keeps its place, which for a key only the frozen prefix
+      // held is the prefix's own order.
+      const ordinal = change?.reinsert
+        ? appended(row.seq, index)
+        : kept?.deleted === 0 && typeof kept.ordinal === 'string'
           ? kept.ordinal
-          : `s${String(row.seq).padStart(16, '0')}:${String(index).padStart(16, '0')}`
-      if (compact) {
-        db.prepare(`DELETE FROM journal_outcomes
-          WHERE generation = ? AND field = ? AND entry_key = ?`).run(
-          generation,
-          value.field,
-          value.key
-        )
-      }
-      db.prepare(`INSERT INTO journal_outcomes
-        (generation, seq, field, entry_key, ordinal, value_json, deleted)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
-        generation,
+          : !kept && source.prefix > 0 && change
+            ? JOURNAL_PREFIX_ORDINAL
+            : appended(row.seq, index)
+      insert.run(
+        source.generation,
         value.seq,
         value.field,
         value.key,
+        value.format,
         ordinal,
         value.json,
         Number(value.deleted)
@@ -137,4 +135,8 @@ export function persistJournalOutcomeRows(
     }
   }
   return { state: transition.state, values, adopt: transition.adopt }
+}
+
+function appended(seq: number, index: number): string {
+  return `s${String(seq).padStart(16, '0')}:${String(index).padStart(16, '0')}`
 }

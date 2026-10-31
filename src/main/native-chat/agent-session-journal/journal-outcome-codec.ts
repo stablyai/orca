@@ -3,18 +3,22 @@ import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalEntryChange } from './journal-transition-collections'
 import { journalEntryJson, journalStateScalars } from './journal-state-layout'
-import { validateOutcomeFormat1 } from './journal-outcome-format-1'
-import { startOutcomeFormat1Decode } from './journal-outcome-format-1-decode'
+import { admitOutcomeFormat1, JOURNAL_OUTCOME_FORMAT_1 } from './journal-outcome-format-1'
+import { decodeOutcomeFormat1Onto } from './journal-outcome-format-1-decode'
 import { AgentSessionJournalError } from './journal-write-guards'
 
 export type JournalOutcome = {
   seq: number
   field: string
   key: string
+  format: number
   ordinal: string
   json: string
   deleted: boolean
 }
+
+/** A key first written over a frozen input prefix keeps the place the prefix gave it. */
+export const JOURNAL_PREFIX_ORDINAL = 'b'
 
 /** Stored outcome content this build rejects; storage errors never become this, so they stay
  * retryable, as main's replay keeps them. */
@@ -36,6 +40,7 @@ export function encodeJournalOutcomes(
     seq: state.lastSequence,
     field: entry.path,
     key: JSON.stringify(entry.key),
+    format: JOURNAL_OUTCOME_FORMAT_1,
     json: entry.deleted
       ? 'null'
       : entry.path === 'items'
@@ -49,6 +54,7 @@ export function encodeJournalOutcomes(
         seq: state.lastSequence,
         field: '$',
         key: JSON.stringify(key),
+        format: JOURNAL_OUTCOME_FORMAT_1,
         json: JSON.stringify(value),
         deleted: false
       })
@@ -56,7 +62,7 @@ export function encodeJournalOutcomes(
   }
   for (const value of values) {
     // A reducer field format 1 has no home for needs a new outcome format, never a silent change.
-    if (validateOutcomeFormat1(value) === 'unknown') {
+    if (admitOutcomeFormat1(value) === 'unknown') {
       throw new Error(`journal outcome format 1 does not store ${value.field} ${value.key}`)
     }
   }
@@ -67,6 +73,8 @@ export function journalOutcomeScalars(state: JournalReducerState): Record<string
   return scalars(state)
 }
 
+/** Admits one stored record or refuses the chat: a newer format or field as newer, anything else as
+ * damage. */
 export function decodeJournalOutcome(row: SqliteRow): JournalOutcome {
   return decodingOutcome(() => {
     if (
@@ -75,8 +83,11 @@ export function decodeJournalOutcome(row: SqliteRow): JournalOutcome {
       row.seq < 1 ||
       typeof row.field !== 'string' ||
       typeof row.entry_key !== 'string' ||
+      typeof row.format !== 'number' ||
+      !Number.isSafeInteger(row.format) ||
+      row.format < 1 ||
       typeof row.ordinal !== 'string' ||
-      !/^s\d{16}:\d{16}$/.test(row.ordinal) ||
+      !/^(b|s\d{16}:\d{16})$/.test(row.ordinal) ||
       typeof row.value_json !== 'string' ||
       (row.deleted !== 0 && row.deleted !== 1)
     ) {
@@ -86,21 +97,19 @@ export function decodeJournalOutcome(row: SqliteRow): JournalOutcome {
       seq: row.seq,
       field: row.field,
       key: row.entry_key,
+      format: row.format,
       ordinal: row.ordinal,
       json: row.value_json,
       deleted: row.deleted === 1
     }
-    if (validateOutcomeFormat1(value) === 'unknown') {
-      throw new AgentSessionJournalError(
-        'journal_read_only',
-        'the chat holds a newer outcome field'
-      )
+    if (value.format !== JOURNAL_OUTCOME_FORMAT_1 || admitOutcomeFormat1(value) === 'unknown') {
+      throw new AgentSessionJournalError('journal_read_only', 'the chat holds a newer outcome')
     }
     return value
   })
 }
 
-/** A pure decode: a newer writer's field is refused as newer, anything else it throws is damage. */
+/** A pure decode: a newer writer's record is refused as newer, anything else it throws is damage. */
 export function decodingOutcome<T>(decode: () => T): T {
   try {
     return decode()
@@ -112,7 +121,8 @@ export function decodingOutcome<T>(decode: () => T): T {
   }
 }
 
-/** Last-write-wins stores only whole current values; order comes from the canonical log. */
+/** Last-write-wins per key, deletions included, so the tail can remove values from a frozen prefix;
+ * order comes from the canonical log. */
 export class JournalOutcomeFold {
   private readonly values = new Map<string, Map<string, JournalOutcome>>()
   add(value: JournalOutcome): void {
@@ -121,41 +131,42 @@ export class JournalOutcomeFold {
       field = new Map()
       this.values.set(value.field, field)
     }
-    if (value.deleted) {
-      field.delete(value.key)
-    } else {
-      field.set(value.key, value)
-    }
+    field.set(value.key, value)
   }
 
-  /** journalOutcomeSource admits only format 1, so every fold decodes as format 1. */
+  /** Applies the latest values over `baseline` (the folded input prefix) or over the scalars alone:
+   * a deletion removes, a prefix-ordinal value replaces in place, and every other value takes its
+   * canonical place after the prefix. Each record was admitted as format 1 on read. */
   *finishPages(
     sessionId: string,
     epoch: string,
-    through: number
+    through: number,
+    baseline?: JournalReducerState
   ): Generator<void, JournalReducerState> {
-    const decode = decodingOutcome(() =>
-      startOutcomeFormat1Decode(
-        Object.fromEntries(
-          [...(this.values.get('$')?.values() ?? [])].map((value) => [
-            JSON.parse(value.key),
-            JSON.parse(value.json)
-          ])
-        )
-      )
+    const scalarJson = [...(this.values.get('$')?.values() ?? [])].map(
+      (value): [string, string] => [String(JSON.parse(value.key)), value.json]
     )
+    const decode = decodingOutcome(() => decodeOutcomeFormat1Onto(scalarJson, baseline))
     let bytes = 0
     let count = 0
     for (const [field, entries] of this.values) {
       if (field === '$') {
         continue
       }
-      // Canonical ordinals compare bytewise, as SQLite's BINARY collation orders them.
+      // Canonical ordinals compare bytewise, as SQLite's BINARY collation orders them; the prefix
+      // ordinal sorts before every appended one.
       const ordered = [...entries.values()].sort((a, b) => (a.ordinal < b.ordinal ? -1 : 1))
       for (const value of ordered) {
-        decodingOutcome(() =>
-          field === 'items' ? decode.item(value.json) : decode.entry(field, value.json)
-        )
+        decodingOutcome(() => {
+          if (value.deleted || value.ordinal !== JOURNAL_PREFIX_ORDINAL) {
+            decode.remove(field, JSON.parse(value.key))
+          } else if (!decode.has(field, JSON.parse(value.key))) {
+            throw new Error('journal outcome replaces a value the prefix does not hold')
+          }
+          if (!value.deleted) {
+            decode.entry(field, value.json)
+          }
+        })
         bytes += Buffer.byteLength(value.json)
         count += 1
         if (count >= 32 || bytes >= 1 << 20) {
@@ -172,8 +183,13 @@ export class JournalOutcomeFold {
     return state
   }
 
-  finish(sessionId: string, epoch: string, through: number): JournalReducerState {
-    const pages = this.finishPages(sessionId, epoch, through)
+  finish(
+    sessionId: string,
+    epoch: string,
+    through: number,
+    baseline?: JournalReducerState
+  ): JournalReducerState {
+    const pages = this.finishPages(sessionId, epoch, through, baseline)
     let step = pages.next()
     while (!step.done) {
       step = pages.next()
