@@ -4,13 +4,14 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
-import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
+import { getFnmDefaultAliasDirectories } from '../../shared/fnm-default-alias-dirs'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { checkServeUserDataPath } from './serve-user-data-path-guard'
 import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import { isLinuxWaylandSession } from '../../shared/linux-wayland-session'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import {
   hasMissingProfileStateDatabaseWithRetainedAuthority,
   readActiveProfileId,
@@ -120,12 +121,33 @@ export function resetDevParentShutdownRequestForTests(): void {
   devParentShutdownRequested = false
 }
 
+/** `homedir()` throws ERR_SYSTEM_ERROR where the account database has no entry (a mapped `docker run --user`); the seed must degrade to no `~` entries instead. */
+function resolveAccountHome(): string | undefined {
+  try {
+    return homedir() || undefined
+  } catch (error) {
+    console.warn('[startup] Could not resolve the account directory:', error)
+    return undefined
+  }
+}
+
+/** Repair a packaged launch's inherited environment: GUI launches reach here with no HOME and an empty or partial PATH, so every `~` and package-manager bin a CLI needs is absent. */
 export function patchPackagedProcessPath(): void {
   if (!app.isPackaged) {
     return
   }
 
-  const home = process.env.HOME ?? ''
+  // A packaged launch can inherit no HOME, which drops every `~` entry from the seed and leaves a CLI blind to its own config (#23214). POSIX only: Windows carries the directory in USERPROFILE.
+  const accountHome = resolveAccountHome()
+  if (process.platform !== 'win32' && !process.env.HOME && accountHome) {
+    process.env.HOME = accountHome
+  }
+
+  const inheritedHome = process.env.HOME ?? ''
+  // Absolute only: a relative seed entry resolves against each spawn's cwd, so a worktree could supply `.local/bin/gh` (#13082 rule).
+  const home = resolveAbsoluteDirOverride(inheritedHome, '')
+  // Windows has USERPROFILE but no usable HOME, so the version-manager home falls back to the account directory.
+  const versionManagerHome = resolveAbsoluteDirOverride(accountHome ?? inheritedHome, '')
   // #18234: append generic user bins; prepending ~/.local/bin made a gh/mise wrapper recursively shadow system gh. Shell hydration owns user ordering.
   const isGenericUserBinDir = (path: string): boolean =>
     process.platform !== 'win32' &&
@@ -144,6 +166,9 @@ export function patchPackagedProcessPath(): void {
     }
 
     appendPaths.push('/nix/var/nix/profiles/default/bin')
+
+    // A launch from a compositor keybinding or unit inherits no PATH, so this seed is the whole PATH and a package-manager CLI (`gh` at /usr/bin/gh, #23214) was unreachable. Placed after the install-site dirs, which the #18234 prepends still outrank.
+    appendPaths.push('/usr/bin', '/bin')
 
     if (home) {
       appendPaths.push(
@@ -164,11 +189,21 @@ export function patchPackagedProcessPath(): void {
   }
 
   // env-node shebangs require runtime shims; exclude generic user bins so arbitrary wrappers cannot shadow system tools.
-  for (const path of getVersionManagerBinPaths()) {
-    if (isWindowsFnmDefaultAliasDir(path)) {
-      appendPaths.push(path)
-    } else if (!isGenericUserBinDir(path)) {
-      prependPaths.push(path)
+  // Why the guard: with no usable home this call returns `.volta/bin`-style relative entries, and these lead PATH, so the exposure is worst here.
+  // Why the explicit homePath: keeps this list and the `~` seed on one answer, and skips the unguarded homedir() call inside.
+  if (versionManagerHome) {
+    // fnm's default alias is the one shim that must trail an inherited PATH, and only on win32; classified from the guarded home.
+    const fnmDefaultAliasDirs = new Set(
+      process.platform === 'win32'
+        ? getFnmDefaultAliasDirectories(process.platform, versionManagerHome)
+        : []
+    )
+    for (const path of getVersionManagerBinPaths({ homePath: versionManagerHome })) {
+      if (fnmDefaultAliasDirs.has(path)) {
+        appendPaths.push(path)
+      } else if (!isGenericUserBinDir(path)) {
+        prependPaths.push(path)
+      }
     }
   }
 
