@@ -166,15 +166,20 @@ describe('createUISlice settings navigation', () => {
         }
       ],
       settings: {
+        ...getDefaultSettings('/tmp'),
         visibleTaskProviders: ['linear'],
         defaultTaskSource: 'github',
         defaultTaskViewPreset: 'all'
-      } as unknown as AppState['settings'],
-      linearStatus: { connected: true } as AppState['linearStatus'],
-      preflightStatus: { glab: { installed: false } } as AppState['preflightStatus'],
+      },
+      linearStatus: { connected: true, viewer: null },
+      preflightStatus: {
+        git: { installed: true },
+        gh: { installed: true, authenticated: true },
+        glab: { installed: false, authenticated: false }
+      },
       prefetchWorkItems,
       prefetchLinearIssues
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().openTaskPage()
 
@@ -252,12 +257,13 @@ describe('createUISlice settings navigation', () => {
         }
       ],
       settings: {
+        ...getDefaultSettings('/tmp'),
         visibleTaskProviders: ['github'],
         defaultTaskSource: 'github',
         defaultTaskViewPreset: 'all'
-      } as unknown as AppState['settings'],
+      },
       prefetchWorkItems
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().openTaskPage({
       taskSource: 'github',

@@ -317,3 +317,74 @@ describe('unavailable mapped Jira destinations', () => {
     expect(result.current.sourceContextState.linkedWorkItem?.jiraIdentifier).toBe('APP-1')
   })
 })
+
+it('keeps a logical-group contextual host separate from an explicit pick and refuses a removed picked checkout', () => {
+  Object.assign(window.api, {
+    gh: { repoSlug: async () => null },
+    repos: {
+      getBaseRefDefault: async () => ({ defaultBaseRef: 'main', remoteCount: 1 }),
+      getSlug: async () => null
+    },
+    hooks: { check: async () => ({ hooks: null, hasHooks: false, mayNeedUpdate: false }) },
+    sparsePresets: { list: async () => [] }
+  })
+  const alpha: Repo = {
+    ...currentRepo,
+    kind: 'git',
+    id: 'alpha',
+    path: '/alpha',
+    upstream: { owner: 'org', repo: 'harbor' }
+  }
+  const beta: Repo = { ...alpha, id: 'beta', path: '/beta' }
+  const ssh: Repo = { ...alpha, path: '/remote/alpha', connectionId: 'builder' }
+  const repos = [alpha, beta, ssh]
+  const projection = projectHostSetupProjectionFromRepos(repos)
+  const sshSetup = projection.setups.find((setup) => setup.hostId === 'ssh:builder')!
+  useAppStore.setState({
+    settings: null,
+    repos,
+    projects: projection.projects,
+    projectHostSetups: projection.setups,
+    projectGroups: [],
+    newWorkspaceDraft: null,
+    worktreesByRepo: {},
+    sparsePresetsByRepo: {},
+    workspaceHostScope: 'all',
+    sshTargetLabels: new Map([['builder', 'Builder']]),
+    detectedAgentIds: [],
+    remoteDetectedAgentIds: { builder: [] }
+  })
+  const { result } = renderHook(() => {
+    const target = useComposerTargetState(
+      {
+        persistDraft: false,
+        initialProjectScope: {
+          key: `project:${projection.projects[0].id}`,
+          registrations: projection.setups,
+          context: { repoId: ssh.id, hostId: 'ssh:builder', setupId: sshSetup.id }
+        }
+      },
+      decisions
+    )
+    const external = useComposerExternalSync(target)
+    const source = useComposerSourceState(target, external)
+    return { ...target, source }
+  })
+  expect(result.current.runtimeTargetSelection.selectedRepo).toBe(ssh)
+  expect(result.current.runtimeTargetSelection.selectedRepoRequiresConnection).toBe(true)
+  act(() =>
+    result.current.source.targetChangeActions.handleProjectHostSetupChange(
+      JSON.stringify([beta.id, 'local'])
+    )
+  )
+  expect(result.current.runtimeTargetSelection.selectedWorkspaceTarget).toMatchObject({
+    status: 'ready',
+    target: { repo: beta, repoId: beta.id, hostId: 'local' }
+  })
+  expect(result.current.runtimeTargetSelection.selectedRepoRequiresConnection).toBe(false)
+  act(() => useAppStore.setState({ repos: [alpha, ssh] }))
+  expect(result.current.runtimeTargetSelection.selectedWorkspaceTarget.status).toBe('unavailable')
+  expect(result.current.runtimeTargetSelection.selectedRepo).toBeUndefined()
+  act(() => useAppStore.setState({ repos }))
+  expect(result.current.runtimeTargetSelection.selectedRepo).toBe(beta)
+})

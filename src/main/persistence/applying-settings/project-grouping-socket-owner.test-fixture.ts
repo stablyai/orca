@@ -19,6 +19,7 @@ import {
 } from '../../runtime/rpc/mobile-socket-wiring'
 import { CLIENT_UI_METHODS } from '../../runtime/rpc/methods/client-ui'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../runtime/rpc/methods/runtime-client-capabilities'
+import { MOBILE_PROJECT_SECTIONS_METHODS } from '../../runtime/rpc/methods/mobile-project-sections'
 import { STATUS_METHODS } from '../../runtime/rpc/methods/status'
 import { PAIRING_METHODS } from '../../runtime/rpc/methods/pairing'
 import { generateKeyPair } from '../../../shared/e2ee-crypto'
@@ -51,6 +52,7 @@ export async function createProjectGroupingSocketOwner(
     methods: [
       ...methods,
       ...STATUS_METHODS,
+      ...MOBILE_PROJECT_SECTIONS_METHODS,
       ...PAIRING_METHODS,
       ...RUNTIME_CLIENT_CAPABILITY_METHODS
     ],

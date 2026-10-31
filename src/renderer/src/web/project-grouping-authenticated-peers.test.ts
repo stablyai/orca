@@ -79,16 +79,19 @@ it.each(['web', 'mobile', 'old'] as const)(
     }
     wiring.attachTransport(transport)
     class Socket extends EventEmitter {
-      readonly OPEN = 1
-      readyState = 1
+      readonly OPEN: WebSocket['OPEN'] = 1
+      readyState: WebSocket['readyState'] = 1
       bufferedAmount = 0
-      send = vi.fn()
-      close = vi.fn()
+      send = vi.fn<WebSocket['send']>()
+      close = vi.fn<WebSocket['close']>()
     }
     const Q = 'runtime:server\0same'
     try {
-      const socket = new Socket()
-      // SAFETY: the production wiring needs WebSocket's EventEmitter/send/close surface only.
+      const socket = new Socket() satisfies Pick<
+        WebSocket,
+        'OPEN' | 'readyState' | 'bufferedAmount' | 'send' | 'close' | 'on' | 'once' | 'off'
+      >
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed EventEmitter/readiness/send/close port crosses the transport library's full WebSocket handle; unused WebSocket members are not implemented.
       const ws = socket as unknown as WebSocket
       const phone = generateKeyPair()
       receive(

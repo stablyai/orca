@@ -1,3 +1,4 @@
+import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import type { HeaderRevealPlacement } from '../../../../../../shared/sidebar-list/header-reveal-placement'
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
 import type React from 'react'
@@ -49,18 +50,18 @@ export type VirtualizedWorktreeViewportProps = {
   projectOrderBy: ProjectOrderBy
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
-  handleCreateForRepo: (repo: Repo, options: { pinHost: boolean }) => void
-  handleOpenRepoSettings: (projectId: string, sectionId?: string) => void
-  handleOpenWorktreeVisibility: (repo: Repo) => void
+  handleCreateForRepo: RepoHeaderProjectActions['onCreateForRepo']
+  handleOpenRepoSettings: RepoHeaderProjectActions['onOpenRepoSettings']
+  handleOpenWorktreeVisibility: RepoHeaderProjectActions['onOpenWorktreeVisibility']
   handleShowImportedWorktrees: (repo: Repo) => void
   handleKeepImportedWorktreesHidden: (repo: Repo) => void
   importedWorktreeCardActionState: ReadonlyMap<string, ImportedWorktreeCardActionState>
   handleOpenSuppressExternalWorktreeInbox: (repo: Repo) => void
   newExternalWorktreeInboxActionState: ReadonlyMap<string, NewExternalWorktreesInboxActionState>
-  handleRemoveProject: (repo: Repo) => void
-  handleCreateGroupFromRepo: (repo: Repo) => void
-  handleMoveProjectToGroup: (repo: Repo, groupId: string) => void
-  handleRemoveProjectFromGroup: (repo: Repo) => void
+  handleRemoveProject: RepoHeaderProjectActions['onRemoveProject']
+  handleCreateGroupFromRepo: RepoHeaderProjectActions['onCreateGroupFromRepo']
+  handleMoveProjectToGroup: RepoHeaderProjectActions['onMoveProjectToGroup']
+  handleRemoveProjectFromGroup: RepoHeaderProjectActions['onRemoveProjectFromGroup']
   handleRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   handleDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
   handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void

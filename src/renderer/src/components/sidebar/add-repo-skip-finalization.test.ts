@@ -1,3 +1,21 @@
+import { selectVisibleSidebarWorktrees } from '../../../../shared/sidebar-list/visible-worktrees'
+import { getPinnedSectionWorktrees } from '../../../../shared/sidebar-list/pinned-section-worktrees'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import {
+  NO_WORKSPACE_ROW_FILTERS,
+  type WorkspaceRowFactReader
+} from '../../../../shared/workspace-view/workspace-row-filters'
+import {
+  adoptEndpointRepo,
+  adoptEndpointProjectCatalog
+} from '../../../../shared/endpoint-catalog-adoption'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { buildProjectGroupingIndex } from '../../../../shared/project-section-grouping'
+import { getEmptyProjectPlaceholderRepoIds } from '../../../../shared/sidebar-list/empty-project-placeholder-repos'
+import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
+import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
+import { revealRepoInProjectFilter } from './project-filter-reveal'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { getProjectGroupingIndexFromState } from '../../store/project-host-setup-selector'
@@ -274,4 +292,142 @@ describe('finalizeImportedRepoAfterSkip', () => {
     expect(state.setShowActiveOnly).toHaveBeenCalledWith(false)
     expect(state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
   })
+})
+
+it('uses the physical nested source for explicit reveal and the reached Repo filter gates', () => {
+  const target = { kind: 'environment', environmentId: 'E' } as const
+  const authored = [
+    { id: 'r', connectionId: 'x', executionHostId: 'ssh:x' as const, path: '/srv/r' },
+    { id: 'r', connectionId: 'y', executionHostId: 'ssh:y' as const, path: '/srv/r' },
+    { id: 'q', connectionId: 'y', executionHostId: 'ssh:y' as const, path: '/srv/q' }
+  ].map((repo) => ({
+    ...repo,
+    displayName: repo.path,
+    badgeColor: '',
+    addedAt: 0,
+    upstream: { owner: 'org', repo: 'app' },
+    externalWorktreeVisibility: 'hide' as const
+  }))
+  const original = projectHostSetupProjectionFromRepos(authored)
+  const projection = adoptEndpointProjectCatalog(target, original.projects, original.setups)
+  const repos = authored.map((repo) => adoptEndpointRepo(target, repo))
+  const index = buildProjectGroupingIndex({
+    projects: projection.projects,
+    projectHostSetups: projection.setups,
+    settings: { projectGroupingMode: 'host' }
+  })
+  const state = makeState({ repos, filterRepoIds: ['offline'] })
+  revealRepoInProjectFilter(state, 'r', 'ssh:x', index)
+  expect(state.setFilterRepoIds).toHaveBeenLastCalledWith(['offline', 'ssh:x\0r'])
+  const hidden = {
+    ...makeWorktree({ id: 'r::/srv/feature', repoId: 'r' }),
+    hostId: 'ssh:x' as const,
+    runtimeOwnerEnvironmentId: 'E',
+    ownership: 'external' as const,
+    visible: false,
+    selectedCheckout: false
+  }
+  const detected = { repoId: 'r', authoritative: true, source: 'git' as const, worktrees: [hidden] }
+  const selected = ['ssh:x\0r']
+  const child = {
+    ...makeWorktree({ id: 'r::child', repoId: 'r' }),
+    hostId: 'ssh:x' as const,
+    instanceId: 'child'
+  }
+  const parent = {
+    ...makeWorktree({ id: 'q::parent', repoId: 'q' }),
+    hostId: 'ssh:x' as const,
+    instanceId: 'parent',
+    isPinned: true
+  }
+  const lineage: Record<string, WorktreeLineage> = {
+    [child.id]: {
+      worktreeId: child.id,
+      worktreeInstanceId: 'child',
+      parentWorktreeId: parent.id,
+      parentWorktreeInstanceId: 'parent',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+  }
+  const byIdentity = new Map([parent, child].map((item) => [getWorktreeHostIdentity(item), item]))
+  const facts: WorkspaceRowFactReader<Worktree> = {
+    repoId: (item) => item.repoId,
+    hostId: (item) => item.hostId ?? 'local',
+    isArchived: (item) => item.isArchived,
+    isFolderWorkspace: () => false,
+    isOtherClient: () => false,
+    isDefaultBranch: () => false,
+    isAutomationCreated: () => false,
+    isCliCreated: () => false,
+    isDetachedHead: () => false,
+    isMainWorktree: () => false,
+    isSleeping: () => false
+  }
+  const visibleInputs = {
+    rows: [parent, child],
+    ancestorByIdentity: byIdentity,
+    rankOf: (item: Worktree) => (item === parent ? 0 : 1),
+    filters: { ...NO_WORKSPACE_ROW_FILTERS, filterRepoIds: selected },
+    facts,
+    worktreeLineageById: lineage,
+    filterRepoIds: selected
+  }
+  const visible = selectVisibleSidebarWorktrees(visibleInputs)
+  expect(visible).toEqual([child])
+  expect(getPinnedSectionWorktrees(visible, lineage, byIdentity, selected)).toEqual([])
+  const broad = ['r', 'q']
+  const all = selectVisibleSidebarWorktrees({
+    ...visibleInputs,
+    filters: { ...NO_WORKSPACE_ROW_FILTERS, filterRepoIds: broad },
+    filterRepoIds: broad
+  })
+  expect(all).toEqual([parent, child])
+  expect(getPinnedSectionWorktrees(all, lineage, byIdentity, broad)).toEqual([parent, child])
+  expect(
+    selectVisibleSidebarWorktrees({ ...visibleInputs, forcedVisibleWorktreeIds: [parent.id] })
+  ).toEqual([parent, child])
+  expect(
+    getEmptyProjectPlaceholderRepoIds({
+      groupBy: 'repo',
+      repos,
+      worktreesByRepo: {},
+      visibleWorktrees: [],
+      filterRepoIds: selected
+    }).size
+  ).toBe(1)
+  const imported = buildImportedWorktreesCardCandidates({
+    repos,
+    detectedWorktreesByRepo: { r: detected },
+    filterRepoIds: selected
+  })
+  expect([...imported.values()].map((candidate) => candidate.repo)).toEqual([repos[0]])
+  expect([...imported.values()][0].hiddenWorktrees).toEqual([hidden])
+  const dismissed = repos.map((repo) => ({
+    ...repo,
+    externalWorktreeVisibilityPromptDismissedAt: 1,
+    externalWorktreeInboxBaselinePaths: []
+  }))
+  const inbox = buildNewExternalWorktreesInboxCandidates({
+    repos: dismissed,
+    detectedWorktreesByRepo: { r: detected },
+    filterRepoIds: selected
+  })
+  expect([...inbox.values()].map((candidate) => candidate.repo)).toEqual([dismissed[0]])
+  expect([...inbox.values()][0].inboxWorktrees).toEqual([hidden])
+  expect(
+    buildImportedWorktreesCardCandidates({
+      repos,
+      detectedWorktreesByRepo: { r: detected },
+      filterRepoIds: ['runtime:E\0r']
+    }).size
+  ).toBe(0)
+  expect(
+    buildNewExternalWorktreesInboxCandidates({
+      repos: dismissed,
+      detectedWorktreesByRepo: { r: detected },
+      filterRepoIds: ['runtime:E\0r']
+    }).size
+  ).toBe(0)
 })

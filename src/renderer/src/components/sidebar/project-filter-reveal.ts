@@ -1,5 +1,8 @@
 import type { ProjectGroupingIndex } from '../../../../shared/project-section-grouping'
-import { editProjectFilter } from '../../../../shared/project-repo-filter-selection'
+import {
+  editProjectFilter,
+  getProjectRepoFilterHost
+} from '../../../../shared/project-repo-filter-selection'
 import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 import { projectRepoFilterMatcher } from '../../../../shared/project-grouping'
 export type ProjectFilterRevealState = {
@@ -20,7 +23,11 @@ export function revealRepoInProjectFilter(
   ) {
     return
   }
-  const group = index?.groupByRepoHost.get(getRepoHostIdentityForParts(repoId, hostId))
+  const group = index?.groups.find((candidate) =>
+    candidate.registrations.some(
+      (setup) => setup.repoId === repoId && getProjectRepoFilterHost(setup) === hostId
+    )
+  )
   if (index && group) {
     state.setFilterRepoIds(
       editProjectFilter(index, state.filterRepoIds, { kind: 'complete', keys: [group.key] })

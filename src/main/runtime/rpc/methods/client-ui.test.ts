@@ -403,9 +403,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn(() => updated)
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>(() => updated)
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
 
     const response = await dispatcher.dispatch(
       makeRequest('ui.set', {
@@ -440,9 +444,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn(() => updated)
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>(() => updated)
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
 
     const response = await dispatcher.dispatch(
       makeRequest('ui.set', { osc52ClipboardDefaultOnNoticePending: false })
@@ -504,9 +512,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn(() => updated)
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>(() => updated)
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
 
     const payload = {
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
@@ -595,9 +607,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn(() => getDefaultUIState())
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>(() => getDefaultUIState())
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
 
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
 
@@ -609,9 +625,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn(() => getDefaultUIState())
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>(() => getDefaultUIState())
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
     // Model App.tsx's 150ms batched writer: one missing key must not lose unrelated paired-client preferences.
     const payload = {
       sidebarWidth: 280,
@@ -663,9 +683,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn()
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>()
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
 
     const response = await dispatcher.dispatch(
       makeRequest('ui.set', { showActiveOnly: 'yes', unknownField: true })
@@ -685,9 +709,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn(() => getDefaultUIState())
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>(() => getDefaultUIState())
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
 
     const response = await dispatcher.dispatch(
       makeRequest('ui.set', { ...drifted, sidebarWidth: 280, filterRepoIds: ['repo-1'] })
@@ -708,9 +736,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn(() => updated)
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>(() => updated)
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
 
     const response = await dispatcher.dispatch(
       makeRequest('ui.set', { worktreeCardProperties: ['status', 'jira-issue'] })
@@ -726,9 +758,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn(() => getDefaultUIState())
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>(() => getDefaultUIState())
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
 
     // Missing cli previously made Settings' default card modes reject the whole payload.
     const response = await dispatcher.dispatch(
@@ -747,9 +783,13 @@ describe('client UI RPC methods', () => {
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         getUIState: () => getDefaultUIState(),
-        updateUIState: vi.fn(() => getDefaultUIState())
-      } as unknown as OrcaRuntimeService
-      const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+        updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>(() => getDefaultUIState())
+      } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+      const dispatcher = new RpcDispatcher({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+        runtime: runtime as unknown as OrcaRuntimeService,
+        methods: CLIENT_UI_METHODS
+      })
 
       const response = await dispatcher.dispatch(
         makeRequest('ui.set', { rightSidebarTab, sidebarWidth: 280 })
@@ -768,9 +808,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn(() => updated)
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>(() => updated)
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
 
     const response = await dispatcher.dispatch(
       makeRequest('ui.set', { worktreeCardProperties: ['status', 'unread', 'ci', 'pr', 'issue'] })
@@ -786,9 +830,13 @@ describe('client UI RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: () => getDefaultUIState(),
-      updateUIState: vi.fn()
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+      updateUIState: vi.fn<OrcaRuntimeService['updateUIState']>()
+    } satisfies Pick<OrcaRuntimeService, 'getRuntimeId' | 'getUIState' | 'updateUIState'>
+    const dispatcher = new RpcDispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked consumed port above covers metadata and selected UI RPC calls through the real dispatcher, not the full runtime service.
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: CLIENT_UI_METHODS
+    })
     const forbiddenPayloads = [
       { starNagBaselineAgents: 10 },
       { starNagAppVersion: '1.2.3' },

@@ -177,12 +177,16 @@ export function useSettingsPageEffects(
       settingsNavigationTarget,
       repoIdToHostSelection.keys()
     )
+    const targetEntry = settingsProjectList.find(
+      (entry) => settingsNavigationTarget.sectionId === `repo-${entry.selectionKey}`
+    )
     if (targetRepoId) {
       const hostSelection = settingsNavigationTarget.hostId
         ? getSettingsTargetHostSelection(
             settingsProjectList,
             targetRepoId,
-            settingsNavigationTarget.hostId
+            settingsNavigationTarget.hostId,
+            targetEntry?.selectionKey
           )
         : repoIdToHostSelection.get(targetRepoId)
       if (hostSelection) {

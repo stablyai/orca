@@ -14,16 +14,18 @@ import { translate } from '@/i18n/i18n'
 
 type ProjectGroupNameDialogProps = {
   open: boolean
+  sessionKey?: object
   title: string
   description: string
   initialName: string
   confirmLabel: string
   onOpenChange: (open: boolean) => void
-  onSubmit: (name: string) => Promise<void> | void
+  onSubmit: (name: string) => Promise<boolean | void> | boolean | void
 }
 
 export function ProjectGroupNameDialog({
   open,
+  sessionKey,
   title,
   description,
   initialName,
@@ -35,8 +37,9 @@ export function ProjectGroupNameDialog({
   const inputId = useId()
   const [name, setName] = useState(initialName)
   const [submitting, setSubmitting] = useState(false)
-  const [previousOpenState, setPreviousOpenState] = useState({ open, initialName })
+  const [previousOpenState, setPreviousOpenState] = useState({ open, initialName, sessionKey })
   const mountedRef = useRef(true)
+  const sessionRef = useRef(0)
   const trimmedName = name.trim()
 
   const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
@@ -45,8 +48,13 @@ export function ProjectGroupNameDialog({
   }, [])
 
   // Seed before paint so selection sees the current name instead of the prior draft.
-  if (open !== previousOpenState.open || initialName !== previousOpenState.initialName) {
-    setPreviousOpenState({ open, initialName })
+  if (
+    open !== previousOpenState.open ||
+    initialName !== previousOpenState.initialName ||
+    sessionKey !== previousOpenState.sessionKey
+  ) {
+    sessionRef.current++
+    setPreviousOpenState({ open, initialName, sessionKey })
     if (open) {
       setName(initialName)
       setSubmitting(false)
@@ -59,15 +67,20 @@ export function ProjectGroupNameDialog({
       if (!trimmedName || submitting) {
         return
       }
+      const session = sessionRef.current
       setSubmitting(true)
       try {
-        await onSubmit(trimmedName)
-        if (mountedRef.current) {
-          onOpenChange(false)
+        const confirmed = await onSubmit(trimmedName)
+        if (mountedRef.current && session === sessionRef.current) {
+          if (confirmed === false) {
+            setSubmitting(false)
+          } else {
+            onOpenChange(false)
+          }
         }
       } catch (error) {
         console.error('Failed to save project group name:', error)
-        if (mountedRef.current) {
+        if (mountedRef.current && session === sessionRef.current) {
           setSubmitting(false)
         }
       }

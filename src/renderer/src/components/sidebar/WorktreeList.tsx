@@ -1,20 +1,29 @@
+import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+
+import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import { openProjectRemovalSettings } from './worktree-list/rows/repo-header-project-actions'
+import { getProjectSectionRepoLookup } from '../../../../shared/project-section-reveal'
 import { useProjectGroupingUpgradeTip } from '@/components/contextual-tours/use-project-grouping-upgrade-tip'
 import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { useAllWorktrees, useRepoMap, useWorktreeMap } from '@/store/selectors'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+
 import { getHeaderCreateWorkspaceTarget } from './header-create-workspace-target'
 import {
+  type ExecutionHostId,
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
 } from '../../../../shared/execution-host'
 import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
-import { getPinnedWorktreeDisplayPolicy } from '../../../../shared/sidebar-list/row-types'
+import {
+  type GroupHeaderRow,
+  getPinnedWorktreeDisplayPolicy
+} from '../../../../shared/sidebar-list/row-types'
 import { selectWorktreeListReviewCacheInputs } from './worktree-list/listing/review-cache-inputs'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+
 import { SidebarWorktreeListDialogs } from './worktree-list/rows/ProjectGroupDialogs'
 import { SidebarWorktreeListEmptyState } from './worktree-list/listing/EmptyState'
 import { VirtualizedWorktreeViewport } from './worktree-list/viewport/VirtualizedWorktreeViewport'
@@ -22,6 +31,7 @@ import { markSidebarWorktreeActiveImmediately } from './worktree-list/rows/optio
 import { EMPTY_PROJECT_GROUPS } from './worktree-list/viewport/viewport-props'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from './worktree-list/drag/drop-commit-context'
 import { useAgentSendTargetWorktreeId } from './worktree-list/listing/use-agent-send-target'
+import { ProjectGroupOperationContext } from './use-project-group-operation'
 import { useProjectGroupDialogs } from './worktree-list/rows/use-project-group-dialogs'
 import { useSidebarRevealRequests } from './worktree-list/navigation/use-reveal-requests'
 import { useSidebarWorktreeFilters } from './worktree-list/listing/use-filters'
@@ -156,10 +166,15 @@ const WorktreeList = React.memo(function WorktreeList({
   }, [])
 
   const handleCreateForRepo = useCallback(
-    (repo: Repo, { pinHost }: { pinHost: boolean }) => {
+    (
+      repo: Repo,
+      { pinHost, projectScope }: { pinHost: boolean; projectScope?: GroupHeaderRow['projectScope'] }
+    ) => {
       const { repos, projectHostSetups } = useAppStore.getState()
       openModal('new-workspace-composer', {
-        initialRepoId: repo.id,
+        ...(!pinHost && projectScope
+          ? { initialProjectScope: projectScope }
+          : { initialRepoId: repo.id }),
         ...(pinHost ? getHeaderCreateWorkspaceTarget(repo, repos, projectHostSetups) : {}),
         telemetrySource: 'sidebar'
       })
@@ -167,27 +182,42 @@ const WorktreeList = React.memo(function WorktreeList({
     [openModal]
   )
   const handleOpenRepoSettings = useCallback(
-    (projectId: string, sectionId?: string) => {
-      openSettingsTarget({ pane: 'repo', repoId: projectId, ...(sectionId ? { sectionId } : {}) })
+    (projectId: string, sectionId?: string, hostId?: ExecutionHostId) => {
+      if (
+        hostId &&
+        !getProjectSectionRepoLookup(useAppStore.getState().repos).has(`${hostId}\0${projectId}`)
+      ) {
+        return
+      }
+      openSettingsTarget({
+        pane: 'repo',
+        repoId: projectId,
+        ...(hostId ? { hostId } : {}),
+        ...(sectionId ? { sectionId } : {})
+      })
       openSettingsPage()
     },
     [openSettingsPage, openSettingsTarget]
   )
   const handleOpenWorktreeVisibility = useCallback(
-    (repo: Repo) => {
-      openModal('worktree-visibility', { repoId: repo.id, hostId: getRepoExecutionHostId(repo) })
+    (repo: Repo, scope?: GroupHeaderRow['projectScope'], hostId?: ExecutionHostId) => {
+      openModal('worktree-visibility', {
+        repoId: repo.id,
+        hostId: getRepoExecutionHostId(repo),
+        ...(scope
+          ? {
+              recoveryTargets: scope.registrations
+                .filter((setup) => setup.kind !== 'folder' && (!hostId || setup.hostId === hostId))
+                .map((setup) => ({ repoId: setup.repoId, hostId: setup.hostId }))
+            }
+          : {})
+      })
     },
     [openModal]
   )
   const handleRemoveProject = useCallback(
-    (repo: Repo) => {
-      openModal('confirm-remove-folder', {
-        repoId: repo.id,
-        displayName: repo.displayName,
-        hostId: getRepoExecutionHostId(repo)
-      })
-    },
-    [openModal]
+    (repo: Repo, scope?: GroupHeaderRow['projectScope']) => openProjectRemovalSettings(repo, scope),
+    []
   )
   const handleCreateFolderWorkspace = useCallback(
     (projectGroup: ProjectGroup) => {
@@ -229,7 +259,7 @@ const WorktreeList = React.memo(function WorktreeList({
   }
 
   return (
-    <>
+    <ProjectGroupOperationContext.Provider value={projectGroupDialogs.operationOwner}>
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
         repos={repos}
@@ -331,7 +361,7 @@ const WorktreeList = React.memo(function WorktreeList({
         scrollOffsetRef={scrollOffsetRef}
         scrollAnchorRef={scrollAnchorRef}
       />
-    </>
+    </ProjectGroupOperationContext.Provider>
   )
 })
 

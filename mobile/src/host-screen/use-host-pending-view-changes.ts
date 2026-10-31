@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileViewPatch, WorkspaceViewSettings } from '../worktree/workspace-view-settings'
@@ -53,7 +53,9 @@ export function useHostPendingViewChanges(
     }
   }, [])
   const live = useRef({ client, support, supportGeneration })
-  live.current = { client, support, supportGeneration }
+  useLayoutEffect(() => {
+    live.current = { client, support, supportGeneration }
+  }, [client, support, supportGeneration])
   const inFlight = useRef(new Set<number>())
   const [owned, setOwned] = useState<OwnedChanges>({ client, pending: NO_CHANGES })
   const ownedRef = useRef(owned)

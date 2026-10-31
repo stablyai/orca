@@ -93,6 +93,8 @@ export function selectProjectGroupTarget<S extends GroupingSetup>(
     setupId?: string | null
     path?: string | null
     contextualRepoId?: string | null
+    contextualHostId?: string | null
+    contextualSetupId?: string | null
     hostId?: string | null
   } = {}
 ): S {
@@ -103,16 +105,19 @@ export function selectProjectGroupTarget<S extends GroupingSetup>(
         normalizeRuntimePathForComparison(setup.path) ===
           normalizeRuntimePathForComparison(hint.path))
     )
+  const contextual = (setup: S) =>
+    setup.repoId === hint.contextualRepoId &&
+    (!hint.contextualHostId || setup.hostId === hint.contextualHostId) &&
+    (!hint.contextualSetupId || setup.id === hint.contextualSetupId)
   return (
     group.members.find(
       (setup) => explicit(setup) && (!hint.hostId || setup.hostId === hint.hostId)
     ) ??
     group.members.find(explicit) ??
     group.members.find(
-      (setup) =>
-        setup.repoId === hint.contextualRepoId && (!hint.hostId || setup.hostId === hint.hostId)
+      (setup) => contextual(setup) && (!hint.hostId || setup.hostId === hint.hostId)
     ) ??
-    group.members.find((setup) => setup.repoId === hint.contextualRepoId) ??
+    group.members.find(contextual) ??
     group.members.find((setup) => setup.hostId === (hint.hostId ?? LOCAL_EXECUTION_HOST_ID)) ??
     group.representative
   )

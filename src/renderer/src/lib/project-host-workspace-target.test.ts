@@ -592,3 +592,60 @@ it.each(['repository', 'host', 'folder'] as const)(
     }
   }
 )
+
+it('keeps an absent scoped group out of the legacy fallback and qualifies a contextual twin without explicitly pinning its host', () => {
+  const alpha = makeRepo('same', {
+    executionHostId: 'local',
+    upstream: { owner: 'org', repo: 'harbor' }
+  })
+  const beta = makeRepo('beta', { upstream: alpha.upstream })
+  const ssh = {
+    ...alpha,
+    path: '/ssh/same',
+    connectionId: 'box',
+    executionHostId: 'ssh:box' as const
+  }
+  const projectId = 'github:org/harbor'
+  const projects = [makeProject(projectId, [alpha.id, beta.id])]
+  const setups = [
+    makeSetup('alpha', projectId, 'local', alpha.id),
+    makeSetup('beta', projectId, 'local', beta.id),
+    makeSetup('ssh', projectId, 'ssh:box', ssh.id)
+  ]
+  const input = {
+    eligibleRepos: [alpha, beta, ssh],
+    projects,
+    projectHostSetups: setups,
+    projectScope: {
+      key: `project:${projectId}`,
+      registrations: setups,
+      context: { repoId: ssh.id, hostId: 'ssh:box' as const, setupId: 'ssh' }
+    }
+  }
+  expect(resolveWorkspaceCreationTarget(input)).toMatchObject({
+    status: 'ready',
+    target: { repo: ssh, hostId: 'ssh:box' }
+  })
+  expect(resolveWorkspaceCreationTarget({ ...input, draftRepoId: beta.id })).toMatchObject({
+    status: 'ready',
+    target: { repo: beta, hostId: 'local' }
+  })
+  expect(resolveWorkspaceCreationTarget({ ...input, eligibleRepos: [alpha, beta] })).toMatchObject({
+    status: 'ready',
+    target: { repo: alpha, hostId: 'local' }
+  })
+  expect(
+    resolveWorkspaceCreationTarget({
+      ...input,
+      projectScope: { ...input.projectScope, key: 'project:missing' }
+    })
+  ).toEqual({ status: 'unavailable', reason: 'project-not-found' })
+  expect(
+    resolveWorkspaceCreationTarget({
+      ...input,
+      projectHostSetupId: 'ssh',
+      projectHostSetupHostId: 'ssh:box',
+      eligibleRepos: [alpha, beta]
+    })
+  ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
+})

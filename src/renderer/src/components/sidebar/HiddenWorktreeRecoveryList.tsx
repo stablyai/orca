@@ -1,3 +1,6 @@
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getHostContextLabel } from '../../../../shared/worktree/host-context-labels'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import React, { useId, useRef, useState } from 'react'
 import { FolderMinus, Search } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -12,41 +15,51 @@ import {
 } from '../../../../shared/external-worktree-inbox'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 
-type Props = {
+export type RecoveryEntry = {
   repo: Repo
   detected: DetectedWorktreeListResult | undefined
   listState: 'checking' | 'ready' | 'failed'
   busyPath: string | null
   toggling: boolean
-  onShow: (worktreePath: string) => Promise<void>
+}
+
+type Props = {
+  entries: readonly RecoveryEntry[]
+  listState: 'checking' | 'ready' | 'failed'
+  onShow: (repo: Repo, worktreePath: string) => Promise<void>
 }
 
 export default function HiddenWorktreeRecoveryList({
-  repo,
-  detected,
+  entries,
   listState,
-  busyPath,
-  toggling,
   onShow
 }: Props): React.JSX.Element | null {
   const [query, setQuery] = useState('')
   const headingId = useId()
   const listRef = useRef<HTMLDivElement>(null)
-  const hidden = getHiddenImportableExternalWorktrees(detected)
+  const hidden = entries.flatMap((entry) =>
+    getHiddenImportableExternalWorktrees(entry.detected).map((worktree) => ({
+      ...entry,
+      worktree,
+      key: `${getRepoHostIdentity(entry.repo)}\0${worktree.path}\0${worktree.id}`
+    }))
+  )
   const normalizedQuery = query.trim().toLowerCase()
   const filtered = normalizedQuery
     ? hidden.filter(
-        (worktree) =>
+        ({ worktree }) =>
           worktree.displayName.toLowerCase().includes(normalizedQuery) ||
           worktree.path.toLowerCase().includes(normalizedQuery)
       )
     : hidden
-  const discoveredCount = hidden.length + getVisibleNonOrcaWorktrees(detected).length
+  const discoveredCount =
+    hidden.length +
+    entries.reduce((count, entry) => count + getVisibleNonOrcaWorktrees(entry.detected).length, 0)
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => listRef.current,
     estimateSize: () => 56,
-    getItemKey: (index) => filtered[index]?.id ?? index,
+    getItemKey: (index) => filtered[index]?.key ?? index,
     overscan: 3,
     initialRect: { width: 480, height: 224 }
   })
@@ -105,14 +118,19 @@ export default function HiddenWorktreeRecoveryList({
         >
           <ul className="relative min-w-0" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
-              const worktree = filtered[virtualRow.index]
-              if (!worktree) {
+              const entry = filtered[virtualRow.index]
+              if (!entry) {
                 return null
               }
-              const displayPath = relativePathInsideRoot(repo.path, worktree.path) || worktree.path
+              const { repo, worktree, busyPath, toggling } = entry
+              const relative = relativePathInsideRoot(repo.path, worktree.path) || worktree.path
+              const displayPath =
+                entries.length > 1
+                  ? `${repo.path} · ${getHostContextLabel(getRepoExecutionHostId(repo))} · ${relative}`
+                  : relative
               return (
                 <li
-                  key={worktree.id}
+                  key={entry.key}
                   ref={virtualizer.measureElement}
                   data-index={virtualRow.index}
                   className="absolute left-0 top-0 w-full pb-1"
@@ -131,13 +149,13 @@ export default function HiddenWorktreeRecoveryList({
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={busyPath !== null || toggling || listState === 'checking'}
+                      disabled={busyPath !== null || toggling || entry.listState === 'checking'}
                       aria-label={translate(
                         'auto.components.sidebar.HiddenWorktreeRecoveryList.showWorktree',
                         'Show {{value0}} at {{value1}}',
                         { value0: worktree.displayName, value1: displayPath }
                       )}
-                      onClick={() => void onShow(worktree.path)}
+                      onClick={() => void onShow(repo, worktree.path)}
                     >
                       {busyPath === worktree.path
                         ? translate(

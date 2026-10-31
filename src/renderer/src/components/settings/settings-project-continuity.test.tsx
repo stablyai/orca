@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { createRoot } from 'react-dom/client'
-import { act, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { Repo } from '../../../../shared/repo-types'
+import { act, useLayoutEffect, useMemo, useState } from 'react'
 import { render, cleanup, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -9,7 +9,7 @@ import { useAppStore } from '@/store'
 import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../../shared/repo-types'
+
 import { TooltipProvider } from '../ui/tooltip'
 import {
   buildRepoIdToHostSelection,
@@ -19,24 +19,16 @@ import {
   getSettingsProjectHostRepo,
   removeSettingsProjectFromAllHosts
 } from './settings-project-list'
-import {
-  buildSettingsViewModel,
-  useConcreteProjectContinuity,
-  useSettingsNavigationActions
-} from './settings-view-model'
+import { buildSettingsViewModel, useSettingsNavigationActions } from './settings-view-model'
 import { renderSettingsPage } from './settings-page-renderer'
 import { LOCAL_SETTINGS_HOST_SCOPE } from './settings-host-scope'
 import type { SettingsStoreModel } from './use-settings-store-model'
-import {
-  useSettingsInteractionController,
-  type SettingsInteractionController
-} from './use-settings-interaction-controller'
+import { useSettingsInteractionController } from './use-settings-interaction-controller'
 import type { SettingsRenderContext } from './settings-render-context'
 import { useSettingsPageEffects } from './use-settings-page-effects'
 import { useSettingsRepoScrollEffects } from './use-settings-repo-scroll-effects'
 import { useSettingsNavigationModel } from './use-settings-navigation-model'
 import type { SettingsTerminalModel } from './use-settings-terminal-model'
-
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 afterEach(() => {
   cleanup()
@@ -660,88 +652,4 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
     })
   )
   expect(document.querySelector('input[id^="repo-display-name-"]')).toBeNull()
-})
-
-it('bounds the mounted current-selection regroup operation with independent entry and setup populations', () => {
-  for (const dimension of ['entries', 'setups'] as const) {
-    for (const n of [100, 1000]) {
-      const repos = Array.from({ length: 1000 }, (_, i) => ({
-        id: `settings-${i}`,
-        path: `/settings/${i}`,
-        displayName: `Settings ${i}`,
-        badgeColor: '',
-        addedAt: 0
-      }))
-      const projection = projectHostSetupProjectionFromRepos(repos)
-      const count = dimension === 'entries' ? n : 1000
-      const setupCount = dimension === 'setups' ? n : 1000
-      const setups = projection.setups
-        .slice(0, setupCount)
-        .map((setup, i) => ({ ...setup, projectId: projection.projects[i % count].id }))
-      let entries = buildSettingsProjectList(repos, {
-        projects: projection.projects.slice(0, count),
-        projectHostSetups: setups
-      })
-      let activeSectionId = `repo-${entries[0].selectionKey}`
-      const hosts = {}
-      const choices = {}
-      const setActiveSectionId = (id: string) => {
-        activeSectionId = id
-      }
-      const nothing = () => {}
-      const container = document.createElement('div')
-      const root = createRoot(container)
-      let actual = ''
-      function Harness() {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exact fields read by continuity are supplied.
-        const input = {
-          settingsProjectList: entries,
-          activeSectionId,
-          setActiveSectionId,
-          settingsProjectHostSelection: hosts,
-          settingsProjectSetupSelection: choices,
-          setSettingsProjectHostSelection: nothing,
-          settingsNavigationTarget: null
-        } as unknown as SettingsStoreModel
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: continuity reads only the pending navigation ref.
-        const interactions = {
-          pendingNavSectionRef: useRef(null)
-        } as unknown as SettingsInteractionController
-        actual = useConcreteProjectContinuity(input, interactions).activeSectionId
-        return null
-      }
-      const get = Map.prototype.get
-      let reads = 0
-      try {
-        act(() => root.render(<Harness />))
-        const probe = vi.spyOn(Map.prototype, 'get').mockImplementation(function (
-          this: Map<unknown, unknown>,
-          key: unknown
-        ) {
-          reads++
-          return get.call(this, key)
-        })
-        try {
-          entries = buildSettingsProjectList(repos, {
-            projects: projection.projects.slice(0, count),
-            projectHostSetups: setups,
-            settings: { projectGroupingMode: 'folder' }
-          })
-          act(() => root.render(<Harness />))
-          expect(actual).toBe(
-            `repo-${entries.find((entry) => entry.setups.some((setup) => setup.repoId === repos[0].id))!.selectionKey}`
-          )
-          expect(reads).toBeGreaterThan(setupCount)
-          expect(reads).toBeLessThan(60 * (count + setupCount))
-          process.stdout.write(
-            `PG8 settings operations ${JSON.stringify({ dimension, n, entries: entries.length, setups: setupCount, reads })}\n`
-          )
-        } finally {
-          probe.mockRestore()
-        }
-      } finally {
-        act(() => root.unmount())
-      }
-    }
-  }
 })

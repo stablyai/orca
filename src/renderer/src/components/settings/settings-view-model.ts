@@ -1,3 +1,4 @@
+import { getProjectRepoFilterHost } from '../../../../shared/project-repo-filter-selection'
 import {
   getSettingsEntryHostSelection,
   getSettingsProjectSelectedSetup,
@@ -206,7 +207,8 @@ export function useConcreteProjectContinuity(
           sectionId: activeSectionId,
           repoId: setup.repoId,
           hostId: setup.hostId,
-          setupId: setup.id
+          setupId: setup.id,
+          physicalHostId: getProjectRepoFilterHost(setup)
         }
       : null
     setCommitted((previous) =>
@@ -216,6 +218,7 @@ export function useConcreteProjectContinuity(
           previous.anchor.repoId === next.repoId &&
           previous.anchor.hostId === next.hostId &&
           previous.anchor.setupId === next.setupId &&
+          previous.anchor.physicalHostId === next.physicalHostId &&
           previous.hosts === settingsProjectHostSelection &&
           previous.setups === settingsProjectSetupSelection
           ? previous

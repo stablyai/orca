@@ -4,13 +4,12 @@ import {
   type ProjectGroupingIndex
 } from '../../../src/shared/project-section-grouping'
 import {
+  getProjectRepoFilterHost,
   projectFilterSelection,
-  editProjectFilter
+  editProjectFilter,
+  type ProjectFilterSelection
 } from '../../../src/shared/project-repo-filter-selection'
-import {
-  getRepoExecutionHostId,
-  normalizeExecutionHostId
-} from '../../../src/shared/execution-host'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import { resolveRepoBadgeColor } from '../../../src/shared/repo-badge-color'
 import { buildSectionRepoMap, type SectionRepo, type Worktree } from './workspace-list-sections'
 
@@ -40,11 +39,11 @@ export function buildFilterRepos(
   if (grouping) {
     const index = buildProjectGroupingIndex(grouping)
     const repoByHost = new Map(
-      repos.map((repo) => [`${getRepoExecutionHostId(repo)}\0${repo.id}`, repo])
+      repos.map((repo) => [`${getProjectRepoFilterHost(repo)}\0${repo.id}`, repo])
     )
     return index.groups.flatMap((group) => {
       const setup = group.representative
-      const repo = repoByHost.get(`${setup.hostId}\0${setup.repoId}`)
+      const repo = repoByHost.get(`${getProjectRepoFilterHost(setup)}\0${setup.repoId}`)
       return repo
         ? [
             {
@@ -60,7 +59,7 @@ export function buildFilterRepos(
   }
   const seen = new Set<string>()
   return repos.flatMap((repo) => {
-    const key = `${getRepoExecutionHostId(repo)}|${repo.id}`
+    const key = `${getProjectRepoFilterHost(repo)}|${repo.id}`
     if (seen.has(key)) {
       return []
     }
@@ -73,9 +72,27 @@ const filterIndexes = new WeakMap<readonly WorkspaceSectionRepo[], ProjectGroupi
 
 export function workspaceProjectFilterSelection(
   repos: readonly WorkspaceSectionRepo[],
-  selected: readonly string[]
-) {
-  return projectFilterSelection(workspaceProjectFilterIndex(repos), selected)
+  selected: readonly string[],
+  meaning: 'exact' | 'legacy' = 'exact'
+): ProjectFilterSelection {
+  const index = workspaceProjectFilterIndex(repos)
+  if (meaning === 'exact') {
+    return projectFilterSelection(index, selected)
+  }
+  const ids = new Set(selected)
+  const fullKeys = repos.filter((repo) => ids.has(repo.id)).map((repo) => repo.key)
+  const full = new Set(fullKeys)
+  return {
+    active: selected.length > 0,
+    fullKeys,
+    partialKeys: [],
+    matchingKeys: fullKeys,
+    full,
+    partial: new Set(),
+    matching: full,
+    unresolved: selected.filter((id) => !index.setupByRepoId.has(id)),
+    badgeCount: selected.length ? Math.max(1, fullKeys.length) : 0
+  }
 }
 
 function workspaceProjectFilterIndex(repos: readonly WorkspaceSectionRepo[]): ProjectGroupingIndex {
@@ -115,9 +132,10 @@ export function selectedWorkspaceProjectKeys(
 export function toggleProjectFilter(
   repo: WorkspaceSectionRepo,
   selected: readonly string[],
-  repos: readonly WorkspaceSectionRepo[] = [repo]
+  repos: readonly WorkspaceSectionRepo[] = [repo],
+  meaning: 'exact' | 'legacy' = 'exact'
 ): string[] {
-  if (!repo.grouping) {
+  if (meaning === 'legacy') {
     return selected.includes(repo.id)
       ? selected.filter((id) => id !== repo.id)
       : [...selected, repo.id]

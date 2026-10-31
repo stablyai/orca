@@ -1,7 +1,6 @@
-import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import { useEffect } from 'react'
 
 export type ActiveVisibilityMutation = { kind: 'row'; path: string } | { kind: 'toggle' }
-type VisibilityListState = 'checking' | 'ready' | 'failed'
 
 // Why: the modal unmounts on close, but its persistence request survives dismissal.
 const activeMutations = new Map<string, ActiveVisibilityMutation>()
@@ -35,58 +34,42 @@ export function finishVisibilityMutation(scope: string, mutation: ActiveVisibili
   mutationListeners.get(scope)?.forEach((listener) => listener())
 }
 
-export function useVisibilityMutationFence<T>(args: {
-  scope: string
-  repoId: string
-  currentScopeRef: MutableRefObject<string>
-  refresh: (repoId: string, options: { requireAuthoritative: true }) => Promise<boolean>
-  setActionState: Dispatch<SetStateAction<T | null>>
-  setBusyPath: Dispatch<SetStateAction<string | null>>
-  setIsToggling: Dispatch<SetStateAction<boolean>>
-  setListState: Dispatch<SetStateAction<VisibilityListState>>
+export function useVisibilityMutationFence(args: {
+  scopes: string
+  refresh: (scope: string) => Promise<boolean>
+  reset: (scope: string, active: ActiveVisibilityMutation | undefined) => void
+  settled: (scope: string, ready: boolean) => void
 }): void {
-  const {
-    currentScopeRef,
-    refresh,
-    repoId,
-    scope,
-    setActionState,
-    setBusyPath,
-    setIsToggling,
-    setListState
-  } = args
+  const { scopes, refresh, reset, settled } = args
   useEffect(() => {
-    const activeMutation = getActiveVisibilityMutation(scope)
-    setActionState(null)
-    setBusyPath(activeMutation?.kind === 'row' ? activeMutation.path : null)
-    setIsToggling(activeMutation?.kind === 'toggle')
-    if (!activeMutation) {
+    let cancelled = false
+    const unsubscribes: (() => void)[] = []
+    const parsed: unknown = JSON.parse(scopes)
+    if (!Array.isArray(parsed)) {
       return
     }
-    let cancelled = false
-    let unsubscribe = (): void => undefined
-    unsubscribe = subscribeToVisibilityMutation(scope, () => {
-      unsubscribe()
-      void refresh(repoId, { requireAuthoritative: true }).then((refreshed) => {
-        if (!cancelled && currentScopeRef.current === scope) {
-          setListState(refreshed ? 'ready' : 'failed')
-          setBusyPath(null)
-          setIsToggling(false)
-        }
+    for (const scope of parsed) {
+      if (typeof scope !== 'string') {
+        continue
+      }
+      const active = getActiveVisibilityMutation(scope)
+      reset(scope, active)
+      if (!active) {
+        continue
+      }
+      const unsubscribe = subscribeToVisibilityMutation(scope, () => {
+        unsubscribe()
+        void refresh(scope).then((ready) => {
+          if (!cancelled && !getActiveVisibilityMutation(scope)) {
+            settled(scope, ready)
+          }
+        })
       })
-    })
+      unsubscribes.push(unsubscribe)
+    }
     return () => {
       cancelled = true
-      unsubscribe()
+      unsubscribes.forEach((unsubscribe) => unsubscribe())
     }
-  }, [
-    currentScopeRef,
-    refresh,
-    repoId,
-    scope,
-    setActionState,
-    setBusyPath,
-    setIsToggling,
-    setListState
-  ])
+  }, [scopes, refresh, reset, settled])
 }

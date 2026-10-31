@@ -49,6 +49,8 @@ export function useHostViewSettings(args: {
   const support =
     gates?.projectRepoFilterSupport ??
     (gates?.statusReadable ? (gates.exactProjectRepoFilters ? 'exact' : 'legacy') : 'unknown')
+  const projectRepoFilterMeaning =
+    support === 'exact' || gates?.exactProjectRepoFilters === true ? 'exact' : 'legacy'
   const pendingViewChanges = useHostPendingViewChanges(client, support, gates?.statusGeneration)
   const pendingChanges =
     ORCA_SIDEBAR_INPUTS_IS_MAIN ||
@@ -143,8 +145,7 @@ export function useHostViewSettings(args: {
         return
       }
       const filterRepoIdsMode =
-        payload.filterRepoIds !== undefined &&
-        (support === 'exact' || gates?.exactProjectRepoFilters === true)
+        payload.filterRepoIds !== undefined && projectRepoFilterMeaning === 'exact'
           ? 'exact'
           : undefined
       const writer = pendingChanges ?? (filterRepoIdsMode ? pendingViewChanges.controls : null)
@@ -161,8 +162,7 @@ export function useHostViewSettings(args: {
       applyViewState,
       pendingChanges,
       pendingViewChanges.controls,
-      support,
-      gates?.exactProjectRepoFilters,
+      projectRepoFilterMeaning,
       refused
     ]
   )
@@ -289,6 +289,7 @@ export function useHostViewSettings(args: {
 
   return {
     clearFilters,
+    projectRepoFilterMeaning,
     projectRepoFiltersReady: !gates || support !== 'unknown',
     pendingViewChanges: pendingViewChanges?.status ?? NOTHING_PENDING,
     setAgentActivityDisplayMode,

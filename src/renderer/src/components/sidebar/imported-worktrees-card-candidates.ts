@@ -1,3 +1,4 @@
+import { getProjectRepoFilterHost } from '../../../../shared/project-repo-filter-selection'
 import {
   getRepoHostIdentity,
   getRepoHostIdentityForParts
@@ -7,7 +8,6 @@ import {
   getDetectedWorktreeOwnerHost,
   partitionDetectedWorktreesByHost
 } from './worktree-visibility-host-target'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { projectRepoFilterMatcher } from '../../../../shared/project-grouping'
 import type {
   GlobalSettings,
@@ -60,7 +60,7 @@ export function buildImportedWorktreesCardCandidates(args: {
   const matchesRepo = projectRepoFilterMatcher(args.filterRepoIds ?? [])
   const candidates = new Map<string, ImportedWorktreesCardCandidate>()
   for (const repo of args.repos) {
-    if (!matchesRepo(repo.id, getRepoExecutionHostId(repo))) {
+    if (!matchesRepo(repo.id, getProjectRepoFilterHost(repo))) {
       continue
     }
     if (visibleRepoIds && !visibleRepoIds.has(getRepoHostIdentity(repo))) {

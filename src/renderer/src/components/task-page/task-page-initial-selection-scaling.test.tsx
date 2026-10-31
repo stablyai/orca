@@ -16,11 +16,8 @@ function resolveSelection(repos: Repo[], persisted: string[], preferred?: string
       jiraStatus: {},
       preflightStatus: null
     } as unknown as TaskPageStoreBindingsModel
-    useTaskPageRepoSelection(model)
-    selected = [
-      ...(model as TaskPageStoreBindingsModel & { repoSelection: ReadonlySet<string> })
-        .repoSelection
-    ]
+    const selection = useTaskPageRepoSelection(model)
+    selected = [...selection.repoSelection]
     return null
   }
   renderToString(<Probe />)

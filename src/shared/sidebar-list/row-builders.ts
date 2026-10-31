@@ -2,7 +2,7 @@ import type { ExecutionHostId } from '../execution-host'
 import { ALL_GROUP_KEY, getWorktreeLineageGroupKey } from './group-keys'
 import { getLaneHostWorktreeCounts, getLaneHostWorktreeIds } from './host-labels'
 import { compareFolderWorkspacesForDisplay } from './folder-workspace-lanes'
-import { getRepoExecutionHostId } from '../execution-host'
+import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../execution-host'
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
 import {
@@ -86,7 +86,8 @@ export function appendWorktreeRows(
     collapsedGroups: Set<string>
     groupDepth: number
     sectionKey: string
-    hostContextLabelByRepoId?: ReadonlyMap<string, string>
+    hostContextLabelByHostId?: ReadonlyMap<ExecutionHostId, string>
+    defaultHostId?: ExecutionHostId
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
   }
 ): void {
@@ -110,7 +111,9 @@ export function appendWorktreeRows(
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
         options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??
-        options.hostContextLabelByRepoId?.get(worktree.repoId),
+        options.hostContextLabelByHostId?.get(
+          getWorktreeExecutionHostId(worktree, repoOf(worktree), options.defaultHostId ?? 'local')
+        ),
       ...(occurrence.childCount > 0
         ? {
             lineageGroupKey: getWorktreeLineageGroupKey(worktree),

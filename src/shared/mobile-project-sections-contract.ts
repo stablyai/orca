@@ -73,11 +73,17 @@ export function buildMobileProjectSectionCatalog(
       projectHostSetups: projection.setups,
       settings
     })
+  const containing = new Map<ProjectSectionSetup, string>()
+  for (const group of index.groups) {
+    for (const setup of group.registrations) {
+      containing.set(setup, group.key)
+    }
+  }
   return {
     repos: repos.map(sectionRepo),
     projects: projection.projects.map(({ id, displayName }) => ({ id, displayName })),
     setups: projection.setups.map((setup) => ({
-      groupKey: index.groupByRepoHost.get(`${setup.hostId}\0${setup.repoId}`)?.key,
+      groupKey: containing.get(setup),
       id: setup.id,
       projectId: setup.projectId,
       hostId: setup.hostId,

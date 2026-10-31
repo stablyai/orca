@@ -97,7 +97,12 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
                   hooksInspectionReady={Boolean(repoHooksState)}
                   mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
                   updateRepo={model.updateRepo}
-                  removeProject={() => void model.removeProjectAllHosts(settingsProject.setups)}
+                  removeProject={(_repoId, accepted) =>
+                    void model.removeProjectAllHosts(
+                      accepted?.addresses ?? [...settingsProject.setups],
+                      accepted
+                    )
+                  }
                   project={project}
                   selectedProjectSetupId={hostSelection.setupId}
                   settingsSelectionKey={settingsProject.selectionKey}
@@ -107,6 +112,7 @@ export function renderProjectSettingsSections(context: SettingsRenderContext): R
                       : undefined
                   }
                   removalScope={getSettingsProjectRemovalScope(settingsProject)}
+                  removalSetups={settingsProject.setups}
                   isLocalWindowsProject={
                     getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
                     terminal.isWindowsTerminalHost

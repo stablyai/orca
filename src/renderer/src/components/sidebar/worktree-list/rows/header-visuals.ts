@@ -1,5 +1,7 @@
 import { CircleX, FolderTree, List, Pin } from 'lucide-react'
-import type React from 'react'
+import { createElement, type ComponentType } from 'react'
+import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import type { Repo } from '../../../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { PRGroupKey } from '../../../../../../shared/workspace-view/workspace-pr-groups'
 import type { SidebarHeaderIcon } from '../../../../../../shared/sidebar-list/row-types'
@@ -15,7 +17,7 @@ const PR_GROUP_META: Record<
   PRGroupKey,
   {
     label: string
-    icon: React.ComponentType<{ className?: string }>
+    icon: ComponentType<{ className?: string }>
     tone: string
   }
 > = {
@@ -71,7 +73,7 @@ const ALL_GROUP_META = {
 } as const
 
 type SidebarHeaderVisual = {
-  icon: React.ComponentType<{ className?: string }>
+  icon: ComponentType<{ className?: string }>
   tone: string
   /** Set for headers the builder leaves unnamed: Pinned, All and the PR lanes. */
   label?: string
@@ -101,4 +103,19 @@ export function getSidebarHeaderVisual(
       return { icon: statusIcon, tone }
     }
   }
+}
+
+export function renderSidebarHeaderGlyph(
+  repo: Pick<Repo, 'repoIcon'> | undefined,
+  color: string | undefined,
+  fallbackIcon: ComponentType<{ className?: string }>
+) {
+  return repo
+    ? createElement(RepoIconGlyph, {
+        repoIcon: repo.repoIcon,
+        color,
+        className: 'size-4',
+        iconClassName: 'size-3.5'
+      })
+    : createElement(fallbackIcon, { className: 'size-3' })
 }

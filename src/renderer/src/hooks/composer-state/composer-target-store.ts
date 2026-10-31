@@ -14,7 +14,10 @@ import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { ComposerDecisions } from './composer-decisions'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import type {
+  WorkspaceCreationTargetHint,
+  WorkspaceCreationProjectScope
+} from '@/lib/project-host-workspace-target'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { selectAllKnownWorkspaceStatuses } from '@/store/host-workspace-status-columns'
 
@@ -27,6 +30,7 @@ export type ComposerStateInput = {
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
   initialTaskSourceContext?: TaskSourceContext | null
+  initialProjectScope?: WorkspaceCreationProjectScope | null
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
@@ -51,6 +55,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialGitHubWorkItem = null,
     initialTaskSourceContext = null,
     initialWorkspaceTarget = null,
+    initialProjectScope = null,
     initialWorkspaceStatus,
     initialBaseBranch,
     persistDraft,
@@ -170,6 +175,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialGitHubWorkItem,
     initialTaskSourceContext,
     initialWorkspaceTarget,
+    initialProjectScope,
     initialWorkspaceStatus,
     initialBaseBranch,
     persistDraft,

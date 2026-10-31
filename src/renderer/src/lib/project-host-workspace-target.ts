@@ -1,3 +1,4 @@
+import type { GroupHeaderRow } from '../../../shared/sidebar-list/row-types'
 import { buildProjectSetupRepoLookup } from './project-setup-repo-lookup'
 import {
   buildProjectGroupingIndex,
@@ -63,7 +64,10 @@ export type WorkspaceCreationTargetResolution =
         | 'setup-not-ready'
     }
 
+export type WorkspaceCreationProjectScope = NonNullable<GroupHeaderRow['projectScope']>
+
 type ProjectHostWorkspaceTargetInput = {
+  projectScope?: WorkspaceCreationProjectScope | null
   grouping?: ProjectGroupingIndex
   settings?: ProjectGroupingSettings | null
   path?: string | null
@@ -154,7 +158,8 @@ function findReadySetupTarget(
 export function resolveWorkspaceCreationTarget(
   input: ProjectHostWorkspaceTargetInput
 ): WorkspaceCreationTargetResolution {
-  const { eligibleRepos, focusedHostScope, hostId, projectHostSetupId, projectId } = input
+  const { eligibleRepos, focusedHostScope, hostId, projectHostSetupId } = input
+  const projectId = input.projectId ?? input.projectScope?.key
   if (eligibleRepos.length === 0) {
     return { status: 'unavailable', reason: 'no-eligible-repo' }
   }
@@ -206,6 +211,9 @@ export function resolveWorkspaceCreationTarget(
         settings: input.settings
       })
     const group = index.groupByKey.get(projectId)
+    if (input.projectScope && !group) {
+      return { status: 'unavailable', reason: 'project-not-found' }
+    }
     const projectSetups = setups.filter((setup) =>
       group
         ? index.groupByRepoHost.get(`${setup.hostId}\0${setup.repoId}`)?.key === group.key
@@ -237,7 +245,17 @@ export function resolveWorkspaceCreationTarget(
         },
         {
           path: input.path,
-          contextualRepoId: input.draftRepoId ?? input.initialRepoId ?? input.activeRepoId,
+          contextualRepoId:
+            input.draftRepoId ??
+            input.initialRepoId ??
+            input.projectScope?.context?.repoId ??
+            input.activeRepoId,
+          ...(!input.draftRepoId && !input.initialRepoId
+            ? {
+                contextualHostId: input.projectScope?.context?.hostId,
+                contextualSetupId: input.projectScope?.context?.setupId
+              }
+            : {}),
           hostId: requestedHost
         }
       )

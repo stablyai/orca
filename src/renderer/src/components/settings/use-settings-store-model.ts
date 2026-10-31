@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
 import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
@@ -39,6 +40,40 @@ import {
   projectRemovalTargets
 } from '@/components/sidebar/removal-unsaved-files'
 
+import {
+  prepareSettingsProjectRemoval,
+  type SettingsProjectRemoval
+} from './repository/RepositoryRemoveProjectButton'
+
+export async function removeCurrentSettingsProject(
+  setups: readonly ProjectHostSetup[],
+  accepted?: SettingsProjectRemoval
+): Promise<void> {
+  const state = useAppStore.getState()
+  const first = setups[0]
+  const repo =
+    first &&
+    state.repos.find(
+      (candidate) =>
+        candidate.id === first.repoId && getRepoExecutionHostId(candidate) === first.hostId
+    )
+  const current =
+    accepted ??
+    (repo ? prepareSettingsProjectRemoval(state, repo, 'project', undefined, setups) : undefined)
+  // Settings keeps its save-or-close policy; the transient product is never fed to post-success purge.
+  const targets = current?.targets ?? projectRemovalTargets(state, setups)
+  if (
+    !blockRemovalForUnsavedFiles(
+      useAppStore.getState,
+      targets,
+      first?.displayName ?? '',
+      current?.closedFileIds
+    )
+  ) {
+    await removeSettingsProjectFromAllHosts(current?.addresses ?? setups, state.removeProject)
+  }
+}
+
 export function useSettingsStoreModel() {
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
@@ -55,7 +90,6 @@ export function useSettingsStoreModel() {
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const updateProject = useAppStore((s) => s.updateProject)
   const updateRepo = useAppStore((s) => s.updateRepo)
-  const removeProject = useAppStore((s) => s.removeProject)
   const settingsNavigationTarget = useAppStore((s) => s.settingsNavigationTarget)
   const clearSettingsTarget = useAppStore((s) => s.clearSettingsTarget)
   const settingsProjectHostSelection = useAppStore((s) => s.settingsProjectHostSelection)
@@ -85,18 +119,9 @@ export function useSettingsStoreModel() {
   )
   // Remove the entry’s setups on every host; split clones own separate entries.
   const removeProjectAllHosts = useCallback(
-    async (setups: readonly ProjectHostSetup[]): Promise<void> => {
-      // Block dirty removals because this confirmation cannot list files and leaves folders on disk.
-      const targets = projectRemovalTargets(
-        useAppStore.getState(),
-        setups.map((setup) => ({ repoId: setup.repoId, hostId: setup.hostId }))
-      )
-      const name = setups[0]?.displayName ?? ''
-      if (!blockRemovalForUnsavedFiles(useAppStore.getState, targets, name)) {
-        await removeSettingsProjectFromAllHosts(setups, removeProject)
-      }
-    },
-    [removeProject]
+    (setups: readonly ProjectHostSetup[], accepted?: SettingsProjectRemoval): Promise<void> =>
+      removeCurrentSettingsProject(setups, accepted),
+    []
   )
 
   const [repoHooksMap, setRepoHooksMap] = useState<

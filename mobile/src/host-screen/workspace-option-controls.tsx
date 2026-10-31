@@ -120,7 +120,11 @@ function HostsPage({ controller, hosts }: WorkspaceOptionProps) {
 function projectsValue({ controller }: WorkspaceOptionProps, t: Translate): string {
   const repos = controller.sectionsResult.uniqueRepos
   const selected = controller.state.view.filters.filterRepoIds
-  const selection = workspaceProjectFilterSelection(repos, selected)
+  const selection = workspaceProjectFilterSelection(
+    repos,
+    selected,
+    controller.settings.projectRepoFilterMeaning
+  )
   if (!selection.active) {
     return t('hostScreen.workspaceOptionControls.allProjects', 'All projects')
   }
@@ -155,7 +159,11 @@ function ProjectsPage({ controller }: WorkspaceOptionProps) {
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
   const selected = state.view.filters.filterRepoIds
-  const selection = workspaceProjectFilterSelection(controller.sectionsResult.uniqueRepos, selected)
+  const selection = workspaceProjectFilterSelection(
+    controller.sectionsResult.uniqueRepos,
+    selected,
+    settings.projectRepoFilterMeaning
+  )
   const checkedKeys = selection.full
   const repos = controller.sectionsResult.uniqueRepos.filter(
     (repo) => !needle || repo.name.toLowerCase().includes(needle)
@@ -206,7 +214,12 @@ function ProjectsPage({ controller }: WorkspaceOptionProps) {
             onPress={() =>
               settings.setFilter(
                 'filterRepoIds',
-                toggleProjectFilter(repo, selected, controller.sectionsResult.uniqueRepos)
+                toggleProjectFilter(
+                  repo,
+                  selected,
+                  controller.sectionsResult.uniqueRepos,
+                  settings.projectRepoFilterMeaning
+                )
               )
             }
             leading={<View style={[styles.filterRepoDot, { backgroundColor: repo.color }]} />}

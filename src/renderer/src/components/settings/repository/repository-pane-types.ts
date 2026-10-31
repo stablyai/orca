@@ -1,9 +1,14 @@
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
-import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
+import type {
+  Project,
+  ProjectHostSetup,
+  ProjectUpdateArgs
+} from '../../../../../shared/project-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { SettingsProjectRemovalScope } from '../settings-project-list'
+import type { SettingsProjectRemoval } from './RepositoryRemoveProjectButton'
 import type { RepositorySettingsSessionState } from './RepositorySettingsSession'
 
 export type RepositoryPaneRepoUpdate = Omit<
@@ -27,11 +32,12 @@ export type RepositoryPaneProps = {
     updates: RepositoryPaneRepoUpdate,
     options?: { hostId?: ExecutionHostId }
   ) => void | Promise<boolean>
-  removeProject: (repoId: string) => void
+  removeProject: (repoId: string, accepted?: SettingsProjectRemoval) => void
   project?: Project | null
   selectedProjectSetupId?: string
   settingsSelectionKey?: string
   settingsEntryRepoIds?: ReadonlySet<string>
+  removalSetups?: readonly ProjectHostSetup[]
   removalScope?: SettingsProjectRemovalScope
   isLocalWindowsProject?: boolean
   wslAvailable?: boolean

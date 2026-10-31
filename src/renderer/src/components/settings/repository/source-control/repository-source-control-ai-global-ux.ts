@@ -1,5 +1,5 @@
 import { liftActionPermissionArgs } from '../../../../../../shared/source-control-action-permission-lift'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { CUSTOM_AGENT_ID } from '../../../../../../shared/commit-message-agent-spec'
@@ -59,7 +59,9 @@ export function useRepositorySourceControlAiGlobalUx({
   const persistedSerialized = useMemo(() => JSON.stringify(persistedRepoAi), [persistedRepoAi])
   const persistedRef = useRef(persistedRepoAi ?? {})
   const currentSnapshotRef = useRef(persistedRepoAi)
-  currentSnapshotRef.current = persistedRepoAi
+  useLayoutEffect(() => {
+    currentSnapshotRef.current = persistedRepoAi
+  }, [persistedRepoAi])
   const repoIdRef = useRef(repoId)
   const updateRepoRef = useRef(updateRepo)
   repoIdRef.current = repoId
@@ -101,6 +103,7 @@ export function useRepositorySourceControlAiGlobalUx({
     }
   })
 
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: reconcile authoritative readback with optimistic writes and explicit-Save drafts; null preserves the current session.
   useEffect(() => {
     if (persistedRepoAi === null) {
       return

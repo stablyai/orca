@@ -21,7 +21,10 @@ import type { RuntimeEnvironmentStatus } from '../../store/slices/runtime-status
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { WorkspaceHostScope } from '../../../../shared/ui-chrome-types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import type {
+  WorkspaceCreationTargetHint,
+  WorkspaceCreationProjectScope
+} from '@/lib/project-host-workspace-target'
 
 export type ComposerTargetStoreModel = {
   initialRepoId: string | undefined
@@ -31,6 +34,7 @@ export type ComposerTargetStoreModel = {
   initialLinkedWorkItem: LinkedWorkItemSummary | null
   initialGitHubWorkItem: GitHubWorkItem | null
   initialTaskSourceContext: TaskSourceContext | null
+  initialProjectScope: WorkspaceCreationProjectScope | null
   initialWorkspaceTarget: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus: WorkspaceStatus | undefined
   initialBaseBranch: string | undefined

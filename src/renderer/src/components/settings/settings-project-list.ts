@@ -1,74 +1,25 @@
-import { buildProjectSetupRepoLookup } from '@/lib/project-setup-repo-lookup'
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import { buildProjectGroups, getProjectGroupKey } from '../../../../shared/project-grouping'
+export {
+  getSettingsEntryHostSelection,
+  getSettingsProjectRemovalScope
+} from './settings-project-host-selection'
 import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'
 
-export type SettingsProject = {
-  projectId: string
-  project: Project
-  setups: ProjectHostSetup[]
-  representativeHostId: ExecutionHostId
-  representativeRepoId: string
-  /** Resolved group key used by this entry's host selection. */
-  selectionKey: string
-  /** Label for a host or folder group. */
-  checkoutLabel?: string
-  /** This entry holds a host or folder subset of its repository. */
-  splitProject?: boolean
-}
+import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { SettingsConcreteSelection, SettingsProject } from './settings-project-types'
 
-function getCheckoutSelectionKey(projectId: string, repoId: string): string {
-  return `${projectId}::setup:${repoId}`
-}
+export type {
+  SettingsProject,
+  SettingsProjectRemovalScope,
+  SettingsConcreteSelection
+} from './settings-project-types'
+import { buildProjectSetupRepoLookup } from '@/lib/project-setup-repo-lookup'
+import { resolveQualifiedIndexedRepoOwnerForHost } from '@/lib/repo-owner-index'
+import { getProjectRepoFilterHost } from '../../../../shared/project-repo-filter-selection'
 
-/** Carry the latest explicit host pick across split/unsplit selection keys while that host remains present. */
-export function getSettingsEntryHostSelection(
-  settingsProject: SettingsProject,
-  hostSelection: Readonly<Record<string, ExecutionHostId>>,
-  setupSelection: Readonly<Record<string, string>>
-): { hostId: ExecutionHostId | undefined; setupId: string | undefined } {
-  const { projectId, selectionKey, setups } = settingsProject
-  const keys = new Set([
-    selectionKey,
-    projectId,
-    ...setups.map((setup) => getCheckoutSelectionKey(projectId, setup.repoId)),
-    ...setups.flatMap((setup) =>
-      (['repository', 'host', 'folder'] as const).map((mode) => getProjectGroupKey(setup, mode))
-    )
-  ])
-  // Selection records are ordered by the store's last explicit pick, including alias keys.
-  for (const key of Object.keys(hostSelection).toReversed()) {
-    if (!keys.has(key)) {
-      continue
-    }
-    const hostId = hostSelection[key]
-    const setupId = setupSelection[key]
-    if (setups.some((setup) => setup.hostId === hostId && (!setupId || setup.id === setupId))) {
-      return { hostId, setupId }
-    }
-  }
-  return { hostId: undefined, setupId: undefined }
-}
-
-export type SettingsProjectRemovalScope = 'project' | 'checkout' | `host:${string}`
-
-export function getSettingsProjectRemovalScope(
-  settingsProject: SettingsProject
-): SettingsProjectRemovalScope {
-  if (
-    settingsProject.selectionKey.includes('::host:') &&
-    !settingsProject.selectionKey.includes('::setup:')
-  ) {
-    return `host:${settingsProject.setups[0]?.hostId ?? ''}`
-  }
-  if (settingsProject.selectionKey.includes('::setup:')) {
-    return 'checkout'
-  }
-  return 'project'
-}
+import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { buildProjectGroups } from '../../../../shared/project-grouping'
 
 /** Prefer local, then lowest repo ID, to keep navigation and pane identity stable until that repo is removed. */
 export function getSettingsProjectRepresentativeRepoId(
@@ -187,11 +138,19 @@ export function buildRepoIdToHostSelection(
 export function getSettingsTargetHostSelection(
   projects: readonly SettingsProject[],
   repoId: string,
-  hostId: ExecutionHostId
+  hostId: ExecutionHostId,
+  selectionKey?: string,
+  physicalHostId?: ExecutionHostId
 ): SettingsProjectHostSelection | null {
   for (const settingsProject of projects) {
+    if (selectionKey && settingsProject.selectionKey !== selectionKey) {
+      continue
+    }
     const setup = settingsProject.setups.find(
-      (candidate) => candidate.repoId === repoId && candidate.hostId === hostId
+      (candidate) =>
+        candidate.repoId === repoId &&
+        candidate.hostId === hostId &&
+        (!physicalHostId || getProjectRepoFilterHost(candidate) === physicalHostId)
     )
     if (setup) {
       return { selectionKey: settingsProject.selectionKey, hostId, setupId: setup.id }
@@ -231,8 +190,11 @@ export async function removeSettingsProjectFromAllHosts(
     options: { hostId: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
   ) => Promise<void>
 ): Promise<void> {
+  const seen = new Set<string>()
   for (const setup of setups) {
-    if (setup.repoId.trim().length > 0) {
+    const identity = `${setup.hostId}\0${setup.repoId}`
+    if (setup.repoId.trim().length > 0 && !seen.has(identity)) {
+      seen.add(identity)
       // Surface failures from user-initiated removal.
       await removeProject(setup.repoId, { hostId: setup.hostId, errorFeedback: 'toast' })
     }
@@ -247,7 +209,27 @@ export function getSettingsProjectHostRepo(
   selectedSetupId?: string
 ): Repo | undefined {
   const setup = getSettingsProjectSelectedSetup(settingsProject, selectedHostId, selectedSetupId)
-  return setup ? (buildProjectSetupRepoLookup(repos).resolve(setup) ?? undefined) : undefined
+  if (!setup) {
+    return undefined
+  }
+  const physical = getProjectRepoFilterHost(setup)
+  const match = resolveQualifiedIndexedRepoOwnerForHost(
+    repos,
+    setup.repoId,
+    setup.hostId,
+    setup.hostId.startsWith('runtime:')
+      ? physical.startsWith('ssh:')
+        ? physical.slice(4)
+        : null
+      : undefined
+  )
+  return match.kind === 'resolved'
+    ? match.owner
+    : (() => {
+        const candidates = buildProjectSetupRepoLookup(repos).byId.get(setup.repoId) ?? []
+        const legacy = candidates.length === 1 ? candidates[0] : undefined
+        return legacy && !legacy.executionHostId && !legacy.connectionId ? legacy : undefined
+      })()
 }
 
 /** The same concrete selection supplies rendering and continuity, even without a hydrated Repo. */
@@ -264,13 +246,6 @@ export function getSettingsProjectSelectedSetup(
   )
 }
 
-export type SettingsConcreteSelection = {
-  sectionId: string
-  repoId: string
-  hostId: ExecutionHostId
-  setupId: string
-}
-
 export function projectSettingsConcreteSelection(
   entries: readonly SettingsProject[],
   activeSectionId: string,
@@ -279,7 +254,14 @@ export function projectSettingsConcreteSelection(
   if (!anchor || anchor.sectionId !== activeSectionId) {
     return null
   }
-  const target = getSettingsTargetHostSelection(entries, anchor.repoId, anchor.hostId)
+  const current = entries.find((entry) => `repo-${entry.selectionKey}` === anchor.sectionId)
+  const target = getSettingsTargetHostSelection(
+    entries,
+    anchor.repoId,
+    anchor.hostId,
+    current?.selectionKey,
+    anchor.physicalHostId
+  )
   if (!target) {
     return null
   }

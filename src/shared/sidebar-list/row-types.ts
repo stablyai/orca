@@ -1,3 +1,4 @@
+import type { GroupingSetup } from '../project-grouping'
 import type { WorktreeOccurrence } from '../worktree-occurrence-plan'
 import type { FolderWorkspace } from '../folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
@@ -37,6 +38,14 @@ export type GroupHeaderRow = {
   count: number
   icon: SidebarHeaderIcon
   repo?: Repo
+  contextRepo?: Repo
+  displayRepo?: Repo
+  projectScope?: {
+    catalogHostId?: ExecutionHostId
+    key: string
+    registrations: readonly GroupingSetup[]
+    context?: { repoId: string; hostId: ExecutionHostId; setupId?: string }
+  }
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
   hostId?: ExecutionHostId

@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
+import { useLayoutEffect } from 'react'
+import * as persistQueue from './repository-source-control-ai-persist-queue'
 import { describe, expect, it, vi } from 'vitest'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-repo-settings'
 import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control-ai-settings'
@@ -45,6 +47,90 @@ const withRecipe = (commandInputTemplate: string): RepoSourceControlAiOverrides 
 })
 
 describe('useRepositorySourceControlAiGlobalUx', () => {
+  it('publishes committed nullable availability before passive reconciliation without replacing the acknowledged queue base', async () => {
+    const originalQueue = persistQueue.createRepoAiPersistQueue
+    let getPersisted: (() => RepoSourceControlAiOverrides | null) | undefined
+    const queueSpy = vi
+      .spyOn(persistQueue, 'createRepoAiPersistQueue')
+      .mockImplementation((options) => {
+        getPersisted = options.getPersisted
+        return originalQueue(options)
+      })
+    const available = { ...withRecipe('original'), enabled: false }
+    const updateRepo = vi.fn().mockResolvedValue(true)
+    type Ux = ReturnType<typeof useRepositorySourceControlAiGlobalUx>
+    let onCommit: ((ux: Ux) => void) | undefined
+    const observedAvailability: string[] = []
+    const hook = renderHook(
+      ({ snapshot }: { snapshot: RepoSourceControlAiOverrides | null }) => {
+        const ux = useRepositorySourceControlAiGlobalUx({
+          repoId: 'repo-1',
+          persistedRepoAi: snapshot,
+          settings: null,
+          source,
+          updateRepo
+        })
+        useLayoutEffect(() => {
+          const observe = onCommit
+          onCommit = undefined
+          observe?.(ux)
+        })
+        return ux
+      },
+      { initialProps: { snapshot: available } }
+    )
+    try {
+      act(() => {
+        hook.result.current.updateActionTemplate('fixCommitFailure', 'draft template')
+        hook.result.current.updateActionAgentArgs('fixCommitFailure', '--draft')
+      })
+      expect(updateRepo).not.toHaveBeenCalled()
+      const save = hook.result.current.saveActionRecipeText
+      let unavailableSave: Promise<void> | undefined
+      onCommit = () => {
+        observedAvailability.push('null')
+        expect(getPersisted?.()).toBeNull()
+        unavailableSave = save('fixCommitFailure')
+      }
+      hook.rerender({ snapshot: null })
+      expect(unavailableSave).toBeDefined()
+      expect(observedAvailability).toEqual(['null'])
+      await act(async () => unavailableSave)
+      expect(updateRepo).not.toHaveBeenCalled()
+      expect(hook.result.current.actionDirtyById.fixCommitFailure).toBe(true)
+      expect(hook.result.current.savingActionIds.fixCommitFailure).not.toBe(true)
+      expect(hook.result.current.displayRepoAi.actionOverrides?.fixCommitFailure).toMatchObject({
+        commandInputTemplate: 'draft template',
+        agentArgs: '--draft'
+      })
+      onCommit = () => {
+        observedAvailability.push('available')
+        expect(getPersisted?.()).toEqual(available)
+      }
+      hook.rerender({ snapshot: { ...available } })
+      expect(observedAvailability).toEqual(['null', 'available'])
+      await act(async () => hook.result.current.saveActionRecipeText('fixCommitFailure'))
+      expect(updateRepo).toHaveBeenCalledTimes(1)
+      expect(updateRepo).toHaveBeenCalledWith(
+        'repo-1',
+        expect.objectContaining({
+          sourceControlAi: expect.objectContaining({ enabled: false })
+        })
+      )
+      expect(hook.result.current.displayRepoAi.actionOverrides?.fixCommitFailure).toMatchObject({
+        commandInputTemplate: 'draft template',
+        agentArgs: '--draft'
+      })
+      expect(hook.result.current.actionDirtyById.fixCommitFailure).toBe(false)
+      expect(getPersisted?.()?.actionOverrides?.fixCommitFailure?.commandInputTemplate).toBe(
+        'draft template'
+      )
+    } finally {
+      hook.unmount()
+      queueSpy.mockRestore()
+    }
+  })
+
   it('keeps dirty preferences after failed or same-agent saves and clears the old namespace after a successful switch', async () => {
     const preferences = {
       agentId: 'codex',

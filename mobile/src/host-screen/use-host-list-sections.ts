@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { ProjectSectionModel } from '../../../src/shared/project-section-grouping'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-feed-rows'
 import { repoIconFeedKey } from '../../../src/shared/sidebar-list/repo-icon-data-urls-contract'
@@ -45,7 +46,7 @@ function useCollapsedGroups(state: HostScreenState): Set<string> {
 function useFilterRepos(
   catalogRepos: readonly SectionRepo[],
   displayWorktrees: Worktree[],
-  grouping?: import('../../../src/shared/project-section-grouping').ProjectSectionModel | null
+  grouping?: ProjectSectionModel | null
 ): WorkspaceSectionRepo[] {
   return useMemo(
     () => buildFilterRepos(catalogRepos, displayWorktrees, grouping),

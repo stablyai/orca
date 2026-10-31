@@ -14,52 +14,14 @@ import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import type { GroupHeaderRow, RepoOfWorktree } from './row-types'
 
-function getRepoHostId(repoId: string, repoMap: Map<string, Repo>): ExecutionHostId | null {
-  const repo = repoMap.get(repoId)
-  return repo ? getRepoExecutionHostId(repo) : null
-}
-
-function getRepoHostLabel(
-  repoId: string,
-  repoMap: Map<string, Repo>,
-  projectIndex: ProjectGroupingIndex | null,
-  hostLabelById: ReadonlyMap<string, string> | undefined
-): string | null {
-  const setup = projectIndex?.setupByRepoId.get(repoId)
-  if (setup) {
-    return getHostContextLabel(setup.hostId, { hostLabelById })
-  }
-  const repo = repoMap.get(repoId)
-  if (!repo) {
-    return null
-  }
-  const hostId = getRepoExecutionHostId(repo)
-  return getHostContextLabel(hostId, { hostLabelById })
-}
-
 export function getMixedHostContextLabels(
-  group: WorktreeGroupEntry,
-  repoMap: Map<string, Repo>,
-  projectIndex: ProjectGroupingIndex | null,
+  hostIds: Iterable<ExecutionHostId>,
   hostLabelById: ReadonlyMap<string, string> | undefined
-): Map<string, string> | undefined {
-  const labelsByRepoId = new Map<string, string>()
-  // Host identity, not the rendered label, determines whether rows are ambiguous:
-  // two hosts can intentionally share a user-facing label.
-  const uniqueHostIds = new Set<ExecutionHostId>()
-  for (const repoId of group.repoIds) {
-    const label = getRepoHostLabel(repoId, repoMap, projectIndex, hostLabelById)
-    if (!label) {
-      continue
-    }
-    labelsByRepoId.set(repoId, label)
-    const setup = projectIndex?.setupByRepoId.get(repoId)
-    const hostId = setup?.hostId ?? getRepoHostId(repoId, repoMap)
-    if (hostId) {
-      uniqueHostIds.add(hostId)
-    }
-  }
-  return uniqueHostIds.size > 1 ? labelsByRepoId : undefined
+): Map<ExecutionHostId, string> | undefined {
+  const hosts = new Set(hostIds)
+  return hosts.size > 1
+    ? new Map([...hosts].map((host) => [host, getHostContextLabel(host, { hostLabelById })]))
+    : undefined
 }
 
 /** Project observed hosts onto already admitted concrete targets; membership belongs to section preparation. */

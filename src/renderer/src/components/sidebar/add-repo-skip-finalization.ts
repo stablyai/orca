@@ -1,5 +1,5 @@
 import type { ProjectGroupingIndex } from '../../../../shared/project-section-grouping'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getProjectRepoFilterHost } from '../../../../shared/project-repo-filter-selection'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isDefaultBranchWorkspace } from '../../../../shared/worktree/workspace-kinds'
@@ -36,7 +36,7 @@ export function finalizeImportedRepoAfterSkip(
   revealRepoInProjectFilter(
     state,
     importedRepoId,
-    importedRepo ? getRepoExecutionHostId(importedRepo) : 'local',
+    importedRepo ? getProjectRepoFilterHost(importedRepo) : 'local',
     grouping
   )
   if (state.showActiveOnly) {

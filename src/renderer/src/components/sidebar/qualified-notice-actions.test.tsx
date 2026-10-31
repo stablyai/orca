@@ -1,17 +1,17 @@
 // @vitest-environment happy-dom
+import {
+  fetchWorktreesFixture,
+  local,
+  remote,
+  detected,
+  envelope
+} from './qualified-notice-actions-test-fixtures'
 import { act } from 'react'
+
 import { createRoot } from 'react-dom/client'
-import { afterEach, expect, it, vi } from 'vitest'
-import { z } from 'zod'
+import { expect, it, vi } from 'vitest'
+
 import type { AppState } from '@/store/types'
-import type {
-  DirectSshWorktreeFetchOptions,
-  WorktreeFetchOptions
-} from '@/store/slices/worktree-helpers'
-import type {
-  HostQualifiedDetectedWorktreeResult,
-  ProviderRequestId
-} from '../../../../shared/detected-worktree-provider-contract'
 import { TooltipProvider } from '../ui/tooltip'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -21,11 +21,7 @@ import {
   buildImportedWorktreesCardRow,
   buildNewExternalWorktreesInboxRow
 } from '../../../../shared/sidebar-list/row-builders'
-import type {
-  DetectedWorktree,
-  DetectedWorktreeListResult
-} from '../../../../shared/worktree/types'
-import { repo, worktree } from './worktree-list-groups-test-fixtures'
+import { repo } from './worktree-list-groups-test-fixtures'
 import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
 import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
 import {
@@ -39,53 +35,6 @@ import {
   renderNewExternalWorktreesInboxVirtualRow,
   renderImportedWorktreesVirtualRow
 } from './worktree-list/rows/notice-rows'
-
-function fetchWorktreesFixture() {
-  const providerRequestId = z
-    .custom<ProviderRequestId>((value) => value === 'qualified-notice-fixture')
-    .parse('qualified-notice-fixture')
-  const ordinary = vi.fn(async (_repoId: string, _options?: WorktreeFetchOptions) => false)
-  function fetchWorktrees(
-    repoId: string,
-    options: DirectSshWorktreeFetchOptions
-  ): Promise<HostQualifiedDetectedWorktreeResult>
-  function fetchWorktrees(repoId: string, options?: WorktreeFetchOptions): Promise<boolean>
-  async function fetchWorktrees(
-    repoId: string,
-    options?: WorktreeFetchOptions | DirectSshWorktreeFetchOptions
-  ): Promise<boolean | HostQualifiedDetectedWorktreeResult> {
-    if (options && 'directSshAuthority' in options) {
-      return {
-        providerRequestId,
-        executionHostId: options.executionHostId,
-        status: 'rejected'
-      }
-    }
-    return ordinary(repoId, options)
-  }
-  return { fetchWorktrees, ordinary }
-}
-
-const local = { ...repo, externalWorktreeVisibility: 'hide' as const }
-const remote = { ...local, path: '/server/repo', executionHostId: 'runtime:server' as const }
-function detected(path: string, extra: Partial<DetectedWorktree> = {}): DetectedWorktree {
-  return {
-    ...worktree,
-    repoId: local.id,
-    id: path,
-    path,
-    ownership: 'external',
-    selectedCheckout: false,
-    visible: false,
-    ...extra
-  }
-}
-function envelope(rows: DetectedWorktree[], authoritative = true): DetectedWorktreeListResult {
-  return { repoId: repo.id, worktrees: rows, authoritative, source: 'git' }
-}
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
-afterEach(() => useAppStore.setState(useAppStore.getInitialState(), true))
-
 it('partitions full current ownership once, retaining opaque envelope and runtime-owned SSH rows for both notices and Review', () => {
   const ssh = { ...local, executionHostId: 'ssh:box' as const }
   const rows = [
@@ -461,3 +410,5 @@ it('retains exact inbox dialog, failure and recovery identity across same-ID twi
     container.remove()
   }
 })
+
+// Geometry/platform services only; collection, viewport dispatch, menus and controllers remain production.

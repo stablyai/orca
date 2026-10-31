@@ -1,15 +1,46 @@
 // @vitest-environment happy-dom
+import {
+  adoptEndpointRepo,
+  adoptEndpointProjectCatalog
+} from '../../../../shared/endpoint-catalog-adoption'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { buildProjectGroupingIndex } from '../../../../shared/project-section-grouping'
 
 /** Exercise submenu focus timing and query reset, which flat-menu tests cannot cover. */
 
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { registerUIHandlers } from '../../../../main/ipc/ui'
+import {
+  createStore,
+  closeTestStores,
+  readDataFile,
+  testState,
+  writeDataFile
+} from '../../../../main/persistence/persistence-test-harness'
+import { getDefaultPersistedState } from '../../../../shared/constants'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  handlers: new Map<string, (...args: unknown[]) => unknown>(),
   state: {} as Record<string, unknown>
 }))
 
+vi.mock('electron', () => ({
+  app: { getPath: () => testState.dir },
+  safeStorage: { isEncryptionAvailable: () => false },
+  ipcMain: {
+    handle: (name: string, fn: (...args: unknown[]) => unknown) => mocks.handlers.set(name, fn),
+    on: () => {},
+    removeAllListeners: () => {}
+  },
+  BrowserWindow: { getAllWindows: () => [] },
+  webContents: { getAllWebContents: () => [] }
+}))
+vi.mock('../../../../main/telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: () => 'Unassigned' }))
 
 vi.mock('@/store', () => ({
@@ -35,7 +66,6 @@ import {
   NO_WORKSPACE_ROW_FILTERS,
   type WorkspaceRowFactReader
 } from '../../../../shared/workspace-view/workspace-row-filters'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import SidebarFilter from './SidebarFilter'
 import { useProjectFilterOptions } from './use-project-filter-options'
@@ -338,7 +368,7 @@ it.each([[[]], [[grouped[0]]]])(
 
 it('keeps qualified host twins restricted and keeps an explicit all-known allow list active', async () => {
   const twin = { ...grouped[0], id: 'same' }
-  const repos = [twin, { ...twin, executionHostId: 'runtime:server' as ExecutionHostId }]
+  const repos = [twin, { ...twin, executionHostId: 'runtime:server' as const }]
   setState({ repos, filterRepoIds: ['runtime:server\0same'] })
   render()
   openSubmenu()
@@ -601,4 +631,98 @@ it('keeps literal old-owner remove/complete/empty semantics for duplicates and o
   ])
   expect(edit('remove', [])).toEqual(['raw-a', 'local\0raw-a', 'offline'])
   expect(edit('remove', ['missing'])).toEqual(['raw-a', 'local\0raw-a', 'offline'])
+})
+
+it('completes the actual adopted nested Hx in Projects without borrowing Hy from the transport/raw winner', async () => {
+  const target = { kind: 'environment', environmentId: 'E' } as const
+  const authored = [
+    { id: 'r', connectionId: 'x', executionHostId: 'ssh:x' as const, path: '/srv/r' },
+    { id: 'r', connectionId: 'y', executionHostId: 'ssh:y' as const, path: '/srv/r' },
+    { id: 'q', connectionId: 'y', executionHostId: 'ssh:y' as const, path: '/srv/q' }
+  ].map((repo) => ({
+    ...repo,
+    displayName: repo.path,
+    badgeColor: '',
+    addedAt: 0,
+    upstream: { owner: 'org', repo: 'app' }
+  }))
+  const original = projectHostSetupProjectionFromRepos(authored)
+  const projection = adoptEndpointProjectCatalog(target, original.projects, original.setups)
+  const repos = authored.map((repo) => adoptEndpointRepo(target, repo))
+  setState({
+    repos,
+    projects: projection.projects,
+    projectHostSetups: projection.setups,
+    filterRepoIds: ['offline'],
+    settings: { projectGroupingMode: 'host' }
+  })
+  let options: ReturnType<typeof useProjectFilterOptions> | undefined
+  function Capture() {
+    options = useProjectFilterOptions(['offline'])
+    return null
+  }
+  act(() => root.render(<Capture />))
+  const index = buildProjectGroupingIndex({
+    projects: projection.projects,
+    projectHostSetups: projection.setups,
+    settings: { projectGroupingMode: 'host' }
+  })
+  const hx = index.groups.find((group) => group.registrations.includes(projection.setups[0]))!
+  expect(options!.repos.map((repo) => repo.id)).toContain(hx.key)
+  testState.dir = mkdtempSync(join(tmpdir(), 'orca-nested-filter-'))
+  writeDataFile({ ...getDefaultPersistedState(testState.dir), repos: authored })
+  const store = createStore()
+  registerUIHandlers(store)
+  setFilterRepoIds.mockImplementation((ids: string[]) =>
+    mocks.handlers.get('ui:set')!({}, { filterRepoIds: ids })
+  )
+  try {
+    render(true)
+    openSubmenu()
+    await settle()
+    act(() =>
+      searchInput()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    )
+    expect(setFilterRepoIds).toHaveBeenLastCalledWith(['offline', 'ssh:x\0r'])
+    expect(store.getUI().filterRepoIds).toEqual(['offline', 'ssh:x\0r'])
+    store.flush()
+    expect(readDataFile().ui.filterRepoIds).toEqual(['offline', 'ssh:x\0r'])
+    const rows = [
+      { id: 'r', host: 'ssh:x' as const, name: 'wx' },
+      { id: 'r', host: 'ssh:y' as const, name: 'wy' },
+      { id: 'q', host: 'ssh:y' as const, name: 'wq' }
+    ]
+    const reader: WorkspaceRowFactReader<(typeof rows)[number]> = {
+      repoId: (row) => row.id,
+      hostId: (row) => row.host,
+      isArchived: () => false,
+      isFolderWorkspace: () => false,
+      isOtherClient: () => false,
+      isDefaultBranch: () => false,
+      isAutomationCreated: () => false,
+      isCliCreated: () => false,
+      isDetachedHead: () => false,
+      isMainWorktree: () => false,
+      isSleeping: () => false
+    }
+    const visible = (ids: string[]) =>
+      filterWorkspaceRows(rows, { ...NO_WORKSPACE_ROW_FILTERS, filterRepoIds: ids }, reader).map(
+        (row) => row.name
+      )
+    expect(visible(['offline', 'r'])).toEqual(['wx', 'wy'])
+    expect(visible(store.getUI().filterRepoIds)).toEqual(['wx'])
+    expect(visible(['runtime:E\0r'])).toEqual([])
+    mocks.state.filterRepoIds = ['offline', 'ssh:x\0r']
+    render(true)
+    await settle()
+    expect(document.querySelector('[data-badges]')?.textContent).toBe('1:0')
+    expect(document.body.textContent).toContain('Unavailable projects')
+    await closeTestStores()
+    const restored = createStore().getUI().filterRepoIds
+    expect(restored).toContain('ssh:x\0r')
+    expect(visible(restored)).toEqual(['wx'])
+  } finally {
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  }
 })

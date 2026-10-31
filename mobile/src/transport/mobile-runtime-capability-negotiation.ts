@@ -26,7 +26,6 @@ export async function settleMobileRuntimeCapabilities(
   }
   if (!response.ok) {
     console.warn('[net] mobile capability negotiation unavailable', response.error.code)
-    return
   }
 }
 

@@ -33,6 +33,7 @@ export function SidebarWorktreeListDialogs({
     <>
       <ProjectGroupNameDialog
         open={nameDialog !== null}
+        sessionKey={nameDialog ?? undefined}
         title={
           nameDialog?.type === 'rename'
             ? translate('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')

@@ -2,7 +2,7 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useShallow } from 'zustand/react/shallow'
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -38,6 +38,9 @@ import {
 } from './github/task-page-github-work-item-mutation-registry'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { getTaskPageRepoSourceContext } from './task-page-source-context'
+
+type PaginationInput = Parameters<typeof useTaskPageGitHubSearchPagination>[0]
+type LandingInput = Parameters<typeof useTaskPageGitHubLandingRefresh>[0]
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -110,7 +113,7 @@ it.each(['github', 'gitlab'] as const)(
       projectHostSetups: projection.setups,
       settings: saved
     })
-    const fetchPage = vi.fn(
+    const fetchPage = vi.fn<PaginationInput['fetchWorkItemsNextPage']>(
       async (
         _repos: unknown[],
         _perRepo: number,
@@ -119,8 +122,12 @@ it.each(['github', 'gitlab'] as const)(
         _page: number
       ) => ({ items: [], failedCount: 0, errorTypes: [] })
     )
-    const initial = vi.fn(async () => ({ items: [], failedCount: 0, githubUnavailable: false }))
-    const count = vi.fn(async () => ({ totalPages: 1 }))
+    const initial = vi.fn<LandingInput['fetchWorkItemsAcrossRepos']>(async () => ({
+      items: [],
+      failedCount: 0,
+      githubUnavailable: false
+    }))
+    const count = vi.fn<LandingInput['countWorkItemsAcrossRepos']>(async () => ({ totalPages: 1 }))
     const workItem: GitHubWorkItem = {
       id: 'issue:1',
       repoId: 'same',
@@ -133,7 +140,7 @@ it.each(['github', 'gitlab'] as const)(
       updatedAt: '2026-10-29T00:00:00Z',
       author: null
     }
-    const quietFetch = vi.fn(async () => ({
+    const quietFetch = vi.fn<LandingInput['fetchWorkItemsAcrossRepos']>(async () => ({
       items: [workItem],
       failedCount: 0,
       githubUnavailable: false
@@ -157,9 +164,11 @@ it.each(['github', 'gitlab'] as const)(
       } as unknown as TaskPageStoreBindingsModel)
       selected = model.selectedRepos
       const [quietRefreshNonce, setQuietRefreshNonce] = useState(0)
-      const [pages, setPages] = useState<GitHubWorkItem[][]>([[workItem]])
+      const [pages, setPages] = useState<PaginationInput['pages']>([[workItem]])
       const pagesRef = useRef(pages)
-      pagesRef.current = pages
+      useLayoutEffect(() => {
+        pagesRef.current = pages
+      }, [pages])
       const pagination = {
         ...model,
         taskResumeApplied: false,
@@ -169,9 +178,9 @@ it.each(['github', 'gitlab'] as const)(
         activeGithubTaskKind: 'prs',
         githubSearchPersistReadyRef: useRef(false),
         paginationGenerationRef: useRef(0),
-        pagesRef: useRef([]),
-        currentPageRef: useRef(0),
-        countedTotalPagesRef: useRef(null),
+        pagesRef: useRef<PaginationInput['pagesRef']['current']>([]),
+        currentPageRef: useRef<PaginationInput['currentPageRef']['current']>(0),
+        countedTotalPagesRef: useRef<PaginationInput['countedTotalPagesRef']['current']>(null),
         paginationLoading: false,
         currentPage: 0,
         githubPerRepoPageLimit: 50,
@@ -186,13 +195,38 @@ it.each(['github', 'gitlab'] as const)(
         setLoadingTargetPage: noop,
         setCountedTotalPages: noop,
         setProvenPageLimit: noop
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies all fields destructured by the production pagination hook.
+      } satisfies Pick<
+        PaginationInput,
+        | 'taskResumeApplied'
+        | 'taskSearchInput'
+        | 'appliedTaskSearch'
+        | 'activeTaskPreset'
+        | 'activeGithubTaskKind'
+        | 'githubSearchPersistReadyRef'
+        | 'paginationGenerationRef'
+        | 'pagesRef'
+        | 'currentPageRef'
+        | 'countedTotalPagesRef'
+        | 'paginationLoading'
+        | 'currentPage'
+        | 'githubPerRepoPageLimit'
+        | 'githubPageSize'
+        | 'fetchWorkItemsNextPage'
+        | 'setTaskResumeState'
+        | 'setAppliedTaskSearch'
+        | 'setTasksFiltering'
+        | 'setPages'
+        | 'setCurrentPage'
+        | 'setPaginationLoading'
+        | 'setLoadingTargetPage'
+        | 'setCountedTotalPages'
+        | 'setProvenPageLimit'
+      >
       const page = useTaskPageGitHubSearchPagination(
-        pagination as unknown as Parameters<typeof useTaskPageGitHubSearchPagination>[0]
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked pagination port supplies actual refs, setters and fetch signature consumed by this hook; unused layered-model members are not implemented.
+        pagination as unknown as PaginationInput
       )
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the complete production quiet-refresh inputs; the authority is confirmed through its real dialog boundary below.
-      useTaskPageGitHubQuietRefresh({
+      const quietInput = {
         ...pagination,
         taskSource: provider,
         githubMode: 'items',
@@ -204,8 +238,10 @@ it.each(['github', 'gitlab'] as const)(
         githubWorkItemMutationQueryKey: model.selectedReposKey,
         hardRefreshEpochRef: useRef(0),
         fetchWorkItemsAcrossRepos: quietFetch
-      } as unknown as Parameters<typeof useTaskPageGitHubQuietRefresh>[0])
-      useTaskPageGitHubLandingRefresh({
+      } satisfies Partial<LandingInput>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked supplied model retains real pagination refs/setters/fetch and quiet-refresh owner fields; unused layered-model members are not implemented.
+      useTaskPageGitHubQuietRefresh(quietInput as unknown as LandingInput)
+      const landingInput = {
         ...pagination,
         taskSource: provider,
         taskResumeApplied: true,
@@ -219,10 +255,13 @@ it.each(['github', 'gitlab'] as const)(
         githubWorkItemMutationQueryKey: model.selectedReposKey,
         lastFetchedNonceRef: useRef(0),
         lastFetchedInvalidationNonceRef: useRef(0),
-        landingGitHubRefreshKeysRef: useRef(new Set()),
+        landingGitHubRefreshKeysRef: useRef<LandingInput['landingGitHubRefreshKeysRef']['current']>(
+          new Set()
+        ),
         githubResumeConsumedRef: useRef(false),
         githubResumeContextRef: useRef(''),
-        pendingGithubScrollRestoreRef: useRef(null),
+        pendingGithubScrollRestoreRef:
+          useRef<LandingInput['pendingGithubScrollRestoreRef']['current']>(null),
         hardRefreshEpochRef: useRef(0),
         retryingSourceKeys: new Set<string>(),
         setRetryingSourceKeys: noop,
@@ -231,8 +270,9 @@ it.each(['github', 'gitlab'] as const)(
         setTasksError: noop,
         setFailedCount: noop,
         setGithubUnavailable: noop
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every production landing/count dependency; empty real-shaped fetch results need no item mutation fixture.
-      } as unknown as Parameters<typeof useTaskPageGitHubLandingRefresh>[0])
+      } satisfies Partial<LandingInput>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked supplied landing model retains every runner read/ref/setter and real fetch/count signatures; unused layered-model members are not implemented.
+      useTaskPageGitHubLandingRefresh(landingInput as unknown as LandingInput)
       useTaskPageGitLabLoading({
         selectedRepos: model.selectedRepos,
         selectedReposKey: model.selectedReposKey,

@@ -7,7 +7,10 @@ import type { QuickSubmitOptions } from './composer-state/quick-creation-request
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import type {
+  WorkspaceCreationTargetHint,
+  WorkspaceCreationProjectScope
+} from '@/lib/project-host-workspace-target'
 import { buildComposerCardProps } from './composer-state/composer-card-props'
 import {
   canResolveFolderSmartGitHubSubmit,
@@ -51,6 +54,7 @@ export type UseComposerStateOptions = {
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
   initialTaskSourceContext?: TaskSourceContext | null
+  initialProjectScope?: WorkspaceCreationProjectScope | null
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string

@@ -102,8 +102,7 @@ function headerContext(rows: GroupHeaderRow[], statuses: readonly WorkspaceStatu
     onRowClickCapture: noop,
     onRowPointerDown: noop
   }
-  // SAFETY: header-only fixture supplies every field read by the production header builder.
-  // oxlint-disable-next-line typescript/consistent-type-assertions
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: header-only fixture supplies every field read by the production header builder.
   const args = partialArgs as BuildArgs
   return buildWorktreeVirtualRowContext(args)
 }
