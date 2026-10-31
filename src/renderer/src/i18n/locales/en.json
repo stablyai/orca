@@ -853,6 +853,20 @@
       "chatRuntime": "Chat runtime",
       "chatChoiceTitle": "Open as chat or CLI",
       "chatChoiceDescription": "Choose whether each agent opens as a chat or in its CLI.",
+      "defaultSurfaceTitle": "Open agents as",
+      "defaultSurfaceDescription": "The default for agents on this computer.",
+      "defaultSurfaceChatDescription": "Rich messages, visuals and images.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "Each agent’s own CLI.",
+      "defaultSurfacePerAgent": "Choose per agent",
+      "defaultSurfaceNowChat": "Agents now open as chats",
+      "defaultSurfaceNowTerminal": "Agents now open in the terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} stays in the terminal, as you set.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} stay in the terminal, as you set.",
+      "defaultSurfaceKeptChat_one": "{{agents}} stays as a chat, as you set.",
+      "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
+      "defaultSurfaceSetAllChat": "Set all to Chat",
+      "defaultSurfaceSetAllTerminal": "Set all to Terminal",
       "sameAsChoice": "Same as {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -20754,7 +20768,26 @@
       "title": "Jump to a worktree with <shortcut>",
       "description": "Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard."
     },
-    "gotIt": "Got it"
+    "gotIt": "Got it",
+    "chatUiHere": {
+      "title": "Chat UI is here",
+      "offIntro": "Agents can now open as a chat, with rich messages, visuals and images.",
+      "offTerminal": "Prefer the terminal? It stays fully supported. Your agents keep opening there until you choose Chat.",
+      "onIntro": "Chat UI is out of Experimental and now part of Orca. Your agents keep opening as chats, with rich messages, visuals and images.",
+      "onTerminal": "The terminal stays fully supported too. Switch any agent back anytime.",
+      "changeInSettings": "Change anytime in <link>Settings → Agents</link>.",
+      "stayInTerminal": "Stay in terminal",
+      "cta": "Use Chat UI",
+      "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
+      "demoTabTitle": "Explain login",
+      "demoPrompt": "Map out how login works",
+      "demoReply": "Login starts in {{file}}: the browser posts to /login, the server checks the password and creates a session, then redirects you to the app. Here’s the flow:",
+      "demoBrowser": "Browser",
+      "demoSession": "Session",
+      "demoApp": "App",
+      "demoPassword": "password",
+      "demoCookie": "cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "More matches may be available. Refine your search to narrow the results.",

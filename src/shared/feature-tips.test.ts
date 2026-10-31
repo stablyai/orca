@@ -11,6 +11,7 @@ describe('feature tips', () => {
     const tips = getOrderedUnseenFeatureTips({ seenTipIds: new Set<FeatureTipId>() })
 
     expect(tips.map((tip) => tip.id)).toEqual([
+      'chat-ui-here',
       'agent-session-search',
       'orca-cli',
       'cmd-j-palette',
@@ -21,6 +22,7 @@ describe('feature tips', () => {
   it('skips tips the user has already seen', () => {
     const tips = getOrderedUnseenFeatureTips({
       seenTipIds: new Set<FeatureTipId>([
+        'chat-ui-here',
         'voice-dictation',
         'orca-cli',
         'cmd-j-palette',
@@ -38,7 +40,8 @@ describe('feature tips', () => {
       completedTipIds: getCompletedFeatureTipIds({
         cliInstalled: true,
         voiceDictationEnabled: true,
-        sessionSearchTipCompleted: true
+        sessionSearchTipCompleted: true,
+        chatUiLaunchTipCompleted: true
       })
     })
 
@@ -51,7 +54,8 @@ describe('feature tips', () => {
       completedTipIds: getCompletedFeatureTipIds({
         cliInstalled: true,
         voiceDictationEnabled: false,
-        sessionSearchTipCompleted: true
+        sessionSearchTipCompleted: true,
+        chatUiLaunchTipCompleted: true
       })
     })
 
@@ -65,6 +69,7 @@ describe('feature tips', () => {
         cliInstalled: false,
         voiceDictationEnabled: false,
         sessionSearchTipCompleted: true,
+        chatUiLaunchTipCompleted: true,
         featureInteractions: {
           'voice-dictation': { firstInteractedAt: 100, interactionCount: 1 }
         }

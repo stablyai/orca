@@ -4,6 +4,7 @@ import type {
   FeatureInteractionState
 } from '../../../../../shared/feature-interactions'
 import type { FeatureTipId } from '../../../../../shared/feature-tips'
+import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
 import type { SettingsNavigationTarget } from '../../../lib/settings-navigation-types'
@@ -59,6 +60,9 @@ export type UISliceContextual = {
   closeModal: () => void
   featureTipsSeenIds: FeatureTipId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
+  /** Main's once-decided Chat UI launch tip variant; null until read. */
+  chatUiLaunchTipVariant: ChatUiLaunchTipVariant | null
+  setChatUiLaunchTipVariant: (variant: ChatUiLaunchTipVariant) => void
   featureInteractions: FeatureInteractionState
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<void>
   contextualToursSeenIds: ContextualTourId[]

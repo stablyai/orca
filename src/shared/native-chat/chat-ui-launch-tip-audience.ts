@@ -19,6 +19,20 @@ export type ChatUiLaunchTipAudience = {
   basis: ChatUiLaunchTipAudienceBasis
 }
 
+/** Which tip a profile gets: none, the invitation for terminal users, or the note for chat users. */
+export type ChatUiLaunchTipVariant = 'none' | 'chat-ui-off' | 'chat-ui-on'
+
+export function chatUiLaunchTipVariant(
+  audience: ChatUiLaunchTipAudience | null
+): ChatUiLaunchTipVariant {
+  if (audience?.membership !== 'eligible') {
+    return 'none'
+  }
+  return audience.basis === 'chat-ui-on' || audience.basis === 'chat-ui-off'
+    ? audience.basis
+    : 'none'
+}
+
 export function parseChatUiLaunchTipAudience(value: unknown): ChatUiLaunchTipAudience | null {
   if (!isRecord(value)) {
     return null

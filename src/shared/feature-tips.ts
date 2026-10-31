@@ -4,11 +4,17 @@ import {
   type FeatureInteractionState
 } from './feature-interactions'
 
-export type FeatureTipId = 'voice-dictation' | 'orca-cli' | 'cmd-j-palette' | 'agent-session-search'
+export type FeatureTipId =
+  | 'chat-ui-here'
+  | 'voice-dictation'
+  | 'orca-cli'
+  | 'cmd-j-palette'
+  | 'agent-session-search'
 
 export type FeatureTipPriority = 'new' | 'unseen'
 
 export type FeatureTipAction =
+  | 'use-chat-ui'
   | 'enable-voice'
   | 'setup-cli'
   | 'learn-cmd-j-palette'
@@ -30,10 +36,23 @@ export type CompletedFeatureTipState = {
   voiceDictationEnabled: boolean
   /** Search is on, or this client cannot turn it on. */
   sessionSearchTipCompleted: boolean
+  /** Main's once-decided record leaves this profile out, or this client has no such profile. */
+  chatUiLaunchTipCompleted: boolean
   featureInteractions?: FeatureInteractionState
 }
 
 export const FEATURE_TIPS = [
+  {
+    // First, so upgraded profiles meet it on their first launch after Chat UI left Experimental.
+    id: 'chat-ui-here',
+    priority: 'new',
+    eyebrow: 'New',
+    title: 'Chat UI is here',
+    description: 'Agents can now open as a chat, with rich messages, visuals and images.',
+    action: 'use-chat-ui',
+    ctaLabel: 'Use Chat UI',
+    completedByFeatureInteractions: []
+  },
   {
     id: 'agent-session-search',
     priority: 'new',
@@ -109,6 +128,9 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
   }
   if (state.sessionSearchTipCompleted) {
     completedIds.add('agent-session-search')
+  }
+  if (state.chatUiLaunchTipCompleted) {
+    completedIds.add('chat-ui-here')
   }
   for (const tip of FEATURE_TIPS) {
     if (

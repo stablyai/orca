@@ -49,6 +49,8 @@ import {
   terminalPaneSplitSchema
 } from './telemetry-feature-education-event-schemas'
 import {
+  chatUiFeatureTipActionSchema,
+  chatUiFeatureTipShownSchema,
   cmdJPaletteFeatureTipAcknowledgedSchema,
   cmdJPaletteFeatureTipShownSchema,
   featureWallClosedSchema,
@@ -181,6 +183,8 @@ export const eventSchemas = {
   orca_cli_feature_tip_setup_result: orcaCliFeatureTipSetupResultSchema,
   cmd_j_palette_feature_tip_shown: cmdJPaletteFeatureTipShownSchema,
   cmd_j_palette_feature_tip_acknowledged: cmdJPaletteFeatureTipAcknowledgedSchema,
+  chat_ui_feature_tip_shown: chatUiFeatureTipShownSchema,
+  chat_ui_feature_tip_action: chatUiFeatureTipActionSchema,
 
   feature_wall_opened: featureWallOpenedSchema,
   feature_wall_closed: featureWallClosedSchema,

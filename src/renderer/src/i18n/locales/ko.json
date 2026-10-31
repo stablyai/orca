@@ -379,6 +379,20 @@
       "chatRuntime": "채팅 런타임",
       "chatChoiceTitle": "채팅 또는 CLI로 열기",
       "chatChoiceDescription": "각 에이전트를 채팅으로 열지 CLI로 열지 선택합니다.",
+      "defaultSurfaceTitle": "에이전트 열기 방식",
+      "defaultSurfaceDescription": "이 컴퓨터에서 에이전트를 여는 기본 방식입니다.",
+      "defaultSurfaceChatDescription": "서식 있는 메시지, 시각 자료, 이미지.",
+      "defaultSurfaceTerminal": "터미널",
+      "defaultSurfaceTerminalDescription": "각 에이전트의 자체 CLI.",
+      "defaultSurfacePerAgent": "에이전트별로 선택",
+      "defaultSurfaceNowChat": "이제 에이전트가 채팅으로 열립니다",
+      "defaultSurfaceNowTerminal": "이제 에이전트가 터미널에서 열립니다",
+      "defaultSurfaceKeptTerminal_one": "{{agents}}은(는) 설정한 대로 터미널에서 열립니다.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}}은(는) 설정한 대로 터미널에서 열립니다.",
+      "defaultSurfaceKeptChat_one": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
+      "defaultSurfaceKeptChat_other": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
+      "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
+      "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
       "sameAsChoice": "{{agent}}와 동일 · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -20288,7 +20302,26 @@
       "title": "<shortcut> 키로 워크트리 이동",
       "description": "워크트리 검색, 탭 전환, 설정 조정, 새 워크트리 생성까지 모두 키보드만으로 하세요."
     },
-    "gotIt": "확인"
+    "gotIt": "확인",
+    "chatUiHere": {
+      "title": "채팅 UI가 나왔습니다",
+      "offIntro": "이제 에이전트를 채팅으로 열 수 있습니다. 서식 있는 메시지, 시각 자료, 이미지를 지원합니다.",
+      "offTerminal": "터미널이 더 편하신가요? 터미널은 앞으로도 완전히 지원됩니다. 채팅을 선택하기 전까지 에이전트는 계속 터미널에서 열립니다.",
+      "onIntro": "채팅 UI가 실험적 기능에서 벗어나 이제 Orca의 정식 기능이 되었습니다. 에이전트는 계속 채팅으로 열리며 서식 있는 메시지, 시각 자료, 이미지를 지원합니다.",
+      "onTerminal": "터미널도 계속 완전히 지원됩니다. 언제든지 에이전트를 다시 터미널로 바꿀 수 있습니다.",
+      "changeInSettings": "<link>설정 → 에이전트</link>에서 언제든지 변경할 수 있습니다.",
+      "stayInTerminal": "터미널 계속 사용",
+      "cta": "채팅 UI 사용",
+      "saveFailed": "채팅 UI를 켜지 못했습니다. 설정 → 에이전트에서 채팅을 선택하세요.",
+      "demoTabTitle": "로그인 설명",
+      "demoPrompt": "로그인이 어떻게 동작하는지 정리해 줘",
+      "demoReply": "로그인은 {{file}}에서 시작합니다. 브라우저가 /login으로 보내면 서버가 비밀번호를 확인하고 세션을 만든 뒤 앱으로 리디렉션합니다. 흐름은 다음과 같습니다:",
+      "demoBrowser": "브라우저",
+      "demoSession": "세션",
+      "demoApp": "앱",
+      "demoPassword": "비밀번호",
+      "demoCookie": "쿠키"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "더 많은 일치 항목을 사용할 수 있습니다. 검색 결과를 좁히려면 검색을 구체화하세요.",

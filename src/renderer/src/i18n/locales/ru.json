@@ -862,6 +862,24 @@
       "chatRuntime": "Среда чата",
       "chatChoiceTitle": "Открывать как чат или CLI",
       "chatChoiceDescription": "Выберите, открывается ли каждый агент как чат или в своём CLI.",
+      "defaultSurfaceTitle": "Открывать агентов как",
+      "defaultSurfaceDescription": "Вариант по умолчанию для агентов на этом компьютере.",
+      "defaultSurfaceChatDescription": "Форматированные сообщения, визуализации и изображения.",
+      "defaultSurfaceTerminal": "Терминал",
+      "defaultSurfaceTerminalDescription": "Собственный CLI каждого агента.",
+      "defaultSurfacePerAgent": "Выбрать для каждого агента",
+      "defaultSurfaceNowChat": "Агенты теперь открываются в виде чатов",
+      "defaultSurfaceNowTerminal": "Агенты теперь открываются в терминале",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} остаётся в терминале, как вы настроили.",
+      "defaultSurfaceKeptTerminal_few": "{{agents}} остаются в терминале, как вы настроили.",
+      "defaultSurfaceKeptTerminal_many": "{{agents}} остаются в терминале, как вы настроили.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} остаются в терминале, как вы настроили.",
+      "defaultSurfaceKeptChat_one": "{{agents}} остаётся в виде чата, как вы настроили.",
+      "defaultSurfaceKeptChat_few": "{{agents}} остаются в виде чатов, как вы настроили.",
+      "defaultSurfaceKeptChat_many": "{{agents}} остаются в виде чатов, как вы настроили.",
+      "defaultSurfaceKeptChat_other": "{{agents}} остаются в виде чатов, как вы настроили.",
+      "defaultSurfaceSetAllChat": "Перевести все в чат",
+      "defaultSurfaceSetAllTerminal": "Перевести все в терминал",
       "sameAsChoice": "Как у {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -21136,7 +21154,26 @@
       "title": "Переход к рабочему дереву с <shortcut>",
       "description": "Ищите рабочие деревья, переключайте вкладки, меняйте настройки или создавайте рабочие деревья, не отрывая рук от клавиатуры."
     },
-    "gotIt": "Понятно"
+    "gotIt": "Понятно",
+    "chatUiHere": {
+      "title": "Интерфейс чата уже здесь",
+      "offIntro": "Агенты теперь могут открываться в виде чата: с форматированными сообщениями, визуализациями и изображениями.",
+      "offTerminal": "Предпочитаете терминал? Он по-прежнему полностью поддерживается. Ваши агенты будут открываться в нём, пока вы не выберете чат.",
+      "onIntro": "Интерфейс чата больше не экспериментальный и теперь входит в Orca. Ваши агенты по-прежнему открываются в виде чатов: с форматированными сообщениями, визуализациями и изображениями.",
+      "onTerminal": "Терминал тоже по-прежнему полностью поддерживается. Любого агента можно вернуть в него в любой момент.",
+      "changeInSettings": "Изменить это можно в любой момент в разделе <link>Настройки → Агенты</link>.",
+      "stayInTerminal": "Остаться в терминале",
+      "cta": "Использовать чат",
+      "saveFailed": "Не удалось включить интерфейс чата. Выберите «Чат» в разделе «Настройки → Агенты».",
+      "demoTabTitle": "Как работает вход",
+      "demoPrompt": "Распиши, как работает вход",
+      "demoReply": "Вход начинается в {{file}}: браузер отправляет запрос на /login, сервер проверяет пароль и создаёт сессию, а затем перенаправляет вас в приложение. Вот схема:",
+      "demoBrowser": "Браузер",
+      "demoSession": "Сессия",
+      "demoApp": "Сайт",
+      "demoPassword": "пароль",
+      "demoCookie": "cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "Возможны другие совпадения. Уточните запрос, чтобы сузить результаты.",

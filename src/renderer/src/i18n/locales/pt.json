@@ -688,7 +688,26 @@
       "title": "Vá para um worktree com <shortcut>",
       "description": "Busque worktrees, troque de aba, ajuste configurações ou crie um worktree, tudo sem sair do teclado."
     },
-    "gotIt": "Entendi"
+    "gotIt": "Entendi",
+    "chatUiHere": {
+      "title": "Chegou a interface de chat",
+      "offIntro": "Os agentes agora podem abrir como um chat, com mensagens formatadas, recursos visuais e imagens.",
+      "offTerminal": "Prefere o terminal? Ele continua com suporte completo. Seus agentes continuam abrindo nele até você escolher Chat.",
+      "onIntro": "A interface de chat deixou de ser experimental e agora faz parte do Orca. Seus agentes continuam abrindo como chats, com mensagens formatadas, recursos visuais e imagens.",
+      "onTerminal": "O terminal também continua com suporte completo. Volte qualquer agente para ele quando quiser.",
+      "changeInSettings": "Altere quando quiser em <link>Configurações → Agentes</link>.",
+      "stayInTerminal": "Continuar no terminal",
+      "cta": "Usar a interface de chat",
+      "saveFailed": "Não foi possível ativar a interface de chat. Escolha Chat em Configurações → Agentes.",
+      "demoTabTitle": "Explicar o login",
+      "demoPrompt": "Mostre como o login funciona",
+      "demoReply": "O login começa em {{file}}: o navegador envia para /login, o servidor verifica a senha e cria uma sessão, depois redireciona você para o app. Este é o fluxo:",
+      "demoBrowser": "Navegador",
+      "demoSession": "Sessão",
+      "demoApp": "App",
+      "demoPassword": "senha",
+      "demoCookie": "cookie"
+    }
   },
   "rendererRecovery": {
     "reload": "Recarregar",
@@ -1541,6 +1560,22 @@
       "chatRuntime": "Runtime de chat",
       "chatChoiceTitle": "Abrir como chat ou CLI",
       "chatChoiceDescription": "Escolha se cada agente abre como chat ou na sua CLI.",
+      "defaultSurfaceTitle": "Abrir agentes como",
+      "defaultSurfaceDescription": "O padrão para os agentes neste computador.",
+      "defaultSurfaceChatDescription": "Mensagens formatadas, recursos visuais e imagens.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "A CLI própria de cada agente.",
+      "defaultSurfacePerAgent": "Escolher por agente",
+      "defaultSurfaceNowChat": "Os agentes agora abrem como chats",
+      "defaultSurfaceNowTerminal": "Os agentes agora abrem no terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} continua no terminal, como você definiu.",
+      "defaultSurfaceKeptTerminal_many": "{{agents}} continuam no terminal, como você definiu.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} continuam no terminal, como você definiu.",
+      "defaultSurfaceKeptChat_one": "{{agents}} continua como chat, como você definiu.",
+      "defaultSurfaceKeptChat_many": "{{agents}} continuam como chats, como você definiu.",
+      "defaultSurfaceKeptChat_other": "{{agents}} continuam como chats, como você definiu.",
+      "defaultSurfaceSetAllChat": "Definir todos como Chat",
+      "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
       "sameAsChoice": "Igual a {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {

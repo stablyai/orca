@@ -56,6 +56,7 @@ describe('Chat UI launch tip audience', () => {
     writeDataFile({ settings })
     const store = createStore()
     store.flush()
+    expect(store.getChatUiLaunchTipVariant()).toBe(basis)
     const record = { version: 1, membership, basis }
     expect(readDataFile()).toHaveProperty('chatUiLaunchTipAudience', record)
     expect(Object.hasOwn(readPersistedState().settings, 'experimentalNativeChat')).toBe(
@@ -72,6 +73,7 @@ describe('Chat UI launch tip audience', () => {
     // The audience, rather than retained old data, owns completion on desktop.
     const reopened = await reopen()
     reopened.flush()
+    expect(reopened.getChatUiLaunchTipVariant()).toBe(basis)
     expect(readDataFile()).toHaveProperty('chatUiLaunchTipAudience', record)
   })
 

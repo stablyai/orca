@@ -602,6 +602,22 @@
       "chatRuntime": "Environnement de chat",
       "chatChoiceTitle": "Ouvrir en chat ou en CLI",
       "chatChoiceDescription": "Choisissez si chaque agent s’ouvre en chat ou dans sa CLI.",
+      "defaultSurfaceTitle": "Ouvrir les agents en",
+      "defaultSurfaceDescription": "Le choix par défaut pour les agents sur cet ordinateur.",
+      "defaultSurfaceChatDescription": "Messages enrichis, visuels et images.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "La CLI propre à chaque agent.",
+      "defaultSurfacePerAgent": "Choisir par agent",
+      "defaultSurfaceNowChat": "Les agents s'ouvrent désormais en chat",
+      "defaultSurfaceNowTerminal": "Les agents s'ouvrent désormais dans le terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} reste dans le terminal, comme vous l’avez choisi.",
+      "defaultSurfaceKeptTerminal_many": "{{agents}} restent dans le terminal, comme vous l’avez choisi.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} restent dans le terminal, comme vous l’avez choisi.",
+      "defaultSurfaceKeptChat_one": "{{agents}} reste en chat, comme vous l’avez choisi.",
+      "defaultSurfaceKeptChat_many": "{{agents}} restent en chat, comme vous l’avez choisi.",
+      "defaultSurfaceKeptChat_other": "{{agents}} restent en chat, comme vous l’avez choisi.",
+      "defaultSurfaceSetAllChat": "Tout mettre en Chat",
+      "defaultSurfaceSetAllTerminal": "Tout mettre en Terminal",
       "sameAsChoice": "Identique à {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -20692,7 +20708,26 @@
       "title": "Accédez à un worktree avec <shortcut>",
       "description": "Recherchez des worktrees, changez d’onglet, ajustez les paramètres ou créez un worktree, sans quitter le clavier."
     },
-    "gotIt": "Compris"
+    "gotIt": "Compris",
+    "chatUiHere": {
+      "title": "L'interface de chat est arrivée",
+      "offIntro": "Les agents peuvent désormais s'ouvrir sous forme de chat, avec des messages enrichis, des visuels et des images.",
+      "offTerminal": "Vous préférez le terminal ? Il reste entièrement pris en charge. Vos agents continuent de s'y ouvrir jusqu'à ce que vous choisissiez Chat.",
+      "onIntro": "L'interface de chat n'est plus expérimentale et fait désormais partie d'Orca. Vos agents continuent de s'ouvrir sous forme de chats, avec des messages enrichis, des visuels et des images.",
+      "onTerminal": "Le terminal reste lui aussi entièrement pris en charge. Vous pouvez y remettre n'importe quel agent à tout moment.",
+      "changeInSettings": "Modifiable à tout moment dans <link>Paramètres → Agents</link>.",
+      "stayInTerminal": "Rester dans le terminal",
+      "cta": "Utiliser l'interface de chat",
+      "saveFailed": "Impossible d'activer l'interface de chat. Choisissez Chat dans Paramètres → Agents.",
+      "demoTabTitle": "Expliquer la connexion",
+      "demoPrompt": "Explique comment fonctionne la connexion",
+      "demoReply": "La connexion commence dans {{file}} : le navigateur envoie à /login, le serveur vérifie le mot de passe et crée une session, puis vous redirige vers l’app. Voici le flux :",
+      "demoBrowser": "Navigateur",
+      "demoSession": "Session",
+      "demoApp": "App",
+      "demoPassword": "mot de passe",
+      "demoCookie": "cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats.",

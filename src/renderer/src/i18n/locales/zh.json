@@ -379,6 +379,20 @@
       "chatRuntime": "聊天运行时",
       "chatChoiceTitle": "以聊天或 CLI 打开",
       "chatChoiceDescription": "选择每个智能体以聊天还是其 CLI 打开。",
+      "defaultSurfaceTitle": "智能体打开方式",
+      "defaultSurfaceDescription": "这台电脑上智能体的默认打开方式。",
+      "defaultSurfaceChatDescription": "富文本消息、可视化内容和图片。",
+      "defaultSurfaceTerminal": "终端",
+      "defaultSurfaceTerminalDescription": "每个智能体自己的 CLI。",
+      "defaultSurfacePerAgent": "按智能体选择",
+      "defaultSurfaceNowChat": "智能体现在以聊天方式打开",
+      "defaultSurfaceNowTerminal": "智能体现在在终端中打开",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} 按你的设置继续在终端中打开。",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} 按你的设置继续在终端中打开。",
+      "defaultSurfaceKeptChat_one": "{{agents}} 按你的设置继续以聊天方式打开。",
+      "defaultSurfaceKeptChat_other": "{{agents}} 按你的设置继续以聊天方式打开。",
+      "defaultSurfaceSetAllChat": "全部设为聊天",
+      "defaultSurfaceSetAllTerminal": "全部设为终端",
       "sameAsChoice": "与 {{agent}} 相同 · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -20289,7 +20303,26 @@
       "title": "使用 <shortcut> 跳转到工作树",
       "description": "搜索工作树、切换标签页、调整设置或创建工作树，全程无需离开键盘。"
     },
-    "gotIt": "知道了"
+    "gotIt": "知道了",
+    "chatUiHere": {
+      "title": "聊天界面来了",
+      "offIntro": "智能体现在可以以聊天方式打开，支持富文本消息、可视化内容和图片。",
+      "offTerminal": "更喜欢终端？终端将继续获得完整支持。在你选择聊天之前，智能体会继续在终端中打开。",
+      "onIntro": "聊天界面已结束实验阶段，正式成为 Orca 的一部分。你的智能体会继续以聊天方式打开，支持富文本消息、可视化内容和图片。",
+      "onTerminal": "终端同样会继续获得完整支持。你可以随时把任何智能体切换回终端。",
+      "changeInSettings": "可随时在<link>设置 → 智能体</link>中更改。",
+      "stayInTerminal": "继续使用终端",
+      "cta": "使用聊天界面",
+      "saveFailed": "无法开启聊天界面。请在“设置 → 智能体”中选择聊天。",
+      "demoTabTitle": "解释登录流程",
+      "demoPrompt": "梳理一下登录是怎么工作的",
+      "demoReply": "登录从 {{file}} 开始：浏览器提交到 /login，服务器检查密码并创建会话，然后将你重定向到应用。流程如下：",
+      "demoBrowser": "浏览器",
+      "demoSession": "会话",
+      "demoApp": "应用",
+      "demoPassword": "密码",
+      "demoCookie": "Cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "可能还有更多匹配结果。请细化搜索以缩小范围。",

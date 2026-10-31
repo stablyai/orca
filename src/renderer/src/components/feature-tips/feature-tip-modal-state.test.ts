@@ -24,6 +24,7 @@ describe('feature tip modal state', () => {
       modalData: { tipId: 'voice-dictation' },
       seenTipIds: ['voice-dictation'],
       featureInteractions: {},
+      chatUiLaunchTipVariant: 'none',
       settings: makeSettings(),
       webClient: false
     })
@@ -37,6 +38,7 @@ describe('feature tip modal state', () => {
       modalData: {},
       seenTipIds: [],
       featureInteractions: {},
+      chatUiLaunchTipVariant: 'none',
       settings: makeSettings(),
       webClient: false
     })

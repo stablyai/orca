@@ -775,6 +775,20 @@
       "chatRuntime": "聊天執行環境",
       "chatChoiceTitle": "以聊天或 CLI 開啟",
       "chatChoiceDescription": "選擇每個代理程式以聊天或其 CLI 開啟。",
+      "defaultSurfaceTitle": "代理程式開啟方式",
+      "defaultSurfaceDescription": "這台電腦上代理程式的預設開啟方式。",
+      "defaultSurfaceChatDescription": "豐富訊息、視覺內容和圖片。",
+      "defaultSurfaceTerminal": "終端機",
+      "defaultSurfaceTerminalDescription": "每個代理程式自己的 CLI。",
+      "defaultSurfacePerAgent": "逐一設定代理程式",
+      "defaultSurfaceNowChat": "代理程式現在會以聊天方式開啟",
+      "defaultSurfaceNowTerminal": "代理程式現在會在終端機中開啟",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} 依您的設定繼續在終端機中開啟。",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} 依您的設定繼續在終端機中開啟。",
+      "defaultSurfaceKeptChat_one": "{{agents}} 依您的設定繼續以聊天方式開啟。",
+      "defaultSurfaceKeptChat_other": "{{agents}} 依您的設定繼續以聊天方式開啟。",
+      "defaultSurfaceSetAllChat": "全部設為聊天",
+      "defaultSurfaceSetAllTerminal": "全部設為終端機",
       "sameAsChoice": "與 {{agent}} 相同 · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -20136,7 +20150,26 @@
       "title": "使用 <shortcut> 跳至工作樹",
       "description": "搜尋工作樹、切換分頁、調整設定或建立工作樹，全程不必離開鍵盤。"
     },
-    "gotIt": "知道了"
+    "gotIt": "知道了",
+    "chatUiHere": {
+      "title": "聊天介面來了",
+      "offIntro": "代理程式現在可以用聊天方式開啟，支援豐富訊息、視覺內容和圖片。",
+      "offTerminal": "比較喜歡終端機？終端機仍會獲得完整支援。在您選擇聊天之前，代理程式都會繼續在終端機中開啟。",
+      "onIntro": "聊天介面已結束實驗階段，正式成為 Orca 的一部分。您的代理程式會繼續以聊天方式開啟，支援豐富訊息、視覺內容和圖片。",
+      "onTerminal": "終端機同樣會獲得完整支援。您隨時可以把任何代理程式切換回終端機。",
+      "changeInSettings": "隨時可在<link>設定 → 代理程式</link>中變更。",
+      "stayInTerminal": "繼續使用終端機",
+      "cta": "使用聊天介面",
+      "saveFailed": "無法開啟聊天介面。請在「設定 → 代理程式」中選擇聊天。",
+      "demoTabTitle": "說明登入流程",
+      "demoPrompt": "說明登入是怎麼運作的",
+      "demoReply": "登入從 {{file}} 開始：瀏覽器送出到 /login，伺服器檢查密碼並建立工作階段，然後將您重新導向到應用程式。流程如下：",
+      "demoBrowser": "瀏覽器",
+      "demoSession": "工作階段",
+      "demoApp": "應用程式",
+      "demoPassword": "密碼",
+      "demoCookie": "Cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "可能還有更多符合項目。請縮小搜尋範圍。",

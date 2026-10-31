@@ -379,6 +379,20 @@
       "chatRuntime": "チャットランタイム",
       "chatChoiceTitle": "チャットまたは CLI で開く",
       "chatChoiceDescription": "各 Agent をチャットで開くか CLI で開くかを選びます。",
+      "defaultSurfaceTitle": "Agent の開き方",
+      "defaultSurfaceDescription": "このコンピューター上の Agent の既定の開き方です。",
+      "defaultSurfaceChatDescription": "リッチなメッセージ、ビジュアル、画像。",
+      "defaultSurfaceTerminal": "ターミナル",
+      "defaultSurfaceTerminalDescription": "各 Agent 独自の CLI。",
+      "defaultSurfacePerAgent": "Agent ごとに選択",
+      "defaultSurfaceNowChat": "Agent はチャットとして開くようになりました",
+      "defaultSurfaceNowTerminal": "Agent はターミナルで開くようになりました",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} は設定どおりターミナルで開きます。",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} は設定どおりターミナルで開きます。",
+      "defaultSurfaceKeptChat_one": "{{agents}} は設定どおりチャットとして開きます。",
+      "defaultSurfaceKeptChat_other": "{{agents}} は設定どおりチャットとして開きます。",
+      "defaultSurfaceSetAllChat": "すべてチャットにする",
+      "defaultSurfaceSetAllTerminal": "すべてターミナルにする",
       "sameAsChoice": "{{agent}} と同じ · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -20288,7 +20302,26 @@
       "title": "<shortcut> でワークツリーに移動",
       "description": "ワークツリーの検索、タブの切り替え、設定の調整、新しいワークツリーの作成を、すべてキーボードだけで行えます。"
     },
-    "gotIt": "了解"
+    "gotIt": "了解",
+    "chatUiHere": {
+      "title": "チャット UI が登場",
+      "offIntro": "Agent をチャットとして開けるようになりました。リッチなメッセージ、ビジュアル、画像を表示できます。",
+      "offTerminal": "ターミナルのほうが好みですか？ターミナルは引き続き完全にサポートされます。チャットを選ぶまで、Agent はこれまでどおりターミナルで開きます。",
+      "onIntro": "チャット UI は実験的機能を卒業し、Orca の標準機能になりました。Agent はこれまでどおりチャットとして開き、リッチなメッセージ、ビジュアル、画像を表示できます。",
+      "onTerminal": "ターミナルも引き続き完全にサポートされます。どの Agent もいつでもターミナルに戻せます。",
+      "changeInSettings": "<link>設定 → Agent</link> でいつでも変更できます。",
+      "stayInTerminal": "ターミナルのまま使う",
+      "cta": "チャット UI を使う",
+      "saveFailed": "チャット UI をオンにできませんでした。設定 → Agent でチャットを選んでください。",
+      "demoTabTitle": "ログインの説明",
+      "demoPrompt": "ログインの仕組みを図にして",
+      "demoReply": "ログインは {{file}} から始まります。ブラウザが /login に送信し、サーバーがパスワードを確認してセッションを作成し、アプリにリダイレクトします。流れは次のとおりです:",
+      "demoBrowser": "ブラウザ",
+      "demoSession": "セッション",
+      "demoApp": "アプリ",
+      "demoPassword": "パスワード",
+      "demoCookie": "Cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "さらに多くの一致が利用可能になる可能性があります。検索を絞り込んで結果を絞り込みます。",

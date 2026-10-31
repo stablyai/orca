@@ -810,6 +810,20 @@
       "chatRuntime": "Chat-Laufzeit",
       "chatChoiceTitle": "Als Chat oder CLI öffnen",
       "chatChoiceDescription": "Lege fest, ob jeder Agent als Chat oder in seiner CLI geöffnet wird.",
+      "defaultSurfaceTitle": "Agenten öffnen als",
+      "defaultSurfaceDescription": "Die Standardeinstellung für Agenten auf diesem Computer.",
+      "defaultSurfaceChatDescription": "Formatierte Nachrichten, Grafiken und Bilder.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "Die eigene CLI jedes Agenten.",
+      "defaultSurfacePerAgent": "Pro Agent wählen",
+      "defaultSurfaceNowChat": "Agenten öffnen sich jetzt als Chats",
+      "defaultSurfaceNowTerminal": "Agenten öffnen sich jetzt im Terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} bleibt wie eingestellt im Terminal.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} bleiben wie eingestellt im Terminal.",
+      "defaultSurfaceKeptChat_one": "{{agents}} bleibt wie eingestellt ein Chat.",
+      "defaultSurfaceKeptChat_other": "{{agents}} bleiben wie eingestellt Chats.",
+      "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
+      "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
       "sameAsChoice": "Wie {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -20451,7 +20465,26 @@
       "title": "Mit <shortcut> zu einem Worktree wechseln",
       "description": "Worktrees suchen, Tabs wechseln, Einstellungen anpassen oder einen neuen Worktree erstellen – alles per Tastatur."
     },
-    "gotIt": "Verstanden"
+    "gotIt": "Verstanden",
+    "chatUiHere": {
+      "title": "Die Chat-Oberfläche ist da",
+      "offIntro": "Agenten können jetzt als Chat geöffnet werden, mit formatierten Nachrichten, Grafiken und Bildern.",
+      "offTerminal": "Lieber das Terminal? Es wird weiterhin voll unterstützt. Deine Agenten öffnen sich dort, bis du Chat wählst.",
+      "onIntro": "Die Chat-Oberfläche ist nicht mehr experimentell und jetzt fester Teil von Orca. Deine Agenten öffnen sich weiterhin als Chats, mit formatierten Nachrichten, Grafiken und Bildern.",
+      "onTerminal": "Auch das Terminal wird weiterhin voll unterstützt. Jeder Agent lässt sich jederzeit zurückstellen.",
+      "changeInSettings": "Jederzeit unter <link>Einstellungen → Agenten</link> ändern.",
+      "stayInTerminal": "Im Terminal bleiben",
+      "cta": "Chat-Oberfläche nutzen",
+      "saveFailed": "Die Chat-Oberfläche konnte nicht aktiviert werden. Unter Einstellungen → Agenten „Chat“ wählen.",
+      "demoTabTitle": "Anmeldung erklären",
+      "demoPrompt": "Zeig mir, wie die Anmeldung funktioniert",
+      "demoReply": "Die Anmeldung beginnt in {{file}}: Der Browser sendet an /login, der Server prüft das Passwort und erstellt eine Sitzung, dann leitet er dich zur App weiter. So läuft es ab:",
+      "demoBrowser": "Browser",
+      "demoSession": "Sitzung",
+      "demoApp": "App",
+      "demoPassword": "Passwort",
+      "demoCookie": "Cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "Möglicherweise sind weitere Treffer verfügbar. Die Suche verfeinern, um die Ergebnisse einzugrenzen.",
