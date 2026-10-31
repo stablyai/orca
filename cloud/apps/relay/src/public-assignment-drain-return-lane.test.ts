@@ -129,7 +129,8 @@ describe('drain-return lane', () => {
       drain: vi.fn(),
       ready: vi.fn(async () => true),
       recordAssignmentAdmission: (outcome) => outcomes.push(outcome),
-      recordAssignmentUnavailable: (cause) => causes.push(cause)
+      recordAssignmentUnavailable: (cause, ownRetry) =>
+        causes.push(ownRetry ? `${cause}:own-retry` : cause)
     })
 
     expect(
@@ -140,7 +141,26 @@ describe('drain-return lane', () => {
     expect(repeat.status).toBe(503)
     expect(repeat.headers.get('retry-after')).toBe('2')
     expect(outcomes).toEqual(['sticky', 'sticky-rejected'])
-    expect(causes).toEqual(['sticky-lane'])
+    expect(causes).toEqual(['sticky-lane:own-retry'])
+  })
+
+  it('marks a placement re-ask inside the host interval as the host’s own retry', async () => {
+    const host = 'rrrrrrrrrrrrrrrr'
+    const causes: string[] = []
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { assign: vi.fn(async () => assignment('cell-r', host)), resolve: vi.fn() } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true),
+      recordAssignmentUnavailable: (cause, ownRetry) =>
+        causes.push(ownRetry ? `${cause}:own-retry` : cause)
+    })
+
+    expect((await app.request('/v1/assign', assignmentRequest(host))).status).toBe(200)
+    const repeat = await app.request('/v1/assign', assignmentRequest(host))
+
+    expect(repeat.status).toBe(503)
+    expect(causes).toEqual(['placement-lane:own-retry'])
   })
 
   it('names the cause of a placement that found no capacity', async () => {

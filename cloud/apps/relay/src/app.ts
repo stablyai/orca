@@ -58,6 +58,7 @@ import {
 } from './drain-return-admission.js'
 import { googleMetadataIdentityToken } from './google-metadata-identity-token.js'
 import {
+  isOwnRetryRejection,
   RelayPublicAssignmentAdmission,
   type AssignmentAdmissionRejection
 } from './public-assignment-admission.js'
@@ -168,7 +169,7 @@ export function createRelayApp(
     recordDrainReturnRetryAfter?: (seconds: number) => void
     recordAdmissionServiceMs?: (lane: 'sticky' | 'drain-return', durationMs: number) => void
     recordStickySlot?: (sample: StickySlotSample) => void
-    recordAssignmentUnavailable?: (cause: AssignmentUnavailableCause) => void
+    recordAssignmentUnavailable?: (cause: AssignmentUnavailableCause, ownRetry?: boolean) => void
     recordRegionRequest?: (region: RelayRegion | undefined) => void
     // Step 3 shadow directory; absent unless the director polls seat feeds.
     shadowSeats?: ShadowSeatDirectory
@@ -523,7 +524,7 @@ export function createRelayApp(
       })
       if (!stickySlot) {
         operations.recordAssignmentAdmission?.('sticky-rejected')
-        operations.recordAssignmentUnavailable?.('sticky-lane')
+        operations.recordAssignmentUnavailable?.('sticky-lane', isOwnRetryRejection(rejection))
         logAdmissionRejection({
           route: 'assign',
           lane: 'sticky',
@@ -603,7 +604,7 @@ export function createRelayApp(
           relayHostId: claims.relayHostId,
           reason: rejection
         })
-        operations.recordAssignmentUnavailable?.('placement-lane')
+        operations.recordAssignmentUnavailable?.('placement-lane', isOwnRetryRejection(rejection))
         return rejectPublicAssignment(context)
       }
     }

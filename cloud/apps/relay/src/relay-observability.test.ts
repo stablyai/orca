@@ -232,7 +232,7 @@ describe('relay observability', () => {
     })
   })
 
-  it('splits non-drain 503s from scheduled drain-return deferrals', () => {
+  it('splits non-drain 503s from scheduled drain-return deferrals and own retries', () => {
     const entries: Array<Record<string, unknown>> = []
     const observability = new RelayObservability(
       { role: 'director', cellId: 'director', region: 'us-central1' },
@@ -243,6 +243,9 @@ describe('relay observability', () => {
     }
     observability.recordAssignmentUnavailable('reserve-paced-drained')
     observability.recordAssignmentUnavailable('sticky-lane')
+    observability.recordAssignmentUnavailable('placement-lane', true)
+    observability.recordAssignmentUnavailable('placement-lane', true)
+    observability.recordAssignmentUnavailable('placement-lane')
     observability.recordAssignmentUnavailable('relay_capacity_exhausted')
     observability.recordAssignmentUnavailable('relay_capacity_exhausted')
     observability.flush(counts)
@@ -253,11 +256,17 @@ describe('relay observability', () => {
         'drain-return-deferred': 40,
         'reserve-paced-drained': 1,
         'sticky-lane': 1,
+        'placement-lane': 3,
         relay_capacity_exhausted: 2
       },
-      assignNonDrain503sDelta: 3
+      assignNonDrain503sDelta: 4,
+      ownRetry503sDelta: 2
     })
-    expect(entries[1]).toMatchObject({ assign503sByCauseDelta: {}, assignNonDrain503sDelta: 0 })
+    expect(entries[1]).toMatchObject({
+      assign503sByCauseDelta: {},
+      assignNonDrain503sDelta: 0,
+      ownRetry503sDelta: 0
+    })
   })
 
   it('reports lane slot service times only for windows that served the lane', () => {
