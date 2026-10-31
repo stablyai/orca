@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/context-menu'
 import { PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
@@ -73,13 +72,8 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     localPreflightContextKey(getLocalPreflightContext(s))
   )
   const linearStatus = useAppStore((s) => s.linearStatus)
-  const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
-  const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
-  const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
-  const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
-  const providerRuntimeContextKey = useAppStore((s) => getProviderRuntimeContextKey(s.settings))
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
@@ -118,23 +112,20 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     if (!preflightStatusChecked || !preflightStatusCurrent) {
       void refreshPreflightStatus()
     }
-    if (!linearStatusChecked || linearStatusContextKey !== providerRuntimeContextKey) {
+    if (taskProviderConnections.linear === undefined) {
       void checkLinearConnection()
     }
     // Why: Jira hides once its status settles as disconnected; without a check its icon lingers.
-    if (!jiraStatusChecked || jiraStatusContextKey !== providerRuntimeContextKey) {
+    if (taskProviderConnections.jira === undefined) {
       void checkJiraConnection()
     }
   }, [
     checkJiraConnection,
     checkLinearConnection,
-    jiraStatusChecked,
-    jiraStatusContextKey,
-    linearStatusChecked,
-    linearStatusContextKey,
     preflightStatusChecked,
     preflightStatusCurrent,
-    providerRuntimeContextKey,
+    taskProviderConnections.jira,
+    taskProviderConnections.linear,
     refreshPreflightStatus
   ])
 
