@@ -320,4 +320,46 @@ describe('LinkActionPopover', () => {
     expect(mocks.openSettingsPage).toHaveBeenCalledOnce()
     expect(restoreFocus).not.toHaveBeenCalled()
   })
+  it.each(['callback', 'omitted'] as const)(
+    'retains Settings callback order and hides only explicit omission (%s)',
+    (mode) => {
+      const order: string[] = []
+      const onClose = () => {
+        order.push('close')
+      }
+      const onOpenSettings =
+        mode === 'callback'
+          ? () => {
+              order.push('host')
+            }
+          : null
+      mocks.openSettingsTarget.mockImplementation(() => {
+        order.push('target')
+      })
+      mocks.openSettingsPage.mockImplementation(() => {
+        order.push('page')
+      })
+      const request: LinkActionRequest = {
+        anchorX: 0,
+        anchorY: 0,
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'System Browser', run: vi.fn() },
+        restoreFocus: vi.fn()
+      }
+      render(
+        <LinkActionPopover request={request} onClose={onClose} onOpenSettings={onOpenSettings} />
+      )
+      const gear = screen.queryByRole('button', { name: 'Terminal link settings' })
+      if (mode === 'omitted') {
+        expect(gear).toBeNull()
+        expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy()
+        expect(screen.getByRole('button', { name: /System Browser/ })).toBeTruthy()
+        expect(order).toEqual([])
+      } else {
+        fireEvent.click(gear!)
+        expect(order).toEqual(['close', 'host', 'target', 'page'])
+      }
+    }
+  )
 })
