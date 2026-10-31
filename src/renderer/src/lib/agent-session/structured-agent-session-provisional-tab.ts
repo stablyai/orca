@@ -1,4 +1,9 @@
 import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  type DesktopNavigationRequest
+} from '../desktop-navigation'
+import {
   readNativeChatComposerDraft,
   structuredAgentSessionDraftScopeKey
 } from '@/components/native-chat/native-chat-composer-draft-store'
@@ -70,15 +75,17 @@ function launchHooks(args: ProvisionalLaunchArgs): StructuredAgentLaunchHooks {
 export type ProvisionalLaunchArgs = {
   plan: AgentSessionLaunchPlan
   hooks: StructuredAgentLaunchHooks
+  onOpened?: (tab: OpenedAgentSessionTab) => void
   focusIntent?: NativeChatComposerFocusIntent
   target?: AgentSessionLaunchTarget
   targetGroupId?: string
   afterTabId?: string
   activate?: boolean
+  navigation?: DesktopNavigationRequest | null
   /** Identity-only resumes publish on commit; unknown outcomes keep their recovery tab. */
   deferPublication?: true
   /** Allow workspace reveal before host acquisition, when the launch has no session ID or owned chat tab yet. */
-  beforeOpen?: (sessionId?: string) => boolean | void
+  beforeOpen?: (sessionId?: string, navigation?: DesktopNavigationRequest | null) => boolean | void
   /** The terminal the host's "no" opens; a caller without one gets a new agent tab's. */
   onHostDeclined?: (
     target: RuntimeClientTarget,
@@ -93,6 +100,18 @@ export type ProvisionalLaunchArgs = {
 export function beginStructuredAgentSessionProvisionalLaunch(
   args: ProvisionalLaunchArgs
 ): StructuredAgentSessionProvisionalLaunch | null {
+  const navigation =
+    args.navigation === undefined
+      ? args.activate === false
+        ? null
+        : beginDesktopNavigation()
+      : args.navigation
+  const beforeOpen = args.beforeOpen
+  args = {
+    ...args,
+    navigation,
+    beforeOpen: beforeOpen ? (sessionId) => beforeOpen(sessionId, navigation) : undefined
+  }
   const focusIntent = args.focusIntent
   if (args.activate === false) {
     focusIntent?.cancel()
@@ -109,7 +128,8 @@ export function beginStructuredAgentSessionProvisionalLaunch(
   ): ReturnType<typeof beginLocalProvisionalLaunch> => {
     if (launch?.tab) {
       tabOpened = true
-      if (args.activate !== false) {
+      args.onOpened?.(launch.tab)
+      if (args.activate !== false && navigation && canPresentDesktopNavigation(navigation)) {
         focusIntent?.request(launch.tab.id)
       }
     } else if (!launch) {
@@ -174,7 +194,13 @@ export function beginStructuredAgentSessionProvisionalLaunch(
             beforeOpen: undefined
           })
         ),
-      onHostDeclined: (target) => openDeclinedTerminal(args, worktreeId, target),
+      onHostDeclined: (target) =>
+        openDeclinedTerminal(
+          args,
+          worktreeId,
+          target,
+          !navigation || !canPresentDesktopNavigation(navigation) ? false : undefined
+        ),
       ...(args.declinedOpensCallerSurface ? { declinedOpensCallerSurface: true as const } : {})
     })
     void launch.settlement.then(cancelIfNoTab, cancelIfNoTab)
@@ -219,6 +245,7 @@ function beginLocalProvisionalLaunch(
       agent: args.plan.agent,
       ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
+      navigation: args.navigation,
       ...(args.activate !== undefined ? { activate: args.activate } : {})
     })
     afterPendingTab(tab.id, (shown) => {

@@ -1,11 +1,9 @@
+import { reseedGatedEmptyWorkspace } from './worktree-gated-empty-reseed'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { activateAndRevealFolderWorkspace, activateAndRevealWorktree } from './worktree-activation'
 import * as activationGate from './worktree-agent-activation-gate'
-import {
-  ensureWorktreeHasInitialTerminal,
-  reseedGatedEmptyWorkspace
-} from './worktree-initial-terminal-seeding'
+import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import {
   isEmptyWorkspaceDefaultSurfacePending,
   releaseEmptyWorkspaceDefaultSurface
@@ -119,7 +117,7 @@ describe('empty workspace seeding with a default agent chat', () => {
       { seedUserDefaultSurface: true }
     )
 
-    expect(defaultChat.open).toHaveBeenCalledWith('wt-1', expect.any(Function))
+    expect(defaultChat.open).toHaveBeenCalledWith('wt-1', expect.any(Function), undefined)
     expect(primaryTabId).toBe('chat-tab')
     expect(createTab).not.toHaveBeenCalled()
   })
@@ -185,7 +183,11 @@ describe('empty workspace seeding with a default agent chat', () => {
 
     activateAndRevealWorktree(worktree.id, { ...USER_OPEN, notifyHostRuntime: false })
 
-    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id, expect.any(Function))
+    expect(defaultChat.open).toHaveBeenCalledWith(
+      worktree.id,
+      expect.any(Function),
+      expect.objectContaining({ experimental: false })
+    )
   })
 
   it('back/forward navigation asks for the default surface', () => {
@@ -199,7 +201,11 @@ describe('empty workspace seeding with a default agent chat', () => {
 
     useAppStore.getState().goBackWorktree()
 
-    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id, expect.any(Function))
+    expect(defaultChat.open).toHaveBeenCalledWith(
+      worktree.id,
+      expect.any(Function),
+      expect.objectContaining({ experimental: false })
+    )
   })
 
   // Activation without deliberate user intent (CLI/phone/failure/delete fallback) must not start an unrequested agent.
@@ -231,7 +237,11 @@ describe('the gated reseed that seeds an empty workspace in Electron', () => {
     expect(result === false ? 'failed' : result.primaryTabId).toBeNull()
     await gate.mock.results[0]?.value
 
-    expect(defaultChat.open).toHaveBeenCalledWith(worktree.id, expect.any(Function))
+    expect(defaultChat.open).toHaveBeenCalledWith(
+      worktree.id,
+      expect.any(Function),
+      expect.objectContaining({ experimental: false })
+    )
     expect(tabCount(worktree.id)).toBe(0)
   })
 
@@ -255,7 +265,11 @@ describe('the gated reseed that seeds an empty workspace in Electron', () => {
     activateAndRevealFolderWorkspace(FOLDER_ID, { ...USER_OPEN, executionHostId: 'local' })
     await gate.mock.results[0]?.value
 
-    expect(defaultChat.open).toHaveBeenCalledWith(FOLDER_KEY, expect.any(Function))
+    expect(defaultChat.open).toHaveBeenCalledWith(
+      FOLDER_KEY,
+      expect.any(Function),
+      expect.objectContaining({ experimental: false })
+    )
     expect(tabCount(FOLDER_KEY)).toBe(0)
   })
 

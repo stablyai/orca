@@ -5,7 +5,7 @@ import {
 import {
   reseedGatedEmptyWorkspace,
   type GatedEmptyWorkspaceReseedIntent
-} from './worktree-initial-terminal-seeding'
+} from './worktree-gated-empty-reseed'
 import {
   emptyWorkspaceDefaultChatAwaitsDetection,
   loadEmptyWorkspaceDefaultChatDetection

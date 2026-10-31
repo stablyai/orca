@@ -1,3 +1,4 @@
+import { ThreadsExperimentalSetting, getThreadsSearchEntry } from './ThreadsExperimentalSetting'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
@@ -256,6 +257,10 @@ export function ExperimentalPane({
             />
           </div>
         </SearchableSetting>
+      ) : null}
+
+      {matchesSettingsSearch(searchQuery, [getThreadsSearchEntry()]) ? (
+        <ThreadsExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />

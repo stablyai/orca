@@ -1,3 +1,8 @@
+import {
+  desktopThreadIds,
+  visibleGroupActiveTabId
+} from '@/components/threads/desktop-tab-projection'
+import { activeThreadSelection, discardThreadDraft } from '@/components/threads/thread-navigation'
 import type { KeybindingContext } from '../../../shared/keybindings'
 import { toVisibleTabType, type Tab } from '../../../shared/tab-types'
 import { useAppStore } from '@/store'
@@ -44,7 +49,14 @@ function hasFocusedGroup(state: TabState, worktreeId: string): boolean {
 }
 
 function resolveActiveTab(state: TabState, worktreeId: string): Tab | null {
-  const activeTab = state.getActiveTab(worktreeId)
+  const hidden = desktopThreadIds(state, worktreeId)
+  const group = state.groupsByWorktree[worktreeId]?.find(
+    (g) => g.id === state.activeGroupIdByWorktree[worktreeId]
+  )
+  const visibleId = group ? visibleGroupActiveTabId(group, hidden) : null
+  const activeTab = group
+    ? state.unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.id === visibleId)
+    : state.getActiveTab(worktreeId)
   if (activeTab) {
     return activeTab
   }
@@ -106,6 +118,34 @@ function resolveCloseTarget(
 /** Input adapters describe intent; targeting and tab operations live here. */
 export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boolean {
   const state = useAppStore.getState()
+  if (
+    state.settings?.experimentalThreads &&
+    state.activeView === 'empty-workbench' &&
+    !('target' in command && command.target) &&
+    !isFloatingWorkspacePanelFocused()
+  ) {
+    return false
+  }
+  const thread = activeThreadSelection(state)
+  if (
+    thread &&
+    !(command.type === 'close' && command.target) &&
+    !isFloatingWorkspacePanelFocused() &&
+    !selectEmptyFloatingWorkspacePanelVisible(state)
+  ) {
+    if (command.type !== 'close') {
+      return false
+    }
+    if (thread.kind === 'new') {
+      discardThreadDraft()
+      return true
+    }
+    const tab = state.getTab(thread.tabId)
+    if (!tab) {
+      return false
+    }
+    command = { ...command, target: { kind: 'tab', tabId: tab.id, worktreeId: tab.worktreeId } }
+  }
   if (command.type === 'close') {
     if (!command.target) {
       if (selectEmptyFloatingWorkspacePanelVisible(state)) {

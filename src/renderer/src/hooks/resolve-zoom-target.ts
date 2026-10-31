@@ -1,4 +1,4 @@
-import type { TopLevelView } from '../../../shared/ui-chrome-types'
+import { workspaceView, type RendererView } from '@/lib/renderer-view'
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 
 function closestFocusedElement(element: unknown, selector: string): unknown {
@@ -38,7 +38,7 @@ export function focusedBrowserPageId(activeElement: unknown): string | null {
 
 /** Zoom belongs to the focused surface within the current workspace. */
 export function resolveZoomTarget(args: {
-  activeView: TopLevelView
+  activeView: RendererView
   activeTabType: WorkspaceVisibleTabType
   activeElement: unknown
 }): 'terminal' | 'editor' | 'simulator' | 'chat' | 'browser' | 'ui' {
@@ -64,7 +64,7 @@ export function resolveZoomTarget(args: {
   if (focusedBrowserPageId(activeElement)) {
     return 'browser'
   }
-  if (activeView !== 'terminal') {
+  if (workspaceView(activeView) !== 'terminal') {
     return 'ui'
   }
   if (activeTabType === 'simulator') {

@@ -1,3 +1,4 @@
+import { workspaceView } from '@/lib/renderer-view'
 import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
@@ -15,7 +16,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(
     window.api.ui.onOpenQuickOpen(() => {
       const store = useAppStore.getState()
-      if (store.activeView === 'terminal' && store.activeWorktreeId !== null) {
+      if (workspaceView(store.activeView) === 'terminal' && store.activeWorktreeId !== null) {
         store.openModal('quick-open')
       }
     })
@@ -86,7 +87,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         emitCmdJRowIndexJump(index)
         return
       }
-      if (store.activeView !== 'terminal') {
+      if (workspaceView(store.activeView) !== 'terminal') {
         return
       }
       const visibleTargets = getVisibleWorktreeShortcutTargets()
@@ -116,7 +117,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
     window.api.ui.onWorktreeHistoryNavigate((direction) => {
       const store = useAppStore.getState()
       // Why: mirror button visibility — worktree history nav is only meaningful in the terminal view, so no-op elsewhere.
-      if (store.activeView !== 'terminal') {
+      if (workspaceView(store.activeView) !== 'terminal') {
         return
       }
       if (direction === 'back') {

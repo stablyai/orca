@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
+import { ThreadsSection } from '../threads/ThreadsSection'
 import { setSidebarLiveWidth } from './sidebar-live-width'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
@@ -167,6 +168,7 @@ function Sidebar({
         {sidebarOpen && (
           <>
             <SidebarNav />
+            {settings?.experimentalThreads ? <ThreadsSection /> : null}
             <SidebarHeader
               onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
               activityOptionsTarget={setAgentOptionsTarget}

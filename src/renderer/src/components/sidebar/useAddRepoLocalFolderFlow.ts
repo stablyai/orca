@@ -1,3 +1,5 @@
+import type { GitRepoAddOutcome } from './use-complete-git-repo-add'
+import { beginDesktopNavigation, type DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { track } from '@/lib/telemetry'
@@ -7,7 +9,6 @@ import {
   createNestedRepoTelemetryAttemptId
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import type { RepoSlice } from '@/store/repos/repo-state'
 import type { AppState } from '@/store/types'
@@ -17,15 +18,14 @@ import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
-import { showSkippedBatchFoldersToast } from './add-repo-skipped-folders-toast'
-
-type LocalPathAddResult =
-  | { status: 'completed'; repo: Repo }
-  | { status: 'cancelled' | 'paused' | 'skipped' }
-
-type LocalPathAddMode = 'single' | 'batch'
+import {
+  addLocalProjectPaths,
+  type LocalPathAddResult,
+  type LocalPathAddMode
+} from './add-repo-local-path-batch'
 
 export function useAddRepoLocalFolderFlow({
+  navigation,
   isOpen,
   droppedLocalPath,
   activeRuntimeEnvironmentId,
@@ -42,6 +42,7 @@ export function useAddRepoLocalFolderFlow({
   setAddProjectBusyLabel,
   offerWslHost
 }: {
+  navigation?: DesktopNavigationRequest
   isOpen: boolean
   droppedLocalPath: string
   activeRuntimeEnvironmentId: string | null | undefined
@@ -56,7 +57,8 @@ export function useAddRepoLocalFolderFlow({
   onGitRepoReady: (
     repoId: string,
     source: AddRepoExistingWorkspaceSource,
-    executionHostId?: ExecutionHostId
+    executionHostId?: ExecutionHostId,
+    outcome?: GitRepoAddOutcome
   ) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
@@ -85,7 +87,8 @@ export function useAddRepoLocalFolderFlow({
       path: string,
       source: AddRepoExistingWorkspaceSource,
       gen: number,
-      mode: LocalPathAddMode = 'single'
+      mode: LocalPathAddMode = 'single',
+      request: DesktopNavigationRequest = navigation ?? beginDesktopNavigation()
     ): Promise<LocalPathAddResult> => {
       if (activeRuntimeEnvironmentId?.trim()) {
         toast.error(
@@ -159,7 +162,7 @@ export function useAddRepoLocalFolderFlow({
         }
         if (scan?.selectedPathKind === 'non_git_folder') {
           closeModal()
-          openModal('confirm-non-git-folder', { folderPath: path })
+          openModal('confirm-non-git-folder', { folderPath: path, navigation: request })
           return { status: 'paused' }
         }
         setAddProjectBusyLabel(addRepoBusyLabels.openingProject())
@@ -182,7 +185,9 @@ export function useAddRepoLocalFolderFlow({
           if (mode === 'batch') {
             return { status: 'completed', repo }
           }
-          await onGitRepoReady(repo.id, source, ownerOptions.executionHostId)
+          await onGitRepoReady(repo.id, source, ownerOptions.executionHostId, {
+            navigation: request
+          })
         } else {
           // Folder projects activate their synthetic root through the add flow instead of Git checkout completion.
           closeModal()
@@ -195,6 +200,7 @@ export function useAddRepoLocalFolderFlow({
       }
     },
     [
+      navigation,
       activeRuntimeEnvironmentId,
       addRepoPath,
       clearNestedScanState,
@@ -219,7 +225,13 @@ export function useAddRepoLocalFolderFlow({
       const gen = ++localAddGenRef.current
       setIsAdding(true)
       try {
-        return await addLocalPathForGeneration(path, source, gen, mode)
+        return await addLocalPathForGeneration(
+          path,
+          source,
+          gen,
+          mode,
+          navigation ?? beginDesktopNavigation()
+        )
       } finally {
         if (gen === localAddGenRef.current) {
           clearNestedScanState()
@@ -228,47 +240,13 @@ export function useAddRepoLocalFolderFlow({
         }
       }
     },
-    [addLocalPathForGeneration, clearNestedScanState, setAddProjectBusyLabel, setIsAdding]
-  )
-
-  const handleAddLocalPaths = useCallback(
-    async (paths: string[], source: AddRepoExistingWorkspaceSource, gen: number): Promise<void> => {
-      const gitRepoIds: string[] = []
-      const shouldDeferGitRepoReady = paths.length > 1
-      let skippedCount = 0
-      for (const path of paths) {
-        const result = await addLocalPathForGeneration(
-          path,
-          source,
-          gen,
-          shouldDeferGitRepoReady ? 'batch' : 'single'
-        )
-        if (result.status === 'skipped') {
-          skippedCount++
-          continue
-        }
-        if (result.status !== 'completed') {
-          return
-        }
-        if (isGitRepoKind(result.repo)) {
-          gitRepoIds.push(result.repo.id)
-        }
-      }
-      if (gen !== localAddGenRef.current) {
-        return
-      }
-      if (skippedCount > 0) {
-        showSkippedBatchFoldersToast()
-      }
-      if (shouldDeferGitRepoReady && gitRepoIds.length > 0) {
-        await onGitRepoReady(
-          gitRepoIds[0],
-          source,
-          worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null).executionHostId
-        )
-      }
-    },
-    [activeRuntimeEnvironmentId, addLocalPathForGeneration, onGitRepoReady]
+    [
+      navigation,
+      addLocalPathForGeneration,
+      clearNestedScanState,
+      setAddProjectBusyLabel,
+      setIsAdding
+    ]
   )
 
   useEffect(() => {
@@ -285,6 +263,7 @@ export function useAddRepoLocalFolderFlow({
   }, [droppedLocalPath, handleAddLocalPath, isOpen, offerWslHost])
 
   const handleBrowse = useCallback(async (): Promise<void> => {
+    const request = navigation ?? beginDesktopNavigation()
     const gen = ++localAddGenRef.current
     setIsAdding(true)
     setAddProjectBusyLabel(addRepoBusyLabels.chooseFolder())
@@ -296,7 +275,18 @@ export function useAddRepoLocalFolderFlow({
       if (paths.length === 1 && offerWslHost?.(paths[0], 'local_folder_picker')) {
         return
       }
-      await handleAddLocalPaths(paths, 'local_folder_picker', gen)
+      await addLocalProjectPaths(
+        paths,
+        (path, mode) => addLocalPathForGeneration(path, 'local_folder_picker', gen, mode, request),
+        () => gen === localAddGenRef.current,
+        (repoId) =>
+          onGitRepoReady(
+            repoId,
+            'local_folder_picker',
+            worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null).executionHostId,
+            { navigation: request }
+          )
+      )
     } finally {
       if (gen === localAddGenRef.current) {
         clearNestedScanState()
@@ -304,7 +294,16 @@ export function useAddRepoLocalFolderFlow({
         setAddProjectBusyLabel(null)
       }
     }
-  }, [clearNestedScanState, handleAddLocalPaths, offerWslHost, setAddProjectBusyLabel, setIsAdding])
+  }, [
+    navigation,
+    clearNestedScanState,
+    activeRuntimeEnvironmentId,
+    addLocalPathForGeneration,
+    onGitRepoReady,
+    offerWslHost,
+    setAddProjectBusyLabel,
+    setIsAdding
+  ])
 
   return { handleBrowse, resetLocalFolderFlow, handleAddLocalPath }
 }

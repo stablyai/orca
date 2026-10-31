@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from './desktop-navigation'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -15,6 +16,7 @@ export type WorktreeActivationSurfaceSelection = {
   providesInitialSurface?: boolean
   /** Set only where the user deliberately opened this existing workspace; absent keeps the shell seed. */
   navigationIntent?: 'user-open'
+  navigation?: DesktopNavigationRequest | null
 }
 
 export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {

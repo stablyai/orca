@@ -1,3 +1,9 @@
+import { effectiveWorkspaceView } from '@/lib/renderer-view'
+import {
+  beginDesktopNavigation,
+  commitDesktopNavigation,
+  navigateDesktopTab
+} from '@/lib/desktop-navigation'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import {
@@ -132,8 +138,11 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         scrollToBottomIfOutputSinceLastView
       }) => {
         const store = useAppStore.getState()
-        revealWorkspaceSurface(store, worktreeId)
-        store.setActiveTab(tabId)
+        const request = beginDesktopNavigation(store)
+        commitDesktopNavigation(request, () => {
+          revealWorkspaceSurface(store, worktreeId)
+          store.setActiveTab(tabId)
+        })
         if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
           activateTabAndFocusPane(tabId, leafId ?? null, {
             ...(ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess } : {}),
@@ -161,12 +170,15 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       if (
         !userInitiated &&
         tab?.contentType === 'agent-session' &&
-        store.activeWorktreeId !== worktreeId
+        (store.activeWorktreeId !== worktreeId ||
+          effectiveWorkspaceView(store) === 'thread-draft' ||
+          effectiveWorkspaceView(store) === 'empty-workbench')
       ) {
         return
       }
       if (!tab) {
         if (browserTarget) {
+          beginDesktopNavigation(store)
           // Why: older/mobile fallback snapshots identify browser tabs by workspace id when no unified tab wrapper exists.
           revealWorkspaceSurface(store, worktreeId)
           store.setActiveBrowserTab(browserTarget.workspaceId)
@@ -174,9 +186,10 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         }
         return
       }
+      const request = beginDesktopNavigation(store)
       revealWorkspaceSurface(store, worktreeId)
       store.focusGroup(worktreeId, tab.groupId)
-      store.activateTab(tab.id)
+      navigateDesktopTab(tab.id, { worktreeId, request })
       if (tab.contentType === 'agent-session') {
         store.setActiveTabType('agent-session', worktreeId)
       } else if (browserTarget) {

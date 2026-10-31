@@ -1,4 +1,10 @@
 import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  navigateDesktopTab,
+  type DesktopNavigationRequest
+} from './desktop-navigation'
+import {
   findIndexedProjectGroupOwner,
   findIndexedRepoOwner,
   findIndexedWorktreeOwner,
@@ -154,13 +160,21 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   /** The tab the chat opens right after, in that tab's group. */
   afterTabId?: string
   activate?: boolean
+  navigation?: DesktopNavigationRequest | null
 }): OpenedAgentSessionTab {
   const state = useAppStore.getState()
+  const navigation =
+    args.navigation === undefined
+      ? args.activate !== false
+        ? beginDesktopNavigation(state)
+        : null
+      : args.navigation
+  const foreground = () => !!navigation && canPresentDesktopNavigation(navigation)
   const existing = findStructuredLaunchTab(args)
   if (existing) {
-    if (args.activate !== false) {
+    if (foreground()) {
       state.focusGroup(args.worktreeId, existing.groupId)
-      state.activateTab(existing.id, { worktreeId: args.worktreeId })
+      navigateDesktopTab(existing.id, { worktreeId: args.worktreeId, request: navigation! })
       state.setActiveTabType('agent-session', args.worktreeId)
     }
     return existing
@@ -184,11 +198,14 @@ export function openStructuredAgentSessionProvisionalTab(args: {
       label: defaultAgentChatLabel(args.agent),
       targetGroupId,
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
-      activate: args.activate !== false
+      activate: foreground()
     })
+    if (foreground()) {
+      navigateDesktopTab(tab.id, { worktreeId: args.worktreeId, request: navigation! })
+    }
     const target = structuredAgentSessionTargetForHost(args.executionHostId)
     holdFrameDrawnProvisionalChatTab(target, args.worktreeId, tab.id)
-    if (args.activate !== false) {
+    if (foreground()) {
       state.setActiveTabType('agent-session', args.worktreeId)
     }
     return tab
@@ -205,7 +222,8 @@ export function openStructuredAgentSessionProvisionalTab(args: {
         ...(args.afterTabId
           ? { afterTabId: args.afterTabId }
           : slotAnchor(address, args.worktreeId)),
-        activate: args.activate !== false,
+        activate: foreground(),
+        navigation,
         drawHere
       })
     : null

@@ -1,3 +1,4 @@
+import { effectiveWorkspaceView } from '@/lib/renderer-view'
 import { useEffect } from 'react'
 import {
   keybindingMatchesAction,
@@ -43,7 +44,7 @@ export function useTabBarQuickCommandsShortcut({
   const terminalShortcutPolicy = useAppStore(
     (s) => s.settings?.terminalShortcutPolicy ?? 'orca-first'
   )
-  const activeView = useAppStore((s) => s.activeView)
+  const activeView = useAppStore(effectiveWorkspaceView)
 
   // Why: every strip stays mounted for stable layout, but only the visible focused group owns shortcuts.
   useEffect(() => {

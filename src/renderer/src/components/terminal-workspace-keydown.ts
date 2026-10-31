@@ -1,3 +1,4 @@
+import { activeThreadSelection } from './threads/thread-navigation'
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import type { KeybindingActionId } from '../../../shared/keybindings'
@@ -66,6 +67,14 @@ export function handleTerminalWorkspaceKeyDown(
       platform: shortcutPlatform,
       keybindings
     })
+  }
+  if (!floatingWorkspaceFocused && activeThreadSelection(useAppStore.getState())) {
+    if (!event.repeat && matchShortcut('tab.close')) {
+      if (dispatchWorkspaceTabCommand({ type: 'close', context })) {
+        event.preventDefault()
+      }
+    }
+    return
   }
   if (!event.repeat) {
     const agentShortcut = resolveTerminalAgentTabShortcut({

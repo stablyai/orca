@@ -1,5 +1,9 @@
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import {
+  useThreadMembership,
+  isThreadTab
+} from '@/components/native-chat/structured-session-summary-store'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
@@ -50,6 +54,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     const selectAgentFreshness = createWorktreeAgentFreshnessSelector(worktreeId)
     const readInputs = (state: AppState) =>
       [
+        active && state.settings?.experimentalThreads === true,
         active ? state.tabsByWorktree[worktreeId] : EMPTY_TABS,
         active ? selectLiveAgentStatusEntriesForWorktree(state, worktreeId) : EMPTY_LIVE_ENTRIES,
         active
@@ -83,6 +88,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
   }, [worktreeId, active])
   const getInputs = useCallback(() => selectInputs(useAppStore.getState()), [selectInputs])
   const [
+    threadsEnabled,
     tabs,
     liveEntries,
     migrationUnsupported,
@@ -99,6 +105,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     getInputs
   )
 
+  const threadTabIds = useThreadMembership(worktreeId, active && threadsEnabled)
   return useMemo<DashboardAgentRow[]>(() => {
     if (!active) {
       return EMPTY_AGENT_ROWS
@@ -130,10 +137,12 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         paneForegroundAgentByPaneKey,
         now
       })
-    )
+    ).filter((row) => !isThreadTab(threadsEnabled, row.tab.id, threadTabIds))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     active,
+    threadTabIds,
+    threadsEnabled,
     tabs,
     liveEntries,
     migrationUnsupported,

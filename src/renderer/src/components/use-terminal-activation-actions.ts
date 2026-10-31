@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { navigateDesktopTab } from '@/lib/desktop-navigation'
 import { useAppStore } from '../store'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
@@ -11,6 +12,16 @@ export function useTerminalActivationActions(controller: TerminalBulkCloseContro
   const { activeWorktreeId, setActiveBrowserTab, setActiveTab, setActiveTabType } = controller
   const handleActivateTab = useCallback(
     (tabId: string) => {
+      const tab = activeWorktreeId
+        ? useAppStore
+            .getState()
+            .unifiedTabsByWorktree[activeWorktreeId]?.find(
+              (tab) => tab.contentType === 'terminal' && tab.entityId === tabId
+            )
+        : undefined
+      if (tab) {
+        navigateDesktopTab(tab.id, { worktreeId: tab.worktreeId })
+      }
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
       if (activeWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void activateWebRuntimeSessionTab({
@@ -27,6 +38,16 @@ export function useTerminalActivationActions(controller: TerminalBulkCloseContro
 
   const handleTogglePaneExpand = useCallback(
     (tabId: string) => {
+      const tab = activeWorktreeId
+        ? useAppStore
+            .getState()
+            .unifiedTabsByWorktree[activeWorktreeId]?.find(
+              (tab) => tab.contentType === 'terminal' && tab.entityId === tabId
+            )
+        : undefined
+      if (tab) {
+        navigateDesktopTab(tab.id, { worktreeId: tab.worktreeId })
+      }
       setActiveTab(tabId)
       requestAnimationFrame(() => {
         window.dispatchEvent(
@@ -34,12 +55,20 @@ export function useTerminalActivationActions(controller: TerminalBulkCloseContro
         )
       })
     },
-    [setActiveTab]
+    [activeWorktreeId, setActiveTab]
   )
 
   const handleActivateBrowserTab = useCallback(
     (tabId: string) => {
       const state = useAppStore.getState()
+      const tab = activeWorktreeId
+        ? state.unifiedTabsByWorktree[activeWorktreeId]?.find(
+            (tab) => tab.contentType === 'browser' && tab.entityId === tabId
+          )
+        : undefined
+      if (tab) {
+        navigateDesktopTab(tab.id, { worktreeId: tab.worktreeId })
+      }
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
       if (
         activeWorktreeId &&

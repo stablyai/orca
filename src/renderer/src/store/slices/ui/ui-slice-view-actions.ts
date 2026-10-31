@@ -1,14 +1,18 @@
+import { beginDesktopNavigation, commitDesktopNavigation } from '@/lib/desktop-navigation-request'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { rewindHistoryIndexPastView } from '../worktree-nav-history'
 
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     openActivityPage: () => {
-      set((state) => ({
-        activeView: 'activity',
-        previousViewBeforeActivity:
-          state.activeView === 'activity' ? state.previousViewBeforeActivity : state.activeView
-      }))
+      const navigation = beginDesktopNavigation(get())
+      commitDesktopNavigation(navigation, () =>
+        set((state) => ({
+          activeView: 'activity',
+          previousViewBeforeActivity:
+            state.activeView === 'activity' ? state.previousViewBeforeActivity : state.activeView
+        }))
+      )
     },
     closeActivityPage: () =>
       set((state) => ({
@@ -20,14 +24,17 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     setPendingAutomationRunNavigation: (navigation) =>
       set({ pendingAutomationRunNavigation: navigation }),
     openAutomationsPage: () => {
+      const navigation = beginDesktopNavigation(get())
       get().recordViewVisit('automations')
-      set((state) => ({
-        activeView: 'automations',
-        previousViewBeforeAutomations:
-          state.activeView === 'automations'
-            ? state.previousViewBeforeAutomations
-            : state.activeView
-      }))
+      commitDesktopNavigation(navigation, () =>
+        set((state) => ({
+          activeView: 'automations',
+          previousViewBeforeAutomations:
+            state.activeView === 'automations'
+              ? state.previousViewBeforeAutomations
+              : state.activeView
+        }))
+      )
     },
     closeAutomationsPage: () =>
       set((state) => ({
@@ -40,23 +47,29 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         void window.api.workspaceSpace.openWindow()
         return
       }
-      set((state) => ({
-        activeView: 'space',
-        previousViewBeforeSpace:
-          state.activeView === 'space' ? state.previousViewBeforeSpace : state.activeView
-      }))
+      const navigation = beginDesktopNavigation(get())
+      commitDesktopNavigation(navigation, () =>
+        set((state) => ({
+          activeView: 'space',
+          previousViewBeforeSpace:
+            state.activeView === 'space' ? state.previousViewBeforeSpace : state.activeView
+        }))
+      )
     },
     closeSpacePage: () =>
       set((state) => ({
         activeView: state.previousViewBeforeSpace
       })),
     openSkillsPage: () => {
+      const navigation = beginDesktopNavigation(get())
       get().recordViewVisit('skills')
-      set((state) => ({
-        activeView: 'skills',
-        previousViewBeforeSkills:
-          state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView
-      }))
+      commitDesktopNavigation(navigation, () =>
+        set((state) => ({
+          activeView: 'skills',
+          previousViewBeforeSkills:
+            state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView
+        }))
+      )
     },
     closeSkillsPage: () =>
       set((state) => ({
@@ -64,44 +77,57 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'skills')
       })),
     openSkillShare: (shareId) => {
+      const navigation = beginDesktopNavigation(get())
       get().recordViewVisit('skills')
-      set((state) => ({
-        activeView: 'skills',
-        previousViewBeforeSkills:
-          state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView,
-        pendingSkillShareId: shareId
-      }))
+      commitDesktopNavigation(navigation, () =>
+        set((state) => ({
+          activeView: 'skills',
+          previousViewBeforeSkills:
+            state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView,
+          pendingSkillShareId: shareId
+        }))
+      )
     },
     clearPendingSkillShare: () => set({ pendingSkillShareId: null }),
     openSkillsSharedLinks: () => {
+      const navigation = beginDesktopNavigation(get())
       get().recordViewVisit('skills')
-      set((state) => ({
-        activeView: 'skills',
-        previousViewBeforeSkills:
-          state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView,
-        pendingSkillsSharedView: true
-      }))
+      commitDesktopNavigation(navigation, () =>
+        set((state) => ({
+          activeView: 'skills',
+          previousViewBeforeSkills:
+            state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView,
+          pendingSkillsSharedView: true
+        }))
+      )
     },
     clearPendingSkillsSharedView: () => set({ pendingSkillsSharedView: false }),
     openArtifactsPage: () => {
+      const navigation = beginDesktopNavigation(get())
       get().recordViewVisit('artifacts')
-      set((state) => ({
-        activeView: 'artifacts',
-        previousViewBeforeArtifacts:
-          state.activeView === 'artifacts' ? state.previousViewBeforeArtifacts : state.activeView
-      }))
+      commitDesktopNavigation(navigation, () =>
+        set((state) => ({
+          activeView: 'artifacts',
+          previousViewBeforeArtifacts:
+            state.activeView === 'artifacts' ? state.previousViewBeforeArtifacts : state.activeView
+        }))
+      )
     },
     closeArtifactsPage: () =>
       set((state) => ({
         activeView: state.previousViewBeforeArtifacts,
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'artifacts')
       })),
-    openMobilePage: () =>
-      set((state) => ({
-        activeView: 'mobile',
-        previousViewBeforeMobile:
-          state.activeView === 'mobile' ? state.previousViewBeforeMobile : state.activeView
-      })),
+    openMobilePage: () => {
+      const navigation = beginDesktopNavigation(get())
+      commitDesktopNavigation(navigation, () =>
+        set((state) => ({
+          activeView: 'mobile',
+          previousViewBeforeMobile:
+            state.activeView === 'mobile' ? state.previousViewBeforeMobile : state.activeView
+        }))
+      )
+    },
     closeMobilePage: () =>
       set((state) => ({
         activeView: state.previousViewBeforeMobile

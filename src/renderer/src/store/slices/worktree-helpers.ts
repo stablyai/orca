@@ -183,7 +183,10 @@ export type WorktreeSlice = {
     options?: CreateWorktreeCallOptions
   ) => Promise<CreatedWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
-  beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
+  beginPendingWorktreeCreation: (
+    entry: PendingWorktreeCreation,
+    options?: { activate?: boolean }
+  ) => void
   /** Merge a status patch into an existing pending entry. */
   updatePendingWorktreeCreation: (
     creationId: string,

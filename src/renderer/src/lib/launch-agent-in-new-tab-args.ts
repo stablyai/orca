@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from './desktop-navigation'
 import type { AgentSessionLaunchRequest } from '@/lib/agent-session-launch-plan'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -6,6 +7,7 @@ import type { LaunchAgentInNewTabRequest } from '@/lib/launch-agent-in-new-tab-h
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 
 export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
+  navigation?: DesktopNavigationRequest | null
   requestedSurface?: AgentSessionLaunchRequest['requestedSurface']
   selectedExecutionHostId?: AgentSessionLaunchRequest['selectedExecutionHostId']
   agent: TuiAgent
@@ -47,8 +49,21 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   pendingActivationSpawn?: boolean
   /** Lets a workspace reveal itself before the selected surface opens. */
   beforeSurfaceOpen?: (
-    surface: { kind: 'local-terminal' } | { kind: 'host-published' }
+    surface: { kind: 'local-terminal' } | { kind: 'host-published' },
+    navigation?: DesktopNavigationRequest | null
   ) => boolean | void
   /** Opens instead of this agent's terminal when the host declines its structured chat. */
   onStructuredHostDeclined?: () => StructuredLaunchTerminal
 }
+
+/** What the caller's own terminal launch would have carried beyond the plan's agent and prompt. */
+export type DeclinedStructuredLaunchTerminalOptions = Pick<
+  LaunchAgentInNewTabArgs,
+  | 'navigation'
+  | 'agentArgs'
+  | 'sessionOptionsYieldToAgentArgs'
+  | 'launchPlatform'
+  | 'launchSource'
+  | 'initialCwd'
+  | 'activate'
+>

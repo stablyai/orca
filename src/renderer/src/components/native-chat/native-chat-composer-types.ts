@@ -52,6 +52,7 @@ export type NativeChatStructuredComposerTransport = {
   /** What a plain send does now, and whether Cmd/Ctrl+Enter would send it the other way. */
   sendFollowUp?: NativeChatSendFollowUp
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
+  launchPicker?: React.ReactNode
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
   optionPickerRequest?: NativeChatOptionPickerRequest | null
@@ -137,6 +138,7 @@ export type NativeChatComposerProps = {
    *  text and dictation only, with no command/skill/@-file pickers, `/resume`, attachments or
    *  file-backed pastes. The pending transport reports no session options or context usage. */
   workspacePending?: true
+  placeholder?: string
   /** Cmd/Ctrl+Shift+Enter steers the head queued card; false when it can't. */
   steerHead?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */

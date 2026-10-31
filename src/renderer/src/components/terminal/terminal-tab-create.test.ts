@@ -4,12 +4,19 @@ const {
   createBrowserUuidMock,
   createWebRuntimeSessionTerminalMock,
   getStateMock,
-  isWebRuntimeSessionActiveMock
+  isWebRuntimeSessionActiveMock,
+  navigateMock
 } = vi.hoisted(() => ({
   createBrowserUuidMock: vi.fn(() => 'tab-1'),
   createWebRuntimeSessionTerminalMock: vi.fn(),
   getStateMock: vi.fn(),
-  isWebRuntimeSessionActiveMock: vi.fn()
+  isWebRuntimeSessionActiveMock: vi.fn(),
+  navigateMock: vi.fn()
+}))
+
+vi.mock('@/lib/desktop-navigation', () => ({
+  beginDesktopNavigation: () => ({ id: 1 }),
+  navigateDesktopTab: navigateMock
 }))
 
 vi.mock('@/store', () => ({
@@ -57,8 +64,11 @@ describe('createNewTerminalTab', () => {
 
     createNewTerminalTab('wt-1', 'zsh')
 
-    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh', { id: 'tab-1' })
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
+    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh', {
+      id: 'tab-1',
+      activate: false
+    })
+    expect(navigateMock).toHaveBeenCalledWith('tab-1', { worktreeId: 'wt-1', request: { id: 1 } })
     expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
   })
@@ -103,7 +113,8 @@ describe('createNewTerminalTab', () => {
         worktreeId: 'wt-1',
         environmentId: 'web-runtime',
         shell: 'pwsh',
-        activate: true
+        activate: true,
+        navigation: { id: 1 }
       },
       { userAct: true }
     )
@@ -130,7 +141,8 @@ describe('createNewTerminalTab', () => {
         worktreeId: 'wt-1',
         environmentId: 'owner-runtime',
         shell: 'pwsh',
-        activate: true
+        activate: true,
+        navigation: { id: 1 }
       },
       { userAct: true }
     )
@@ -159,9 +171,10 @@ describe('createNewTerminalTab', () => {
 
     expect(createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       id: 'tab-1',
+      activate: false,
       startupCwd: '/repo/packages/app'
     })
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
+    expect(navigateMock).toHaveBeenCalledWith('tab-1', { worktreeId: 'wt-1', request: { id: 1 } })
   })
 
   it('delegates requested startup cwd to host runtime terminals', () => {
@@ -181,7 +194,8 @@ describe('createNewTerminalTab', () => {
         environmentId: 'web-runtime',
         command: undefined,
         cwd: '/repo/packages/app',
-        activate: true
+        activate: true,
+        navigation: { id: 1 }
       },
       { userAct: true }
     )

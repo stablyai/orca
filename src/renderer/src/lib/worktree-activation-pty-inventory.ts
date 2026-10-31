@@ -60,3 +60,8 @@ export async function listActivationPtySessions(
   }
   return window.api.pty.listSessions(scope)
 }
+
+export const canInspectAgentActivationInventory = (): boolean =>
+  typeof window !== 'undefined' &&
+  typeof window.api?.runtime?.call === 'function' &&
+  typeof window.api?.pty?.listSessions === 'function'

@@ -1,3 +1,6 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation-request'
+import { peekWebSessionFocusIntent } from './web-session-focus-intent'
+import { captureWebSessionIntentOwner } from './web-runtime-session-environment'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { createWebRuntimeSessionTerminal } from './web-runtime-terminal-creation'
@@ -40,7 +43,8 @@ vi.mock('../store', () => ({
   }
 }))
 
-vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
+vi.mock('./web-session-tabs-sync/tracking-lifecycle', async (original) => ({
+  ...(await original<object>()),
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot
 }))
 vi.mock('./web-session-tabs-sync/snapshot-api', () => ({
@@ -92,7 +96,10 @@ function stubSelectableWorkspaceStore(selection: MutableSelection): void {
   )
 }
 
-afterEach(() => resetWebSessionCloseIntentForTests())
+afterEach(() => {
+  resetWebSessionCloseIntentForTests()
+  resetTerminalCreateEnvironment()
+})
 
 describe('web-runtime-session terminal workspace routing', () => {
   beforeEach(() => {
@@ -277,3 +284,41 @@ describe('web-runtime-session terminal workspace routing', () => {
     expect(selection.activeWorkspaceExecutionHostId).toBe('local')
   })
 })
+
+it.each([false, true])(
+  'paired terminal publication completes with original presentation superseded=%s',
+  async (superseded) => {
+    stubTerminalCreateEnvironment(mocks)
+    const state = mocks.getState()
+    Object.assign(state, { activeView: 'terminal', getTab: () => null })
+    const navigation = beginDesktopNavigation(state)
+    const held = Promise.withResolvers<{ id: string; ok: true; result: { tab: { id: string } } }>()
+    const runtimeCall = vi
+      .fn()
+      .mockReturnValueOnce(held.promise)
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall })
+    const owner = captureWebSessionIntentOwner(ENVIRONMENT_ID)
+    const creating = createWebRuntimeSessionTerminal({
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      activate: true,
+      selectWorktree: false,
+      navigation
+    })
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledOnce())
+    if (superseded) {
+      state.settings.experimentalThreads = true
+      beginDesktopNavigation(state, true)
+      state.activeView = 'thread-draft'
+    }
+    held.resolve({ id: 'create', ok: true, result: { tab: { id: 'scoped-terminal' } } })
+    expect(await creating).toEqual({ status: 'created' })
+    expect(peekWebSessionFocusIntent(owner, WORKTREE_ID)?.hostTabId ?? null).toBe(
+      superseded ? null : 'scoped-terminal'
+    )
+    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalled()
+    expect(state.activeView).toBe(superseded ? 'thread-draft' : 'terminal')
+    resetTerminalCreateEnvironment()
+  }
+)

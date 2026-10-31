@@ -31,6 +31,7 @@ export function restorePersistedStructuredLaunchState(
     intent = restoreStructuredAgentSessionLaunchIntent({
       worktreeId,
       executionHostId: record.executionHostId,
+      ...(record.surface ? { surface: record.surface } : {}),
       sessionId: record.sessionId,
       agent: record.agent,
       clientOperationId: record.clientOperationId,

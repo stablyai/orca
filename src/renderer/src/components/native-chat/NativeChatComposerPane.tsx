@@ -60,6 +60,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       recallSource,
       inputOwnedByCard = false,
       notices: chatNotices,
+      placeholder,
       workspacePending: pending = false
     },
     ref
@@ -225,19 +226,18 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         resolveTarget
       })
 
-    const { surface: ptySessionOptionsSurface, snapshot: ptySessionOptionsSnapshot } =
-      useNativeChatSessionOptions({
-        agent,
-        terminalTabId,
-        targetPtyId,
-        dispatchCommand: dispatchSessionOptionCommand,
-        onAgentPicker: onSwitchToTerminal,
-        readTerminalScreen,
-        paneKey
-      })
-    const sessionOptionsSurface = structuredTransport?.optionsSurface ?? ptySessionOptionsSurface
+    const ptyOptions = useNativeChatSessionOptions({
+      agent,
+      terminalTabId,
+      targetPtyId,
+      dispatchCommand: dispatchSessionOptionCommand,
+      onAgentPicker: onSwitchToTerminal,
+      readTerminalScreen,
+      paneKey
+    })
+    const sessionOptionsSurface = structuredTransport?.optionsSurface ?? ptyOptions.surface
     const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
-    const sessionOptionsSnapshot = structuredTransport?.optionSnapshot ?? ptySessionOptionsSnapshot
+    const sessionOptionsSnapshot = structuredTransport?.optionSnapshot ?? ptyOptions.snapshot
 
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
@@ -258,7 +258,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onSlashCommand,
       onSubmitted,
       answerCommandLocally,
-      sessionOptionsSurface: ptySessionOptionsSurface,
+      sessionOptionsSurface: ptyOptions.surface,
       trackPendingSend,
       setDraft,
       setCaret,
@@ -367,6 +367,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     return (
       <div ref={root} data-native-chat-composer-scope={draftScopeKey}>
         <NativeChatComposerField
+          placeholder={placeholder}
           draftScopeKey={draftScopeKey}
           positionTarget={editSession ? undefined : terminalTabId}
           textareaRef={textareaRef}
@@ -409,6 +410,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           onDictationHoldEnd={dictation.stopHoldDictation}
           onSend={send}
           onStop={interrupt}
+          launchPicker={structuredTransport?.launchPicker}
           sessionOptionsSurface={sessionOptionsSurface}
           sessionOptionsSnapshot={sessionOptionsSnapshot}
           contextUsage={contextUsageSummary}

@@ -13,4 +13,12 @@ describe('buildActiveViewUnloadPatch', () => {
       activeView: 'tasks'
     })
   })
+  it.each(['thread-draft', 'empty-workbench'] as const)(
+    'checkpoints %s using the supported workspace vocabulary',
+    (activeView) => {
+      expect(buildActiveViewUnloadPatch({ activeView, persistedUIReady: true })).toEqual({
+        activeView: 'terminal'
+      })
+    }
+  )
 })

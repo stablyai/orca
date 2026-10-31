@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from './desktop-navigation'
 import {
   ensureAgentLaunchPreferences,
   type AgentLaunchPreferences
@@ -94,6 +95,7 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
   worktreeId: string
   executionHostId: ExecutionHostId | undefined
   launch: OnboardingFolderAgentLaunch
+  navigation?: DesktopNavigationRequest
 }): Promise<void> {
   const reveal = (
     startup: OnboardingFolderAgentStartup | undefined,
@@ -101,6 +103,7 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
   ) =>
     activateAndRevealWorktree(args.worktreeId, {
       sidebarRevealBehavior: 'auto',
+      navigation: args.navigation,
       ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
       ...(startup ? { startup } : {}),
       ...(providesInitialSurface ? { providesInitialSurface: true } : {})
@@ -114,6 +117,7 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
   beginStructuredAgentSessionProvisionalLaunch({
     plan,
     hooks: {},
+    navigation: args.navigation,
     target: { worktreeId: args.worktreeId },
     beforeOpen: () => reveal(undefined, true) !== false
   })

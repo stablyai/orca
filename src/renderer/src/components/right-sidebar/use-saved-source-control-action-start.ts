@@ -1,3 +1,4 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation'
 import {
   selectSourceControlActionRecipe,
   type CurrentActionSelection
@@ -56,6 +57,7 @@ export function useSavedSourceControlActionStart() {
         }
       }
       signal?.throwIfAborted()
+      const navigation = args.navigation ?? beginDesktopNavigation()
       const store = useAppStore.getState()
       const { worktreeId } = args
       const recipe = selectSourceControlActionRecipe(args.selection)
@@ -113,6 +115,7 @@ export function useSavedSourceControlActionStart() {
       }
       const launched = await runSourceControlAgentActionStart({
         ...args,
+        navigation,
         recipe,
         agentLaunchPreferences,
         selectedAgent: agent,

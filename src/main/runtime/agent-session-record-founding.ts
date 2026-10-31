@@ -17,6 +17,7 @@ export type AgentSessionRecordIdentity = Pick<
   | 'options'
   | 'launchArgs'
   | 'launchDirectory'
+  | 'surface'
 >
 
 export function agentSessionRecordIdentityFields(
@@ -37,6 +38,7 @@ export function agentSessionRecordIdentityFields(
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
     // /clear retains its tab and launch directory.
     ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),
+    ...(identity.surface ? { surface: identity.surface } : {}),
     createdAt: now,
     updatedAt: now
   }

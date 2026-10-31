@@ -1,3 +1,8 @@
+import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  navigateDesktopTab
+} from '@/lib/desktop-navigation-request'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
@@ -38,6 +43,13 @@ export function createBrowserTabActions(
     createBrowserTab: (worktreeId, url, options) => {
       options?.validateLinkPlacement?.(get())
       assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
+      const navigation =
+        options?.navigation === undefined
+          ? options?.activate === false
+            ? null
+            : beginDesktopNavigation(get())
+          : options.navigation
+      options = { ...options, navigation }
       const workspaceId = createBrowserUuid()
       const browserPageId = options?.browserPageId
       if (
@@ -107,7 +119,10 @@ export function createBrowserTabActions(
               ...s.browserPagesByWorkspace,
               [workspaceId]: [page]
             },
-            ...browserTabOpenView(s, worktreeId, browserTab, page, options)
+            ...browserTabOpenView(s, worktreeId, browserTab, page, {
+              ...options,
+              activate: !!navigation && canPresentDesktopNavigation(navigation)
+            })
           }
         })
 
@@ -116,7 +131,7 @@ export function createBrowserTabActions(
           (t) => t.contentType === 'browser' && t.entityId === workspaceId
         )
         if (!alreadyHasUnifiedTab) {
-          const shouldActivate = options?.activate ?? true
+          const shouldActivate = !!navigation && canPresentDesktopNavigation(navigation)
           let created
           try {
             created = state.createUnifiedTab(worktreeId, 'browser', {
@@ -140,6 +155,7 @@ export function createBrowserTabActions(
           }
           // Why: unified creation already selected the tab and recorded the visit; only the group moves.
           if (shouldActivate && created) {
+            navigateDesktopTab(get(), created.id, { worktreeId, request: navigation! })
             get().focusGroup(worktreeId, created.groupId)
           }
         }
@@ -153,8 +169,10 @@ export function createBrowserTabActions(
           browserTab,
           page,
           options,
-          showView: () => {
-            set((s) => browserTabOpenView(s, worktreeId, browserTab, page, options))
+          showView: (activate) => {
+            set((s) =>
+              browserTabOpenView(s, worktreeId, browserTab, page, { ...options, activate })
+            )
             admitLinkPageMount()
           },
           drawHere

@@ -1,3 +1,8 @@
+import {
+  canPresentDesktopNavigation,
+  navigateDesktopTab,
+  type DesktopNavigationRequest
+} from '@/lib/desktop-navigation-request'
 // Window writes OpenFile immediately but selects proposed tabs only after main frames draw them. Tab consumers wait via afterPendingTab.
 
 import type { Tab } from '../../../../../../shared/tab-types'
@@ -25,6 +30,7 @@ type EditorTabOpen = {
   isPreview: boolean
   /** The group the window resolved; a dead or missing one falls back as today's create does. */
   groupId: string | undefined
+  navigation: DesktopNavigationRequest | null
   selection: EditorTabSelection
   index?: number
   /** Today's draw, for a twin main may route to a paired server. */
@@ -67,9 +73,10 @@ function placementGroupId(
 
 /** Return proposed tab ID; null for paired-owned layouts/missing OpenFile means caller draws directly. */
 export function openEditorTabThroughLayoutOwner(
-  state: AppState,
+  getState: () => AppState,
   open: EditorTabOpen
 ): string | null {
+  const state = getState()
   const { fileId, worktreeId } = open
   const file = openFileOf(state, worktreeId, fileId)
   // A store without the tab slice draws no tab, as today's optional create does.
@@ -95,7 +102,7 @@ export function openEditorTabThroughLayoutOwner(
       const shownId = result.tabId ?? tabId
       // A throwing selection must not leave the tab pending: its waiters would never run.
       try {
-        selectDrawnEditorTab(state, worktreeId, shownId, open.selection)
+        selectDrawnEditorTab(getState(), worktreeId, shownId, open.selection, open.navigation)
       } finally {
         settle(shownId)
       }
@@ -122,9 +129,14 @@ function selectDrawnEditorTab(
   state: AppState,
   worktreeId: string,
   tabId: string,
-  selection: EditorTabSelection
+  selection: EditorTabSelection,
+  navigation: DesktopNavigationRequest | null
 ): void {
-  if (selection === 'none') {
+  if (selection === 'none' || (navigation && !canPresentDesktopNavigation(navigation))) {
+    return
+  }
+  if (navigation) {
+    navigateDesktopTab(state, tabId, { worktreeId, preservePreview: true, request: navigation })
     return
   }
   state.activateTab?.(tabId, {

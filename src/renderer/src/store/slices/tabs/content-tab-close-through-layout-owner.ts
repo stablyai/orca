@@ -1,3 +1,11 @@
+import { openDesktopWorkbench } from '@/lib/desktop-navigation-request'
+import {
+  captureDesktopRetirement,
+  canRepairRetiredSelection,
+  canReplaceRetiredForeground,
+  type DesktopRetirement
+} from '@/lib/desktop-retirement'
+import { desktopThreadIds } from '@/components/threads/desktop-tab-projection'
 // Main decides content closes; wait for its frame before cleanup and selection, preserving refused tabs and notifying close waiters.
 
 import type { Tab } from '../../../../../shared/tab-types'
@@ -26,23 +34,32 @@ export function closesThroughLayoutOwner(contentType: Tab['contentType']): boole
 function selectAfterClose(
   get: () => AppState,
   tab: Pick<Tab, 'id' | 'worktreeId' | 'groupId'>,
-  nextActiveTabId: string | null
+  nextActiveTabId: string | null,
+  retirement: DesktopRetirement
 ): void {
   const state = get()
+  if (!canRepairRetiredSelection(state, retirement)) {
+    return
+  }
   const worktreeId = tab.worktreeId
   if ((state.unifiedTabsByWorktree[worktreeId] ?? []).some((entry) => entry.id === tab.id)) {
     return
   }
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const group = state.groupsByWorktree[worktreeId]?.find((entry) => entry.id === tab.groupId)
+  const hidden = desktopThreadIds(state, worktreeId)
+  const visibleOrder = group?.tabOrder.filter((id) => !hidden.has(id)) ?? []
   const next =
-    group && nextActiveTabId && group.tabOrder.includes(nextActiveTabId)
+    group && nextActiveTabId && visibleOrder.includes(nextActiveTabId)
       ? nextActiveTabId
       : group
-        ? pickNextActiveTab(group.tabOrder, group.recentTabIds, tab.id)
+        ? pickNextActiveTab(visibleOrder, group.recentTabIds, tab.id)
         : null
   if (next && group?.activeTabId !== next) {
     state.activateTab(next, { worktreeId, preservePreview: true, recordFocus: false })
+  }
+  if (!next && canReplaceRetiredForeground(get(), retirement, tab.id)) {
+    openDesktopWorkbench(get(), worktreeId, retirement.navigation)
   }
   // Activation focuses the tab's group; the user's focused group stays, and shows its surface.
   if (activeGroupId) {
@@ -63,14 +80,15 @@ export type ContentTabClose = {
   /** The window's own cleanup once main's frame dropped the tab, before the selection moves. */
   closed?: () => void
   /** Lands an emptied active worktree on the welcome screen; true when it did. */
-  landIfEmptied?: () => boolean
+  landIfEmptied?: (retirement: DesktopRetirement) => boolean
 }
 
 /** Return false for kinds/layouts main does not own, allowing caller-local close. */
 export function closeContentTabThroughLayoutOwner(
   get: () => AppState,
   tab: Pick<Tab, 'id' | 'entityId' | 'worktreeId' | 'groupId' | 'contentType'>,
-  close: ContentTabClose
+  close: ContentTabClose,
+  captured?: DesktopRetirement
 ): boolean {
   // Today's close of a twin's tab closes its tab-bar entry as today too.
   if (!closesThroughLayoutOwner(tab.contentType) || closingAsToday.has(tab.id)) {
@@ -80,12 +98,13 @@ export function closeContentTabThroughLayoutOwner(
   if (isTabClosePending(tab.id)) {
     return true
   }
+  const retirement = captured ?? captureDesktopRetirement(get(), tab.worktreeId, tab.groupId)
   // A close of a tab still opening goes once main answered the open.
   if (isPendingTab(tab.id)) {
     afterPendingTab(tab.id, () => {
       const drawn = get().unifiedTabsByWorktree[tab.worktreeId]?.find((e) => e.id === tab.id)
       if (drawn) {
-        closeContentTabThroughLayoutOwner(get, drawn, close)
+        closeContentTabThroughLayoutOwner(get, drawn, close, retirement)
       }
     })
     return true
@@ -95,8 +114,8 @@ export function closeContentTabThroughLayoutOwner(
     // Waiters first: a closeFile's content cleanup must not undo the selection.
     settle(tab.id)
     close.closed?.()
-    if (!close.landIfEmptied?.()) {
-      selectAfterClose(get, tab, close.nextActiveTabId)
+    if (!close.landIfEmptied?.(retirement)) {
+      selectAfterClose(get, tab, close.nextActiveTabId, retirement)
     }
   }
   const closeAsToday = (): void => {

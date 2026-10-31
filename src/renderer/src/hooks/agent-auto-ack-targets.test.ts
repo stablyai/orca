@@ -92,3 +92,19 @@ describe('visible agent acknowledgement target', () => {
     expect(isTabOnScreen(state, FLOATING, TERMINAL, 'terminal')).toBe(true)
   })
 })
+
+it.each(['thread-draft', 'empty-workbench'] as const)(
+  'uses ordinary visible targets for retained %s only while disabled',
+  (activeView) => {
+    const store = floatingStore()
+    store.setState({ activeView, activeWorktreeId: FLOATING, floatingWorkspacePanelOpen: false })
+    for (const experimentalThreads of [false, true]) {
+      store.setState({ settings: { ...store.getState().settings!, experimentalThreads } })
+      expect(resolveAutoAckTabTargets(store.getState())).toEqual(
+        experimentalThreads
+          ? []
+          : [{ tabId: TERMINAL, worktreeId: FLOATING, surfaceKind: 'terminal' }]
+      )
+    }
+  }
+)

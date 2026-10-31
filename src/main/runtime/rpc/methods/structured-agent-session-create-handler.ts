@@ -85,6 +85,7 @@ export async function handleStructuredAgentSessionCreate(
         agent: params.agent,
         caller: callerFor(ctx),
         structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
+        ...(params.surface ? { surface: params.surface } : {}),
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.optionsMode ? { optionsMode: params.optionsMode } : {}),

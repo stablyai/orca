@@ -47,6 +47,7 @@ export type PreparedStructuredAgentSessionCreate = {
 /** New creates keep the immutable client intent in the ledger; legacy creates keep attach identity. */
 export function structuredAgentSessionCreateIntentFingerprint(params: {
   envelope: AgentSessionMutationEnvelope
+  surface?: 'thread'
   worktree: string
   agent: string
   resumeFrom?: StructuredAgentSessionResumeSource
@@ -59,6 +60,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
     method: 'agentSession.create',
     sessionId: params.envelope.sessionId,
     fields: {
+      ...(params.surface ? { surface: params.surface } : {}),
       worktree: params.worktree,
       agent: params.agent,
       resumeFrom: params.resumeFrom,
@@ -76,6 +78,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   /** Installs the host lazily; called at the same point the RPC handler always installed it. */
   ensureHost: () => Promise<StructuredAgentSessionHost>
   envelope: AgentSessionMutationEnvelope
+  surface?: 'thread'
   worktree: string
   agent: StructuredAgentId
   caller: StructuredAgentSessionCaller
@@ -153,6 +156,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
+      ...(args.surface ? { surface: args.surface } : {}),
       ...(picked ? { options: picked } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
@@ -261,6 +265,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   ensureHost: () => Promise<StructuredAgentSessionHost>
   caller: StructuredAgentSessionCaller
   envelope: AgentSessionMutationEnvelope
+  surface?: 'thread'
   worktree: string
   agent: StructuredAgentId
   activate: boolean

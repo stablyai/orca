@@ -1,3 +1,4 @@
+import { navigateDesktopTab } from '@/lib/desktop-navigation'
 import {
   isFloatingWorkspaceId,
   floatingWorkspaceToWorktree
@@ -61,7 +62,7 @@ export function activateBrowserWorkspaceTab(params: BrowserWorkspaceTabTarget): 
   }
   const state = useAppStore.getState()
   state.focusGroup(params.worktreeId, unifiedTab.groupId)
-  state.activateTab(unifiedTab.id, { worktreeId: params.worktreeId })
+  navigateDesktopTab(unifiedTab.id, { worktreeId: params.worktreeId })
   state.setActiveBrowserTab(params.workspaceId)
   if (params.pageId) {
     state.setActiveBrowserPage(params.workspaceId, params.pageId)

@@ -63,7 +63,7 @@ export function createBrowserPageFocusActions(
         (entry) => entry.contentType === 'browser' && entry.entityId === workspace.id
       )
       if (item) {
-        get().activateTab(item.id)
+        get().activateTab(item.id, { recordFocus: surfacePane })
       }
     },
 

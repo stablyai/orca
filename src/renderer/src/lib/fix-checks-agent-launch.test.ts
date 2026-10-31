@@ -1,3 +1,4 @@
+import { beginDesktopNavigation, canPresentDesktopNavigation } from './desktop-navigation'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
@@ -171,12 +172,10 @@ describe('startFixChecksAgent', () => {
     mocks.activateAndRevealWorktree.mockReturnValue(true)
     mocks.findGithubPrWorkspaceAttachment.mockReturnValue(null)
     mocks.getConnectionId.mockReturnValue(null)
-    mocks.launchAgentInNewTab.mockImplementation(
-      (args: { beforeSurfaceOpen?: (surface: { kind: 'local-terminal' }) => boolean | void }) => {
-        args.beforeSurfaceOpen?.({ kind: 'local-terminal' })
-        return { surface: { kind: 'local-terminal', tabId: 'tab-1' } }
-      }
-    )
+    mocks.launchAgentInNewTab.mockImplementation((args: LaunchAgentInNewTabArgs) => {
+      args.beforeSurfaceOpen?.({ kind: 'local-terminal' }, args.navigation)
+      return { surface: { kind: 'local-terminal', tabId: 'tab-1' } }
+    })
     mocks.launchWorkItemDirect.mockResolvedValue(true)
     mocks.pickSourceControlLaunchAgent.mockImplementation(({ detectedAgents }) => {
       return detectedAgents.includes('codex') ? 'codex' : null
@@ -202,8 +201,34 @@ describe('startFixChecksAgent', () => {
 
     // The launcher owns creation; activation must not seed a sibling shell after the last terminal closed.
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true
+      providesInitialSurface: true,
+      navigation: expect.objectContaining({ id: expect.any(Number) })
     })
+  })
+
+  it('keeps the original Fix Checks scope through held detection while launch work succeeds', async () => {
+    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+    const held = Promise.withResolvers<string[]>()
+    mocks.store.ensureDetectedAgents.mockReturnValueOnce(held.promise)
+    const pending = startFixChecksAgent({
+      repoId: 'repo-1',
+      worktreeId: 'wt-1',
+      basePrompt: 'Fix checks',
+      launchSource: 'task_page'
+    })
+    await vi.waitFor(() => expect(mocks.store.ensureDetectedAgents).toHaveBeenCalled())
+    Object.assign(mocks.store.settings, { experimentalThreads: true })
+    beginDesktopNavigation(undefined, true)
+    held.resolve(['codex'])
+    await expect(pending).resolves.toBe(true)
+    const request = vi.mocked(mocks.launchAgentInNewTab).mock.lastCall?.[0].navigation
+    expect(request).toBeTruthy()
+    expect(canPresentDesktopNavigation(request)).toBe(false)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({ navigation: request })
+    )
+    expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
   })
 
   it('carries the actual use-default literal from Fix Checks into final startup and its recipe', async () => {

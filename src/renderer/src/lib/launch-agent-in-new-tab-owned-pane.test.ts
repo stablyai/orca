@@ -55,7 +55,7 @@ it.each([undefined, null, '--model gpt-5.5'])(
           }
         })
       )
-      expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'local-terminal' })
+      expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'local-terminal' }, null)
       expect(mockSetActiveTabType).not.toHaveBeenCalled()
       if (!outcome || !('surface' in outcome) || !outcome.promptDeliveryResult) {
         throw new Error('missing delivery result')

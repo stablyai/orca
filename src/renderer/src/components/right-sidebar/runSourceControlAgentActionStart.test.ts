@@ -1,3 +1,5 @@
+import { beginDesktopNavigation, captureDesktopNavigation } from '@/lib/desktop-navigation-request'
+import { useAppStore } from '@/store'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
@@ -412,6 +414,7 @@ describe('runSourceControlAgentActionStart', () => {
     ).resolves.toBe(true)
 
     expect(onStart).toHaveBeenCalledWith({
+      navigation: expect.objectContaining({ id: expect.any(Number) }),
       agent: 'codex',
       commandInput: 'Fix the bug',
       agentArgs: '--model gpt-5'
@@ -735,3 +738,38 @@ it('saves a foreign resolved literal as current raw and starts from the canonica
     expect.objectContaining({ agent: 'claude', agentArgs: '-c model=o3' })
   )
 })
+
+it.each([false, true])(
+  'retains the Start request through recovery admission, adapter=%s',
+  async (adapter) => {
+    vi.clearAllMocks()
+    const settings = useAppStore.getState().settings
+    useAppStore.setState({ settings: { ...settings!, experimentalThreads: true } })
+    const admission = Promise.withResolvers<{ inFlight: boolean }>()
+    mocks.mutationInFlight.mockReturnValue(admission.promise)
+    mocks.onStart.mockResolvedValue(true)
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'accepted' },
+      promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+    })
+    try {
+      const starting = runSourceControlAgentActionStart(
+        buildArgs({
+          recoveryContext: { target: { kind: 'local' }, worktreeId: 'wt-1', worktreePath: '/repo' },
+          ...(adapter ? { onStart: mocks.onStart } : {})
+        })
+      )
+      const original = captureDesktopNavigation(useAppStore.getState())
+      beginDesktopNavigation(useAppStore.getState(), true)
+      admission.resolve({ inFlight: false })
+      expect(await starting).toBe(true)
+      const launch = (adapter ? mocks.onStart : mocks.launchAgentInNewTab).mock.calls[0][0]
+      expect(launch.navigation.id).toBe(original.id)
+      expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+      expect(mocks.onLaunched).toHaveBeenCalledOnce()
+      expect(mocks.onClose).toHaveBeenCalledOnce()
+    } finally {
+      useAppStore.setState({ settings })
+    }
+  }
+)

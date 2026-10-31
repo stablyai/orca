@@ -1,3 +1,4 @@
+import { beginDesktopNavigation, canPresentDesktopNavigation } from '@/lib/desktop-navigation'
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control-action-selection'
 import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import {
@@ -109,6 +110,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   getStoreState: () => SourceControlAiLaunchStoreSnapshot
   copy: SourceControlRecoveryLaunchCopy
 }): Promise<boolean> {
+  const navigation = beginDesktopNavigation()
   const worktreeConnectionId = getConnectionId(activeWorktreeId)
   const connectionId =
     worktreeConnectionId !== undefined ? worktreeConnectionId : sourceRepoConnectionId
@@ -186,6 +188,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     }
   )
   const result = launchAgentInNewTab({
+    navigation,
     requestId: newAgentLaunchRequestId(),
     agent,
     worktreeId: activeWorktreeId,
@@ -212,7 +215,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  if (result.surface.kind === 'local-terminal') {
+  if (result.surface.kind === 'local-terminal' && canPresentDesktopNavigation(navigation)) {
     focusTerminalTabSurface(result.surface.tabId)
   }
   toast.success(copy.success)

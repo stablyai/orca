@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from './desktop-navigation'
 import {
   adoptAgentSessionLaunchVerdict,
   type AgentSessionLaunchPlan
@@ -23,6 +24,7 @@ type StructuredFromNewTab = {
 /** Ask the owning host to admit chat before publication; refusal falls back to the caller’s configured surface or a terminal where the CLI is installed. */
 export function launchStructuredAgentFromNewTab(args: {
   plan: AgentSessionLaunchPlan
+  navigation?: DesktopNavigationRequest | null
   worktreeId: string
   groupId?: string
   focusIntent?: NativeChatComposerFocusIntent
@@ -31,12 +33,13 @@ export function launchStructuredAgentFromNewTab(args: {
   openTerminal: (terminalPlan: AgentSessionLaunchPlan, activate?: false) => AgentTabLaunchOutcome
 }): StructuredFromNewTab | null {
   const { plan, beforeSurfaceOpen } = args
-  if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
+  if (beforeSurfaceOpen?.({ kind: 'host-published' }, args.navigation) === false) {
     return null
   }
   const launch = beginStructuredAgentSessionProvisionalLaunch({
     plan,
     hooks: {},
+    navigation: args.navigation,
     ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
     target: { worktreeId: args.worktreeId },
     ...(args.groupId ? { targetGroupId: args.groupId } : {}),

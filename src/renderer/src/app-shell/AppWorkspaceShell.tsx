@@ -1,3 +1,4 @@
+import { ThreadSurface, useThreadSurfaceActive } from '../components/threads/ThreadSurface'
 import { memo, Suspense, useCallback, useRef } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
@@ -113,7 +114,11 @@ export function AppWorkspaceShell(props: {
   layout: AppChromeLayout
   floatingWorkspace: FloatingWorkspacePanelState
 }): React.JSX.Element {
-  const { layout, floatingWorkspace } = props
+  const { layout: baseLayout, floatingWorkspace } = props
+  const threadSurface = useThreadSurfaceActive()
+  const layout = threadSurface
+    ? { ...baseLayout, showRightSidebarControls: false, workspaceChromeActive: false }
+    : baseLayout
   const titlebarLeftControls = <TitlebarLeftControls layout={layout} />
   const titlebarMainStrip = <TitlebarMainStrip layout={layout} />
   // Keep scroll memory above sidebar view remounts to preserve list position.
@@ -205,7 +210,9 @@ export function AppWorkspaceShell(props: {
                 )}
                 <div className="flex flex-1 min-w-0 min-h-0 flex-col">
                   {layout.shouldMountTerminalWorkbench ? (
-                    <TerminalWorkbenchContainer isVisible={layout.terminalWorkbenchVisible}>
+                    <TerminalWorkbenchContainer
+                      isVisible={layout.terminalWorkbenchVisible && !threadSurface}
+                    >
                       <Suspense fallback={null}>
                         <RecoverableRenderErrorBoundary
                           boundaryId="terminal.workbench"
@@ -236,7 +243,15 @@ export function AppWorkspaceShell(props: {
                         'Retry the page or navigate to another Orca surface.'
                       )}
                     >
-                      <ActivePage layout={layout} />
+                      {threadSurface ? (
+                        <ThreadSurface
+                          reserveCollapsedSidebarHeaderSpace={
+                            layout.leftTitlebarChromeLayout.shouldMount && !layout.sidebarOpen
+                          }
+                        />
+                      ) : (
+                        <ActivePage layout={layout} />
+                      )}
                     </RecoverableRenderErrorBoundary>
                   </Suspense>
                 </div>

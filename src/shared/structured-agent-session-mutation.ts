@@ -45,6 +45,7 @@ export function structuredAgentSessionDomainFingerprint(input: {
 
 export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
+  surface?: 'thread'
   worktree: string
   agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
@@ -57,6 +58,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
     method: 'agentSession.create',
     sessionId: input.sessionId,
     fields: {
+      surface: input.surface,
       worktree: input.worktree,
       agent: input.agent,
       // Dropping undefined preserves blank-create digests; resume intent must not replay as blank create.

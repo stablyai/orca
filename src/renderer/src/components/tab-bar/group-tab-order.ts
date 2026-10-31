@@ -1,3 +1,4 @@
+import { desktopVisibleTabs } from '../threads/desktop-tab-projection'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../../store/types'
 import { reconcileTabOrder } from './reconcile-order'
@@ -149,10 +150,16 @@ export function getActiveTabNavOrder(
     | 'tabsByWorktree'
     | 'openFiles'
     | 'browserTabsByWorktree'
-  >,
+  > &
+    Partial<Pick<AppState, 'settings'>>,
   worktreeId: string,
   ids: ActiveTabNavOrderIds = {}
 ): VisibleTabRef[] {
+  const visibleTabs = desktopVisibleTabs(
+    state,
+    worktreeId,
+    state.unifiedTabsByWorktree[worktreeId] ?? []
+  )
   const terminalIds = ids.terminalIds ?? (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
   const editorIds =
     ids.editorIds ?? state.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
@@ -160,14 +167,10 @@ export function getActiveTabNavOrder(
     ids.browserIds ?? (state.browserTabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
   const simulatorIds =
     ids.simulatorIds ??
-    (state.unifiedTabsByWorktree[worktreeId] ?? [])
-      .filter((tab) => tab.contentType === 'simulator')
-      .map((tab) => tab.id)
+    visibleTabs.filter((tab) => tab.contentType === 'simulator').map((tab) => tab.id)
   const agentSessionIds =
-    ids.agentSessionIds ??
-    (state.unifiedTabsByWorktree[worktreeId] ?? [])
-      .filter((tab) => tab.contentType === 'agent-session')
-      .map((tab) => tab.id)
+    ids.agentSessionIds?.filter((id) => visibleTabs.some((tab) => tab.id === id)) ??
+    visibleTabs.filter((tab) => tab.contentType === 'agent-session').map((tab) => tab.id)
 
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const group = activeGroupId
@@ -175,9 +178,7 @@ export function getActiveTabNavOrder(
     : undefined
 
   if (group) {
-    const groupTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-      (tab) => tab.groupId === group.id
-    )
+    const groupTabs = visibleTabs.filter((tab) => tab.groupId === group.id)
     // Unified terminal tabs render before legacy runtime hydration; keep them cyclable so activation can restore the runtime.
     const groupTerminalIds = new Set([
       ...terminalIds,
@@ -217,7 +218,7 @@ export function getActiveTabNavOrder(
     } else if (simulatorIdSet.has(id)) {
       result.push({ type: 'simulator', id })
     } else if (agentSessionIdSet.has(id)) {
-      const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+      const tab = visibleTabs.find(
         (candidate) => candidate.id === id && candidate.contentType === 'agent-session'
       )
       if (tab) {

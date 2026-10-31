@@ -173,7 +173,7 @@ export function createMarkdownPreviewActions(
         }
       })
       void openWorkspaceEditorItem(
-        get(),
+        get,
         id,
         file.worktreeId,
         `${file.relativePath} (preview)`,

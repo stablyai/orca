@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
     setActiveTabType: vi.fn(),
     state: {
       activeWorktreeId: 'workspace',
-      activeWorkspaceExecutionHostId: 'local' as const,
+      activeWorkspaceExecutionHostId: 'local' as 'local' | 'runtime:remote-2',
       unifiedTabsByWorktree: tabs
     }
   }
@@ -25,9 +25,20 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       ...mocks.state,
+      getTab: (id: string) =>
+        Object.values(mocks.state.unifiedTabsByWorktree)
+          .flat()
+          .find((tab) => tab.id === id) ?? null,
       activateTab: mocks.activateTab,
       focusGroup: mocks.focusGroup,
-      setActiveTabType: mocks.setActiveTabType
+      setActiveTabType: mocks.setActiveTabType,
+      setActiveView: vi.fn(),
+      setActiveWorktree: vi.fn((workspace, host) => {
+        mocks.state.activeWorktreeId = workspace
+        if (host) {
+          mocks.state.activeWorkspaceExecutionHostId = host
+        }
+      })
     })
   }
 }))
@@ -64,6 +75,7 @@ function tab(id: string, host: 'local' | 'runtime:remote-2'): Tab {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.state.activeWorktreeId = 'workspace'
+  mocks.state.activeWorkspaceExecutionHostId = 'local'
   mocks.moved.mockReturnValue(false)
   mocks.state.unifiedTabsByWorktree = { workspace: [tab('wrong-local', 'local')] }
   mocks.supports.mockResolvedValue(true)
@@ -109,7 +121,7 @@ it('keeps implicit activation unfiltered while explicit automation refuses an eq
   expect(mocks.supports).not.toHaveBeenCalled()
 })
 
-it('shares one result and the first presentation across History and neutral callers, then permits retry', async () => {
+it('shares restore work and gives the latest caller its presentation across History and neutral callers, then permits retry', async () => {
   const pointer = { workspaceId: 'workspace', sessionId: 'coalesced' }
   const release = Promise.withResolvers<'gone'>()
   const parts = {
@@ -127,8 +139,8 @@ it('shares one result and the first presentation across History and neutral call
   expect(await history).toBe(true)
   expect(await joined).toBe('gone')
   expect(parts.reveal).toHaveBeenCalledOnce()
-  expect(parts.gone).toHaveBeenCalledOnce()
-  expect(present).not.toHaveBeenCalled()
+  expect(parts.gone).not.toHaveBeenCalled()
+  expect(present).toHaveBeenCalledExactlyOnceWith('gone')
   const pending = Promise.withResolvers<'gone'>()
   parts.reveal.mockImplementationOnce(() => pending.promise)
   const neutral = openExistingStructuredSession(pointer, { target: TARGET, deps: parts, present })
@@ -191,12 +203,15 @@ it('preserves History success-only navigation, the active-workspace shortcut and
   expect(mocks.moved).not.toHaveBeenCalled()
   parts.activate.mockReturnValue(true)
   await activateAiVaultStructuredSession(session, parts, TARGET)
-  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith('workspace')
+  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith('workspace', {
+    navigation: expect.any(Object)
+  })
   mocks.navigate.mockClear()
   mocks.moved.mockReturnValue(true)
   await activateAiVaultStructuredSession(session, parts, TARGET)
   expect(mocks.navigate).not.toHaveBeenCalled()
   mocks.state.activeWorktreeId = 'workspace'
+  mocks.state.activeWorkspaceExecutionHostId = 'local'
   mocks.moved.mockClear()
   await activateAiVaultStructuredSession(session, parts, TARGET)
   expect(mocks.moved).not.toHaveBeenCalled()

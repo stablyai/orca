@@ -1,10 +1,16 @@
 import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  type DesktopNavigationRequest
+} from './desktop-navigation'
+import {
   ensureAgentLaunchPreferences,
   type AgentLaunchPreferences
 } from '@/components/settings/use-host-agent-launch-preferences'
 import {
   resolveChecksActionAgent,
-  sourceControlRepoAgentRows
+  sourceControlRepoAgentRows,
+  pickExistingWorktreeChecksAgent
 } from '@/lib/source-control-agent-picker'
 export { resolveChecksActionAgent } from '@/lib/source-control-agent-picker'
 import {
@@ -14,7 +20,6 @@ import {
 import { toast } from 'sonner'
 import {
   ensureDetectedAgentsForRepo,
-  ensureDetectedAgentsForWorktree,
   type RepoHostFields
 } from '@/lib/agent-detection-target-inventory'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -46,6 +51,7 @@ import {
 } from '../../../shared/source-control-action-launch-preferences'
 
 type StartFixChecksAgentArgs = {
+  navigation?: DesktopNavigationRequest
   repoId: string
   basePrompt: string
   item?: GitHubWorkItem
@@ -99,46 +105,9 @@ async function resolveSavedAgentOverride(
   return { kind: 'agent', agent: savedAgent }
 }
 
-async function pickExistingWorktreeAgent(worktreeId: string): Promise<TuiAgent | null> {
-  const workspace = worktreeLaunchWorkspace(worktreeId)
-  const [choices, preferences] = await Promise.all([
-    acquireAgentLaunchChoices(workspace, () =>
-      ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId)
-    ),
-    ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
-  ])
-  const state = useAppStore.getState()
-  const repoId = state.allWorktrees().find((entry) => entry.id === worktreeId)?.repoId
-  const agent = resolveChecksActionAgent(
-    state,
-    'fixChecks',
-    repoId,
-    workspace,
-    choices.detected,
-    preferences
-  )
-  if (!agent) {
-    const repo = state.repos.find((entry) => entry.id === repoId)
-    const savedAgent = readSourceControlLaunchRecipeAgentId(
-      resolveSourceControlActionRecipe({ settings: state.settings, repo, actionId: 'fixChecks' })
-    )
-    toast.error(
-      savedAgent
-        ? translate(
-            'auto.lib.fix.checks.agent.launch.4c7f783a7a',
-            'Saved checks agent is not available on this workspace host.'
-          )
-        : translate(
-            'auto.lib.fix.checks.agent.launch.2ebf794906',
-            'No enabled AI agent was detected on this workspace host.'
-          )
-    )
-  }
-  return agent
-}
-
 export function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
-  return launchFixChecksAgent(args).catch((error) => {
+  const navigation = args.navigation ?? beginDesktopNavigation()
+  return launchFixChecksAgent({ ...args, navigation }).catch((error) => {
     if (
       error instanceof AgentLaunchChoiceCancelled ||
       (error instanceof DOMException && error.name === 'AbortError')
@@ -149,7 +118,9 @@ export function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
   })
 }
 
-async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
+async function launchFixChecksAgent(
+  args: StartFixChecksAgentArgs & { navigation: DesktopNavigationRequest }
+): Promise<boolean> {
   const store = useAppStore.getState()
   const repo = store.repos.find((candidate) => candidate.id === args.repoId) ?? null
   const recipe = () =>
@@ -196,7 +167,7 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
       )
       return false
     }
-    const agent = await pickExistingWorktreeAgent(targetWorktreeId)
+    const agent = await pickExistingWorktreeChecksAgent(targetWorktreeId)
     const prompt = agent ? commandInput() : ''
     if (!agent || !prompt) {
       return false
@@ -224,6 +195,7 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
     )
     let revealFailed = false
     const result = launchAgentInNewTab({
+      navigation: args.navigation,
       requestId: newAgentLaunchRequestId(),
       agent,
       worktreeId: targetWorktreeId,
@@ -233,9 +205,10 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
       promptDelivery: 'submit-after-ready',
       launchPlatform,
       launchSource: args.launchSource,
-      beforeSurfaceOpen: () => {
+      beforeSurfaceOpen: (_surface, navigation) => {
         // Why: the launcher owns the initial surface, so revealing must not seed a sibling shell.
         const revealed = activateAndRevealWorktree(targetWorktreeId, {
+          navigation,
           providesInitialSurface: true
         })
         revealFailed = revealed === false
@@ -256,7 +229,7 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
       )
       return false
     }
-    if (result.surface.kind === 'local-terminal') {
+    if (result.surface.kind === 'local-terminal' && canPresentDesktopNavigation(args.navigation)) {
       focusTerminalTabSurface(result.surface.tabId)
     }
     return true
@@ -285,6 +258,7 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
   }
 
   return await launchWorkItemDirect({
+    navigation: args.navigation,
     item: { ...args.item, pasteContent: prompt },
     repoId: args.repoId,
     agentLaunchPreferences,

@@ -1,3 +1,10 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { acquireAgentLaunchChoices } from './host-chat-program-acquisition'
+import { worktreeLaunchWorkspace } from './agent-launch-route-input'
+import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import { ensureDetectedAgentsForWorktree } from './agent-detection-target-inventory'
 import type { AppState } from '@/store/types'
 import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
@@ -114,4 +121,44 @@ export function resolveChecksActionAgent(
     disabledAgents: policy?.disabledTuiAgents,
     chosenOpensAsChat: usable
   })
+}
+
+export async function pickExistingWorktreeChecksAgent(
+  worktreeId: string
+): Promise<TuiAgent | null> {
+  const workspace = worktreeLaunchWorkspace(worktreeId)
+  const [choices, preferences] = await Promise.all([
+    acquireAgentLaunchChoices(workspace, () =>
+      ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId)
+    ),
+    ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
+  ])
+  const state = useAppStore.getState()
+  const repoId = state.allWorktrees().find((entry) => entry.id === worktreeId)?.repoId
+  const agent = resolveChecksActionAgent(
+    state,
+    'fixChecks',
+    repoId,
+    workspace,
+    choices.detected,
+    preferences
+  )
+  if (!agent) {
+    const repo = state.repos.find((entry) => entry.id === repoId)
+    const savedAgent = readSourceControlLaunchRecipeAgentId(
+      resolveSourceControlActionRecipe({ settings: state.settings, repo, actionId: 'fixChecks' })
+    )
+    toast.error(
+      savedAgent
+        ? translate(
+            'auto.lib.fix.checks.agent.launch.4c7f783a7a',
+            'Saved checks agent is not available on this workspace host.'
+          )
+        : translate(
+            'auto.lib.fix.checks.agent.launch.2ebf794906',
+            'No enabled AI agent was detected on this workspace host.'
+          )
+    )
+  }
+  return agent
 }

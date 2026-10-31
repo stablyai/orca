@@ -1,3 +1,4 @@
+import { openDesktopWorkbench } from '../threads/thread-navigation'
 import { useShallow } from 'zustand/react/shallow'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -34,6 +35,8 @@ export function useTabGroupWorkspaceModel({
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       expandedPaneByTabId: state.expandedPaneByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID,
+      threadsEnabled:
+        state.settings?.experimentalThreads === true && state.activeWorktreeId === worktreeId,
       generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
       mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false
     }))
@@ -89,6 +92,7 @@ export function useTabGroupWorkspaceModel({
     commands: {
       focusGroup: () => {
         focusGroup(worktreeId, groupId)
+        openDesktopWorkbench(useAppStore.getState(), worktreeId)
       },
       activateAgentSession,
       activateBrowser,

@@ -2,6 +2,10 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import {
+  publishStructuredSessionSummaries,
+  useStructuredSessionSummaries
+} from '../native-chat/structured-session-summary-store'
 import { makeTabGroup, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
 import type { BulkTabCloseScope } from '../../../../shared/bulk-tab-close-confirmation'
 import { useTabGroupCloseScopeCommands } from './useTabGroupCloseScopeCommands'
@@ -33,6 +37,10 @@ let settle: (confirmed: boolean) => void
 
 beforeEach(() => {
   vi.clearAllMocks()
+  useStructuredSessionSummaries.setState({ byTabId: new Map(), threadTabIds: new Set() })
+  useAppStore.setState({
+    settings: { ...useAppStore.getState().settings, experimentalThreads: false }
+  })
   confirm.mockImplementation(
     () =>
       new Promise((resolve) => {
@@ -183,6 +191,35 @@ describe('group bulk close confirmation', () => {
     await confirmRequest()
     expect(closeMany).toHaveBeenCalledExactlyOnceWith([left.id, right.id])
     expect(otherCloseMany).not.toHaveBeenCalled()
+  })
+
+  it('keeps a thread out of host bulk close only while Threads is enabled', async () => {
+    publishStructuredSessionSummaries([
+      {
+        tabId: right.id,
+        summary: {
+          sessionId: 'thread',
+          workspaceId: worktreeId,
+          agent: 'codex',
+          surface: 'thread',
+          status: null,
+          latestPrompt: '',
+          updatedAt: 1
+        }
+      }
+    ])
+    useAppStore.setState({
+      settings: { ...useAppStore.getState().settings, experimentalThreads: true }
+    })
+    request('others')
+    await confirmRequest()
+    expect(closeMany).toHaveBeenLastCalledWith([left.id])
+    useAppStore.setState({
+      settings: { ...useAppStore.getState().settings, experimentalThreads: false }
+    })
+    request('others')
+    await confirmRequest()
+    expect(closeMany).toHaveBeenLastCalledWith([left.id, right.id])
   })
 
   it('does not prompt when there are no eligible targets', () => {

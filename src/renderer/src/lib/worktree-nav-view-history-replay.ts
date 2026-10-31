@@ -1,8 +1,10 @@
+import { beginDesktopNavigation } from './desktop-navigation'
 import { useAppStore } from '@/store'
 import type { WorktreeNavHistoryViewEntry } from '@/store/slices/worktree-nav-history'
 
 // Replay via setActiveView: open*Page would mutate previousViewBefore* or duplicate history (navigateToIndex).
 export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): void {
+  beginDesktopNavigation()
   if (entry === 'automations' || entry === 'artifacts' || entry === 'skills') {
     useAppStore.getState().setActiveView(entry)
     return

@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from '@/lib/desktop-navigation-request'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -40,6 +41,7 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   launchPreferences?: AgentLaunchPreferences
   providerSession?: AgentProviderSessionMetadata
   viewMode?: 'terminal' | 'chat'
+  navigation?: DesktopNavigationRequest | null
   activate?: boolean
   selectWorktree?: boolean
 }

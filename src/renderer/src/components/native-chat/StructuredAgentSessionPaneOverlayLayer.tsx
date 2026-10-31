@@ -1,3 +1,6 @@
+import { navigateDesktopGroup } from '@/lib/desktop-navigation'
+import { openDesktopWorkbench } from '../threads/thread-navigation'
+import { visibleGroupActiveTabId } from '../threads/desktop-tab-projection'
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -8,6 +11,7 @@ import {
 } from '@/runtime/structured-agent-session-owner'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
+import { useThreadMembership, isThreadTab } from './structured-session-summary-store'
 import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 
 type StructuredAgentSessionTab = Tab & {
@@ -69,25 +73,37 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     worktreeId: string
     isWorktreeActive: boolean
   }): React.JSX.Element {
-    const { unifiedTabs, groups, activeGroupId } = useAppStore(
+    const { unifiedTabs, groups, activeGroupId, threadsEnabled } = useAppStore(
       useShallow((state) => ({
         unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
         groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
+        threadsEnabled: state.settings?.experimentalThreads === true,
         activeGroupId: state.activeGroupIdByWorktree[worktreeId]
       }))
     )
-    const focusGroup = useAppStore((state) => state.focusGroup)
+    const threadTabIds = useThreadMembership(worktreeId, threadsEnabled && isWorktreeActive)
+    const focusGroup = navigateDesktopGroup
     const focusOwningGroup = useCallback(
-      (groupId: string) => focusGroup(worktreeId, groupId),
+      (groupId: string) => {
+        focusGroup(worktreeId, groupId)
+        openDesktopWorkbench(useAppStore.getState(), worktreeId)
+      },
       [focusGroup, worktreeId]
     )
     const groupActiveTabById = useMemo(
-      () => new Map(groups.map((group) => [group.id, group.activeTabId] as const)),
-      [groups]
+      () =>
+        new Map(
+          groups.map((group) => [group.id, visibleGroupActiveTabId(group, threadTabIds)] as const)
+        ),
+      [groups, threadTabIds]
     )
     const structuredTabs = useMemo(
-      () => unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab)),
-      [unifiedTabs]
+      () =>
+        unifiedTabs.filter(
+          (tab): tab is StructuredAgentSessionTab =>
+            isStructuredTab(tab) && !isThreadTab(threadsEnabled, tab.id, threadTabIds)
+        ),
+      [unifiedTabs, threadTabIds, threadsEnabled]
     )
 
     return (

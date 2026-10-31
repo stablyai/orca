@@ -1,3 +1,7 @@
+import {
+  commitDesktopNavigation,
+  type DesktopNavigationRequest
+} from '@/lib/desktop-navigation-request'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
 import {
@@ -5,8 +9,18 @@ import {
   type WebRuntimeSessionWorkspaceSelection
 } from './web-runtime-session-workspace-routing'
 
-export function selectWebRuntimeSessionWorktree(worktreeId: string, environmentId: string): void {
-  useAppStore.getState().setActiveWorktree(worktreeId, toRuntimeExecutionHostId(environmentId))
+export function selectWebRuntimeSessionWorktree(
+  worktreeId: string,
+  environmentId: string,
+  navigation?: DesktopNavigationRequest | null
+): void {
+  const select = () =>
+    useAppStore.getState().setActiveWorktree(worktreeId, toRuntimeExecutionHostId(environmentId))
+  if (navigation === undefined) {
+    select()
+  } else if (navigation) {
+    commitDesktopNavigation(navigation, select)
+  }
 }
 
 export type WebRuntimeSessionWorkspaceSelectionRollback = {

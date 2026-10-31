@@ -441,3 +441,14 @@ describe('keybindings', () => {
     expect(keybindingMatchesAction('browser.annotateElement', altShiftN, platform)).toBe(true)
   })
 })
+
+it('binds New thread on macOS without reserving AltGr text on Windows or Linux', () => {
+  expect(getEffectiveKeybindingsForAction('thread.create', 'darwin')).toEqual(['Mod+Alt+N'])
+  expect(getEffectiveKeybindingsForAction('thread.create', 'linux')).toEqual([])
+  expect(getEffectiveKeybindingsForAction('thread.create', 'win32')).toEqual([])
+  expect(
+    findKeybindingConflicts('darwin').filter((conflict) =>
+      JSON.stringify(conflict).includes('thread.create')
+    )
+  ).toEqual([])
+})

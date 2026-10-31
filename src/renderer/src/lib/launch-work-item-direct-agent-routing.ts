@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from './desktop-navigation'
 import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import { agentLaunchCommandErrorMessage } from '@/lib/launch-work-item-direct-messages'
@@ -116,6 +117,7 @@ export async function resolveDirectWorkItemAgent(args: {
 export function beginDirectWorkItemStructuredLaunch(args: {
   plan: AgentSessionLaunchPlan | null
   primaryTabId: string | null
+  navigation?: DesktopNavigationRequest
   beforeOpen: (sessionId?: string) => boolean | void
   /** The terminal launch the host's "no" falls back to, carrying the caller's own CLI args. */
   declinedTerminal?: DeclinedStructuredLaunchTerminalOptions
@@ -137,6 +139,7 @@ export function beginDirectWorkItemStructuredLaunch(args: {
     plan,
     hooks: {},
     beforeOpen: args.beforeOpen,
+    navigation: args.navigation,
     ...(args.declinedTerminal ? { declinedTerminal: args.declinedTerminal } : {})
   })
   if (!launch) {

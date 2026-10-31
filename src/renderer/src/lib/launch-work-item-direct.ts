@@ -1,3 +1,4 @@
+import { beginDesktopNavigation } from './desktop-navigation'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -47,15 +48,8 @@ import { loadProjectLaunchContext } from '@/lib/agent-detection-target-inventory
 
 /** Create/activate a workspace and deliver work-item context to its agent. Setup decisions, unresolved repos or unavailable agents fall back to the modal; paste failures retain the usable workspace and surface a notice. */
 export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<boolean> {
-  const {
-    item,
-    repoId,
-    openModalFallback,
-    baseBranch,
-    telemetrySource,
-    launchSource,
-    agentOverride
-  } = args
+  const { item, repoId, openModalFallback, baseBranch, telemetrySource, launchSource } = args
+  const navigation = args.navigation ?? beginDesktopNavigation()
   let agentArgs = args.agentArgs
   const store = useAppStore.getState()
   const owner = resolveDirectLaunchOwnerRow(store.repos, repoId)
@@ -219,7 +213,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       worktreeId,
       worktreePath,
       repoId,
-      agentOverride,
+      agentOverride: args.agentOverride,
       agentLaunchPreferences: args.agentLaunchPreferences,
       agentArgs: args.agentArgs,
       ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
@@ -242,6 +236,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     if (launchPreparation.unavailable) {
       activateAndRevealWorktree(worktreeId, {
         sidebarRevealBehavior: 'auto',
+        navigation,
         setup: result.setup
       })
       toast.error(unavailableAgentErrorMessage())
@@ -260,6 +255,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const revealWorkspace = (): boolean => {
       activationHolder.value = activateAndRevealWorktree(worktreeId, {
         sidebarRevealBehavior: 'auto',
+        navigation,
         setup: result.setup,
         defaultTabs: result.defaultTabs,
         ...(launchPreparation.structuredLaunch
@@ -272,6 +268,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       plan,
       primaryTabId: null,
       beforeOpen: revealWorkspace,
+      navigation,
       declinedTerminal: {
         ...(agentArgs !== undefined ? { agentArgs } : {}),
         sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
@@ -300,17 +297,16 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
 
   store.setSidebarOpen(true)
 
-  if (structuredLaunchCompleted) {
-    return true
-  }
-
-  return finishDirectWorkItemPrompt({
-    primaryTabId,
-    effectiveAgent,
-    promptDelivery,
-    draftContent,
-    startupPlan,
-    draftLaunchedNatively,
-    startupPlanFailed
-  })
+  return (
+    structuredLaunchCompleted ||
+    finishDirectWorkItemPrompt({
+      primaryTabId,
+      effectiveAgent,
+      promptDelivery,
+      draftContent,
+      startupPlan,
+      draftLaunchedNatively,
+      startupPlanFailed
+    })
+  )
 }

@@ -167,11 +167,15 @@ const mockStoreState = vi.hoisted(() => ({
   createEmptySplitGroup: vi.fn(),
   createUnifiedTab: vi.fn(),
   createUnifiedTabInSplit: vi.fn(),
-  getTab: vi.fn((tabId: string) =>
-    Object.values(mockStoreState.unifiedTabsByWorktree)
-      .flat()
-      .find((tab) => tab.id === tabId)
-  ),
+  getTab: vi.fn((tabId: string) => {
+    for (const [worktreeId, tabs] of Object.entries(mockStoreState.unifiedTabsByWorktree)) {
+      const tab = tabs.find((tab) => tab.id === tabId)
+      if (tab) {
+        return { ...tab, worktreeId }
+      }
+    }
+    return null
+  }),
   dropUnifiedTab: vi.fn(),
   folderWorkspaces: [] as {
     id: string
@@ -184,6 +188,8 @@ const mockStoreState = vi.hoisted(() => ({
   groupsByWorktree: {} as Record<string, { id: string }[]>,
   layoutByWorktree: {} as Record<string, unknown>,
   settings: { mobileEmulatorEnabled: true },
+  setActiveView: vi.fn(),
+  setActiveWorktree: vi.fn(),
   setActiveTab: vi.fn(),
   setActiveTabType: vi.fn(),
   unifiedTabsByWorktree: ((): Record<string, MockTabRow[]> => ({}))()
@@ -390,10 +396,10 @@ describe('ensureSimulatorTab', () => {
 
   it('creates a simulator tab in a new right split when requested', async () => {
     mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
-    mockStoreState.createUnifiedTabInSplit.mockReturnValue({
-      id: 'sim-2',
-      groupId: 'group-2',
-      contentType: 'simulator'
+    mockStoreState.createUnifiedTabInSplit.mockImplementation(() => {
+      const tab = { id: 'sim-2', groupId: 'group-2', contentType: 'simulator' }
+      mockStoreState.unifiedTabsByWorktree['wt-1'] = [tab]
+      return tab
     })
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
@@ -427,9 +433,10 @@ describe('ensureSimulatorTab', () => {
         activate: true
       }
     )
-    expect(mockStoreState.activateTab).not.toHaveBeenCalled()
-    expect(mockStoreState.focusGroup).not.toHaveBeenCalled()
-    expect(mockStoreState.setActiveTabType).not.toHaveBeenCalled()
+    expect(mockStoreState.activateTab).toHaveBeenCalledWith('sim-2')
+    expect(mockStoreState.focusGroup).toHaveBeenCalledWith('wt-1', 'group-2')
+    expect(mockStoreState.setActiveView).toHaveBeenCalledWith('terminal')
+    expect(mockStoreState.setActiveTabType).toHaveBeenCalledWith('simulator', 'wt-1')
   })
 
   it('reuses an existing right split when requested', async () => {

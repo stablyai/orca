@@ -34,6 +34,7 @@ import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat-
 function noop(): void {}
 
 export type NativeChatComposerFieldProps = {
+  placeholder?: string
   editSession?: { cancel: () => void }
   /** Own draft persistence and native-drop routing by this pane so drops cannot land in another composer. */
   draftScopeKey: string
@@ -86,6 +87,7 @@ export type NativeChatComposerFieldProps = {
   onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
+  launchPicker?: React.ReactNode
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   contextUsage?: NativeChatContextUsageSummary | null
@@ -127,6 +129,7 @@ function imeComposedSegment(base: string, settled: string): string {
 }
 
 export function NativeChatComposerField({
+  placeholder,
   editSession,
   draftScopeKey,
   positionTarget,
@@ -171,6 +174,7 @@ export function NativeChatComposerField({
   onDictationHoldEnd,
   onSend,
   onStop,
+  launchPicker,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
   contextUsage,
@@ -355,7 +359,9 @@ export function NativeChatComposerField({
                         'components.native-chat.goal.placeholder',
                         'Describe your goal, define measurable outcomes for best results'
                       )
-                    : (unavailableHint ?? nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
+                    : (unavailableHint ??
+                      placeholder ??
+                      nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines without JavaScript measurement.
               className={cn(
@@ -385,6 +391,7 @@ export function NativeChatComposerField({
                 onDictationHoldEnd={dictationHoldEnd}
                 onSend={send}
                 onStop={onStop ? stop : undefined}
+                launchPicker={launchPicker}
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
                 contextUsage={contextUsage}

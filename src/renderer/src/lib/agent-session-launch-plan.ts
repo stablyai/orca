@@ -50,6 +50,7 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
 
 /** Carry the decided route and delivery fields in memory so post-create launches and same-session retries reuse them without re-resolving. */
 export type AgentSessionLaunchVerdict = {
+  surface?: 'thread'
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
   requestId: AgentLaunchRequestId
@@ -93,6 +94,7 @@ export type AgentSessionLaunchPlan = Readonly<AgentSessionLaunchVerdict> & {
 
 function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): StructuredAgentLaunchOptions {
   return {
+    ...(verdict.surface ? { surface: verdict.surface } : {}),
     requestId: verdict.requestId,
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
     ...(verdict.promptDelivery ? { promptDelivery: verdict.promptDelivery } : {}),

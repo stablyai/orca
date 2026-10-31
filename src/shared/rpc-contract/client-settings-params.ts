@@ -111,6 +111,7 @@ export const SettingsUpdate = z
     defaultTaskViewPreset: z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
       .optional(),
+    experimentalThreads: z.boolean().optional(),
     experimentalNewWorktreeCardStyle: z.boolean().optional(),
     /** No UI: the host-side switch for connectors, so a headless server can be turned on. */
     experimentalConnectors: z.boolean().optional(),

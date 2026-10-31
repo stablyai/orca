@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import type { StateCreator } from 'zustand'
 import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser-profile-scope'
 
@@ -34,6 +35,7 @@ import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contr
 import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
 
 export type CreateBrowserTabOptions = {
+  navigation?: DesktopNavigationRequest | null
   /** Link-only guard, checked before records and again at the unified-tab mutation. */
   validateLinkPlacement?: (state: AppState) => void
   activate?: boolean

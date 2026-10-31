@@ -84,6 +84,7 @@ export function structuredAgentSessionStatusSummary({
     ...childWork,
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
+    ...(record?.surface ? { surface: record.surface } : {}),
     ...structuredSummaryConversationNaming(record, namingFailure),
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
     updatedAt: journal.lastActivityAt() || now()

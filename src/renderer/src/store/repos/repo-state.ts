@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import type { WslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
@@ -208,7 +209,10 @@ export type RepoSlice = {
     args: ProjectHostSetupDeleteArgs
   ) => Promise<ProjectHostSetupDeleteResult | null>
   setupProjectClone: (args: ProjectHostSetupCloneArgs) => Promise<ProjectHostSetupResult | null>
-  addNonGitFolder: (path: string, options?: AddRepoPathOptions) => Promise<Repo | null>
+  addNonGitFolder: (
+    path: string,
+    options?: AddRepoPathOptions & { navigation?: DesktopNavigationRequest }
+  ) => Promise<Repo | null>
   scanNestedRepos: (
     path: string,
     connectionId: string | undefined,

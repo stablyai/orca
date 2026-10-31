@@ -144,6 +144,7 @@ export const CreateIntentParams = z
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
     resumeFrom: ResumeSource.optional(),
+    surface: z.literal('thread').optional(),
     ...CREATE_TAB_FIELDS,
     /** Both fields require `agentSession.create.message.v1` on the executing host. */
     firstMessage: z

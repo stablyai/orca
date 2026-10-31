@@ -1,3 +1,5 @@
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { beginDesktopNavigation, navigateDesktopTab } from '@/lib/desktop-navigation'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
@@ -25,8 +27,6 @@ export function useTabGroupCreationCommands({
   worktreeState: TabGroupWorktreeSnapshot
 }) {
   const createTab = useAppStore((state) => state.createTab)
-  const setActiveTab = useAppStore((state) => state.setActiveTab)
-  const setActiveTabType = useAppStore((state) => state.setActiveTabType)
   const createBrowserTab = useAppStore((state) => state.createBrowserTab)
   const openNewBrowserTabInActiveWorkspace = useAppStore(
     (state) => state.openNewBrowserTabInActiveWorkspace
@@ -116,6 +116,7 @@ export function useTabGroupCreationCommands({
       void openNewTerminalTabInActiveWorkspace(groupId)
     },
     newTerminalWithShell: (shellOverride: string) => {
+      const navigation = isFloatingWorkspaceId(worktreeId) ? null : beginDesktopNavigation()
       void (async () => {
         const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
           useAppStore.getState(),
@@ -127,7 +128,8 @@ export function useTabGroupCreationCommands({
             environmentId,
             targetGroupId: groupId,
             shell: shellOverride,
-            activate: true
+            activate: true,
+            navigation
           },
           { userAct: true }
         )
@@ -135,10 +137,10 @@ export function useTabGroupCreationCommands({
           return
         }
         const tabId = createBrowserUuid()
-        createTab(worktreeId, groupId, shellOverride, { id: tabId })
-        setActiveTab(tabId)
-        setActiveTabType('terminal', worktreeId)
-        focusTerminalTabSurface(tabId)
+        createTab(worktreeId, groupId, shellOverride, { id: tabId, activate: false })
+        if (navigateDesktopTab(tabId, { worktreeId, request: navigation })) {
+          focusTerminalTabSurface(tabId)
+        }
       })()
     }
   }

@@ -1,4 +1,5 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
+import { beginDesktopNavigation } from '@/lib/desktop-navigation-request'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
 import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
@@ -23,6 +24,12 @@ export function createOpenUnstagedDiff(
     openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
       const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
       const selection = options?.selection
+      const navigation =
+        options?.navigation === undefined
+          ? selection === 'none' || selection === 'background'
+            ? null
+            : beginDesktopNavigation(get())
+          : options.navigation
       let editorItemTargetGroupId = options?.targetGroupId
       let editorItemFileId = ''
       set((s) => {
@@ -94,14 +101,16 @@ export function createOpenUnstagedDiff(
         }
       })
       void openWorkspaceEditorItem(
-        get(),
+        get,
         editorItemFileId,
         worktreeId,
         relativePath,
         'diff',
         isPreview,
         editorItemTargetGroupId,
-        selection
+        selection,
+        undefined,
+        navigation
       )
     }
   }

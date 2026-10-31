@@ -104,7 +104,7 @@ export function createOpenCombinedDiff(
           activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
         }
       })
-      void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')
+      void openWorkspaceEditorItem(get, id, worktreeId, label, 'diff')
     },
     openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) => {
       const branchCompare = toBranchCompareSnapshot(compare)
@@ -161,7 +161,7 @@ export function createOpenCombinedDiff(
         }
       })
       void openWorkspaceEditorItem(
-        get(),
+        get,
         id,
         worktreeId,
         `Branch Changes (${compare.baseRef})`,
@@ -225,7 +225,7 @@ export function createOpenCombinedDiff(
           activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
         }
       })
-      void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')
+      void openWorkspaceEditorItem(get, id, worktreeId, label, 'diff')
     }
   }
 }

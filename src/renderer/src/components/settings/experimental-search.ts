@@ -1,3 +1,4 @@
+import { getThreadsSearchEntry } from './ThreadsExperimentalSetting'
 import type { SettingsSearchEntry } from './settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
@@ -179,6 +180,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         )
       ]
     },
+    getThreadsSearchEntry(),
     getNewWorktreeCardStyleSearchEntry(),
     getEphemeralVmsSearchEntry(),
     getBrowserExtensionsExperimentalSearchEntry(),

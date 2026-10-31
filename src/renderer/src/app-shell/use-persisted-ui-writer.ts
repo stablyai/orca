@@ -1,3 +1,4 @@
+import { workspaceView } from '@/lib/renderer-view'
 import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../store'
@@ -187,6 +188,6 @@ export function usePersistedUIWriter(): void {
     if (!persistedUIReady) {
       return
     }
-    void window.api.ui.set({ activeView })
+    void window.api.ui.set({ activeView: workspaceView(activeView) })
   }, [activeView, persistedUIReady])
 }

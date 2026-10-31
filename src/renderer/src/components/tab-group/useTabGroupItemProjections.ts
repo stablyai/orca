@@ -1,3 +1,5 @@
+import { useThreadMembership } from '../native-chat/structured-session-summary-store'
+import { visibleGroupActiveTabId } from '../threads/desktop-tab-projection'
 import { useMemo } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
@@ -17,6 +19,7 @@ export type TabGroupWorktreeSnapshot = {
   browserTabs: readonly BrowserTabState[]
   expandedPaneByTabId: TabGroupAppState['expandedPaneByTabId']
   terminalLayoutsByTabId: NonNullable<TabGroupAppState['terminalLayoutsByTabId']>
+  threadsEnabled?: boolean
   generatedTabTitlesEnabled: boolean
   mobileEmulatorEnabled: boolean
 }
@@ -36,15 +39,17 @@ export function useTabGroupItemProjections({
   worktreeId: string
   worktreeState: TabGroupWorktreeSnapshot
 }) {
+  const hidden = useThreadMembership(worktreeId, worktreeState.threadsEnabled === true)
   const group = useMemo(
     () => worktreeState.groups.find((item) => item.id === groupId) ?? null,
     [groupId, worktreeState.groups]
   )
   const groupTabs = useMemo(
-    () => worktreeState.unifiedTabs.filter((item) => item.groupId === groupId),
-    [groupId, worktreeState.unifiedTabs]
+    () =>
+      worktreeState.unifiedTabs.filter((item) => item.groupId === groupId && !hidden.has(item.id)),
+    [groupId, worktreeState.unifiedTabs, hidden]
   )
-  const activeItemId = group?.activeTabId ?? null
+  const activeItemId = group ? visibleGroupActiveTabId(group, hidden) : null
   const activeTab = groupTabs.find((item) => item.id === activeItemId) ?? null
   // Why: shell identity lives on the terminal tab (not the unified tab) so icons survive default-shell changes.
   const terminalTabById = useMemo(
@@ -134,16 +139,18 @@ export function useTabGroupItemProjections({
 
   const tabBarOrder = useMemo(
     () =>
-      (group?.tabOrder ?? []).map((itemId) => {
-        const item = groupTabById.get(itemId)
-        if (!item) {
-          return itemId
-        }
-        return item.contentType === 'terminal' || item.contentType === 'browser'
-          ? item.entityId
-          : item.id
-      }),
-    [group, groupTabById]
+      (group?.tabOrder ?? [])
+        .filter((id) => !hidden.has(id))
+        .map((itemId) => {
+          const item = groupTabById.get(itemId)
+          if (!item) {
+            return itemId
+          }
+          return item.contentType === 'terminal' || item.contentType === 'browser'
+            ? item.entityId
+            : item.id
+        }),
+    [group, groupTabById, hidden]
   )
 
   return {

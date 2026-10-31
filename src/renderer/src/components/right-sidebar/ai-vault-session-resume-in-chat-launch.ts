@@ -1,3 +1,4 @@
+import { beginDesktopNavigation, type DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import { toast } from 'sonner'
 import {
   parseRoutableExecutionHostId,
@@ -41,12 +42,10 @@ export type AiVaultChatReplacement = {
 
 export function activateAiVaultResumeWorkspace(
   workspaceId: string,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  navigation?: DesktopNavigationRequest
 ): boolean {
-  return (
-    activateAndRevealWorkspace(workspaceId, executionHostId ? { executionHostId } : undefined) !==
-    false
-  )
+  return activateAndRevealWorkspace(workspaceId, { executionHostId, navigation }) !== false
 }
 
 /** Adopt through the eligibility verdict; silent terminal fallback would hide actionable refusals. */
@@ -57,6 +56,7 @@ export async function resumeAiVaultSessionInNewChat(
   requestId: AgentLaunchRequestId,
   replacing?: AiVaultChatReplacement
 ): Promise<void> {
+  const navigation = beginDesktopNavigation()
   try {
     const recordingHost = parseRoutableExecutionHostId(session.executionHostId)
     const workspaceOwner = structuredLaunchOwner({ route: 'structured-native-chat' }, worktreeId)
@@ -86,6 +86,7 @@ export async function resumeAiVaultSessionInNewChat(
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
       hooks: {},
+      navigation,
       ...(replacing
         ? { afterTabId: replacing.afterTabId, focusIntent: replacing.focusIntent }
         : {}),
@@ -97,7 +98,7 @@ export async function resumeAiVaultSessionInNewChat(
               structuredLaunchOwner({ route: 'structured-native-chat' }, worktreeId)
                 ?.executionHostId !== executionHostId
             ) {
-              return activateAiVaultResumeWorkspace(worktreeId, executionHostId)
+              return activateAiVaultResumeWorkspace(worktreeId, executionHostId, navigation)
             }
             return true
           }
@@ -120,7 +121,7 @@ export async function resumeAiVaultSessionInNewChat(
         resolveWebSessionVisibleTabId(state, selection.activeWorktreeId ?? '') ===
           resolveWebSessionVisibleTabId(selection, selection.activeWorktreeId ?? '')
       ) {
-        activateAiVaultResumeWorkspace(worktreeId, executionHostId)
+        activateAiVaultResumeWorkspace(worktreeId, executionHostId, navigation)
       }
       const handled = replacing?.onSettled(settlement) === true
       if (settlement.kind === 'failed' && !settlement.notified && !handled) {

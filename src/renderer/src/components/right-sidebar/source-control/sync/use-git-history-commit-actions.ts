@@ -1,3 +1,4 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation'
 import { useCallback, useEffect, useRef } from 'react'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
@@ -253,6 +254,7 @@ async function explainCommitWithDefaultAgent(
   worktreeId: string,
   item: GitHistoryItem
 ): Promise<void> {
+  const navigation = beginDesktopNavigation()
   const detectionTarget = getDetectionTargetIdentityForWorktree(useAppStore.getState(), worktreeId)
   const agent = await resolveDefaultAgentForWorktreeNewTab(useAppStore.getState, worktreeId)
   // The agent belongs to the detected host; abort if the workspace moved.
@@ -278,6 +280,7 @@ async function explainCommitWithDefaultAgent(
     `Run \`git show --no-ext-diff ${item.id}\` to inspect the full diff, then summarize what changed and why at a high level, calling out the most important files and any risks.`
   ].join('\n')
   launchAgentInNewTab({
+    navigation,
     requestId: newAgentLaunchRequestId(),
     agent,
     worktreeId,

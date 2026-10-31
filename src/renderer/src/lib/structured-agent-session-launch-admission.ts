@@ -22,7 +22,8 @@ import type {
   StructuredAgentLaunchSettlement
 } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
-import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
+import type { DeclinedStructuredLaunchTerminalOptions } from './launch-agent-in-new-tab-args'
+export type { DeclinedStructuredLaunchTerminalOptions } from './launch-agent-in-new-tab-args'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
@@ -117,17 +118,6 @@ function notifyHostUnreachable(agent: TuiAgent, executionHostId: ExecutionHostId
     }
   )
 }
-
-/** What the caller's own terminal launch would have carried beyond the plan's agent and prompt. */
-export type DeclinedStructuredLaunchTerminalOptions = Pick<
-  LaunchAgentInNewTabArgs,
-  | 'agentArgs'
-  | 'sessionOptionsYieldToAgentArgs'
-  | 'launchPlatform'
-  | 'launchSource'
-  | 'initialCwd'
-  | 'activate'
->
 
 /** A caller with no terminal path of its own gets the one a new agent tab would open. */
 export async function openDeclinedStructuredLaunchTerminal(args: {

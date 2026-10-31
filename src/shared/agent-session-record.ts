@@ -127,6 +127,8 @@ export type AgentSessionRecord = {
   /** The conversation's one name: Orca's automatic name or the user's rename. Session History,
    *  tabs, sidebars and phones all read this field. */
   conversationName?: string
+  /** Absent for ordinary chats; the session owns this classification across reopen. */
+  surface?: 'thread'
   /** `'user'` once the user renamed the conversation; absent means Orca named it. Automatic naming
    *  never replaces a user's name, and a window's pre-upgrade tab rename only fills a name Orca
    *  chose. */
@@ -317,6 +319,7 @@ export function isPersistedAgentSessionObservationRecord(
         isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&
       (record.conversationCommand === undefined ||
         isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
+      (record.surface === undefined || record.surface === 'thread') &&
       (record.conversationName === undefined ||
         isAgentSessionConversationName(record.conversationName)) &&
       (record.conversationNameSource === undefined || record.conversationNameSource === 'user') &&

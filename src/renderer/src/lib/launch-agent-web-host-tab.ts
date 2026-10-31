@@ -1,3 +1,7 @@
+import {
+  canPresentDesktopNavigation,
+  type DesktopNavigationRequest
+} from './desktop-navigation-request'
 import type { AgentLaunchChoices } from '../../../shared/agent-launch-choices'
 import { structuredAgentLabel } from './structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
@@ -26,6 +30,7 @@ import {
 
 /** Paired web tabs are host-owned; never create a local tab, and return tabId:null. */
 export async function launchAgentInWebHostTab(args: {
+  navigation: DesktopNavigationRequest | null
   agent: TuiAgent
   worktreeId: string
   environmentId: string | null
@@ -98,6 +103,7 @@ export async function launchAgentInWebHostTab(args: {
   const structuredPromptDelivery: AgentPromptDelivery =
     promptDelivery === 'draft' ? 'draft' : 'auto-submit'
   const launch = {
+    navigation: args.navigation,
     worktreeId,
     environmentId,
     targetGroupId: groupId,
@@ -140,7 +146,11 @@ export async function launchAgentInWebHostTab(args: {
       toast.error(failureMessage)
       return { delivered: false, failureNotified: true, outcome }
     }
-    if (args.activate !== false) {
+    if (
+      args.activate !== false &&
+      args.navigation &&
+      canPresentDesktopNavigation(args.navigation)
+    ) {
       useAppStore.getState().setActiveTabType('terminal', worktreeId)
     }
     if (hasPrompt && promptDelivered) {

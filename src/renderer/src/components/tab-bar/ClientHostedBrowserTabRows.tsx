@@ -1,7 +1,7 @@
+import { navigateDesktopGroup } from '@/lib/desktop-navigation'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '../../store'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import {
   selectClientHostedBrowserRow,
@@ -25,7 +25,7 @@ export default function ClientHostedBrowserTabRows({
   includeTopTabBorder: boolean
 }): React.JSX.Element | null {
   const activeRowId = useActiveClientHostedBrowserRowId({ worktreeId, groupId, groupActiveTabId })
-  const focusGroup = useAppStore((state) => state.focusGroup)
+  const focusGroup = navigateDesktopGroup
 
   const activate = useCallback(
     (browserPageId: string) => {

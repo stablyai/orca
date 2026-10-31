@@ -1,3 +1,6 @@
+import { navigateDesktopGroup } from '@/lib/desktop-navigation'
+import { useDesktopVisibleGroups } from '../../threads/use-desktop-tab-projection'
+import { openDesktopWorkbench } from '../../threads/thread-navigation'
 import { memo, useCallback, useEffect, useMemo } from 'react'
 import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
@@ -126,16 +129,24 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId: string
   isWorktreeActive: boolean
 }): React.JSX.Element {
-  const { browserTabs, unifiedTabs, groups, focusedGroupId } = useAppStore(
+  const {
+    browserTabs,
+    unifiedTabs,
+    groups: hostGroups,
+    threadsEnabled,
+    focusedGroupId
+  } = useAppStore(
     useShallow((state) => ({
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
+      threadsEnabled: state.settings?.experimentalThreads === true,
       groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
       // Why: the focused split within this worktree; gates the browser Find shortcut so a focused terminal in the same split keeps Cmd/Ctrl+F (#11348).
       focusedGroupId: state.activeGroupIdByWorktree[worktreeId]
     }))
   )
-  const focusGroup = useAppStore((state) => state.focusGroup)
+  const groups = useDesktopVisibleGroups(worktreeId, hostGroups, threadsEnabled && isWorktreeActive)
+  const focusGroup = navigateDesktopGroup
   const isFloatingWorkspace = isFloatingWorkspaceId(worktreeId)
   const knownFocusedGroupId = useMemo(
     () =>
@@ -147,7 +158,10 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
 
   // Why: stable identity so BrowserOverlaySlot's memo holds; groupId is passed at call time so one callback serves every slot.
   const focusOwningGroup = useCallback(
-    (groupId: string) => focusGroup(worktreeId, groupId),
+    (groupId: string) => {
+      focusGroup(worktreeId, groupId)
+      openDesktopWorkbench(useAppStore.getState(), worktreeId)
+    },
     [focusGroup, worktreeId]
   )
 

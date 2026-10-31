@@ -1,6 +1,15 @@
+import {
+  presentDesktopWorkspace,
+  commitDesktopNavigation,
+  beginDesktopNavigation,
+  canPresentDesktopNavigation
+} from './desktop-navigation'
+import { activateAndRevealFolderWorkspace } from './folder-workspace-activation'
+export { activateAndRevealFolderWorkspace } from './folder-workspace-activation'
+import { canInspectAgentActivationInventory } from './worktree-activation-pty-inventory'
+import { openDesktopWorkbench } from '@/components/threads/thread-navigation'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
-import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { activateWebRuntimeSessionWorktree } from '@/runtime/web-runtime-worktree-activation'
@@ -9,24 +18,9 @@ import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-regist
 import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import {
-  folderWorkspaceActivationBlocked,
-  getFolderWorkspacePathStatusDescription,
-  getFolderWorkspacePathStatusTitle
-} from './folder-workspace-path-status'
-import { toast } from 'sonner'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import {
-  findFolderWorkspaceOwner,
-  getRuntimeEnvironmentIdForFolderWorkspace
-} from './folder-workspace-runtime-owner'
-import { getFolderWorkspaceHostId } from '../../../shared/folder-workspace-execution-host'
-import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
-import {
-  ensureFolderWorkspaceInitialTerminal,
-  ensureWorktreeHasInitialTerminal
-} from '@/lib/worktree-initial-terminal-seeding'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
 import {
@@ -40,133 +34,13 @@ import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from './pending-worktree-creation'
-import {
-  buildActivationStateTransition,
-  markVisited,
-  readPreviousActive
-} from './worktree-activation-visit'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { buildActivationStateTransition } from './worktree-activation-visit'
 
 /** Share palette/dialog activation; derive repoId and no-op if the selected worktree vanished. */
 export type ActivateAndRevealResult = {
   /** Id of the primary terminal tab seeded with `opts.startup`, or null. Prefer this over
    *  `activeTabIdByWorktree`, which may point at another tab if setup/issue scripts opened their own. */
   primaryTabId: string | null
-}
-
-const canInspectAgentActivationInventory = (): boolean =>
-  typeof window !== 'undefined' &&
-  typeof window.api?.runtime?.call === 'function' &&
-  typeof window.api?.pty?.listSessions === 'function'
-
-export function activateAndRevealFolderWorkspace(
-  folderWorkspaceId: string,
-  opts?: WorktreeActivationSurfaceSelection & {
-    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
-    revealInSidebar?: boolean
-    showWorkspaceList?: boolean
-    startup?: WorktreeStartupPayload
-    runtimeEnvironmentId?: string | null
-    executionHostId?: ExecutionHostId
-  }
-): ActivateAndRevealResult | false {
-  const state = useAppStore.getState()
-  const folderWorkspaceOwner = findFolderWorkspaceOwner(
-    state,
-    folderWorkspaceId,
-    opts?.executionHostId
-  )
-  const folderWorkspace = selectFolderWorkspaces(state).find(
-    (workspace) => workspace === folderWorkspaceOwner
-  )
-  if (!folderWorkspace) {
-    return false
-  }
-  const runtimeEnvironmentId =
-    opts && 'runtimeEnvironmentId' in opts
-      ? (opts.runtimeEnvironmentId ?? null)
-      : getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId, opts?.executionHostId)
-  const pathStatus = state.getFreshFolderWorkspacePathStatus(
-    {
-      scope: 'folder-workspace',
-      folderWorkspaceId
-    },
-    { runtimeEnvironmentId }
-  )
-  if (folderWorkspaceActivationBlocked(pathStatus)) {
-    const title =
-      getFolderWorkspacePathStatusTitle(pathStatus) ??
-      translate(
-        'auto.lib.worktree.activation.cannotOpenFolderWorkspace',
-        'Cannot open folder workspace'
-      )
-    toast.error(title, {
-      description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
-    })
-    return false
-  }
-
-  if (state.activeView !== 'terminal') {
-    state.setActiveView('terminal')
-  }
-
-  const previousActive = readPreviousActive(state)
-  state.setActiveFolderWorkspace(folderWorkspaceId, opts?.executionHostId)
-
-  const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
-  const providesInitialSurface = activationProvidesInitialSurface(opts)
-  const seedUserDefaultSurface = activationSeedsUserDefaultSurface(opts)
-  markVisited(state, workspaceKey, previousActive, opts?.executionHostId, opts?.navigationIntent)
-  if (!state.isNavigatingHistory) {
-    state.recordWorktreeVisit(workspaceKey)
-  }
-  // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
-  const shouldGateAgentActivation =
-    !opts?.startup &&
-    (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
-      (canInspectAgentActivationInventory() &&
-        shouldAutoCreateInitialTerminal(
-          state.reconcileWorktreeTabModel(workspaceKey).renderableTabCount
-        )))
-  if (!shouldGateAgentActivation) {
-    resumeSleepingAgentSessionsForWorktree(workspaceKey)
-  }
-  if (shouldGateAgentActivation) {
-    gateAndReseedEmptyWorkspace(workspaceKey, {
-      callerProvidesSurface: opts?.providesInitialSurface === true,
-      seedUserDefaultSurface,
-      ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
-    })
-  }
-  const primaryTabId = shouldGateAgentActivation
-    ? null
-    : ensureFolderWorkspaceInitialTerminal(
-        folderWorkspace,
-        opts?.startup,
-        providesInitialSurface,
-        seedUserDefaultSurface
-      )
-
-  if (opts?.showWorkspaceList) {
-    state.setSidebarBody('workspaces')
-  }
-  if (opts?.revealInSidebar !== false) {
-    state.revealWorktreeInSidebar(workspaceKey, {
-      executionHostId:
-        opts?.executionHostId ?? getFolderWorkspaceHostId(folderWorkspace, state.projectGroups),
-      ...(opts?.sidebarRevealBehavior ? { behavior: opts.sidebarRevealBehavior } : {})
-    })
-  }
-
-  if (opts?.providesInitialSurface !== true) {
-    ensureWebRuntimeWorktreeTerminalAfterWake(workspaceKey, {
-      runtimeEnvironmentId,
-      startup: opts?.startup,
-      agent: opts?.agent
-    })
-  }
-
-  return { primaryTabId }
 }
 
 export function activateAndRevealWorktree(
@@ -183,17 +57,45 @@ export function activateAndRevealWorktree(
   if (!wt) {
     return false
   }
+  const navigation =
+    opts?.navigation === undefined ? beginDesktopNavigation(state) : opts.navigation
   const pendingCreationId = findPendingWorktreeCreationId(state.pendingWorktreeCreations, wt.id)
   // Why: a checkout published mid-create shows its creation progress until that creation hands off.
   if (pendingCreationId && opts?.worktreeCreationId !== pendingCreationId) {
-    state.setActivePendingWorktreeCreation(pendingCreationId)
-    state.updatePendingWorktreeCreation(pendingCreationId, { loaderVisible: true })
-    state.setActiveView('terminal')
+    if (navigation && canPresentDesktopNavigation(navigation)) {
+      state.setActivePendingWorktreeCreation(pendingCreationId)
+      state.updatePendingWorktreeCreation(pendingCreationId, { loaderVisible: true })
+      presentDesktopWorkspace(state, navigation)
+    }
     return { primaryTabId: null }
   }
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
+  if (navigation === null || !canPresentDesktopNavigation(navigation)) {
+    const primaryTabId = hasActivationWork
+      ? ensureWorktreeHasInitialTerminal(
+          state,
+          worktreeId,
+          opts?.startup,
+          opts?.setup,
+          opts?.issueCommand,
+          opts?.defaultTabs,
+          {
+            activateCreatedTabs: false,
+            callerProvidesSurface: activationProvidesInitialSurface(opts),
+            worktreeCreationId: opts?.worktreeCreationId,
+            executionHostId: opts?.executionHostId,
+            backendStartupTerminalSpawned: opts?.backendStartupTerminalSpawned,
+            createNewTerminalForStartup: opts?.createNewTerminalForStartup
+          }
+        )
+      : null
+    if (primaryTabId && opts?.initialCwd) {
+      state.queueTabInitialCwd(primaryTabId, opts.initialCwd)
+    }
+    return { primaryTabId }
+  }
   const providesInitialSurface = activationProvidesInitialSurface(opts)
   const seedUserDefaultSurface = activationSeedsUserDefaultSurface(opts)
   // Why: a plain reselect should still reveal the sidebar row but must not restamp focus recency or wake persistence.
@@ -205,20 +107,22 @@ export function activateAndRevealWorktree(
     state.activeView === 'terminal'
 
   if (state.activeView !== 'terminal') {
-    state.setActiveView('terminal')
+    presentDesktopWorkspace(state, navigation)
   }
   noteUserWorkspaceOpen(worktreeId, opts?.navigationIntent)
 
-  state.setActiveWorktree(
-    worktreeId,
-    opts?.executionHostId,
-    buildActivationStateTransition(state, worktreeId, {
-      repoId: wt.repoId,
-      // Why: Cmd+J focus recency (docs/cmd-j-empty-query-ordering.md); a plain reselect must not restamp it.
-      stampsVisit: !isPlainAlreadyActiveTerminal,
-      nextHostId: opts?.executionHostId ?? null
-    })
-  )
+  commitDesktopNavigation(navigation, () => {
+    state.setActiveWorktree(
+      worktreeId,
+      opts?.executionHostId,
+      buildActivationStateTransition(state, worktreeId, {
+        repoId: wt.repoId,
+        // Why: Cmd+J focus recency (docs/cmd-j-empty-query-ordering.md); a plain reselect must not restamp it.
+        stampsVisit: !isPlainAlreadyActiveTerminal,
+        nextHostId: opts?.executionHostId ?? null
+      })
+    )
+  })
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
@@ -248,6 +152,7 @@ export function activateAndRevealWorktree(
     gateAndReseedEmptyWorkspace(worktreeId, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
+      navigation,
       ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
     })
   }
@@ -268,6 +173,7 @@ export function activateAndRevealWorktree(
             ...(opts?.createNewTerminalForStartup ? { createNewTerminalForStartup: true } : {}),
             ...(providesInitialSurface ? { callerProvidesSurface: true } : {}),
             ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {}),
+            navigation,
             reseedEmptiedWorkspace: !providesInitialSurface
           }
         )
@@ -307,6 +213,9 @@ export function activateAndRevealWorktree(
     })
   }
 
+  if (opts?.navigationIntent === 'user-open') {
+    openDesktopWorkbench(useAppStore.getState(), worktreeId, navigation ?? undefined)
+  }
   return { primaryTabId }
 }
 

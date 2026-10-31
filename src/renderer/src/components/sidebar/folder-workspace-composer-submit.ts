@@ -1,3 +1,4 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation'
 import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import {
   resolveAgentStartupPlanInputs,
@@ -95,6 +96,7 @@ export async function submitFolderWorkspaceCreate({
   createFolderWorkspace,
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
+  const navigation = beginDesktopNavigation()
   const linkedName = linkedWorkItem ? getLinkedItemDisplayName(linkedWorkItem) : null
   const nameIsAutoManaged = shouldApplyWorkspaceSourceAutoName({
     currentName: name,
@@ -241,6 +243,7 @@ export async function submitFolderWorkspaceCreate({
     } = { value: false }
     const revealWorkspace = (): boolean => {
       activationHolder.value = activateAndRevealFolderWorkspace(workspace.id, {
+        navigation,
         agent: quickAgent,
         ...(!structuredLaunch && startup ? { startup } : {}),
         ...(structuredLaunch ? { providesInitialSurface: true } : {}),
@@ -254,7 +257,8 @@ export async function submitFolderWorkspaceCreate({
         plan,
         hooks: {},
         target: { worktreeId: folderWorkspaceKey(workspace.id) },
-        beforeOpen: revealWorkspace
+        beforeOpen: revealWorkspace,
+        navigation
       })
     } else {
       revealWorkspace()

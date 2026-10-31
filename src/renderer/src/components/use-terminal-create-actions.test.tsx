@@ -23,6 +23,11 @@ const mocks = vi.hoisted(() => ({
   openMobileEmulatorTab: vi.fn()
 }))
 
+vi.mock('@/lib/desktop-navigation', () => ({
+  beginDesktopNavigation: () => ({ id: 1 }),
+  navigateDesktopTab: vi.fn(() => true)
+}))
+
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('sonner', () => ({
   toast: { error: (...args: unknown[]) => mocks.toastError(...args), message: vi.fn() }
@@ -118,7 +123,8 @@ describe('useTerminalCreateActions creation gates', () => {
     )
     renderActions().handleNewTab('/bin/zsh')
     expect(mocks.createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, '/bin/zsh', {
-      id: expect.any(String)
+      id: expect.any(String),
+      activate: false
     })
     const tabId = mocks.createTab.mock.calls[0][3].id
     expect(setTabBarOrder).toHaveBeenCalledWith(WORKTREE_ID, ['browser-1', 'term-a', tabId])

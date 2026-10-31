@@ -1,3 +1,4 @@
+import { navigateDesktopTab } from '@/lib/desktop-navigation'
 import { useAppStore } from '../store'
 import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
 import {
@@ -49,31 +50,31 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
     store.setActiveTab(next.id)
     // Legacy terminal entity activation can choose another split copy; finish with exact unified ID.
     if (next.tabId) {
-      store.activateTab?.(next.tabId)
+      navigateDesktopTab(next.tabId)
     }
     store.setActiveTabType('terminal', worktreeId)
   } else if (next.type === 'browser') {
     store.setActiveBrowserTab(next.id)
     if (next.tabId) {
-      store.activateTab?.(next.tabId)
+      navigateDesktopTab(next.tabId)
     }
     store.setActiveTabType('browser', worktreeId)
   } else if (next.type === 'simulator') {
     store.setActiveTab(next.tabId ?? next.id)
     if (next.tabId) {
-      store.activateTab?.(next.tabId)
+      navigateDesktopTab(next.tabId)
     }
     store.setActiveTabType('simulator', worktreeId)
   } else if (next.type === 'agent-session') {
     if (next.tabId) {
-      store.activateTab?.(next.tabId)
+      navigateDesktopTab(next.tabId)
     }
     store.setActiveTabType('agent-session', worktreeId)
   } else {
     // setActiveFile selects the entity; activateTab disambiguates its split copy.
     store.setActiveFile(next.id)
     if (next.tabId) {
-      store.activateTab?.(next.tabId)
+      navigateDesktopTab(next.tabId)
     }
     store.setActiveTabType('editor', worktreeId)
   }

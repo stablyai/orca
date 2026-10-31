@@ -1,3 +1,4 @@
+import { effectiveWorkspaceView } from '@/lib/renderer-view'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
@@ -181,12 +182,12 @@ export function buildCmdJQuickActionContext(args: {
     getClientCreationActionPolicy(args.state, activeWorktreeId)['managed-browser'].state ===
     'enabled'
   const activeChatTarget =
-    args.state.activeView === 'terminal'
+    effectiveWorkspaceView(args.state) === 'terminal'
       ? resolveActiveNativeChatSplitTarget(args.state, activeWorktreeId, activeGroupId)
       : null
 
   return {
-    activeView: args.state.activeView,
+    activeView: effectiveWorkspaceView(args.state),
     activeWorktreeId,
     activeWorktree,
     isLoading,

@@ -4,6 +4,7 @@ import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-
 
 const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
+  navigate: vi.fn(),
   setActiveTab: vi.fn(),
   setActiveTabType: vi.fn(),
   setActiveWorktree: vi.fn(),
@@ -16,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
   runtimeCall: vi.fn()
+}))
+
+vi.mock('@/lib/desktop-navigation', () => ({
+  beginDesktopNavigation: () => ({ id: 1 }),
+  navigateDesktopTab: mocks.navigate
 }))
 
 vi.mock('react', async () => await stubHeadlessReact())
@@ -92,9 +98,13 @@ describe('tab group "+" menu shell launch on a locally-owned workspace', () => {
 
     expect(mocks.runtimeCall).not.toHaveBeenCalled()
     expect(mocks.createTab).toHaveBeenCalledWith(WORKTREE_ID, GROUP_ID, 'powershell.exe', {
-      id: expect.any(String)
+      id: expect.any(String),
+      activate: false
     })
-    expect(mocks.setActiveTab).toHaveBeenCalledWith(mocks.createTab.mock.calls[0][3].id)
+    expect(mocks.navigate).toHaveBeenCalledWith(mocks.createTab.mock.calls[0][3].id, {
+      worktreeId: WORKTREE_ID,
+      request: { id: 1 }
+    })
   })
 
   it('leaves the workspace on its own execution host', async () => {

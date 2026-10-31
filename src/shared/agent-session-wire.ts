@@ -1,3 +1,5 @@
+import type { AgentSessionNamingError } from './agent-session-conversation-names'
+export type { AgentSessionNamingError } from './agent-session-conversation-names'
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
 import type { AgentSessionCurrentWorkFields } from './agent-session-current-work-wire'
@@ -246,6 +248,8 @@ export type AgentSessionStatusSummary = {
   providerSession?: AgentProviderSessionMetadata
   /** Retain the saved conversation name beyond tab closure; absent while unnamed or on older hosts. */
   conversationName?: string
+  /** Absent for ordinary chats; the session owns this classification across reopen. */
+  surface?: 'thread'
   /** Why the host could not name this chat, kept in memory only while the chat still has the
    *  name the failed run would have replaced. Absent from older hosts; older clients ignore it. */
   namingError?: AgentSessionNamingError
@@ -258,14 +262,6 @@ export type AgentSessionStatusSummary = {
   updatedAt: number
   /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
   statusStartedAt?: number
-}
-
-/** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
-export type AgentSessionNamingError = {
-  message: string
-  failedAt: number
-  /** Names Orca-authored copy; `message` stays English for older clients. */
-  messageCode?: string
 }
 
 export type AgentSessionConversationName = {

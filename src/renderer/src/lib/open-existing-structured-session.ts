@@ -1,3 +1,8 @@
+import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  type DesktopNavigationRequest
+} from './desktop-navigation'
 import { activateStructuredAgentSessionById } from './agent-session/structured-agent-session-tab-activation'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
@@ -39,13 +44,17 @@ const defaultDeps: StructuredSessionOpenDeps = {
   reveal: revealStructuredSession
 }
 
-const activationsInFlight = new Map<string, Promise<StructuredSessionOpenOutcome>>()
+const activationsInFlight = new Map<
+  string,
+  { work: Promise<StructuredSessionOpenOutcome>; latestClaim: number }
+>()
 
-/** Reopen the host record; the first caller owns presentation for the shared interaction. */
+/** Share bounded restoration work; each caller retains its own foreground claim. */
 export async function openExistingStructuredSession(
   structured: StructuredSessionIdentity,
   options: {
     target?: RuntimeClientTarget
+    navigation?: DesktopNavigationRequest
     deps?: StructuredSessionOpenDeps
     present: (outcome: StructuredSessionOpenOutcome) => void
     onError?: () => void
@@ -59,25 +68,43 @@ export async function openExistingStructuredSession(
       )
   )
   const key = `${hostKey}\0${structured.workspaceId}\0${structured.sessionId}`
-  const inFlight = activationsInFlight.get(key)
-  if (inFlight) {
-    return inFlight
-  }
-  const activation = activateStructuredSession(structured, deps, target).then(
-    (outcome) => {
-      present(outcome)
-      return outcome
-    },
-    (error: unknown) => {
-      options.onError?.()
-      throw error
+  const navigation = options.navigation ?? beginDesktopNavigation()
+  let activation = activationsInFlight.get(key)
+  if (!activation) {
+    activation = {
+      work: activateStructuredSession(structured, deps, target),
+      latestClaim: navigation.id
     }
-  )
-  activationsInFlight.set(key, activation)
+    activationsInFlight.set(key, activation)
+    void activation.work
+      .finally(() => {
+        if (activationsInFlight.get(key) === activation) {
+          activationsInFlight.delete(key)
+        }
+      })
+      .catch(() => {})
+  }
+  activation.latestClaim = navigation.id
   try {
-    return await activation
-  } finally {
-    activationsInFlight.delete(key)
+    let outcome = await activation.work
+    if (activation.latestClaim === navigation.id && canPresentDesktopNavigation(navigation)) {
+      if (
+        outcome === 'activated' &&
+        !deps.activate({
+          worktreeId: structured.workspaceId,
+          sessionId: structured.sessionId,
+          ...(target ? { target } : {}),
+          navigation
+        })
+      ) {
+        outcome = 'unavailable'
+      }
+      present(outcome)
+    }
+    return outcome
+  } catch (error) {
+    options.onError?.()
+    throw error
   }
 }
 
@@ -91,17 +118,17 @@ async function activateStructuredSession(
     sessionId: structured.sessionId,
     ...(host ? { target: host } : {})
   }
-  if (!deps.activate(target)) {
+  if (!deps.activate({ ...target, navigation: null })) {
     // Refresh can avoid reveal, but failure must fall through: host republication is the actual repair.
     const refreshed = await refreshedWithoutThrowing(deps, structured.workspaceId, host)
-    if (!refreshed || !deps.activate(target)) {
+    if (!refreshed || !deps.activate({ ...target, navigation: null })) {
       // Ask the host to republish a closed or unpublished tab from its persisted record.
       const revealed = await deps.reveal(target)
       if (revealed !== 'revealed') {
         return revealed === 'unreachable' ? 'unavailable' : revealed
       }
       await refreshedWithoutThrowing(deps, structured.workspaceId, host)
-      if (!deps.activate(target)) {
+      if (!deps.activate({ ...target, navigation: null })) {
         return 'unavailable'
       }
     }

@@ -19,6 +19,7 @@ export type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: StructuredAgentId
+  surface?: 'thread'
   resumeFrom?: StructuredAgentSessionResumeSource
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
   tabId?: string
@@ -55,6 +56,7 @@ export function structuredAgentSessionCreateParams(args: {
   sessionId: string
   worktree: string
   agent: StructuredAgentId
+  surface?: 'thread'
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
@@ -66,6 +68,7 @@ export function structuredAgentSessionCreateParams(args: {
   now?: number
 }): StructuredAgentSessionCreateParams {
   const fields = {
+    ...(args.surface ? { surface: args.surface } : {}),
     worktree: args.worktree,
     agent: args.agent,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),

@@ -61,6 +61,7 @@ export type TabBarRuntimeModel = {
   newSimulatorShortcut: string
   newFileShortcut: string
   openMarkdownShortcut: string | null
+  threadsEnabled?: boolean
   generatedTabTitlesEnabled: boolean
   mobileEmulatorEnabled: boolean
   showMobileEmulatorIntroCallout: boolean
@@ -97,7 +98,12 @@ export function useTabBarRuntimeModel({
   const newSimulatorShortcut = useShortcutLabel('tab.newSimulator')
   const newFileShortcut = useShortcutLabel('tab.newMarkdown')
   const openMarkdownShortcut = useOptionalShortcutLabel('tab.openMarkdown')
-  const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
+  const [generatedTabTitlesEnabled, threadsEnabled] = useAppStore(
+    useShallow((s) => [
+      s.settings?.tabAutoGenerateTitle === true,
+      s.settings?.experimentalThreads === true && s.activeWorktreeId === worktreeId
+    ])
+  )
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const mobileEmulatorTabIntroDismissed = useAppStore((s) => s.mobileEmulatorTabIntroDismissed)
@@ -246,6 +252,7 @@ export function useTabBarRuntimeModel({
     newFileShortcut,
     openMarkdownShortcut,
     generatedTabTitlesEnabled,
+    threadsEnabled,
     mobileEmulatorEnabled,
     showMobileEmulatorIntroCallout,
     unifiedTabs,

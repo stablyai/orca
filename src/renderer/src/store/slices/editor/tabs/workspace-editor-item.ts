@@ -1,3 +1,9 @@
+import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  navigateDesktopTab,
+  type DesktopNavigationRequest
+} from '@/lib/desktop-navigation-request'
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
@@ -13,7 +19,7 @@ import {
 } from './editor-tab-open-through-layout-owner'
 
 export function openWorkspaceEditorItem(
-  state: AppState,
+  stateOrGet: AppState | (() => AppState),
   fileId: string,
   worktreeId: string,
   label: string,
@@ -22,8 +28,18 @@ export function openWorkspaceEditorItem(
   targetGroupId?: string,
   selection: EditorTabSelection = 'focus',
   /** Where in its group a reopened tab goes back to. */
-  index?: number
+  index?: number,
+  navigation?: DesktopNavigationRequest | null
 ): string {
+  const getState = typeof stateOrGet === 'function' ? stateOrGet : () => stateOrGet
+  const state = getState()
+  const request =
+    navigation === undefined
+      ? selection === 'focus'
+        ? beginDesktopNavigation(state)
+        : null
+      : navigation
+  const foreground = () => !!request && canPresentDesktopNavigation(request)
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
     const existing = state.findTabForEntityInGroup?.(
@@ -37,22 +53,27 @@ export function openWorkspaceEditorItem(
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         sendReusedEditorTabToLayoutOwner(state, existing)
       }
-      if (selection !== 'none') {
+      if (selection === 'background' || foreground()) {
         // Why: sidebar preview reopens focus the tab without promoting it; explicit activation still promotes previews by default.
-        state.activateTab?.(existing.id, {
-          preservePreview: isPreview,
-          ...(selection === 'background' ? { recordFocus: false } : {})
-        })
+        if (request) {
+          navigateDesktopTab(state, existing.id, { request, preservePreview: isPreview })
+        } else {
+          state.activateTab?.(existing.id, {
+            preservePreview: isPreview,
+            ...(selection === 'background' ? { recordFocus: false } : {})
+          })
+        }
       }
       return existing.id
     }
   }
   const drawHere = (id?: string): Tab | undefined => {
+    const state = getState()
     const file =
       contentType === 'editor'
         ? state.openFiles.find((entry) => entry.id === fileId && entry.worktreeId === worktreeId)
         : undefined
-    return state.createUnifiedTab?.(worktreeId, contentType, {
+    const tab = state.createUnifiedTab?.(worktreeId, contentType, {
       ...(id ? { id } : {}),
       entityId: fileId,
       label,
@@ -60,19 +81,24 @@ export function openWorkspaceEditorItem(
       // The tab follows the captured file owner even when another host has UI focus.
       ...(file ? { executionHostId: getOpenFileExecutionHostId(file) } : {}),
       ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
-      ...(selection === 'none' ? { activate: false } : {}),
+      activate: selection === 'background' || foreground(),
       ...(selection === 'background' ? { recordFocus: false } : {})
     })
+    if (tab && request && foreground()) {
+      navigateDesktopTab(state, tab.id, { request, preservePreview: isPreview })
+    }
+    return tab
   }
   // Switch point: main opens the tab under the window's proposed id and its frame draws it.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    const sent = openEditorTabThroughLayoutOwner(state, {
+    const sent = openEditorTabThroughLayoutOwner(getState, {
       fileId,
       worktreeId,
       contentType,
       isPreview: isPreview === true,
       groupId: resolvedGroupId,
       selection,
+      navigation: request,
       index,
       drawHere
     })

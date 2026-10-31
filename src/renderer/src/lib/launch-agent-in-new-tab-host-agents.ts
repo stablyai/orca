@@ -106,7 +106,7 @@ export function launchOnceHostAnswered(
   args: LaunchAgentInNewTabArgs,
   relaunch: (args: LaunchAgentInNewTabArgs) => AgentTabLaunchOutcome
 ): LaunchAgentInNewTabResult {
-  if (args.beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
+  if (args.beforeSurfaceOpen?.({ kind: 'host-published' }, args.navigation) === false) {
     args.focusIntent?.cancel()
     return null
   }

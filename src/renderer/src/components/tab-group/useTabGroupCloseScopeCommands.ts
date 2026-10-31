@@ -1,3 +1,7 @@
+import {
+  isThreadTab,
+  useStructuredSessionSummaries
+} from '../native-chat/structured-session-summary-store'
 import { useCallback } from 'react'
 import { useAppStore } from '../../store'
 import { captureWorkspaceEmptiedReaction } from './workspace-emptied-reaction'
@@ -28,7 +32,13 @@ export function useTabGroupCloseScopeCommands({
         return []
       }
       const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-        (tab) => tab.groupId === groupId
+        (tab) =>
+          tab.groupId === groupId &&
+          !isThreadTab(
+            state.settings?.experimentalThreads === true,
+            tab.id,
+            useStructuredSessionSummaries.getState().threadTabIds
+          )
       )
       if (scope === 'editors') {
         return tabs
@@ -55,8 +65,15 @@ export function useTabGroupCloseScopeCommands({
 
   const closeGroup = useCallback(() => {
     const whenEmptied = captureWorkspaceEmptiedReaction(worktreeId)
-    const items = [...(useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? [])].filter(
-      (item) => item.groupId === groupId
+    const state = useAppStore.getState()
+    const items = [...(state.unifiedTabsByWorktree[worktreeId] ?? [])].filter(
+      (item) =>
+        item.groupId === groupId &&
+        !isThreadTab(
+          state.settings?.experimentalThreads === true,
+          item.id,
+          useStructuredSessionSummaries.getState().threadTabIds
+        )
     )
     for (const item of items) {
       closeItem(item.id, { skipEmptyCheck: true })

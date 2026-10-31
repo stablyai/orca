@@ -1,3 +1,4 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
@@ -72,6 +73,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
       )
       return
     }
+    const navigation = beginDesktopNavigation()
     const requestKey = stateRequestKey
     setIsFixingChecksWithAI(true)
     try {
@@ -124,6 +126,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
         checkRunDetailsByCheckKey
       })
       const started = await startFixChecksAgent({
+        navigation,
         repoId: repo.id,
         basePrompt,
         worktreeId: activeWorktreeId,
