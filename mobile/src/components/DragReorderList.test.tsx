@@ -237,6 +237,18 @@ it('stops scrolling at the viewport edge when rows are replaced', async () => {
   await act(async () => fixture.root.unmount())
 })
 
+it('mounts an appended row in its own slot instead of at the top', async () => {
+  const fixture = await mounted()
+  await fixture.updateItems(['a', 'b', 'c'])
+  const rowTops = fixture.root.root
+    .findAllByType('AnimatedView')
+    .flatMap((node) =>
+      Array.isArray(node.props.style) ? [Object.assign({}, ...node.props.style).top] : []
+    )
+  expect(rowTops).toEqual([0, 72, 144])
+  await act(async () => fixture.root.unmount())
+})
+
 it('keeps measured rows still on hold, restores cancellation, and drops by moved ID plus neighbor', async () => {
   const move = vi.fn()
   function Harness() {
