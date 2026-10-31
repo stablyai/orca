@@ -32,9 +32,11 @@ vi.mock('electron', () => ({
   ipcMain: { on() {}, removeListener() {} },
   app: { getPath: () => '/synthetic' }
 }))
-const execution = vi.hoisted(() => ({
-  started: undefined as ((id: string | null) => void) | undefined
-}))
+const execution = vi.hoisted(
+  (): {
+    started: ((id: string | null) => void) | undefined
+  } => ({ started: undefined })
+)
 vi.mock('@/lib/agent-launch-pane-start', () => ({
   awaitAgentLaunchPaneStart: () =>
     new Promise<string | null>((resolve) => {

@@ -15,17 +15,16 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPickerDraft } from '../../../shared/agent-launch-picker'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 
-const evidence = vi.hoisted(() => ({
-  phase: '',
-  trace: [] as {
+const evidence = vi.hoisted(() => {
+  const trace: {
     phase: string
     agent: string
     target?: string
     authority?: string
     initial?: AgentPickerDraft
-  }[],
-  submit: vi.fn()
-}))
+  }[] = []
+  return { phase: '', trace, submit: vi.fn() }
+})
 vi.mock('@/components/agent/AgentLaunchSetupButton', async (importOriginal) => {
   const original = await importOriginal<typeof SetupButtonModule>()
   return {
