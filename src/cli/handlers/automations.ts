@@ -54,7 +54,11 @@ import {
   assertExtraAgentArgsSupported,
   getExtraAgentArgsFlag
 } from './automation-extra-agent-args-flag'
-import { assertAutomationSetupMode, getAutomationSetupFlag } from './automation-setup-flag'
+import {
+  assertAutomationSetupMode,
+  checkAutomationSetupSaved,
+  getAutomationSetupFlag
+} from './automation-setup-flag'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
   destination?: AutomationDestination
@@ -179,7 +183,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const sourceContext = getSourceContextFlag(flags)
     const workspaceMode =
       getWorkspaceModeFlag(flags) ?? (target.workspace ? 'existing' : 'new_per_run')
-    assertAutomationSetupMode(setupDecision, workspaceMode)
+    assertAutomationSetupMode(setupDecision, workspaceMode, 'create')
     // Built before the destination read so a contradictory flag still fails without a runtime call.
     const create = {
       name: getRequiredStringFlag(flags, 'name'),
@@ -206,7 +210,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       ...create,
       ...(destination ? { destination } : {})
     })
-    printResult(result, json, formatAutomationShow)
+    printResult(checkAutomationSetupSaved(result, setupDecision), json, formatAutomationShow)
   },
   'automations edit': async ({ flags, client, cwd, json }) => {
     const setupDecision = getAutomationSetupFlag(flags)
@@ -241,7 +245,8 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     )
     assertAutomationSetupMode(
       setupDecision,
-      updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode)
+      updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode),
+      'edit'
     )
     // Owner fencing covers the source host; moves must fence the destination too.
     const destination = await resolveAutomationDestination(client, target)
@@ -251,7 +256,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       ...(destination ? { destination } : {}),
       updates
     })
-    printResult(result, json, formatAutomationShow)
+    printResult(checkAutomationSetupSaved(result, setupDecision), json, formatAutomationShow)
   },
   'automations remove': async ({ flags, client, json }) => {
     const id = getRequiredStringFlag(flags, 'id')

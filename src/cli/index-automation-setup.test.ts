@@ -41,7 +41,13 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { okFixture, queueFixtures, localRepoDestinationFixtures } from './test-fixtures'
+import {
+  buildWorktree,
+  okFixture,
+  queueFixtures,
+  localRepoDestinationFixtures,
+  worktreeListFixture
+} from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('automation setup CLI contract', () => {
@@ -79,22 +85,31 @@ describe('automation setup CLI contract', () => {
       queueFixtures(
         callMock,
         ...localRepoDestinationFixtures(),
-        okFixture('created', { automation: { id: 'a1', setupDecision: setup } }),
-        okFixture('shown', { automation: { id: 'a1', setupDecision: setup } })
+        okFixture('created', { automation: { id: 'a1', setupDecision: setup } })
       )
-      const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+      vi.spyOn(console, 'log').mockImplementation(() => {})
       await main([...createArgs, '--setup', setup], '/tmp/repo')
       expect(process.exitCode).not.toBe(1)
       expect(callMock).toHaveBeenLastCalledWith(
         'automation.create',
         expect.objectContaining({ setupDecision: setup, workspaceMode: 'new_per_run' })
       )
-      await main(['automations', 'show', 'a1', '--json'], '/tmp/repo')
-      expect(
-        JSON.parse(String(output.mock.calls.at(-1)?.[0])).result.automation.setupDecision
-      ).toBe(setup)
     }
   )
+
+  it('fails when an older host saves the automation without the setup choice', async () => {
+    queueFixtures(
+      callMock,
+      ...localRepoDestinationFixtures(),
+      okFixture('created', { automation: { id: 'a1' } })
+    )
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main([...createArgs, '--setup', 'run'], '/tmp/repo')
+    expect(process.exitCode).toBe(1)
+    expect(JSON.parse(String(output.mock.calls.at(-1)?.[0])).error.message).toBe(
+      'The host saved automation a1 but did not keep --setup run, so its runs will use setup skip. Update Orca on that host, then run orca automations edit a1 --setup run.'
+    )
+  })
 
   it('keeps an omitted create choice on the shipped skip fallback', async () => {
     queueFixtures(
@@ -199,11 +214,26 @@ describe('automation setup CLI contract', () => {
     expect(JSON.parse(String(output.mock.calls.at(-1)?.[0])).error.message).toContain('new-per-run')
   })
 
+  it('explains the refusal when create defaults to the current worktree', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')])
+    )
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const args = createArgs.filter((arg) => arg !== '--repo' && arg !== 'id:repo-1')
+    await main([...args, '--setup', 'run'], '/tmp/repo/feature')
+    expect(process.exitCode).toBe(1)
+    expect(callMock.mock.calls.map(([method]) => method)).toEqual(['worktree.list'])
+    expect(JSON.parse(String(output.mock.calls.at(-1)?.[0])).error.message).toBe(
+      '--setup only applies to automations that create a new worktree per run, but this one runs in an existing worktree (with no target, create uses the current worktree). Pass --repo <selector> or --workspace-mode new-per-run, or omit --setup.'
+    )
+  })
+
   it('accepts setup while switching an existing automation to new-per-run', async () => {
     queueFixtures(
       callMock,
       okFixture('current', { automation: { id: 'a1', workspaceMode: 'existing' } }),
-      okFixture('updated', { automation: { id: 'a1' } })
+      okFixture('updated', { automation: { id: 'a1', setupDecision: 'run' } })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
     await main(

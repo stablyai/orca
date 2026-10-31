@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
 import { launchAutomationChatAgent } from './automation-chat-agent-launch'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 const launch = vi.hoisted(() => vi.fn())
 vi.mock('../runtime/rpc/methods/agent-launch', () => ({ launchAgentOnHost: launch }))
@@ -20,9 +20,7 @@ it.each(['run', 'skip', undefined] as const)(
       scripts: { setup: 'echo setup', archive: '' },
       setupRunPolicy: 'run-by-default'
     }
-    // SAFETY: the mocked host launch and target enrichment do not call runtime services in this boundary test.
-    const runtime = {} as OrcaRuntimeService
-    await launchAutomationChatAgent(runtime, {
+    await launchAutomationChatAgent(new OrcaRuntimeService(), {
       automation: {
         ...state.automations[0],
         workspaceMode: 'new_per_run',

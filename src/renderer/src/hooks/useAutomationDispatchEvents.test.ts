@@ -266,12 +266,15 @@ describe('useAutomationDispatchEvents setup launch', () => {
     ).toEqual([])
   })
 
-  it('defaults legacy automations without a setup choice to skipping setup', async () => {
-    await registerAndDispatch(makeAutomation({ setupDecision: undefined }))
+  it.each(['run', 'skip', undefined] as const)(
+    'creates the workspace with saved setup %s, defaulting a missing choice to skip',
+    async (setupDecision) => {
+      await registerAndDispatch(makeAutomation({ setupDecision }))
 
-    expect(mockCreateWorktree.mock.calls[0][3]).toBe('skip')
-    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalled()
-  })
+      expect(mockCreateWorktree.mock.calls[0][3]).toBe(setupDecision ?? 'skip')
+      expect(mockLaunchAgentBackgroundSession).toHaveBeenCalled()
+    }
+  )
 
   it('creates a new-per-run workspace on the captured run host, and names none without one', async () => {
     await registerAndDispatch(makeAutomation({ runContext: { repoId: 'repo-1', hostId: 'local' } }))

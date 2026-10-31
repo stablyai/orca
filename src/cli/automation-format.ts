@@ -83,6 +83,10 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `nextRunAt: ${new Date(automation.nextRunAt).toISOString()}`,
     ...projectLines,
     `workspaceMode: ${automation.workspaceMode}`,
+    // Runs launch with the saved choice or skip; existing workspaces never run setup.
+    ...(automation.workspaceMode === 'new_per_run'
+      ? [`setup: ${automation.setupDecision ?? 'skip'}`]
+      : []),
     `workspaceId: ${automation.workspaceId ?? 'null'}`,
     `baseBranch: ${automation.baseBranch ?? 'null'}`,
     `reuseSession: ${automation.reuseSession}`,

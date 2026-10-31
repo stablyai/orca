@@ -60,7 +60,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --project, or --project-host-setup, to run on a specific project host setup. --project takes the project id or the display name from `orca project list`, and --host is only needed when the project is set up on more than one host.',
       '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
-      'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
+      'Use --workspace to run in an existing worktree. With --repo or a project target, the automation creates a new worktree per run; with no target, a local create runs in the current Orca worktree unless you pass --workspace-mode new-per-run.',
       'Use --setup run|skip for repository setup on new-per-run automations. When omitted on create, setup is skipped. Explicit choices override the repository setup policy.',
       'Use --precheck to run a command only before scheduled runs; exit code 0 continues, any other exit, error, or timeout skips the run.',
       'Use --precheck-timeout <seconds> to set the time limit (default 60 seconds). Skips appear in Orca run history and orca automations runs --id <automation-id> as skipped_precheck.',
