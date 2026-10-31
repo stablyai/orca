@@ -69,6 +69,7 @@ export function isolatedScanRoots(root: string) {
     rovoSessionsDir: join(root, 'rovo-sessions'),
     openclawStateDir: join(root, 'openclaw-state'),
     openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
+    zeroclawStateDir: join(root, 'zeroclaw-state'),
     piSessionsDir: join(root, 'pi-sessions'),
     ompSessionsDir: join(root, 'omp-sessions'),
     primeAgentSessionsDir: join(root, 'prime-agent-sessions'),

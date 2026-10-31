@@ -143,6 +143,12 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://github.com/openclaw/openclaw'
     },
     {
+      id: 'zeroclaw',
+      label: translate('auto.lib.agent.catalog.zeroclaw', 'ZeroClaw'),
+      cmd: 'zeroclaw',
+      homepageUrl: 'https://github.com/zeroclaw-labs/zeroclaw'
+    },
+    {
       id: 'codebuddy',
       label: translate('auto.lib.agent.catalog.codebuddy_label', 'CodeBuddy'),
       cmd: 'codebuddy',

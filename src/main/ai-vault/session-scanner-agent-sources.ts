@@ -42,6 +42,10 @@ const COPILOT_SESSIONS_DIR = join(
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
+const ZEROCLAW_STATE_DIR =
+  process.env.ZEROCLAW_STATE_DIR?.trim() ||
+  process.env.ZEROCLAW_HOME?.trim() ||
+  join(homedir(), '.zeroclaw')
 export function piSessionHistorySessionsDir(): string {
   return normalizeAgentSessionsDir(
     process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
@@ -251,6 +255,17 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.jsonl']
   },
   openclaw: OPENCLAW_AGENT_SOURCE,
+  zeroclaw: {
+    // Sessions live under <stateDir>/sessions or <stateDir>/agents/.../sessions.
+    rootDirs: (options, wslHomeDirs) => [
+      options.zeroclawStateDir ?? ZEROCLAW_STATE_DIR,
+      ...wslHomeDirs.map((homeDir) => join(homeDir, '.zeroclaw'))
+    ],
+    extensions: ['.jsonl', '.json'],
+    filePredicate: (filePath) => pathSegments(filePath).includes('sessions'),
+    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME,
+    mergeRootDiscoveries: true
+  },
   droid: {
     rootDirs: (options, wslHomeDirs) => [
       ...sessionRootDirs(options.droidSessionsDir ?? DROID_SESSIONS_DIR, wslHomeDirs, [

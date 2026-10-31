@@ -1445,7 +1445,8 @@
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
           "qoder_cn_label": "Qoder CLI China",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "zeroclaw": "ZeroClaw"
         },
         "skill": {
           "cli": {

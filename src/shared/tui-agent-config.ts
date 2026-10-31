@@ -279,6 +279,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'openclaw',
     promptInjectionMode: 'stdin-after-start'
   },
+  zeroclaw: {
+    detectCmd: 'zeroclaw',
+    launchCmd: 'zeroclaw',
+    expectedProcess: 'zeroclaw',
+    promptInjectionMode: 'stdin-after-start'
+  },
   copilot: {
     detectCmd: 'copilot',
     // Why: `--prompt` exits on completion (kills the hosted session); `-i/--interactive` keeps it interactive.

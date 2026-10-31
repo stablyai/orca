@@ -11,6 +11,13 @@ describe('native chat agent picker profiles', () => {
   it('does not grant custom or unverified agents a skill grammar', () => {
     expect(getNativeChatAgentProfile('custom-agent')).toBeNull()
   })
+
+  it('registers ZeroClaw with / skill prefix and zeroclaw owner', () => {
+    expect(getNativeChatAgentProfile('zeroclaw')).toEqual({
+      skillPrefix: '/',
+      skillSourceOwner: 'zeroclaw'
+    })
+  })
 })
 
 describe('host-claimed native chat commands', () => {

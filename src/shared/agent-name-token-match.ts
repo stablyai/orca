@@ -13,6 +13,7 @@ export const AGENT_NAMES = [
   'opencode2',
   'mimo',
   'openclaw',
+  'zeroclaw',
   'aider',
   'grok',
   'devin',

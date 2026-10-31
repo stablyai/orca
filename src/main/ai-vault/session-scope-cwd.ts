@@ -100,6 +100,7 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
   omp: SESSION_HEADER,
   'prime-agent': SESSION_HEADER,
   openclaw: SESSION_HEADER,
+  zeroclaw: SESSION_HEADER,
   droid: head((record) => (record.type === 'session_start' ? record.cwd : undefined)),
   gemini: { kind: 'none' },
   grok: document((content) => {
