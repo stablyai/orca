@@ -9,6 +9,7 @@ import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
 } from '../../modules/orca-mobile-web-shell/src'
+import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
 import { useHostClient } from '../transport/host-client-hooks'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 import { bridgeDiagnosticLine, frameWithoutHostLine } from './shell-bridge-log-lines'
@@ -25,7 +26,7 @@ import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { PageHostSnapshot } from './use-page-host-snapshot'
-import type { PageStorageForInit } from './page-storage-keys'
+import { pageStorageKeysForRoute, type PageStorageForInit } from './page-storage-keys'
 
 class BridgeViewGoneError extends Error {
   constructor() {
@@ -133,6 +134,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   const clientIdRef = useRef(clientId)
   const clientRef = useRef(client)
   const droppedFrameLoggedRef = useRef<string | null>(null)
+  const writingFromPageRef = useRef(false)
   // Update refs on every commit before host construction; native frames may arrive before passive effects.
   useLayoutEffect(() => {
     argsRef.current = args
@@ -188,7 +190,14 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onHaptic: (kind) => argsRef.current.onHaptic(kind),
       serveNativeVerb: (verb, params) => argsRef.current.serveNativeVerb(verb, params),
       readStorage: () => argsRef.current.readStorage(),
-      onStorageWrite: (key, value) => argsRef.current.onStorageWrite(key, value),
+      onStorageWrite: (key, value) => {
+        writingFromPageRef.current = true
+        try {
+          argsRef.current.onStorageWrite(key, value)
+        } finally {
+          writingFromPageRef.current = false
+        }
+      },
       onPageFault: (error) => argsRef.current.onPageFault(error),
       onRouteParamClear: (param, value) => argsRef.current.onRouteParamClear(param, value),
       onRouteRefused: (issue) => argsRef.current.onRouteRefused(issue),
@@ -210,6 +219,26 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       host.dispose()
     }
   }, [buildId, client, sessionId, snapshot])
+
+  useEffect(() => {
+    const keys = pageStorageKeysForRoute(args.hostId, args.route.pathname)
+    const unsubscribes = keys.map((key) =>
+      subscribeMirroredKey(key, () => {
+        if (writingFromPageRef.current) {
+          return
+        }
+        const mounted = hostRef.current
+        if (mounted !== null && mounted.sessionId === sessionId) {
+          mounted.host.publishStorage()
+        }
+      })
+    )
+    return () => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe()
+      }
+    }
+  }, [args.hostId, args.route.pathname, buildId, client, sessionId, snapshot])
 
   useEffect(() => {
     const mounted = hostRef.current

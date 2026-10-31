@@ -32,6 +32,7 @@ export class PageStorageRefusedError extends Error {
 }
 
 const values = new Map<string, string>()
+const listeners = new Set<(key: string, value: string | null) => void>()
 let write: PageStorageWriter = () => false
 // Refuse withheld oversized keys as too-large: the page holds no starting value, so any write would overwrite rather than extend the native value (ruling 33.6).
 let oversizeKeys: ReadonlySet<string> = new Set()
@@ -57,6 +58,34 @@ export function publishPageStorage(
   hostId = forHostId
   routePathname = forRoutePathname
   readWorkspaceKey = forWorkspaceKeyReader
+}
+
+export function replacePageStorage(
+  entries: Readonly<Record<string, string>>,
+  forOversizeKeys: readonly string[] = []
+): void {
+  const changed: [string, string | null][] = []
+  for (const [key, prev] of values) {
+    if (!Object.hasOwn(entries, key)) {
+      values.delete(key)
+      changed.push([key, null])
+    } else if (entries[key] !== prev) {
+      values.set(key, entries[key]!)
+      changed.push([key, entries[key]!])
+    }
+  }
+  for (const [key, value] of Object.entries(entries)) {
+    if (!values.has(key)) {
+      values.set(key, value)
+      changed.push([key, value])
+    }
+  }
+  oversizeKeys = new Set(forOversizeKeys)
+  for (const [key, value] of changed) {
+    for (const listener of listeners) {
+      listener(key, value)
+    }
+  }
 }
 
 /** Apply native shortcut settings without replacing page-owned drafts or pending journals. */
@@ -154,7 +183,14 @@ const pageAsyncStorage = {
   multiRemove: (keys: readonly string[]): Promise<void> =>
     applyBatch(keys.map((key) => [key, null] as const)),
   getAllKeys: (): Promise<string[]> => Promise.resolve([...values.keys()]),
-  clear: (): Promise<void> => Promise.resolve()
+  // The app's store is not this document's to empty, and no screen in the page closure calls it.
+  clear: (): Promise<void> => Promise.resolve(),
+  subscribe: (listener: (key: string, value: string | null) => void): (() => void) => {
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+    }
+  }
 }
 
 export default pageAsyncStorage
