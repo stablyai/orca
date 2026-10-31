@@ -17,16 +17,19 @@ export function seedStructuredAgentLaunchDraft(
 ): void {
   if (options.draftFromScope) {
     const source = readNativeChatComposerDraft(options.draftFromScope)
-    if (source.text !== '' || source.images.length > 0) {
-      const { text, document, pastedTextFiles, images } = source
+    const { text, document, pastedTextFiles, images } = source
+    const moved =
+      (text !== '' || images.length > 0) &&
       seedEmptyLaunchDraft(state, {
         text,
         images,
         ...(document ? { document } : {}),
         ...(pastedTextFiles ? { pastedTextFiles } : {})
       })
+    // An occupied chat draft keeps the source, so the text is never dropped.
+    if (moved || (text === '' && images.length === 0)) {
+      deleteNativeChatComposerDraft(options.draftFromScope)
     }
-    deleteNativeChatComposerDraft(options.draftFromScope)
   }
   if (options.promptDelivery !== 'draft' || !options.prompt) {
     return
@@ -37,12 +40,12 @@ export function seedStructuredAgentLaunchDraft(
 function seedEmptyLaunchDraft(
   state: StructuredLaunchState,
   change: NativeChatComposerDraftChange
-): void {
+): boolean {
   const { sessionId, worktreeId, executionHostId } = state.intent
   const scopeKey = structuredAgentSessionDraftScopeKey(sessionId)
   const current = readNativeChatComposerDraft(scopeKey)
   if (current.text !== '' || current.document) {
-    return
+    return false
   }
   updateNativeChatComposerDraft(
     scopeKey,
@@ -55,4 +58,5 @@ function seedEmptyLaunchDraft(
       pending: true
     }
   )
+  return true
 }

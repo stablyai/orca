@@ -36,9 +36,15 @@ type LaunchStructuredWorktreeSessionArgs = {
 /** Host-declined chats keep background creates in place without navigation (#23974); still-visible creates use normal agent-tab fallback. */
 function openBackgroundDeclinedTerminal(
   args: LaunchStructuredWorktreeSessionArgs,
-  host: RuntimeClientTarget
+  host: RuntimeClientTarget,
+  heldChatMessage: string | undefined
 ): StructuredLaunchTerminal {
-  const startup = buildWorktreeCreationStartupOpt(args.request, false)
+  const built = buildWorktreeCreationStartupOpt(args.request, false)
+  // The submit-time plan never saw a message sent while the worktree was created; leave it unsent in the agent's input.
+  const startup =
+    built && heldChatMessage && !built.draftPrompt
+      ? { ...built, draftPrompt: heldChatMessage }
+      : built
   if (host.kind === 'environment') {
     ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
       startup,
@@ -80,10 +86,8 @@ export async function launchStructuredWorktreeSession(
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
   // Read at launch, not submit: the user may have written or sent in the chat while git worked.
-  const request = withPendingChatInput(
-    useAppStore.getState().pendingWorktreeCreations[args.creationId],
-    args.request
-  )
+  const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
+  const request = withPendingChatInput(pending, args.request)
   // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
   const plan = adoptAgentSessionLaunchVerdict({
     route: args.agentLaunchRoute,
@@ -110,7 +114,10 @@ export async function launchStructuredWorktreeSession(
       activate: args.shouldActivateOnCompletion,
       ...(args.shouldActivateOnCompletion
         ? {}
-        : { onHostDeclined: (host) => openBackgroundDeclinedTerminal(args, host) }),
+        : {
+            onHostDeclined: (host) =>
+              openBackgroundDeclinedTerminal(args, host, pending?.heldChatMessage)
+          }),
       beforeOpen: () => {
         // Launch cancellation can beat pending-store updates during async reveal; check the signal too.
         if (abandoned.signal.aborted || isCancelled()) {
