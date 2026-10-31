@@ -62,7 +62,7 @@ function createFakeOpenedSocket(callbacks: RemoteRuntimeWebSocketCallbacks): Fak
 function physicalClose(socket: FakeOpenedSocket): void {
   Object.assign(socket.ws, { readyState: WebSocket.CLOSED, bufferedAmount: 0 })
   socket.ws.emit('close')
-  socket.callbacks.onClose(socket.ws)
+  socket.callbacks.onClose(socket.ws, 1000, Buffer.alloc(0))
 }
 
 async function authenticate(

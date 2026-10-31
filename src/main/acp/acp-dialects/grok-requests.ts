@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import {
   isValidAgentSessionQuestionAnswers,
-  legacyAgentSessionQuestionAnswers
+  legacyAgentSessionQuestionAnswers,
+  type AgentSessionPromptResponse
 } from '../../../shared/agent-session-question-answer'
 import { AcpRpcError } from '../acp-errors'
 import { pendingAcpResolution } from '../acp-timeline-requests'
@@ -51,7 +52,7 @@ function questionRequest(params: unknown): AcpRequestPresentation {
   }
   return {
     body,
-    reply: (response) => {
+    reply: (response: Exclude<AgentSessionPromptResponse, { kind: 'form' }> | null) => {
       if (response === null) {
         return { outcome: 'cancelled' }
       }

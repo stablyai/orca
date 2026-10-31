@@ -19792,6 +19792,7 @@
         "questionCount_one": "{{count}} question"
       },
       "approval": {
+        "openLink": "Open link",
         "title": "Allow {{value0}}?",
         "allow": "Allow",
         "deny": "Deny",

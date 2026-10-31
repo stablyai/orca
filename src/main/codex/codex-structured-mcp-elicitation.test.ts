@@ -43,7 +43,8 @@ async function elicitationSession(mode: 'url' | 'form', cancellationAdmitted = t
     spawnToken: 'spawn-9',
     events: recorded.sink
   })
-  const request = { ...frame, params: { ...frame.params, threadId: THREAD_ID, turnId: 'turn-1' } }
+  const params: Record<string, unknown> = { ...frame.params, threadId: THREAD_ID, turnId: 'turn-1' }
+  const request = { ...frame, params }
   codex.connections[0].handlers.onServerRequest?.(request)
   const cards = [...recorded.bodies].flatMap(([id, body]) =>
     body.kind === 'approval' || body.kind === 'question' ? [{ id, body }] : []
@@ -105,12 +106,19 @@ describe('recorded MCP elicitation contracts', () => {
     expect(cards).toHaveLength(1)
     const card = cards[0]!
     expect(card.body.kind).toBe('approval')
+    if (card.body.kind !== 'approval') {
+      throw new Error('Missing recorded form approval')
+    }
     expect(card.body.options.map((option) => option.id)).toEqual(['decline', 'cancel'])
     const content = { name: '  ', count: 0, confirmed: false, color: 'blue', note: '' }
     await expect(
       answer(card.id, { kind: 'form', content: { ...content, count: 11 } })
     ).rejects.toThrow('at most 10')
-    expect(recorded.bodies.get(card.id)?.resolution.state).toBe('pending')
+    const pending = recorded.bodies.get(card.id)
+    if (pending?.kind !== 'approval') {
+      throw new Error('Missing pending form approval')
+    }
+    expect(pending.resolution.state).toBe('pending')
     expect(codex.connections[0].replies).toEqual([])
     await answer(card.id, { kind: 'form', content })
     expect(codex.connections[0].replies).toEqual([

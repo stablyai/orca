@@ -1,5 +1,5 @@
 import { reserveRemoteRuntimeRetainedBytes } from '../../../src/shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc-client-contract'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
 import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'

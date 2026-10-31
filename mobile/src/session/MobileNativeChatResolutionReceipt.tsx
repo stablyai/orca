@@ -28,7 +28,7 @@ export function MobileNativeChatResolutionReceipt({
   fontScale: number
 }): React.JSX.Element | null {
   const hydrated = useMobileNativeChatSettledBody(presentation)
-  const body =
+  const body: NativeChatResolvedPrompt =
     presentation.deferredBody && hydrated.status === 'ready' ? hydrated.body : presentation
   const incomplete = !!body.deferredBody
   useMobileColorScheme()

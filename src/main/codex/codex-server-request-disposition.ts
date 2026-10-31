@@ -22,7 +22,8 @@ export const CODEX_LEGACY_EXEC_APPROVAL_METHOD = 'execCommandApproval'
 export type CodexServerRequestDisposition =
   | { kind: 'prompt'; prompt: CodexPendingPrompt }
   | { kind: 'responded'; method: string }
-  | { kind: 'admission-refused' | 'replay' }
+  | { kind: 'admission-refused' }
+  | { kind: 'replay' }
 
 type ResponseConnection = Pick<CodexAppServerConnection, 'respond' | 'respondWithError'>
 

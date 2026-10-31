@@ -11,7 +11,7 @@ import { structuredQuestionTranscript } from '../../../../../src/shared/structur
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { createElement, useLayoutEffect, useRef } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { Pressable, TextInput } from 'react-native'
+import { Pressable, Text, TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat-ask-dismiss-key'
@@ -128,7 +128,7 @@ it('automatically hydrates a projected saved phone receipt and displays exact se
         )
       )
     })
-    const nodes = mounted.root.findAll((node) => node.type === 'Text')
+    const nodes = mounted.root.findAllByType(Text)
     expect(nodes.map((node) => node.children.join(''))).toContain('Blue label')
     expect(nodes.map((node) => node.children.join(''))).not.toContain('Red label')
     const answer = nodes.find((node) => node.children.join('') === text)
@@ -185,9 +185,7 @@ it('renders saved whole-form receipt values on phone through the existing receip
       })
     )
   })
-  const text = mounted.root
-    .findAll((node) => node.type === 'Text')
-    .map((node) => node.children.join(''))
+  const text = mounted.root.findAllByType(Text).map((node) => node.children.join(''))
   for (const value of [
     'Configure report',
     'count',
@@ -212,9 +210,7 @@ it('renders saved whole-form receipt values on phone through the existing receip
   await act(async () => {
     await activateMobileUiLocale('fr')
   })
-  const french = mounted.root
-    .findAll((node) => node.type === 'Text')
-    .map((node) => node.children.join(''))
+  const french = mounted.root.findAllByType(Text).map((node) => node.children.join(''))
   expect(french).toContain('Non')
   expect(french).toContain('Red label')
   expect(french).toContain('0')
@@ -587,7 +583,7 @@ it('keeps the known Open control present disabled without support while decision
     expect(opener.props.disabled).toBe(true)
     expect(opener.props.accessibilityState).toEqual({ disabled: true })
     expect(
-      tree!.root.findAll((node) => node.type === 'Text' && node.children.includes(url)).length
+      tree!.root.findAllByType(Text).filter((node) => node.children.includes(url)).length
     ).toBeGreaterThan(0)
     const decision = tree!.root
       .findAllByType(Pressable)
@@ -596,7 +592,7 @@ it('keeps the known Open control present disabled without support while decision
     await act(async () => {
       await decision.props.onPress()
     })
-    expect(answer).toHaveBeenCalledWith('accept')
+    expect(answer).toHaveBeenCalledWith('accept', undefined, undefined)
   } finally {
     await act(async () => tree?.unmount())
     vi.mocked(useExternalLinkAvailable).mockReturnValue(true)

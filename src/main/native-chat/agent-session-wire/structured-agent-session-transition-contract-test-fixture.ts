@@ -8,7 +8,7 @@ import {
   type AgentJournalToolCallItem
 } from '../../../shared/agent-session-journal-types'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
+import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   createDeferredStructuredAgentSessionEventSink,
@@ -39,7 +39,7 @@ export function tool(
   return { kind: 'tool-call', name, input: { name }, state }
 }
 
-export function failedTool(id: AgentJournalItemIdentity): JournalLifecycleMutationInput {
+export function failedTool(id: AgentJournalItemIdentity): JournalLifecycleIdentityMutationInput {
   return {
     kind: 'item',
     identity: id,

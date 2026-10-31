@@ -108,25 +108,24 @@ it('bounds real 20/200-source settlement for many owners and one heterogeneous o
   const iterate = Set.prototype[Symbol.iterator]
   let leaseVisits = 0,
     sourceVisits = 0
-  const iterator = vi.spyOn(Set.prototype, Symbol.iterator).mockImplementation(function () {
+  const iterator = vi.spyOn(Set.prototype, Symbol.iterator).mockImplementation(function (
+    this: Set<unknown>
+  ) {
     const underlying = iterate.call(this)
-    return {
-      next() {
-        const result = underlying.next()
-        if (!result.done && typeof result.value === 'object' && result.value !== null) {
-          if ('retainedBytes' in result.value) {
-            leaseVisits++
-          }
-          if ('source' in result.value && 'running' in result.value) {
-            sourceVisits++
-          }
+    const next = underlying.next.bind(underlying)
+    underlying.next = () => {
+      const result = next()
+      if (!result.done && typeof result.value === 'object' && result.value !== null) {
+        if ('retainedBytes' in result.value) {
+          leaseVisits++
         }
-        return result
-      },
-      [Symbol.iterator]() {
-        return this
+        if ('source' in result.value && 'running' in result.value) {
+          sourceVisits++
+        }
       }
+      return result
     }
+    return underlying
   })
   const exact = {
     ...body,

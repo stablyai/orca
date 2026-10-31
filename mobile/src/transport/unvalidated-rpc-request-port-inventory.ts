@@ -27,7 +27,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
   // Owns connect-wait, timeout and replay bookkeeping for every raw request.
   { file: 'src/transport/rpc-client-request-tracker.ts', references: 1 },
   // Composes the port into RpcClient, which is why every holder of a client still carries it.
-  { file: 'src/transport/rpc-client.ts', references: 2 },
+  { file: 'src/transport/rpc-client-contract.ts', references: 2 },
   // The typed boundary itself — the one module that turns a reply into a declared type.
   { file: 'src/transport/rpc-operation.ts', references: 5 },
   // Forwards the port with the workspace's execution host stamped on; picks no method.

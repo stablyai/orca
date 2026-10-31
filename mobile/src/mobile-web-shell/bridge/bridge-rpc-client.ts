@@ -1,4 +1,4 @@
-import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
+import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client-contract'
 import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/types'
 import {
   BRIDGE_MAX_PENDING_REQUESTS,

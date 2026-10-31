@@ -128,7 +128,8 @@ export async function certifyBody(
     }
     expect(recovered.body).toEqual(item.body)
     expect(nativeChatReceiptAnswers(recovered.body)).toEqual(nativeChatReceiptAnswers(item.body))
-    if (item.body.form.fields[0]?.schema.enum) {
+    const schema = item.body.form.fields[0]?.schema
+    if (schema && 'enum' in schema && schema.enum) {
       expect(nativeChatReceiptAnswers(recovered.body)[0]?.answer).toBe('Blue label')
     }
   } finally {

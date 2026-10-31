@@ -1,3 +1,4 @@
+import { mobileE2eeOutboundMemory } from './mobile-e2ee-outbound-admission'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { setFlagsFromString } from 'node:v8'
@@ -272,23 +273,54 @@ describe('mobile E2EE v2 physical channel', () => {
   })
 
   it('bounds the unified outbound queue and reports a wedged link', async () => {
+    const baseline = mobileE2eeOutboundMemory.evidence()
+    expect(baseline.queuedBytes).toBe(0)
+    expect(baseline.queuedFrames).toBe(0)
     const ctx = setup(async () => null)
     await authenticate(ctx)
     ctx.socket.bufferedAmount = 9 * 1024 * 1024
     const megabyte = new Uint8Array(1024 * 1024)
-    for (let index = 0; index < 63; index++) {
-      expect(ctx.channel.sendBinary(megabyte)).toBe(true)
+    const charge = 3 * (megabyte.length + 82)
+    const accepted = Math.floor((64 * 1024 * 1024) / charge)
+    expect(accepted).toBe(21)
+    const binary = vi.spyOn(ctx.session, 'sealBinary')
+    const text = vi.spyOn(ctx.session, 'sealText')
+    for (let index = 0; index < 64; index++) {
+      if (index === accepted) {
+        expect(mobileE2eeOutboundMemory.evidence().queuedBytes).toBe(accepted * charge)
+        expect(mobileE2eeOutboundMemory.evidence().queuedFrames).toBe(accepted)
+        expect(ctx.onError).not.toHaveBeenCalled()
+      }
+      expect(ctx.channel.sendBinary(megabyte)).toBe(index < accepted)
+      if (index < accepted) {
+        expect(ctx.onError).not.toHaveBeenCalled()
+      }
     }
-    expect(ctx.onError).not.toHaveBeenCalled()
-    expect(ctx.sent).toHaveLength(2)
-    expect(ctx.channel.sendBinary(megabyte)).toBe(true)
     expect(ctx.onError).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ message: 'E2EE v2 outbound buffer overflow' })
     )
+    expect(ctx.sent).toHaveLength(2)
+    expect(binary).not.toHaveBeenCalled()
+    expect(text).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(mobileE2eeOutboundMemory.evidence()).toEqual({
+      ...baseline,
+      bufferedBytes: baseline.bufferedBytes + 9 * 1024 * 1024,
+      sockets: baseline.sockets + 1
+    })
+    ctx.channel.dispose()
+    expect(mobileE2eeOutboundMemory.evidence().bufferedBytes).toBe(
+      baseline.bufferedBytes + 9 * 1024 * 1024
+    )
+    ctx.socket.readyState = 3
     ctx.socket.bufferedAmount = 0
+    ctx.channel.dispose()
     vi.runOnlyPendingTimers()
     expect(ctx.sent).toHaveLength(2)
+    expect(binary).not.toHaveBeenCalled()
+    expect(text).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
+    expect(mobileE2eeOutboundMemory.evidence()).toEqual(baseline)
   })
 })
 

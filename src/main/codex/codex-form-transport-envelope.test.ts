@@ -18,6 +18,7 @@ import {
   settledBodyPresentation
 } from '../native-chat/agent-session-wire/agent-session-settled-body'
 import { createBridgePortPair } from '../../../mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import { BridgeReplyPayloadSchema } from '../../../mobile/src/mobile-web-shell/bridge/bridge-envelope'
 import { createFakeRpcClient } from '../../../mobile/src/mobile-web-shell/bridge-host-test-fakes'
 import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from '../runtime/rpc/methods/structured-agent-session-prompt-response'
 import {
@@ -296,7 +297,7 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
     })
     const sender = new RemoteRuntimeRequestConnection(server.pairing)
     const rpc = createFakeRpcClient()
-    rpc.sendRequest = (method, params) => {
+    rpc.sendRequest = async (method, params) => {
       const wire = JSON.stringify(
         buildDirectRpcWireRequest({ id: requestId, method, params }, deviceToken)
       )
@@ -307,7 +308,7 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
         throw new Error('Invalid forwarded request')
       }
       expect(forwarded.params).toEqual(params)
-      return sender.request(method, forwarded.params, 15000)
+      return BridgeReplyPayloadSchema.parse(await sender.request(method, forwarded.params, 15000))
     }
     const bridge = createBridgePortPair({ rpc, inboundMessageBytes: M })
     await bridge.flush()

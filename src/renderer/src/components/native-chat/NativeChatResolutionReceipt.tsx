@@ -26,7 +26,7 @@ export function NativeChatResolutionReceipt({
 }): React.JSX.Element | null {
   useUiLanguageRevision()
   const hydrated = useNativeChatSettledBody(presentation)
-  const body =
+  const body: NativeChatResolvedPrompt =
     presentation.deferredBody && hydrated.status === 'ready' ? hydrated.body : presentation
   const incomplete = !!body.deferredBody
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`

@@ -81,7 +81,10 @@ export class CodexPromptRegistry {
           })
         : [{ identity: codexPromptIdentity(prompt), questionId: null }]
     prompt.journalRows = new Map(
-      rows.map((row) => [agentJournalItemKey(row.identity), row.questionId])
+      rows.map((row): [string, string | null] => [
+        agentJournalItemKey(row.identity),
+        row.questionId
+      ])
     )
     prompt.requestFingerprint = digestPayload(JSON.stringify(request.params))
     if (
