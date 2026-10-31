@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { cleanup } from '@testing-library/react'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/protocol-version'
@@ -10,7 +10,11 @@ import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type * as StructuredAgentClient from '@/runtime/structured-agent-session-client'
 import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
 
-const mocks = vi.hoisted(() => ({
+const mocks: {
+  capability: Mock
+  detection: Mock<() => UseDetectedAgentsResult>
+  launch: Mock
+} = vi.hoisted(() => ({
   capability: vi.fn(),
   detection: vi.fn<() => UseDetectedAgentsResult>(),
   launch: vi.fn()
