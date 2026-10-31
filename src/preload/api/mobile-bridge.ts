@@ -13,6 +13,8 @@ export const mobileApi = {
   getPairingQR: (args?: {
     address?: string
     connectionMode?: MobilePairingConnectionMode
+    /** Relay only: false mints a code without a direct address; the listener stays on loopback. */
+    localPath?: boolean
     rotate?: boolean
   }): Promise<
     | {

@@ -23,6 +23,7 @@ import type { NestedWorkerDepthSettings } from './nested-worker-depth'
 import type { SshRemoteControlSettings } from './ssh-remote-control-settings'
 import type { AgentWorkspaceTrustSettings } from './agent-workspace-trust-decision'
 import type { KeybindingGlobalSettings } from './keybindings/global-settings'
+import type { MobilePairingRelaySettings } from './mobile-pairing-relay-settings'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
@@ -49,4 +50,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   BrowserPasswordsGlobalSettings &
   NestedWorkerDepthSettings &
   AgentWorkspaceTrustSettings &
-  KeybindingGlobalSettings
+  KeybindingGlobalSettings &
+  MobilePairingRelaySettings

@@ -8,6 +8,7 @@ import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../../network-exposure-guidance'
 import { createOwnerPairingOffer } from '../../pairing-offer-requests'
 import type { PairingOffersRpcContext } from '../core'
+import type { RuntimePairingReach } from '../../../../shared/runtime-pairing-reach'
 import { RuntimeRpcPairing } from './runtime-rpc-pairing'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import {
@@ -21,27 +22,38 @@ import {
 // How long an automatic mint waits for an on-demand Relay install before reporting it missing.
 const RELAY_PROVIDER_INSTALL_WAIT_MS = 15_000
 
+type MobilePairingOfferArgs = {
+  address?: string | null
+  connectionMode?: MobilePairingConnectionMode
+  name?: string
+  rotate?: boolean
+  offerTtlMs?: number
+}
+
+// Relay reaches this desktop over an outbound link; only an advertised direct address needs off-host reach.
+function mobilePairingReach(args: MobilePairingOfferArgs): RuntimePairingReach {
+  return args.connectionMode === 'local-only' || Boolean(args.address?.trim())
+    ? 'network'
+    : 'this-computer'
+}
+
 export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   protected override ownerPairingOffers(): PairingOffersRpcContext {
     return { create: (params) => createOwnerPairingOffer(this, params) }
   }
 
-  async createMobilePairingOffer(args: {
-    address?: string | null
-    connectionMode?: MobilePairingConnectionMode
-    name?: string
-    rotate?: boolean
-    offerTtlMs?: number
-  }): Promise<MobilePairingOffer> {
-    // Network pairing opts into LAN exposure: widen before advertising QR endpoints; failed widening stays unavailable on loopback (STA-2370).
-    try {
-      await this.ensureNetworkExposure()
-    } catch (error) {
-      console.error(
-        '[runtime] Network exposure failed while creating a mobile pairing offer:',
-        error
-      )
-      return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+  async createMobilePairingOffer(args: MobilePairingOfferArgs): Promise<MobilePairingOffer> {
+    // A direct path opts into LAN exposure: widen before advertising it; failed widening stays unavailable on loopback (STA-2370).
+    if (mobilePairingReach(args) === 'network') {
+      try {
+        await this.ensureNetworkExposure()
+      } catch (error) {
+        console.error(
+          '[runtime] Network exposure failed while creating a mobile pairing offer:',
+          error
+        )
+        return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+      }
     }
     if (args.connectionMode === 'local-only') {
       this.mobilePairingOfferGeneration += 1
@@ -85,29 +97,27 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   }
 
   protected async createMobilePairingOfferSerial(
-    args: {
-      address?: string | null
-      connectionMode?: MobilePairingConnectionMode
-      name?: string
-      rotate?: boolean
-      offerTtlMs?: number
-    },
+    args: MobilePairingOfferArgs,
     generation: number
   ): Promise<MobilePairingOffer> {
     // Renderer input is untrusted; only explicit local-only may suppress Relay provisioning.
     const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
+    const reach = mobilePairingReach(args)
     // Expired offers leave through discard so their Relay invites are revoked too.
     for (const expired of this.deviceRegistry?.listExpiredPairingOffers('mobile') ?? []) {
       this.discardPendingMobilePairingDevice(expired.deviceId)
     }
     const pending = this.deviceRegistry?.getPendingDevice('mobile', args.offerTtlMs)
+    const pendingOffers = this.deviceRegistry?.listPendingDevices('mobile') ?? []
     // Rotate when connection policy changes so old QR credentials retain no new-policy authority.
-    const switchingPendingMode =
-      pending != null &&
-      this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode
-    if (args.rotate || switchingPendingMode) {
+    const switchingPendingPolicy = pendingOffers.some(
+      (offer) =>
+        this.deviceRegistry?.getMobilePairingConnectionMode(offer.deviceId) !== connectionMode ||
+        (offer.pairingReach ?? 'network') !== reach
+    )
+    if (args.rotate || switchingPendingPolicy) {
       // Durably enqueue cloud revocation for every offer rotation drops, or old invites outlive the QR.
-      for (const offer of this.deviceRegistry?.listPendingDevices('mobile') ?? []) {
+      for (const offer of pendingOffers) {
         if (offer.relayBinding && !this.queueRelayDeviceRevoke(offer.relayBinding)) {
           return pairingUnavailable(
             'device_registry_unavailable',
@@ -118,7 +128,8 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     }
     const direct = this.createPairingOffer({
       ...args,
-      rotate: args.rotate || switchingPendingMode,
+      reach,
+      rotate: args.rotate || switchingPendingPolicy,
       scope: 'mobile'
     })
     if (!direct.available) {

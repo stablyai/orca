@@ -43,6 +43,7 @@ type MobilePageContentProps = {
   pairQrDataUrl: string | null
   pairQrSize: number | null
   pairingUrl: string | null
+  pairingEndpoint: string | null
   pairingQrError: boolean
   relayMintFailure: MobileRelayMintFailure | null
   onUseLan: () => void
@@ -89,6 +90,7 @@ export function MobilePageContent({
   pairQrDataUrl,
   pairQrSize,
   pairingUrl,
+  pairingEndpoint,
   pairingQrError,
   relayMintFailure,
   onUseLan,
@@ -137,6 +139,7 @@ export function MobilePageContent({
               pairQrDataUrl={pairQrDataUrl}
               pairQrSize={pairQrSize}
               pairingUrl={pairingUrl}
+              pairingEndpoint={pairingEndpoint}
               pairingQrError={pairingQrError}
               relayMintFailure={relayMintFailure}
               onUseLan={onUseLan}
