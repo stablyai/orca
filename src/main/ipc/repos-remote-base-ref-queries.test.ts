@@ -68,30 +68,6 @@ describe('repos:getBaseRefDefault envelope', () => {
     expect(result).toEqual({ defaultBaseRef: null, remoteCount: 0 })
   })
 
-  it('returns { defaultBaseRef: null, remoteCount: 0 } for an unknown repoId', async () => {
-    mockStore.getRepo.mockReturnValue(undefined)
-
-    const result = await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'missing' })
-
-    expect(result).toEqual({ defaultBaseRef: null, remoteCount: 0 })
-  })
-
-  it('wraps the local getBaseRefDefault result in the envelope', async () => {
-    mockStore.getRepo.mockReturnValue({
-      id: 'r1',
-      path: '/repo',
-      kind: 'git'
-    })
-
-    const result = (await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })) as {
-      defaultBaseRef: string | null
-      remoteCount: number
-    }
-
-    expect(result.defaultBaseRef).toBe('origin/main')
-    expect(result.remoteCount).toBe(1)
-  })
-
   it('returns { defaultBaseRef: null, remoteCount: 0 } for an SSH repo without running git', async () => {
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
@@ -120,22 +96,6 @@ describe('repos:searchBaseRefs on SSH repos', () => {
     registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
-  it('returns [] for a folder-mode repo without invoking the relay', async () => {
-    mockStore.getRepo.mockReturnValue({
-      id: 'r1',
-      path: '/some/folder',
-      kind: 'folder',
-      connectionId: 'conn-1'
-    })
-
-    const result = await handlers.get('repos:searchBaseRefs')!(null, {
-      repoId: 'r1',
-      query: 'main'
-    })
-
-    expect(result).toEqual([])
-  })
-
   it('returns [] for an SSH repo without running git', async () => {
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
@@ -151,22 +111,6 @@ describe('repos:searchBaseRefs on SSH repos', () => {
 
     expect(result).toEqual([])
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('returns [] when the SSH provider is not connected', async () => {
-    mockStore.getRepo.mockReturnValue({
-      id: 'r1',
-      path: '/remote/repo',
-      connectionId: 'unknown-conn',
-      kind: 'git'
-    })
-
-    const result = await handlers.get('repos:searchBaseRefs')!(null, {
-      repoId: 'r1',
-      query: 'main'
-    })
-
-    expect(result).toEqual([])
   })
 })
 

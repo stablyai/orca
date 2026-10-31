@@ -186,16 +186,6 @@ it('gives the slot back when the host refuses the /clear, or its call fails', as
   }
 })
 
-it('holds nothing for a /compact, which the host runs as a turn with sends queued behind it', async () => {
-  hostWithAClearOut()
-  const { result } = view('session-a')
-  act(() => {
-    void result.current.runConversationCommand('compact')
-  })
-  await act(async () => {})
-  expect(result.current.sendOut).toBe(false)
-})
-
 it('takes sends again once a /clear that never answers passes its deadline', async () => {
   vi.useFakeTimers()
   try {

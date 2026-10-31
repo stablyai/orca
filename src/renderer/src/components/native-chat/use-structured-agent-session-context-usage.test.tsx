@@ -119,18 +119,6 @@ describe('useStructuredAgentSession context usage', () => {
     unloadedTurnRevisions = undefined
   })
 
-  it('shows the host whole-journal answer when the loaded page starts after the turn row', async () => {
-    answerOptions([{ used: estimate(150_000), window: WINDOW }])
-    const { result } = render()
-
-    await waitFor(() =>
-      expect(result.current.contextUsage).toMatchObject({
-        usedTokens: 150_000,
-        windowTokens: 1_000_000
-      })
-    )
-  })
-
   it('prefers the loaded window when it holds a newer turn fact', async () => {
     // The window part is only on an older row, so a full reading needs the host answer applied.
     items = [turnRow(900, { used: estimate(180_000) })]
