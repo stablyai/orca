@@ -18,7 +18,11 @@ import type {
 } from '../../../../../shared/github/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
-import { workItemDetailsCache } from './work-item-details-cache'
+import {
+  WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
+  patchCachedWorkItemBody,
+  workItemDetailsCache
+} from './work-item-details-cache'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 
 const mocks = vi.hoisted(() => ({
@@ -140,6 +144,15 @@ describe('Refresh task with real shared record and mounted copy', () => {
 
   it('retains visible data while loading, publishes all metadata and keeps data on retryable failure', async () => {
     await render()
+    // With nothing loaded yet, the body's existing load error is the one message for a failed Refresh.
+    mocks.details.mockRejectedValueOnce(new Error('raw provider detail'))
+    await act(async () => {
+      await model.refreshTask()
+    })
+    expect(workItemDetailsCache.get(model.detailsCacheKey!)?.error).toBe(
+      WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE
+    )
+    expect(mocks.toastError).not.toHaveBeenCalled()
     const response = deferred<GitHubWorkItemDetails>()
     mocks.details.mockReturnValueOnce(response.promise)
     let refresh!: Promise<void>
@@ -199,6 +212,30 @@ describe('Refresh task with real shared record and mounted copy', () => {
     expect(mocks.details).toHaveBeenCalledTimes(2)
     expect(node.textContent).toBe('After edit|idle')
     expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('lets a description saved during a Refresh read win and rereads after it', async () => {
+    await render()
+    const first = deferred<GitHubWorkItemDetails>()
+    mocks.details
+      .mockResolvedValueOnce(details)
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({ ...details, body: 'Saved body' })
+    await act(async () => {
+      await model.refreshTask()
+    })
+    let refresh!: Promise<void>
+    await act(async () => {
+      refresh = model.refreshTask()
+      await Promise.resolve()
+    })
+    patchCachedWorkItemBody(model.detailsCacheKey!, 'Saved body')
+    await act(async () => {
+      first.resolve({ ...details, body: 'Body stays visible' })
+      await refresh
+    })
+    expect(mocks.details).toHaveBeenCalledTimes(3)
+    expect(workItemDetailsCache.get(model.detailsCacheKey!)?.details?.body).toBe('Saved body')
   })
 
   it('discards old-account deferred mounted copies on A to B to A', async () => {

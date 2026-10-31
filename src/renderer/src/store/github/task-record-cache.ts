@@ -166,7 +166,13 @@ export class GitHubTaskRecordCache {
     return `${hostId}\0${item.repoId}\0${githubTaskIdentity(item)}`
   }
   private record(item: GitHubWorkItem, binding: TaskBinding) {
-    const record = this.records.get(this.key(item, binding.observation.hostId))
+    const key = this.key(item, binding.observation.hostId)
+    const record = this.records.get(key)
+    if (record && !this.current(record.binding)) {
+      // A record whose own fence went stale dies here, whichever store field moved.
+      this.records.delete(key)
+      return undefined
+    }
     return record?.binding.incarnation === binding.incarnation && this.current(binding)
       ? record
       : undefined
@@ -205,15 +211,18 @@ export class GitHubTaskRecordCache {
       deleteConfirmedListSnapshot(scope, visible.repoId, visible.id, 'assignees')
     }
     if (changed) {
-      const ownerRepo = parseGitHubIssueOrPRLink(visible.url)?.slug
-      for (const { source } of associations) {
-        this.store.getState().patchWorkItem(visible.id, facts(visible), visible.repoId, {
-          sourceContext: source,
-          ownerRepo
-        })
-      }
+      this.publish(visible, record.binding.observation)
     }
     this.notify()
+  }
+  private publish(value: GitHubWorkItem, observation: GitHubTaskObservation) {
+    const ownerRepo = parseGitHubIssueOrPRLink(value.url)?.slug
+    for (const { source } of observation.associations) {
+      this.store.getState().patchWorkItem(value.id, facts(value), value.repoId, {
+        sourceContext: source,
+        ownerRepo
+      })
+    }
   }
   private notify() {
     this.revision++
@@ -255,19 +264,12 @@ export class GitHubTaskRecordCache {
   }
   acceptSearch(
     rows: readonly GitHubWorkItem[],
-    binding: TaskBinding | undefined,
-    previous: readonly GitHubWorkItem[] = []
+    binding: TaskBinding | undefined
   ): readonly GitHubWorkItem[] {
-    const knownRows = new Map(previous.map((item) => [githubTaskIdentity(item), item]))
     return rows.map((item) => {
       const record = binding && this.record(item, binding)
       if (!record) {
-        const known = knownRows.get(githubTaskIdentity(item))
-        return known &&
-          Number.isFinite(version(known)) &&
-          (!Number.isFinite(version(item)) || version(known) > version(item))
-          ? known
-          : item
+        return item
       }
       if (
         !record.needsRead &&
@@ -305,15 +307,9 @@ export class GitHubTaskRecordCache {
   ): (success: boolean) => GitHubWorkItem | null {
     if (item.type !== 'issue' || !this.canTrack(binding)) {
       return (success: boolean) => {
-        if (!this.current(binding)) {
-          return null
-        }
         const value = success ? delta(item) : item
         if (success) {
-          this.store.getState().patchWorkItem(item.id, facts(value), item.repoId, {
-            sourceContext: binding.observation.source,
-            ownerRepo: parseGitHubIssueOrPRLink(item.url)?.slug
-          })
+          this.publish(value, binding.observation)
         }
         return value
       }
@@ -330,7 +326,10 @@ export class GitHubTaskRecordCache {
       }
       settled = true
       if (this.record(item, binding) !== record) {
-        return null
+        // Disposed mid-flight (reconnect, account switch): settle the copies its begin patched, as main does.
+        const value = success ? delta(item) : item
+        this.publish(value, binding.observation)
+        return value
       }
       if (success) {
         record.base = delta(record.base)

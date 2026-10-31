@@ -184,10 +184,7 @@ export function useGitHubItemDialogDetails({
         sourceContext,
         number: workItem.number,
         type: workItem.type,
-        ownerRepo: cached?.route?.ownerRepo ?? issueRepository,
-        canonical: !!cached?.route,
-        accepts: cached?.route ? target?.current : undefined,
-        rpcOptions: cached?.route ? target?.rpcOptions : undefined
+        ownerRepo: issueRepository
       })
       return result && binding
         ? withWorkItemDetailsItem(
@@ -205,7 +202,6 @@ export function useGitHubItemDialogDetails({
     detailsCacheKey,
     issueRepository,
     refetchTick,
-    cachedEntry?.fetchedAt,
     target,
     cache
   ])

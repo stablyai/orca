@@ -22,7 +22,6 @@ export type WorkItemDetailsCacheEntry = {
   fetchedAt: number
   pending?: Promise<GitHubWorkItemDetails | null>
   error?: string
-  route?: { ownerRepo: GitHubOwnerRepo; bindingKey: string }
 }
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
@@ -60,12 +59,11 @@ export function getWorkItemDetailsCacheKey(args: {
   type: 'issue' | 'pr'
   number: number
   ownerRepo?: GitHubOwnerRepo | null
-  canonical?: boolean
   bindingKey?: string
 }): string {
   // NUL-separate routing axes to prevent key collisions; keep repoPath second for path-only invalidation events.
   const sourceKey =
-    args.ownerRepo && (args.canonical || !getGitHubSourceRuntimeHost(args.sourceContext))
+    args.ownerRepo && !getGitHubSourceRuntimeHost(args.sourceContext)
       ? githubRepoIdentityKey(args.ownerRepo)
       : (args.issueSourcePreference ?? 'auto')
   const keyParts = args.sourceCacheScope
@@ -77,9 +75,8 @@ export function getWorkItemDetailsCacheKey(args: {
 
 export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
   // Reinsert as most recent; Map order supplies the eviction order.
-  const route = entry.route ?? workItemDetailsCache.get(key)?.route
   workItemDetailsCache.delete(key)
-  workItemDetailsCache.set(key, route ? { ...entry, route } : entry)
+  workItemDetailsCache.set(key, entry)
   while (workItemDetailsCache.size > WORK_ITEM_DETAILS_CACHE_MAX) {
     const oldest = workItemDetailsCache.keys().next().value
     if (oldest === undefined) {
@@ -92,11 +89,7 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
 
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
   workItemDetailsCacheGeneration += 1
-  const previous = workItemDetailsCache.get(key)
-  const existed = previous?.route
-    ? (touchWorkItemDetailsCache(key, { ...previous, fetchedAt: -Date.now(), pending: undefined }),
-      true)
-    : workItemDetailsCache.delete(key)
+  const existed = workItemDetailsCache.delete(key)
   if (existed) {
     notifyWorkItemDetailsCache()
   }
@@ -126,12 +119,7 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
     const [keyRepoId, keyRepoPath] = key.split('\0')
     const matches = args.repoId ? keyRepoId === args.repoId : keyRepoPath === args.repoPath
     if (matches) {
-      const previous = workItemDetailsCache.get(key)
-      if (previous?.route) {
-        touchWorkItemDetailsCache(key, { ...previous, fetchedAt: -Date.now(), pending: undefined })
-      } else {
-        workItemDetailsCache.delete(key)
-      }
+      workItemDetailsCache.delete(key)
       removed = true
     }
   }
@@ -202,6 +190,7 @@ export function patchCachedPRReviewRequests(
   })
 }
 
+// An issue's saved body drops `pending` so a read (Refresh included) started before it settles superseded.
 export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
   const prev = workItemDetailsCache.get(cacheKey)
   if (!prev?.details) {
@@ -211,6 +200,7 @@ export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
     ...prev,
     details: { ...prev.details, body },
     fetchedAt: Date.now(),
+    pending: prev.details.item.type === 'issue' ? undefined : prev.pending,
     error: undefined
   })
 }

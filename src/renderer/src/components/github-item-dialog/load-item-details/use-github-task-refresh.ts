@@ -25,11 +25,7 @@ import {
   type TaskSourceContext
 } from '../../../../../shared/task-source-context'
 
-import {
-  getWorkItemDetailsCacheKey,
-  workItemDetailsCache,
-  touchWorkItemDetailsCache
-} from './work-item-details-cache'
+import { getWorkItemDetailsCacheKey, workItemDetailsCache } from './work-item-details-cache'
 import {
   startWorkItemDetailsFetch,
   loadCanonicalGitHubTaskDetails
@@ -128,7 +124,8 @@ export function useGitHubTaskRefresh({
     [bindingKey]
   )
   const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  const cacheKey = (canonical: boolean) =>
+  // Refresh writes the same entry ordinary loads use; only its own read is fresh and strict.
+  const detailsCacheKey =
     workItem && effectiveRepoId && canUseDetailsRepoContext
       ? getWorkItemDetailsCacheKey({
           repoPath: repoPath ?? '',
@@ -140,19 +137,12 @@ export function useGitHubTaskRefresh({
           type: workItem.type,
           number: workItem.number,
           ownerRepo: issueRepository,
-          canonical,
           bindingKey
         })
       : null
-  const canonicalCacheKey = target ? cacheKey(true) : null
-  const ordinaryCacheKey = cacheKey(false)
-  const detailsCacheKey =
-    canonicalCacheKey && workItemDetailsCache.get(canonicalCacheKey)?.route
-      ? canonicalCacheKey
-      : ordinaryCacheKey
   const optimisticKey = target?.key ?? detailsCacheKey ?? ''
   const refreshTask = useCallback(async () => {
-    if (!target || !binding || !canonicalCacheKey || !target.current()) {
+    if (!target || !binding || !detailsCacheKey || !target.current()) {
       return
     }
     intentRef.current?.()
@@ -192,27 +182,13 @@ export function useGitHubTaskRefresh({
         }
         const revision = cache.readRevision(target.item, binding)
         const accepts = () => alive() && cache.readRevision(target.item, binding) === revision
+        const shown = !!workItemDetailsCache.get(detailsCacheKey)?.details
         attempt = startWorkItemDetailsFetch(
-          canonicalCacheKey,
+          detailsCacheKey,
           () => loadCanonicalGitHubTaskDetails(cache, binding, target, accepts),
           {
-            seed: workItemDetailsCache.get(detailsCacheKey ?? ''),
-            route: { ownerRepo: target.ownerRepo, bindingKey: bindingKey ?? target.key },
             accepts,
             onAccepted: (result) => {
-              // Publication renews Map insertion order, so iterate a snapshot.
-              const entries = [...workItemDetailsCache]
-              for (const [key, entry] of entries) {
-                if (entry.route?.bindingKey === bindingKey && entry.details) {
-                  touchWorkItemDetailsCache(key, {
-                    ...entry,
-                    details: result,
-                    fetchedAt: Date.now(),
-                    pending: undefined,
-                    error: undefined
-                  })
-                }
-              }
               onAcceptedRef.current?.(result.item)
               if (mounted.current) {
                 setAcceptedRefresh((n) => n + 1)
@@ -231,7 +207,8 @@ export function useGitHubTaskRefresh({
         ) {
           continue
         }
-        if (outcome.status !== 'accepted') {
+        // With nothing loaded yet, the body's existing load error is this failure's one message.
+        if (outcome.status !== 'accepted' && shown) {
           toast.error(
             translate(
               'auto.components.GitHubItemDialog.refreshTaskFailed',
@@ -244,7 +221,7 @@ export function useGitHubTaskRefresh({
     } finally {
       dispose()
     }
-  }, [target, canonicalCacheKey, detailsCacheKey, mounted, binding, bindingKey, cache])
+  }, [target, detailsCacheKey, mounted, binding, cache])
 
   return {
     target,

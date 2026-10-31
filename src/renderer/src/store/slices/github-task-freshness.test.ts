@@ -29,30 +29,6 @@ describe('GitHub task search freshness at the store boundary', () => {
     resetRemoteRuntimeMocks()
   })
 
-  it.each(['labels', 'assignees', 'state'] as const)(
-    'keeps newer known %s in both cache and fetch return',
-    async (field) => {
-      const known = {
-        ...row,
-        labels: ['confirmed'],
-        state: 'closed' as const,
-        assignees: [{ login: 'me', name: null, avatarUrl: '' }]
-      }
-      const store = createTestStore()
-      const key = workItemsCacheKey('repo', 20, '')
-      store.setState({ workItemsCache: { [key]: { data: [known], fetchedAt: 1 } } })
-      mockApi.gh.listWorkItems.mockResolvedValue({
-        items: [{ ...row, updatedAt: '2026-10-31T12:00:01Z' }],
-        sources
-      })
-      const returned = await store
-        .getState()
-        .fetchWorkItems('repo', '/repo', 20, '', { force: true })
-      expect(returned[0][field]).toEqual(known[field])
-      expect(store.getState().workItemsCache[key].data?.[0][field]).toEqual(known[field])
-    }
-  )
-
   it('adopts a genuinely newer external issue change', async () => {
     const store = createTestStore()
     const key = workItemsCacheKey('repo', 20, '')

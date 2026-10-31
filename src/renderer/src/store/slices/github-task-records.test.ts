@@ -5,6 +5,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitHubProjectTable } from '../../../../shared/github/project-types'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
+import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 import { getRegistryMergedTaskPageGitHubWorkItem } from '@/components/task-page/github/task-page-github-work-item-mutation-composition'
 import {
   setConfirmedListSnapshot,
@@ -379,6 +380,26 @@ describe('shared GitHub task records through production store actions', () => {
     expect(lookup).toHaveBeenCalledTimes(1)
   })
 
+  it.each([true, false])(
+    'folds a Projects-row label edit into the record and the projected board (%s)',
+    async (success) => {
+      const { cache, binding } = setup()
+      await cache.readCanonical(row, binding, async () => ({ ...row, labels: ['original'] }))
+      const table = board([projectRow()])
+      const finish = cache.projectOperation(
+        table.rows[0],
+        { kind: 'local' },
+        { addLabels: ['bug'] }
+      )
+      const labels = () =>
+        cache.projectTable(table, 'local').rows[0].content.labels.map((l) => l.name)
+      expect(labels()).toEqual(['original', 'bug'])
+      expect(cache.projectItem(row).labels).toEqual(['original', 'bug'])
+      finish(success)
+      expect(labels()).toEqual(success ? ['original', 'bug'] : ['original'])
+      expect(cache.projectItem(row).labels).toEqual(success ? ['original', 'bug'] : ['original'])
+    }
+  )
   it('verifies conflicting board rows once per fetch, never from truncation or re-render', async () => {
     const { store, cache, binding } = setup()
     const labels = Array.from({ length: 11 }, (_, n) => `label-${n}`)
@@ -405,6 +426,31 @@ describe('shared GitHub task records through production store actions', () => {
     }
     store.setState({ repos: [{ ...repo, ghAccount: { host: 'github.com', user: 'bob' } }] })
     expect(cache.projectTable(board([projectRow()]), 'local').rows[0].content.title).toBe('Indexed')
+  })
+  it('rolls a failed edit back in the Tasks rows when its record was disposed mid-flight', async () => {
+    const { store, cache } = setup()
+    mockApi.gh.listWorkItems.mockResolvedValue({
+      items: [row],
+      sources: {
+        issues: { owner: 'acme', repo: 'widgets' },
+        prs: null,
+        originCandidate: null,
+        upstreamCandidate: null
+      }
+    })
+    const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
+    await store.getState().fetchWorkItems(repo.id, repo.path, 20, '', { sourceContext })
+    const finish = cache.operation(row, cache.capture(repo, sourceContext)!, (base) => ({
+      ...base,
+      labels: ['bug']
+    }))
+    const cached = () =>
+      Object.values(store.getState().workItemsCache).flatMap((e) => e.data ?? [])[0]
+    expect(cached().labels).toEqual(['bug'])
+    store.setState({ repos: [{ ...repo, ghAccount: { host: 'github.com', user: 'bob' } }] })
+    store.setState({ repos: [repo] })
+    expect(finish(false)?.labels).toEqual([])
+    expect(cached().labels).toEqual([])
   })
   it('keeps every row through a connection change and drops only the old record', async () => {
     setRuntimeEnvironmentConnectionGenerationForTests('p34245-test', 1)

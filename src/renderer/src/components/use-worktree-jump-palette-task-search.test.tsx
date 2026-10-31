@@ -7,6 +7,11 @@ import { jiraTaskResult } from './cmd-j/task-search.test-fixture'
 import { EMPTY_PALETTE_FILTER } from './cmd-j/palette-filter'
 import { buildPaletteFilterModel } from './cmd-j/palette-filter-options'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
+import { makeCmdJTaskSearchResult } from './cmd-j/task-search-results'
+import { useAppStore } from '@/store'
+import type { Repo } from '../../../shared/repo-types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
 
 vi.mock('./cmd-j/task-search-requests', () => ({ createCmdJTaskSearchRequests: vi.fn() }))
 const input: Parameters<typeof useWorktreeJumpPaletteTaskSearch>[0] = {
@@ -119,4 +124,47 @@ it('cancels old searches and ignores their replies after the captured palette ho
   expect(run).toHaveBeenCalledTimes(2)
   await act(async () => finishOldRequest([{ ...jiraTaskResult, id: 'old-owner-result' }]))
   expect(result.current.taskItems.map((item) => item.id)).toEqual(['new-owner-result'])
+})
+
+it('shows an accepted GitHub task record over the stale search row it returned', async () => {
+  const repo: Repo = { id: 'repo', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 1 }
+  const issue: GitHubWorkItem = {
+    id: 'issue:42',
+    repoId: repo.id,
+    type: 'issue',
+    number: 42,
+    title: 'Indexed',
+    state: 'open',
+    labels: [],
+    assignees: [],
+    url: 'https://github.com/acme/widgets/issues/42',
+    author: null,
+    updatedAt: '2026-10-31T12:00:02Z'
+  }
+  useAppStore.setState({ repos: [repo] })
+  const cache = useAppStore.getState().githubTaskCache
+  await cache.readCanonical(issue, cache.capture(repo)!, async () => ({
+    ...issue,
+    title: 'Accepted',
+    labels: ['bug']
+  }))
+  const source = buildTaskSourceContextFromRepo({ provider: 'github', projectId: repo.id, repo })!
+  vi.mocked(createCmdJTaskSearchRequests).mockReturnValue([
+    {
+      id: 'github',
+      provider: 'github',
+      hostLabel: 'Local',
+      run: async () => [
+        makeCmdJTaskSearchResult({ provider: 'github', issue }, source, repo.id, 'Local')
+      ]
+    }
+  ])
+  const { result } = renderHook(useWorktreeJumpPaletteTaskSearch, { initialProps: input })
+  await act(async () => vi.advanceTimersByTimeAsync(600))
+  const task = result.current.taskItems[0]?.result.task
+  expect(task?.provider === 'github' && task.issue).toMatchObject({
+    title: 'Accepted',
+    labels: ['bug']
+  })
+  useAppStore.setState({ repos: [] })
 })

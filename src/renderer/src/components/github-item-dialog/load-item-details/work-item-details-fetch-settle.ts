@@ -6,8 +6,7 @@ import {
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
   touchWorkItemDetailsCache,
   workItemDetailsCache,
-  withWorkItemDetailsItem,
-  type WorkItemDetailsCacheEntry
+  withWorkItemDetailsItem
 } from './work-item-details-cache'
 
 export async function loadCanonicalGitHubTaskDetails(
@@ -96,18 +95,15 @@ export async function settleWorkItemDetailsFetch(
 export function startWorkItemDetailsFetch(
   key: string,
   load: () => Promise<GitHubWorkItemDetails | null>,
-  options: FetchAcceptance & {
-    seed?: WorkItemDetailsCacheEntry
-    route?: WorkItemDetailsCacheEntry['route']
-  } = {}
+  options: FetchAcceptance = {}
 ) {
   const inflight = Promise.resolve().then(load)
-  const previous = workItemDetailsCache.get(key) ?? options.seed
+  const previous = workItemDetailsCache.get(key)
   touchWorkItemDetailsCache(key, {
     details: previous?.details ?? null,
     fetchedAt: previous?.fetchedAt ?? 0,
     pending: inflight,
-    route: options.route ?? previous?.route
+    error: previous?.error
   })
   const settled = settleWorkItemDetailsFetch({ ...options, detailsCacheKey: key, inflight })
   return {

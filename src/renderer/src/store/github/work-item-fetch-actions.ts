@@ -156,8 +156,7 @@ export const createWorkItemFetchActions = (
               repoId,
               ...(repoHostId ? { repoHostId } : {})
             })),
-            binding,
-            get().workItemsCache[key]?.data ?? []
+            binding
           )
         ]
         if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
