@@ -52,10 +52,10 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.terminal.search.72d0482137', 'Window Blur'),
+    title: translate('settings.windowMaterial.title', 'Window Material'),
     description: translate(
-      'auto.components.settings.terminal.search.bc2054657a',
-      'Apply background blur to the terminal window. Requires restart.'
+      'settings.windowMaterial.description',
+      'What shows behind translucent terminals. Requires restart.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.terminal.search.0838b3717b', 'window'),
@@ -68,7 +68,8 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.terminal.search.4f7f8f28ca',
         'transparency'
       ),
-      ...translateSearchKeyword('auto.components.settings.terminal.search.6c2f9f05c8', 'vibrancy')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.6c2f9f05c8', 'vibrancy'),
+      ...translateSearchKeyword('settings.windowMaterial.keywords.acrylic', 'acrylic')
     ]
   },
   {

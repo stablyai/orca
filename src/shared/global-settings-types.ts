@@ -143,7 +143,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
-  windowBackgroundBlur?: boolean
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
   minimizeToTrayOnClose?: boolean
   /** macOS: toggles the additive menu-bar entry (Orca survives last-window close); doesn't change Dock behavior. */

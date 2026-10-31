@@ -109,6 +109,7 @@ export function buildDefaultSettings(args: {
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
     windowBackgroundBlur: false,
+    reduceVisualEffects: false,
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
