@@ -145,8 +145,8 @@ function creationRoot(
 }
 
 /** Whether `ancestorId` is `from` or an earlier Dispatch of the same worker in its Run: one it continued with a
- *  follow-up, or whose exact process it took over (its saved custody, or for the user's own pane the pane's previous
- *  assignment). Each hop is read, so another Run in between ends the walk. */
+ *  follow-up, or whose exact process it took over in saved custody. Each hop is read, so another Run in between ends
+ *  the walk. */
 function continuesDispatch(
   db: OrchestrationDb,
   from: DispatchContextRow,

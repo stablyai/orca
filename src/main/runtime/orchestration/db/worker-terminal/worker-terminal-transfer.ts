@@ -1,14 +1,8 @@
 import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
-import {
-  DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
-  isEquivalentPaneKey,
-  paneKeyMatchSuffix,
-  parseWorkerTerminalPriorOwnerIds
-} from '../pane-key-match'
+import { isEquivalentPaneKey, parseWorkerTerminalPriorOwnerIds } from '../pane-key-match'
 import type { DispatchContextRow } from '../../types'
 import type { OrchestrationDb } from '../orchestration-db'
-import { parsePaneKey } from '../../../../../shared/stable-pane-id'
 
 // Finds an owned, settled, exact-match resource for an explicitly reused terminal.
 export function findTransferableWorkerTerminalResource(
@@ -165,53 +159,20 @@ export function listWorkerTerminalResourcesByIncarnationPrefix(
     .all(prefix.length, prefix) as WorkerTerminalResourceRow[]
 }
 
-type PaneHolder = {
-  id: string
-  /** Dispatch insertion order; never compared with custody rowids. */
-  inserted: number
-  supervised: 0 | 1
-  pane: string | null
-  incarnation: string | null
-  status: string
-  host: string | null
-  acquired: number | null
-  origin: string | null
-  prior: string | null
-  provenance: string | null
-}
-
-// Custody rows are inserted when a Dispatch acquires its pane and never reminted, so a pane's original-acquisition rows in
-// rowid order are its holders in acquisition order. Backfilled and transferred rows carry no such order. A direct
-// dispatch claims the pane in the Dispatch row it inserts (no worker row, no custody row), so it precedes any Dispatch
-// inserted after it, and every acquisition by one. A table rebuild that renumbers either table's rowids must keep its
-// order or retire this proof. Both host cohorts are read: an unknown host is not another host.
-const PANE_HOLDERS_SQL = `WITH holders AS (
-    SELECT rowid AS inserted, * FROM dispatch_contexts
-     WHERE ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ? AND host_scope = ?
-    UNION ALL
-    SELECT rowid AS inserted, * FROM dispatch_contexts
-     WHERE ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ? AND host_scope IS NULL
-  )
-  SELECT h.id, h.inserted, h.assignee_pane_key AS pane, h.process_incarnation AS incarnation,
-         h.status, h.host_scope AS host, r.rowid AS acquired, r.origin_dispatch_id AS origin,
-         r.prior_owner_dispatch_ids AS prior, r.retained_reason AS provenance,
-         EXISTS (SELECT 1 FROM worker_dispatches w WHERE w.dispatch_id = h.id) AS supervised
-    FROM holders h LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = h.id`
-
-/** A pane's acquisitions in order, and the latest direct claim's insertion, before which no edge may reach. */
-type PaneOrder = { previous: Map<string, PaneHolder | undefined>; claimedBefore: number }
-
 const IDENTITY_COHORT_SQL =
   'SELECT * FROM worker_terminal_resources WHERE process_incarnation = ? AND host_scope IS ?'
 
-/** For one caller check: who held a Dispatch's exact terminal process right before it. Each custody cohort, history and
- *  pane order is read and decoded at most once per check; it is evidence, never permission, and goes when the check does. */
+type OwnerHistory = Map<string, string | undefined>
+
+/** For one caller check: who held a Dispatch's exact terminal process right before it, from saved custody only. Each
+ *  owner history and identity cohort is read and decoded at most once per check; it is evidence, never permission, and
+ *  goes when the check does. */
 export function previousCustodianLookup(
   db: OrchestrationDb
 ): (dispatch: DispatchContextRow) => string | undefined {
-  const cohorts = new Map<string, WorkerTerminalResourceRow[]>()
-  const histories = new Map<string, Map<string, string | undefined> | null>()
-  const panes = new Map<string, PaneOrder | null>()
+  const histories = new Map<string, OwnerHistory | null>()
+  // Per exact process: each former holder's one custody row, or null when several rows name it.
+  const cohorts = new Map<string, Map<string, WorkerTerminalResourceRow | null>>()
   // Each holder's predecessor in the row's ordered owners; unreadable or repeating history proves nothing.
   const historyOf = (resource: WorkerTerminalResourceRow) => {
     if (!histories.has(resource.id)) {
@@ -222,78 +183,31 @@ export function previousCustodianLookup(
     }
     return histories.get(resource.id)
   }
-  // An external pane is never transferred, so its earlier holder is the pane's previous assignment.
-  const externalHolder = (resource: WorkerTerminalResourceRow) => {
-    const { pane_key: paneKey, process_incarnation: incarnation, host_scope: host } = resource
-    const owner = resource.owner_dispatch_id
-    if (resource.ownership_state !== 'external' || resource.origin_dispatch_id !== owner) {
-      return undefined
+  const cohortOf = (incarnation: string, host: string | null) => {
+    const key = JSON.stringify([incarnation, host])
+    let holders = cohorts.get(key)
+    if (!holders) {
+      holders = new Map()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+      const rows = db.db
+        .prepare(IDENTITY_COHORT_SQL)
+        .all(incarnation, host) as WorkerTerminalResourceRow[]
+      for (const row of rows) {
+        for (const holder of historyOf(row)?.keys() ?? []) {
+          holders.set(holder, holders.has(holder) ? null : row)
+        }
+      }
+      cohorts.set(key, holders)
     }
-    // An unknown host or identity proves no adjacency.
-    if (!paneKey || !incarnation || !host) {
-      return undefined
-    }
-    const key = JSON.stringify([parsePaneKey(paneKey)?.leafId ?? paneKey, host])
-    if (!panes.has(key)) {
-      panes.set(key, orderPaneHolders(db, paneKey, host))
-    }
-    const order = panes.get(key)
-    const previous = order?.previous.get(owner)
-    // A direct claim inserted after the previous holder could sit between the two.
-    return previous &&
-      previous.inserted > order.claimedBefore &&
-      previous.incarnation === incarnation &&
-      !['pending', 'dispatched'].includes(previous.status)
-      ? previous.id
-      : undefined
+    return holders
   }
   return (dispatch) => {
-    let resource = db.getWorkerTerminalResourceByOwner(dispatch.id)
-    if (!resource && dispatch.process_incarnation) {
-      // A former holder: its exact process's custody rows, kept only if their ordered owners name it.
-      const key = JSON.stringify([dispatch.process_incarnation, dispatch.host_scope])
-      let cohort = cohorts.get(key)
-      if (!cohort) {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
-        cohort = db.db
-          .prepare(IDENTITY_COHORT_SQL)
-          .all(dispatch.process_incarnation, dispatch.host_scope) as WorkerTerminalResourceRow[]
-        cohorts.set(key, cohort)
-      }
-      const held = cohort.filter((row) => historyOf(row)?.has(dispatch.id))
-      resource = held.length === 1 ? held[0] : undefined
-    }
-    const history = resource && historyOf(resource)
-    if (!resource || !history?.has(dispatch.id)) {
-      return undefined
-    }
-    return history.get(dispatch.id) ?? externalHolder(resource)
-  }
-}
-
-/** Each acquisition's predecessor on the pane and the latest direct claim, or null when any other holder's place in
- *  the order is unproven. */
-function orderPaneHolders(db: OrchestrationDb, paneKey: string, host: string): PaneOrder | null {
-  const suffix = paneKeyMatchSuffix(paneKey)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this projection selects exactly PaneHolder's columns.
-  const holders = (
-    db.db.prepare(PANE_HOLDERS_SQL).all(suffix, host, suffix) as PaneHolder[]
-  ).filter((holder) => holder.pane !== null && isEquivalentPaneKey(holder.pane, paneKey))
-  const ordered = holders.filter(
-    (holder) =>
-      holder.host === host &&
-      holder.origin === holder.id &&
-      holder.prior === '[]' &&
-      holder.provenance !== 'legacy_ambiguous'
-  )
-  const claims = holders.filter((holder) => holder.acquired === null && !holder.supervised)
-  if (ordered.length + claims.length !== holders.length) {
-    return null
-  }
-  ordered.sort((a, b) => (a.acquired ?? 0) - (b.acquired ?? 0))
-  return {
-    previous: new Map(ordered.map((holder, index) => [holder.id, ordered[index - 1]])),
-    claimedBefore: Math.max(0, ...claims.map((claim) => claim.inserted))
+    const resource =
+      db.getWorkerTerminalResourceByOwner(dispatch.id) ??
+      (dispatch.process_incarnation
+        ? cohortOf(dispatch.process_incarnation, dispatch.host_scope).get(dispatch.id)
+        : undefined)
+    return resource ? historyOf(resource)?.get(dispatch.id) : undefined
   }
 }
 

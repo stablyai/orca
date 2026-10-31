@@ -1,6 +1,5 @@
 import type { OrchestrationDb } from '../orchestration-db'
 import { OUTSTANDING_MAILBOX_INDEX_SQL } from './migrate-v41'
-import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from '../pane-key-match'
 
 export function hasColumn(this: OrchestrationDb, table: string, column: string): boolean {
   const rows = this.db.pragma(`table_info(${table})`) as { name: string }[]
@@ -15,15 +14,6 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
   ) {
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dispatch_session_presentation
       ON dispatch_contexts(status, completed_at) WHERE assignee_orca_session_id IS NOT NULL`)
-  }
-  if (
-    ['assignee_pane_key', 'host_scope'].every((column) =>
-      this.hasColumn('dispatch_contexts', column)
-    )
-  ) {
-    // Every assignment a pane ever had, settled ones included: where a worker's earlier holder is read from.
-    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dispatch_pane_leaf_history
-      ON dispatch_contexts(${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL}, host_scope)`)
   }
   if (this.hasColumn('deliveries', 'mailbox_handle')) {
     this.db.exec(OUTSTANDING_MAILBOX_INDEX_SQL)
