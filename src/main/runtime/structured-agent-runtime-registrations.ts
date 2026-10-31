@@ -73,6 +73,8 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         structuredAgentLaunchSources(context),
         codexStructuredLaunchPart({
           resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
+          resolveQuotaApiCredential: context.resolveQuotaApiCredential,
+          restoreQuotaOpenaiSubscription: context.restoreQuotaOpenaiSubscription,
           ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
         })
       ),
@@ -125,6 +127,7 @@ function createClaudeAdapter(
       structuredAgentLaunchSources(context),
       claudeStructuredLaunchPart({
         resolveLaunchArgs: () => deps.resolveLaunchArgs('claude'),
+        resolveQuotaApiCredential: context.resolveQuotaApiCredential,
         ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
         resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
         attachmentDirectory: agentSessionAttachmentStoreRoot(deps.stateDirectory),
