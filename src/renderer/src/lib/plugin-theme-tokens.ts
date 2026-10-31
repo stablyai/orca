@@ -1,7 +1,7 @@
 import {
   pluginAppThemeCssFallback,
-  type PluginThemeDerivationRule
-} from '../../../shared/plugins/artifacts/plugin-theme-artifact'
+  type PluginThemeCssFallbackRule
+} from '../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
 
 /** sRGB channels 0-255 and alpha 0-1, or null when the value is not a CSS color. */
 export type ColorProbe = (value: string) => readonly [number, number, number, number] | null
@@ -11,8 +11,8 @@ type ContrastRule = {
   surface: string
   text: string
   min: number
-  /** The only side a failure drops, when the other is a shared token this check must not cost. */
-  drop?: 'surface' | 'text'
+  /** What a failure drops, when not both sides: never a shared token this check must not cost. */
+  drop?: readonly string[]
   /** A translucent surface is checked as painted over this opaque one. */
   over?: string
 }
@@ -55,7 +55,7 @@ const CONTRAST_RULES: readonly ContrastRule[] = [
   textPair('--worktree-sidebar-accent', '--worktree-sidebar-accent-foreground'),
   {
     ...textPair('--worktree-sidebar-active', '--worktree-sidebar-foreground'),
-    drop: 'surface',
+    drop: ['--worktree-sidebar-active'],
     over: '--worktree-sidebar'
   },
   { ...textPair('--host-badge', '--host-badge-foreground'), over: '--worktree-sidebar' },
@@ -63,23 +63,25 @@ const CONTRAST_RULES: readonly ContrastRule[] = [
   textPair('--tab-inactive', '--tab-inactive-foreground'),
   // Hovered inactive tabs take the active text color.
   textPair('--tab-inactive', '--tab-active-foreground'),
-  { ...textPair('--chat-user-message', '--foreground'), drop: 'surface', over: '--background' },
-  ...[
-    '--diff-added-background',
-    '--diff-added-emphasis',
-    '--diff-removed-background',
-    '--diff-removed-emphasis'
-  ].map((tint): ContrastRule => ({
-    ...textPair(tint, '--foreground'),
-    drop: 'surface',
-    over: '--editor-surface'
-  })),
-  { ...textPair('--editor-surface', '--text-link'), drop: 'text' },
+  {
+    ...textPair('--chat-user-message', '--chat-foreground-strong'),
+    drop: ['--chat-user-message'],
+    over: '--chat-canvas'
+  },
+  // A tint the theme omits follows its hue, so a failing tint drops the hue too.
+  ...['added', 'removed'].flatMap((side) =>
+    ['background', 'emphasis'].map((kind): ContrastRule => ({
+      ...textPair(`--diff-${side}-${kind}`, '--foreground'),
+      drop: [`--diff-${side}-${kind}`, `--diff-${side}`],
+      over: '--editor-surface'
+    }))
+  ),
+  { ...textPair('--editor-surface', '--text-link'), drop: ['--text-link'] },
   ...GIT_DECORATIONS.map((status): ContrastRule => ({
     surface: '--sidebar',
     text: `--git-decoration-${status}`,
     min: MIN_STATUS_TEXT_CONTRAST,
-    drop: 'text'
+    drop: [`--git-decoration-${status}`]
   }))
 ]
 // Why 2:1, not WCAG's 3:1: Orca's own light ring is 2.6:1; the goal is a ring that never vanishes.
@@ -148,7 +150,11 @@ export function safePluginThemeTokens(
     }
   }
   const builtInColors = new Map<string, Rgba | null>()
-  const derived = (rule: PluginThemeDerivationRule): Rgba | null => {
+  const derived = (rule: PluginThemeCssFallbackRule): Rgba | null => {
+    if ('tint' in rule) {
+      const hue = effective(rule.tint)
+      return hue ? [hue[0], hue[1], hue[2], (hue[3] * rule.percent) / 100] : null
+    }
     if (!('mixForeground' in rule)) {
       return rule.map(effective).find(Boolean) ?? null
     }
@@ -187,8 +193,7 @@ export function safePluginThemeTokens(
           textColor[3] < 1 ||
           contrastRatio(surfaceColor, textColor) < rule.min)
       ) {
-        const dropped = rule.drop ? [rule[rule.drop]] : [rule.surface, rule.text]
-        changed = drop(...dropped) || changed
+        changed = drop(...(rule.drop ?? [rule.surface, rule.text])) || changed
       }
     }
     for (const [ring, surface] of RINGS) {

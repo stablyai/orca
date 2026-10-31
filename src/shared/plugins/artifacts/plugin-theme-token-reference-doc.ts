@@ -1,9 +1,9 @@
 import {
   completePluginAppThemeTokens,
-  pluginAppThemeCssFallback,
   PLUGIN_APP_THEME_REQUIRED_TOKENS,
   PLUGIN_APP_THEME_TOKENS
 } from './plugin-theme-artifact'
+import { pluginAppThemeCssFallback } from './plugin-theme-css-fallbacks'
 
 const REQUIRED = new Set<string>(PLUGIN_APP_THEME_REQUIRED_TOKENS)
 
@@ -84,13 +84,7 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
 const MODE_MIXES: Partial<Record<PluginAppThemeToken, string>> = {
   '--worktree-sidebar-active': 'a translucent wash of `--worktree-sidebar-foreground`',
   '--worktree-sidebar-active-border': 'a mix of `--worktree-sidebar-border`',
-  '--chat-user-message': '`--foreground` mixed lightly into the chat background',
-  '--diff-added-background': 'a translucent tint of `--diff-added`',
-  '--diff-added-emphasis': 'a translucent tint of `--diff-added`',
-  '--diff-added-gutter': 'a translucent tint of `--diff-added`',
-  '--diff-removed-background': 'a translucent tint of `--diff-removed`',
-  '--diff-removed-emphasis': 'a translucent tint of `--diff-removed`',
-  '--diff-removed-gutter': 'a translucent tint of `--diff-removed`'
+  '--chat-user-message': '`--foreground` mixed lightly into the chat background'
 }
 
 /** What an omitted token becomes, read back from the real derivation with every other token
@@ -103,6 +97,9 @@ function omittedValueFor(token: PluginAppThemeToken, base: 'light' | 'dark'): st
     ])
   )
   const cssFallback = pluginAppThemeCssFallback(token, base)
+  if (cssFallback && 'tint' in cssFallback) {
+    return `\`${cssFallback.tint}\` at ${cssFallback.percent}% opacity`
+  }
   const derived = cssFallback
     ? 'mixForeground' in cssFallback
       ? `color-mix(in srgb, var(--foreground) ${cssFallback.mixForeground}%, var(${cssFallback.into ?? '--background'}))`
