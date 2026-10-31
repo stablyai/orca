@@ -65,6 +65,10 @@ function makeSnapshot(): unknown {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function setPath(root: unknown, path: string[], value: unknown): void {
   let current: unknown = root
   for (const segment of path.slice(0, -1)) {
@@ -123,6 +127,64 @@ describe('decodeAccountsSnapshot', () => {
     setPath(snapshot, path, value)
 
     expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
+  })
+
+  it('decodes additional providers, grouped buckets, and usage metadata', () => {
+    const raw = makeSnapshot()
+    if (!isRecord(raw) || !isRecord(raw.rateLimits)) {
+      throw new Error('fixture')
+    }
+    raw.rateLimits.antigravity = {
+      provider: 'antigravity',
+      session: null,
+      weekly: null,
+      buckets: [
+        {
+          name: 'Gemini Models',
+          group: 'Gemini Models',
+          windowName: 'Weekly Limit Remaining',
+          usedPercent: 4,
+          windowMinutes: 10080,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ],
+      planType: null,
+      updatedAt: 100,
+      error: null,
+      status: 'ok'
+    }
+    raw.rateLimits.zcode = {
+      provider: 'zcode',
+      session: null,
+      weekly: null,
+      monthly: {
+        usedPercent: 3,
+        windowMinutes: 43200,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: 100,
+      error: null,
+      status: 'ok',
+      usageMetadata: {
+        authProvenance: 'user@example.com',
+        credentialSource: 'oauth',
+        source: 'web',
+        failureKind: 'network',
+        retryAtMs: 5
+      }
+    }
+
+    const snapshot = decodeAccountsSnapshot(raw)
+
+    expect(snapshot.rateLimits.antigravity?.buckets?.[0]?.group).toBe('Gemini Models')
+    expect(snapshot.rateLimits.antigravity?.buckets?.[0]?.windowName).toBe('Weekly Limit Remaining')
+    expect(snapshot.rateLimits.zcode?.provider).toBe('zcode')
+    expect(snapshot.rateLimits.zcode?.usageMetadata).toMatchObject({
+      authProvenance: 'user@example.com',
+      retryAtMs: 5
+    })
   })
 
   it('rejects a host target that smuggles a WSL distro', () => {

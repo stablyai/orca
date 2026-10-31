@@ -20,6 +20,9 @@ import {
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
+  hasRenderableUsage,
+  getActiveAdditionalProviders,
+  AdditionalProvidersUsageSections,
   UsageBar
 } from '../components/AccountUsage'
 import {
@@ -327,6 +330,12 @@ export function MobileAccountsScreen() {
     )
   }
 
+  const additionalProviders = snapshot ? getActiveAdditionalProviders(snapshot) : []
+  const showClaude =
+    snapshot != null && (hasRenderableUsage(snapshot, 'claude') || additionalProviders.length === 0)
+  const showCodex =
+    snapshot != null && (hasRenderableUsage(snapshot, 'codex') || additionalProviders.length === 0)
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <NavBar
@@ -374,8 +383,9 @@ export function MobileAccountsScreen() {
           </View>
         ) : (
           <>
-            {renderProviderSection('claude', 'Claude')}
-            {renderProviderSection('codex', 'Codex')}
+            {showClaude ? renderProviderSection('claude', 'Claude') : null}
+            {showCodex ? renderProviderSection('codex', 'Codex') : null}
+            <AdditionalProvidersUsageSections snapshot={snapshot} now={now} />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>
