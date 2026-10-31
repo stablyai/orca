@@ -83,7 +83,10 @@ function switchParams(sessionId: string, source?: SwitchSource) {
   }
 }
 
-function worktreeTarget() {
+type WorktreeTarget = Awaited<
+  ReturnType<ReturnType<typeof setupMainOwnedWorkspace>['runtime']['resolveRuntimeFileTarget']>
+>
+function worktreeTarget(): WorktreeTarget {
   return {
     worktree: {
       id: WORKTREE_ID,

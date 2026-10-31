@@ -370,6 +370,8 @@ it('shows a pane that never saw its exit stopped from main’s frame, without re
             leafId: kept.pane.leafId,
             title: 'Terminal',
             isActive: true,
+            status: 'ready',
+            terminal: kept.source.ptyId,
             stoppedSwitchSource: {
               ptyId: kept.source.ptyId,
               incarnationId,

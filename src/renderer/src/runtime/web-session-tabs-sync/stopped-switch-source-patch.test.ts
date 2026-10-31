@@ -13,14 +13,14 @@ import {
 
 vi.mock('../../store', () => ({ useAppStore: { setState: vi.fn() } }))
 
-type Row = RuntimeMobileSessionTabsResult['tabs'][number]
+type Terminal = Extract<RuntimeMobileSessionTabsResult['tabs'][number], { type: 'terminal' }>
 const fact = {
   ptyId: 'host-pty-1',
   incarnationId: 'incarnation-1',
   agent: 'codex',
   providerSessionId: 'codex-conversation'
 } as const
-const stopped: Row = {
+const stopped: Terminal = {
   type: 'terminal',
   id: `host-tab-1::${LEAF_ID}`,
   parentTabId: 'host-tab-1',
@@ -32,7 +32,7 @@ const stopped: Row = {
   incarnationId: fact.incarnationId,
   stoppedSwitchSource: fact
 }
-const other: Row = {
+const other: Terminal = {
   ...stopped,
   id: `host-tab-2::${LEAF_ID}`,
   parentTabId: 'host-tab-2',
