@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -18,7 +18,7 @@ async function tempRoot(): Promise<string> {
   return root
 }
 
-const NOW = Date.now()
+const NOW = Date.parse('2026-10-30T12:00:00Z')
 
 function stats(installs: number, generatedAt = '2026-10-30T02:00:00Z') {
   return { generatedAt, installs: { 'stablyai.orca-nord-theme': installs } }
@@ -58,6 +58,7 @@ describe('PluginInstallStatsService', () => {
     })
     await first.getInstallCounts()
     await first.settled()
+    await utimes(join(root, 'plugin-install-stats.json'), NOW / 1000, NOW / 1000)
 
     const fetcher = vi.fn(async () => stats(60))
     const restarted = new PluginInstallStatsService({
