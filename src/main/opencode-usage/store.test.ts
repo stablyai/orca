@@ -163,7 +163,7 @@ describe('OpenCodeUsageStore', () => {
   beforeEach(() => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-opencode-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
-    initOpenCodeUsagePath()
+    initOpenCodeUsagePath(tempUserData)
     vi.mocked(scanOpenCodeUsageDatabasesViaWorker).mockReset()
     vi.mocked(scanOpenCodeUsageDatabasesViaWorker).mockResolvedValue(createEmptyScanResult())
     vi.useFakeTimers()

@@ -197,6 +197,15 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   runtime.setSkillCloudService(new SkillCloudService(app.getPath('userData')))
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   installWslOrcadAccountShim(store)
+  const { claudeUsage, codexUsage, openCodeUsage, museUsage } = state
+  if (claudeUsage && codexUsage && openCodeUsage && museUsage) {
+    runtime.setUsageAnalyticsStores({
+      claude: claudeUsage,
+      codex: codexUsage,
+      opencode: openCodeUsage,
+      muse: museUsage
+    })
+  }
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Resolve every Codex launch through runtime-home, including default-account hooks/auth.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,

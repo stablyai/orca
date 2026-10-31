@@ -179,6 +179,7 @@ const ROOT_SOURCES: Record<Root, readonly string[]> = {
   orcad: [
     'src/main/orcad/orcad-entry.ts',
     'src/main/orcad/orcad-account-services.ts',
+    'src/main/orcad/orcad-usage-analytics.ts',
     'src/main/orcad/orcad-emulator-bridge.ts'
   ]
 }
@@ -428,6 +429,8 @@ describe('runtime composition parity (Electron vs orcad)', () => {
       'rpc-option:webClientRoot',
       'rpc-option:wsPort',
       'runtime.setAccountServices',
+      // Without it `usage.*` refuses and a paired desktop's Stats & Usage cannot read the host.
+      'runtime.setUsageAnalyticsStores',
       // #31112: without it `stats.summary` answers {} and mobile home shows zeros.
       'ctor-arg:stats',
       'host:setAppEnvironment',
