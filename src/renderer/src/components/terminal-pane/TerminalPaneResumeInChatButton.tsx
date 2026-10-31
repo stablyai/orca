@@ -4,7 +4,6 @@ import {
   useConversationSwitchReadiness,
   runCliChatResume
 } from '@/lib/conversation-surface-switch'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { useShallow } from 'zustand/react/shallow'
 import { Loader2, MessagesSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -37,10 +36,6 @@ export function TerminalPaneResumeInChatButton({
   )
   const busy = useConversationSwitchBusy(readiness.pending)
 
-  const enabled = useAppStore((state) => isNativeChatEnabled(state.settings))
-  if (!enabled) {
-    return null
-  }
   const label = translate('components.tab.bar.switch.toNativeChat', 'Switch to native chat')
   const updateRequired = source?.hostUpdateRequired === true
   const tooltip = updateRequired

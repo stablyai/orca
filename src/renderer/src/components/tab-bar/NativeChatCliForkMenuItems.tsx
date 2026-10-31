@@ -4,7 +4,6 @@ import {
   runNativeChatCliSwitch
 } from '@/lib/conversation-surface-switch'
 import { useShallow } from 'zustand/react/shallow'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
@@ -44,8 +43,7 @@ export function NativeChatCliForkMenuItems({
         }
       : null
   )
-  const enabled = useAppStore((state) => isNativeChatEnabled(state.settings))
-  if (!chat || !agent || !enabled || !inPlaceSwitchEnabled(agent)) {
+  if (!chat || !agent || !inPlaceSwitchEnabled(agent)) {
     return null
   }
   return (

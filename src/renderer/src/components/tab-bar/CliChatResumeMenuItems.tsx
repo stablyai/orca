@@ -1,6 +1,5 @@
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { useConversationSwitchReadiness, runCliChatResume } from '@/lib/conversation-surface-switch'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
@@ -22,8 +21,7 @@ export function CliChatResumeMenuItems({
   const readiness = useConversationSwitchReadiness(
     source ? { direction: 'chat', ...source, source } : null
   )
-  const enabled = useAppStore((state) => isNativeChatEnabled(state.settings))
-  if (!source || !enabled || source.hostUpdateRequired) {
+  if (!source || source.hostUpdateRequired) {
     return null
   }
   return (

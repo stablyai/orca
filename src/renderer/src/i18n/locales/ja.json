@@ -379,6 +379,20 @@
       "chatRuntime": "チャットランタイム",
       "chatChoiceTitle": "チャットまたは CLI で開く",
       "chatChoiceDescription": "各 Agent をチャットで開くか CLI で開くかを選びます。",
+      "defaultSurfaceTitle": "Agent の開き方",
+      "defaultSurfaceDescription": "このコンピューター上の Agent の既定の開き方です。",
+      "defaultSurfaceChatDescription": "リッチなメッセージ、ビジュアル、画像。",
+      "defaultSurfaceTerminal": "ターミナル",
+      "defaultSurfaceTerminalDescription": "各 Agent 独自の CLI。",
+      "defaultSurfacePerAgent": "Agent ごとに選択",
+      "defaultSurfaceNowChat": "Agent はチャットとして開くようになりました",
+      "defaultSurfaceNowTerminal": "Agent はターミナルで開くようになりました",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} は設定どおりターミナルで開きます。",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} は設定どおりターミナルで開きます。",
+      "defaultSurfaceKeptChat_one": "{{agents}} は設定どおりチャットとして開きます。",
+      "defaultSurfaceKeptChat_other": "{{agents}} は設定どおりチャットとして開きます。",
+      "defaultSurfaceSetAllChat": "すべてチャットにする",
+      "defaultSurfaceSetAllTerminal": "すべてターミナルにする",
       "sameAsChoice": "{{agent}} と同じ · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -7241,8 +7255,6 @@
             "toggleLabel": "新規カードスタイルを切り替え"
           },
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Chat UI の切り替え",
             "shellEnvNamesLabel": "シェルから渡す変数",
             "shellEnvNamePlaceholder": "変数名",
             "shellEnvNameAdd": "追加",
@@ -7254,9 +7266,7 @@
             "shellEnvToggleLabel": "シェル環境の使用の切り替え",
             "resumeTitle": "再起動後に作業中のチャットを自動的に再開する",
             "resumeCopy": "Orca が終了するかアップデートをインストールすると、Orca が再度開かれたときに作業中だったチャットが自動的に再開されます。",
-            "resumeToggleLabel": "再起動後の自動再開の切り替え",
-            "description": "チャット UI でサポートされている新規 Agent を開きます。",
-            "copy": "サポートされている新規 Agent は構造化チャットで開きます。他の Agent はターミナルで開きます。既存のチャットは引き続き利用可能です。"
+            "resumeToggleLabel": "再起動後の自動再開の切り替え"
           },
           "agentDashboard": {
             "title": "Agent ダッシュボード",
@@ -9447,19 +9457,6 @@
               "title": "新規カードスタイル",
               "worktree": "ワークツリー",
               "worktrees": "ワークツリー"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "ネイティブ",
-              "chat": "チャット",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "ああ",
-              "terminal": "ターミナル",
-              "agent": "Agent",
-              "description": "チャット UI でサポートされている新規 Agent を開きます。"
             },
             "agentDashboard": {
               "title": "Agent ダッシュボード",
@@ -20243,18 +20240,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "新機能",
-      "title": "ネイティブチャットを刷新",
-      "intro": "対応 Agent の新しいチャットはアップグレード版のチャットビューで開きます。チャットと CLI の切り替えは右サイドバーの{{panel}}から:",
-      "resumeInNativeChat": "{{action}}: 対応する CLI の会話をネイティブチャットで開きます。",
-      "resumeInCli": "{{action}}: Claude/Codex のチャットを新しい CLI セッションに複製します。元のチャットは残ります。",
-      "gotIt": "OK",
-      "leaveOff": "オフのままにする",
-      "enableNow": "今すぐ有効にする",
-      "enableError": "チャットモードを有効にできませんでした。",
-      "manageInSettings": "<link>設定 → 実験的機能</link>で Chat UI を管理できます。"
-    },
     "voice": {
       "demoPrompt": "特殊なケースについてはこの差分を確認し、見つかったものについてはテストを追加してください。",
       "startDictation": "ディクテーションを開始する",
@@ -20326,7 +20311,26 @@
       "title": "<shortcut> でワークツリーに移動",
       "description": "ワークツリーの検索、タブの切り替え、設定の調整、新しいワークツリーの作成を、すべてキーボードだけで行えます。"
     },
-    "gotIt": "了解"
+    "gotIt": "了解",
+    "chatUiHere": {
+      "title": "チャット UI が登場",
+      "offIntro": "Agent をチャットとして開けるようになりました。リッチなメッセージ、ビジュアル、画像を表示できます。",
+      "offTerminal": "ターミナルのほうが好みですか？ターミナルは引き続き完全にサポートされます。チャットを選ぶまで、Agent はこれまでどおりターミナルで開きます。",
+      "onIntro": "チャット UI は実験的機能を卒業し、Orca の標準機能になりました。Agent はこれまでどおりチャットとして開き、リッチなメッセージ、ビジュアル、画像を表示できます。",
+      "onTerminal": "ターミナルも引き続き完全にサポートされます。どの Agent もいつでもターミナルに戻せます。",
+      "changeInSettings": "<link>設定 → Agent</link> でいつでも変更できます。",
+      "stayInTerminal": "ターミナルのまま使う",
+      "cta": "チャット UI を使う",
+      "saveFailed": "チャット UI をオンにできませんでした。設定 → Agent でチャットを選んでください。",
+      "demoTabTitle": "ログインの説明",
+      "demoPrompt": "ログインの仕組みを図にして",
+      "demoReply": "ログインは {{file}} から始まります。ブラウザが /login に送信し、サーバーがパスワードを確認してセッションを作成し、アプリにリダイレクトします。流れは次のとおりです:",
+      "demoBrowser": "ブラウザ",
+      "demoSession": "セッション",
+      "demoApp": "アプリ",
+      "demoPassword": "パスワード",
+      "demoCookie": "Cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "さらに多くの一致が利用可能になる可能性があります。検索を絞り込んで結果を絞り込みます。",

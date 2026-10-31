@@ -72,7 +72,7 @@ const CHAT_SUBJECT = {
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
-    settings: createGlobalSettingsFixture({ experimentalNativeChat: true }),
+    settings: createGlobalSettingsFixture(),
     repos: [makeRepo()],
     worktreesByRepo: { 'repo-1': [makeWorktree('wt-1', 'Worktree', { path: '/repo/wt' })] }
   })

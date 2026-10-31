@@ -5,7 +5,6 @@ import {
   useConversationSwitchReadiness,
   runNativeChatCliSwitch
 } from '@/lib/conversation-surface-switch'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { Loader2, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -57,11 +56,10 @@ export function NativeChatTopRightControls({
   )
   const busy = useConversationSwitchBusy(readiness.pending)
 
-  const enabled = useAppStore((state) => isNativeChatEnabled(state.settings))
   if (find.isOpen) {
     return <NativeChatFindBar find={find} isVisible={session.isVisible} />
   }
-  if (!enabled || !worktreeId || !hostId || !agent || !inPlaceSwitchEnabled(agent)) {
+  if (!worktreeId || !hostId || !agent || !inPlaceSwitchEnabled(agent)) {
     return null
   }
   const label = translate('components.tab.bar.switch.toCli', 'Switch to CLI')

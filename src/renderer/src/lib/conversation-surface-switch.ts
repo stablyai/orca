@@ -2,7 +2,6 @@ import { adoptingAgentOnHost } from '@/components/right-sidebar/ai-vault-session
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from '../../../shared/ai-vault-session-filters'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
-import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import {
   inPlaceSwitchEnabled,
   adoptsCliConversations
@@ -69,11 +68,7 @@ export function runNativeChatCliSwitch(
  * exit is visible: the tab is replaced, or it stays as it was with one message.
  */
 export async function runConversationSwitch(args: ConversationSwitch): Promise<boolean> {
-  if (
-    (args.direction === 'chat' && !isNativeChatEnabled(useAppStore.getState().settings)) ||
-    !inPlaceSwitchEnabled(args.agent) ||
-    pendingNow(args)
-  ) {
+  if (!inPlaceSwitchEnabled(args.agent) || pendingNow(args)) {
     return false
   }
   args = withConversationSwitchPlatform(args)

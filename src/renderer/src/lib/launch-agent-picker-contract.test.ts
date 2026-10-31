@@ -150,7 +150,7 @@ describe('picker window launch contract', () => {
       const host: ExecutionHostId =
         target === 'ssh' ? 'ssh:ssh-target-1' : target === 'local' ? 'local' : 'runtime:web-runtime'
       const rows = buildNewTabAgentMenuRows({
-        settings: { experimentalNativeChat: true, nativeChatProviders: { claude: false } },
+        settings: { agentDefaultSurface: 'chat', nativeChatProviders: { claude: false } },
         detectedOnHost: ['claude'],
         chatAgents: ['claude'],
         hostChatAnswer: () => (target === 'ssh' ? 'ssh' : 'yes'),

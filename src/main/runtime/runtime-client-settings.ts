@@ -88,10 +88,6 @@ export class RuntimeClientSettingsController {
         : null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
-      experimentalNativeChat: settings.experimentalNativeChat === true,
-      // Older clients use this key to fall back to terminal-backed chat. Keep their default terminal.
-      openAgentTabsInChatByDefault: false,
-      experimentalStructuredNativeChat: settings.experimentalNativeChat === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',

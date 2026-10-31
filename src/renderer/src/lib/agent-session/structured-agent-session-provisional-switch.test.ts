@@ -217,8 +217,7 @@ it.each([false, true])(
     useAppStore.setState((state) => ({
       settings: {
         ...getDefaultSettings('/home/test'),
-        ...state.settings,
-        experimentalNativeChat: true
+        ...state.settings
       }
     }))
     const running = runConversationSwitch({

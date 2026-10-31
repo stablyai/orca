@@ -23,7 +23,7 @@ it.each(['suspended'] as const)(
     useAppStore.setState(useAppStore.getInitialState(), true)
     const paneKey = 'shell:3f2504e0-4f89-41d3-9a0c-0305e82c3301'
     useAppStore.setState({
-      settings: createGlobalSettingsFixture({ experimentalNativeChat: true }),
+      settings: createGlobalSettingsFixture(),
       repos: [TEST_REPO],
       worktreesByRepo: { repo1: [makeWorktree({ id: 'wt-1', repoId: 'repo1' })] },
       tabsByWorktree: { 'wt-1': [makeTerminalTab({ id: 'shell', worktreeId: 'wt-1' })] },

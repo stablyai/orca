@@ -31,7 +31,9 @@ vi.mock('@/lib/conversation-surface-switch', () => ({
   useConversationSwitchReadiness: (args: { source?: CliChatResumeSource } | null) => ({
     ready: !mocks.pending && !args?.source?.hostUpdateRequired,
     pending: mocks.pending
-  })
+  }),
+  // The real hook only delays the busy look; pending already disables the button.
+  useConversationSwitchBusy: (pending: boolean) => pending
 }))
 afterEach(cleanup)
 beforeEach(() => {
@@ -39,7 +41,7 @@ beforeEach(() => {
   delete mocks.source.hostUpdateRequired
   mocks.pending = false
   useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({ settings: createGlobalSettingsFixture({ experimentalNativeChat: true }) })
+  useAppStore.setState({ settings: createGlobalSettingsFixture() })
   vi.clearAllMocks()
 })
 

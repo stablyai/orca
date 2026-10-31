@@ -105,9 +105,6 @@ beforeEach(() => {
   mocks.support.mockResolvedValue(true)
   mocks.call.mockResolvedValue({ status: 'completed', sessionId: subject.sessionId })
   useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({
-    settings: { ...useAppStore.getState().settings!, experimentalNativeChat: true }
-  })
 })
 afterEach(() => {
   cleanup()

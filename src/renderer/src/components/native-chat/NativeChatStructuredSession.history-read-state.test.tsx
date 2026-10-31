@@ -246,13 +246,13 @@ afterEach(() => {
   })
 }
 
-it('gates the native header switch through capability hydration and live Chat UI updates', async () => {
+it('holds the native header switch until capabilities hydrate, with no copy button beside it', async () => {
   const tab = agentSessionTabFixture('native-controls', 'wt-1', {
     entityId: '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
   })
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
-    settings: createGlobalSettingsFixture({ experimentalNativeChat: false }),
+    settings: createGlobalSettingsFixture(),
     repos: [makeRepo()],
     worktreesByRepo: { 'repo-1': [makeWorktree('wt-1', 'native', { path: '/repo' })] },
     unifiedTabsByWorktree: { 'wt-1': [tab] },
@@ -291,19 +291,10 @@ it('gates the native header switch through capability hydration and live Chat UI
       />
     </TooltipProvider>
   )
-  const transcript = screen.getByTestId('message-list')
-  const legacyName = 'Continue with Terminal Agent'
-  const expectHidden = () => {
-    expect(screen.queryAllByRole('button', { name: 'Switch to CLI', hidden: true })).toHaveLength(0)
-    expect(screen.getByTestId('message-list')).toBe(transcript)
-    expect(screen.getAllByRole('button', { name: legacyName, hidden: true })).toHaveLength(1)
-  }
-  expectHidden()
-  act(() => {
-    useAppStore.setState({
-      settings: createGlobalSettingsFixture({ experimentalNativeChat: true })
-    })
-  })
+  // An agent that switches in place has the switch control, not the copy-in-a-new-terminal button.
+  expect(
+    screen.queryAllByRole('button', { name: 'Continue with Terminal Agent', hidden: true })
+  ).toHaveLength(0)
   const loadingButtons = screen.getAllByRole('button', { name: 'Switch to CLI', hidden: true })
   for (const button of loadingButtons) {
     expect(button.hasAttribute('disabled')).toBe(true)
@@ -323,12 +314,6 @@ it('gates the native header switch through capability hydration and live Chat UI
   for (const button of buttons) {
     expect(button.hasAttribute('disabled')).toBe(false)
   }
-  act(() => {
-    useAppStore.setState({
-      settings: createGlobalSettingsFixture({ experimentalNativeChat: false })
-    })
-  })
-  expectHidden()
 })
 
 vi.mock('@/components/confirmation-dialog-context', async (original) => ({

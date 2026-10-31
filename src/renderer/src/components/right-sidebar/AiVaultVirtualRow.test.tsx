@@ -327,8 +327,7 @@ describe('AiVaultVirtualRow CLI surface actions', () => {
       useAppStore.setState((state) => ({
         settings: {
           ...getDefaultSettings('/home/test'),
-          ...state.settings,
-          experimentalNativeChat: true
+          ...state.settings
         }
       }))
       setLocalRuntimeCapabilitiesForTests([])

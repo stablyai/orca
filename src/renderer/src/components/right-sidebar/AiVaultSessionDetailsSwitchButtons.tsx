@@ -1,8 +1,6 @@
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import { useConversationSwitchReadiness } from '@/lib/conversation-surface-switch'
 import { historyConversationSwitch } from './ai-vault-session-in-place-switch'
-import { useAppStore } from '@/store'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { MessagesSquare, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -32,10 +30,6 @@ export function AiVaultSessionDetailsSwitchButtons({
   const cli = useConversationSwitchReadiness(
     historyConversationSwitch(session, 'terminal', undefined, originalPaneTarget)
   )
-  const enabled = useAppStore((state) => isNativeChatEnabled(state.settings))
-  if (!enabled) {
-    return null
-  }
   return (
     <>
       {onResumeInNewChat ? (

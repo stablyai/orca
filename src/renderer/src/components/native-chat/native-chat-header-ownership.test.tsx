@@ -109,7 +109,7 @@ function seedChats(size: number) {
     countedTab({
       ...makeUnifiedTab(`chat-${index}`, workspace, `session-${index}`, `Chat ${index}`),
       contentType: 'agent-session',
-      agentSessionAgent: 'codex',
+      agentSessionAgent: 'omp',
       executionHostId: 'local',
       groupId: index === size - 1 ? 'second' : 'first'
     })
@@ -201,7 +201,8 @@ function eligibility(
   folder: string,
   git: string,
   sessionId = 'session',
-  agent: subjects.NativeChatTabSession['agent'] = 'codex',
+  // The copy button belongs to an agent the top-right control can't switch in place.
+  agent: subjects.NativeChatTabSession['agent'] = 'omp',
   tabId = 'tab'
 ) {
   return (
@@ -323,7 +324,7 @@ it.each([10, 100])(
       const expected = [folder, git].filter((worktreeId) =>
         subjects.resolveNativeChatCliForkIdentity(useAppStore.getState(), {
           tab: { id: 'tab', worktreeId },
-          nativeChat: { sessionId: 'session', agent: 'codex' }
+          nativeChat: { sessionId: 'session', agent: 'omp' }
         })
       )
       expect(screen.queryAllByRole('button')).toHaveLength(expected.length)
@@ -336,19 +337,19 @@ it.each([10, 100])(
     view.rerender(eligibility(folder, git, 'new-session'))
     expect(identity).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ nativeChat: { sessionId: 'new-session', agent: 'codex' } })
+      expect.objectContaining({ nativeChat: { sessionId: 'new-session', agent: 'omp' } })
     )
     identity.mockClear()
-    view.rerender(eligibility(folder, git, 'new-session', 'codex', 'new-tab'))
+    view.rerender(eligibility(folder, git, 'new-session', 'omp', 'new-tab'))
     expect(identity).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ tab: { id: 'new-tab', worktreeId: folder } })
     )
     view.rerender(eligibility(folder, git, 'new-session', 'gemini', 'new-tab'))
     expect(screen.queryAllByRole('button')).toHaveLength(0)
-    view.rerender(eligibility(folder, git, 'new-session', 'codex', 'new-tab'))
+    view.rerender(eligibility(folder, git, 'new-session', 'omp', 'new-tab'))
     expect(screen.getAllByRole('button')).toHaveLength(2)
-    view.rerender(eligibility('folder:missing', git, 'new-session', 'codex', 'new-tab'))
+    view.rerender(eligibility('folder:missing', git, 'new-session', 'omp', 'new-tab'))
     expect(screen.getAllByRole('button')).toHaveLength(1)
     expect(fullRequest).not.toHaveBeenCalled()
   }

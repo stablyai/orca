@@ -108,7 +108,7 @@ function History({ session }: { session: AiVaultSession }) {
     allWorktrees: [],
     workspaceId: 'workspace',
     resumeTargetState: targetState,
-    settings: createGlobalSettingsFixture({ ...state.settings, experimentalNativeChat: true })
+    settings: createGlobalSettingsFixture({ ...state.settings })
   })
   const actions = useAiVaultSessionLaunchActions({
     activeWorktree: null,
@@ -163,7 +163,7 @@ beforeEach(async () => {
     }
   })
   useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({ settings: createGlobalSettingsFixture({ experimentalNativeChat: true }) })
+  useAppStore.setState({ settings: createGlobalSettingsFixture() })
   setLocalRuntimeCapabilitiesForTests([HISTORY, SWITCH])
   await refreshLocalRuntimeCapabilities()
   mocks.owner.mockReturnValue('local')
