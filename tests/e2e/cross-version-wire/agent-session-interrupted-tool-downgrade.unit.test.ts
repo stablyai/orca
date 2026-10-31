@@ -10,6 +10,7 @@ import {
 import type { AgentJournalItemIdentity } from '../../../src/shared/agent-session-journal-types'
 import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
+import type { JournalReadRow } from '../../../src/main/native-chat/agent-session-journal/journal-read-row'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -32,10 +33,19 @@ type OldRunOutcome = (
   options: { activeTurnIsWorking?: boolean }
 ) => { failedCallCount: number; succeeded: boolean }
 
+// Old builds fold input rows; an outcome row here means the probe opened a converted chat by mistake.
+function inputRows(rows: readonly JournalReadRow[]): JournalRow[] {
+  return rows.map((row) => {
+    if (row.kind === 'outcome') {
+      throw new Error('expected input rows')
+    }
+    return row
+  })
+}
 // Loads a real old build, including cold extraction and transforms.
 test('an older host and client read a call a stop cut short as the failure they always showed', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-interrupted-tool-downgrade-'))
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   try {
     // This build: a call a stop cut short, with the partial output it left.
     const journal = await journals.open({
@@ -67,7 +77,7 @@ test('an older host and client read a call a stop cut short as the failure they 
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }
-    const rows: JournalRow[] = since.rows
+    const rows = inputRows(since.rows)
     const current = journal.snapshot().items
     expect(current.map((item) => item.body)).toMatchObject([
       { state: 'failed', endedAs: 'interrupted' },

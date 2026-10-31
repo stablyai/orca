@@ -246,6 +246,10 @@ describe('declared context at the desktop consumer', () => {
           expect(effort).toBeUndefined()
         }
         expect(chat.result.current.capture()).toEqual({ selection: { model } })
+        mocks.call.mockImplementation(() => new Promise(() => {}))
+        chat.rerender({ running: { fence: 2 } })
+        expect(chat.frames.at(-1)).toEqual({ model, effort: display ?? null })
+        expect(chat.result.current.capture()).toEqual({ selection: { model } })
         chat.unmount()
       }
     }
