@@ -1,3 +1,4 @@
+import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control-ai-recipe-save'
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, cleanup, fireEvent, screen, within, waitFor } from '@testing-library/react'
@@ -22,6 +23,7 @@ import {
 } from '../../../../../../shared/source-control-ai-recipe-save'
 import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control-action-recipe-match'
 import { SourceControlActionAgentPicker } from '../../SourceControlActionAgentPicker'
+import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
 import { SourceControlAiActionRecipeDefaults } from '../../SourceControlAiActionRecipeDefaults'
 import { useAppStore } from '../../../../store/index'
@@ -721,3 +723,71 @@ it.each([
     ).toBe(expectedArgs)
   }
 )
+
+it('keeps staged repository setup through template edits and saves/reopens only current own fields', async () => {
+  useAppStore.setState(({ settings }) => ({
+    settings: settings && { ...settings, experimentalNativeChat: false },
+    localDetectedAgentIdsByContext: { host: ['claude'] }
+  }))
+  const repo = {
+    ...TEST_REPO,
+    sourceControlAi: {
+      actionOverrides: {
+        fixChecks: {
+          agentId: 'claude' as const,
+          agentArgs: '--saved',
+          commandInputTemplate: 'Old repo'
+        }
+      }
+    }
+  }
+  useAppStore.setState({ repos: [repo] })
+  const update = vi.fn<(id: string, updates: SourceControlAiRepoUpdate) => Promise<boolean>>(
+    async () => true
+  )
+  const view = render(
+    React.createElement(RepositorySourceControlAiSection, { repo, updateRepo: update }),
+    { wrapper: TooltipProvider }
+  )
+  const card = screen.getByText('Broken checks fixes').closest('[data-settings-section]')!
+  if (!(card instanceof HTMLElement)) {
+    throw new Error('Missing repository card')
+  }
+  const own = within(card)
+  const open = async () => {
+    const trigger = own.getByRole('button', { name: 'Select agent' })
+    await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure Claude' }))
+  }
+  await open()
+  fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+    target: { value: '--model claude-sonnet-5-5 --accepted' }
+  })
+  fireEvent.blur(screen.getByRole('textbox', { name: 'Arguments' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+    target: { value: '--pending' }
+  })
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Arguments' }), { key: 'Escape' })
+  fireEvent.keyDown(document, { key: 'Escape' })
+  fireEvent.change(own.getByDisplayValue('Old repo'), { target: { value: 'CURRENT {basePrompt}' } })
+  await open()
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--pending')
+  expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  expect(own.getByDisplayValue('CURRENT {basePrompt}')).toBeDefined()
+  fireEvent.click(own.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(update).toHaveBeenCalledOnce())
+  const saved = update.mock.calls[0]![1].sourceControlAi!
+  expect(saved.actionOverrides!.fixChecks!.commandInputTemplate).toBe('CURRENT {basePrompt}')
+  expect(saved.actionOverrides!.fixChecks!.agentArgs).toBe('--pending')
+  view.unmount()
+  render(
+    React.createElement(RepositorySourceControlAiSection, {
+      repo: { ...repo, sourceControlAi: saved },
+      updateRepo: update
+    }),
+    { wrapper: TooltipProvider }
+  )
+  expect(screen.getByDisplayValue('CURRENT {basePrompt}')).toBeDefined()
+})

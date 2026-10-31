@@ -1,4 +1,4 @@
-import { act } from 'react'
+import { act, createElement, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
@@ -29,3 +29,35 @@ afterEach(() => {
   host.remove()
   vi.unstubAllGlobals()
 })
+
+// Render the controlled production view through its real owner, including synchronous current actions.
+import { AgentLaunchSetupPanel as SetupPanel } from './AgentLaunchSetupPanel'
+import { useAgentPickerDraftScope, useAgentPickerSetup } from './agent-launch-picker-drafts'
+export function AgentLaunchSetupPanel({
+  initial,
+  onDraftChange,
+  onUse,
+  ...props
+}: Omit<ComponentProps<typeof SetupPanel>, 'draft' | 'getDraft' | 'onDraftChange'> & {
+  initial?: AgentPickerDraft
+  onDraftChange?: (draft: AgentPickerDraft) => void
+}) {
+  const draftScope = useAgentPickerDraftScope()
+  const setup = useAgentPickerSetup({ entry: props.entry, initial, draftScope, open: true })
+  return setup.ready
+    ? createElement(SetupPanel, {
+        ...props,
+        draft: setup.draft,
+        getDraft: setup.getDraft,
+        onDraftChange: (draft) => {
+          setup.change(draft)
+          onDraftChange?.(draft)
+        },
+        onUse: (draft) => {
+          if (setup.accept(draft)) {
+            onUse(draft)
+          }
+        }
+      })
+    : null
+}

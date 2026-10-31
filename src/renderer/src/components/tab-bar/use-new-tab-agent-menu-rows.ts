@@ -255,6 +255,7 @@ export function useAgentMenuObservation(
         defaultTuiAgent: settings?.defaultTuiAgent,
         pickerContext: {
           workspace,
+          launchCwd,
           executionHostId: facts.executionHostId,
           pairingRevision: facts.pairingRevision,
           runtimeId: facts.runtimeId,

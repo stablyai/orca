@@ -6,7 +6,7 @@ import { act } from 'react'
 import { fireEvent } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import { AgentLaunchSetupPanel } from './agent-launch-setup-panel-test-fixture'
 import { readPiRpcModelOptions } from '../../../../main/pi/rpc-options'
 
 import {

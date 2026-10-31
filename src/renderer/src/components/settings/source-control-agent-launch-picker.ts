@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow'
 import { acceptAgentPickerArguments } from '../../../../shared/agent-launch-picker-edits'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import {
@@ -56,10 +57,71 @@ export function applySourceControlPickerDraft(
   }
   return {
     current: {
-      ...receipt.selection.current,
+      ...selection.current,
+      agentArgs: receipt.selection.current.agentArgs,
+      argumentChoices: receipt.selection.current.argumentChoices,
       agentId: selection.current.agentId,
       surface: selection.current.surface
     },
-    source: receipt.selection.source
+    source: {
+      ...selection.source,
+      authoredPreferences: receipt.selection.source.authoredPreferences,
+      ...(selection.source.scope === 'repo' && receipt.selection.source.scope === 'repo'
+        ? { ownsArgs: receipt.selection.source.ownsArgs }
+        : {})
+    }
   }
+}
+
+/** Template edits do not change the staged setup's source or ownership. */
+export function sameSourceControlSetupSelection(
+  a: CurrentActionSelection,
+  b: CurrentActionSelection
+) {
+  const x = a.current.argumentChoices
+  const y = b.current.argumentChoices
+  return (
+    a.current.agentId === b.current.agentId &&
+    a.current.surface === b.current.surface &&
+    a.current.agentArgs === b.current.agentArgs &&
+    (x === y ||
+      (!!x &&
+        !!y &&
+        x.syntaxAgent === y.syntaxAgent &&
+        x.nodes.length === y.nodes.length &&
+        x.nodes.every((node, i) => node.at === y.nodes[i].at && node.text === y.nodes[i].text))) &&
+    a.source.scope === b.source.scope &&
+    a.source.authoredAgentId === b.source.authoredAgentId &&
+    samePreferences(a.source.authoredPreferences, b.source.authoredPreferences) &&
+    (a.source.scope !== 'repo' ||
+      (b.source.scope === 'repo' &&
+        a.source.ownsArgs === b.source.ownsArgs &&
+        samePreferences(a.source.parentPreferences, b.source.parentPreferences)))
+  )
+}
+
+function samePreferences(
+  a: CurrentActionSelection['source']['authoredPreferences'],
+  b: CurrentActionSelection['source']['authoredPreferences']
+) {
+  const x = a?.modelSelection
+  const y = b?.modelSelection
+  return (
+    a === b ||
+    (!!a &&
+      !!b &&
+      a.agentId === b.agentId &&
+      a.model === b.model &&
+      a.permissionMode === b.permissionMode &&
+      shallow(a.options, b.options) &&
+      (x === y ||
+        (!!x &&
+          !!y &&
+          x.base === y.base &&
+          shallow(x.model, y.model) &&
+          Object.keys(x.options ?? {}).length === Object.keys(y.options ?? {}).length &&
+          Object.entries(x.options ?? {}).every(([key, value]) =>
+            shallow(value, y.options?.[key])
+          ))))
+  )
 }

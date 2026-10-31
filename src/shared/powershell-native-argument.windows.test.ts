@@ -1,3 +1,10 @@
+import { parse as parseToml } from 'smol-toml'
+import { getDefaultSettings } from './constants'
+import { saveSourceControlActionRecipe } from './source-control-ai-recipe-save'
+import { resolveSourceControlActionRecipe } from './source-control-ai-operation-policy'
+import { projectSourceControlActionLaunch } from './source-control-action-launch-preferences'
+import { resolveAgentStartupPlanInputs } from './agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from './tui-agent-startup'
 import { spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -128,6 +135,57 @@ describe.each(POWERSHELLS)('agent wrappers under $name', ({ powershell, prelude,
         }
         // Why this shape: escaping it as `\"` makes pwsh's .cmd quoting expose `&` to cmd.
         const prompt = 'a"b & echo INJECTED'
+        const settings = { ...getDefaultSettings(root), agentPermissionDefault: 'own' as const }
+        const compiled = (agent: 'codex' | 'claude', raw: string) => {
+          const saved = saveSourceControlActionRecipe({
+            settings,
+            actionId: 'fixChecks',
+            target: { type: 'global' },
+            recipe: {
+              agentId: agent,
+              agentArgs: raw,
+              launchPreferences: {
+                agentId: agent,
+                modelSelection: {
+                  base: 'default',
+                  options: { effort: { agentId: agent, value: 'high' } }
+                }
+              }
+            }
+          })
+          if (!('sourceControlAi' in saved)) {
+            throw new Error('Expected global saved recipe')
+          }
+          const reopened = resolveSourceControlActionRecipe({
+            settings: { ...settings, sourceControlAi: saved.sourceControlAi },
+            actionId: 'fixChecks'
+          })
+          const inputs = projectSourceControlActionLaunch(reopened, agent, { basePrompt: '' })
+          const startup = buildAgentStartupPlan({
+            ...resolveAgentStartupPlanInputs({
+              agent,
+              settings,
+              ...inputs,
+              platform: 'win32',
+              shell: 'powershell',
+              isRemote: false
+            }),
+            prompt: '',
+            allowEmptyPromptLaunch: true
+          })
+          if (!startup) {
+            throw new Error('Expected real saved startup')
+          }
+          return startup.launchCommand
+        }
+        const savedCommands = [
+          compiled('codex', `-c 'model="true"'`),
+          compiled('codex', `-c 'model="42"'`),
+          compiled('codex', `-c 'model="a\\"b"'`),
+          compiled('codex', '-m true'),
+          compiled('codex', '--model private/unlisted'),
+          compiled('claude', `--settings '{"fastMode":false,"theme":"light","env":{"KEEP":"yes"}}'`)
+        ]
         const codexArgs = ['-c', 'model_reasoning_effort="high"', '-c', 'model="true"']
         const claudeArgs = ['--settings', '{"fastMode":false,"theme":"light"}']
         const result = await runProcess({
@@ -136,9 +194,7 @@ describe.each(POWERSHELLS)('agent wrappers under $name', ({ powershell, prelude,
             '-NoProfile',
             '-NonInteractive',
             '-Command',
-            `${prelude}\n${getPowerShellAgentWrappers()}\n` +
-              `codex ${[prompt, ...codexArgs].map(quotePowerShellLiteral).join(' ')}\n` +
-              `claude ${[prompt, ...claudeArgs].map(quotePowerShellLiteral).join(' ')}`
+            `${prelude}\n${getPowerShellAgentWrappers()}\ncodex ${[prompt, ...codexArgs].map(quotePowerShellLiteral).join(' ')}\nclaude ${[prompt, ...claudeArgs].map(quotePowerShellLiteral).join(' ')}\n${savedCommands.join('\n')}`
           ],
           cwd: root,
           env: {
@@ -150,10 +206,52 @@ describe.each(POWERSHELLS)('agent wrappers under $name', ({ powershell, prelude,
         })
 
         expect(result.code, JSON.stringify(result)).toBe(0)
-        expect(result.stdout.trim().split(/\r?\n/)).toEqual([
+        const lines = result.stdout.trim().split(/\r?\n/)
+        expect(lines.slice(0, 2)).toEqual([
           JSON.stringify(['codex', prompt, ...codexArgs]),
           JSON.stringify(['claude', prompt, ...claudeArgs])
         ])
+        const savedArgv: string[][] = lines.slice(2).map((line) => JSON.parse(line))
+        expect(savedArgv).toHaveLength(savedCommands.length)
+        const configs = savedArgv.slice(0, 3).map((argv) => {
+          const values: Record<string, unknown> = {}
+          for (let i = 1; i < argv.length; i++) {
+            if (argv[i] === '-c') {
+              const assignment = argv[++i]
+              const equals = assignment.indexOf('=')
+              const text = assignment.slice(equals + 1)
+              let value: unknown
+              try {
+                value = parseToml(`value=${text}`).value
+              } catch {
+                value = text
+              }
+              values[assignment.slice(0, equals)] = value
+            }
+          }
+          return values
+        })
+        expect(configs).toEqual([
+          { model: 'true', model_reasoning_effort: 'high' },
+          { model: '42', model_reasoning_effort: 'high' },
+          { model: 'a"b', model_reasoning_effort: 'high' }
+        ])
+        expect(savedArgv[3]).toEqual(['codex', '-m', 'true', '-c', 'model_reasoning_effort=high'])
+        expect(savedArgv[4]).toEqual([
+          'codex',
+          '--model',
+          'private/unlisted',
+          '-c',
+          'model_reasoning_effort=high'
+        ])
+        const claude = savedArgv[5]
+        expect(claude[0]).toBe('claude')
+        expect(JSON.parse(claude[claude.indexOf('--settings') + 1])).toEqual({
+          fastMode: false,
+          theme: 'light',
+          env: { KEEP: 'yes' }
+        })
+        expect(claude.slice(-2)).toEqual(['--effort', 'high'])
       } finally {
         await rm(root, { recursive: true, force: true })
       }

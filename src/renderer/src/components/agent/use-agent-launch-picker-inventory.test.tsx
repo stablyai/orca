@@ -3,7 +3,12 @@ import { createElement, Suspense, startTransition, useLayoutEffect, useState } f
 import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
-import { exerciseAgentPickerFreshness } from './agent-launch-picker-freshness-test-fixture'
+import {
+  inventoryModel as model,
+  inventoryCatalog as catalog,
+  exerciseAgentPickerFreshness,
+  exerciseRetainedAgentPickerPublications
+} from './agent-launch-picker-freshness-test-fixture'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -55,43 +60,6 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.session
 }))
 
-function model(
-  host = 'alpha',
-  agents: picker.AgentPickerEntry['agent'][] = ['codex']
-): Extract<NewTabAgentMenuModel, { state: 'settled' }> {
-  return {
-    state: 'settled',
-    rows: agents.map((agent) => ({ agent, kind: 'chat', executionHostId: `runtime:${host}` })),
-    detection: {
-      detectedIds: agents,
-      isLoading: false,
-      isRefreshing: false,
-      detectionFailed: false,
-      needsServerUpdate: false,
-      refresh: async () => agents
-    },
-    pickerContext: {
-      workspace: { kind: 'git-worktree', worktreeId: 'wt' },
-      executionHostId: `runtime:${host}`,
-      pairingRevision: 7,
-      runtimeId: `process-${host}`,
-      settings: null,
-      key: host
-    }
-  }
-}
-const catalog: AgentSessionModelCatalogResult = {
-  origin: 'probe',
-  fetchedAt: 1,
-  models: [
-    {
-      id: 'host-model',
-      label: 'Host model',
-      isDefault: true,
-      efforts: [{ value: 'low', label: 'Low' }]
-    }
-  ]
-}
 beforeEach(() => {
   mocks.settings.mockReset().mockResolvedValue(
     projectAgentLaunchSettings({
@@ -743,4 +711,12 @@ it('acquires setup for a not-yet-created workspace against its existing project 
     'agentSession.createSupport',
     { worktree: 'path:/host/repo', agent: 'codex' }
   )
+})
+
+it('keeps the active accepted and pending envelope through real same-authority sibling, settings and support publications', async () => {
+  await exerciseRetainedAgentPickerPublications({
+    menu: model('retained-publications', ['codex', 'claude']),
+    settings: mocks.settings,
+    session: mocks.session
+  })
 })

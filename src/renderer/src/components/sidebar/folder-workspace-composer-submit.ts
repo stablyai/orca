@@ -267,11 +267,11 @@ export async function submitFolderWorkspaceCreate({
       })
       return activationHolder.value !== false
     }
-    const structuredLaunchAccepted = structuredLaunch
     if (plan?.route === 'structured-native-chat') {
       beginStructuredAgentSessionProvisionalLaunch({
         plan,
         hooks: {},
+        declinedTerminal: { agentArgs },
         target: { worktreeId: folderWorkspaceKey(workspace.id) },
         beforeOpen: revealWorkspace
       })
@@ -280,7 +280,7 @@ export async function submitFolderWorkspaceCreate({
     }
     const activation = activationHolder.value
     if (
-      !structuredLaunchAccepted &&
+      !structuredLaunch &&
       quickAgent &&
       startupPlan &&
       launchDraftPrompt &&
@@ -295,7 +295,7 @@ export async function submitFolderWorkspaceCreate({
       })
     }
     if (
-      !structuredLaunchAccepted &&
+      !structuredLaunch &&
       startupPlan &&
       (startupPlan.followupPrompt || startupPlan.draftPrompt) &&
       activation !== false

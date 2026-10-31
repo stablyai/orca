@@ -1,9 +1,12 @@
+import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
+import { memo, useCallback, useLayoutEffect, useRef, type ComponentProps } from 'react'
 import { pickSourceControlLaunchAgent } from '../../../../shared/source-control-launch-agent-selection'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import {
   sourceControlPickerDraft,
-  applySourceControlPickerDraft
+  applySourceControlPickerDraft,
+  sameSourceControlSetupSelection
 } from './source-control-agent-launch-picker'
 import {
   canonicalSourceControlActionSelection,
@@ -87,63 +90,105 @@ export function sourceControlActionAgentPreview(
       }
 }
 
-export function SourceControlActionAgentPickerView({
-  observation,
-  canSaveSurface,
-  ...props
-}: PickerProps & {
+type ViewProps = PickerProps & {
   observation: ReturnType<typeof useAgentMenuObservation>
   canSaveSurface: boolean
-}) {
-  const selection =
-    props.selection ??
-    canonicalSourceControlActionSelection({ agentId: props.agent, surface: props.surface })
-  const preview = sourceControlActionAgentPreview(observation, props.agent)
-  return (
-    <AgentLaunchPicker
-      draftScope={props.draftScope}
-      model={observation.model}
-      agent={props.agent}
-      disabled={props.disabled}
-      emptyLabel={translate(
-        'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
-        'Use default agent'
-      )}
-      draftForEntry={(entry) =>
-        sourceControlPickerDraft(
-          selection,
-          entry,
-          props.surface ?? entry.defaultSurface,
-          preview.status === 'ready' ? preview.agent : null
-        )
+}
+
+export function SourceControlActionAgentPickerView(props: ViewProps) {
+  const current = useRef(props)
+  useLayoutEffect(() => {
+    current.current = props
+  })
+  const onPick = useCallback<NonNullable<ComponentProps<typeof AgentLaunchPicker>['onPick']>>(
+    (agent, draft, entry, surface) => {
+      const props = current.current
+      const selection =
+        props.selection ??
+        canonicalSourceControlActionSelection({ agentId: props.agent, surface: props.surface })
+      const preview = sourceControlActionAgentPreview(props.observation, props.agent)
+      const saved = props.canSaveSurface
+        ? savedSurfaceForPick(props.observation.model, agent, surface)
+        : undefined
+      if (!draft || props.agent !== agent || props.surface !== saved) {
+        props.onPick(agent, { surface: saved })
       }
-      onPick={(agent, draft, entry, surface) => {
-        const saved = canSaveSurface
-          ? savedSurfaceForPick(observation.model, agent, surface)
-          : undefined
-        if (!draft || props.agent !== agent || props.surface !== saved) {
-          props.onPick(agent, { surface: saved })
+      if (draft && entry) {
+        const picked = pickSourceControlActionAgent(
+          selection,
+          agent,
+          preview.status === 'ready' ? preview.agent : null,
+          surface
+        )
+        const next = applySourceControlPickerDraft(picked, entry, draft)
+        if (next !== picked) {
+          props.onSetupPick?.(next, selection, draft.recipeEdits?.argumentsAuthored === true)
         }
-        if (draft && entry) {
-          const picked = pickSourceControlActionAgent(
-            selection,
-            agent,
-            preview.status === 'ready' ? preview.agent : null,
-            surface
-          )
-          const next = applySourceControlPickerDraft(picked, entry, draft)
-          if (next !== picked) {
-            props.onSetupPick?.(next, selection, draft.recipeEdits?.argumentsAuthored === true)
-          }
-        }
-      }}
-    >
-      <DropdownMenuItem onSelect={() => props.onPick(null, {})}>
-        {translate(
+      }
+    },
+    []
+  )
+  const onDefault = useCallback(() => current.current.onPick(null, {}), [])
+  return (
+    <SelectedSourceControlActionAgentPicker {...props} onSelection={onPick} onDefault={onDefault} />
+  )
+}
+
+const SelectedSourceControlActionAgentPicker = memo(
+  function SelectedSourceControlActionAgentPicker({
+    observation,
+    onSelection,
+    onDefault,
+    ...props
+  }: ViewProps & {
+    onSelection: ComponentProps<typeof AgentLaunchPicker>['onPick']
+    onDefault: () => void
+  }) {
+    const selection =
+      props.selection ??
+      canonicalSourceControlActionSelection({ agentId: props.agent, surface: props.surface })
+    const preview = sourceControlActionAgentPreview(observation, props.agent)
+    return (
+      <AgentLaunchPicker
+        draftScope={props.draftScope}
+        model={observation.model}
+        agent={props.agent}
+        disabled={props.disabled}
+        emptyLabel={translate(
           'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
           'Use default agent'
         )}
-      </DropdownMenuItem>
-    </AgentLaunchPicker>
-  )
-}
+        draftForEntry={(entry) =>
+          sourceControlPickerDraft(
+            selection,
+            entry,
+            props.surface ?? entry.defaultSurface,
+            preview.status === 'ready' ? preview.agent : null
+          )
+        }
+        onPick={onSelection}
+      >
+        <DropdownMenuItem onSelect={onDefault}>
+          {translate(
+            'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
+            'Use default agent'
+          )}
+        </DropdownMenuItem>
+      </AgentLaunchPicker>
+    )
+  },
+  (a, b) =>
+    a.agent === b.agent &&
+    a.surface === b.surface &&
+    a.disabled === b.disabled &&
+    a.draftScope === b.draftScope &&
+    a.canSaveSurface === b.canSaveSurface &&
+    ((!a.selection && !b.selection) ||
+      (!!a.selection &&
+        !!b.selection &&
+        sameSourceControlSetupSelection(a.selection, b.selection))) &&
+    a.observation.preferencesPending === b.observation.preferencesPending &&
+    a.observation.preferences.defaultTuiAgent === b.observation.preferences.defaultTuiAgent &&
+    a.observation.preferences.disabledTuiAgents === b.observation.preferences.disabledTuiAgents &&
+    sameAgentLaunchPickerModel(a.observation.model, b.observation.model)
+)

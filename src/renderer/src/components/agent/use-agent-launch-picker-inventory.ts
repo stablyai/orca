@@ -1,3 +1,9 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  selectWorkspaceByHostTarget,
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspace-record-selectors'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { readHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
@@ -52,6 +58,49 @@ export function useAgentLaunchPickerInventory(
     : undefined
   const workspaceId = worktreeId ?? context?.workspace.worktreeId
   const selector = workspaceId ? `id:${workspaceId}` : repo ? `path:${repo.path}` : undefined
+  const state = useAppStore.getState()
+  const hostId = parseExecutionHostId(executionHostId)?.id
+  const worktrees = selectWorktreesByRepo(state)
+  const folders = selectFolderWorkspaces(state)
+  const concreteWorkspace = useMemo(
+    () =>
+      !!(
+        workspaceId &&
+        hostId &&
+        selectWorkspaceByHostTarget(
+          { worktreesByRepo: worktrees ?? {}, folderWorkspaces: folders ?? [] },
+          { id: workspaceId, hostId }
+        )
+      ),
+    [workspaceId, hostId, worktrees, folders]
+  )
+  const draftTarget = useMemo(
+    () => ({
+      key: JSON.stringify([
+        context?.workspace.kind,
+        workspaceId,
+        context?.workspace.repoId,
+        repo?.path,
+        context?.launchCwd,
+        context?.workspace.executionContext,
+        executionHostId
+      ]),
+      worktreeId: concreteWorkspace ? workspaceId : undefined,
+      repoId: repo?.id,
+      executionHostId
+    }),
+    [
+      context?.workspace.kind,
+      workspaceId,
+      context?.workspace.repoId,
+      repo?.path,
+      repo?.id,
+      context?.launchCwd,
+      context?.workspace.executionContext,
+      executionHostId,
+      concreteWorkspace
+    ]
+  )
   const key = useMemo(
     () =>
       JSON.stringify([
@@ -99,9 +148,10 @@ export function useAgentLaunchPickerInventory(
             arguments: undefined,
             defaultsPending: true,
             structuredDefaultsPending: entry.surfaces.includes('chat'),
-            ownerKey: key
+            ownerKey: key,
+            draftTarget
           }))
-        : build(settings).map((entry) => ({ ...entry, ownerKey: key })),
+        : build(settings).map((entry) => ({ ...entry, ownerKey: key, draftTarget })),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- The semantic key covers rows, detection, target and defaults without restarting for object identity.
     [key]
   )
@@ -185,7 +235,8 @@ export function useAgentLaunchPickerInventory(
                       defaultsPending: false,
                       structuredDefaultsPending:
                         entry.surfaces.includes('chat') && !structuredKnown,
-                      ownerKey: key
+                      ownerKey: key,
+                      draftTarget
                     }))
                   : undefined
               },

@@ -1,3 +1,5 @@
+import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   canonicalSourceControlActionSelection,
   type SelectedSourceControlActionRecipe
@@ -141,6 +143,38 @@ export function SourceControlAgentActionDialogForm({
         )
       : startLabel
 
+  const currentPick = useRef(onAgentPick)
+  useLayoutEffect(() => {
+    currentPick.current = onAgentPick
+  }, [onAgentPick])
+  const onPickerPick = useCallback<
+    NonNullable<React.ComponentProps<typeof AgentLaunchPicker>['onPick']>
+  >((agent, draft, entry, surface) => currentPick.current(agent, surface, draft, entry), [])
+  const selectedSetup = surfaceRows.launchSelection ?? canonicalSourceControlActionSelection(recipe)
+  const {
+    agentId,
+    agentArgs: sourceArgs,
+    argumentChoices,
+    surface: sourceSurface
+  } = selectedSetup.current
+  const source = selectedSetup.source
+  const setupSelection = useMemo(
+    () => ({
+      current: { agentId, agentArgs: sourceArgs, argumentChoices, surface: sourceSurface },
+      source
+    }),
+    [agentId, sourceArgs, argumentChoices, sourceSurface, source]
+  )
+  const draftForEntry = useCallback(
+    (entry: AgentPickerEntry) =>
+      sourceControlPickerDraft(
+        setupSelection,
+        entry,
+        surfaceRows.surface ?? entry.defaultSurface,
+        selectedAgent
+      ),
+    [setupSelection, surfaceRows.surface, selectedAgent]
+  )
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <div className="min-h-0 min-w-0 max-h-[min(60vh,31rem)] space-y-4 overflow-y-auto pr-1 scrollbar-sleek">
@@ -157,15 +191,8 @@ export function SourceControlAgentActionDialogForm({
               worktreeId={surfaceRows.worktreeId}
               agent={selectedAgent}
               disabled={!surfaceRows.selection.ready || isStarting}
-              draftForEntry={(entry) =>
-                sourceControlPickerDraft(
-                  surfaceRows.launchSelection ?? canonicalSourceControlActionSelection(recipe),
-                  entry,
-                  surfaceRows.surface ?? entry.defaultSurface,
-                  selectedAgent
-                )
-              }
-              onPick={(agent, draft, entry, surface) => onAgentPick(agent, surface, draft, entry)}
+              draftForEntry={draftForEntry}
+              onPick={onPickerPick}
             />
           ) : (
             <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">

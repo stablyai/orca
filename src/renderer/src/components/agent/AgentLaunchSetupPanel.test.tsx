@@ -5,7 +5,7 @@ import { act } from 'react'
 import { fireEvent, getByText, isInaccessible, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import { AgentLaunchSetupPanel } from './agent-launch-setup-panel-test-fixture'
 import * as shell from '../../../../shared/tui-agent-startup-shell'
 import {
   resolveAgentLaunchCommand,

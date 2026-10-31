@@ -1,3 +1,7 @@
+import {
+  useAgentPickerSetup,
+  useAgentPickerDraftScope
+} from '../components/agent/agent-launch-picker-drafts'
 // @vitest-environment happy-dom
 import type * as SettingsTransport from '../components/settings/agent-launch-settings-transport'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -432,14 +436,23 @@ it.each(['claude', 'codex'] as const)(
     function Panel({ open }: { open: boolean }) {
       const entries = useAgentLaunchPickerInventory('wt-1', menu, open)
       current = entries[0]
-      return open
+      const draftScope = useAgentPickerDraftScope()
+      const setup = useAgentPickerSetup({ entry: current, draftScope, open })
+      return open && setup.ready
         ? createElement(
             TooltipProvider,
             null,
             createElement(AgentLaunchSetupPanel, {
               key: current.ownerKey,
               entry: current,
-              onUse: (draft) => launches.push(draft)
+              draft: setup.draft,
+              getDraft: setup.getDraft,
+              onDraftChange: setup.change,
+              onUse: (draft) => {
+                if (setup.accept({ ...draft, surface: setup.draft.surface })) {
+                  launches.push(draft)
+                }
+              }
             })
           )
         : null

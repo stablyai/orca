@@ -1,12 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactElement
-} from 'react'
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { flushSync } from 'react-dom'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -16,38 +8,17 @@ import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 
-// The menu and its popovers unmount on dismissal; authored setups live for this app session.
-type RetainedSetup = {
-  authority: string | undefined
-  baseline: string
-  acceptedBaseline?: string
-  draft: AgentPickerDraft
-}
-type AgentPickerDraftOwner = object
-const appSession: AgentPickerDraftOwner = {}
-const sessionDrafts = new WeakMap<AgentPickerDraftOwner, Map<string, RetainedSetup>>()
-
-export function invalidateAgentPickerDrafts(scope: AgentPickerDraftOwner) {
-  sessionDrafts.delete(scope)
-}
-
-export function useAgentPickerDraftScope(resetSignal?: unknown) {
-  const scope = useMemo(() => ({ resetSignal }), [resetSignal])
-  useEffect(() => () => invalidateAgentPickerDrafts(scope), [scope])
-  return scope
-}
-
-function baselineOf(draft?: AgentPickerDraft) {
-  if (!draft?.recipeEdits) {
-    return JSON.stringify(draft) ?? ''
-  }
-  const { surface: _surface, ...current } = draft.recipeEdits.selection.current
-  return JSON.stringify({
-    surface: draft.surface,
-    current,
-    source: draft.recipeEdits.selection.source
-  })
-}
+import {
+  useAgentPickerSetup,
+  type AgentPickerSetupIdentity,
+  type AgentPickerDraftOwner
+} from './agent-launch-picker-drafts'
+export {
+  invalidateAgentPickerDrafts,
+  retireAgentPickerDrafts,
+  useAgentPickerDraftScope
+} from './agent-launch-picker-drafts'
+export type { AgentPickerSetupIdentity } from './agent-launch-picker-drafts'
 
 function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   if (event.key === 'Enter' || event.key === ' ') {
@@ -69,8 +40,9 @@ function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
 
 export function AgentLaunchSetupButton({
   entry,
-  draftScope = appSession,
+  draftScope,
   draftId = 'agent',
+  preset,
   initial,
   mode,
   renderAnchor,
@@ -83,6 +55,7 @@ export function AgentLaunchSetupButton({
   entry: AgentPickerEntry
   draftScope?: AgentPickerDraftOwner
   draftId?: string
+  preset?: AgentPickerSetupIdentity
   initial?: AgentPickerDraft
   mode?: 'launch' | 'select'
   renderAnchor?: (trigger: ReactElement) => ReactElement
@@ -92,46 +65,9 @@ export function AgentLaunchSetupButton({
   onOpenChange?: (open: boolean) => void
   onUse: (draft: AgentPickerDraft) => void
 }) {
-  const scopeGeneration = useRef({ scope: draftScope, version: 0 })
-  if (scopeGeneration.current.scope !== draftScope) {
-    scopeGeneration.current = { scope: draftScope, version: scopeGeneration.current.version + 1 }
-  }
-  const draftKey = JSON.stringify([entry.agent, draftId])
-  const baseline = baselineOf(initial)
-  const drafts = sessionDrafts.get(draftScope) ?? new Map<string, RetainedSetup>()
-  const retained = drafts.get(draftKey)
-  const matches =
-    retained?.authority === entry.ownerKey &&
-    (retained?.baseline === baseline || retained?.acceptedBaseline === baseline)
-  if (retained && !matches) {
-    drafts.delete(draftKey)
-  }
-  const retainedDraft =
-    matches && retained
-      ? {
-          ...retained.draft,
-          ...(retained.acceptedBaseline === baseline && initial?.recipeEdits
-            ? { recipeEdits: initial.recipeEdits }
-            : {})
-        }
-      : initial
-  const retain = (draft: AgentPickerDraft, accepted = false) => {
-    sessionDrafts.set(draftScope, drafts)
-    drafts.set(draftKey, {
-      authority: entry.ownerKey,
-      baseline,
-      ...(accepted ? { acceptedBaseline: baselineOf(draft) } : {}),
-      draft:
-        accepted && draft.recipeEdits
-          ? {
-              ...draft,
-              recipeEdits: { ...draft.recipeEdits, changed: false, argumentsAuthored: false }
-            }
-          : draft
-    })
-  }
   const [localOpen, setOpen] = useState(false)
   const open = controlledOpen ?? localOpen
+  const setup = useAgentPickerSetup({ entry, initial, draftScope, draftId, preset, open })
   const closeFocus = useRef({ open, restore: true })
   useLayoutEffect(() => {
     if (closeFocus.current.open && !open) {
@@ -180,6 +116,7 @@ export function AgentLaunchSetupButton({
   }, [open])
   const changeOpen = (next: boolean) => {
     if (next) {
+      setup.activate()
       setPlacement('right')
     }
     if (controlledOpen === undefined) {
@@ -236,26 +173,26 @@ export function AgentLaunchSetupButton({
         }}
       >
         <div className="min-h-0 overflow-y-auto scrollbar-sleek">
-          <AgentLaunchSetupPanel
-            key={JSON.stringify([
-              scopeGeneration.current.version,
-              draftKey,
-              entry.ownerKey,
-              baseline
-            ])}
-            entry={entry}
-            mode={mode}
-            initial={retainedDraft}
-            disabled={disabled}
-            onDraftChange={(draft) => retain(draft)}
-            onUse={(draft) => {
-              if (mode === 'select') {
-                retain(draft, true)
-              }
-              onUse(draft)
-              changeOpen(false)
-            }}
-          />
+          {setup.ready ? (
+            <AgentLaunchSetupPanel
+              entry={entry}
+              mode={mode}
+              draft={setup.draft}
+              getDraft={setup.getDraft}
+              disabled={disabled}
+              onDraftChange={setup.change}
+              onUse={(draft) => {
+                if (
+                  setup.accept(
+                    mode === 'select' ? draft : { ...draft, surface: setup.draft.surface }
+                  )
+                ) {
+                  onUse(draft)
+                }
+                changeOpen(false)
+              }}
+            />
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>

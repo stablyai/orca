@@ -226,3 +226,51 @@ it.each(['global', 'repo'] as const)(
     reopened.unmount()
   }
 )
+
+it.each(['global', 'repo'] as const)(
+  'keeps pending Customize setup over template-only edits and saves current %s metadata',
+  async (scope) => {
+    const mounted = mountSourceDialog(
+      { agentId: 'claude', commandInputTemplate: 'Old global', agentArgs: '--saved' },
+      { agentId: 'claude', commandInputTemplate: 'Old repo', agentArgs: '--saved' },
+      undefined,
+      undefined,
+      scope
+    )
+    const open = async () => {
+      const trigger = screen.getByRole('button', { name: 'Select agent' })
+      await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+      fireEvent.click(await screen.findByRole('button', { name: 'Configure Claude' }))
+      const toggle = screen.getByRole('button', { name: 'Toggle Arguments' })
+      if (!screen.queryByRole('textbox', { name: 'Arguments' })) {
+        fireEvent.click(toggle)
+      }
+    }
+    await open()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+      target: { value: '--model claude-sonnet-5-5 --accepted' }
+    })
+    fireEvent.blur(screen.getByRole('textbox', { name: 'Arguments' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+      target: { value: '--latest-pending' }
+    })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Arguments' }), { key: 'Escape' })
+    fireEvent.keyDown(document, { key: 'Escape' })
+    act(() => mounted.controller.onCommandTemplateChange('CURRENT {basePrompt}'))
+    await open()
+    expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty(
+      'value',
+      '--latest-pending'
+    )
+    expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    expect(mounted.controller.recipe.commandInputTemplate).toBe('CURRENT {basePrompt}')
+    expect(mounted.controller.recipe.agentArgs).toBe('--latest-pending')
+    await act(() => mounted.controller.handleStart())
+    expect(mounted.persist).toHaveBeenCalledOnce()
+    expect(mounted.persist.mock.calls[0][2].commandInputTemplate).toBe('CURRENT {basePrompt}')
+    expect(mounted.onStart).toHaveBeenCalledOnce()
+    expect(mounted.onStart.mock.calls[0][0].commandInput).toBe('CURRENT fix')
+  }
+)

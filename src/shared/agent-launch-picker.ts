@@ -41,6 +41,7 @@ export type AgentPickerEntry = {
   arguments?: string | null
   catalog: AgentSessionModelCatalogResult
   ownerKey?: string
+  draftTarget?: { key: string; worktreeId?: string; repoId?: string; executionHostId: string }
   defaultsPending?: boolean
   structuredDefaultsPending?: boolean
 }

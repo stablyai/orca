@@ -1,5 +1,5 @@
 import { agentLaunchSetupOptionRows } from './agent-launch-setup-option-rows'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-catalog'
 import { Button } from '@/components/ui/button'
@@ -27,7 +27,6 @@ import {
 import {
   agentPickerButtonOrder,
   agentPickerArgumentsKnown,
-  agentPickerDraft,
   agentPickerEffectiveChoices,
   agentPickerModels,
   agentPickerEntryOptions,
@@ -39,28 +38,27 @@ import {
 
 export function AgentLaunchSetupPanel({
   entry,
-  initial,
+  draft,
+  getDraft,
   mode = 'launch',
   disabled,
   onDraftChange,
   onUse
 }: {
   entry: AgentPickerEntry
-  initial?: AgentPickerDraft
+  draft: AgentPickerDraft
+  getDraft: () => AgentPickerDraft | undefined
   mode?: 'launch' | 'select'
   disabled?: boolean
-  onDraftChange?: (draft: AgentPickerDraft) => void
+  onDraftChange: (draft: AgentPickerDraft) => void
   onUse: (draft: AgentPickerDraft) => void
 }) {
-  const [draft, updateDraft] = useState(() => initial ?? agentPickerDraft(entry))
-  const latestDraft = useRef(draft)
-  const setDraft = (next: AgentPickerDraft) => {
-    latestDraft.current = next
-    updateDraft(next)
-    onDraftChange?.(next)
+  const editDraft = (edit: AgentPickerEdit) => {
+    const current = getDraft()
+    if (current) {
+      onDraftChange(applyAgentPickerEdit(entry, current, edit))
+    }
   }
-  const editDraft = (edit: AgentPickerEdit) =>
-    setDraft(applyAgentPickerEdit(entry, latestDraft.current, edit))
   const [modelQuery, setModelQuery] = useState('')
   const [legacy, setLegacy] = useState(false)
   const [argumentsOpen, setArgumentsOpen] = useState(entry.defaultSurface === 'terminal')
@@ -121,9 +119,10 @@ export function AgentLaunchSetupPanel({
       />
     ) : null
   const use = (surface: AgentPickerSurface) => {
-    const accepted = acceptAgentPickerArguments(entry, latestDraft.current)
-    setDraft(accepted)
-    onUse({ ...accepted, surface })
+    const current = getDraft()
+    if (current) {
+      onUse({ ...acceptAgentPickerArguments(entry, current), surface })
+    }
   }
   const choiceChips = agentModelChoiceChips(
     entry.agent,
@@ -137,7 +136,7 @@ export function AgentLaunchSetupPanel({
             ? 'permissionMode'
             : Object.keys(patch.options ?? {})[0]
       editDraft({ kind: 'remove-chip', key })
-      return agentPickerPanelArguments(entry, latestDraft.current).text
+      return agentPickerPanelArguments(entry, getDraft() ?? draft).text
     },
     argumentsView.context
   )

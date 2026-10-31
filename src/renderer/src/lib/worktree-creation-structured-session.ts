@@ -101,6 +101,7 @@ export async function launchStructuredWorktreeSession(
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
       hooks: { signal: abandoned.signal },
+      declinedTerminal: { agentArgs: args.request.launchInputs?.agentArgs },
       target: { worktreeId: args.worktreeId },
       activate: args.shouldActivateOnCompletion,
       ...(args.shouldActivateOnCompletion
