@@ -4,6 +4,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import { agentSenderPublicationPatch } from '../agent-sender-associations'
 import { isCurrentSessionTabsRuntimeFrame } from './publisher-identity-fences'
 import { recordReceivedWebSessionTabsSnapshot } from './tracking'
+import { isHostMirroredWorktree } from './visibility-types'
 
 type Publications = AppState['agentSenderPublicationsByHost']
 
@@ -15,14 +16,18 @@ export function receivedAgentSenderPublications(
 ): Publications {
   let next = publications
   for (const snapshot of snapshots) {
-    const patch = snapshot.agentSenderAssociations
-      ? agentSenderPublicationPatch(
-          { agentSenderPublicationsByHost: next },
-          host,
-          snapshot.worktree,
-          snapshot.agentSenderAssociations
-        )
-      : {}
+    // A paired host's floating terminal is never mirrored here, as the tab apply skips it: its
+    // senders open by asking that host, not through a pane this window lacks.
+    const eligible = !host.startsWith('runtime:') || isHostMirroredWorktree(snapshot.worktree)
+    const patch =
+      eligible && snapshot.agentSenderAssociations
+        ? agentSenderPublicationPatch(
+            { agentSenderPublicationsByHost: next },
+            host,
+            snapshot.worktree,
+            snapshot.agentSenderAssociations
+          )
+        : {}
     next = patch.agentSenderPublicationsByHost ?? next
   }
   return next
