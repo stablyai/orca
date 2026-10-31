@@ -8,7 +8,10 @@ import {
   useNativeChatDisclosures
 } from './native-chat-disclosure-store'
 import { MessageRow } from './NativeChatMessageRow'
-import { buildAutomationRunPreamble } from '../../../../shared/automation-run-preamble'
+import {
+  automationRunMessageBody,
+  buildAutomationRunPreamble
+} from '../../../../shared/automation-run-preamble'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 vi.mock('@/components/confirmation-dialog-context', () => ({
@@ -101,24 +104,32 @@ describe('a long sent prompt', () => {
 })
 
 describe('automation instructions', () => {
-  it('discloses the exact preamble separately from the task and remembers the reader choice', () => {
-    const message = prompt('automation', `${buildAutomationRunPreamble('orca-dev')}Write the brief`)
+  it('shows legacy combined messages in full without an instruction toggle', () => {
+    renderPrompt(prompt('legacy', `${buildAutomationRunPreamble('orca')}Write the brief`))
+    expect(screen.queryByRole('button', { name: 'Automation instructions' })).toBeNull()
+    expect(screen.getByText(/You are running an Orca automation/)).toBeInTheDocument()
+  })
+
+  it('discloses tagged instructions separately from the task and remembers the reader choice', () => {
+    const message = {
+      ...prompt('automation'),
+      blocks: automationRunMessageBody('Write the brief', 'Run instructions can change').blocks
+    }
     const { show } = renderPrompt(message)
     const toggle = () => screen.getByRole('button', { name: 'Automation instructions' })
     expect(screen.getByText('Write the brief')).toBeInTheDocument()
     expect(toggle()).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText(/You are running an Orca automation/)).toBeNull()
+    expect(screen.queryByText('Run instructions can change')).toBeNull()
     expect(showFull()).toBeNull()
 
     fireEvent.click(toggle())
     expect(toggle()).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText(/You are running an Orca automation/)).toBeInTheDocument()
-    expect(screen.queryByText('=== TASK ===')).toBeNull()
+    expect(screen.getByText('Run instructions can change')).toBeInTheDocument()
     expect(showFull()).toBeNull()
     show(null)
     show(message)
     expect(toggle()).toHaveAttribute('aria-expanded', 'true')
     fireEvent.click(toggle())
-    expect(screen.queryByText(/You are running an Orca automation/)).toBeNull()
+    expect(screen.queryByText('Run instructions can change')).toBeNull()
   })
 })

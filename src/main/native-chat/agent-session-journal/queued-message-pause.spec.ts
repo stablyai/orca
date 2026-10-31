@@ -1,3 +1,4 @@
+import { automationRunMessageBody } from '../../../shared/automation-run-preamble'
 // Derive pauses from journal rows; never maintain a second stored pause state.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -158,6 +159,15 @@ export function registerQueuedMessagePauseTests(): void {
   afterEach(async () => {
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })
+  })
+
+  it('retains tagged automation instruction blocks when a queued send is reopened', async () => {
+    const body = automationRunMessageBody('Write the brief', 'Future run instructions')
+    let journal = await open()
+    await journal.queuedMessages.insert({ messageId: 'automation', body })
+    await journal.close()
+    journal = await open()
+    expect(journal.queuedMessages.list()[0]?.body).toEqual(body)
   })
 
   describe("the queue's pause, derived from the journal", () => {

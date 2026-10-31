@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { createStructuredAgentSessionOperationId } from '../../shared/structured-agent-session-mutation'
-import { structuredAgentSessionSendBody } from '../../shared/structured-agent-session-send-mutation'
+import { automationRunMessageBody } from '../../shared/automation-run-preamble'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
+import { agentLaunchPromptText } from '../../shared/agent-launch-intent'
 import type {
   AgentLaunchIntent,
   AgentLaunchPromptDisposal,
@@ -28,7 +29,7 @@ export function launchPromptCreateInputs(
     ? {
         firstMessage: {
           clientMessageId: createStructuredAgentSessionOperationId(randomUUID),
-          body: structuredAgentSessionSendBody(text, [])
+          body: automationRunMessageBody(text, intent.prompt?.automationInstructions)
         },
         ...(signal ? { signal } : {})
       }
@@ -83,14 +84,16 @@ export async function deliverTerminalLaunchPrompt(
     handle,
     agent: intent.agent,
     freshLaunch,
-    prompt: intent.prompt,
+    prompt: { ...intent.prompt, text: agentLaunchPromptText(intent.prompt) },
     ...(signal ? { signal } : {})
   })
   return delivered ? HANDED_TO_TERMINAL : NOT_DELIVERED
 }
 
 function launchSubmitText(intent: AgentLaunchIntent): string | undefined {
-  return intent.prompt?.delivery === 'submit' && intent.prompt.text ? intent.prompt.text : undefined
+  return intent.prompt?.delivery === 'submit' && intent.prompt.text
+    ? agentLaunchPromptText(intent.prompt)
+    : undefined
 }
 
 /** Offer argv prompts; only the surface building the typed line can confirm that they fit. */

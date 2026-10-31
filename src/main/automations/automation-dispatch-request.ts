@@ -1,3 +1,4 @@
+import { buildAutomationRunPreamble } from '../../shared/automation-run-preamble'
 import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import type { WebContents } from 'electron'
 import { isDeepStrictEqual } from 'node:util'
@@ -206,7 +207,18 @@ export async function requestAutomationDispatch(
       if (latestRefusal) {
         throw new AutomationDispatchRefusedError(latestRefusal)
       }
-      return dispatcher({ ...request, target: latestTarget })
+      return dispatcher({
+        ...request,
+        target: latestTarget,
+        ...(automation.surface === 'chat'
+          ? {
+              agentPrompt: automation.prompt,
+              ...(reportingCli
+                ? { agentInstructions: buildAutomationRunPreamble(reportingCli).trimEnd() }
+                : {})
+            }
+          : {})
+      })
     }
   })
 }

@@ -1,3 +1,4 @@
+import { automationRunMessageBody } from '../../../shared/automation-run-preamble'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import {
@@ -218,31 +219,37 @@ describe('submission and dispatch state machine', () => {
     expect(state.submissions.get('cm_1')?.providerItemId).toBe('codex:thread-1:turn-1:0')
   })
 
-  it('folds the provider echo into the submission bubble instead of adding a second one', () => {
-    const state = fold([
-      submission,
-      {
-        kind: 'dispatch',
-        clientMessageId: 'cm_1',
-        state: 'accepted',
-        providerItemId: 'codex:thread-1:turn-1:0',
-        reason: null,
-        ...base(2)
-      },
-      {
-        kind: 'item',
-        itemId: 'codex:thread-1:turn-1:0',
-        revision: 1,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
-        ...base(3)
-      }
-    ])
-    const items = renderJournalState(state).items
-    expect(items).toHaveLength(1)
-    expect(items[0]?.itemId).toBe(agentJournalSubmissionKey('cm_1'))
-    expect(items[0]?.sequence).toBe(1)
-    expect(items[0]?.revision).toBe(1)
-  })
+  it.each([userText('hi'), automationRunMessageBody('Write the brief', 'Run instructions')])(
+    'keeps the original blocks when a provider echoes normalized text %#',
+    (body) => {
+      const state = fold([
+        { ...submission, body, payloadFingerprint: sendFingerprint(body) },
+        {
+          kind: 'dispatch',
+          clientMessageId: 'cm_1',
+          state: 'accepted',
+          providerItemId: 'codex:thread-1:turn-1:0',
+          reason: null,
+          ...base(2)
+        },
+        {
+          kind: 'item',
+          itemId: 'codex:thread-1:turn-1:0',
+          revision: 1,
+          body: userText(
+            body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+          ),
+          ...base(3)
+        }
+      ])
+      const items = renderJournalState(state).items
+      expect(items).toHaveLength(1)
+      expect(items[0]?.itemId).toBe(agentJournalSubmissionKey('cm_1'))
+      expect(items[0]?.sequence).toBe(1)
+      expect(items[0]?.revision).toBe(1)
+      expect(items[0]?.body).toEqual(body)
+    }
+  )
 
   it('durably accepts a pending submission from the provider echo row itself', () => {
     const body = userText('hi')

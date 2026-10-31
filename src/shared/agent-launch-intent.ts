@@ -12,7 +12,15 @@ export type AgentLaunchPromptDelivery =
 
 export type AgentLaunchPrompt = {
   text: string
+  /** Host-produced instructions, tagged in chat and prepended for terminal delivery. */
+  automationInstructions?: string
   delivery: AgentLaunchPromptDelivery
+}
+
+export function agentLaunchPromptText(prompt: AgentLaunchPrompt): string {
+  return prompt.automationInstructions
+    ? `${prompt.automationInstructions}\n${prompt.text}`
+    : prompt.text
 }
 
 /** Create the workspace inside launch: structured support cannot be resolved before it exists, and agent-first creation bypassed that route. */
