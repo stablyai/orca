@@ -84,8 +84,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
-  /** Opt-in code-editor font; empty (the default) keeps following `terminalFontFamily`. */
-  editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
