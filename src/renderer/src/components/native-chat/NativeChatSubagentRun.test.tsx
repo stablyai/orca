@@ -18,6 +18,19 @@ function group(agents: NativeChatSubagentEntry[]): NativeChatSubagentGroupBlock 
 }
 
 describe('NativeChatSubagentRun', () => {
+  it('discloses optional metadata beside the original child label only when expanded', () => {
+    render(
+      <NativeChatSubagentRun
+        block={group([{ id: 'a', label: 'Review original', state: 'completed' }])}
+        entryDetails={new Map([['a', 'Codex · WSL · Ubuntu-24.04']])}
+      />
+    )
+    expect(screen.queryByText('Codex · WSL · Ubuntu-24.04')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Ran 1 subagent/ }))
+    expect(screen.getByText('Review original')).toBeVisible()
+    expect(screen.getByText('Codex · WSL · Ubuntu-24.04')).toBeVisible()
+  })
+
   it('reads as a live spawn while children work', () => {
     render(
       <NativeChatSubagentRun

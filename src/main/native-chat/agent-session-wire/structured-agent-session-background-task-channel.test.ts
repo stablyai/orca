@@ -96,7 +96,7 @@ describe('the background-task channel', () => {
     expect(channel.read('session-1')).toBeNull()
   })
 
-  it('hides the strip when its last child settles after the provider let go of the session', () => {
+  it('retains a completed agent for inspection after the provider lets go of the session', () => {
     let views: AgentChildWorkView[] = [child]
     let held: Stops = { supportsTaskStop: true, supportsStopAll: true }
     const { sessions, channel, session } = channelOver(
@@ -108,7 +108,11 @@ describe('the background-task channel', () => {
 
     held = undefined
     views = [{ ...child, state: 'done', membership: 'settled', outcome: 'unknown', settledAt: 2 }]
-    expect(channel.read('session-1')).toBeNull()
+    expect(channel.read('session-1')).toMatchObject({
+      children: views,
+      supportsStopAll: false,
+      settledTasks: [expect.objectContaining({ id: 'task-1' })]
+    })
   })
 
   it('republishes only for an open conversation', () => {

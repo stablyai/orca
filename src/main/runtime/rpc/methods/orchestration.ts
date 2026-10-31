@@ -11,6 +11,7 @@ import { ORCHESTRATION_ASK_METHODS } from './orchestration/messaging/ask-methods
 import { ORCHESTRATION_GATE_METHODS } from './orchestration/gates/gates'
 import { ORCHESTRATION_RESET_METHODS } from './orchestration/runs/reset-methods'
 import { ORCHESTRATION_CALLER_METHODS } from './orchestration/caller-show'
+import { ORCHESTRATION_SESSION_CHILDREN_METHODS } from './orchestration/session-children'
 
 // Every orchestration method reads the authority restored at startup.
 export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
@@ -25,5 +26,6 @@ export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
   ...ORCHESTRATION_ASK_METHODS,
   ...ORCHESTRATION_GATE_METHODS,
   ...ORCHESTRATION_RESET_METHODS,
-  ...ORCHESTRATION_CALLER_METHODS
+  ...ORCHESTRATION_CALLER_METHODS,
+  ...ORCHESTRATION_SESSION_CHILDREN_METHODS
 ])

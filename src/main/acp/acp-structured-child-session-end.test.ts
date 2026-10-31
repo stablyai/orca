@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { structuredSessionBackgroundTasksView } from '../../shared/structured-session-background-tasks-view'
 import { isSubagentBlock } from '../../shared/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
@@ -295,7 +296,11 @@ describe('recorded child-session outcome during a full parent Stop', () => {
           { membership: 'settled', outcome: 'cancelled' },
           { membership: 'settled', outcome: 'cancelled' }
         ])
-        expect.soft(await strip()).toBeNull()
+        expect.soft(structuredSessionBackgroundTasksView(await strip(), null)).toMatchObject({
+          show: true,
+          isMonitoring: false,
+          offersStopAll: false
+        })
       }
       await vi.advanceTimersByTimeAsync(335 - 17)
       expect((await hosted.turns()).at(-1)).toMatchObject({
@@ -311,7 +316,16 @@ describe('recorded child-session outcome during a full parent Stop', () => {
         { membership: 'settled', outcome: 'cancelled' },
         { membership: 'settled', outcome }
       ])
-      expect(await strip()).toBeNull()
+      const retained = await strip()
+      expect(retained?.children).toMatchObject([
+        { membership: 'settled', outcome: 'cancelled' },
+        { membership: 'settled', outcome }
+      ])
+      expect(structuredSessionBackgroundTasksView(retained, null)).toMatchObject({
+        show: true,
+        isMonitoring: false,
+        offersStopAll: false
+      })
       expect(await hosted.turns()).toHaveLength(1)
     }
   )

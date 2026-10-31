@@ -46,6 +46,7 @@ import {
 } from '../../../../shared/structured-agent-session-subagent-roster'
 
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { NativeChatChildNavigationContext } from './native-chat-child-navigation'
 
 import { session, stubLayout } from './native-chat-windowing-test-harness'
 
@@ -58,6 +59,8 @@ import {
   stubLayout as materialRailStubLayout,
   windowState
 } from './NativeChatMessageList.windowing-test-support'
+
+const childNavigation = { open: () => {} }
 
 {
   function journalItem(
@@ -258,6 +261,20 @@ import {
       expect(screen.getByText('Edited')).toBeInTheDocument()
       expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /explore the lane/, expanded: true })).toBeVisible()
+    })
+
+    it('reveals a child edit from the parent rollup when child conversation navigation is available', () => {
+      vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {})
+      render(
+        <NativeChatChildNavigationContext.Provider value={childNavigation}>
+          {listOf('completed')}
+        </NativeChatChildNavigationContext.Provider>
+      )
+      expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
+      fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
+      expect(screen.getByText('Edited')).toBeVisible()
+      expect(screen.getByText('The PR is CLEAN.')).toBeVisible()
     })
 
     // Journal turn records own subagent edits, even when a newer send is queued or the opener is unloaded.

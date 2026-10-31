@@ -30,10 +30,26 @@ type RegisterPaneDropClaim = ((registration: NativeChatPaneDropRegistration) => 
 }
 
 const NativeChatPaneFileDropContext = createContext<RegisterPaneDropClaim | null>(null)
+const NativeChatPaneFileDropEnabledContext = createContext(true)
+
+export function NativeChatPaneFileDropScope({
+  enabled,
+  children,
+  ...props
+}: React.ComponentProps<'div'> & {
+  enabled: boolean
+}): React.JSX.Element {
+  return (
+    <NativeChatPaneFileDropEnabledContext.Provider value={enabled}>
+      <div {...props}>{children}</div>
+    </NativeChatPaneFileDropEnabledContext.Provider>
+  )
+}
 
 /** Publish the composer’s claim so the whole pane accepts its file drops. */
 export function useNativeChatPaneFileDropClaim(claim: NativeChatPaneDropClaim): void {
   const register = useContext(NativeChatPaneFileDropContext)
+  const enabled = useContext(NativeChatPaneFileDropEnabledContext)
   const claimRef = useRef(claim)
   useLayoutEffect(() => {
     claimRef.current = claim
@@ -49,7 +65,10 @@ export function useNativeChatPaneFileDropClaim(claim: NativeChatPaneDropClaim): 
     [destinationKey, focusScopeKey]
   )
   // A guard transition ends the current hover before the next paint.
-  useLayoutEffect(() => register?.(registration), [register, registration])
+  useLayoutEffect(
+    () => (enabled ? register?.(registration) : undefined),
+    [enabled, register, registration]
+  )
 }
 
 export function NativeChatPaneFileDropSurface({

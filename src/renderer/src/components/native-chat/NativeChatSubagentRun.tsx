@@ -16,6 +16,8 @@ import type {
 import { formatNativeChatDuration } from './NativeChatWorkingStatus'
 import { nativeChatSubagentEntryRuns } from './native-chat-subagent-sections'
 import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'
+import { useNativeChatChildNavigation } from './native-chat-child-navigation'
+import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 
 const STATE_DOT_CLASS: Record<NativeChatSubagentState, string> = {
   working: 'bg-foreground/70',
@@ -73,15 +75,20 @@ function SubagentElapsed({
 /** Each child entry controls its section; the transcript inserts its rows after the entry. */
 export function NativeChatSubagentEntries({
   agents,
+  stateLabels,
+  entryDetails,
   sections,
   onSetSectionOpen,
   className
 }: {
   agents: readonly NativeChatSubagentEntry[]
+  stateLabels?: ReadonlyMap<string, string>
+  entryDetails?: ReadonlyMap<string, React.ReactNode>
   sections?: ReadonlyMap<string, boolean>
   onSetSectionOpen?: (agentId: string, open: boolean) => void
   className?: string
 }): React.JSX.Element {
+  const navigation = useNativeChatChildNavigation()
   return (
     <ul className={cn('space-y-0.5', className)}>
       {agents.map((agent) => {
@@ -96,23 +103,32 @@ export function NativeChatSubagentEntries({
                 state === 'idle' ? 'text-chat-foreground-faint' : 'text-chat-foreground'
               )}
             >
-              {agent.label}
+              <span className="block truncate">{agent.label}</span>
+              {entryDetails?.get(agent.id) ? (
+                <span className="block truncate text-xs text-chat-foreground-faint">
+                  {entryDetails.get(agent.id)}
+                </span>
+              ) : null}
             </span>
             <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
-              {subagentStateLabel(state, 1, 1, say)}
+              {stateLabels?.get(agent.id) ?? subagentStateLabel(state, 1, 1, say)}
               {typeof agent.tokens === 'number' ? ` · ${formatSubagentTokens(agent.tokens)}` : null}
             </span>
           </>
         )
         return (
           <li key={agent.id}>
-            {sectionOpen === undefined ? (
+            {sectionOpen === undefined && !navigation ? (
               <div className="flex items-center gap-1.5 py-0.5">{entry}</div>
             ) : (
               <button
                 type="button"
-                onClick={() => onSetSectionOpen?.(agent.id, !sectionOpen)}
-                aria-expanded={sectionOpen}
+                onClick={() =>
+                  navigation
+                    ? navigation.open({ agentId: agent.id, label: agent.label })
+                    : onSetSectionOpen?.(agent.id, !sectionOpen)
+                }
+                aria-expanded={navigation ? undefined : sectionOpen}
                 className="group/subagent-entry flex w-full items-center gap-1.5 rounded-md py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 {entry}
@@ -137,12 +153,16 @@ export function NativeChatSubagentEntries({
 /** Trust journal child states: children outlive their spawning turn, and only host/provider settlement proves lost contact. */
 export function NativeChatSubagentRun({
   block,
+  stateLabels,
+  entryDetails,
   open: heldOpen,
   onSetOpen,
   sections,
   onSetSectionOpen
 }: {
   block: NativeChatSubagentGroupBlock
+  stateLabels?: ReadonlyMap<string, string>
+  entryDetails?: ReadonlyMap<string, React.ReactNode>
   /** Whether the entries show, when the transcript holds that past this row's lifetime. */
   open?: boolean
   onSetOpen?: (open: boolean) => void
@@ -150,9 +170,11 @@ export function NativeChatSubagentRun({
   sections?: ReadonlyMap<string, boolean>
   onSetSectionOpen?: (agentId: string, open: boolean) => void
 }): React.JSX.Element | null {
+  const navigation = useNativeChatChildNavigation()
+  const navigationDisclosure = useNativeChatDisclosure(`subagent-roster:${block.groupId}`, false)
   const [localOpen, setLocalOpen] = useState(false)
-  const open = heldOpen ?? localOpen
-  const setOpen = onSetOpen ?? setLocalOpen
+  const open = navigation ? navigationDisclosure.open : (heldOpen ?? localOpen)
+  const setOpen = navigation ? navigationDisclosure.setOpen : (onSetOpen ?? setLocalOpen)
   const agents = block.agents
   // Not memoized: its words follow the reader's language, which can change under the same roster.
   const header = nativeChatSubagentGroupHeader(agents, say)
@@ -201,6 +223,8 @@ export function NativeChatSubagentRun({
       {open ? (
         <NativeChatSubagentEntries
           agents={sections ? nativeChatSubagentEntryRuns(agents, sections)[0]! : agents}
+          stateLabels={stateLabels}
+          entryDetails={entryDetails}
           sections={sections}
           onSetSectionOpen={onSetSectionOpen}
           className="mt-1"

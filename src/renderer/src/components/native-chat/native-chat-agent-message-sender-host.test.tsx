@@ -1,3 +1,4 @@
+import type * as PaneFileDrop from './NativeChatPaneFileDropSurface'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -46,7 +47,8 @@ vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
 vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
-vi.mock('./NativeChatPaneFileDropSurface', () => ({
+vi.mock('./NativeChatPaneFileDropSurface', async (original) => ({
+  ...(await original<typeof PaneFileDrop>()),
   NativeChatPaneFileDropSurface: ({ children }: { children: ReactNode }) => children
 }))
 vi.mock('../tab-group/RetainedPaneHost', () => ({

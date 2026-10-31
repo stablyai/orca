@@ -22,16 +22,24 @@ type NativeChatPasteBridgeRefs = {
   questionAnswerInputRef?: RefObject<HTMLInputElement | null>
 }
 
+function canPasteIntoAnswerInput(input: HTMLInputElement): boolean {
+  return input.isConnected && !input.disabled && !input.closest('[hidden], [inert]')
+}
+
 /** Text-only on purpose: an answer input takes no image attachments. */
 function pasteClipboardTextInto(input: HTMLInputElement, stillTarget: () => boolean): void {
+  const canContinue = () => canPasteIntoAnswerInput(input) && stillTarget()
+  if (!canContinue()) {
+    return
+  }
   void (async () => {
     const text = await window.api.ui
       .readClipboardText({ maxBytes: TEXT_CONTROL_PASTE_MAX_BYTES })
       .catch(() => '')
-    if (text.length > 0 && stillTarget()) {
+    if (text.length > 0 && canContinue()) {
       await pasteTextIntoTextControl(input, text, {
         source: 'programmatic',
-        canContinue: stillTarget
+        canContinue
       })
     }
   })()
@@ -71,7 +79,7 @@ export function useNativeChatPasteBridge({
         return
       }
       const answerInput = questionAnswerInputRef?.current
-      if (answerInput) {
+      if (answerInput && canPasteIntoAnswerInput(answerInput)) {
         pasteClipboardTextInto(answerInput, () => questionAnswerInputRef?.current === answerInput)
       }
     },
@@ -108,13 +116,15 @@ export function useNativeChatPasteBridge({
         return
       }
       const answerInput = questionAnswerInputRef?.current
-      if (answerInput) {
+      if (answerInput && canPasteIntoAnswerInput(answerInput)) {
         const text = event.clipboardData?.getData('text/plain')
         event.preventDefault()
         if (text) {
           void pasteTextIntoTextControl(answerInput, text, {
             source: 'programmatic',
-            canContinue: () => questionAnswerInputRef?.current === answerInput
+            canContinue: () =>
+              questionAnswerInputRef?.current === answerInput &&
+              canPasteIntoAnswerInput(answerInput)
           })
         }
       }
@@ -134,9 +144,10 @@ export function useNativeChatPasteBridge({
     }
     // Named-pane paste requests carry no clipboard event data.
     const onPasteRequest = (event: Event): void => {
+      const answerInput = questionAnswerInputRef?.current
       if (
         nativeChatComposerDestination(rootRef.current, composerRef.current) ||
-        questionAnswerInputRef?.current
+        (answerInput && canPasteIntoAnswerInput(answerInput))
       ) {
         event.preventDefault()
         pasteClipboardIntoComposer()

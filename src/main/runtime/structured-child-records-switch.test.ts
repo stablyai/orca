@@ -92,7 +92,7 @@ describe('the chat strip and the session list read the same host child records',
     await rm(root, { recursive: true, force: true })
   })
 
-  it('carries running children to both, hides the strip when none runs, and folds the parent row from them', async () => {
+  it('carries running children to both, retains settled agents for inspection, and folds the parent row', async () => {
     const connections: CodexAppServerConnectionHandlers[] = []
     const openConnection: typeof openCodexAppServerConnection = async (_launch, handlers = {}) => {
       connections.push(handlers)
@@ -287,9 +287,19 @@ describe('the chat strip and the session list read the same host child records',
       exitCode: 0
     })
     expect(parentRow()).toMatchObject({ state: 'done' })
-    // Finished child records remain until the user's next turn; exited command records are removed immediately.
+    // The finished agent remains inspectable; its stopped command and live sidebar status leave.
     expect(summaries.at(-1)).not.toHaveProperty('children')
-    expect(strip.at(-1)).toBeNull()
+    expect(summaries.at(-1)).not.toHaveProperty('backgroundTasks')
+    expect(stripRows()).toEqual([
+      {
+        kind: 'agent',
+        description: 'review',
+        state: 'done',
+        membership: 'settled',
+        outcome: 'succeeded'
+      }
+    ])
+    expect(strip.at(-1)).toMatchObject({ supportsStopAll: false })
     const stored = () => rows(server.getStructuredChildWorkViews(parentSubject(summaries)))
     expect(stored()).toEqual([
       {
@@ -340,14 +350,23 @@ describe('the chat strip and the session list read the same host child records',
     expect(strip.at(-1)).toBeNull()
     expect(summaries.at(-1)).not.toHaveProperty('children')
 
-    // The reviewer's next run is still going when the provider exits: it settles with an outcome
-    // nobody reported, and leaves both lists.
+    // Provider exit ends live status; the agent remains inspectable with an unknown outcome.
     await notify('turn/started', { threadId: REVIEWER, turn: { id: 'r2', status: 'inProgress' } })
     both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
     connections[0]?.onExit?.(new Error('scripted provider exit'))
     await settle()
     expect(summaries.at(-1)).not.toHaveProperty('children')
-    expect(strip.at(-1)).toBeNull()
+    expect(summaries.at(-1)).not.toHaveProperty('backgroundTasks')
+    expect(stripRows()).toEqual([
+      {
+        kind: 'agent',
+        description: 'review',
+        state: 'done',
+        membership: 'settled',
+        outcome: 'unknown'
+      }
+    ])
+    expect(strip.at(-1)).toMatchObject({ supportsStopAll: false })
     expect(stored()).toEqual([
       {
         kind: 'agent',

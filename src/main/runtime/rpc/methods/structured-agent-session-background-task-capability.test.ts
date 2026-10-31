@@ -237,6 +237,102 @@ describe('child views at the RPC boundary', () => {
     expect(JSON.stringify(result)).not.toContain('children')
   })
 
+  const settledOnly: AgentSessionBackgroundTaskState = {
+    state: 'monitoring',
+    supportsTaskStop: true,
+    settledTasks: [SETTLED_ROW],
+    children: [view('settled')]
+  }
+
+  it('retains readable settled task history while omitting unsupported child views', async () => {
+    expect(await historyFor(settledOnly, PRE_VIEWS_CLIENT)).toMatchObject({
+      ok: true,
+      result: {
+        page: {
+          backgroundTasks: {
+            state: 'monitoring',
+            supportsTaskStop: true,
+            settledTasks: [SETTLED_ROW]
+          }
+        }
+      }
+    })
+    for (const client of [CURRENT_CLIENT, undefined]) {
+      expect(await historyFor(settledOnly, client)).toMatchObject({
+        ok: true,
+        result: { page: { backgroundTasks: settledOnly } }
+      })
+    }
+    expect(settledOnly.children).toHaveLength(1)
+  })
+
+  it('preserves readable settled tasks on subscriptions for older readers', async () => {
+    hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
+      input.emit({
+        type: 'batch',
+        sessionId: SESSION,
+        fence: 1,
+        backgroundTasks: settledOnly,
+        batch: {
+          cursor: { epoch: 'a', sequence: 0 },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        }
+      })
+      return () => {}
+    })
+    for (const [client, expected] of [
+      [
+        PRE_VIEWS_CLIENT,
+        { state: 'monitoring', supportsTaskStop: true, settledTasks: [SETTLED_ROW] }
+      ],
+      [CURRENT_CLIENT, settledOnly]
+    ] as const) {
+      expect(await call('agentSession.subscribe', { sessionId: SESSION }, client)).toMatchObject({
+        ok: true,
+        result: { type: 'batch', backgroundTasks: expected }
+      })
+    }
+  })
+
+  it('withholds a settled-only child view when an older reader has no readable task rows', async () => {
+    const { settledTasks: _tasks, ...unreadable } = settledOnly
+    expect(await historyFor(unreadable, PRE_VIEWS_CLIENT)).toMatchObject({
+      ok: true,
+      result: { page: { backgroundTasks: null } }
+    })
+  })
+
+  it.each([
+    { ...settledOnly, incomplete: true as const },
+    { ...settledOnly, tasks: [LIVE_ROW] },
+    { ...settledOnly, children: [view('live'), view('settled')] },
+    { state: 'monitoring' as const }
+  ])(
+    'retains incomplete, live and pre-producer states for older readers: %j',
+    async (state: AgentSessionBackgroundTaskState) => {
+      const { children: _children, ...legacy } = state
+      expect(await historyFor(state, PRE_VIEWS_CLIENT)).toMatchObject({
+        ok: true,
+        result: { page: { backgroundTasks: legacy } }
+      })
+    }
+  )
+
+  it('retains settled tasks when a pre-row-stop reader filters its last unstoppable live row', async () => {
+    const state: AgentSessionBackgroundTaskState = {
+      state: 'monitoring',
+      supportsTaskStop: true,
+      tasks: [FOREGROUND_ROW],
+      settledTasks: [SETTLED_ROW]
+    }
+    expect(await historyFor(state, STOP_ONLY_CLIENT)).toMatchObject({
+      ok: true,
+      result: { page: { backgroundTasks: { ...state, tasks: [] } } }
+    })
+  })
+
   // Without targeted stop, clients draw no row buttons; stoppability filtering must not hide those rosters.
   it('keeps unstoppable rows for a stop-only reader when no targeted stop is offered', async () => {
     const codexRoster: AgentSessionBackgroundTaskState = {

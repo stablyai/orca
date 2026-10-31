@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { structuredSessionBackgroundTasksView } from '../../../shared/structured-session-background-tasks-view'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import {
   attach,
@@ -39,7 +40,7 @@ function finished(id: string, settledAt: number): AgentChildWorkView {
 
 const ids = (views: readonly AgentChildWorkView[]) => views.map((view) => view.id)
 
-describe('the sidebar and the strip list running children only', () => {
+describe('the sidebar running-child selector', () => {
   it('drops finished and failed children, and keeps a finished one whose shell still runs', () => {
     const failed = { ...finished('failed', 5), outcome: 'failed' as const }
     const views = [
@@ -53,8 +54,8 @@ describe('the sidebar and the strip list running children only', () => {
   })
 })
 
-describe("the host's strip channel and summary list the same running children", () => {
-  it('sends both the running children, and the strip nothing once none runs', async () => {
+describe('the host retains child history while summaries report running work', () => {
+  it('retains settled children for inspection without adding them to live summaries', async () => {
     let records = [
       finished('done', 5),
       running('run'),
@@ -68,7 +69,7 @@ describe("the host's strip channel and summary list the same running children", 
       const page = await host.history({ sessionId: SESSION, direction: 'tail' })
       return page.ok ? page.page.backgroundTasks : undefined
     }
-    expect(ids((await strip())?.children ?? [])).toEqual(['run', 'owner', 'shell'])
+    expect(ids((await strip())?.children ?? [])).toEqual(['done', 'run', 'owner', 'shell'])
     const summaries: string[][] = []
     host.subscribeStatus({
       id: 'list',
@@ -81,7 +82,16 @@ describe("the host's strip channel and summary list the same running children", 
     expect(summaries.at(-1)).toEqual(['run', 'owner', 'shell'])
 
     records = [finished('done', 5), finished('run', 7)]
-    expect(await strip()).toBeNull()
+    host.publishChildWorkEvidence(SESSION, [])
+    await host.flushStreamedEvents(SESSION)
+    const retained = await strip()
+    expect(ids(retained?.children ?? [])).toEqual(['done', 'run'])
+    expect(ids(host.readStatusSummary(SESSION)?.children ?? [])).toEqual([])
+    expect(structuredSessionBackgroundTasksView(retained, null)).toMatchObject({
+      show: true,
+      isMonitoring: false,
+      offersStopAll: false
+    })
   })
 })
 

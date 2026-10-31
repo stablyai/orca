@@ -88,8 +88,12 @@ export class CodexJournalItems {
     }
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
     const identity = this.identityFor(event.threadId, turnId, item)
-    // Count echoes for stable resume ordinals, but user bubbles come from submissions.
-    if (source === 'live' && item.type === 'userMessage') {
+    // Root input is submission-owned; child assignments have no root submission ledger.
+    if (
+      source === 'live' &&
+      item.type === 'userMessage' &&
+      this.deps.attributionFor(event.threadId, turnId).agentId === undefined
+    ) {
       const echo = readCodexDispatchEcho(item, identity)
       return {
         handled: true,

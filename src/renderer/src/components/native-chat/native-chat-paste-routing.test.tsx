@@ -456,6 +456,26 @@ describe('terminal context-menu paste on a covered pane', () => {
     expect(answer.value).toBe('')
     expect(answerRef.current.value).toBe('')
   })
+
+  it.each(['hidden', 'inert'])(
+    'does not paste a delayed read into a %s parent answer',
+    async (attribute) => {
+      const f = fixture()
+      const answer = document.createElement('input')
+      f.cover(<ChatRoot answer={answer} />)
+      const clipboard = Promise.withResolvers<string>()
+      mocks.readClipboardText.mockReturnValue(clipboard.promise)
+      await pasteTerminalPaneMenuClipboard(menuContext(), menuPane(f.pane), 'context-menu')
+      expect(mocks.readClipboardText).toHaveBeenCalledTimes(1)
+      const parentContent = document.createElement('section')
+      answer.replaceWith(parentContent)
+      parentContent.append(answer)
+      parentContent.setAttribute(attribute, '')
+      await act(async () => clipboard.resolve('Do not change the hidden answer'))
+      expect(answer.value).toBe('')
+      expect(mocks.terminalClipboard).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('pane menu paste opened on a question answer', () => {
