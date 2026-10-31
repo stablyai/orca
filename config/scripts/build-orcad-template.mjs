@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readOrcadRichOutputAssetFilenames } from './orcad-rich-output-bundle.mjs'
 
 import { createHash } from 'node:crypto'
 import {
@@ -194,9 +195,10 @@ async function main() {
   mkdirSync(outputDir, { recursive: true })
   const [firstTarget] = templateTargets
   // Every package carries the same page: its manifest is a common file, checked byte for byte below.
-  const commonArtifacts = orcadTemplateCommonFilenames(
-    readOrcadMobileWebAssetFilenames(packages[firstTarget])
-  )
+  const commonArtifacts = orcadTemplateCommonFilenames([
+    ...readOrcadMobileWebAssetFilenames(packages[firstTarget]),
+    ...readOrcadRichOutputAssetFilenames(packages[firstTarget])
+  ])
   for (const filename of commonArtifacts) {
     const source = join(packages[firstTarget], ...filename.split('/'))
     // Why check every target: the template keeps one copy, so a per-target difference would ship wrong bytes.

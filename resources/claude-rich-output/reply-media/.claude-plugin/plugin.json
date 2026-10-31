@@ -1,0 +1,73 @@
+{
+  "name": "reply-media",
+  "version": "0.1.0",
+  "description": "Draws the mermaid fences, math formulas and local images of a reply as pictures in the terminal, and plays its local videos (kitty graphics: Ghostty, kitty)",
+  "types": "./types/plugin.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn this mod off without removing it. Takes effect at once.",
+      "default": true
+    },
+    "diagrams": {
+      "type": "boolean",
+      "title": "Diagrams",
+      "description": "Draw a ```mermaid fence as a picture. Off, the fence stays text, and Claude is not told to draw diagrams that way.",
+      "default": true
+    },
+    "math": {
+      "type": "boolean",
+      "title": "Formulas",
+      "description": "Draw a ```math fence or a $$ block as a picture. Off, the formula stays text, and Claude is not told to write formulas that way.",
+      "default": true
+    },
+    "images": {
+      "type": "boolean",
+      "title": "Images",
+      "description": "Draw a local image written as ![alt](path) on a line of its own. Off, the line stays text, and Claude is not told to show images that way.",
+      "default": true
+    },
+    "videos": {
+      "type": "boolean",
+      "title": "Videos",
+      "description": "Show a local video written as ![alt](path) as its first frame with a play button. Off, the line stays text, and Claude is not told to show videos that way.",
+      "default": true
+    },
+    "buttons": {
+      "type": "boolean",
+      "title": "Buttons under a picture",
+      "description": "Copy a picture's source (an image's path), and zoom it in a pane, or open a video in the player. A video's play button stays.",
+      "default": true
+    },
+    "resumedReplies": {
+      "type": "number",
+      "title": "Replies redrawn on resume",
+      "description": "How many of a resumed session's last replies get their pictures drawn again. Each picture is rendered before the first prompt, so a higher number starts slower. 0 redraws none.",
+      "default": 3,
+      "min": 0,
+      "max": 50
+    },
+    "pxPerColumn": {
+      "type": "number",
+      "title": "Picture pixels per column",
+      "description": "How many pixels of a picture one terminal column shows. A lower number draws pictures larger.",
+      "default": 8,
+      "min": 1,
+      "max": 64
+    },
+    "cellAspect": {
+      "type": "number",
+      "title": "Cell height over width",
+      "description": "How many times taller than wide one terminal cell is. Change it when pictures look squashed or stretched. 2.17 was measured on Ghostty with JetBrains Mono 18.",
+      "default": 2.17,
+      "min": 1,
+      "max": 4
+    }
+  },
+  "author": {
+    "name": "Nate Chia",
+    "url": "https://github.com/NateCC0902/NeonCoat"
+  },
+  "license": "MIT"
+}

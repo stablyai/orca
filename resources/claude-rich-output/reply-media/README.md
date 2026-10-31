@@ -1,0 +1,7 @@
+# reply-media
+
+Renders display formulas, selected Mermaid diagram types, local images, and bounded silent video previews in Claude terminal replies. Requires Node 24, librsvg and ffmpeg on the execution host. Inline formulas and remote image URLs stay textual. Bundled by Orca as an optional module derived from NeonCoat by Nate Chia (MIT). Enable Claude Rich Output in Orca Terminal settings and start a new Claude session. Existing sessions and global Claude settings are not changed. Compatible experimental Claude function hooks are required. See the parent README for compatibility, limits, and provenance.
+
+Generated media shares a private per-user cache. On access and after conversion, entries older than seven days are removed and the oldest entries are reclaimed toward a 512 MiB total. The current entry and entries used or modified within fifteen minutes are protected while conversion or playback may still be active, so this is a cleanup target rather than a hard disk quota. Cleanup failures are retried on later access; swept previews can be regenerated from their source. Original media files, unrecognized cache entries and symlink targets are not collected.
+
+Replaying cached video frames refreshes their protection without extracting them again. Recognized temporary conversion outputs left by an interrupted process are counted and collected after the same fifteen-minute active window; newer partial outputs remain protected.

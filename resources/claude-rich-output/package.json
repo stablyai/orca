@@ -1,0 +1,16 @@
+{
+  "name": "@orca/claude-rich-output",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "reply-markdown",
+    "reply-media",
+    "LICENSE.neoncoat",
+    "README.md"
+  ],
+  "type": "module",
+  "dependencies": {
+    "@mathjax/src": "4.1.3",
+    "beautiful-mermaid": "1.1.3"
+  }
+}

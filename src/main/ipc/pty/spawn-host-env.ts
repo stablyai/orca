@@ -18,6 +18,7 @@ import { stampWslOrchestrationCompatibilityHost } from '../../pty/wsl-orca-env'
 import { getRuntimeSourceStamp } from '../../runtime/host-descriptor'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { buildPtyHostEnv } from './host-env/assembly'
+import { applyClaudeRichOutputEnv } from '../../claude/claude-rich-output'
 import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
 import { runAsWslLaunchUserAct } from '../../wsl/wsl-background-exec-gate'
 import {
@@ -261,6 +262,13 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
       routeBrowserOpensToClient: deps.runtime?.shouldRelayTerminalBrowserOpens?.(),
       deferGitConfigGuardToDaemon:
         args.provider.supportsGitCredentialGuardHost?.(sessionId) === true
+    })
+    await applyClaudeRichOutputEnv(env, {
+      isPackaged: getAppEnvironment().isPackaged(),
+      resourcesPath: process.resourcesPath,
+      launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+      isWsl,
+      cwd: args.cwd
     })
     stampWslOrchestrationCompatibilityHost(
       env,

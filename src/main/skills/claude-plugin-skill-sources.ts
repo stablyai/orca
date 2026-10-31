@@ -55,7 +55,9 @@ function parseJsonObject(content: string | null): Record<string, unknown> | null
   }
 }
 
-function readEnabledPlugins(settingsContents: readonly (string | null)[]): Map<string, boolean> {
+export function readClaudePluginEnablement(
+  settingsContents: readonly (string | null)[]
+): Map<string, boolean> {
   const enabled = new Map<string, boolean>()
   for (const content of settingsContents) {
     const settings = parseJsonObject(content)
@@ -72,7 +74,7 @@ function readEnabledPlugins(settingsContents: readonly (string | null)[]): Map<s
   return enabled
 }
 
-function parseInstall(value: unknown): ClaudePluginInstall | null {
+export function parseClaudePluginInstall(value: unknown): ClaudePluginInstall | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
@@ -128,7 +130,7 @@ function selectActiveInstall(
 ): ClaudePluginInstall | null {
   return (
     values
-      .map(parseInstall)
+      .map(parseClaudePluginInstall)
       .filter((install): install is ClaudePluginInstall => install !== null)
       .filter(
         (install) =>
@@ -150,27 +152,45 @@ function safePluginLabel(pluginId: string, pathApi: SkillDiscoveryPathApi): stri
   return safeLabel || 'plugin'
 }
 
+export function resolveClaudePluginInstalls(args: {
+  installedPlugins: string | null
+  cwd: string
+  pathApi?: SkillDiscoveryPathApi
+}): { pluginId: string; installPath: string }[] {
+  const installed = parseJsonObject(args.installedPlugins)?.plugins
+  if (!installed || typeof installed !== 'object' || Array.isArray(installed)) {
+    return []
+  }
+  const installs: { pluginId: string; installPath: string }[] = []
+  for (const [pluginId, values] of Object.entries(installed)) {
+    if (!Array.isArray(values)) {
+      continue
+    }
+    const install = selectActiveInstall(values, args.cwd, args.pathApi ?? defaultPathApi)
+    if (install) {
+      installs.push({ pluginId, installPath: install.installPath })
+    }
+  }
+  return installs
+}
+
 export function resolveClaudePluginSkillSources(args: {
   metadata: ClaudePluginMetadata
   cwd: string
   pathApi?: SkillDiscoveryPathApi
 }): SkillScanRoot[] {
   const pathApi = args.pathApi ?? defaultPathApi
-  const installed = parseJsonObject(args.metadata.installedPlugins)?.plugins
-  if (!installed || typeof installed !== 'object' || Array.isArray(installed)) {
-    return []
-  }
-  const enabled = readEnabledPlugins(args.metadata.settings)
+  const enabled = readClaudePluginEnablement(args.metadata.settings)
   const roots = new Map<string, SkillScanRoot>()
-  for (const [pluginId, rawInstalls] of Object.entries(installed)) {
-    if (enabled.get(pluginId) !== true || !Array.isArray(rawInstalls)) {
+  for (const { pluginId, installPath } of resolveClaudePluginInstalls({
+    installedPlugins: args.metadata.installedPlugins,
+    cwd: args.cwd,
+    pathApi
+  })) {
+    if (enabled.get(pluginId) !== true) {
       continue
     }
-    const install = selectActiveInstall(rawInstalls, args.cwd, pathApi)
-    if (!install) {
-      continue
-    }
-    const skillsPath = pathApi.join(install.installPath, 'skills')
+    const skillsPath = pathApi.join(installPath, 'skills')
     if (!roots.has(skillsPath)) {
       roots.set(skillsPath, {
         id: `claude-plugin-${stablePathId(skillsPath)}`,

@@ -17,6 +17,7 @@ export type AgentStartupSettings = Partial<
     | 'agentDefaultArgs'
     | 'agentLaunchChoices'
     | 'agentDefaultEnv'
+    | 'claudeRichOutput'
     | 'agentPermissionDefault'
     | 'agentPermissionOverrides'
     | 'terminalWindowsShell'

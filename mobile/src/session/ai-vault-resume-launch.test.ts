@@ -10,6 +10,9 @@ import {
 } from './ai-vault-resume-launch'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
+import type { AiVaultResumeLaunchSettings } from '../../../src/shared/ai-vault-resume-startup'
+import { loadMobileResumeMetadata } from '../agent-history/mobile-agent-history-resume-metadata'
+import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   return {
@@ -38,6 +41,64 @@ function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
 }
 
 describe('buildMobileAiVaultResumeLaunch', () => {
+  for (const hostPlatform of ['darwin', 'linux', 'win32'] as const) {
+    it.each([true, false, undefined])(
+      `preserves the host rich-output setting=%s through mobile resume on ${hostPlatform}`,
+      async (enabled) => {
+        const settings: AiVaultResumeLaunchSettings = {
+          agentDefaultEnv: { claude: { PROJECT_MODE: 'kept' } }
+        }
+        if (enabled !== undefined) {
+          settings.claudeRichOutput = enabled
+        }
+        const client = new FakeSession('connected')
+        client.sendRequest.mockImplementation(async (method) => ({
+          id: 'metadata',
+          ok: true,
+          result:
+            method === 'settings.get'
+              ? { settings }
+              : { repos: [], folderWorkspaces: [], groups: [], worktrees: [] },
+          _meta: { runtimeId: 'runtime' }
+        }))
+        const metadata = await loadMobileResumeMetadata(client)
+        expect(metadata.settings).toBe(settings)
+        const launch = buildMobileAiVaultResumeLaunch({
+          session: session({ cwd: hostPlatform === 'win32' ? 'C:\\repo' : '/work' }),
+          workspacePlatform: hostPlatform,
+          settings: metadata.settings
+        })
+        const expected = {
+          PROJECT_MODE: 'kept',
+          ...(enabled === true ? { ORCA_CLAUDE_RICH_OUTPUT: '1' } : {})
+        }
+        expect(launch.env).toEqual(expected)
+        expect(launch.launchConfig?.agentEnv).toEqual(expected)
+        client.sendRequest
+          .mockResolvedValueOnce({
+            id: 'create',
+            ok: true,
+            result: {
+              tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' }
+            },
+            _meta: { runtimeId: 'runtime' }
+          })
+          .mockResolvedValueOnce({
+            id: 'send',
+            ok: true,
+            result: { send: { accepted: true } },
+            _meta: { runtimeId: 'runtime' }
+          })
+        await resumeAiVaultSessionInTerminal(client, 'worktree-1', launch)
+        expect(
+          client.sendRequest.mock.calls.find(
+            ([method]) => method === 'session.tabs.createTerminal'
+          )?.[1]
+        ).toMatchObject({ env: expected })
+      }
+    )
+  }
+
   it('resumes Cursor by conversation id with its default args and launch config like desktop', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({ agent: 'cursor', sessionId: 'cursor-1' }),

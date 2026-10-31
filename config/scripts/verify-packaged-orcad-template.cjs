@@ -1,3 +1,7 @@
+const {
+  CLAUDE_RICH_OUTPUT_MANIFEST,
+  claudeRichOutputAssetFilenames
+} = require('../../src/shared/claude-rich-output-artifacts.ts')
 const { createHash } = require('node:crypto')
 const { lstatSync, readFileSync, readdirSync } = require('node:fs')
 const { basename, join, relative, sep } = require('node:path')
@@ -172,9 +176,12 @@ function verifyPackagedOrcadTemplate(resourcesDir, targets = ORCAD_TEMPLATE_TARG
     requireSha256(commonSha256[ORCAD_MOBILE_WEB_MANIFEST], `${ORCAD_MOBILE_WEB_MANIFEST} checksum`),
     ORCAD_MOBILE_WEB_MANIFEST
   )
-  const commonFilenames = orcadTemplateCommonFilenames(
-    orcadMobileWebAssetFilenames(readFileSync(pageManifest, 'utf8'))
-  )
+  const commonFilenames = orcadTemplateCommonFilenames([
+    ...orcadMobileWebAssetFilenames(readFileSync(pageManifest, 'utf8')),
+    ...claudeRichOutputAssetFilenames(
+      readFileSync(join(templateDir, CLAUDE_RICH_OUTPUT_MANIFEST), 'utf8')
+    )
+  ])
   requireExactNames(Object.keys(commonSha256), commonFilenames, 'common manifest inventory')
   for (const filename of commonFilenames) {
     verifyFile(

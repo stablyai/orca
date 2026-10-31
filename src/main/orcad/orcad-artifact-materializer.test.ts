@@ -1,3 +1,4 @@
+import { CLAUDE_RICH_OUTPUT_MANIFEST } from '../../shared/claude-rich-output-artifacts'
 import { createHash } from 'node:crypto'
 import type * as NodeFs from 'node:fs'
 import {
@@ -52,7 +53,8 @@ import {
 } from './orcad-artifact-materializer'
 
 const TARGET = 'linux-x64-glibc' as const
-const PAGE_ASSETS = ['out/mobile-web/index.html']
+const RICH_ASSET = 'claude-rich-output/reply-media/hooks/register.tsx'
+const PAGE_ASSETS = ['out/mobile-web/index.html', RICH_ASSET]
 const fileReads = vi.hoisted(() => ({ count: 0 }))
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -105,6 +107,9 @@ function targetContents(target: NodeRuntimeTarget, filename: string): string {
 }
 
 function commonContents(filename: string): string {
+  if (filename === CLAUDE_RICH_OUTPUT_MANIFEST) {
+    return JSON.stringify({ assets: [RICH_ASSET] })
+  }
   if (filename === ORCAD_MOBILE_WEB_MANIFEST) {
     return JSON.stringify({ assets: [{ path: 'index.html' }] })
   }

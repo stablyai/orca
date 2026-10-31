@@ -5,6 +5,7 @@ packages:
   - native/windows-registry
   - native/windows-security
   - src/packages/*
+  - resources/claude-rich-output
 
 minimumReleaseAge: 4320
 # Preserve the existing exception for the explicitly selected Bun 1.4.4 release.

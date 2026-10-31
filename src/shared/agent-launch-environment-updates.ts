@@ -36,6 +36,22 @@ export function legacyEnvUpdates(
   env: Record<string, string>,
   platform: NodeJS.Platform | undefined = agentPermissionHostPlatform()
 ): AgentLaunchSettingsSource {
+  const user = { ...env }
+  if (
+    agent === 'claude' &&
+    !Object.hasOwn(settings.agentDefaultEnv?.claude ?? {}, 'ORCA_CLAUDE_RICH_OUTPUT')
+  ) {
+    delete user.ORCA_CLAUDE_RICH_OUTPUT
+  }
+  return storedEnvUpdates(settings, agent, user, platform)
+}
+
+function storedEnvUpdates(
+  settings: AgentLaunchSettingsSource,
+  agent: TuiAgent,
+  env: Record<string, string>,
+  platform: NodeJS.Platform | undefined
+): AgentLaunchSettingsSource {
   if (!hasEnvPermission(agent)) {
     return { agentDefaultEnv: { ...settings.agentDefaultEnv, [agent]: env } }
   }
@@ -76,7 +92,9 @@ export function agentEnvironmentMutationUpdates(
   platform: NodeJS.Platform
 ): AgentLaunchSettingsSource {
   // Edits the env the terminal gets, so removing Goose's published bypass entry means own.
-  const env = { ...resolveTuiAgentLaunchEnv(mutation.agent, settings, platform) }
+  const env = {
+    ...resolveTuiAgentLaunchEnv(mutation.agent, { ...settings, claudeRichOutput: false }, platform)
+  }
   // Windows environment names are case insensitive on the execution host.
   for (const name of Object.keys(env)) {
     if (
@@ -89,7 +107,7 @@ export function agentEnvironmentMutationUpdates(
   const nextEnv =
     mutation.type === 'environment-set' ? { ...env, [mutation.name]: mutation.value } : env
   if (hasTypedAgentPermission(settings)) {
-    return legacyEnvUpdates(settings, mutation.agent, nextEnv, platform)
+    return storedEnvUpdates(settings, mutation.agent, nextEnv, platform)
   }
   return { agentDefaultEnv: { ...settings.agentDefaultEnv, [mutation.agent]: nextEnv } }
 }

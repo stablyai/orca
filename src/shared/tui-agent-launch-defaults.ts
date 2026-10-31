@@ -38,7 +38,8 @@ export type AgentLaunchProfileSettings = Partial<
     | 'agentPermissionOverrides'
     | 'terminalWindowsShell'
   >
->
+> &
+  Partial<Pick<GlobalSettings, 'claudeRichOutput'>>
 
 /** Launch intent overrides only Orca's injected permission, preserving the user's args and env. */
 export function agentLaunchPermissionSettings<T extends AgentLaunchProfileSettings>(
@@ -237,6 +238,10 @@ export function resolveTuiAgentLaunchEnv(
   platform: NodeJS.Platform | null | undefined = agentPermissionHostPlatform(),
   visitBaseEntry?: (name: string, value: string) => true
 ): Record<string, string> {
+  const richOutput: Record<string, string> =
+    agent === 'claude' && settings?.claudeRichOutput === true
+      ? { ORCA_CLAUDE_RICH_OUTPUT: '1' }
+      : {}
   const configured = settings?.agentDefaultEnv
   const value: unknown = configured && Object.getOwnPropertyDescriptor(configured, agent)?.value
   const own =
@@ -251,12 +256,15 @@ export function resolveTuiAgentLaunchEnv(
     if (!own) {
       entries.forEach(([name, value]) => visitBaseEntry?.(name, value))
     }
-    return Object.fromEntries(entries)
+    return { ...richOutput, ...Object.fromEntries(entries) }
   }
   const added = Object.entries(
     agentPermissionEnv(agent, resolveAgentPermission(agent, settings).choice)
   ).filter(([name]) => !own?.some(([key]) => permissionEnvNameMatches(key, name, platform)))
-  return Object.fromEntries(added.length ? [...added, ...(own ?? [])] : (own ?? []))
+  return {
+    ...richOutput,
+    ...Object.fromEntries(added.length ? [...added, ...(own ?? [])] : (own ?? []))
+  }
 }
 
 /** Publish composed args/env for older clients that infer permission from text; explicit keys prevent fallback to their built-in defaults. */

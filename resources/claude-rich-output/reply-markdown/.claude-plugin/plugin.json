@@ -1,0 +1,74 @@
+{
+  "name": "reply-markdown",
+  "version": "0.1.0",
+  "description": "Draws a reply's headings, lists, quotes, callouts, tables and rules in color, with copy buttons for tables, callouts and code cards (terminal)",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "description": "Turn this mod off without removing it. Takes effect at once.",
+      "default": true
+    },
+    "headings": {
+      "type": "boolean",
+      "title": "Headings",
+      "description": "Draw headings in color, a level 1 heading as a badge. Off, the engine draws them.",
+      "default": true
+    },
+    "lists": {
+      "type": "boolean",
+      "title": "Lists",
+      "description": "Draw bullets and numbers in color, and task items as checkboxes. Off, the engine draws lists, and Claude is not told to write task lists.",
+      "default": true
+    },
+    "quotes": {
+      "type": "boolean",
+      "title": "Quotes",
+      "description": "Draw a quote with a colored bar beside it. Off, the engine draws it.",
+      "default": true
+    },
+    "callouts": {
+      "type": "boolean",
+      "title": "Callouts",
+      "description": "Draw a GitHub alert (> [!WARNING] and the rest) as a box in its color, with a button that copies its Markdown source. Off, the engine draws it as a quote, and Claude is not told to write alerts.",
+      "default": true
+    },
+    "tables": {
+      "type": "boolean",
+      "title": "Tables",
+      "description": "Draw a table with the lines the table border option names, with a button that copies its Markdown source. Off, the engine draws it.",
+      "default": true
+    },
+    "rules": {
+      "type": "boolean",
+      "title": "Rules",
+      "description": "Draw a horizontal rule as a line across the reply. Off, the engine draws it.",
+      "default": true
+    },
+    "codeCards": {
+      "type": "boolean",
+      "title": "Code cards",
+      "description": "Put a code fence in a card with a copy button. Off, the engine draws it, and Claude is not told to put what the user will copy in a fence of its own.",
+      "default": true
+    },
+    "tableBorder": {
+      "type": "string",
+      "title": "Table border",
+      "description": "The lines of a table. rules: no frame, a line under the header and a faint one between the rows. round: a frame of thin lines, rounded corners. single: thin lines, square corners. bold: thick lines, square corners. Thick lines cannot have rounded corners: no such characters exist.",
+      "options": ["rules", "round", "single", "bold"],
+      "default": "rules"
+    },
+    "cardBorder": {
+      "type": "string",
+      "title": "Card and callout border",
+      "description": "The border of a code card and of a callout box. round: thin lines, rounded corners. single: thin lines, square corners. bold: thick lines, square corners.",
+      "options": ["round", "single", "bold"],
+      "default": "round"
+    }
+  },
+  "author": {
+    "name": "Nate Chia",
+    "url": "https://github.com/NateCC0902/NeonCoat"
+  },
+  "license": "MIT"
+}

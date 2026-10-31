@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCAD_MOBILE_WEB_MANIFEST, orcadArtifactFilenames } from '../../shared/orcad-artifacts'
+import { CLAUDE_RICH_OUTPUT_MANIFEST } from '../../shared/claude-rich-output-artifacts'
 import { runOrcadProfilePreflight } from './orcad-profile-preflight'
 import { readOrcadArtifactIdentity } from './orcad-artifact-identity'
 import { resolveOrcadExitCode } from './orcad-exit-code'
@@ -13,6 +14,7 @@ const fixture = vi.hoisted(() => ({
   directory: '',
   sqlite: vi.fn(async () => ({ sqliteVersion: '3.53.2', revision: 1 }))
 }))
+const RICH_ASSET = 'claude-rich-output/reply-media/hooks/register.tsx'
 vi.mock('./orcad-app-paths', () => ({ resolveOrcadInstallRoot: () => fixture.directory }))
 vi.mock('../persistence/profile-state/profile-state-runtime-preflight', () => ({
   preflightProfileStateRuntime: fixture.sqlite
@@ -29,6 +31,9 @@ function fixtureContents(filename: string): string {
   if (filename === '.server-target') {
     return 'linux-x64-glibc\n'
   }
+  if (filename === CLAUDE_RICH_OUTPUT_MANIFEST) {
+    return JSON.stringify({ assets: [RICH_ASSET] })
+  }
   return filename === ORCAD_MOBILE_WEB_MANIFEST
     ? JSON.stringify({ assets: [{ path: 'index.html' }] })
     : filename
@@ -36,7 +41,10 @@ function fixtureContents(filename: string): string {
 
 beforeEach(async () => {
   fixture.directory = await mkdtemp(join(tmpdir(), 'orcad-artifact-preflight-'))
-  for (const filename of orcadArtifactFilenames('linux-x64-glibc', ['out/mobile-web/index.html'])) {
+  for (const filename of orcadArtifactFilenames('linux-x64-glibc', [
+    'out/mobile-web/index.html',
+    RICH_ASSET
+  ])) {
     const path = join(fixture.directory, filename)
     await mkdir(dirname(path), { recursive: true })
     await writeFile(path, fixtureContents(filename))
@@ -63,7 +71,9 @@ describe('installed artifact admission', () => {
     'node_modules/@parcel/watcher/watcher.node',
     '.runtime-node',
     'node_modules/node-pty/build/Release/pty.node',
-    'out/mobile-web/index.html'
+    'out/mobile-web/index.html',
+    CLAUDE_RICH_OUTPUT_MANIFEST,
+    RICH_ASSET
   ])('refuses a missing %s as configuration before any profile probe', async (filename) => {
     await rm(join(fixture.directory, filename))
     const error = await runOrcadProfilePreflight(randomUUID()).catch((failure: unknown) => failure)

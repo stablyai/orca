@@ -55,6 +55,7 @@ import {
   orcadRipgrepArtifact
 } from '../../src/shared/orcad-artifacts.ts'
 import { computeOrcadFullVersion } from './orcad-artifact-version.mjs'
+import { stageOrcadRichOutput } from './orcad-rich-output-bundle.mjs'
 import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
 import { findSlotProblems, readManifest } from './orcad-prebuild-slot-contents.mjs'
 import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browser-name.ts'
@@ -207,6 +208,8 @@ if (existsSync(AGENT_BROWSER_SOURCE) && process.env.ORCAD_OMIT_AGENT_BROWSER !==
 cpSync(join(ROOT, 'resources', 'licenses', 'ripgrep'), join(OUT_DIR, 'ripgrep', 'licenses'), {
   recursive: true
 })
+await import('./build-claude-rich-output.mjs')
+await stageOrcadRichOutput(ROOT, OUT_DIR)
 cpSync(join(ROOT, 'resources', 'native-chat-visuals'), join(OUT_DIR, 'native-chat-visuals'), {
   recursive: true
 })

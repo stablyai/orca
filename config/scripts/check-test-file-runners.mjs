@@ -17,6 +17,23 @@ const TEST_FILE_NAME = /\.(?:test|spec|e2e|bench)\.[cm]?[jt]sx?$/
 // Mirror literals must appear in runner sources; list manual rows each run so their lack of CI remains visible.
 const NON_UNIT_TEST_RUNNERS = [
   {
+    name: 'Claude plugin hooks and media (pnpm test:claude-rich-output)',
+    manual: true,
+    include: [
+      'resources/claude-rich-output/reply-markdown/hooks/*.test.ts',
+      'resources/claude-rich-output/reply-markdown/hooks/*.test.mjs',
+      'resources/claude-rich-output/reply-media/hooks/*.test.ts',
+      'resources/claude-rich-output/reply-media/render/*.test.mjs'
+    ],
+    sources: ['config/scripts/test-claude-rich-output.mjs'],
+    mirrors: [
+      'resources/claude-rich-output/reply-markdown/hooks/*.test.mjs',
+      'resources/claude-rich-output/reply-media/render/*.test.mjs',
+      "['reply-markdown', 'reply-media']",
+      "['plugin', 'test', path]"
+    ]
+  },
+  {
     name: 'Playwright e2e',
     include: ['tests/e2e/**/*.spec.ts'],
     sources: ['tests/playwright.config.ts'],

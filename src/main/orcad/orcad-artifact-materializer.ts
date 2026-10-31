@@ -1,3 +1,4 @@
+import { claudeRichOutputTemplateAssetFilenames } from '../../shared/claude-rich-output-artifacts'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises'
@@ -89,7 +90,8 @@ export async function assembleOrcadArtifact(args: {
 }): Promise<string> {
   const trust = args.trustVerificationRecord === true
   const manifest = args.manifest ?? (await readTemplateManifest(args.templateDir))
-  const mobileWebAssets = templateMobileWebAssets(manifest)
+  const richAssets = claudeRichOutputTemplateAssetFilenames(manifest.commonSha256)
+  const mobileWebAssets = [...templateMobileWebAssets(manifest), ...richAssets]
   const sources = artifactSources(args.templateDir, args.target, manifest, mobileWebAssets)
   const expected = expectedTemplateSha256(args.target, manifest, mobileWebAssets)
   const targetRoot = join(args.cacheRoot, args.target)

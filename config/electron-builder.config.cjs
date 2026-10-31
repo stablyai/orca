@@ -147,6 +147,9 @@ const commonExtraResources = [
   skillFreshnessResources,
   ...agentBrowserSkillResources,
   nativeChatVisualsResource,
+  { from: 'out/claude-rich-output', to: 'claude-rich-output' },
+  // electron-builder excludes a source directory's root node_modules.
+  { from: 'out/claude-rich-output/node_modules', to: 'claude-rich-output/node_modules' },
   emojiShortcodeDatasetResource
 ]
 // Native speech addons need real disk paths; copy only the artifact target’s variant.
@@ -303,6 +306,8 @@ module.exports = {
     '!tsconfig.json',
     // Feature media is read from process.resourcesPath via extraResources; exclude duplicate sources.
     '!resources/onboarding/feature-wall/**',
+    '!resources/claude-rich-output/**',
+    '!out/claude-rich-output{,/**/*}',
     '!resources/skills/**',
     '!resources/native-chat-visuals/**',
     // extraResources already ships plugin bytes; exclude source duplicates.
