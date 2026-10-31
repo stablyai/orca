@@ -1,5 +1,6 @@
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../shared/skill-install-capability'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
+import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import { createServer, type Server } from 'node:http'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -104,7 +105,8 @@ describe('CLI remote WebSocket transport', () => {
           REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
           TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
           TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
-          AGENT_LAUNCH_RUNTIME_CAPABILITY
+          AGENT_LAUNCH_RUNTIME_CAPABILITY,
+          WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
         ]
       })
     )
