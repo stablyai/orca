@@ -9481,6 +9481,24 @@
           "manyDescription": "Não serão atualizadas até você revisá-las.",
           "review": "Revisar",
           "dismiss": "Dispensar"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Confirme que você confia nesta pasta",
+          "title": "Confirme que você confia em {{value0}}",
+          "theme": "Este tema é de {{value0}}, não do Orca. Instale apenas plugins de autores em quem você confia.",
+          "content": "Este plugin é de {{value0}}, não do Orca. Instale apenas plugins de autores em quem você confia.",
+          "translations": "Esta tradução é de {{value0}}, não do Orca. Traduções podem alterar qualquer texto do Orca, então instale-as apenas de autores em quem você confia.",
+          "code": "Este plugin é de {{value0}}, não do Orca. Ele executa o código do publicador dentro do Orca, então instale-o apenas se você confia em {{value0}}.",
+          "git": "O Orca não verificou este repositório. Um plugin dele pode executar o código do publicador dentro do Orca, então instale-o apenas se você confia em {{value0}}.",
+          "localFolder": "Esta é uma pasta local não verificada. Um plugin dela pode executar código dentro do Orca, então instale-o apenas se você confia na origem.",
+          "devFolder": "Esta é uma pasta local não verificada. O Orca carrega o plugin como está, e edições de código posteriores são executadas sem perguntar, então adicione apenas pastas em que você confia.",
+          "publisher": "Publicador",
+          "repository": "Repositório",
+          "folder": "Pasta",
+          "catalog": "Catálogo",
+          "cancel": "Cancelar",
+          "addFolder": "Adicionar pasta",
+          "install": "Instalar"
         }
       },
       "right": {

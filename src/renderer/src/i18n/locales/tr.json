@@ -13146,6 +13146,24 @@
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",
           "assignedDark": "{{value0}} koyu temanız olarak ayarlandı",
           "saveFailed": "Tema kaydedilemedi. Yeniden deneyin."
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Bu klasöre güvendiğinizden emin olun",
+          "title": "{{value0}} kaynağına güvendiğinizden emin olun",
+          "theme": "Bu tema Orca’dan değil, {{value0}} kaynağından geliyor. Yalnızca güvendiğiniz yazarların eklentilerini yükleyin.",
+          "content": "Bu eklenti Orca’dan değil, {{value0}} kaynağından geliyor. Yalnızca güvendiğiniz yazarların eklentilerini yükleyin.",
+          "translations": "Bu çeviri Orca’dan değil, {{value0}} kaynağından geliyor. Çeviriler Orca’daki her metni değiştirebilir; bu yüzden yalnızca güvendiğiniz yazarlardan yükleyin.",
+          "code": "Bu eklenti Orca’dan değil, {{value0}} kaynağından geliyor. Yayıncının kodunu Orca içinde çalıştırır; bu yüzden yalnızca {{value0}} kaynağına güveniyorsanız yükleyin.",
+          "git": "Orca bu depoyu denetlemedi. Buradan gelen bir eklenti yayıncısının kodunu Orca içinde çalıştırabilir; bu yüzden yalnızca {{value0}} kaynağına güveniyorsanız yükleyin.",
+          "localFolder": "Bu doğrulanmamış bir yerel klasör. Buradan gelen bir eklenti Orca içinde kod çalıştırabilir; bu yüzden yalnızca kaynağına güveniyorsanız yükleyin.",
+          "devFolder": "Bu doğrulanmamış bir yerel klasör. Orca eklentisini olduğu gibi yükler ve sonraki kod düzenlemeleri sormadan çalışır; bu yüzden yalnızca güvendiğiniz klasörleri ekleyin.",
+          "publisher": "Yayıncı",
+          "repository": "Depo",
+          "folder": "Klasör",
+          "catalog": "Katalog",
+          "cancel": "İptal",
+          "addFolder": "Klasör ekle",
+          "install": "Yükle"
         }
       },
       "right": {

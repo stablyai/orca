@@ -13160,6 +13160,24 @@
           "assignedLight": "{{value0}} als helles Design festgelegt",
           "assignedDark": "{{value0}} als dunkles Design festgelegt",
           "saveFailed": "Das Design konnte nicht gespeichert werden. Versuche es erneut."
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Stellen Sie sicher, dass Sie diesem Ordner vertrauen",
+          "title": "Stellen Sie sicher, dass Sie {{value0}} vertrauen",
+          "theme": "Dieses Design stammt von {{value0}}, nicht von Orca. Installieren Sie nur Plugins von Autoren, denen Sie vertrauen.",
+          "content": "Dieses Plugin stammt von {{value0}}, nicht von Orca. Installieren Sie nur Plugins von Autoren, denen Sie vertrauen.",
+          "translations": "Diese Übersetzung stammt von {{value0}}, nicht von Orca. Übersetzungen können jeden Text in Orca ändern. Installieren Sie sie daher nur von Autoren, denen Sie vertrauen.",
+          "code": "Dieses Plugin stammt von {{value0}}, nicht von Orca. Es führt den Code des Herausgebers in Orca aus. Installieren Sie es daher nur, wenn Sie {{value0}} vertrauen.",
+          "git": "Orca hat dieses Repository nicht geprüft. Ein Plugin daraus kann den Code seines Herausgebers in Orca ausführen. Installieren Sie es daher nur, wenn Sie {{value0}} vertrauen.",
+          "localFolder": "Dies ist ein nicht verifizierter lokaler Ordner. Ein Plugin daraus kann Code in Orca ausführen. Installieren Sie es daher nur, wenn Sie seiner Herkunft vertrauen.",
+          "devFolder": "Dies ist ein nicht verifizierter lokaler Ordner. Orca lädt sein Plugin unverändert, und spätere Codeänderungen laufen ohne Nachfrage. Fügen Sie daher nur Ordner hinzu, denen Sie vertrauen.",
+          "publisher": "Herausgeber",
+          "repository": "Repository",
+          "folder": "Ordner",
+          "catalog": "Katalog",
+          "cancel": "Abbrechen",
+          "addFolder": "Ordner hinzufügen",
+          "install": "Installieren"
         }
       },
       "right": {

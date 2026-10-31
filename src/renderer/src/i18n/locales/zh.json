@@ -12678,6 +12678,24 @@
           "manyDescription": "在你审核之前不会更新。",
           "review": "审核",
           "dismiss": "关闭"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "请确认你信任此文件夹",
+          "title": "请确认你信任 {{value0}}",
+          "theme": "此主题来自 {{value0}}，而非 Orca。请只安装你信任的作者的插件。",
+          "content": "此插件来自 {{value0}}，而非 Orca。请只安装你信任的作者的插件。",
+          "translations": "此翻译来自 {{value0}}，而非 Orca。翻译可以更改 Orca 中的任何文本，因此请只安装你信任的作者的翻译。",
+          "code": "此插件来自 {{value0}}，而非 Orca。它会在 Orca 内运行发布者的代码，因此仅在你信任 {{value0}} 时安装。",
+          "git": "Orca 尚未检查此仓库。来自它的插件可以在 Orca 内运行发布者的代码，因此仅在你信任 {{value0}} 时安装。",
+          "localFolder": "这是未经验证的本地文件夹。来自它的插件可以在 Orca 内运行代码，因此仅在你信任其来源时安装。",
+          "devFolder": "这是未经验证的本地文件夹。Orca 会按原样加载其插件，之后的代码修改会直接运行而不再询问，因此请只添加你信任的文件夹。",
+          "publisher": "发布者",
+          "repository": "仓库",
+          "folder": "文件夹",
+          "catalog": "目录",
+          "cancel": "取消",
+          "addFolder": "添加文件夹",
+          "install": "安装"
         }
       },
       "right": {

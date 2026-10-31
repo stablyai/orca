@@ -13190,6 +13190,24 @@
           "manyDescription": "Elles ne seront pas installées tant que vous ne les aurez pas vérifiées.",
           "review": "Vérifier",
           "dismiss": "Ignorer"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Assurez-vous de faire confiance à ce dossier",
+          "title": "Assurez-vous de faire confiance à {{value0}}",
+          "theme": "Ce thème provient de {{value0}}, pas d’Orca. N’installez que des plugins d’auteurs de confiance.",
+          "content": "Ce plugin provient de {{value0}}, pas d’Orca. N’installez que des plugins d’auteurs de confiance.",
+          "translations": "Cette traduction provient de {{value0}}, pas d’Orca. Les traductions peuvent modifier n’importe quel texte d’Orca : ne les installez que depuis des auteurs de confiance.",
+          "code": "Ce plugin provient de {{value0}}, pas d’Orca. Il exécute le code de l’éditeur dans Orca : ne l’installez que si vous faites confiance à {{value0}}.",
+          "git": "Orca n’a pas vérifié ce dépôt. Un plugin qui en provient peut exécuter le code de son éditeur dans Orca : ne l’installez que si vous faites confiance à {{value0}}.",
+          "localFolder": "Ce dossier local n’est pas vérifié. Un plugin qui en provient peut exécuter du code dans Orca : ne l’installez que si vous faites confiance à sa provenance.",
+          "devFolder": "Ce dossier local n’est pas vérifié. Orca charge son plugin tel quel, et les modifications de code ultérieures s’exécutent sans confirmation : n’ajoutez que des dossiers de confiance.",
+          "publisher": "Éditeur",
+          "repository": "Dépôt",
+          "folder": "Dossier",
+          "catalog": "Catalogue",
+          "cancel": "Annuler",
+          "addFolder": "Ajouter le dossier",
+          "install": "Installer"
         }
       },
       "right": {

@@ -12983,6 +12983,24 @@
           "assignedLight": "已將 {{value0}} 設為淺色主題",
           "assignedDark": "已將 {{value0}} 設為深色主題",
           "saveFailed": "無法儲存主題。請再試一次。"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "請確認你信任此資料夾",
+          "title": "請確認你信任 {{value0}}",
+          "theme": "此主題來自 {{value0}}，而非 Orca。請只安裝你信任的作者的外掛。",
+          "content": "此外掛來自 {{value0}}，而非 Orca。請只安裝你信任的作者的外掛。",
+          "translations": "此翻譯來自 {{value0}}，而非 Orca。翻譯可以變更 Orca 中的任何文字，因此請只安裝你信任的作者的翻譯。",
+          "code": "此外掛來自 {{value0}}，而非 Orca。它會在 Orca 內執行發布者的程式碼，因此僅在你信任 {{value0}} 時安裝。",
+          "git": "Orca 尚未檢查此存放庫。來自它的外掛可以在 Orca 內執行發布者的程式碼，因此僅在你信任 {{value0}} 時安裝。",
+          "localFolder": "這是未經驗證的本機資料夾。來自它的外掛可以在 Orca 內執行程式碼，因此僅在你信任其來源時安裝。",
+          "devFolder": "這是未經驗證的本機資料夾。Orca 會按原樣載入其外掛，之後的程式碼修改會直接執行而不再詢問，因此請只新增你信任的資料夾。",
+          "publisher": "發布者",
+          "repository": "存放庫",
+          "folder": "資料夾",
+          "catalog": "目錄",
+          "cancel": "取消",
+          "addFolder": "新增資料夾",
+          "install": "安裝"
         }
       },
       "right": {

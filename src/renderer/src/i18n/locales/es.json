@@ -12966,6 +12966,24 @@
           "manyDescription": "No se actualizarán hasta que las revises.",
           "review": "Revisar",
           "dismiss": "Descartar"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Asegúrate de que confías en esta carpeta",
+          "title": "Asegúrate de que confías en {{value0}}",
+          "theme": "Este tema es de {{value0}}, no de Orca. Instala solo plugins de autores en los que confíes.",
+          "content": "Este plugin es de {{value0}}, no de Orca. Instala solo plugins de autores en los que confíes.",
+          "translations": "Esta traducción es de {{value0}}, no de Orca. Las traducciones pueden cambiar cualquier texto de Orca, así que instálalas solo de autores en los que confíes.",
+          "code": "Este plugin es de {{value0}}, no de Orca. Ejecuta el código del editor dentro de Orca, así que instálalo solo si confías en {{value0}}.",
+          "git": "Orca no ha revisado este repositorio. Un plugin de él puede ejecutar el código de su editor dentro de Orca, así que instálalo solo si confías en {{value0}}.",
+          "localFolder": "Esta es una carpeta local sin verificar. Un plugin de ella puede ejecutar código dentro de Orca, así que instálalo solo si confías en su procedencia.",
+          "devFolder": "Esta es una carpeta local sin verificar. Orca carga su plugin tal cual y los cambios de código posteriores se ejecutan sin preguntar, así que añade solo carpetas en las que confíes.",
+          "publisher": "Editor",
+          "repository": "Repositorio",
+          "folder": "Carpeta",
+          "catalog": "Catálogo",
+          "cancel": "Cancelar",
+          "addFolder": "Añadir carpeta",
+          "install": "Instalar"
         }
       },
       "right": {
