@@ -13063,7 +13063,8 @@
           "whatsNew": "Nouveautés",
           "hashCopied": "Empreinte du contenu copiée",
           "hashCopyFailed": "Impossible de copier l’empreinte.",
-          "readme": "Lire le README sur {{value0}}"
+          "readme": "Lire le README sur {{value0}}",
+          "installs": "Installations"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Aucun plugin ne correspond à ces filtres",
@@ -18857,6 +18858,9 @@
           "PluginsSectionDescription": {
             "openWith": "Ouvrir avec (lorsqu’aucun champ modifiable n’a le focus)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} installations"
         }
       }
     },

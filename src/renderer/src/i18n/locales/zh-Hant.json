@@ -12843,7 +12843,8 @@
           "previous": "上一版",
           "updated": "更新時間",
           "license": "授權",
-          "whatsNew": "新功能"
+          "whatsNew": "新功能",
+          "installs": "安裝次數"
         },
         "PluginDetailPage": {
           "back": "外掛",
@@ -18410,6 +18411,9 @@
           "PluginsSectionDescription": {
             "openWith": "開啟方式（焦點不在可編輯欄位時）"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} 次安裝"
         }
       }
     },

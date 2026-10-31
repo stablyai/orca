@@ -12839,7 +12839,8 @@
           "whatsNew": "Novedades",
           "hashCopied": "Hash de contenido copiado",
           "hashCopyFailed": "No se pudo copiar el hash.",
-          "readme": "Leer el README en {{value0}}"
+          "readme": "Leer el README en {{value0}}",
+          "installs": "Instalaciones"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Ningún plugin coincide con estos filtros",
@@ -18637,6 +18638,9 @@
           "PluginsSectionDescription": {
             "openWith": "Abrir con (cuando el foco no está en un campo editable)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} instalaciones"
         }
       }
     },

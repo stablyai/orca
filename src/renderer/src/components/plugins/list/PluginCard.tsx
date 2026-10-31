@@ -6,6 +6,10 @@ import { PluginCardArt, type PluginArtPalette } from './PluginCardArt'
 import type { PluginListEntry } from './plugin-list-entries'
 import { pluginArtShortcut, pluginArtTypes } from './PluginRowArt'
 import { servedPluginHostImages } from '../../../../../shared/plugins/images/plugin-image-url'
+import {
+  pluginInstallCountLabel,
+  usePluginInstallCount
+} from '../presentation/plugin-install-count'
 
 type PluginCardProps = {
   entry: PluginListEntry
@@ -36,6 +40,7 @@ export function PluginCard({
   onIntent,
   onIntentEnd
 }: PluginCardProps): React.JSX.Element {
+  const installCount = usePluginInstallCount(entry)
   const cover =
     servedPluginHostImages(entry.installed?.images)?.cover ??
     servedPluginHostImages(entry.listing?.images)?.cover
@@ -96,7 +101,15 @@ export function PluginCard({
             />
           ) : null}
         </div>
-        <p className="h-4 truncate text-xs text-muted-foreground">{entry.publisher}</p>
+        <p className="h-4 truncate text-xs text-muted-foreground">
+          {entry.publisher}
+          {installCount !== null ? (
+            <span data-plugin-install-count="">
+              {entry.publisher ? ' · ' : ''}
+              {pluginInstallCountLabel(installCount)}
+            </span>
+          ) : null}
+        </p>
         <p
           data-tone={notice?.tone}
           className="mt-0.5 line-clamp-2 h-9 text-xs leading-[18px] text-muted-foreground data-[tone=destructive]:text-destructive data-[tone=warning]:text-status-warning-text"

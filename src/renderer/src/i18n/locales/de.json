@@ -13020,7 +13020,8 @@
           "previous": "Vorherige",
           "updated": "Aktualisiert",
           "license": "Lizenz",
-          "whatsNew": "Neuigkeiten"
+          "whatsNew": "Neuigkeiten",
+          "installs": "Installationen"
         },
         "PluginDetailPage": {
           "back": "Plugins",
@@ -18669,6 +18670,9 @@
           "PluginsSectionDescription": {
             "openWith": "Öffnen mit (wenn der Fokus nicht in einem bearbeitbaren Feld liegt)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} Installationen"
         }
       }
     },

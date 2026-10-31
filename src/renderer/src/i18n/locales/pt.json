@@ -9419,7 +9419,8 @@
           "previous": "Anterior",
           "updated": "Atualizado",
           "license": "Licença",
-          "whatsNew": "Novidades"
+          "whatsNew": "Novidades",
+          "installs": "Instalações"
         },
         "PluginFilterPopover": {
           "kind": "Categoria",
@@ -19746,6 +19747,9 @@
           "PluginsSectionDescription": {
             "openWith": "Abrir com (quando o foco não estiver em um campo editável)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} instalações"
         }
       }
     },

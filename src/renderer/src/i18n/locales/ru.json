@@ -13386,7 +13386,8 @@
           "previous": "Предыдущая",
           "updated": "Обновлено",
           "license": "Лицензия",
-          "whatsNew": "Что нового"
+          "whatsNew": "Что нового",
+          "installs": "Установки"
         },
         "PluginDetailPage": {
           "back": "Плагины",
@@ -19243,6 +19244,9 @@
           "PluginsSectionDescription": {
             "openWith": "Открыть с помощью (если фокус не находится в редактируемом поле)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "Установок: {{value0}}"
         }
       }
     },

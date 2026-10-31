@@ -13006,7 +13006,8 @@
           "previous": "Önceki",
           "updated": "Güncellendi",
           "license": "Lisans",
-          "whatsNew": "Yenilikler"
+          "whatsNew": "Yenilikler",
+          "installs": "Yüklemeler"
         },
         "PluginDetailPage": {
           "back": "Eklentiler",
@@ -18655,6 +18656,9 @@
           "PluginsSectionDescription": {
             "openWith": "Birlikte aç (odak düzenlenebilir bir alanda değilken)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} yükleme"
         }
       }
     },

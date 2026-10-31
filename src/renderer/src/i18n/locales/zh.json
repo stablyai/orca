@@ -12584,7 +12584,8 @@
           "whatsNew": "新功能",
           "hashCopied": "已复制内容哈希",
           "hashCopyFailed": "无法复制哈希。",
-          "readme": "在 {{value0}} 上阅读 README"
+          "readme": "在 {{value0}} 上阅读 README",
+          "installs": "安装次数"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "没有与这些筛选条件匹配的插件",
@@ -18163,6 +18164,9 @@
           "PluginsSectionDescription": {
             "openWith": "打开方式（焦点不在可编辑字段中时）"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} 次安装"
         }
       }
     },

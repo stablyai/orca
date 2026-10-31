@@ -12551,7 +12551,8 @@
           "whatsNew": "새로운 기능",
           "hashCopied": "콘텐츠 해시를 복사했습니다",
           "hashCopyFailed": "해시를 복사할 수 없습니다.",
-          "readme": "{{value0}}에서 README 읽기"
+          "readme": "{{value0}}에서 README 읽기",
+          "installs": "설치 수"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "이 필터와 일치하는 플러그인이 없습니다",
@@ -18163,6 +18164,9 @@
           "PluginsSectionDescription": {
             "openWith": "다음으로 열기 (편집 가능한 필드에 포커스가 없을 때)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}}회 설치"
         }
       }
     },
