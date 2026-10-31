@@ -1,6 +1,6 @@
 import * as fs from 'node:fs'
 import * as asyncFs from 'node:fs/promises'
-import type { ChildProcess } from '@orca/process-host'
+import type { ChildProcess } from 'node:child_process'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
