@@ -13,7 +13,6 @@
     { "path": "../cloud/packages/postgres-schema/tsconfig.json" },
     { "path": "../cloud/packages/push-contract/tsconfig.json" },
     { "path": "../cloud/packages/relay-contract/tsconfig.json" },
-    { "path": "../docs/site/tsconfig.json" },
     { "path": "./tsconfig.node.json" },
     { "path": "./tsconfig.web.json" }
   ]
