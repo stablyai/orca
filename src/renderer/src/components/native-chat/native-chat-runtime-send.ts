@@ -145,33 +145,39 @@ export async function typeNativeChatCommand(
 export function sendNativeChatTypedCommand(
   ptyId: string,
   command: string,
-  /** Written first to empty a seeded multi-line draft; the command's own Ctrl+U reaches one line. */
-  clearInput?: string
+  /** A seeded draft's clear, confirmed like a message send's; the command's own Ctrl+U reaches one line. */
+  options?: Pick<NativeChatSendOptions, 'clearInput' | 'confirmCleared'>
 ): NativeChatSendHandle {
   const controller = new AbortController()
   return enqueueNativeChatPtySend(
     ptyId,
-    (command.length + 1) * AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
-    ({ isCancelled, markSubmitted }) => {
+    (command.length + 1) * AGENT_TUI_COMMAND_KEY_INTERVAL_MS + clearConfirmDurationMs(options),
+    ({ isCancelled, delay, markSubmitted }) => {
       const finish = (outcome: 'accepted' | 'rejected' | 'unknown'): void => {
         if (!isCancelled() && outcome !== 'accepted') {
           clearUnsubmittedAgentInput(ptyId)
         }
         markSubmitted()
       }
-      const write = async (key: string): Promise<'accepted' | 'rejected'> => {
-        if (isCancelled()) {
-          return 'rejected'
-        }
-        return (await sendRuntimePtyInputVerified(ptyId, key, 'driving')) ? 'accepted' : 'rejected'
+      const typeCommand = (): void => {
+        void typeAgentTuiCommand({
+          command,
+          signal: controller.signal,
+          write: async (key) => {
+            if (isCancelled()) {
+              return 'rejected'
+            }
+            return (await sendRuntimePtyInputVerified(ptyId, key, 'driving'))
+              ? 'accepted'
+              : 'rejected'
+          }
+        }).then(finish, () => finish('rejected'))
       }
-      void (clearInput ? write(clearInput) : Promise.resolve('accepted' as const))
-        .then((cleared) =>
-          cleared === 'accepted'
-            ? typeAgentTuiCommand({ command, signal: controller.signal, write })
-            : cleared
-        )
-        .then(finish, () => finish('rejected'))
+      if (options?.clearInput) {
+        clearThenWrite(ptyId, options, delay, typeCommand)
+      } else {
+        typeCommand()
+      }
     },
     {
       onCancelUnsubmitted: () => {
