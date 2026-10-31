@@ -10,7 +10,8 @@ import { agentProviderSessionForHostEnsure } from '@/runtime/agent-session-ensur
 import { createRemoteRuntimeDisconnectedInputGrace } from './remote-runtime-disconnected-input-grace'
 import {
   createRemoteRuntimeRecoveryInputHold,
-  type RemoteRuntimeInputEndpoint
+  type RemoteRuntimeInputEndpoint,
+  type RestoredInputExpectation
 } from './remote-runtime-recovery-input-hold'
 import {
   createRemoteRuntimeInputJournal,
@@ -347,6 +348,7 @@ export function createRemoteRuntimePtyTransport(
     }
   })
   let isFirstConnect = true
+  let attachInputExpectation: RestoredInputExpectation | null = null
   let heldInputRelease: {
     stream: RemoteRuntimeMultiplexedTerminal
     waitingForValidation: boolean
@@ -1976,6 +1978,8 @@ export function createRemoteRuntimePtyTransport(
       heldInputRelease = null
       return
     }
+    // Why: like the local flush, startup work that appeared during the attach drops its typing.
+    settleAttachInput(opts.releasePreconnectInput?.() !== false)
     // Why: the debounce suffix belongs after the held prefix, never ahead of its replay.
     const pending = inputBatcher.takePending()
     if (pending) {
@@ -3324,9 +3328,22 @@ export function createRemoteRuntimePtyTransport(
         }
         return
       }
+      if (!connected) {
+        // Why: like the local attach, one that bound nothing drops its typing instead of holding it for a resubscribe.
+        settleAttachInput(false)
+      }
       recovery.cancel()
       handleRemoteTerminalError(error)
     })
+  }
+
+  // Why: an attach's held typing settles once, at its first flush or when it binds no terminal.
+  function settleAttachInput(bound: boolean): void {
+    const expectation = attachInputExpectation
+    attachInputExpectation = null
+    if (expectation) {
+      recoveryInputHold.settleExpectation(expectation, bound)
+    }
   }
 
   function sendInputNow(data: string): boolean {
@@ -3751,7 +3768,7 @@ export function createRemoteRuntimePtyTransport(
     attach(options) {
       settleSignInConnectWait()
       // Why: like the local attach, keys typed before it reach the terminal this pane names, never another.
-      recoveryInputHold.expect(
+      attachInputExpectation = recoveryInputHold.expect(
         opts.bufferInputUntilConnect && opts.releasePreconnectInput?.() !== false
           ? restoredInputEndpoint(options.existingPtyId)
           : null
