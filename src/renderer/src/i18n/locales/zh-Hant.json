@@ -19845,11 +19845,11 @@
         }
       },
       "nativeChat": {
-        "followUpBehaviorTitle": "代理程式工作時按 Enter",
+        "followUpBehaviorTitle": "將後續訊息加入佇列",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
         "inlineVisualsToggleLabel": "切換內嵌視覺化",
-        "followUpBehaviorCopy": "加入佇列：訊息會以卡片形式等待，代理程式完成後再傳送。引導：訊息會直接進入正在進行的回合。Cmd/Ctrl+Enter 則執行另一種。",
+        "followUpBehaviorCopy": "代理程式工作時傳送的訊息會以卡片形式等待，直到回合結束。Cmd/Ctrl+Enter 會將一則訊息傳送到正在進行的回合。",
         "followUpSteer": "引導",
         "followUpQueue": "加入佇列",
         "behaviorTitle": "行為",

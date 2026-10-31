@@ -131,8 +131,8 @@ function draft(id: string): AgentSessionQueuedMessage {
   }
 }
 
-// Most cases read the chat with Queue chosen; Steer is the default.
-function render(queueFollowUps = true) {
+// Omit the preference to exercise the production default; explicit OFF stays separate.
+function render(queueFollowUps?: boolean) {
   return renderHook(() =>
     useStructuredAgentSession({
       sessionId: 'session-1',

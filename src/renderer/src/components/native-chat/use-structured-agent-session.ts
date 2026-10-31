@@ -6,7 +6,7 @@ import { useStructuredAgentSessionSendOptions } from './use-structured-agent-ses
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './use-structured-agent-session-command-write'
 import { structuredAgentSessionSendQueues } from './structured-agent-session-queue-request'
-import { nativeChatFollowUpBehavior } from '../../../../shared/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
@@ -48,7 +48,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     hostStopping = false,
     launch,
     providerStarting = false,
-    queueFollowUps = nativeChatFollowUpBehavior(null) === 'queue',
+    queueFollowUps = nativeChatQueueFollowUps(null),
     sessionId,
     target,
     transportEnabled = true

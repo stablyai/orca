@@ -1,3 +1,4 @@
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session-journal-types'
 import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session-journal-schemas'
@@ -51,6 +52,25 @@ function unanswerablePrompt(): { body: AgentJournalItemBody } {
 }
 
 describe('per-send queue resolution', () => {
+  it.each([
+    undefined,
+    null,
+    {},
+    { nativeChatQueueFollowUps: null },
+    { nativeChatQueueFollowUps: 'false' },
+    { nativeChatQueueFollowUps: true },
+    { nativeChatQueueFollowUps: false }
+  ])('normalizes one preference source into default and alternate requests (%j)', (settings) => {
+    const followUpsQueue = nativeChatQueueFollowUps(settings)
+    const enabled = settings?.nativeChatQueueFollowUps !== false
+    expect(structuredAgentSessionQueueRequest(queue({ followUpsQueue }))).toBe(
+      enabled ? 'queue-if-active' : undefined
+    )
+    expect(structuredAgentSessionQueueRequest(queue({ followUpsQueue }), true)).toBe(
+      enabled ? undefined : 'queue-if-active'
+    )
+  })
+
   it.each([
     { followUpsQueue: true, alternate: false, queues: true },
     { followUpsQueue: true, alternate: true, queues: false },

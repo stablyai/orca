@@ -43,9 +43,9 @@ const asyncStorage = vi.hoisted(() => ({
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
 function normalReply(method: string): RpcResponse {
-  // The host chose Queue; Steer, the default, is pinned on its own below.
+  // Queue is the default; explicit OFF is covered below.
   if (method === 'settings.get') {
-    return ok({ settings: { nativeChatFollowUpBehavior: 'queue' } })
+    return ok({ settings: { nativeChatQueueFollowUps: true } })
   }
   if (method === 'agentSession.options') {
     return ok({ models: [], current: {} })
@@ -263,7 +263,7 @@ describe('mobile structured queued messages', () => {
     it("sends straight into the turn when the host's setting is Steer, as the desktop does", async () => {
       sendRequest.mockImplementation(async (method) => {
         if (method === 'settings.get') {
-          return ok({ settings: {} })
+          return ok({ settings: { nativeChatQueueFollowUps: false } })
         }
         if (method === 'agentSession.send') {
           return mutationOk({
@@ -289,7 +289,7 @@ describe('mobile structured queued messages', () => {
       async (behavior) => {
         sendRequest.mockImplementation(async (method) => {
           if (method === 'settings.get') {
-            return ok({ settings: { nativeChatFollowUpBehavior: behavior } })
+            return ok({ settings: { nativeChatQueueFollowUps: behavior === 'queue' } })
           }
           if (method === 'agentSession.send') {
             return mutationOk({
@@ -370,7 +370,7 @@ describe('mobile structured queued messages', () => {
       })
       expect(requestOf('agentSession.send').params.delivery).toBe('queue-if-active')
       await act(async () =>
-        preferenceListener?.({ type: 'nativeChatFollowUpBehaviorChanged', behavior: 'steer' })
+        preferenceListener?.({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
       )
       expect(hook!.sendMenu).toBe('steer')
       await act(async () => {

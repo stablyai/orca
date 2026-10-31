@@ -37,7 +37,7 @@ import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draf
 describe('NativeChatStructuredSession', () => {
   it('isolates mounted chats from unrelated settings and renders their live follow-up choice', async () => {
     const original = useAppStore.getState().settings
-    const settings = { ...getDefaultSettings('/tmp'), nativeChatFollowUpBehavior: 'steer' as const }
+    const settings = { ...getDefaultSettings('/tmp'), nativeChatQueueFollowUps: false }
     useAppStore.setState({ settings })
     const view = render(
       <>
@@ -62,7 +62,7 @@ describe('NativeChatStructuredSession', () => {
       await act(async () => {})
       mocks.controllerRender.mockClear()
       act(() =>
-        useAppStore.setState({ settings: { ...settings, nativeChatFollowUpBehavior: 'steer' } })
+        useAppStore.setState({ settings: { ...settings, nativeChatQueueFollowUps: false } })
       )
       expect(mocks.controllerRender).not.toHaveBeenCalled()
       act(() =>
@@ -71,9 +71,7 @@ describe('NativeChatStructuredSession', () => {
         })
       )
       expect(mocks.controllerRender).not.toHaveBeenCalled()
-      act(() =>
-        useAppStore.setState({ settings: { ...settings, nativeChatFollowUpBehavior: 'queue' } })
-      )
+      act(() => useAppStore.setState({ settings: { ...settings, nativeChatQueueFollowUps: true } }))
       expect(new Set(mocks.controllerRender.mock.calls.map(([sessionId]) => sessionId))).toEqual(
         new Set(['local-chat', 'ssh-chat'])
       )

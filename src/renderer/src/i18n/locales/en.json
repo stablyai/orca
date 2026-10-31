@@ -20472,11 +20472,11 @@
         }
       },
       "nativeChat": {
-        "followUpBehaviorTitle": "While the agent works, Enter",
+        "followUpBehaviorTitle": "Queue follow-ups",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "followUpBehaviorCopy": "Queue: your message waits as a card and sends when the turn ends. Steer: it goes into the running turn. Cmd/Ctrl+Enter does the other.",
+        "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends. Cmd/Ctrl+Enter sends one into the running turn.",
         "followUpSteer": "Steer",
         "followUpQueue": "Queue",
         "behaviorTitle": "Behavior",

@@ -208,8 +208,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** Opt-in resume of working structured chats after restart; off still lists them for review before token spending. */
   nativeChatResumeWorkOnRestart?: boolean
-  /** What Enter does with a message while the agent works, on capable hosts; read it through `nativeChatFollowUpBehavior`. */
-  nativeChatFollowUpBehavior?: 'queue' | 'steer'
+  /** Queue follow-ups while the agent works on capable hosts; absent means on. */
+  nativeChatQueueFollowUps?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */

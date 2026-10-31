@@ -20105,8 +20105,8 @@
     },
     "settings": {
       "nativeChat": {
-        "followUpBehaviorTitle": "Mientras el agente trabaja, Intro",
-        "followUpBehaviorCopy": "Poner en cola: tu mensaje espera como tarjeta y se envía cuando el agente termina. Enviar ahora: entra en el turno en curso. Cmd/Ctrl+Intro hace lo otro.",
+        "followUpBehaviorTitle": "Poner mensajes de seguimiento en cola",
+        "followUpBehaviorCopy": "Los mensajes enviados mientras el agente trabaja esperan como tarjetas hasta que termina el turno. Cmd/Ctrl+Intro envía uno al turno en curso.",
         "followUpSteer": "Enviar ahora",
         "followUpQueue": "Poner en cola",
         "inlineVisualsTitle": "Elementos visuales inline",

@@ -34,7 +34,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentSkillSharingEnabled'
   | 'machineName'
   | 'nativeChatPermissionMode'
-  | 'nativeChatFollowUpBehavior'
+  | 'nativeChatQueueFollowUps'
   | 'sourceControlGroupOrder'
   | 'sourceControlCompareAgainstUpstream'
   | 'diffShowWhitespace'

@@ -1,8 +1,9 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { RpcClient } from '../transport/rpc-client'
 import { mobileNativeChatFollowUpPreference } from './mobile-native-chat-follow-up-preference'
 
-const defaultSnapshot = (): boolean => false
+const defaultSnapshot = (): boolean => nativeChatQueueFollowUps(null)
 
 export function useMobileNativeChatQueueFollowUps(
   client: RpcClient | null,

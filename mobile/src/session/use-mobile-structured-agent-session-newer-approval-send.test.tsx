@@ -101,7 +101,7 @@ beforeEach(() => {
       : method === 'agentSession.options'
         ? ok({ models: [], current: {} })
         : method === 'settings.get'
-          ? ok({ settings: { nativeChatFollowUpBehavior: 'queue' } })
+          ? ok({ settings: { nativeChatQueueFollowUps: true } })
           : ok({})
   )
 })
@@ -141,7 +141,7 @@ async function afterStop(items: AgentJournalRenderItem[]): Promise<unknown> {
       : method === 'agentSession.options'
         ? ok({ models: [], current: {} })
         : method === 'settings.get'
-          ? ok({ settings: { nativeChatFollowUpBehavior: 'queue' } })
+          ? ok({ settings: { nativeChatQueueFollowUps: true } })
           : ok({})
   )
   act(() => {

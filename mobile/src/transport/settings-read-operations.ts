@@ -2,10 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from './rpc-operation'
 import type { RpcCompatibleReader } from './rpc-operation-contract'
 import { normalizeSourceControlGroupOrder } from '../../../src/shared/source-control-group-order'
 import type { SourceControlGroupOrder } from '../../../src/shared/ui-chrome-types'
-import {
-  nativeChatFollowUpBehavior,
-  type NativeChatFollowUpBehavior
-} from '../../../src/shared/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat-follow-up-behavior'
 
 function settingsMember(raw: unknown): unknown {
   const boxed: { readonly settings?: unknown } | null | undefined = raw == null ? raw : Object(raw)
@@ -121,25 +118,23 @@ export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
   })
 )
 
-// An older host omits the key, which reads as Steer; that host never queues anyway.
-const followUpBehaviorReader: RpcCompatibleReader<
-  unknown,
-  'follow-up-behavior',
-  NativeChatFollowUpBehavior
-> = (raw) => {
+// Absent settings default ON; delivery still depends on host capability.
+const followUpBehaviorReader: RpcCompatibleReader<unknown, 'follow-up-behavior', boolean> = (
+  raw
+) => {
   const settings = raw == null ? undefined : settingsMember(raw)
   return {
     compatible: true,
     variant: 'follow-up-behavior',
-    value: nativeChatFollowUpBehavior({
-      nativeChatFollowUpBehavior:
-        settings == null ? undefined : settingsField(settings, 'nativeChatFollowUpBehavior')
+    value: nativeChatQueueFollowUps({
+      nativeChatQueueFollowUps:
+        settings == null ? undefined : settingsField(settings, 'nativeChatQueueFollowUps')
     }),
     salvage: { droppedPaths: [], droppedCount: 0 }
   }
 }
 
-export const nativeChatFollowUpBehaviorRead = bindDeferredRpcOperation(
+export const nativeChatQueueFollowUpsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'settings.native-chat-follow-up-behavior-or-skip',
     method: 'settings.get',

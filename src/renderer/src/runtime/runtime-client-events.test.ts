@@ -116,10 +116,10 @@ it('existing desktop reader ignores additive phone preference fields and events'
     result: {
       type: 'ready',
       subscriptionId: 'old-reader',
-      snapshot: { nativeChatFollowUpBehavior: 'queue' }
+      snapshot: { nativeChatQueueFollowUps: true }
     }
   })
-  respond({ ok: true, result: { type: 'nativeChatFollowUpBehaviorChanged', behavior: 'steer' } })
+  respond({ ok: true, result: { type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false } })
   expect(onEvent).not.toHaveBeenCalled()
   expect(onError).not.toHaveBeenCalled()
   subscription.unsubscribe()

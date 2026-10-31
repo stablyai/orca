@@ -7,33 +7,6 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
-// Why: Radix Select needs pointer/layout APIs happy-dom lacks; a native select keeps value testable.
-vi.mock('../ui/select', () => ({
-  Select: ({
-    value,
-    onValueChange,
-    children
-  }: {
-    value: string
-    onValueChange: (value: string) => void
-    children: React.ReactNode
-  }) => (
-    <select
-      aria-label="While the agent works, Enter"
-      value={value}
-      onChange={(event) => onValueChange(event.currentTarget.value)}
-    >
-      {children}
-    </select>
-  ),
-  SelectTrigger: () => null,
-  SelectValue: () => null,
-  SelectContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => (
-    <option value={value}>{children}</option>
-  )
-}))
-
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { i18n } from '@/i18n/i18n'
 import de from '../../i18n/locales/de.json'
@@ -177,7 +150,7 @@ describe('ChatBehaviorSetting shell environment', () => {
 })
 
 describe('ChatBehaviorSetting follow-up behavior', () => {
-  const FOLLOW_UP_SELECT = 'select[aria-label="While the agent works, Enter"]'
+  const FOLLOW_UP_SWITCH = '[role="switch"][aria-label="Queue follow-ups"]'
 
   it('hides the choice until the host answers, then shows it', async () => {
     setLocalRuntimeCapabilitiesForTests(null)
@@ -186,25 +159,28 @@ describe('ChatBehaviorSetting follow-up behavior', () => {
       runtime: { getStatus: () => new Promise((resolve) => (answer = resolve)) }
     })
     const { container } = renderSetting({})
-    expect(container.querySelector(FOLLOW_UP_SELECT)).toBeNull()
+    expect(container.querySelector(FOLLOW_UP_SWITCH)).toBeNull()
     await act(async () =>
       answer({ capabilities: [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY] })
     )
-    expect(container.querySelector(FOLLOW_UP_SELECT)).not.toBeNull()
+    expect(container.querySelector(FOLLOW_UP_SWITCH)).not.toBeNull()
   })
 
-  it('reads Steer by default and saves Queue through the follow-up key', () => {
-    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
-    const updateSettings = vi.fn()
-    const { container } = renderSetting({}, updateSettings)
-    const select = container.querySelector<HTMLSelectElement>(FOLLOW_UP_SELECT)!
-    expect(select.value).toBe('steer')
-    fireEvent.change(select, { target: { value: 'queue' } })
-    expect(updateSettings).toHaveBeenCalledWith({ nativeChatFollowUpBehavior: 'queue' })
-  })
+  it.each([true, false, undefined])(
+    'reads Queue by default and toggles the existing boolean (%s)',
+    (saved) => {
+      setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+      const updateSettings = vi.fn()
+      const { container } = renderSetting({ nativeChatQueueFollowUps: saved }, updateSettings)
+      const toggle = container.querySelector<HTMLButtonElement>(FOLLOW_UP_SWITCH)!
+      expect(toggle.getAttribute('aria-checked')).toBe(String(saved !== false))
+      fireEvent.click(toggle)
+      expect(updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: saved === false })
+    }
+  )
 })
 
-it('renders the follow-up Select and its options using the German catalog', async () => {
+it('renders the Queue switch and description using the German catalog', async () => {
   setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
   i18n.addResourceBundle('de', 'translation', de, true, true)
   await act(async () => {
@@ -212,12 +188,14 @@ it('renders the follow-up Select and its options using the German catalog', asyn
   })
   try {
     const { container } = renderSetting({ experimentalNativeChat: true })
-    const options = Array.from(container.querySelectorAll('select option')).map(
-      (option) => option.textContent
-    )
-    expect(options).toContain(de.components.settings.nativeChat.followUpSteer)
-    expect(options).toContain(de.components.settings.nativeChat.followUpQueue)
-    expect(container.textContent).toContain(de.components.settings.nativeChat.followUpBehaviorTitle)
+    const copy = de.components.settings.nativeChat
+    expect(
+      container
+        .querySelector(`[role="switch"][aria-label="${copy.followUpBehaviorTitle}"]`)
+        ?.getAttribute('aria-checked')
+    ).toBe('true')
+    expect(container.textContent).toContain(copy.followUpBehaviorTitle)
+    expect(container.textContent).toContain(copy.followUpBehaviorCopy)
   } finally {
     await act(async () => {
       await i18n.changeLanguage('en')

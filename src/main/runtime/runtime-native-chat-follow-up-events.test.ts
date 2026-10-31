@@ -23,17 +23,17 @@ it('publishes only a change in the normalized host preference, including on a he
     }
     expect(emit).not.toHaveBeenCalled()
   }
-  settings = { ...settings, nativeChatFollowUpBehavior: 'queue' }
-  changed?.({ nativeChatFollowUpBehavior: 'queue' }, settings)
+  settings = { ...settings, nativeChatQueueFollowUps: false }
+  changed?.({ nativeChatQueueFollowUps: false }, settings)
   expect(emit.mock.calls).toEqual([
-    [{ type: 'nativeChatFollowUpBehaviorChanged', behavior: 'queue' }]
+    [{ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false }]
   ])
   changed?.({}, settings)
-  settings = { ...settings, nativeChatFollowUpBehavior: 'steer' }
+  settings = { ...settings, nativeChatQueueFollowUps: true }
   changed?.({}, settings)
   expect(emit).toHaveBeenLastCalledWith({
-    type: 'nativeChatFollowUpBehaviorChanged',
-    behavior: 'steer'
+    type: 'nativeChatQueueFollowUpsChanged',
+    queueFollowUps: true
   })
   expect(emit).toHaveBeenCalledTimes(2)
 })
@@ -45,7 +45,7 @@ it('client-events ready snapshots the same normalized setting after installing i
   const runtime = new OrcaRuntimeService()
   const settings = getDefaultSettings('/tmp')
   const controller = new RuntimeClientSettingsController({
-    getSettings: () => ({ ...settings, nativeChatFollowUpBehavior: 'queue' }),
+    getSettings: () => ({ ...settings, nativeChatQueueFollowUps: false }),
     updateSettings: () => {}
   })
   const onEvent = vi.spyOn(runtime, 'onClientEvent')
@@ -64,7 +64,7 @@ it('client-events ready snapshots the same normalized setting after installing i
   const message = ready.mock.calls.find(([value]) => value.type === 'ready')?.[0]
   expect(message).toMatchObject({
     type: 'ready',
-    snapshot: { nativeChatFollowUpBehavior: 'queue' }
+    snapshot: { nativeChatQueueFollowUps: false }
   })
   runtime.cleanupSubscription(message.subscriptionId)
   await pending
