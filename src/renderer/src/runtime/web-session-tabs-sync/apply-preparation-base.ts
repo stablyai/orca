@@ -68,9 +68,17 @@ export function prepareWebSessionTabsSnapshotBase(
         )
       }
     : rawSnapshot
+  const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const shownHere = (tab: RuntimeMobileSessionTabsResult['tabs'][number]): boolean =>
+    unifiedTabs.some((local) =>
+      tab.type === 'terminal'
+        ? local.id === toWebTerminalSurfaceTabId(tab.parentTabId)
+        : tab.type === 'agent-session' && local.entityId === tab.sessionId
+    )
   // Why: only a caller-recorded create intent may focus its arriving tab; unsolicited server-active must not steal focus (#5435).
   const focusIntent = peekWebSessionFocusIntent({ environmentId }, worktreeId)
   const focusIntentHostTabId = focusIntent?.hostTabId ?? null
+  const afterHostTabId = focusIntent?.afterHostTabId
   const matchingFocusIntentTab =
     focusIntentHostTabId === null
       ? null
@@ -86,7 +94,16 @@ export function prepareWebSessionTabsSnapshotBase(
               tab.id === focusIntentHostTabId ||
               (tab.type === 'terminal' && tab.parentTabId === focusIntentHostTabId) ||
               (tab.type === 'browser' && tab.browserPageId === focusIntentHostTabId)
-          ) ?? null)
+          ) ??
+          (afterHostTabId
+            ? snapshot.tabs.find(
+                (tab) =>
+                  slotAnchorOf(tab)?.after === true &&
+                  slotAnchorOf(tab)?.hostTabId === afterHostTabId &&
+                  !shownHere(tab)
+              )
+            : undefined) ??
+          null)
   const expectedCurrentLocalTabId = focusIntent?.expectedCurrentLocalTabId
   const currentVisibleLocalTabId = resolveWebSessionVisibleTabId(state, worktreeId)
   const callerFocusIntentTab =
@@ -99,22 +116,18 @@ export function prepareWebSessionTabsSnapshotBase(
     snapshot.navigationIntent === 'follow'
       ? (snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ?? null)
       : null
-  // A switch's destination takes the focus its source had here, checked when it lands as a recorded
-  // intent's expected tab is; read from the snapshot, so a client that never got the answer converges.
-  const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  // A tab that replaced the one shown here takes its focus in every view, since that tab is gone
+  // everywhere; read from the snapshot, so a client that never got the answer converges. A tab
+  // placed beside a split pane's surviving tab is focused only by its initiator's intent above.
   const anchoredIntentTab =
     (currentVisibleLocalTabId !== null &&
       snapshot.tabs.find((tab) => {
         const anchor = slotAnchorOf(tab)
-        const shown = unifiedTabs.some((local) =>
-          tab.type === 'terminal'
-            ? local.id === toWebTerminalSurfaceTabId(tab.parentTabId)
-            : tab.type === 'agent-session' && local.entityId === tab.sessionId
-        )
         return (
-          anchor &&
-          !shown &&
-          slotAnchorLocalTabIds(unifiedTabs, anchor.hostTabId).includes(currentVisibleLocalTabId)
+          anchor !== undefined &&
+          !anchor.after &&
+          slotAnchorLocalTabIds(unifiedTabs, anchor.hostTabId).includes(currentVisibleLocalTabId) &&
+          !shownHere(tab)
         )
       })) ||
     null

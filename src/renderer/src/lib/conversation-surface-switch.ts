@@ -35,6 +35,7 @@ import { structuredLaunchFailure } from './structured-agent-session-launch-failu
 import { prepareAiVaultSessionForResume } from './ai-vault-session-resume-preparation'
 import type { CliChatResumeSource } from '@/components/tab-bar/cli-chat-resume-source'
 import { runLegacyConversationSwitch } from './conversation-switch-legacy'
+import { recordConversationSwitchFocus } from './conversation-switch-focus-intent'
 import {
   type ConversationSwitch,
   keyFor,
@@ -161,6 +162,7 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
       }
       // The host stopped nothing. A yes is a new switch under its own invocation, never a replay.
       if (!(await confirmStop())) {
+        request.abandonFocus?.()
         return false
       }
       consent = true
@@ -171,6 +173,9 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
       }
     }
     if (answer.status !== 'completed') {
+      if (answer.status === 'refused') {
+        request?.abandonFocus?.()
+      }
       feedback(
         conversationSwitchFailureText(new AgentSessionRefusalError(answer.refusal), args),
         'error'
@@ -214,7 +219,11 @@ async function switchRequest(
   args: ConversationSwitch,
   hostId: ExecutionHostId,
   deadline: ReturnType<typeof agentSessionSwitchDeadline>
-): Promise<{ sessionId: string | undefined; execution: Record<string, unknown> }> {
+): Promise<{
+  sessionId: string | undefined
+  execution: Record<string, unknown>
+  abandonFocus?: () => void
+}> {
   const invocationId = createBrowserUuid()
   if (args.direction === 'chat' && args.source) {
     const captured = await deadline.wait(captureSourceTerminal(args.source))
@@ -239,6 +248,13 @@ async function switchRequest(
     )
     return {
       sessionId: intent.sessionId,
+      abandonFocus: recordConversationSwitchFocus({
+        target: captured.target,
+        workspaceId: args.workspaceId,
+        sourceTabId: args.source.tabId,
+        hostSourceTabId: captured.presentation?.identity.tabId,
+        chatSessionId: intent.sessionId
+      }),
       execution: {
         invocationId,
         create: intent.params,

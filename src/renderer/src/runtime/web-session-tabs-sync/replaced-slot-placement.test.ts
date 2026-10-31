@@ -3,6 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import type { ReplacedTab } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyWebSessionTabsSnapshot } from './snapshot-api'
 import type { WebSessionTabsSyncState } from './state'
+import { recordWebSessionFocusIntent } from '../web-session-focus-intent'
 import {
   ENV,
   LEAF_ID,
@@ -125,12 +126,24 @@ function shownThree(active: 'host-a' | 'host-b') {
 }
 
 it.each([
-  ['the split pane’s tab held the selection', 'host-a', true],
-  ['the user had picked another tab', 'host-b', false]
+  ['the initiator, still on the split pane’s tab', 'host-a', true, 'chat'],
+  ['the initiator, after clicking to another tab', 'host-b', true, 'host-b'],
+  ['another viewer showing the split pane’s tab', 'host-a', false, 'host-a']
 ] as const)(
-  'opens a chat beside the split pane it came from on this client; selection when %s',
-  (_name, active, takes) => {
+  'opens a chat beside the split pane it came from; only its initiator follows: %s',
+  (_name, active, initiated, selected) => {
     const { state, a, b, c } = shownThree(active)
+    if (initiated) {
+      // Named a chat the host then reused: the intent still matches by the slot.
+      recordWebSessionFocusIntent(
+        { environmentId: ENV },
+        WT,
+        'agent-session:minted',
+        undefined,
+        a,
+        'host-a'
+      )
+    }
     const next = apply(
       state,
       makeSnapshot(
@@ -150,7 +163,7 @@ it.each([
     const group = next.groupsByWorktree[WT]![0]!
     const chatTab = next.unifiedTabsByWorktree[WT]!.find((tab) => tab.entityId === 'session-1')!
     expect(group.tabOrder).toEqual([c, a, chatTab.id, b])
-    expect(group.activeTabId).toBe(takes ? chatTab.id : b)
+    expect(group.activeTabId).toBe({ chat: chatTab.id, 'host-a': a, 'host-b': b }[selected])
   }
 )
 

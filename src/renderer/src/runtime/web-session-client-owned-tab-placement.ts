@@ -167,24 +167,27 @@ export function reconcileClientOwnedTabPlacement(
       target.tabOrder.push(move.tabId)
     }
   }
-  // A destination takes its group's selection only from its source, or from an empty group.
+  // A tab that replaced another takes its group's selection only from it, or from an empty
+  // group; one beside a split pane's surviving tab takes none (its initiator's intent may).
   const inheritedActive = new Map<string, string>()
   for (const adopted of input.adoptedTabs) {
     if (movedTabIds.has(adopted.tabId) || !input.validUnifiedTabIds.has(adopted.tabId)) {
       continue
     }
-    const anchorIds = adopted.anchor?.tabIds ?? []
-    const slot = [...working.values()].find((entry) =>
-      entry.group.tabOrder.some((id) => anchorIds.includes(id))
-    )
+    const anchor = adopted.anchor
+    const slot =
+      anchor &&
+      [...working.values()].find((entry) =>
+        entry.group.tabOrder.some((id) => anchor.tabIds.includes(id))
+      )
     if (slot && !slot.tabOrder.includes(adopted.tabId)) {
       // After the last tab still shown that stood at or before the anchor in this client's order.
-      const at = slot.group.tabOrder.findIndex((id) => anchorIds.includes(id))
+      const at = slot.group.tabOrder.findIndex((id) => anchor.tabIds.includes(id))
       const before = new Set(slot.group.tabOrder.slice(0, at + 1))
       const index = slot.tabOrder.reduce((last, id, i) => (before.has(id) ? i + 1 : last), 0)
       slot.tabOrder.splice(index, 0, adopted.tabId)
       const held = slot.group.activeTabId
-      if (held == null || anchorIds.includes(held)) {
+      if (!anchor.after && (held == null || anchor.tabIds.includes(held))) {
         inheritedActive.set(slot.group.id, adopted.tabId)
       }
       continue
