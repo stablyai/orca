@@ -31,6 +31,11 @@ export function requestSleepingAgentWakeOnMount(
     useAppStore.getState().sleepingAgentSessionsByPaneKey,
     worktreeId
   )) {
+    // Explicit sleep stays asleep until its own tab opens; a sibling record's targeted wake must not
+    // wake it just because the two share a tab (#11598).
+    if (record.restoreOnTabOpenOnly === true) {
+      continue
+    }
     const tabId = getSleepingRecordTabId(record)
     if (record.worktreeId === worktreeId && tabId !== null && wanted.has(tabId)) {
       markSleepingAgentWakeRequest(record)
