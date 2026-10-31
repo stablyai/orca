@@ -499,7 +499,10 @@ it.each([3, 30])(
             id: 'live',
             label: 'Live',
             isDefault: true,
-            efforts: [{ value: 'high', label: 'High' }]
+            efforts: [
+              { value: 'high', label: 'High' },
+              { value: `phase${generation}`, label: `Phase${generation}` }
+            ]
           },
           {
             id: `generation-${generation}`,
@@ -535,11 +538,11 @@ it.each([3, 30])(
       )
     }
     const view = render(createElement(Owner, { open: true }))
-    const openSetup = async (text: string) => {
+    const openSetup = async (text: string, effort = 'high') => {
       const search = document.querySelector<HTMLInputElement>(
         'input[placeholder="Search agents and setups…"]'
       )!
-      fireEvent.change(search, { target: { value: `${text} high` } })
+      fireEvent.change(search, { target: { value: `${text} ${effort}` } })
       await vi.waitFor(() =>
         expect(
           [...document.querySelectorAll('[role="menuitem"]')].some((row) =>
@@ -581,6 +584,12 @@ it.each([3, 30])(
         })
         fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
         expect(records!.size).toBe(2)
+        await openSetup('Live', `phase${generation}`)
+        fireEvent.change(document.querySelector('textarea')!, {
+          target: { value: '--inactive-effort' }
+        })
+        fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+        expect(records!.size).toBe(3)
         view.rerender(createElement(Owner, { open: false }))
         await act(async () => {})
       }
