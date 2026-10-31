@@ -1,5 +1,5 @@
-import { createRef } from 'react'
-import { render } from '@testing-library/react'
+import { createRef, type RefObject } from 'react'
+import { render, type RenderResult } from '@testing-library/react'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import type { OrchestrationAgentReference } from '../../../../shared/orchestration-agent-reference'
 import { NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
@@ -15,7 +15,11 @@ export function mountedMention(
   first: OrchestrationAgentReference,
   managed = false,
   initialValue = 'Hello suffix'
-) {
+): RenderResult & {
+  input: RefObject<NativeChatComposerInput | null>
+  handle: RefObject<NativeChatComposerHandle | null>
+  setMode: (mode: MentionInput) => void
+} {
   crewRows.push({
     partyKey: 'worker',
     role: 'worker',
