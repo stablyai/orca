@@ -135,6 +135,8 @@ export async function refreshGitStatusForWorktree({
       { target, worktreeId, worktreePath, connectionId },
       {
         admissionTier: request?.admissionTier ?? 'status',
+        // Why: the file-watch trigger skips churn under these paths; matched directories come back collapsed.
+        includeIgnored: true,
         ...(request?.reuseLineStats === true ? { reuseLineStats: true } : {}),
         ...(request?.signal ? { signal: request.signal } : {}),
         ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {}),

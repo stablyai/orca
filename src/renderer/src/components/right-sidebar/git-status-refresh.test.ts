@@ -66,7 +66,8 @@ describe('refreshGitStatusForWorktree', () => {
     expect(gitStatus).toHaveBeenCalledWith({
       worktreePath: '/repo',
       connectionId: 'ssh-1',
-      admissionTier: 'status'
+      admissionTier: 'status',
+      includeIgnored: true
     })
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-1', status)
     expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith(
@@ -175,7 +176,8 @@ describe('refreshGitStatusForWorktree', () => {
     expect(gitStatus).toHaveBeenNthCalledWith(1, {
       worktreePath: '/repo',
       connectionId: undefined,
-      admissionTier: 'status'
+      admissionTier: 'status',
+      includeIgnored: true
     })
     expect(gitStatus).toHaveBeenNthCalledWith(2, {
       worktreePath: '/repo',

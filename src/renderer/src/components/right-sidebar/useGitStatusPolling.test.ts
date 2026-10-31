@@ -102,7 +102,7 @@ async function usePollingOnce(
   vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
   vi.doMock('@/store', () => ({
     useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
-      getState: () => ({ settings: null })
+      getState: () => ({ settings: null, gitIgnoredPathsByWorktree: {} })
     })
   }))
 
@@ -385,7 +385,7 @@ describe('useGitStatusPolling', () => {
     vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
-        getState: () => ({ settings: null })
+        getState: () => ({ settings: null, gitIgnoredPathsByWorktree: {} })
       })
     }))
     vi.doMock('@/store/selectors', () => ({
@@ -504,7 +504,7 @@ describe('useGitStatusPolling', () => {
     vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
-        getState: () => ({ settings: null })
+        getState: () => ({ settings: null, gitIgnoredPathsByWorktree: {} })
       })
     }))
     vi.doMock('@/store/selectors', () => ({
@@ -630,7 +630,7 @@ describe('useGitStatusPolling', () => {
     vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
-        getState: () => ({ settings: null })
+        getState: () => ({ settings: null, gitIgnoredPathsByWorktree: {} })
       })
     }))
     vi.doMock('@/store/selectors', () => ({
@@ -812,7 +812,7 @@ describe('useGitStatusPolling', () => {
     vi.doMock('./worktree-git-owner-target', localGitOwnerModule)
     vi.doMock('@/store', () => ({
       useAppStore: Object.assign((selector: (s: PollState) => unknown) => selector(state), {
-        getState: () => ({ settings: null })
+        getState: () => ({ settings: null, gitIgnoredPathsByWorktree: {} })
       })
     }))
     vi.doMock('@/store/selectors', () => ({
