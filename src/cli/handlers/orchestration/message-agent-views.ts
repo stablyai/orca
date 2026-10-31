@@ -129,15 +129,12 @@ type CheckFields = {
   cancelled?: true
   connectionLost?: true
   legacyCompatibility?: OrchestrationCheckOutput['legacyCompatibility']
-  formatted?: string
   next?: string
 }
 
 export function checkView(
   checkedTerminal: string
 ): OrchestrationAgentView<CheckAgentResult, CheckFields> {
-  const fullText = (value: CheckAgentResult): string =>
-    withReceiptNext(formatOrchestrationCheckText(value, checkedTerminal), value)
   return {
     fields: (value) => {
       const legacyCompatibilityActive = Boolean(
@@ -156,18 +153,13 @@ export function checkView(
         cancelled: value.cancelled ? true : undefined,
         connectionLost: value.connectionLost ? true : undefined,
         legacyCompatibility: value.legacyCompatibility,
-        // --format asked for the agent-readable banners themselves.
-        formatted: value.formatted,
         next: value.next && resolveOrcaCommandsInText(value.next)
       }
     },
     text: (fields, value) => {
-      // Legacy and preformatted batches carry safety headers only the full formatter prints.
-      if (fields.legacyCompatibility || value.formatted !== undefined || !fields.messages.length) {
-        return withReceiptNext(
-          formatOrchestrationCheckText(value, checkedTerminal, orchestrationCliName()),
-          fields
-        )
+      // Legacy batches carry safety headers only today's formatter prints.
+      if (fields.legacyCompatibility || !fields.messages.length) {
+        return withReceiptNext(formatOrchestrationCheckText(value, checkedTerminal), fields)
       }
       const messages = fields.messages
         .map((view, index) =>
@@ -179,14 +171,11 @@ export function checkView(
         fields
       )
     },
-    fullText,
     // An interrupted wait delivered nothing; the caller must not read it as an empty mailbox.
     failure: (value) =>
       value.cancelled || value.connectionLost
         ? {
             code: value.connectionLost ? 'check_connection_closed' : 'check_cancelled',
-            // Newly classified as a failure; --full keeps the exit 0 scripts saw.
-            fullExitCode: 0,
             message: value.connectionLost
               ? 'Wait cancelled because the connection closed; no messages were consumed.'
               : 'Wait cancelled; no messages were consumed.'

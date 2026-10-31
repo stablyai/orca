@@ -3,7 +3,7 @@ import {
   type OrchestrationAgentView,
   type OrchestrationFailure
 } from './agent-view'
-import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
+import type { WorkerReleaseReceipt } from './worker-output'
 
 type WorkerReleaseFields = {
   dispatchId: string
@@ -30,7 +30,6 @@ export const WORKER_RELEASE_VIEW: OrchestrationAgentView<
     lastError: value.lastError,
     next: value.recovery && resolveOrcaCommandsInText(value.recovery)
   }),
-  fullText: formatWorkerRelease,
   // Retained, pending, and already-released are settled outcomes; only release_unknown fails.
   failure: (value) =>
     value.state === 'release_unknown'

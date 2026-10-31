@@ -1,10 +1,13 @@
 import type { CommandHandler } from '../../dispatch'
-import { orchestrationCliName, printOrchestrationResult } from './agent-view'
-import { checkView, type CheckAgentResult } from './message-agent-views'
+import { printResult } from '../../format'
+import { withReceiptNext } from './receipt-next-text'
+import { printOrchestrationResult } from './agent-view'
+import { checkView } from './message-agent-views'
 import { getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeRpcSuccess } from '../../runtime-client'
 import {
+  formatOrchestrationCheckText,
   prepareOrchestrationCheckOutput,
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
@@ -15,10 +18,17 @@ import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { flushOrchestrationStdout, resolveCompatibilityCliCommand } from './runtime-compatibility'
 import { orchestrationCallerLabel, resolveOrchestrationTerminalHandle } from './terminal-identity'
 
-type CheckResult = CheckAgentResult & {
+type CheckResult = {
   messages: MessageSummary[]
+  count: number
+  formatted?: string
+  deliveryId?: string | null
   runId?: string
+  timedOut?: boolean
+  cancelled?: boolean
+  connectionLost?: boolean
   legacyCompatibility?: LegacyCompatibilityResult
+  next?: string
 }
 
 export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
@@ -53,7 +63,6 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
         format: flags.has('format') ? true : undefined,
         inject: flags.has('inject') ? true : undefined,
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
-        replyCliCommand: flags.has('full') ? undefined : resolveCompatibilityCliCommand(),
         run: getOptionalStringFlag(flags, 'run'),
         ack: getOptionalStringFlag(flags, 'ack'),
         wait: wait ? true : undefined,
@@ -67,15 +76,15 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     }
     result = {
       ...result,
-      // --full keeps today's `orca` hints; the concise view names the executable in use.
-      result: prepareOrchestrationCheckOutput(
-        result.result,
-        callerLabel,
-        flags.has('format'),
-        flags.has('full') ? undefined : orchestrationCliName()
-      )
+      result: prepareOrchestrationCheckOutput(result.result, callerLabel, flags.has('format'))
     }
-    printOrchestrationResult(result, { flags, json }, checkView(callerLabel))
+    if (flags.has('full')) {
+      printResult(result, json, (value) =>
+        withReceiptNext(formatOrchestrationCheckText(value, callerLabel), value)
+      )
+    } else {
+      printOrchestrationResult(result, json, checkView(callerLabel))
+    }
     const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds
     if (compatibilityAck && compatibilityAck.length > 0) {
       await flushOrchestrationStdout()

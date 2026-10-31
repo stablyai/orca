@@ -1,6 +1,7 @@
 import type { CommandHandler } from '../../dispatch'
-import { printOrchestrationReceipt, printOrchestrationResult } from './agent-view'
-import { workerListView, workerListWarnings, type WorkerListResult } from './worker-agent-views'
+import { printResult } from '../../format'
+import { printOrchestrationResult } from './agent-view'
+import { WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
 import { WORKER_RELEASE_VIEW, workerStopFailure } from './worker-release-agent-view'
 import {
   getOptionalPositiveIntegerFlag,
@@ -9,12 +10,8 @@ import {
 } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { callOrchestrationMutation } from './mutation-request'
-import type { WorkerReleaseReceipt } from './worker-output'
-import {
-  formatWorkerListScope,
-  resolveWorkerListRunScope,
-  type WorkerListRunScope
-} from './worker-list-run-scope'
+import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
+import { formatWorkerListScope, resolveWorkerListRunScope } from './worker-list-run-scope'
 
 const WORKER_TERMINAL_LIST_STATES = [
   'active',
@@ -36,12 +33,21 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     }>(client, flags, 'orchestration.workerStop', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
-    printOrchestrationReceipt(
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (value) => value,
+        failure: workerStopFailure
+      })
+      return
+    }
+    if (result.result.state === 'stop_unknown') {
+      process.exitCode = 1
+    }
+    printResult(
       result,
-      { flags, json },
+      json,
       (value) =>
-        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}`,
-      workerStopFailure
+        `Worker ${value.dispatchId} [${value.state}] process=${value.processAction}${value.lastError ? `\n${value.lastError}` : ''}${value.warning ? `\nWarning: ${value.warning}` : ''}`
     )
   },
 
@@ -53,9 +59,13 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     }>(client, flags, 'orchestration.workerAbandon', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
-    printOrchestrationReceipt(
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, { fields: (value) => value })
+      return
+    }
+    printResult(
       result,
-      { flags, json },
+      json,
       (value) => `Worker ${value.dispatchId} [${value.state}]\nWarning: ${value.warning}`
     )
   },
@@ -67,7 +77,15 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       'orchestration.workerRelease',
       { dispatch: getRequiredStringFlag(flags, 'dispatch') }
     )
-    printOrchestrationResult(result, { flags, json }, WORKER_RELEASE_VIEW)
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, WORKER_RELEASE_VIEW)
+      return
+    }
+    // Retained, pending, and already-released are settled outcomes; only release_unknown fails.
+    if (result.result.state === 'release_unknown') {
+      process.exitCode = 1
+    }
+    printResult(result, json, formatWorkerRelease)
   },
 
   'orchestration worker-retain': async ({ flags, client, json }) => {
@@ -77,7 +95,14 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       'orchestration.workerRetain',
       { dispatch: getRequiredStringFlag(flags, 'dispatch') }
     )
-    printOrchestrationResult(result, { flags, json }, WORKER_RELEASE_VIEW)
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, WORKER_RELEASE_VIEW)
+      return
+    }
+    if (result.result.state === 'release_unknown') {
+      process.exitCode = 1
+    }
+    printResult(result, json, formatWorkerRelease)
   },
 
   'orchestration worker-list': async ({ flags, client, cwd, json }) => {
@@ -110,45 +135,57 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
         'The connected Orca runtime did not prove support for the requested worker-list flags, so no inventory was printed. Update the connected Orca runtime and retry.'
       )
     }
-    printOrchestrationResult(
-      { ...result, result: { ...result.result, scope } },
-      { flags, json },
-      workerListView(formatWorkerList)
-    )
+    if (!flags.has('full')) {
+      printOrchestrationResult(
+        { ...result, result: { ...result.result, scope } },
+        json,
+        WORKER_LIST_VIEW
+      )
+      return
+    }
+    printResult({ ...result, result: { ...result.result, scope } }, json, (value) => {
+      const rows =
+        value.workers.length === 0
+          ? 'No workers found.'
+          : value.workers
+              .map((worker) => {
+                const projection = worker.projection
+                const provider = projection?.provider
+                  ? `${projection.provider.id}${projection.provider.model ? `/${projection.provider.model}` : ''}`
+                  : 'unknown'
+                const workspace = projection?.workspace?.id ?? 'unknown'
+                const stage = projection?.stage.activity ?? worker.dispatchStatus
+                const liveness = projection?.liveness.verdict
+                const attention = projection?.attention?.categories.join(',') || 'none'
+                const details = projection
+                  ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.id} workspace=${workspace}`
+                  : `]`
+                const next = projection
+                  ? ` next=${projection.nextAction.argv.join(' ') || 'none'}`
+                  : ''
+                const autoRelease = projection?.autoReleaseAt
+                  ? ` auto-release=${projection.autoReleaseAt}`
+                  : ''
+                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${autoRelease}${next}`
+              })
+              .join('\n')
+      const counts = Object.entries(value.counts)
+        .map(([state, count]) => `${state}=${count}`)
+        .join(' ')
+      const pagination =
+        value.page?.hasMore && value.page.nextCursor
+          ? `\nMore: --cursor ${value.page.nextCursor}`
+          : ''
+      const warnings = [
+        ...(value.warnings ?? []),
+        ...(value.partialHostErrors ?? []).map(
+          (error) =>
+            `worker observations from ${error.name} (${error.environmentId}) are incomplete: ${error.code}; dispatches=${error.dispatchIds.join(',') || 'none'}`
+        )
+      ].map((warning) => `Warning: ${warning}`)
+      const warningBlock = warnings.length ? `\n${warnings.join('\n')}` : ''
+      const scopeLine = `\n${formatWorkerListScope(value.scope ?? scope)}`
+      return `${counts ? `${rows}\nTerminals: ${counts}` : rows}${scopeLine}${pagination}${warningBlock}`
+    })
   }
-}
-
-function formatWorkerList(value: WorkerListResult & { scope: WorkerListRunScope }): string {
-  const rows =
-    value.workers.length === 0
-      ? 'No workers found.'
-      : value.workers
-          .map((worker) => {
-            const projection = worker.projection
-            const provider = projection?.provider
-              ? `${projection.provider.id}${projection.provider.model ? `/${projection.provider.model}` : ''}`
-              : 'unknown'
-            const workspace = projection?.workspace?.id ?? 'unknown'
-            const stage = projection?.stage.activity ?? worker.dispatchStatus
-            const liveness = projection?.liveness.verdict
-            const attention = projection?.attention?.categories.join(',') || 'none'
-            const details = projection
-              ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.id} workspace=${workspace}`
-              : `]`
-            const next = projection ? ` next=${projection.nextAction.argv.join(' ') || 'none'}` : ''
-            const autoRelease = projection?.autoReleaseAt
-              ? ` auto-release=${projection.autoReleaseAt}`
-              : ''
-            return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${autoRelease}${next}`
-          })
-          .join('\n')
-  const counts = Object.entries(value.counts)
-    .map(([state, count]) => `${state}=${count}`)
-    .join(' ')
-  const pagination =
-    value.page?.hasMore && value.page.nextCursor ? `\nMore: --cursor ${value.page.nextCursor}` : ''
-  const warnings = workerListWarnings(value).map((warning) => `Warning: ${warning}`)
-  const warningBlock = warnings.length ? `\n${warnings.join('\n')}` : ''
-  const scopeLine = `\n${formatWorkerListScope(value.scope)}`
-  return `${counts ? `${rows}\nTerminals: ${counts}` : rows}${scopeLine}${pagination}${warningBlock}`
 }

@@ -1,6 +1,6 @@
 import type { HandlerContext } from '../../dispatch'
-import { formatOrchestrationErrorLine } from '../../cli-error'
 import { printResult } from '../../format'
+import { formatOrchestrationErrorLine } from '../../cli-error'
 import { renderCommand } from '../../orchestration-mutation-recovery'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import type { RuntimeRpcSuccess } from '../../runtime-client'
@@ -13,43 +13,31 @@ export type OrchestrationFailure = {
   code: string
   message: string
   exitCode?: number
-  /** --full keeps the exit code scripts saw before the concise view. */
-  fullExitCode?: number
   level?: 'error' | 'warning'
 }
 
-/** What one command prints by default: the same small fields as one-line JSON or plain text. */
+/** What one command prints by default; --full skips it and runs today's printer instead. */
 export type OrchestrationAgentView<TResult, TFields extends AgentViewFields> = {
   fields: (result: TResult) => TFields
   /** Defaults to the shared field text; only prose (messages, answers) needs its own. */
   text?: (fields: TFields, result: TResult) => string
-  /** Today's text, printed by --full. */
-  fullText: (result: TResult) => string
   failure?: (result: TResult) => OrchestrationFailure | undefined
 }
 
 export function printOrchestrationResult<TResult, TFields extends AgentViewFields>(
   response: RuntimeRpcSuccess<TResult>,
-  ctx: Pick<HandlerContext, 'flags' | 'json'>,
+  json: boolean,
   view: OrchestrationAgentView<TResult, TFields>
 ): void {
   const failure = view.failure?.(response.result)
-  if (ctx.flags.has('full')) {
-    printResult(response, ctx.json, view.fullText)
-  } else {
-    printOrchestrationFields(
-      ctx.json,
-      view.fields(response.result),
-      (fields) => (view.text ? view.text(fields, response.result) : formatAgentFieldsText(fields)),
-      !failure || failure.exitCode === 0
-    )
-  }
+  printOrchestrationFields(
+    json,
+    view.fields(response.result),
+    (fields) => (view.text ? view.text(fields, response.result) : formatAgentFieldsText(fields)),
+    !failure || failure.exitCode === 0
+  )
   if (failure) {
-    reportOrchestrationFailure(
-      ctx.flags.has('full') && failure.fullExitCode !== undefined
-        ? { ...failure, exitCode: failure.fullExitCode }
-        : failure
-    )
+    reportOrchestrationFailure(failure)
   }
 }
 
@@ -63,19 +51,17 @@ export function printOrchestrationFields<TFields extends AgentViewFields>(
   console.log(json ? JSON.stringify({ ok, result: withNextLast(fields) }) : text(fields))
 }
 
-/** Small receipts whose result already is the agent's fields; JSON only loses the envelope. */
+/** Receipts whose text is the same in both modes; --full is today's printResult, unchanged. */
 export function printOrchestrationReceipt<TResult extends AgentViewFields>(
   response: RuntimeRpcSuccess<TResult>,
   ctx: Pick<HandlerContext, 'flags' | 'json'>,
-  text: (result: TResult) => string,
-  failure?: (result: TResult) => OrchestrationFailure | undefined
+  text: (result: TResult) => string
 ): void {
-  printOrchestrationResult(response, ctx, {
-    fields: (result) => result,
-    text: (_, result) => text(result),
-    fullText: text,
-    failure
-  })
+  if (ctx.flags.has('full')) {
+    printResult(response, ctx.json, text)
+  } else {
+    printOrchestrationFields(ctx.json, response.result, text)
+  }
 }
 
 export function reportOrchestrationFailure(failure: OrchestrationFailure): void {

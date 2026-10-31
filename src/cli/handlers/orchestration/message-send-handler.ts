@@ -1,4 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
+import { printResult } from '../../format'
 import { printOrchestrationResult, resolveOrcaCommandsInText } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
@@ -122,14 +123,39 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
       throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
-    printOrchestrationResult(
-      result,
-      { flags, json },
-      {
-        fields: sendFields,
-        fullText: (value) => formatSendFields({ ...sendFields(value), next: value.next })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, { fields: sendFields })
+      return
+    }
+    printResult(result, json, (value) => {
+      const warnings = 'warnings' in value ? (value.warnings ?? []) : []
+      const withWarnings = (line: string): string =>
+        withReceiptNext(
+          [line, ...warnings.map((warning) => `Warning: ${warning.message}`)].join('\n'),
+          value
+        )
+      if ('message' in value) {
+        const lifecycle = 'lifecycle' in value ? value.lifecycle : undefined
+        const autoRelease =
+          lifecycle && 'autoReleaseAt' in lifecycle && lifecycle.autoReleaseAt
+            ? ` (terminal auto-release at ${lifecycle.autoReleaseAt})`
+            : ''
+        return withWarnings(`Sent ${value.message.id}${autoRelease}`)
       }
-    )
+      if ('relay' in value) {
+        if (value.relay.destination === 'worker') {
+          return withWarnings(
+            `Queued ${value.relay.messageId} for worker Dispatch ${value.relay.dispatchId}`
+          )
+        }
+        return withWarnings(
+          `Queued ${value.relay.messageId} for Run home (Dispatch ${value.relay.dispatchId})`
+        )
+      }
+      return withWarnings(
+        `Sent ${value.messages.length} messages to ${value.recipients} recipients`
+      )
+    })
   }
 }
 
@@ -170,19 +196,4 @@ function sendFields(value: OrchestrationSendResult): SendFields {
     recipients: value.recipients,
     ...common
   }
-}
-
-function formatSendFields(fields: SendFields): string {
-  const head =
-    fields.messageIds !== undefined
-      ? `Sent ${fields.messageIds.length} messages to ${fields.recipients} recipients`
-      : fields.dispatchId === undefined
-        ? `Sent ${fields.messageId}${fields.autoReleaseAt ? ` (terminal auto-release at ${fields.autoReleaseAt})` : ''}`
-        : fields.queuedFor === 'worker'
-          ? `Queued ${fields.messageId} for worker Dispatch ${fields.dispatchId}`
-          : `Queued ${fields.messageId} for Run home (Dispatch ${fields.dispatchId})`
-  return withReceiptNext(
-    [head, ...(fields.warnings ?? []).map((warning) => `Warning: ${warning}`)].join('\n'),
-    fields
-  )
 }

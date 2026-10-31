@@ -1,5 +1,7 @@
 import type { CommandHandler } from '../../dispatch'
+import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
+import { TASK_LIST_VIEW, TASK_RECEIPT_VIEW, type TaskListResult } from './task-agent-views'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration-task-summary'
@@ -32,11 +34,11 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         callerTerminalHandle
       }
     )
-    printOrchestrationResult(
-      result,
-      { flags, json },
-      taskReceiptView((id, status) => `Created ${id} [${status}]`)
-    )
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, TASK_RECEIPT_VIEW)
+      return
+    }
+    printResult(result, json, (r) => `Created ${r.task.id} [${r.task.status}]`)
   },
 
   'orchestration task-list': async ({ flags, client, cwd, json }) => {
@@ -61,30 +63,26 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
           result: { ...result.result, tasks: abbreviateOrchestrationTasks(result.result.tasks) }
         }
       : result
-    printOrchestrationResult(
-      output,
-      { flags, json },
-      {
-        // Rows also carry creator identity and timestamps that no next command takes.
-        fields: (r) => ({
-          tasks: r.tasks.map((task) => ({
-            id: task.id,
-            status: task.status,
-            title: task.display_name ?? task.task_title ?? undefined,
-            spec: task.spec,
-            specTruncated: task.spec_truncated || undefined,
-            deps: task.deps && task.deps !== '[]' ? task.deps : undefined,
-            parentId: task.parent_id ?? undefined,
-            result: task.result ?? undefined,
-            dispatchId: task.dispatch_id ?? undefined,
-            assignee: task.assignee_handle ?? undefined
-          })),
-          runId: r.runId,
-          legacyReadOnly: r.legacyReadOnly || undefined
-        }),
-        fullText: formatTaskList
+    if (!flags.has('full')) {
+      printOrchestrationResult(output, json, TASK_LIST_VIEW)
+      return
+    }
+    printResult(output, json, (r) => {
+      if (r.count === 0) {
+        return r.legacyReadOnly ? 'No legacy tasks (read-only).' : 'No tasks.'
       }
-    )
+      const tasks = r.tasks
+        .map((task) => {
+          const label = task.display_name ?? task.task_title ?? task.spec
+          const head = `${task.id} [${task.status}] ${label.slice(0, 60)}`
+          if (task.status === 'dispatched' && task.assignee_handle) {
+            return `${head} -> ${task.assignee_handle} (${task.dispatch_id ?? '?'})`
+          }
+          return head
+        })
+        .join('\n')
+      return r.legacyReadOnly ? `Legacy Run ${r.runId} (read-only)\n${tasks}` : tasks
+    })
   },
 
   'orchestration task-update': async ({ flags, client, cwd, json }) => {
@@ -107,56 +105,10 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         callerTerminalHandle: await resolveCoordinatorTerminalHandle(flags, cwd, client)
       }
     )
-    printOrchestrationResult(
-      result,
-      { flags, json },
-      taskReceiptView((id, status) => `Updated ${id} -> ${status}`)
-    )
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, TASK_RECEIPT_VIEW)
+      return
+    }
+    printResult(result, json, (r) => `Updated ${r.task.id} -> ${r.task.status}`)
   }
-}
-
-type TaskReceipt = { task: { id: string; status: string } }
-
-// The task row echoes the caller's spec back; the id and status are what it acts on.
-function taskReceiptView(format: (taskId: string, status: string) => string) {
-  return {
-    fields: (value: TaskReceipt) => ({ taskId: value.task.id, status: value.task.status }),
-    fullText: (value: TaskReceipt) => format(value.task.id, value.task.status)
-  }
-}
-
-type TaskListResult = {
-  tasks: {
-    id: string
-    spec: string
-    task_title?: string | null
-    display_name?: string | null
-    status: string
-    assignee_handle?: string | null
-    dispatch_id?: string | null
-    spec_truncated?: boolean
-    deps?: string
-    parent_id?: string | null
-    result?: string | null
-  }[]
-  count: number
-  runId?: string
-  legacyReadOnly?: boolean
-}
-
-function formatTaskList(r: TaskListResult): string {
-  if (r.count === 0) {
-    return r.legacyReadOnly ? 'No legacy tasks (read-only).' : 'No tasks.'
-  }
-  const tasks = r.tasks
-    .map((task) => {
-      const label = task.display_name ?? task.task_title ?? task.spec
-      const head = `${task.id} [${task.status}] ${label.slice(0, 60)}`
-      if (task.status === 'dispatched' && task.assignee_handle) {
-        return `${head} -> ${task.assignee_handle} (${task.dispatch_id ?? '?'})`
-      }
-      return head
-    })
-    .join('\n')
-  return r.legacyReadOnly ? `Legacy Run ${r.runId} (read-only)\n${tasks}` : tasks
 }

@@ -3,8 +3,7 @@ import {
   resolveOrcaCommandsInText,
   type OrchestrationAgentView
 } from './agent-view'
-import { withReceiptNext } from './receipt-next-text'
-import { formatWorkerStart, type WorkerStartReceipt } from './worker-output'
+import type { WorkerStartReceipt } from './worker-output'
 
 type LaunchChoice = {
   agent?: string | null
@@ -88,7 +87,6 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
             : value.next && resolveOrcaCommandsInText(value.next)
       }
     },
-    fullText: (value) => withReceiptNext(formatWorkerStart(value), value),
     failure: (value) =>
       value.state === 'ready'
         ? undefined
@@ -97,7 +95,6 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
               // The worker is likely starting; a non-zero exit reads as a failure to retry.
               level: 'warning',
               exitCode: 0,
-              fullExitCode: 1,
               code: 'turn_start_unobserved',
               message: "task typed in; the worker may still be starting. Don't resend."
             }

@@ -233,7 +233,7 @@ describe('orchestration agent views', () => {
     )
     expect(process.exitCode).toBe(1)
 
-    // These were exit 0 before; --full keeps that for scripts.
+    // --full runs today's printer, which never set an exit code here.
     process.exitCode = undefined
     await run(
       'check',
@@ -243,10 +243,10 @@ describe('orchestration agent views', () => {
       ],
       { messages: [], count: 0, cancelled: true }
     )
-    expect(process.exitCode).toBe(0)
+    expect(process.exitCode).toBeUndefined()
   })
 
-  it('keeps --full stdout as before while a timed-out ask still fails on one stderr line', async () => {
+  it('keeps --full ask output and exit exactly as before', async () => {
     callMock.mockImplementation(async (method: string) =>
       method === 'status.get'
         ? { result: { capabilities: [] } }
@@ -283,7 +283,7 @@ describe('orchestration agent views', () => {
     expect(log).not.toHaveBeenCalled()
     expect(error.mock.calls).toEqual([
       [
-        'error: ask_timeout: ask timeout after 1000ms; question msg_q is still pending. Resume waiting; do not ask again: orca-dev orchestration ask --from term_worker --resume msg_q --timeout-ms 1000'
+        'ask timeout after 1000ms; question is still pending (messageId: msg_q). Resume waiting; do not ask again:\norca-dev orchestration ask --from term_worker --resume msg_q --timeout-ms 1000'
       ]
     ])
     expect(process.exitCode).toBe(1)
@@ -333,25 +333,7 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBe(1)
   })
 
-  it('names the resolved executable in a legacy check reply hint', async () => {
-    const { stdout } = await run('check', [['run', 'run_1']], {
-      messages: [
-        {
-          id: 'msg_q',
-          from_handle: 'term_worker',
-          to_handle: 'run:run_1',
-          subject: 'Question',
-          body: 'Proceed?',
-          type: 'question'
-        }
-      ],
-      count: 1,
-      legacyCompatibility: { recovery: false }
-    })
-    expect(stdout).toContain('[Reply: orca-dev orchestration reply --id msg_q --body "..."]')
-  })
-
-  it('keeps payload fields that collide with view keys, and never edits message text', async () => {
+  it('keeps colliding payload fields, never edits message text, and drops the runtime banner', async () => {
     const body = '[Reply: orca orchestration reply --id x --body "quoted by the worker"]'
     const { stdout } = await run(
       'check',
@@ -380,7 +362,7 @@ describe('orchestration agent views', () => {
       body,
       payload: { id: 'payload_id', payload: 'evidence' }
     })
-    expect(result.formatted).toBe(`banner\n${body}`)
+    expect(result.formatted).toBeUndefined()
   })
 
   it('marks a failed concise JSON receipt ok:false and keeps its fields', async () => {
@@ -438,30 +420,5 @@ describe('orchestration agent views', () => {
     expect(stdout).toContain('Reply: orca-dev orchestration reply --id msg_q --body "..."')
     expect(stdout).not.toContain('read-only')
     expect(stdout).not.toContain('Next:')
-  })
-
-  it('keeps --full --format Reply hints on `orca` by not asking the runtime for another name', async () => {
-    await run(
-      'check',
-      [
-        ['run', 'run_1'],
-        ['format', true],
-        ['full', true]
-      ],
-      {
-        messages: [],
-        count: 0
-      }
-    )
-    expect(callMock.mock.calls[0]?.[1]).toMatchObject({ replyCliCommand: undefined })
-    await run(
-      'check',
-      [
-        ['run', 'run_1'],
-        ['format', true]
-      ],
-      { messages: [], count: 0 }
-    )
-    expect(callMock.mock.calls.at(-1)?.[1]).toMatchObject({ replyCliCommand: 'orca-dev' })
   })
 })
