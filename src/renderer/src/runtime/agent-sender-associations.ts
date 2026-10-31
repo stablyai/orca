@@ -14,7 +14,12 @@ import {
 
 export { agentSenderPublicationPatch } from './agent-sender-publication-patch'
 export type { AgentSenderPublications } from './agent-sender-publication-patch'
-export type LocatedAgentSender = AgentSenderAssociation & { host: string; tab?: Tab }
+/** `paneKey` is this window's name for the pane; `hostPaneKey` is the name its host gave it. */
+export type LocatedAgentSender = AgentSenderAssociation & {
+  host: string
+  hostPaneKey: string
+  tab?: Tab
+}
 const EMPTY: AgentSenderPublications = Object.freeze({})
 const key = (host: string, address: string) => JSON.stringify([host, address])
 
@@ -76,7 +81,13 @@ function senderIndex(state: AppState) {
       return null
     }
     const paneKey = actual ?? row.paneKey
-    return { ...row, host, paneKey, tab: chatTabs.get(key(host, paneKey)) }
+    return {
+      ...row,
+      host,
+      paneKey,
+      hostPaneKey: row.paneKey,
+      tab: chatTabs.get(key(host, paneKey))
+    }
   }
   // Execution rows grouped by (execution peer, home principal that attached them).
   const attachments = new Map<string, Map<string, LocatedAgentSender | null>>()

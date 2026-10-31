@@ -2,28 +2,27 @@
 
 import { toast } from 'sonner'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { agentSessionWriteNoticeText } from '@/components/native-chat/agent-session-write-notice-text'
 import type {
   OrchestrationPartyLocation,
   OrchestrationPartyLocationResult
 } from '../../../shared/orchestration-caller-status'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
-import {
-  focusRendererTerminalHandle,
-  focusRuntimeTerminalHandle
-} from '@/components/terminal-pane/terminal-handle-links'
 import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
 import {
   activateAiVaultStructuredSession,
   structuredSessionOpenFeedback
 } from './activate-ai-vault-structured-session'
 import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
-import type { LocatedAgentSender } from '@/runtime/agent-sender-associations'
+import {
+  focusTerminal,
+  openLocatedAgentMessageSender,
+  showLookupFailure,
+  type LookupFailure
+} from './open-located-agent-message-sender'
 import { unnamedSenderLabel } from '@/components/native-chat/native-chat-agent-message-sender-label'
 import {
   agentMessageSenderOpens,
@@ -31,8 +30,6 @@ import {
   agentMessageSenderUnavailableText,
   resolveAgentMessageSenderTarget
 } from '@/components/native-chat/native-chat-agent-message-sender-target'
-import { activateWorktreeAgentPane } from '@/components/sidebar/use-worktree-agent-activation'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   executionHostIdForStructuredTarget,
   resolveStructuredAgentSessionOwner,
@@ -41,17 +38,7 @@ import {
 } from '@/runtime/structured-agent-session-owner'
 
 type Sender = AgentMessageSource['senders'][number]
-/** older-host identifies the chat host; update may mean either side, and unreachable proves nothing. */
-type LookupFailure = 'older-host' | 'update' | 'unreachable'
 type Lookup = OrchestrationPartyLocationResult | LookupFailure
-
-/** The answers that prove the terminal is gone; anything else proves nothing about it. */
-const TERMINAL_GONE_CODES = new Set([
-  'terminal_exited',
-  'terminal_gone',
-  'terminal_handle_stale',
-  'terminal_not_found'
-])
 
 const opensInFlight = new Map<string, Promise<void>>()
 
@@ -74,19 +61,20 @@ export function openAgentMessageSender(
     target,
     dispatchId
   )
-  if (resolved.kind === 'located') {
-    const { sessionId } = resolved.location
-    if (sessionId) {
-      return openLocatedChat(resolved.location, sessionId)
-    }
-    const tabId = heldTabId(state, resolved.location)
-    if (tabId) {
-      activateWorktreeAgentPane(resolved.location.worktreeId, tabId, resolved.location.paneKey)
-      return Promise.resolve()
-    }
-    // A terminal this window shows no tab for yet: the host reveals it, as its lookup always has.
-  }
   const label = name ?? sender.name ?? unnamedSenderLabel()
+  if (resolved.kind === 'located') {
+    return openLocatedAgentMessageSender(resolved.location, label, {
+      current: () =>
+        resolveAgentMessageSenderTarget(
+          useAppStore.getState(),
+          sender,
+          chatWorktreeId,
+          target,
+          dispatchId
+        ),
+      reopen: () => openAgentMessageSender(source, sender, chatWorktreeId, target, dispatchId, name)
+    })
+  }
   // Only a publishing host's answer can say nothing opens; an older host keeps its own lookup.
   if (
     resolved.kind !== 'none' &&
@@ -121,36 +109,6 @@ export function openAgentMessageSender(
     .finally(() => opensInFlight.delete(key))
   opensInFlight.set(key, opening)
   return opening
-}
-
-/** The located chat itself, through the same activation its sidebar row uses. */
-async function openLocatedChat(location: LocatedAgentSender, sessionId: string): Promise<void> {
-  const host = structuredAgentSessionTargetForHost(location.host)
-  if (!host) {
-    showLookupFailure('unreachable')
-    return
-  }
-  const session = {
-    structuredSession: { workspaceId: location.worktreeId, sessionId }
-  }
-  await activateAiVaultStructuredSession(session, undefined, host)
-}
-
-/** The tab the sidebar activation opens for the located pane, when this window holds one. */
-function heldTabId(
-  state: Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>,
-  location: LocatedAgentSender
-): string | null {
-  const tabId = parsePaneKey(location.paneKey)?.tabId
-  if (!tabId) {
-    return null
-  }
-  const held =
-    (state.tabsByWorktree[location.worktreeId] ?? []).some((tab) => tab.id === tabId) ||
-    (state.unifiedTabsByWorktree[location.worktreeId] ?? []).some(
-      (tab) => tab.id === tabId && tab.contentType === 'agent-session'
-    )
-  return held ? tabId : null
 }
 
 async function openSender(
@@ -210,21 +168,6 @@ async function openSender(
   await focusTerminal(location.handle, environmentId)
 }
 
-async function focusTerminal(handle: string, environmentId: string | null): Promise<void> {
-  if (focusRendererTerminalHandle(handle, environmentId)) {
-    return
-  }
-  try {
-    await focusRuntimeTerminalHandle(handle, environmentId)
-  } catch (error) {
-    if (error instanceof RuntimeRpcCallError && TERMINAL_GONE_CODES.has(error.code)) {
-      showAgentPaneUnavailable()
-    } else {
-      showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable')
-    }
-  }
-}
-
 async function lookUpSender(
   party: Sender['party'],
   messageIds: readonly string[],
@@ -273,16 +216,4 @@ function lookUpOnOlderHost(party: Sender['party'], host: RuntimeClientTarget): L
 
 function located(location: OrchestrationPartyLocation): OrchestrationPartyLocationResult {
   return { location }
-}
-
-function showLookupFailure(failure: LookupFailure): void {
-  toast.error(
-    agentSessionWriteNoticeText(
-      failure === 'older-host'
-        ? ['unsupported']
-        : failure === 'update'
-          ? ['updateOrcaToOpenChat']
-          : ['unreachable', 'tryAgain']
-    )
-  )
 }
