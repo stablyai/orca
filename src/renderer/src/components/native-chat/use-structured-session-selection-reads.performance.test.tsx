@@ -4,7 +4,6 @@ import { useSyncExternalStore } from 'react'
 import { createStructuredAgentSessionOptionsReadOwner } from '../../../../shared/structured-agent-session-options-read-owner'
 import { createStructuredAgentSessionOptionState } from '../../../../shared/structured-agent-session-options'
 import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createStructuredSessionSelectionController } from '../../../../shared/structured-agent-session-selection-operations'
@@ -13,7 +12,10 @@ import { useStructuredAgentSessionOptionStamp } from './structured-agent-session
 import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import type * as StructuredClient from '@/runtime/structured-agent-session-client'
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type {
+  AgentSessionOptionsResult,
+  AgentSessionStatusEvent
+} from '../../../../shared/agent-session-wire'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
