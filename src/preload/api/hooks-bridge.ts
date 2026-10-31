@@ -9,6 +9,12 @@ export const hooksApi = {
   inspectSetupScriptImports: (args: { repoId: string; hostId?: ExecutionHostId }) =>
     ipcRenderer.invoke('hooks:inspectSetupScriptImports', args),
 
+  prepareSetupRunner: (args: {
+    repoId: string
+    worktreePath: string
+    hostId?: ExecutionHostId
+  }) => ipcRenderer.invoke('hooks:prepareSetupRunner', args),
+
   readIssueCommand: (args: {
     repoId: string
     hostId?: ExecutionHostId

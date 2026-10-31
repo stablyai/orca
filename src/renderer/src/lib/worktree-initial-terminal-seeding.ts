@@ -221,7 +221,11 @@ export function ensureWorktreeHasInitialTerminal(
   const shouldCreateNewStartupTerminal =
     opts?.createNewTerminalForStartup === true && sequencedStartup !== undefined
   if (!shouldAutoCreate && !shouldCreateForExplicitWork && !shouldCreateNewStartupTerminal) {
-    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
+    const terminalTabs = store.tabsByWorktree[worktreeId] ?? []
+    // On an existing worktree the oldest terminal is unrelated to where the user is.
+    const activeTabId = (store.getActiveTab ?? useAppStore.getState().getActiveTab)?.(worktreeId)?.id
+    const existingTerminalTabId =
+      terminalTabs.find((tab) => tab.id === activeTabId)?.id ?? terminalTabs[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
       // Main can adopt the startup tab yet fail setup spawn; renderer still runs returned fallback setup.
       queueSetupAndIssueCommands(
@@ -235,7 +239,10 @@ export function ensureWorktreeHasInitialTerminal(
       )
       return existingTerminalTabId
     }
-    return null
+    if (!setup && !issueCommand) {
+      return null
+    }
+    // Editor or browser tabs are renderable but cannot carry setup. Create a terminal.
   }
 
   const templatedTabId = applyDefaultTerminalTabs(

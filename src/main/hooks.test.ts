@@ -59,6 +59,24 @@ beforeEach(() => {
   spawnMock.mockImplementation(() => fakeChild())
 })
 
+describe('getSetupCommandSource', () => {
+  it('runs the local script alone under run-both when yaml has no setup', async () => {
+    const fs = await import('node:fs')
+    vi.mocked(fs.existsSync).mockReturnValue(false)
+
+    const { getSetupCommandSource } = await import('./hooks')
+    const repo = makeHookTestRepo({
+      commandSourcePolicy: 'run-both',
+      scripts: { setup: 'echo "local setup"', archive: '' }
+    })
+
+    expect(getSetupCommandSource(repo)).toEqual({
+      source: 'local',
+      command: 'echo "local setup"'
+    })
+  })
+})
+
 describe('runHook', () => {
   const makeRepo = (hookSettings?: {
     mode?: 'auto' | 'override'

@@ -3,13 +3,20 @@ import type * as GitRunner from './git/runner'
 import { describe, expect, it, vi } from 'vitest'
 import { makeHookTestRepo } from './hooks-test-fixtures'
 
+function runnerTmpPath(finalPath: string) {
+  return expect.stringMatching(
+    new RegExp(`^${finalPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.tmp-\\d+-\\d+$`)
+  )
+}
+
 vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
   rmSync: vi.fn(),
-  chmodSync: vi.fn()
+  chmodSync: vi.fn(),
+  renameSync: vi.fn(),
 }))
 
 const { gitExecFileSyncMock } = vi.hoisted(() => ({
@@ -114,7 +121,7 @@ describe('createSetupRunnerScript', () => {
         { cwd: 'C:\\repo-worktree', hostGit: true }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.sh',
+        runnerTmpPath('C:\\repo\\.git\\orca\\setup-runner.sh'),
         '#!/usr/bin/env bash\nset -e\npnpm install\nnpm run build\n',
         'utf-8'
       )
@@ -153,7 +160,7 @@ describe('createSetupRunnerScript', () => {
         { cwd: 'C:\\repo-worktree', hostGit: true }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.cmd',
+        runnerTmpPath('C:\\repo\\.git\\orca\\setup-runner.cmd'),
         expect.stringContaining('call copy .env.example .env\r\n'),
         'utf-8'
       )
@@ -216,7 +223,7 @@ describe('createSetupRunnerScript', () => {
       )
 
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.sh',
+        runnerTmpPath('C:\\repo\\.git\\orca\\setup-runner.sh'),
         '#!/usr/bin/env bash\nset -e\nset -euo pipefail\nmake build | tee build.log\n',
         'utf-8'
       )
@@ -249,12 +256,12 @@ describe('createSetupRunnerScript', () => {
         { cwd: 'C:\\repo-worktree', hostGit: true }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.cmd',
+        runnerTmpPath('C:\\repo\\.git\\orca\\setup-runner.cmd'),
         expect.stringContaining('call pnpm install\r\nif errorlevel 1 exit /b %errorlevel%'),
         'utf-8'
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.cmd',
+        runnerTmpPath('C:\\repo\\.git\\orca\\setup-runner.cmd'),
         expect.stringContaining('call npm run build\r\nif errorlevel 1 exit /b %errorlevel%'),
         'utf-8'
       )
@@ -284,11 +291,14 @@ describe('createSetupRunnerScript', () => {
         { cwd: '/test/worktree', hostGit: true }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        '/test/repo/.git/orca/setup-runner.sh',
+        runnerTmpPath('/test/repo/.git/orca/setup-runner.sh'),
         '#!/usr/bin/env bash\nset -e\npnpm install\n',
         'utf-8'
       )
-      expect(chmodSyncMock).toHaveBeenCalledWith('/test/repo/.git/orca/setup-runner.sh', 0o755)
+      expect(chmodSyncMock).toHaveBeenCalledWith(
+        runnerTmpPath('/test/repo/.git/orca/setup-runner.sh'),
+        0o755
+      )
       expect(result.shell).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
