@@ -3,6 +3,7 @@ import { fetchCodexRateLimits } from '../codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
 import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
@@ -22,6 +23,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
     const controller = this.beginFetchCycle()
     const signal = controller.signal
+    let settledPreviewCount = 0
+    let thrownPreviewCount = 0
 
     for (const account of accounts) {
       this.inactiveClaudeFetching.add(account.id)
@@ -62,7 +65,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           }
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
           this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
-        } catch {
+          settledPreviewCount += 1
+        } catch (error) {
           // Isolate each account's Keychain/network failure so siblings continue.
           if (
             signal.aborted ||
@@ -70,13 +74,24 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             !this.isCurrentInactiveClaudeAccount(account.id)
           ) {
             this.inactiveClaudeCache.delete(account.id)
+          } else {
+            const cached = this.inactiveClaudeCache.get(account.id) ?? null
+            this.inactiveClaudeCache.set(
+              account.id,
+              this.applyStalePolicy(inactiveAccountPreviewFailure('claude', error), cached)
+            )
+            thrownPreviewCount += 1
           }
         }
         this.inactiveClaudeFetching.delete(account.id)
         this.pushToRenderer()
       }
 
-      if (!signal.aborted && fetchGeneration === this.inactiveClaudeAccountsGeneration) {
+      if (
+        !signal.aborted &&
+        fetchGeneration === this.inactiveClaudeAccountsGeneration &&
+        !(settledPreviewCount === 0 && thrownPreviewCount > 0)
+      ) {
         this.lastInactiveClaudeFetchAt = Date.now()
       }
     } finally {
@@ -101,6 +116,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     const controller = this.beginFetchCycle()
     const signal = controller.signal
     this.inactiveCodexFetchInFlight = true
+    let settledPreviewCount = 0
+    let thrownPreviewCount = 0
 
     let staggerNextProbe = false
     try {
@@ -160,7 +177,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           }
           const cached = this.inactiveCodexCache.get(account.id) ?? null
           this.inactiveCodexCache.set(account.id, this.applyStalePolicy(fresh, cached))
-        } catch {
+          settledPreviewCount += 1
+        } catch (error) {
           // Isolate per-account failures so sibling previews continue.
           if (
             signal.aborted ||
@@ -168,13 +186,24 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             !this.isCurrentInactiveCodexAccount(account.id)
           ) {
             this.inactiveCodexCache.delete(account.id)
+          } else {
+            const cached = this.inactiveCodexCache.get(account.id) ?? null
+            this.inactiveCodexCache.set(
+              account.id,
+              this.applyStalePolicy(inactiveAccountPreviewFailure('codex', error), cached)
+            )
+            thrownPreviewCount += 1
           }
         }
         this.inactiveCodexFetching.delete(account.id)
         this.pushToRenderer()
       }
 
-      if (!signal.aborted && fetchGeneration === this.inactiveCodexAccountsGeneration) {
+      if (
+        !signal.aborted &&
+        fetchGeneration === this.inactiveCodexAccountsGeneration &&
+        !(settledPreviewCount === 0 && thrownPreviewCount > 0)
+      ) {
         this.lastInactiveCodexFetchAt = Date.now()
       }
     } finally {
@@ -239,5 +268,21 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     this.inactiveCodexCache.delete(accountId)
     this.inactiveCodexFetching.delete(accountId)
     this.pushToRenderer()
+  }
+}
+
+function inactiveAccountPreviewFailure(
+  provider: 'claude' | 'codex',
+  error: unknown
+): ProviderRateLimits {
+  const message = error instanceof Error ? error.message.trim() : ''
+  return {
+    provider,
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error: message || 'Usage unavailable',
+    status: 'error',
+    usageMetadata: { failureKind: 'unknown' }
   }
 }

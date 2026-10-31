@@ -22,9 +22,9 @@ import { AccountRuntimeToggle, CodexRestartStatusPrompt } from './StatusBarAccou
 import {
   InlineUsageBars,
   InlineUsageSignInAction,
-  InlineUsageSkeleton,
-  isUnavailableInactiveUsage
+  InlineUsageSkeleton
 } from './InlineProviderUsage'
+import { previewAccountRowUsage } from './usage-roster-row-state'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 
@@ -209,12 +209,22 @@ export function CodexSwitcherMenu({
                   const inactiveUsage = target.id
                     ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
                     : null
+                  // Why: rows follow this desktop's codexTarget, so a remote owner's usage stays off this row.
+                  const rowPreview = previewAccountRowUsage({
+                    active: target.active && !hasActiveRuntimeEnvironment,
+                    activeLimits: codex,
+                    inactive: inactiveUsage
+                  })
+                  const rowFetching = target.active
+                    ? codex.status === 'fetching'
+                    : Boolean(inactiveUsage?.isFetching)
                   // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
+                  // A probe that failed for any other reason keeps its status line instead of a login button.
                   const showSignInAction =
                     !hasActiveRuntimeEnvironment &&
                     !target.active &&
                     target.id !== null &&
-                    isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
+                    rowPreview.kind === 'sign-in'
                   const isSigningIn = reauthenticatingAccountId === target.id
                   const isBusy = isSwitching || reauthenticatingAccountId !== null
 
@@ -248,17 +258,11 @@ export function CodexSwitcherMenu({
                             </span>
                           ) : null}
                         </div>
-                        {/* Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row. */}
-                        {target.active && !hasActiveRuntimeEnvironment ? (
-                          <InlineUsageBars
-                            limits={codex}
-                            isFetching={codex.status === 'fetching'}
-                          />
-                        ) : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                        {rowPreview.kind === 'loading' ? (
                           <InlineUsageSkeleton />
                         ) : showSignInAction ? (
                           <InlineUsageSignInAction
-                            isFetching={inactiveUsage?.isFetching ?? false}
+                            isFetching={rowFetching}
                             isSigningIn={isSigningIn}
                             disabled={isBusy}
                             onSignInPointerDown={suppressNextAccountSelect}
@@ -269,11 +273,14 @@ export function CodexSwitcherMenu({
                               }
                             }}
                           />
-                        ) : inactiveUsage?.rateLimits ? (
-                          <InlineUsageBars
-                            limits={inactiveUsage.rateLimits}
-                            isFetching={inactiveUsage.isFetching}
-                          />
+                        ) : rowPreview.kind === 'usage' ? (
+                          <InlineUsageBars limits={rowPreview.limits} isFetching={rowFetching} />
+                        ) : rowPreview.kind === 'message' || rowPreview.kind === 'sign-in' ? (
+                          <span
+                            className={`text-[10px] text-muted-foreground ${rowFetching ? 'animate-pulse' : ''}`}
+                          >
+                            {rowPreview.label}
+                          </span>
                         ) : null}
                       </div>
                     </DropdownMenuItem>

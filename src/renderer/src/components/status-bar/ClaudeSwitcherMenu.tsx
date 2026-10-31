@@ -44,6 +44,7 @@ import {
   InlineUsageSkeleton,
   isUnavailableInactiveUsage
 } from './InlineProviderUsage'
+import { previewAccountRowUsage } from './usage-roster-row-state'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
@@ -327,6 +328,14 @@ export function ClaudeSwitcherMenu({
               const inactiveUsage = target.id
                 ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
                 : null
+              const rowPreview = previewAccountRowUsage({
+                active: target.active && !hasActiveRuntimeEnvironment,
+                activeLimits: claude,
+                inactive: inactiveUsage
+              })
+              const rowFetching = target.active
+                ? claude.status === 'fetching'
+                : Boolean(inactiveUsage?.isFetching)
               // Why local only: the hidden sign-in runs on this device, not a remote server.
               const signInId = target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
 
@@ -369,15 +378,19 @@ export function ClaudeSwitcherMenu({
                         {target.hint}
                       </span>
                     ) : null}
-                    {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                    {rowPreview.kind === 'loading' ? (
                       <InlineUsageSkeleton />
-                    ) : inactiveUsage?.rateLimits &&
+                    ) : rowPreview.kind === 'usage' &&
                       // Why: the sign-in note above already says this; skip the repeat.
-                      !(signInId && isUnavailableInactiveUsage(inactiveUsage.rateLimits)) ? (
-                      <InlineUsageBars
-                        limits={inactiveUsage.rateLimits}
-                        isFetching={inactiveUsage.isFetching}
-                      />
+                      !(signInId && isUnavailableInactiveUsage(rowPreview.limits)) ? (
+                      <InlineUsageBars limits={rowPreview.limits} isFetching={rowFetching} />
+                    ) : !signInId &&
+                      (rowPreview.kind === 'sign-in' || rowPreview.kind === 'message') ? (
+                      <span
+                        className={`text-[10px] text-muted-foreground ${rowFetching ? 'animate-pulse' : ''}`}
+                      >
+                        {rowPreview.label}
+                      </span>
                     ) : null}
                   </div>
                 </DropdownMenuItem>
