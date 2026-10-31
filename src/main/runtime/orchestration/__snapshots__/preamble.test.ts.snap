@@ -17,7 +17,7 @@ Do only this task, yourself: no subagents or helper workers unless the task asks
   # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
-  orca orchestration ask --from orca_session_id:WORKER --question "<your question>" --options "<optional,comma,separated>"
+  orca orchestration ask --from orca_session_id:WORKER --question "<your question>"
 
   # Blocked, and the coordinator must act before you can continue:
   orca orchestration send --from orca_session_id:WORKER --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id task_SNAP --dispatch-id ctx_SNAP
@@ -41,7 +41,7 @@ new work, so do it without the settled task or Dispatch IDs.
 Never refuse a direct user request because you were a worker.
 
 More supervised work arrives in this chat as a fresh preamble and TASK
-block; follow it under its new Dispatch and ignore stale follow-ups.
+block; follow it under its new Dispatch.
 
 === TASK ===
 TASK_BODY"
@@ -63,7 +63,7 @@ Do only this task, yourself: no subagents or helper workers unless the task asks
   # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
-  orca orchestration ask --from term_WORKER --question "<your question>" --options "<optional,comma,separated>"
+  orca orchestration ask --from term_WORKER --question "<your question>"
 
   # Blocked, and the coordinator must act before you can continue:
   orca orchestration send --from term_WORKER --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id task_SNAP --dispatch-id ctx_SNAP
@@ -87,7 +87,7 @@ new work, so do it without the settled task or Dispatch IDs.
 Never refuse a direct user request because you were a worker.
 
 Do not exit the shell. More supervised work arrives here as a fresh preamble
-and TASK block; follow it under its new Dispatch and ignore stale follow-ups.
+and TASK block; follow it under its new Dispatch.
 
 === TASK ===
 TASK_BODY"

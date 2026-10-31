@@ -73,7 +73,7 @@ Do only this task, yourself: no subagents or helper workers unless the task asks
   # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
-  ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>" --options "<optional,comma,separated>"
+  ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>"
 
   # Blocked, and the coordinator must act before you can continue:
   ${cli} orchestration send --from ${params.workerHandle} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
@@ -121,10 +121,10 @@ export function dispatchPreambleSendOptions(requestId: string): DispatchPreamble
 }
 
 export const TERMINAL_REDISPATCH_PARAGRAPH = `Do not exit the shell. More supervised work arrives here as a fresh preamble
-and TASK block; follow it under its new Dispatch and ignore stale follow-ups.`
+and TASK block; follow it under its new Dispatch.`
 
 export const CHAT_REDISPATCH_PARAGRAPH = `More supervised work arrives in this chat as a fresh preamble and TASK
-block; follow it under its new Dispatch and ignore stale follow-ups.`
+block; follow it under its new Dispatch.`
 
 function buildPostWorkerDoneInstructions({
   cli,
@@ -175,9 +175,9 @@ your coordinator's mail.
   ${cli} orchestration reply --from ${workerHandle} --id <message_id> --body "<answer>"
 \`\`\`
 
-Wait until every helper has settled (worker_done, a failed start, stop, or
-abandon) before reporting your own, and name any that failed. Nesting is
-capped; your helpers may not be able to start helpers of their own.
+Then end your turn; Orca wakes you with their mail. Send worker_done only after
+every helper has settled, and name any that failed. Nesting is capped; your
+helpers may not be able to start helpers of their own.
 
 ---`
 }
@@ -194,9 +194,9 @@ If the task asks for sub-workers, create your own Run first, then:
   ${cli} orchestration worker-start --task <task_id> --worktree current --agent <agent> --json
 \`\`\`
 
-Wait until every sub-worker has settled (worker_done, a failed start, stop, or
-abandon) before reporting your own, and name any that failed. Nesting is
-capped; your sub-workers may not be able to dispatch further.
+Then end your turn; Orca wakes you with their mail. Send worker_done only after
+every sub-worker has settled, and name any that failed. Nesting is capped; your
+sub-workers may not be able to dispatch further.
 
 ---`
 }

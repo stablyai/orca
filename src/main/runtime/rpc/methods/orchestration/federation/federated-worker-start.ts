@@ -254,7 +254,13 @@ export async function startFederatedWorker(args: {
           effects: remote.effects ?? [],
           residualResources: remote.residualResources ?? []
         },
-        reportsTurnStops ? undefined : { name: server.name, dispatchId: started.dispatch.id }
+        reportsTurnStops
+          ? undefined
+          : {
+              name: server.name,
+              dispatchId: started.dispatch.id,
+              cli: params.from ? runtime.getTerminalOrchestrationCliCommand(params.from) : 'orca'
+            }
       )
     } else if (remote.state === 'outcome_unknown') {
       const worker = db.markWorkerStartUnknown(

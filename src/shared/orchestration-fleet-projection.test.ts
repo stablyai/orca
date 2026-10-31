@@ -621,6 +621,33 @@ describe('fleet liveness and attention after a host verdict', () => {
     expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
 
+  // Keep open, --keep-open and new-workspace workers stay open on purpose; a release hint would close them.
+  it('asks nothing of a finished worker kept open', () => {
+    const projected = projectOrchestrationFleet({
+      workers: [
+        worker('1', {
+          workerState: 'succeeded',
+          dispatchStatus: 'completed',
+          terminalState: 'retained',
+          resource: {
+            id: 'resource-1',
+            ownerDispatchId: '1',
+            worktreeId: 'workspace-1',
+            paneKey: 'tab-1:leaf-1',
+            hostScope: null,
+            ownershipState: 'owned',
+            releaseState: 'retained',
+            updatedAt: '2026-09-04T00:00:00.000Z'
+          }
+        })
+      ],
+      statuses: [],
+      now: 10_000
+    })
+
+    expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
+  })
+
   // A follow-up reuses the terminal while the pane still reports the earlier Dispatch's turn.
   it('asks nothing of a settled worker whose terminal moved to a follow-up', () => {
     const now = 10_000
