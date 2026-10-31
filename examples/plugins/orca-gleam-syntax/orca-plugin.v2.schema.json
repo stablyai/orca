@@ -35,21 +35,22 @@
       "type": "string",
       "maxLength": 64,
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-      "description": "Plugin id, kebab-case. The install identity is `<publisher>.<id>`. The reserved names `constructor` and `prototype` are refused.",
+      "description": "Plugin id, kebab-case. The install identity is `<publisher>.<id>`, where Orca derives the publisher from the repository owner. The reserved names `constructor` and `prototype` are refused.",
       "x-orca-since": "1.4.160",
       "examples": [
         "gleam-syntax"
       ]
     },
     "publisher": {
-      "type": "string",
-      "maxLength": 64,
-      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-      "description": "Publisher slug, kebab-case. Must be the GitHub or GitLab user or organization that owns the repository (`acme` for `github.com/acme/gleam-syntax`), or the official and community catalogs reject the listing. The reserved names `constructor` and `prototype` are refused. The publishers `stablyai`, `official`, `anthropic`, `openai`, `github` and any starting `orca` (any case), and ids starting `orca-`, install only from Orca's official catalog.",
+      "deprecated": true,
+      "description": "Deprecated: leave it out. Orca derives the publisher from where the plugin comes from, the way a Go module is named by its repository path: the repository owner for the official and community catalogs and for Git URL installs (`acme` for `github.com/acme/gleam-syntax`), and `local` for a folder. A value here is ignored for catalog and Git installs. Leaving it out needs `engines.orca` of at least `>=1.4.246`, because older Orca requires it; if you keep it for older Orca, it must equal the repository owner. Reserved owners (`stablyai`, `official`, `anthropic`, `openai`, `github` and any starting `orca`) and ids starting `orca-` install only from Orca's official catalog.",
       "x-orca-since": "1.4.160",
       "examples": [
         "acme"
-      ]
+      ],
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
     },
     "name": {
       "type": "string",
@@ -433,7 +434,6 @@
     "manifestVersion",
     "execution",
     "id",
-    "publisher",
     "name",
     "version",
     "engines"
@@ -505,7 +505,7 @@
           "minLength": 1,
           "maxLength": 1024,
           "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
-          "description": "HTML file, relative to the plugin root, rendered inside a sandboxed panel frame. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "description": "HTML file, relative to the plugin root, rendered inside a panel frame. It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
           "x-orca-since": "1.4.160",
           "examples": [
             "dist/panel.html"
@@ -958,7 +958,7 @@
           "minLength": 1,
           "maxLength": 1024,
           "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
-          "description": "HTML file rendered inside a sandboxed editor frame, like a panel. It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "description": "HTML file rendered inside an editor frame, like a panel. It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
           "x-orca-since": "1.4.245",
           "examples": [
             "editor/index.html"

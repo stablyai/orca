@@ -32,6 +32,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from './BottomDrawer'
 import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-source-drawer-styles'
+import { TextField } from './composer-input/TextField'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
 
@@ -345,16 +346,14 @@ export function SmartWorkspaceSourceDrawer({
             })}
           </View>
 
-          <TextInput
-            ref={inputRef}
-            style={styles.search}
+          <TextField
+            inputRef={inputRef}
             value={composer.name}
             onChangeText={composer.setName}
             placeholder={t(
               'components.smartWorkspaceSourceDrawer.searchPlaceholder',
               'Type a name or search a source'
             )}
-            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             // Still request native auto-focus; the delayed ref focus is the reliable path.

@@ -83,7 +83,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     minHeight: 72,
     paddingLeft: spacing.md,
     paddingRight: spacing.md,
@@ -94,7 +94,7 @@ const styles = themedStyleSheet(() => ({
   icon: {
     width: 46,
     height: 46,
-    borderRadius: 13,
+    borderRadius: radii.tile,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
@@ -120,7 +120,7 @@ const styles = themedStyleSheet(() => ({
     height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   providerButtonPressed: { backgroundColor: colors.bgRaised }
 }))

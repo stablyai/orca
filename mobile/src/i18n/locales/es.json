@@ -99,6 +99,7 @@
       "connecting": "Conectando…",
       "invalidPairingCode": "No es un código de emparejamiento válido; cópialo de tu ordenador y vuelve a pegarlo.",
       "invalidQrCode": "No es un código QR de Orca válido",
+      "downloadQrCode": "Ese es el código de descarga. Escanea el código de emparejamiento del paso 2 en tu ordenador.",
       "openDesktopStep": "Abre Orca en tu ordenador",
       "openMobileSettingsStep": "Ve a Ajustes → Móvil",
       "openSettings": "Abrir Ajustes",
@@ -1003,8 +1004,12 @@
       "removeShortcut": "Eliminar {{label}}",
       "resetDefaults": "Restablecer valores predeterminados",
       "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original",
-      "shortcutBar": "BARRA DE ATAJOS",
-      "shortcutBarDescription": "Activa o desactiva las teclas para mostrarlas u ocultarlas y mantén pulsado el control de arrastre para colocarlas en el orden que quieras en la barra de atajos de la terminal."
+      "moreKeys": "MÁS TECLAS",
+      "moreKeysDescription": "Estas teclas están bajo ⋯ en la fila de teclas del terminal. Activa o desactiva las teclas para mostrarlas u ocultarlas y mantén pulsado el asa para arrastrarlas al orden que quieras. Las teclas que ya están en la fila, como Esc o las flechas, no aparecen en ⋯.",
+      "directionPad": "CRUCETA",
+      "showDirectionPad": "Mostrar cruceta",
+      "showDirectionPadDescription": "Fija la cruceta en la barra lateral. Si está desactivada, la barra muestra las teclas de flecha.",
+      "showShortcut": "Mostrar atajo {{label}}"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "¿Usar un restablecimiento de límites de uso?",
@@ -1046,6 +1051,11 @@
       "folder": "Carpeta",
       "project": "Proyecto {{repo}}",
       "remoteHost": "Host remoto"
+    },
+    "nativeScreenRecovery": {
+      "title": "Algo salió mal",
+      "tryAgain": "Volver a intentar",
+      "home": "Inicio"
     }
   },
   "connection": {
@@ -1139,7 +1149,8 @@
       "checkTailnet": "Comprueba que el escritorio esté activo y aparezca conectado en tu red de Tailscale.",
       "desktopTitle": "App de escritorio cerrada",
       "disableVpn": "Desactiva esa VPN o activa la tunelización dividida / \"Allow LAN\".",
-      "firewallTitle": "El cortafuegos bloquea el puerto 6768",
+      "firewallTitle": "El cortafuegos bloquea el puerto {{port}}",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Las direcciones de host como 100.x.x.x o *.ts.net se conectan a través de Tailscale — mantenlo ACTIVADO.",
       "macosFirewall": "macOS: Ajustes del Sistema → Red → Firewall — permite las conexiones de Orca.",
       "notificationNetwork": "Prueba con datos móviles u otra red Wi-Fi. Si las alertas llegan tras cambiar de red, es posible que tu red esté retrasando la entrega.",
@@ -1430,14 +1441,6 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Creando espacio de trabajo…"
     },
-    "hostRailActions": {
-      "accounts": "Cuentas",
-      "closeSearch": "Cerrar búsqueda",
-      "floatingWorkspace": "Espacio de trabajo flotante",
-      "newWorkspace": "Nuevo espacio de trabajo",
-      "searchWorkspaces": "Buscar espacios de trabajo",
-      "tasks": "Tareas"
-    },
     "hostScreenHeader": {
       "accounts": "Cuentas",
       "activeFilters_many": "Opciones de espacio de trabajo ({{count}} filtros activos)",
@@ -1450,7 +1453,8 @@
       "reconnect": "Reconectar",
       "searchWorkspaces": "Buscar espacios de trabajo",
       "tasks": "Tareas",
-      "workspaceOptions": "Opciones de espacio de trabajo"
+      "workspaceOptions": "Opciones de espacio de trabajo",
+      "newWorkspace": "Nuevo espacio de trabajo"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "¿Eliminar \"{{name}}\" ({{branch}})?",
@@ -1890,16 +1894,17 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Agregar atajo personalizado",
       "dismissKeyboard": "Ocultar teclado",
-      "dismissKeyboardHint": "Oculta el teclado en pantalla y mantiene abierta la sesión de terminal actual.",
-      "paste": "Pegar",
-      "pasteFromClipboard": "Pegar desde el portapapeles",
       "sendKey": "Enviar {{label}}",
-      "switchToBufferedInput": "Cambiar a la entrada de comandos en búfer",
-      "switchToDesktopMode": "Cambiar al modo de escritorio",
-      "switchToLiveInput": "Cambiar a la entrada directa en la terminal",
-      "switchToPhoneMode": "Cambiar al modo teléfono"
+      "modifierHint": "Se aplica a la siguiente tecla. Toca dos veces para mantenerla activa.",
+      "typeCharacter": "Escribir {{character}}",
+      "interrupt": "Interrumpir terminal",
+      "keysModeLabel": "Modo teclas: lo que escribes va directamente al terminal. Cambiar al modo mensaje",
+      "messageModeLabel": "Modo mensaje: escribe y luego envía. Cambiar al modo teclas",
+      "keysMode": "Teclas",
+      "messageMode": "Mensaje",
+      "moreKeys": "Más teclas y acciones",
+      "showKeyboard": "Mostrar teclado"
     },
     "activeContent": {
       "createTab": "Crear pestaña",
@@ -2025,21 +2030,15 @@
       "titleRight": "¿Cerrar las pestañas de la derecha?"
     },
     "commandDock": {
-      "commandPlaceholder": "Escribe un comando…",
       "liveInputHint": "El texto que escribes se envía directamente a la terminal activa.",
       "liveInputLabel": "Entrada al terminal en tiempo real",
-      "sendCommand": "Enviar comando"
+      "sendCommand": "Enviar comando",
+      "messageAgentPlaceholder": "Mensaje para {{agent}}",
+      "writeCommandPlaceholder": "Escribe un comando y luego envíalo",
+      "theAgent": "el agente"
     },
     "contentRow": {
       "dismissCreationWarning": "Descartar la advertencia de creación del espacio de trabajo"
-    },
-    "diffCommentLineRow": {
-      "addNote": "Agregar nota en la línea {{line}}",
-      "deleteNote": "Eliminar nota de la línea {{line}}",
-      "diffLine": "{{title}}, línea {{line}} del diff",
-      "line": "Línea {{line}}",
-      "placeholder": "Agregar nota de revisión",
-      "saveNote": "Guardar nota"
     },
     "diffLineRow": {
       "addNoteLabel": "Agregar nota en la línea {{line}}",
@@ -2211,13 +2210,19 @@
       "requestFailed": "La solicitud falló: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Muestra el nombre completo del espacio de trabajo y dónde se encuentra",
       "backToWorktrees": "Volver a los worktrees",
       "moreActions": "Más acciones de la sesión",
       "openFileExplorer": "Abrir explorador de archivos",
       "openSourceControl": "Abrir control de código fuente",
       "reconnectToDesktop": "Volver a conectar con el escritorio",
       "showSidebar": "Mostrar barra lateral",
-      "terminalTitle": "Terminal"
+      "terminalTitle": "Terminal",
+      "terminalLayout": "Diseño del terminal",
+      "fileExplorer": "Explorador de archivos",
+      "sourceControl": "Control de código fuente",
+      "newTab": "Nueva pestaña",
+      "quickCommands": "Comandos rápidos"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Historial de agentes",
@@ -2418,10 +2423,8 @@
       "terminal": "Terminal",
       "terminalName": "Nombre de la terminal",
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
-      "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva."
-    },
-    "sideRail": {
-      "backToWorktrees": "Volver a los worktrees"
+      "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva.",
+      "allowAutoClose": "Permitir cierre automático"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "No se detectó ningún agente de IA habilitado en este host de espacio de trabajo.",
@@ -2438,7 +2441,8 @@
       "checkingCapabilities": "Comprobando las funciones del escritorio. Inténtalo de nuevo en un momento.",
       "newTab": "Nueva pestaña",
       "quickCommandsUpdateRequired": "Actualiza el escritorio para usar los comandos rápidos.",
-      "tabStatus": "{{title}}, {{status}}"
+      "tabStatus": "{{title}}, {{status}}",
+      "terminalLayout": "Diseño del terminal"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpiar terminal",
@@ -2594,7 +2598,8 @@
       "saveFailed": "Error al guardar el comando rápido"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "Entrada demasiado grande (máx. 256 KiB)"
+      "inputTooLarge": "Entrada demasiado grande (máx. 256 KiB)",
+      "liveInputInterrupted": "Se interrumpió la entrada en vivo. Se vació el campo; revisa la terminal antes de continuar."
     },
     "useStartup": {
       "wakeAgents": "Abre Orca en el host para reanudar los agentes en reposo."
@@ -2700,6 +2705,56 @@
       "waitForStart": "Espere a que el agente termine de iniciarse.",
       "waitForTurn": "Espere a que el agente termine de responder o deténgalo.",
       "waitMoment": "Espere un momento."
+    },
+    "workerAutoClose": {
+      "running": "Agente de orquestación temporal · Se cierra 2 minutos después de terminar",
+      "finished": "Agente de orquestación temporal finalizado · Se cierra en {{countdown}}",
+      "keepOpen": "Mantener abierto"
+    },
+    "terminalLayoutSheet": {
+      "title": "Diseño del terminal",
+      "oneTerminal": "Un terminal",
+      "selected": "Seleccionado",
+      "auto": "Automático",
+      "autoHint": "Dividir según el espacio disponible",
+      "sideBySide": "En paralelo",
+      "sideBySideHint": "Dos columnas, incluso con la barra lateral abierta",
+      "stacked": "Apilados",
+      "stackedHint": "Dos filas en cualquier orientación",
+      "selectedHint": "Seleccionado · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "No se pudo guardar el diseño",
+      "saveFailedMessage": "Este diseño se aplica por ahora. Vuelve a seleccionarlo para intentar guardarlo de nuevo."
+    },
+    "terminalArrowPad": {
+      "label": "Teclas de dirección",
+      "hint": "Toca un lado para pulsar una flecha o mantén pulsado y arrastra para repetir",
+      "up": "Arriba",
+      "down": "Abajo",
+      "left": "Izquierda",
+      "right": "Derecha"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "Enviar {{label}}",
+      "paste": "Pegar",
+      "sending": "Enviando…",
+      "photo": "Foto",
+      "file": "Archivo",
+      "desktopWidth": "Ancho de escritorio",
+      "phoneWidth": "Ancho de teléfono",
+      "keys": "Teclas",
+      "combos": "Combinaciones",
+      "yourKeys": "Tus teclas",
+      "deleteKeyHint": "Mantén pulsado para eliminar esta tecla",
+      "addCustomKey": "Añadir tecla personalizada",
+      "addKey": "Añadir tecla"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, enfocado",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, toca para enfocar",
+      "inputPane": "{{title}} · Entrada"
     }
   },
   "settings": {
@@ -2789,19 +2844,26 @@
     "notificationDisplayTest": {
       "accepted": "Prueba aceptada por el servicio de notificaciones push de Orca. Comprueba si recibes la notificación.",
       "connectDesktop": "Conéctate a un escritorio y vuelve a intentarlo.",
-      "description": "Envía una prueba a través del servicio de notificaciones push de Orca.",
+      "description": "Prueba la entrega de notificaciones push, o una notificación local si push no está disponible.",
       "desktopUnreachable": "No se pudo conectar con el escritorio. Vuelve a intentarlo.",
       "loadFailed": "No se pudieron cargar los escritorios emparejados.",
       "pairDesktop": "Empareja un escritorio y vuelve a intentarlo.",
       "pushServiceFailed": "No se pudo enviar a través del servicio de notificaciones push de Orca. Vuelve a intentarlo.",
       "rateLimited": "Demasiadas notificaciones. Vuelve a intentarlo más tarde.",
-      "reconnectPhone": "Vuelve a conectarte para registrar este teléfono para recibir notificaciones.",
       "sendButton": "Enviar notificación de prueba",
       "sendFailed": "No se pudo enviar la notificación push de prueba.",
       "sending": "Enviando…",
       "troubleReceivingAlerts": "¿Tienes problemas para recibir alertas?",
       "troubleshooting": "Solución de problemas",
-      "updateDesktop": "Actualiza tu escritorio para realizar esta prueba."
+      "localTitle": "Notificación de prueba",
+      "localBody": "Prueba de notificación local desde este teléfono.",
+      "localScheduled": "{{reason}} Prueba local programada. Comprueba si aparece la notificación. Esto solo comprueba la visualización, no la entrega de alertas de agentes.",
+      "disabled": "Las notificaciones están desactivadas en Orca. Actívalas e inténtalo de nuevo.",
+      "osDisabled": "Las notificaciones están desactivadas en los ajustes del sistema. Permítelas e inténtalo de nuevo.",
+      "noToken": "No hay ningún token push disponible en este teléfono.",
+      "unsupportedHost": "Este ordenador no admite notificaciones push. Actualízalo para recibirlas.",
+      "registrationPending": "El registro push aún no está listo en este ordenador. Inténtalo de nuevo en breve.",
+      "liveFallbackScheduled": "{{reason}} Prueba local programada. Comprueba si aparece la notificación. Las alertas en directo están disponibles mientras Orca está en ejecución y conectado."
     },
     "notificationSettingsScreen": {
       "description": "Recibe notificaciones en este dispositivo cuando un agente necesite tu intervención o termine una tarea.",
@@ -2890,7 +2952,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "merge",
       "rebaseState": "rebase",
-      "stagedCount": "{{count}} en stage"
+      "stagedCount": "{{count}} en stage",
+      "completingMerge": "Finalizando…",
+      "completeMerge": "Completar fusión"
     },
     "branchCompare": {
       "commits_many": "{{count}} commits",
@@ -3344,6 +3408,13 @@
       "branchUnavailable": "Estado de la rama no disponible",
       "commitFailed": "No se pudo hacer commit",
       "waitingForDesktop": "Esperando al escritorio…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Actualiza Orca en el equipo que ejecuta este espacio de trabajo para resolver conflictos de fusión desde el teléfono.",
+      "markResolved": "Marcar como resuelto",
+      "keepFile": "Conservar archivo",
+      "keepDeletion": "Conservar eliminación",
+      "completeMergeFailed": "No se pudo completar la fusión"
     }
   },
   "tasks": {
@@ -4022,6 +4093,15 @@
       "inProgress": "En curso",
       "inReview": "En revisión",
       "pinned": "Fijados"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Cruceta arriba",
+      "left": "Cruceta izquierda",
+      "right": "Cruceta derecha",
+      "down": "Cruceta abajo",
+      "hint": "Envía una tecla de dirección. Mantén pulsado para repetir."
     }
   }
 }

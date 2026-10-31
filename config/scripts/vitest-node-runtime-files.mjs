@@ -35,6 +35,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
   'src/shared/ws-inbound-message-queue.test.ts',
+  'src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts',
+  'src/renderer/src/components/sidebar/HostRemoveDialog.test.tsx',
+  // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
+  'config/scripts/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
   'src/main/claude/claude-transcript-catch-up.test.ts',
   'src/main/claude/claude-transcript-duration.test.ts',
@@ -202,7 +206,6 @@ const NODE_RUNTIME_INCLUDE = [
   // Real fs.watch file bindings; Bun's watcher is not the one Electron runs.
   'src/main/ipc/rebinding-file-watch.test.ts',
   'src/main/ipc/parcel-watcher-shallow-file-subscription.test.ts',
-  'src/main/ipc/runtime-environments/runtime-environment-transport-routing-tailscale-hint.test.ts',
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/profile-state-worker-smoke.test.mjs',

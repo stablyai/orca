@@ -141,7 +141,12 @@ export function createAgentModelCatalogLiveListings(
       source?: () => boolean
     ) {
       const record = deps.getRecord(sessionId)
-      if (!record || !deps.drivesRecord(record) || independentAgentModelCatalog(record.provider)) {
+      if (
+        !record ||
+        !deps.drivesRecord(record) ||
+        record.provider === 'pi' ||
+        independentAgentModelCatalog(record.provider)
+      ) {
         return
       }
       const receipt = leaseWorkspace(record.location.workspaceId)

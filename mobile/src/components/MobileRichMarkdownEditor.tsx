@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -178,9 +179,11 @@ function MobileRichMarkdownEditorWebInner(
     // Mount document once; read promptForUrl via closure because rerunning on changing callback props discards live caret/document.
   }, [])
 
-  useEffect(() => {
-    if (documentRef.current) {
-      ensureDocumentStyle()
+  // Layout effect: restore the host's scope class before paint after a themed className swap.
+  useLayoutEffect(() => {
+    const host = hostRef.current
+    if (documentRef.current && host instanceof HTMLElement) {
+      ensureDocumentStyle(host)
     }
   }, [colorScheme])
 

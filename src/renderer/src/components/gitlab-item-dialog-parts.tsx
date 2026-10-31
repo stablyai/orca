@@ -11,6 +11,7 @@ import type {
   GitLabWorkItem,
   MRComment
 } from '../../../shared/gitlab-types'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export type JobTraceState = {
   loading: boolean
@@ -247,7 +248,7 @@ export function PipelineJobRow({
               type="button"
               variant="ghost"
               size="icon-xs"
-              onClick={() => void window.api.shell.openUrl(job.webUrl)}
+              onClick={(event) => openAppHttpLink(job.webUrl, { event })}
               title={translate('auto.components.GitLabItemDialog.032ae1312b', 'Open job in GitLab')}
             >
               <ExternalLink className="size-3" />

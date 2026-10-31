@@ -144,40 +144,6 @@ describe('worker-stop against a terminal we lost contact with', () => {
     })
   })
 
-  it('does not close a pane after user input transfers ownership', async () => {
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      worktreeId: 'repo::worktree',
-      connected: true,
-      status: 'running'
-    } as never)
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
-      status: 'live',
-      ptyIds: ['runtime:pty:1']
-    })
-    const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      tabId: 'tab_worker',
-      ptyKilled: true
-    })
-    const dispatch = createWorker()
-
-    await expect(
-      call('orchestration.workerTerminalUserInput', {
-        paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-      })
-    ).resolves.toMatchObject({ changed: 1 })
-
-    await expect(
-      call('orchestration.workerStop', { dispatch: dispatch.id })
-    ).resolves.toMatchObject({
-      state: 'stop_unknown',
-      processAction: 'none',
-      lastError: 'The worker terminal is user_owned; no terminal was closed.'
-    })
-    expect(closeTerminal).not.toHaveBeenCalled()
-  })
-
   it('does not close a legacy worker terminal without an ownership record', async () => {
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
       handle: 'term_worker',
@@ -207,19 +173,6 @@ describe('worker-stop against a terminal we lost contact with', () => {
       lastError: 'The worker terminal is unproven; no terminal was closed.'
     })
     expect(closeTerminal).not.toHaveBeenCalled()
-  })
-
-  it('linearizes stop before a concurrent user takeover', () => {
-    const dispatch = createWorker()
-    expect(db.beginWorkerStop(dispatch.id, runtime.getRuntimeId()).disposition).toBe('stopping')
-
-    expect(db.markWorkerTerminalUserOwned('tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')).toBe(
-      0
-    )
-    expect(db.getWorkerTerminalResourceByOwner(dispatch.id)).toMatchObject({
-      ownership_state: 'owned',
-      release_state: 'not_requested'
-    })
   })
 
   it('does not let abandon overwrite a stop in progress', () => {

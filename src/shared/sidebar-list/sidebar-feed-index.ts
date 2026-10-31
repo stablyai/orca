@@ -126,19 +126,27 @@ function repoOfWorktree(
   )
 }
 
+/** Each row's own host's registration, for lists whose repoMap keeps one registration per id. */
+export function createHostScopedRepoOf(
+  repos: readonly Repo[],
+  repoMap: ReadonlyMap<string, Repo>
+): SidebarFeedIndex['repoOf'] {
+  const reposByKey = new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo]))
+  return (worktree) => repoOfWorktree(repoMap, reposByKey, worktree)
+}
+
 export function indexSidebarFeed(
   domains: SidebarFeedDomains,
   repos: readonly Repo[]
 ): SidebarFeedIndex {
   const workspaces = readFeedWorkspaces(domains)
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
-  const reposByKey = new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo]))
   return {
     workspaces,
     worktrees: workspaces.flatMap((entry) => (entry.folderWorkspace ? [] : [entry.worktree])),
     folderWorkspaces: workspaces.flatMap((entry) => entry.folderWorkspace ?? []),
     repoMap,
-    repoOf: (worktree) => repoOfWorktree(repoMap, reposByKey, worktree)
+    repoOf: createHostScopedRepoOf(repos, repoMap)
   }
 }
 

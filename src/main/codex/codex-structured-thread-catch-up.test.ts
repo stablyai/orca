@@ -109,7 +109,7 @@ export async function chat(clock: { now: number }) {
     reopen: async () => {
       deferred.close()
       await journal.close()
-      closeTestJournalHostDatabase(root)
+      await closeTestJournalHostDatabase(root)
       journal = await journals.open(journalOptions)
       deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
       bind()

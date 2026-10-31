@@ -94,7 +94,7 @@ export function resolveNativeChatFileLinkContext(
 type FileLinkContextInputState = WorktreeRuntimeOwnerState & NativeChatTabDirectoryState
 
 // Every field the directory and owner resolvers read.
-const FILE_LINK_CONTEXT_INPUT_KEYS = [
+export const FILE_LINK_CONTEXT_INPUT_KEYS = [
   'repos',
   'settings',
   'worktreesByRepo',

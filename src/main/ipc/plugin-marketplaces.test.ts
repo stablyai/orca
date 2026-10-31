@@ -31,7 +31,8 @@ function createServices(): PluginMarketplaceHandlerServices {
       refreshSource: vi.fn().mockResolvedValue({ id: SOURCE_ID }),
       refreshAll: vi.fn().mockResolvedValue([{ id: SOURCE_ID }]),
       listPlugins: vi.fn().mockResolvedValue([{ pluginKey: PLUGIN_KEY }]),
-      seedOfficialSource: vi.fn().mockResolvedValue({ id: SOURCE_ID })
+      seedOfficialSource: vi.fn().mockResolvedValue({ id: SOURCE_ID }),
+      seedCommunitySource: vi.fn().mockResolvedValue(undefined)
     } as unknown as PluginMarketplaceService,
     installer: {
       preview: vi.fn().mockResolvedValue({ pluginKey: PLUGIN_KEY }),
@@ -144,6 +145,7 @@ describe('plugin marketplace IPC authority', () => {
     expect(services.marketplace.listSources).toHaveBeenCalledTimes(2)
     // The startup seed is deferred, so opening the marketplace seeds the official catalog.
     expect(services.marketplace.seedOfficialSource).toHaveBeenCalledTimes(2)
+    expect(services.marketplace.seedCommunitySource).toHaveBeenCalledTimes(2)
     expect(services.marketplace.addSource).toHaveBeenCalledWith(source)
     expect(services.marketplace.removeSource).toHaveBeenCalledWith(SOURCE_ID)
     expect(services.marketplace.refreshSource).toHaveBeenCalledWith(SOURCE_ID)
@@ -168,8 +170,11 @@ describe('plugin marketplace IPC authority', () => {
     }
 
     await invoke('plugins:installMarketplacePlugin', preview)
-    expect(services.installer.install).toHaveBeenCalledWith(preview)
+    expect(services.installer.install).toHaveBeenCalledWith(preview, { trigger: 'catalog' })
     expect(pluginService.refresh).toHaveBeenCalledOnce()
+    await invoke('plugins:installMarketplacePlugin', { ...preview, fromInstallLink: true })
+    expect(services.installer.install).toHaveBeenLastCalledWith(preview, { trigger: 'deep_link' })
+    vi.mocked(pluginService.refresh).mockClear()
 
     vi.mocked(pluginService.refresh).mockClear()
     vi.mocked(services.installer.install).mockResolvedValueOnce({ ok: false, error: 'failed' })
@@ -238,7 +243,7 @@ describe('plugin marketplace IPC authority', () => {
     await expect(handler?.(event, { ...identity, enableIfData: true })).resolves.toMatchObject({
       needsReview: false
     })
-    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp', 7)
+    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp')
 
     approve.mockClear()
     await expect(
@@ -248,7 +253,7 @@ describe('plugin marketplace IPC authority', () => {
     await expect(
       handler?.(event, { ...identity, enableIfData: true, expectedFingerprint: 'sha256-fp' })
     ).resolves.toMatchObject({ needsReview: false })
-    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp', 7)
+    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp')
 
     approve.mockClear()
     execution.value = 'declarative'
@@ -298,5 +303,33 @@ describe('plugin marketplace IPC authority', () => {
       })
     }
     expect(approve).not.toHaveBeenCalled()
+  })
+})
+
+describe('plugin update review notices IPC', () => {
+  it('hands the renderer untold holds and nothing when no updater runs', async () => {
+    const notice = {
+      pluginKey: PLUGIN_KEY,
+      name: 'Demo',
+      publisher: 'samples',
+      version: '2.0.0',
+      reason: 'access' as const
+    }
+    const take = vi.fn().mockResolvedValue([notice])
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      { ...createServices(), reviewNotices: { take } },
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:takeUpdateReviewNotices')).resolves.toEqual([notice])
+    handlers = new Map()
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      createServices(),
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:takeUpdateReviewNotices')).resolves.toEqual([])
   })
 })

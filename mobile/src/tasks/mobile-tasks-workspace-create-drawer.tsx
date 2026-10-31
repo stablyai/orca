@@ -171,10 +171,8 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                 </Text>
               </Text>
               <MobileWorkspaceNameInput
-                style={styles.input}
                 value={workspaceNameDraft}
                 onChangeText={handleWorkspaceNameDraftChange}
-                placeholderTextColor={colors.textMuted}
                 shouldAutoFocus={taskUiReady && workspaceCreateDraft !== null}
               />
             </View>

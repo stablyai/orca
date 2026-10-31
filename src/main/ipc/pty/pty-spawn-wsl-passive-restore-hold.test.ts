@@ -51,7 +51,7 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 const runningStateMock = vi.hoisted(() =>
-  vi.fn(async (_distro: string, _options?: unknown) => 'stopped')
+  vi.fn(async (_distro: string, _options?: { startedAfter?: number }) => 'stopped')
 )
 vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -128,5 +128,19 @@ describe('a passive WSL restore with a stopped distro', () => {
     await restore({ wslPassiveRestore: undefined, sessionId: 'repo-1::C:\\Users\\me\\repo@@other' })
     expect(runningStateMock).not.toHaveBeenCalled()
     expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("hands the provider this spawn's read anchor, so its hold reuses only that read", async () => {
+    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-daemon' })
+    installDaemonTestProvider({ spawn: providerSpawn })
+    register()
+    runningStateMock.mockResolvedValue('running')
+    await restore()
+
+    const anchor = runningStateMock.mock.calls[0]?.[1]?.startedAfter
+    expect(anchor).toEqual(expect.any(Number))
+    expect(providerSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({ wslHoldReadAnchor: anchor })
+    )
   })
 })

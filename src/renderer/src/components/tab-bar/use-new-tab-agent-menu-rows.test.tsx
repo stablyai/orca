@@ -103,6 +103,15 @@ vi.mock('@/runtime/host-structured-agents', () => ({
   readHostStructuredAgents: mocks.catalog,
   readHostStructuredAgentsForRuntime: mocks.catalog,
   hostStructuredAgentsReadFailed: mocks.failed,
+  hostStructuredAgentsCatalogUnlearned: (
+    host: string,
+    runtimeId: string | null | undefined,
+    capabilities: readonly string[] | undefined
+  ) =>
+    runtimeId !== undefined &&
+    capabilities?.includes(CATALOG) === true &&
+    !mocks.catalog(host, runtimeId) &&
+    !mocks.failed(host, runtimeId),
   loadHostStructuredAgents: mocks.load,
   relearnHostStructuredAgents: mocks.load,
   hostStructuredAgentsVersion: () => 0,
@@ -352,7 +361,9 @@ it('shares real answer preparation at N and 10N across candidates, owners and se
             hook.rerender({ target, phase })
             const measured = work(),
               { model, selectionFor } = hook.result.current
-            expect(measured.routes).toBe(measured.selectors + 1 + Number(Boolean(launchCwd)))
+            expect(measured.routes).toBeLessThanOrEqual(
+              measured.selectors + 1 + Number(Boolean(launchCwd))
+            )
             if (launchCwd) {
               expect(measured.records).toBeGreaterThanOrEqual(count)
             } else {

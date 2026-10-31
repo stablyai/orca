@@ -1,6 +1,9 @@
 import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
 import type { PluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
-import type { PluginAutoUpdateState } from '../../shared/plugins/catalog/plugin-update-policy'
+import type {
+  PluginAutoUpdateState,
+  PluginUpdateReviewNotice
+} from '../../shared/plugins/catalog/plugin-update-policy'
 import type {
   PluginIconThemeMetadata,
   PluginIconThemeRegistration
@@ -189,6 +192,8 @@ export type PluginsApi = {
       enableIfData?: true
       /** The preview's consentFingerprint; with it, main approves only those exact bytes. */
       expectedFingerprint?: string
+      /** The page was opened from an install link; only labels telemetry. */
+      fromInstallLink?: true
     }
   ) => Promise<PluginHostInstallResult>
   previewMarketplaceUpdate: (args: {
@@ -206,6 +211,8 @@ export type PluginsApi = {
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
   /** What automatic updates last did. Older hosts reject the call; treat that as nothing. */
   getAutoUpdateState: () => Promise<PluginAutoUpdateState>
+  /** Held updates not yet told to the user, each returned once per version; never approves. */
+  takeUpdateReviewNotices: () => Promise<PluginUpdateReviewNotice[]>
   /** Fires after each automatic update pass, with the plugins it just updated. */
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
 }

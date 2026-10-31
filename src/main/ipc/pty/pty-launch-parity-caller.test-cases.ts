@@ -26,7 +26,8 @@ const rpc = (
   params: Record<string, unknown>
 ): HostLaunchCall => ({ kind: 'rpc', method, params })
 const POSIX_CLAUDE = "claude '--dangerously-skip-permissions'"
-const CODEX = "codex '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'"
+const CODEX =
+  "codex '-c' 'check_for_update_on_startup=false' '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'"
 
 // Paired new-tab requests carry intent; host planning determines command and environment.
 const PAIRED_TAB_PATH = '/worktree'
@@ -60,7 +61,10 @@ const PAIRED_TAB_CASES: [string, Record<string, unknown>, HostProviderFacts][] =
       promptDelivery: 'auto-submit',
       agentArgs: '--dangerously-bypass-approvals-and-sandbox'
     },
-    { command: `${CODEX} 'fix it'`, startupCommandDelivery: 'shell-ready' }
+    {
+      command: `${CODEX} 'fix it'`,
+      startupCommandDelivery: 'shell-ready'
+    }
   ]
 ]
 
@@ -87,7 +91,10 @@ const PAIRED_PLAN_CASES: PairedPlanCase[] = [
     os: 'linux',
     agent: 'aider',
     prompt: 'fix it',
-    provider: { command: "aider '--yes-always'", ...ZSH }
+    provider: {
+      command: "aider '--yes-always' '--no-check-update' '--no-show-release-notes'",
+      ...ZSH
+    }
   },
   {
     name: 'claude prompt, Windows PowerShell',

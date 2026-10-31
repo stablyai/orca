@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc835f1479ab 100644
+index 5f63978b07ab50aaf7523219a2170ec737a6b5db..b4110a7c781d505ae581436cec68a10bf600734a 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -1,13 +1,18 @@
@@ -8,7 +8,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
      'dependencies': [
 -      "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
 +      "<!(node -p \"require.resolve('node-addon-api/node_addon_api.gyp')\"):node_addon_api_except",
-     ],
++    ],
 +    # Orca: GCC 9 (Ubuntu 20.04 floor) accepts C++20 as gnu++2a, but rejects
 +    # the newer gnu++20 spelling emitted by Node 24's gyp flags.
 +    'cflags_cc!': [
@@ -16,7 +16,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
 +    ],
 +    'cflags_cc': [
 +      '-std=gnu++2a'
-+    ],
+     ],
      'conditions': [
        ['OS=="win"', {
 -        'msvs_configuration_attributes': {
@@ -25,7 +25,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
          'msvs_settings': {
              'VCCLCompilerTool': {
                'AdditionalOptions': [
-@@ -42,32 +39,6 @@
+@@ -42,32 +47,6 @@
              '-lshlwapi'
            ],
          },
@@ -58,10 +58,15 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
        ]
      }, { # OS!="win"
        'targets': [
-@@ -88,6 +85,16 @@
+@@ -88,6 +67,21 @@
                'libraries!': [
                  '-lutil'
                ]
++            }],
++            # Orca: libproc reads complete on the pool; one landing while a
++            # worker_thread's env tears down must not abort the process.
++            ['OS=="mac"', {
++              'defines': ['NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS']
 +            }],
 +            # Orca: pair with the .symver pins in pty.cc. Force the real
 +            # libutil.so.1/libpthread.so.0 into DT_NEEDED (gcc's default
@@ -297,7 +302,7 @@ index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe0cedf305 100644
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc9c93ca19 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,8 +23,11 @@
@@ -362,7 +367,15 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
  #endif
  
  /* NSIG - macro for highest signal + 1, should be defined */
-@@ -228,6 +267,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
+@@ -169,6 +208,7 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pid_t pid) {
+         }
+       }
+     }
++    close(kq);
+ #else
+     while (true) {
+       errno = 0;
+@@ -228,6 +268,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
  static int
  pty_nonblock(int);
  
@@ -372,7 +385,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
  #if defined(__APPLE__)
  static char *
  pty_getproc(int);
-@@ -237,13 +279,23 @@ pty_getproc(int, char *);
+@@ -237,13 +280,23 @@ pty_getproc(int, char *);
  #endif
  
  #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -397,7 +410,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
  #endif
  
  struct DelBuf {
-@@ -345,8 +397,8 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -345,8 +398,8 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
    term->c_cc[VSTATUS] = 20;
    #endif
  
@@ -408,7 +421,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
  
    // helperPath
    std::string helper_path = info[9].As<Napi::String>();
-@@ -367,14 +419,18 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -367,14 +420,18 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
  
@@ -431,7 +444,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
  #else
    int argc = argv_.Length();
    int argl = argc + 2;
-@@ -445,6 +501,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -445,6 +502,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
        if (pty_nonblock(master) == -1) {
          throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
        }
@@ -441,7 +454,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
    }
  #endif
  
-@@ -586,6 +645,23 @@ pty_nonblock(int fd) {
+@@ -586,6 +646,23 @@ pty_nonblock(int fd) {
    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
  }
  
@@ -465,7 +478,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
  /**
   * pty_getproc
   * Taken from tmux.
-@@ -684,15 +760,73 @@ pty_getproc(int fd, char *tty) {
+@@ -684,15 +761,73 @@ pty_getproc(int fd, char *tty) {
  #endif
  
  #if defined(__APPLE__)
@@ -541,7 +554,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,81 +840,461 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,84 +841,499 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
@@ -674,15 +687,17 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
 +    close(*master);
 +    *master = -1;
 +  }
-+
+ 
+-  for (; count > 0; count--) {
+-    close(low_fds[count]);
 +  for (size_t i = 0; i <= count && i < 3; i++) {
 +    if (low_fds[i] != -1) {
 +      close(low_fds[i]);
 +    }
-+  }
-+}
-+#endif
-+
+   }
+ }
+ #endif
+ 
 +#if defined(__APPLE__)
 +/**
 + * Orca: in-process libproc/sysctl process table
@@ -792,7 +807,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
 +struct orca_process_row {
 +  struct kinfo_proc proc;
 +  std::string command;
-+  // argv was unreadable (another user's process): ps, being setuid root, would print more.
++  // argv was unreadable (another user's, exiting or mid-exec): setuid ps may print more.
 +  bool command_incomplete;
 +};
 +
@@ -805,28 +820,24 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
 +  std::string ctype;
 +};
 +
++static std::string
++orca_comm_command(const struct kinfo_proc& proc) {
++  return "(" + std::string(proc.kp_proc.p_comm, strnlen(proc.kp_proc.p_comm, sizeof(proc.kp_proc.p_comm))) + ")";
++}
++
++// Unreadable argv prints "(comm)" as ps does when KERN_PROCARGS2 fails; no path lookup, so a dead mount cannot hang it.
 +static void
 +orca_fill_command(const struct kinfo_proc& proc, std::vector<char>& args_buf, orca_process_row* row) {
-+  pid_t pid = proc.kp_proc.p_pid;
 +  std::string raw;
 +  if (proc.kp_proc.p_stat == SZOMB) {
 +    raw = "<defunct>";
-+  } else if (!orca_read_process_args(pid, args_buf, &raw)) {
++  } else if (!orca_read_process_args(proc.kp_proc.p_pid, args_buf, &raw)) {
++    row->command = orca_comm_command(proc);
 +    row->command_incomplete = true;
-+    char path[PROC_PIDPATHINFO_MAXSIZE];
-+    int length = proc_pidpath(pid, path, sizeof(path));
-+    if (length > 0 && (size_t)length < sizeof(path)) {
-+      raw.assign(path, length);
-+    } else {
-+      raw = std::string("(") +
-+            std::string(proc.kp_proc.p_comm, strnlen(proc.kp_proc.p_comm, sizeof(proc.kp_proc.p_comm))) +
-+            ")";
-+    }
++    return;
 +  }
 +  if (!orca_vis_command(raw, &row->command)) {
-+    row->command = "(" +
-+                   std::string(proc.kp_proc.p_comm, strnlen(proc.kp_proc.p_comm, sizeof(proc.kp_proc.p_comm))) +
-+                   ")";
++    row->command = orca_comm_command(proc);
 +    row->command_incomplete = true;
 +  }
 +}
@@ -886,9 +897,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
 +  }
 +  return 0;
 +}
- 
--  for (; count > 0; count--) {
--    close(low_fds[count]);
++
 +static Napi::Array
 +orca_process_rows_to_js(Napi::Env env, bool include_command, const std::vector<orca_process_row>& rows) {
 +  Napi::Array result = Napi::Array::New(env, rows.size());
@@ -904,6 +913,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
 +    row.Set("status", Napi::Number::New(env, proc.kp_proc.p_stat));
 +    row.Set("flags", Napi::Number::New(env, proc.kp_proc.p_flag));
 +    row.Set("nice", Napi::Number::New(env, proc.kp_proc.p_nice));
++    row.Set("uid", Napi::Number::New(env, proc.kp_eproc.e_ucred.cr_uid));
 +    row.Set("sessionLeader", Napi::Boolean::New(env, (proc.kp_eproc.e_flag & EPROC_SLEADER) != 0));
 +    row.Set("startSec", Napi::Number::New(env, (double)proc.kp_proc.p_starttime.tv_sec));
 +    row.Set("startUsec", Napi::Number::New(env, (double)proc.kp_proc.p_starttime.tv_usec));
@@ -913,7 +923,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
 +      row.Set("commandIncomplete", Napi::Boolean::New(env, entry.command_incomplete));
 +    }
 +    result.Set(index++, row);
-   }
++  }
 +  return result;
 +}
 +
@@ -1000,41 +1010,82 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..45197ddf4440b8599002b360bc50c4fe
 +  return promise;
 +}
 +
-+Napi::Value OrcaProcessCwd(const Napi::CallbackInfo& info) {
++// PROC_PIDVNODEPATHINFO stats the cwd vnode and proc_pidpath may ask the filesystem for a path, so either can block
++// on a dead network mount: both run on a worker thread and JS bounds how many may be outstanding.
++class OrcaProcessPathWorker : public Napi::AsyncWorker {
++ public:
++  OrcaProcessPathWorker(Napi::Env env, pid_t pid, bool cwd)
++      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)), pid_(pid), cwd_(cwd), found_(false) {}
++
++  Napi::Promise Promise() { return deferred_.Promise(); }
++
++  void Execute() override {
++    if (cwd_) {
++      struct proc_vnodepathinfo vnode;
++      int size = proc_pidinfo(pid_, PROC_PIDVNODEPATHINFO, 0, &vnode, sizeof(vnode));
++      if (size == (int)sizeof(vnode) && vnode.pvi_cdir.vip_path[0] != '\0') {
++        path_.assign(vnode.pvi_cdir.vip_path, strnlen(vnode.pvi_cdir.vip_path, sizeof(vnode.pvi_cdir.vip_path)));
++        found_ = true;
++      }
++      return;
++    }
++    char path[PROC_PIDPATHINFO_MAXSIZE];
++    int length = proc_pidpath(pid_, path, sizeof(path));
++    if (length > 0 && (size_t)length < sizeof(path)) {
++      path_.assign(path, length);
++      found_ = true;
++    }
++  }
++
++  void OnOK() override {
++    Napi::Env env = Env();
++    deferred_.Resolve(found_ ? Napi::Value(Napi::String::New(env, path_)) : env.Null());
++  }
++
++  void OnError(const Napi::Error& error) override {
++    deferred_.Reject(error.Value());
++  }
++
++ private:
++  Napi::Promise::Deferred deferred_;
++  pid_t pid_;
++  bool cwd_;
++  bool found_;
++  std::string path_;
++};
++
++static Napi::Value
++orca_queue_path_worker(const Napi::CallbackInfo& info, bool cwd) {
 +  Napi::Env env(info.Env());
 +  if (info.Length() < 1 || !info[0].IsNumber()) {
-+    throw Napi::Error::New(env, "Usage: processCwd(pid)");
++    throw Napi::TypeError::New(env, cwd ? "Usage: readProcessCwd(pid)" : "Usage: readProcessPath(pid)");
 +  }
-+  struct proc_vnodepathinfo vnode;
-+  int size = proc_pidinfo(info[0].As<Napi::Number>().Int32Value(), PROC_PIDVNODEPATHINFO, 0, &vnode, sizeof(vnode));
-+  if (size != (int)sizeof(vnode) || vnode.pvi_cdir.vip_path[0] == '\0') {
-+    return env.Null();
-+  }
-+  return Napi::String::New(env, vnode.pvi_cdir.vip_path, strnlen(vnode.pvi_cdir.vip_path, sizeof(vnode.pvi_cdir.vip_path)));
++  OrcaProcessPathWorker* worker = new OrcaProcessPathWorker(env, info[0].As<Napi::Number>().Int32Value(), cwd);
++  Napi::Promise promise = worker->Promise();
++  worker->Queue();
++  return promise;
 +}
 +
-+Napi::Value OrcaProcessPath(const Napi::CallbackInfo& info) {
-+  Napi::Env env(info.Env());
-+  if (info.Length() < 1 || !info[0].IsNumber()) {
-+    throw Napi::Error::New(env, "Usage: processPath(pid)");
-+  }
-+  char path[PROC_PIDPATHINFO_MAXSIZE];
-+  int length = proc_pidpath(info[0].As<Napi::Number>().Int32Value(), path, sizeof(path));
-+  if (length <= 0 || (size_t)length >= sizeof(path)) {
-+    return env.Null();
-+  }
-+  return Napi::String::New(env, path, length);
- }
- #endif
- 
-@@ -793,6 +1307,11 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
++Napi::Value OrcaReadProcessCwd(const Napi::CallbackInfo& info) {
++  return orca_queue_path_worker(info, true);
++}
++
++Napi::Value OrcaReadProcessPath(const Napi::CallbackInfo& info) {
++  return orca_queue_path_worker(info, false);
++}
++#endif
++
+ /**
+  * Init
+  */
+@@ -793,6 +1343,11 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("open",    Napi::Function::New(env, PtyOpen));
    exports.Set("resize",  Napi::Function::New(env, PtyResize));
    exports.Set("process", Napi::Function::New(env, PtyGetProc));
 +#if defined(__APPLE__)
 +  exports.Set("readProcessTable", Napi::Function::New(env, OrcaProcessTableAsync));
-+  exports.Set("processCwd", Napi::Function::New(env, OrcaProcessCwd));
-+  exports.Set("processPath", Napi::Function::New(env, OrcaProcessPath));
++  exports.Set("readProcessCwd", Napi::Function::New(env, OrcaReadProcessCwd));
++  exports.Set("readProcessPath", Napi::Function::New(env, OrcaReadProcessPath));
 +#endif
    return exports;
  }

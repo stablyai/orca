@@ -66,6 +66,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.commit',
   'git.commitCompare',
   'git.commitDiff',
+  'git.completeMerge',
   'git.diff',
   'git.discard',
   'git.discoverCommitMessageModels',
@@ -79,6 +80,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.pull',
   'git.push',
   'git.rebaseFromBase',
+  'git.resolveConflict',
   'git.stage',
   'git.status',
   'git.unstage',
@@ -146,8 +148,11 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
-  // Mobile reports takeover out of band, matching desktop renderer signaling.
+  // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
+  'orchestration.workerChatTouch',
+  'orchestration.workerAutoClose',
+  'orchestration.workerKeepOpen',
   'projectGroup.list',
   'repo.baseRefDefault',
   'repo.gitAvailable',

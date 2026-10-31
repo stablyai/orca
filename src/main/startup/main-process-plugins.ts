@@ -10,6 +10,7 @@ import { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-
 import { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
 import { PluginReleaseFirstSeenStore } from '../plugins/catalog/plugin-release-first-seen-store'
+import { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
 import { isPluginAutoUpdateOn } from '../../shared/plugins/catalog/plugin-update-policy'
 import { PluginBundledBootstrapCoordinator } from '../plugins/plugin-bundled-bootstrap-coordinator'
 import { getPluginsDataDir } from '../plugins/plugin-discovery'
@@ -65,6 +66,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       .catch((error) =>
         console.warn('[plugins] failed to configure the official marketplace:', error)
       )
+    void state.pluginMarketplaceService
+      ?.seedCommunitySource()
+      .catch((error) => console.warn('[plugins] failed to add the community marketplace:', error))
   }
   state.pluginMarketplaceInstaller = new PluginMarketplaceInstaller({
     marketplace: state.pluginMarketplaceService,
@@ -119,6 +123,12 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     }
   })
   state.pluginAutoUpdater = pluginAutoUpdater
+  state.pluginUpdateReviewNotices = new PluginUpdateReviewNotices({
+    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
+    getHeld: () => pluginAutoUpdater.getHeldForReview(),
+    findName: (pluginKey) => pluginService.findValidPlugin(pluginKey)?.manifest.name ?? null,
+    isKillListed: (pluginKey) => Boolean(state.pluginKillListService?.find(pluginKey))
+  })
   // Why packaged only (like the safety list): dev and e2e runs must not update fixtures unasked.
   const autoUpdateScheduled = app.isPackaged || process.env.ORCA_PLUGIN_AUTO_UPDATE === '1'
   const syncPluginAutoUpdate = (runNow: boolean): void => {
@@ -191,7 +201,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     applyConsent: (request) =>
       applyPluginConsent({ store, pluginService: state.pluginService!, ...request }),
     applyEnablement: (pluginKey, enabled) =>
-      applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled })
+      applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled }),
+    setDevPluginPaths: (devPluginPaths) =>
+      store.updateSettings({ devPluginPaths }, { notifyListeners: true })
   })
   // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.
   void state.pluginService

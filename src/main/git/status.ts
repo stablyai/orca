@@ -33,12 +33,13 @@ export { getCommitDiff } from './source-control/commit-diff'
 export {
   bulkStageFiles,
   bulkUnstageFiles,
+  resolveConflict,
   stageFile,
   stageWorktreeChanges,
   unstageFile
 } from './source-control/staging'
 export { getStagedCommitContext } from './source-control/staged-commit-context'
-export { commitChanges } from './source-control/commit-changes'
+export { commitChanges, completeMerge } from './source-control/commit-changes'
 export {
   bulkDiscardChanges,
   discardChanges,

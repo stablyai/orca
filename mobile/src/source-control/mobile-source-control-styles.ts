@@ -23,7 +23,7 @@ const baseStyles = themedStyleSheet(() => ({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.xs
@@ -48,7 +48,7 @@ const baseStyles = themedStyleSheet(() => ({
   refreshButton: {
     width: 36,
     height: 36,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.xs
@@ -63,7 +63,7 @@ const baseStyles = themedStyleSheet(() => ({
     margin: spacing.lg,
     marginBottom: spacing.sm,
     padding: spacing.md,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
@@ -120,13 +120,28 @@ const baseStyles = themedStyleSheet(() => ({
     minHeight: 32,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.statusAmber,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
+  },
+  completeMergeButton: {
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.control,
+    backgroundColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  completeMergeText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
   },
   abortPressed: {
     opacity: 0.75
@@ -149,7 +164,7 @@ const baseStyles = themedStyleSheet(() => ({
     marginBottom: -spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusAmber
@@ -162,7 +177,7 @@ const baseStyles = themedStyleSheet(() => ({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusRed
@@ -180,7 +195,7 @@ const baseStyles = themedStyleSheet(() => ({
   bulkButton: {
     flex: 1,
     minHeight: 36,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
@@ -190,7 +205,7 @@ const baseStyles = themedStyleSheet(() => ({
   bulkMenuButton: {
     width: 42,
     minHeight: 36,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -211,7 +226,7 @@ const baseStyles = themedStyleSheet(() => ({
   },
   createPrButton: {
     height: 42,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary,
     alignItems: 'center',
     justifyContent: 'center',

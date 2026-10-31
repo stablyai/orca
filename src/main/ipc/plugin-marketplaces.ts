@@ -12,7 +12,11 @@ import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketp
 import { PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN } from '../plugins/catalog/plugin-marketplace-store'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
-import type { PluginAutoUpdateState } from '../../shared/plugins/catalog/plugin-update-policy'
+import type { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
+import type {
+  PluginAutoUpdateState,
+  PluginUpdateReviewNotice
+} from '../../shared/plugins/catalog/plugin-update-policy'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { pluginFileTypeSchema } from '../../shared/plugins/contributions/plugin-file-type'
 import { findPluginFileTypeSuggestion } from '../plugins/catalog/plugin-file-type-suggestion'
@@ -21,14 +25,11 @@ export type PluginMarketplaceHandlerServices = {
   marketplace: PluginMarketplaceService
   installer: PluginMarketplaceInstaller
   autoUpdater?: Pick<PluginAutoUpdater, 'getState'>
+  reviewNotices?: Pick<PluginUpdateReviewNotices, 'take'>
 }
 
 /** The consent write path (applyPluginConsent), bound to the store by the caller. */
-export type PluginApproveConsent = (
-  pluginKey: string,
-  reviewedFingerprint: string,
-  originWebContentsId: number
-) => Promise<void>
+export type PluginApproveConsent = (pluginKey: string, reviewedFingerprint: string) => Promise<void>
 
 const sourceIdSchema = z.string().regex(PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN)
 const removeMarketplaceSchema = z.strictObject({ sourceId: sourceIdSchema })
@@ -43,7 +44,9 @@ const installMarketplacePluginSchema = marketplacePluginSchema.extend({
   /** Ask main to approve in the same step if the installed plugin is content only. */
   enableIfData: z.literal(true).optional(),
   /** The preview's consentFingerprint: one-click approves only these exact bytes. */
-  expectedFingerprint: z.string().min(1).max(256).optional()
+  expectedFingerprint: z.string().min(1).max(256).optional(),
+  /** The page was opened from an `orca://plugins/...` link; only labels install telemetry. */
+  fromInstallLink: z.literal(true).optional()
 })
 const installedPluginSchema = z.strictObject({
   pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
@@ -76,6 +79,7 @@ export function registerPluginMarketplaceHandlers(
   const ensureOfficialSeed = (): void => {
     if (getSettings().pluginSystemEnabled === true) {
       void services.marketplace.seedOfficialSource().catch(() => undefined)
+      void services.marketplace.seedCommunitySource().catch(() => undefined)
     }
   }
   ipcMain.handle('plugins:listMarketplaces', () => {
@@ -105,15 +109,17 @@ export function registerPluginMarketplaceHandlers(
     const parsed = marketplacePluginSchema.parse(args)
     return services.installer.preview(parsed.marketplaceSourceId, parsed.pluginKey)
   })
-  ipcMain.handle('plugins:installMarketplacePlugin', async (event, args: unknown) => {
-    const { enableIfData, expectedFingerprint, ...identity } =
+  ipcMain.handle('plugins:installMarketplacePlugin', async (_event, args: unknown) => {
+    const { enableIfData, expectedFingerprint, fromInstallLink, ...identity } =
       installMarketplacePluginSchema.parse(args)
     return installCatalogReleaseWithApproval({
       pluginKey: identity.pluginKey,
       pluginService,
-      install: () => services.installer.install(identity),
-      approve: (pluginKey, reviewedFingerprint) =>
-        approveConsent(pluginKey, reviewedFingerprint, event.sender.id),
+      install: () =>
+        services.installer.install(identity, {
+          trigger: fromInstallLink ? 'deep_link' : 'catalog'
+        }),
+      approve: approveConsent,
       ...(enableIfData ? { enableIfData: { expectedFingerprint } } : {})
     })
   })
@@ -130,6 +136,10 @@ export function registerPluginMarketplaceHandlers(
     'plugins:getAutoUpdateState',
     (): PluginAutoUpdateState =>
       services.autoUpdater?.getState() ?? { updated: {}, needsReview: {} }
+  )
+  ipcMain.handle(
+    'plugins:takeUpdateReviewNotices',
+    (): Promise<PluginUpdateReviewNotice[]> => services.reviewNotices?.take() ?? Promise.resolve([])
   )
   ipcMain.handle('plugins:getRollbackVersion', (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)

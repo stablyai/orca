@@ -14,7 +14,7 @@ import {
   ptySessionIdForAgentCreateOperation
 } from '../../../daemon/pty-session-id'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
-import type { RuntimePtySpawnState } from './spawn-state'
+import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
 import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import { resolvePtySpawnHostEnv } from '../spawn-host-env'
@@ -77,10 +77,10 @@ export async function prepareRuntimePtySpawn(
     preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd,
-    // Default-deny, as spawn-options' `wslBackgroundStart`: held before the cwd probe and any provider.
-    ...(args.wslUserAct === true
-      ? {}
-      : { wslStartHold: { wslBackgroundStart: true, sessionId: ctx.sessionId } })
+    // The same verdict as spawn-options' `wslBackgroundStart`, held before the cwd probe and any provider.
+    ...(isRuntimeWslBackgroundStart(ctx)
+      ? { wslStartHold: { wslBackgroundStart: true, sessionId: ctx.sessionId } }
+      : {})
   })
   ctx.cwd = target.cwd
   ctx.requestedCwd = target.requestedCwd
@@ -90,6 +90,7 @@ export async function prepareRuntimePtySpawn(
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.expectedWslDistro = target.expectedWslDistro
+  ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
   ctx.claudeAuth =
@@ -151,6 +152,8 @@ export async function prepareRuntimePtySpawn(
     mintedSessionId: ctx.requestedSessionId === undefined,
     resumeOnSelectedAccount: false,
     emptySessionIdSkipsHostEnv: true,
+    // The distro may stop after the hold read: a background start's prep must not wake it (E9).
+    wslPassiveRestore: args.wslUserAct !== true,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
     provider: ctx.provider,
     deps: ctx.deps

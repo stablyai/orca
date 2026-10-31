@@ -71,6 +71,22 @@ describe('device registry after quarantining its own corrupt file', () => {
     expect(registry.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
   })
 
+  it('keeps a device another writer added between its quarantine and its write', () => {
+    const { registry, phone } = partiallyCorruptRegistry()
+    vi.spyOn(secureFile, 'writeSecureJsonFile').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+    expect(() => registry.addDevice('new desktop', 'runtime')).toThrow('disk full')
+    // E.g. the pairing CLI on the host, writing through its own registry instance.
+    const cliPaired = new DeviceRegistry(dir).addDevice('cli pairing', 'runtime')
+
+    const added = registry.addDevice('new desktop', 'runtime')
+
+    expect(fileIds()).toEqual([phone.deviceId, added.deviceId, cliPaired.deviceId])
+    expect(registry.validateToken(cliPaired.token)?.deviceId).toBe(cliPaired.deviceId)
+    expect(registry.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
+  })
+
   it('still revokes everything when the file is deleted after its own write landed', () => {
     const { registry, phone } = partiallyCorruptRegistry()
     registry.addDevice('new desktop', 'runtime')

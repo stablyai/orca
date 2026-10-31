@@ -1,7 +1,6 @@
 import { textFieldClaimsActionKey } from '@/lib/file-search-shortcut-policy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type React from 'react'
-import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { focusRuntimeTerminalSurface } from '@/runtime/mounted-terminal-tab-registry'
@@ -11,13 +10,12 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import type { RenderRow } from '../listing/render-row'
-import type { Worktree } from '../../../../../../shared/worktree/types'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import type { RenderedWorkspaceRow } from '../../worktree-sidebar-row-preference'
 import {
   resolveCycledWorkspaceRow,
   type LastActiveCycleWorkspace
 } from '../../worktree-keyboard-cycle'
-import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 import { useWorkspaceNeighborPrewarm } from './use-neighbor-prewarm'
 
@@ -43,22 +41,18 @@ export function withKeyboardPreview<
 
 export function useWorktreeListKeyboardNavigation(args: {
   rows: HostSectionRow[]
-  renderRows: RenderRow[]
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
-  virtualizer: Virtualizer<HTMLDivElement, HTMLDivElement>
   scrollRef: React.RefObject<HTMLDivElement | null>
   activeModal: string
   markDirectScrollInput: () => void
 }) {
   const {
     rows,
-    renderRows,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
     pinnedDisplayPolicy,
-    virtualizer,
     scrollRef,
     activeModal,
     markDirectScrollInput
@@ -83,7 +77,9 @@ export function useWorktreeListKeyboardNavigation(args: {
 
   // Held arrows move only the sidebar highlight; the workspace under it switches once the repeat stops.
   // fromWorktreeId: another input switching workspaces mid-hold invalidates the preview, so it never pulls the user back.
-  const previewRef = useRef<{ worktree: Worktree; fromWorktreeId: string | null } | null>(null)
+  const previewRef = useRef<{ row: RenderedWorkspaceRow; fromWorktreeId: string | null } | null>(
+    null
+  )
   const [keyboardPreview, setKeyboardPreview] = useState<
     (LastActiveCycleWorkspace & { fromWorktreeId: string | null }) | null
   >(null)
@@ -107,7 +103,11 @@ export function useWorktreeListKeyboardNavigation(args: {
     const preview = previewRef.current
     dropPreview()
     if (preview && preview.fromWorktreeId === useAppStore.getState().activeWorktreeId) {
-      void activateWorktreeFromSidebar(preview.worktree.id, preview.worktree.hostId)
+      void activateWorktreeFromSidebar(
+        preview.row.worktree.id,
+        getWorktreeExecutionHostId(preview.row.worktree, preview.row.repo),
+        { revealInSidebar: false }
+      )
     }
   }, [dropPreview])
   useEffect(() => clearPreviewCommitTimer, [clearPreviewCommitTimer])
@@ -117,31 +117,31 @@ export function useWorktreeListKeyboardNavigation(args: {
       const { worktreeNavHistory, worktreeNavHistoryIndex } = useAppStore.getState()
       const previewState = previewRef.current
       const preview =
-        previewState && previewState.fromWorktreeId === activeWorktreeId
-          ? previewState.worktree
-          : null
+        previewState && previewState.fromWorktreeId === activeWorktreeId ? previewState.row : null
       // Cycle actual rendered rows so collapse, pins, hosts and folder workspaces stay aligned with the screen.
-      const nextWorktree = resolveCycledWorkspaceRow({
+      const nextRow = resolveCycledWorkspaceRow({
         rows,
         pinnedDisplayPolicy,
-        activeWorktreeId: preview ? preview.id : activeWorktreeId,
+        activeWorktreeId: preview ? preview.worktree.id : activeWorktreeId,
         activeWorkspaceExecutionHostId: preview
-          ? (preview.hostId ?? null)
+          ? getWorktreeExecutionHostId(preview.worktree, preview.repo)
           : activeWorkspaceExecutionHostId,
         lastActiveWorkspace: lastActiveWorkspaceRef.current,
         navHistory: worktreeNavHistory,
         navHistoryIndex: worktreeNavHistoryIndex,
         direction
-      })?.worktree
-      if (!nextWorktree) {
+      })
+      if (!nextRow) {
         return
       }
 
+      const nextWorktree = nextRow.worktree
+      const executionHostId = getWorktreeExecutionHostId(nextWorktree, nextRow.repo)
       if (isRepeat) {
-        previewRef.current = { worktree: nextWorktree, fromWorktreeId: activeWorktreeId }
+        previewRef.current = { row: nextRow, fromWorktreeId: activeWorktreeId }
         setKeyboardPreview({
           worktreeId: nextWorktree.id,
-          executionHostId: nextWorktree.hostId ?? null,
+          executionHostId,
           fromWorktreeId: activeWorktreeId
         })
         const now = performance.now()
@@ -161,24 +161,21 @@ export function useWorktreeListKeyboardNavigation(args: {
         )
       } else {
         dropPreview()
-        void activateWorktreeFromSidebar(nextWorktree.id, nextWorktree.hostId)
+        void activateWorktreeFromSidebar(nextWorktree.id, executionHostId, {
+          revealInSidebar: false
+        })
       }
 
-      const rowIndex = findPreferredRenderRowIndexForWorktreeIdentity(
-        renderRows,
-        nextWorktree,
-        pinnedDisplayPolicy
-      )
-      if (rowIndex !== -1) {
-        virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
-      }
+      useAppStore.getState().revealWorktreeInSidebar(nextWorktree.id, {
+        behavior: 'auto',
+        executionHostId,
+        rowKey: nextRow.rowKey
+      })
     },
     [
       rows,
-      renderRows,
       activeWorktreeId,
       activeWorkspaceExecutionHostId,
-      virtualizer,
       pinnedDisplayPolicy,
       clearPreviewCommitTimer,
       commitPreview,

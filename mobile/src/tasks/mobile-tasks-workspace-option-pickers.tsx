@@ -3,7 +3,8 @@ import {
   BottomDrawer,
   View,
   Text,
-  TextInput,
+  TextField,
+  Search,
   colors,
   Pressable,
   Check,
@@ -48,15 +49,14 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
           </Text>
         </View>
         <View style={styles.detailGroup}>
-          <TextInput
-            style={styles.input}
+          <TextField
             value={workspaceBaseBranchQuery}
             onChangeText={setWorkspaceBaseBranchQuery}
             placeholder={translate(
               'tasks.workspaceOptionPickers.searchBranches',
               'Search branches'
             )}
-            placeholderTextColor={colors.textMuted}
+            leading={<Search size={16} color={colors.textMuted} />}
             autoCapitalize="none"
             autoCorrect={false}
           />

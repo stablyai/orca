@@ -97,6 +97,7 @@
       "connecting": "接続中…",
       "invalidPairingCode": "ペアリングコードが無効です。コンピュータからコピーして、もう一度貼り付けてください。",
       "invalidQrCode": "Orca の有効な QR コードではありません",
+      "downloadQrCode": "これはダウンロード用のコードです。デスクトップのステップ2にあるペアリングコードをスキャンしてください。",
       "openDesktopStep": "コンピュータで Orca を開く",
       "openMobileSettingsStep": "「設定」→「モバイル」を開く",
       "openSettings": "設定を開く",
@@ -957,8 +958,12 @@
       "removeShortcut": "{{label}} を削除",
       "resetDefaults": "初期設定に戻す",
       "resetDescription": "すべての組み込みショートカットキーを元の順序で表示",
-      "shortcutBar": "ショートカットバー",
-      "shortcutBarDescription": "キーの表示・非表示を切り替えられます。ドラッグハンドルを長押ししてキーをドラッグすると、ターミナルのショートカットバーのキーを好みの順序に並べ替えられます。"
+      "moreKeys": "その他のキー",
+      "moreKeysDescription": "これらのキーは、ターミナルのキー列にある ⋯ の下に表示されます。キーの表示・非表示を切り替え、ハンドルを長押ししてドラッグすると順序を変更できます。Esc や矢印キーなど、キー列にすでにあるキーは ⋯ に表示されません。",
+      "directionPad": "方向パッド",
+      "showDirectionPad": "方向パッドを表示",
+      "showDirectionPadDescription": "矢印パッドをサイドレールに固定します。オフの場合、レールに各矢印キーが表示されます。",
+      "showShortcut": "{{label}} ショートカットを表示"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "レート制限のリセット枠を使用しますか？",
@@ -999,6 +1004,11 @@
       "folder": "フォルダー",
       "project": "プロジェクト {{repo}}",
       "remoteHost": "リモートホスト"
+    },
+    "nativeScreenRecovery": {
+      "title": "問題が発生しました",
+      "tryAgain": "再試行",
+      "home": "ホーム"
     }
   },
   "connection": {
@@ -1092,7 +1102,8 @@
       "checkTailnet": "デスクトップがスリープ状態になっておらず、tailnet 内で接続済みと表示されていることを確認してください。",
       "desktopTitle": "デスクトップアプリが未起動",
       "disableVpn": "その VPN を無効にするか、スプリットトンネリングまたは「LAN を許可」を有効にしてください。",
-      "firewallTitle": "ファイアウォールがポート 6768 をブロック",
+      "firewallTitle": "ファイアウォールがポート {{port}} をブロック",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x や *.ts.net のようなホストアドレスには Tailscale 経由で接続します。Tailscale をオンにしておいてください。",
       "macosFirewall": "macOS: 「システム設定」→「ネットワーク」→「ファイアウォール」で Orca を許可してください。",
       "notificationNetwork": "モバイルデータ通信か別の Wi-Fi ネットワークを試してください。切り替え後に通知が届く場合は、元のネットワークで配信が遅れている可能性があります。",
@@ -1383,14 +1394,6 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "ワークスペースを作成中…"
     },
-    "hostRailActions": {
-      "accounts": "アカウント",
-      "closeSearch": "検索を閉じる",
-      "floatingWorkspace": "フローティングワークスペース",
-      "newWorkspace": "新規ワークスペース",
-      "searchWorkspaces": "ワークスペースの検索",
-      "tasks": "タスク"
-    },
     "hostScreenHeader": {
       "accounts": "アカウント",
       "activeFilters_one": "ワークスペースのオプション ({{count}} 件のフィルターが有効)",
@@ -1402,7 +1405,8 @@
       "reconnect": "再接続",
       "searchWorkspaces": "ワークスペースの検索",
       "tasks": "タスク",
-      "workspaceOptions": "ワークスペースのオプション"
+      "workspaceOptions": "ワークスペースのオプション",
+      "newWorkspace": "新しいワークスペース"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "「{{name}}」（{{branch}}）を削除しますか？",
@@ -1829,16 +1833,17 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "カスタムショートカットを追加",
       "dismissKeyboard": "キーボードを閉じる",
-      "dismissKeyboardHint": "現在のターミナルセッションを開いたまま、ソフトウェアキーボードを非表示にします。",
-      "paste": "貼り付け",
-      "pasteFromClipboard": "クリップボードから貼り付け",
       "sendKey": "{{label}} を送信",
-      "switchToBufferedInput": "バッファー式のコマンド入力に切り替え",
-      "switchToDesktopMode": "デスクトップモードに切り替え",
-      "switchToLiveInput": "ターミナルへのリアルタイム入力に切り替え",
-      "switchToPhoneMode": "スマートフォンモードに切り替え"
+      "modifierHint": "次のキーに適用されます。ダブルタップすると維持されます。",
+      "typeCharacter": "{{character}}を入力",
+      "interrupt": "ターミナルを中断",
+      "keysModeLabel": "キーモード：入力はターミナルに直接送られます。メッセージモードに切り替える",
+      "messageModeLabel": "メッセージモード：入力してから送信します。キーモードに切り替える",
+      "keysMode": "キー",
+      "messageMode": "メッセージ",
+      "moreKeys": "その他のキーと操作",
+      "showKeyboard": "キーボードを表示"
     },
     "activeContent": {
       "createTab": "タブを作成",
@@ -1948,21 +1953,15 @@
       "titleRight": "右側のタブを閉じますか？"
     },
     "commandDock": {
-      "commandPlaceholder": "コマンドを入力してください…",
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
       "liveInputLabel": "ターミナルへのリアルタイム入力",
-      "sendCommand": "コマンドを送信"
+      "sendCommand": "コマンドを送信",
+      "messageAgentPlaceholder": "{{agent}}にメッセージ",
+      "writeCommandPlaceholder": "コマンドを入力して送信",
+      "theAgent": "Agent"
     },
     "contentRow": {
       "dismissCreationWarning": "ワークスペース作成の警告を閉じる"
-    },
-    "diffCommentLineRow": {
-      "addNote": "{{line}} 行目にメモを追加",
-      "deleteNote": "{{line}} 行目のメモを削除",
-      "diffLine": "{{title}} の差分 {{line}} 行目",
-      "line": "{{line}} 行目",
-      "placeholder": "レビューメモを追加",
-      "saveNote": "メモを保存"
     },
     "diffLineRow": {
       "addNoteLabel": "{{line}} 行目にメモを追加",
@@ -2133,13 +2132,19 @@
       "requestFailed": "リクエストに失敗しました: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "ワークスペースの完全な名前と場所を表示します",
       "backToWorktrees": "ワークツリー一覧に戻る",
       "moreActions": "セッションのその他の操作",
       "openFileExplorer": "ファイルエクスプローラーを開く",
       "openSourceControl": "ソース管理を開く",
       "reconnectToDesktop": "デスクトップに再接続",
       "showSidebar": "サイドバーを表示",
-      "terminalTitle": "ターミナル"
+      "terminalTitle": "ターミナル",
+      "terminalLayout": "ターミナルのレイアウト",
+      "fileExplorer": "ファイルエクスプローラー",
+      "sourceControl": "ソース管理",
+      "newTab": "新規タブ",
+      "quickCommands": "クイックコマンド"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent の履歴",
@@ -2339,10 +2344,8 @@
       "terminal": "ターミナル",
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
-      "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。"
-    },
-    "sideRail": {
-      "backToWorktrees": "ワークツリーに戻る"
+      "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
+      "allowAutoClose": "自動終了を許可"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "このワークスペースホストでは有効な AI Agent が検出されませんでした。",
@@ -2359,7 +2362,8 @@
       "checkingCapabilities": "デスクトップの対応機能を確認中です。少し待ってから再試行してください。",
       "newTab": "新規タブ",
       "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。",
-      "tabStatus": "{{title}}、{{status}}"
+      "tabStatus": "{{title}}、{{status}}",
+      "terminalLayout": "ターミナルのレイアウト"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "ターミナルをクリア",
@@ -2514,7 +2518,8 @@
       "saveFailed": "クイックコマンドの保存に失敗しました"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "入力データが大きすぎます（最大 256 KiB）。"
+      "inputTooLarge": "入力データが大きすぎます（最大 256 KiB）。",
+      "liveInputInterrupted": "ライブ入力が中断されました。入力欄をクリアしました。続行する前にターミナルを確認してください。"
     },
     "useStartup": {
       "wakeAgents": "スリープ中の Agent を再開するには、ホストで Orca を開いてください。"
@@ -2620,6 +2625,56 @@
       "waitForStart": "Agent の起動が終わるまでお待ちください。",
       "waitForTurn": "Agent の応答が終わるまで待つか、Agent を停止してください。",
       "waitMoment": "しばらくお待ちください。"
+    },
+    "workerAutoClose": {
+      "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
+      "finished": "一時的なオーケストレーションワーカーが完了しました · {{countdown}}後に閉じます",
+      "keepOpen": "開いたままにする"
+    },
+    "terminalLayoutSheet": {
+      "title": "ターミナルのレイアウト",
+      "oneTerminal": "ターミナル1つ",
+      "selected": "選択中",
+      "auto": "自動",
+      "autoHint": "利用可能なスペースに合わせて分割",
+      "sideBySide": "左右に並べる",
+      "sideBySideHint": "サイドバーを開いていても2列で表示",
+      "stacked": "上下に並べる",
+      "stackedHint": "画面の向きに関係なく2行で表示",
+      "selectedHint": "選択中 · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "レイアウトを保存できませんでした",
+      "saveFailedMessage": "このレイアウトは一時的に適用されます。もう一度選択すると保存を再試行できます。"
+    },
+    "terminalArrowPad": {
+      "label": "矢印キー",
+      "hint": "端をタップすると矢印キーを1回押し、長押ししてドラッグすると繰り返します",
+      "up": "上",
+      "down": "下",
+      "left": "左",
+      "right": "右"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "{{label}}を送信",
+      "paste": "貼り付け",
+      "sending": "送信中…",
+      "photo": "写真",
+      "file": "ファイル",
+      "desktopWidth": "デスクトップ幅",
+      "phoneWidth": "スマートフォン幅",
+      "keys": "キー",
+      "combos": "組み合わせ",
+      "yourKeys": "自分のキー",
+      "deleteKeyHint": "長押ししてこのキーを削除",
+      "addCustomKey": "カスタムキーを追加",
+      "addKey": "キーを追加"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}、フォーカス中",
+      "terminal": "ターミナル",
+      "tapToFocusPane": "{{title}}、タップしてフォーカス",
+      "inputPane": "{{title}} · 入力"
     }
   },
   "settings": {
@@ -2706,19 +2761,26 @@
     "notificationDisplayTest": {
       "accepted": "Orca のプッシュサービスが通知を受け付けました。通知が届いているか確認してください。",
       "connectDesktop": "デスクトップに接続してから再試行してください。",
-      "description": "Orca のプッシュサービス経由でテスト通知を送信します。",
+      "description": "プッシュ通知の配信をテストします。プッシュを利用できない場合はローカル通知をテストします。",
       "desktopUnreachable": "デスクトップに接続できませんでした。再試行してください。",
       "loadFailed": "ペアリング済みのデスクトップ一覧を読み込めませんでした。",
       "pairDesktop": "デスクトップとペアリングしてから再試行してください。",
       "pushServiceFailed": "Orca のプッシュサービス経由で送信できませんでした。再試行してください。",
       "rateLimited": "通知が多すぎます。しばらくしてから再試行してください。",
-      "reconnectPhone": "このスマートフォンを通知の受信先として登録するには、再接続してください。",
       "sendButton": "テスト通知を送信する",
       "sendFailed": "テスト用のプッシュ通知を送信できませんでした。",
       "sending": "送信中…",
       "troubleReceivingAlerts": "通知が届きませんか？",
       "troubleshooting": "トラブルシューティング",
-      "updateDesktop": "このテストを実行するには、デスクトップを更新してください。"
+      "localTitle": "テスト通知",
+      "localBody": "この端末からのローカル通知テストです。",
+      "localScheduled": "{{reason}} ローカルテストを予約しました。通知を確認してください。このテストは表示のみを確認し、Agentのアラート配信は確認しません。",
+      "disabled": "Orca の通知がオフになっています。通知を有効にして、もう一度お試しください。",
+      "osDisabled": "システム設定で通知がオフになっています。通知を許可して、もう一度お試しください。",
+      "noToken": "この端末ではプッシュトークンを利用できません。",
+      "unsupportedHost": "このデスクトップはプッシュ通知に対応していません。受信するには更新してください。",
+      "registrationPending": "このデスクトップではプッシュ登録がまだ完了していません。しばらくしてからもう一度お試しください。",
+      "liveFallbackScheduled": "{{reason}} ローカルテストを予約しました。通知を確認してください。Orca が実行中で接続されている間は、リアルタイムのアラートを受信できます。"
     },
     "notificationSettingsScreen": {
       "description": "Agent が入力を必要とするときやタスクを完了したときに、このデバイスに通知が届きます。",
@@ -2804,7 +2866,9 @@
       "cherryPickState": "チェリーピック",
       "mergeState": "マージ",
       "rebaseState": "リベース",
-      "stagedCount": "ステージ済み {{count}} 件"
+      "stagedCount": "ステージ済み {{count}} 件",
+      "completingMerge": "完了しています…",
+      "completeMerge": "マージを完了"
     },
     "branchCompare": {
       "commits_one": "{{count}} 件のコミット",
@@ -3243,6 +3307,13 @@
       "branchUnavailable": "ブランチの状態を確認できません。",
       "commitFailed": "コミットに失敗しました。",
       "waitingForDesktop": "デスクトップへの接続を待機中…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "スマートフォンからマージ競合を解決するには、このワークスペースを実行しているコンピューターの Orca を更新してください。",
+      "markResolved": "解決済みとしてマーク",
+      "keepFile": "ファイルを残す",
+      "keepDeletion": "削除を維持",
+      "completeMergeFailed": "マージを完了できませんでした"
     }
   },
   "tasks": {
@@ -3909,6 +3980,15 @@
       "inProgress": "進行中",
       "inReview": "レビュー中",
       "pinned": "ピン留め済み"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "方向パッドの上",
+      "left": "方向パッドの左",
+      "right": "方向パッドの右",
+      "down": "方向パッドの下",
+      "hint": "矢印キーを送信します。長押しで繰り返します。"
     }
   }
 }

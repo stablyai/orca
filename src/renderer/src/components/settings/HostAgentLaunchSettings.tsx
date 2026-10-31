@@ -12,6 +12,7 @@ import {
   mutateHostAgentLaunchSettings,
   readHostAgentLaunchSettings,
   hostSupportsAutoPermissions,
+  hostSupportsLaunchChoices,
   hostSupportsNativeChatPermissions,
   hostSupportsOwnChatPermissions,
   type AgentLaunchSettingsOwner
@@ -29,6 +30,7 @@ type ReadState =
       kind: 'ready'
       settings: AgentLaunchSettings
       autoSupported: boolean
+      choicesSupported: boolean
       nativeChatPermissionsSupported: boolean
       chatOwnSupported: boolean
     }
@@ -66,13 +68,19 @@ export function HostAgentLaunchSettings({
     controllerRef.current = controller
     setRead({ kind: 'loading' })
     try {
-      const [settings, autoSupported, nativeChatPermissionsSupported, chatOwnSupported] =
-        await Promise.all([
-          readHostAgentLaunchSettings(owner, controller.signal),
-          hostSupportsAutoPermissions(owner),
-          hostSupportsNativeChatPermissions(owner),
-          hostSupportsOwnChatPermissions(owner)
-        ])
+      const [
+        settings,
+        autoSupported,
+        nativeChatPermissionsSupported,
+        chatOwnSupported,
+        choicesSupported
+      ] = await Promise.all([
+        readHostAgentLaunchSettings(owner, controller.signal),
+        hostSupportsAutoPermissions(owner),
+        hostSupportsNativeChatPermissions(owner),
+        hostSupportsOwnChatPermissions(owner),
+        hostSupportsLaunchChoices(owner)
+      ])
       if (!controller.signal.aborted) {
         setRead(
           settings
@@ -80,6 +88,7 @@ export function HostAgentLaunchSettings({
                 kind: 'ready',
                 settings,
                 autoSupported,
+                choicesSupported,
                 nativeChatPermissionsSupported,
                 chatOwnSupported
               }
@@ -177,6 +186,7 @@ export function HostAgentLaunchSettings({
           hostName={hostName}
           renderPermissions={renderPermissions}
           autoSupported={read.autoSupported}
+          choicesSupported={read.choicesSupported}
           nativeChatPermissionsSupported={read.nativeChatPermissionsSupported}
           chatOwnSupported={read.chatOwnSupported}
           refreshSettings={() => void refresh()}

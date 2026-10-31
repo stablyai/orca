@@ -13,6 +13,7 @@ import {
 import { createIdleSyncHarness } from './federation-sync-test-harness'
 import { parseRelayedMessage, syncFederatedDispatch } from './federation-sync'
 import { getOrchestrationPeerCapabilityCache } from './orchestration-peer-capability-cache'
+import { MessageWake } from '../runtime-message-waiters'
 
 describe('federation relay parsing', () => {
   it('accepts a supported message type', () => {
@@ -419,7 +420,7 @@ describe('federation relay acknowledgments', () => {
 
     pulled = [relayItem(2)]
     await syncFederatedDispatch(runtime, dispatch.id)
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
     expect(db.getUnreadMessages(`run:${run.id}`).map((message) => message.id)).toEqual([
       'msg_federated_2'
     ])

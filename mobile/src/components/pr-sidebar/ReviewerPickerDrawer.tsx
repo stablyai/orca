@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { Check, Search } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -8,6 +8,7 @@ import type { GitHubAssignableUser } from '../../../../src/shared/github/pull-re
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
+import { TextField } from '../composer-input/TextField'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 
 type Props = {
@@ -94,12 +95,12 @@ export function ReviewerPickerDrawer({
       <Text style={styles.pickerTitle}>
         {t('pullRequest.reviewerPickerDrawer.title', 'Reviewers')}
       </Text>
-      <TextInput
+      <TextField
         style={styles.pickerSearch}
+        leading={<Search size={16} color={colors.textMuted} />}
         value={query}
         onChangeText={setQuery}
         placeholder={t('pullRequest.reviewerPickerDrawer.searchPeople', 'Search people')}
-        placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
       />

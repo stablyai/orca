@@ -79,7 +79,9 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
     onOutcome: (settled) =>
       endPaneAgentLaunch(
         ctx,
-        settled.kind === 'registration-exited' ? { exitedDuringStart: true } : { started: true }
+        settled.kind === 'registration-exited'
+          ? { exitedDuringStart: true, terminalStartFailure: settled.terminalStartFailure }
+          : { started: true }
       ),
     onError: (error) => endPaneAgentLaunch(ctx, { error }),
     releasePreparation: () => {

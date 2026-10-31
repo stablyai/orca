@@ -183,7 +183,15 @@ function readRealpath(folder: string): string | null {
 }
 
 function buildRoutes(store: ProjectRuntimeGitRouterStore): Route[] {
-  const projects = store.getProjects()
+  const ownerByRepoId = new Map<string, Project>()
+  for (const project of store.getProjects()) {
+    for (const repoId of project.sourceRepoIds) {
+      // First owner wins.
+      if (!ownerByRepoId.has(repoId)) {
+        ownerByRepoId.set(repoId, project)
+      }
+    }
+  }
   const globalDefault = store.getSettings().localWindowsRuntimeDefault
   const localRepos = new Map(
     store
@@ -192,7 +200,10 @@ function buildRoutes(store: ProjectRuntimeGitRouterStore): Route[] {
       .map((repo) => [repo.id, repo])
   )
   const distroByRepo = new Map(
-    [...localRepos.values()].map((repo) => [repo.id, wslGitDistro(repo, projects, globalDefault)])
+    [...localRepos.values()].map((repo) => [
+      repo.id,
+      wslGitDistro(repo, ownerByRepoId, globalDefault)
+    ])
   )
   // Host-Git routes stay too, so a project nested in a WSL one keeps its own Git.
   const routes: Route[] = [...localRepos.values()].map((repo) => ({
@@ -219,13 +230,13 @@ function buildRoutes(store: ProjectRuntimeGitRouterStore): Route[] {
  */
 function wslGitDistro(
   repo: Repo,
-  projects: readonly Project[],
+  ownerByRepoId: ReadonlyMap<string, Project>,
   globalWindowsRuntimeDefault: unknown
 ): string | undefined {
   if (isFolderRepo(repo)) {
     return undefined
   }
-  const project = projects.find((entry) => entry.sourceRepoIds.includes(repo.id))
+  const project = ownerByRepoId.get(repo.id)
   const resolution = resolveProjectExecutionRuntime({
     appPlatform: 'win32',
     projectId: project?.id ?? repo.id,

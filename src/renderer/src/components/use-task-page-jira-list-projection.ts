@@ -5,7 +5,7 @@ import {
   getSingleJiraProjectScope,
   getTaskPageJiraStatusOrderScopeKey,
   getTaskPageJiraStatusOrderRuntimeScopeKey
-} from '@/components/task-page-jira-status-order'
+} from '@/components/task-page/jira/task-page-jira-status-order'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import {
   buildJiraIssueWorkspaceAttachmentIndex,

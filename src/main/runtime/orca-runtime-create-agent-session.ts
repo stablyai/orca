@@ -181,6 +181,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           startupAgent: request.agent,
           ...(request.prompt ? { startupPrompt: request.prompt } : {}),
           startupPromptDelivery: request.promptDelivery,
+          suppressStartupUpdatePrompt: request.promptDelivery === 'auto-submit',
           // TEMPORARY: see `startupPromptCarry`.
           startupPromptCarry: 'force-line',
           ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),

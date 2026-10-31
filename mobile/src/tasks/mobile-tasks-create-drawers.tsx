@@ -8,7 +8,8 @@ import {
   Text,
   Pressable,
   ChevronDown,
-  TextInput,
+  MessageBox,
+  TextField,
   ActivityIndicator,
   PickerModal,
   Linking,
@@ -169,12 +170,10 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
         <Text style={styles.fieldLabel}>
           {translate('tasks.tasksCreateDrawers.title', 'Title')}
         </Text>
-        <TextInput
-          style={styles.input}
+        <TextField
           value={createTitle}
           onChangeText={setCreateTitle}
           placeholder={translate('tasks.tasksCreateDrawers.titlePlaceholder', 'Task title')}
-          placeholderTextColor={colors.textMuted}
           autoCapitalize="sentences"
           returnKeyType="next"
         />
@@ -182,14 +181,10 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
         <Text style={styles.fieldLabel}>
           {translate('tasks.tasksCreateDrawers.description', 'Description')}
         </Text>
-        <TextInput
-          style={[styles.input, styles.bodyInput]}
+        <MessageBox
           value={createBody}
           onChangeText={setCreateBody}
           placeholder={translate('tasks.tasksCreateDrawers.descriptionPlaceholder', 'Add context')}
-          placeholderTextColor={colors.textMuted}
-          multiline
-          textAlignVertical="top"
         />
 
         <Pressable
@@ -294,8 +289,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
         <Text style={styles.fieldLabel}>
           {translate('tasks.tasksCreateDrawers.personalApiKey', 'Personal API key')}
         </Text>
-        <TextInput
-          style={styles.input}
+        <TextField
           value={linearApiKeyDraft}
           onChangeText={(next) => {
             setLinearApiKeyDraft(next)
@@ -305,7 +299,6 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
             }
           }}
           placeholder="lin_api_..."
-          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           secureTextEntry

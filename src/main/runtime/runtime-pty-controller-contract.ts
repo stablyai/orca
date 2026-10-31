@@ -169,6 +169,7 @@ export type RuntimePtyController = {
   resize?(ptyId: string, cols: number, rows: number): boolean
   // Exact-id mobile polls must not enumerate every local/SSH PTY.
   hasPty?(ptyId: string): boolean | null
+  getPtyAvailability?(ptyId: string): boolean | null
   /** Omitting the host lists every registered host. */
   listProcesses?(
     hostId?: ExecutionHostId,

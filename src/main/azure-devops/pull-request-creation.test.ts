@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAzureDevOpsPullRequest } from './pull-request-creation'
-import { _resetAzureDevOpsPreviewApiVersionCache } from './azure-devops-api-request'
+import { _resetAzureDevOpsApiVersionCache } from './azure-devops-api-request'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 
@@ -28,7 +28,7 @@ describe('Azure DevOps pull request creation', () => {
       stderr: ''
     })
     _resetAzureDevOpsRepoRefCache()
-    _resetAzureDevOpsPreviewApiVersionCache()
+    _resetAzureDevOpsApiVersionCache()
   })
 
   afterEach(() => {
@@ -142,6 +142,42 @@ describe('Azure DevOps pull request creation', () => {
       url: 'https://ado.example.com:8443/tfs/MyCollection/MyProject/_git/my-repo/pullrequest/51'
     })
     expect(versions).toEqual(['7.1', '7.1-preview'])
+  })
+
+  it('creates a PR only after negotiating a 6.1 preview version', async () => {
+    const versions: (string | null)[] = []
+    let creations = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const version = new URL(String(input)).searchParams.get('api-version')
+        versions.push(version)
+        expect(init?.method).toBe('POST')
+        if (version === '7.1') {
+          return Response.json({ typeKey: 'VssVersionOutOfRangeException' }, { status: 400 })
+        }
+        if (version === '6.1') {
+          return Response.json({ typeKey: 'VssInvalidPreviewVersionException' }, { status: 400 })
+        }
+        expect(version).toBe('6.1-preview')
+        creations++
+        return Response.json({ pullRequestId: 51, title: 'Server create', status: 'active' })
+      })
+    )
+    await expect(
+      createAzureDevOpsPullRequest(
+        '/repo',
+        {
+          provider: 'azure-devops',
+          base: 'main',
+          head: 'feature/server',
+          title: 'Server create'
+        },
+        'local'
+      )
+    ).resolves.toMatchObject({ ok: true, number: 51 })
+    expect(versions).toEqual(['7.1', '6.1', '6.1-preview'])
+    expect(creations).toBe(1)
   })
 
   it('does not retry PR creation when only the error message names the preview exception', async () => {

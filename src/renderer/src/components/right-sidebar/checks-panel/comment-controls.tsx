@@ -28,6 +28,7 @@ import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from '../pr-comment-presentation'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function CopyButton({
   text,
@@ -255,7 +256,7 @@ export function CommentMoreMenu({
         ) : null}
         {hasQueue && (hasGoToComment || hasEdit || hasDelete) ? <DropdownMenuSeparator /> : null}
         {hasGoToComment && (
-          <DropdownMenuItem onSelect={() => window.api.shell.openUrl(comment.url)}>
+          <DropdownMenuItem onSelect={() => openAppHttpLink(comment.url)}>
             <ExternalLink />
             {translate(
               'auto.components.right.sidebar.checks.panel.content.d3923d18fe',

@@ -24,7 +24,7 @@ import {
 } from 'lucide-react-native'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
-import { colors } from '../theme/mobile-theme'
+import { colors, radii } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 // Match desktop repo-icon picker’s lucide glyphs so mobile project headers retain chosen icons.
@@ -65,7 +65,7 @@ export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSeconda
     return (
       <Image
         source={{ uri: repoIcon.src }}
-        style={{ width: size, height: size, borderRadius: 3 }}
+        style={{ width: size, height: size, borderRadius: radii.mark }}
         accessibilityLabel={repoIcon.label}
       />
     )

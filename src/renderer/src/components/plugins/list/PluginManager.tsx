@@ -1,10 +1,8 @@
-import { useMemo, useState } from 'react'
-import { Blocks } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../ui/button'
 import { PluginCatalogLayout, type PluginCatalogFilter } from './PluginCatalogLayout'
-import { PluginCatalogEmptyState } from './PluginCatalogEmptyState'
 import { PluginListGroup } from './PluginListGroup'
 import {
   buildPluginListEntries,
@@ -18,6 +16,7 @@ import { usePluginInstallLink } from '../state/use-plugin-install-link'
 import { usePluginCatalog } from '../state/use-plugin-catalog'
 import { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
 import { usePluginInstallAction } from '../state/use-plugin-install-action'
+import { usePluginUpdateDialog } from '../state/use-plugin-update-dialog'
 import {
   CatalogCard,
   CatalogNotice,
@@ -25,16 +24,20 @@ import {
   PluginCatalogGroups,
   type CatalogCardHandlers
 } from '../catalog/PluginCatalogGroups'
-import { InstalledPluginCarousel } from '../catalog/InstalledPluginCarousel'
 import { PluginListToolbar } from './PluginListToolbar'
-import { PluginNoMatches, PluginPageMissing } from './PluginListEmptyStates'
+import { PluginCategoryChips } from './PluginCategoryChips'
+import {
+  PluginAllInstalled,
+  PluginNoMatches,
+  PluginNoneInstalled,
+  PluginPageMissing
+} from './PluginListEmptyStates'
 import { sortByAttention } from '../presentation/plugin-status-presentation'
 import { usePluginAutoUpdatesStore } from '@/store/plugin-auto-updates'
 import { PluginUpdateAllDialog } from '../dialogs/PluginUpdateAllDialog'
 import {
   matchesPluginFilter,
   NO_PLUGIN_LIST_FILTER,
-  pluginFilterCategories,
   pluginFilterSize,
   type PluginListFilter
 } from './plugin-list-filter'
@@ -52,6 +55,11 @@ function resultCountLabel(count: number): string {
 
 /** Rows a group shows before "Show all"; search and filters show everything. 12 fills whole rows at 1–4 columns. */
 export const PLUGIN_GROUP_ROW_CAP = 12
+
+/** A capped group's rows: the first ones, plus every installed one so its switch stays in view. */
+export function cappedPluginRows(rows: readonly PluginListEntry[]): PluginListEntry[] {
+  return rows.filter((entry, index) => index < PLUGIN_GROUP_ROW_CAP || entry.installed)
+}
 
 type PluginManagerProps = {
   plugins: readonly PluginHostListEntry[]
@@ -95,20 +103,22 @@ export function PluginManager({
   const [search, setSearch] = useState('')
   const [chosenTab, setTab] = useState<PluginCatalogFilter>('all')
   const [listFilter, setListFilter] = useState<PluginListFilter>(NO_PLUGIN_LIST_FILTER)
-  // Why a count: each open mounts a fresh dialog, so its previews and results start clean.
-  const [updateAllOpens, setUpdateAllOpens] = useState(0)
-  const [updateEntries, setUpdateEntries] = useState<readonly PluginListEntry[] | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set())
   const { openKey, open, back } = page
   const catalog = usePluginCatalog({
     onRefreshInstalled,
     onOpenRequested: open
   })
+  // Why: an install counts as from a link only while the page that link opened is showing.
+  const [linkedKey, setLinkedKey] = useState<string | null>(null)
   const installLink = usePluginInstallLink({
     sources: catalog.sources,
     loading: catalog.loading,
     loadMarketplaceData: catalog.loadMarketplaceData,
-    open
+    open: (pluginKey) => {
+      setLinkedKey(pluginKey)
+      open(pluginKey)
+    }
   })
   const openEntry = (pluginKey: string): void => {
     open(pluginKey)
@@ -116,9 +126,14 @@ export function PluginManager({
       onShowLogs(pluginKey)
     }
   }
+  const isFromInstallLink = useCallback(
+    (pluginKey: string) => pluginKey === linkedKey && openKey === linkedKey,
+    [linkedKey, openKey]
+  )
   const install = usePluginInstallAction({
     fetchPreview: catalog.fetchPreview,
-    onInstalled
+    onInstalled,
+    isFromInstallLink
   })
   const prefetch = usePluginHoverPrefetch(catalog.fetchPreview)
   const orcaVersion = useOrcaVersion()
@@ -143,24 +158,31 @@ export function PluginManager({
     matchesPluginSearch(entry, query) && matchesPluginFilter(entry, listFilter)
   const installed = entries.installed.filter(matches)
   const updates = entries.installed.filter((entry) => entry.updateVersion)
-  // Why: once the last update lands the Updates tab is gone, so the list falls back to Installed.
+  // Why: once the last update lands the Updates filter is gone, so the list falls back to Installed.
   const filter: PluginCatalogFilter =
     chosenTab === 'updates' && updates.length === 0 ? 'installed' : chosenTab
   const visibleInstalled = filter === 'updates' ? updates.filter(matches) : installed
   const capped = (groupId: string, rows: PluginListEntry[]): PluginListEntry[] =>
-    narrowed || expandedGroups.has(groupId) ? rows : rows.slice(0, PLUGIN_GROUP_ROW_CAP)
+    narrowed || expandedGroups.has(groupId) ? rows : cappedPluginRows(rows)
   const showAll = (groupId: string) => () =>
     setExpandedGroups((current) => new Set(current).add(groupId))
-
-  const openUpdates = (entries: readonly PluginListEntry[]): void => {
-    setUpdateAllOpens((count) => count + 1)
-    setUpdateEntries(entries)
-  }
+  const listedInCatalog = (entry: PluginListEntry): boolean =>
+    catalog.sources.some((source) => source.id === entry.listing?.marketplaceSourceId)
+  // Why: dev folders, local installs and bundled plugins have no catalog card to carry their switch.
+  const uncataloged = catalog.loading ? [] : installed.filter((entry) => !listedInCatalog(entry))
+  const catalogInstalled = filter === 'available' ? [] : entries.installed
+  const updateDialog = usePluginUpdateDialog({
+    ready: !pluginsLoading && !catalog.loading,
+    updates,
+    page,
+    showUpdates: () => setTab('updates'),
+    reloadCatalogs: catalog.loadMarketplaceData
+  })
   const rowHandlers: InstalledRowHandlers = {
     ...handlers,
     onOpen: openEntry,
     onViewLogs: openEntry,
-    onCheckUpdate: (entry) => openUpdates([entry])
+    onCheckUpdate: (entry) => updateDialog.open([entry])
   }
   const cardHandlers: CatalogCardHandlers = {
     install,
@@ -171,28 +193,32 @@ export function PluginManager({
     installedHandlers: rowHandlers,
     busyPluginKeys
   }
-  const visibleAvailableCount = [
+  const visibleCatalogCount = [
     ...entries.available,
-    ...entries.installed.filter((entry) => entry.listing)
-  ].filter(
-    (entry) =>
-      catalog.sources.some((source) => source.id === entry.listing?.marketplaceSourceId) &&
-      matches(entry)
-  ).length
-  const nothingMatches =
-    narrowed && visibleInstalled.length === 0 && (filter !== 'all' || visibleAvailableCount === 0)
+    ...catalogInstalled.filter((entry) => entry.listing)
+  ].filter((entry) => listedInCatalog(entry) && matches(entry)).length
+  const resultCount =
+    filter === 'installed' || filter === 'updates'
+      ? visibleInstalled.length
+      : visibleCatalogCount + (filter === 'all' ? uncataloged.length : 0)
+  const nothingMatches = narrowed && resultCount === 0
+  const everythingInstalled =
+    filter === 'available' &&
+    !narrowed &&
+    !catalog.loading &&
+    !catalog.error &&
+    catalog.sources.length > 0 &&
+    catalog.sources.every((source) => !source.error) &&
+    visibleCatalogCount === 0
 
+  const installedTitle = translate('auto.components.settings.PluginManager.installed', 'Installed')
   const installedGroup = pluginsLoading ? (
-    <PluginListGroup
-      layout="grid"
-      title={translate('auto.components.settings.PluginManager.installed', 'Installed')}
-      showHeading={false}
-    >
+    <PluginListGroup layout="grid" title={installedTitle} showHeading={false}>
       <PluginCardSkeletons />
     </PluginListGroup>
   ) : pluginsError ? (
     <PluginListGroup
-      title={translate('auto.components.settings.PluginManager.installed', 'Installed')}
+      title={installedTitle}
       showHeading={false}
       notice={
         <CatalogNotice
@@ -211,18 +237,32 @@ export function PluginManager({
       }
     />
   ) : filter === 'all' ? (
-    <InstalledPluginCarousel
-      entries={visibleInstalled}
-      handlers={cardHandlers}
-      onSeeAll={() => setTab('installed')}
-    />
+    uncataloged.length > 0 ? (
+      <PluginListGroup
+        layout="grid"
+        title={installedTitle}
+        detail={
+          // Why: with no catalog loaded every installed plugin lands here, listed or not.
+          catalog.sources.length > 0
+            ? translate(
+                'auto.components.settings.PluginManager.notFromCatalog',
+                'not from a catalog'
+              )
+            : undefined
+        }
+      >
+        {uncataloged.map((entry) => (
+          <CatalogCard key={entry.pluginKey} entry={entry} handlers={cardHandlers} />
+        ))}
+      </PluginListGroup>
+    ) : null
   ) : (
     <PluginListGroup
       layout="grid"
       title={
         filter === 'updates'
           ? translate('auto.components.settings.PluginManager.updatesTitle', 'Updates')
-          : translate('auto.components.settings.PluginManager.installed', 'Installed')
+          : installedTitle
       }
       showHeading={false}
     >
@@ -239,11 +279,11 @@ export function PluginManager({
   const dialogs = (
     <>
       <PluginUpdateAllDialog
-        key={updateAllOpens}
-        open={updateEntries !== null}
-        entries={updateEntries ?? []}
+        key={updateDialog.opens}
+        open={updateDialog.entries !== null}
+        entries={updateDialog.entries ?? []}
         orcaVersion={orcaVersion}
-        onClose={() => setUpdateEntries(null)}
+        onClose={updateDialog.close}
         onUpdated={onInstalled}
       />
       <PluginMarketplaceSourceDialog
@@ -298,12 +338,18 @@ export function PluginManager({
         onSearchChange={setSearch}
         installedCount={plugins.length}
         updateCount={updates.length}
+        filters={
+          <PluginCategoryChips
+            entries={[...entries.installed, ...entries.available]}
+            filter={listFilter}
+            onChange={setListFilter}
+          />
+        }
         toolbar={
           <PluginListToolbar
             updateCount={filter === 'updates' ? updates.length : 0}
-            onUpdateAll={() => openUpdates(updates)}
+            onUpdateAll={() => updateDialog.open(updates)}
             filter={listFilter}
-            categories={pluginFilterCategories([...entries.installed, ...entries.available])}
             sources={catalog.sources}
             onFilterChange={setListFilter}
             refreshBusy={catalog.refreshBusy}
@@ -332,49 +378,36 @@ export function PluginManager({
               setListFilter(NO_PLUGIN_LIST_FILTER)
             }}
           />
-        ) : filter !== 'all' &&
+        ) : (filter === 'installed' || filter === 'updates') &&
           !pluginsLoading &&
           !pluginsError &&
           visibleInstalled.length === 0 ? (
-          <PluginCatalogEmptyState
-            icon={Blocks}
-            title={translate(
-              'auto.components.settings.PluginManager.noneInstalledTitle',
-              'No plugins installed'
-            )}
-            action={
-              <Button variant="outline" size="sm" onClick={() => setTab('all')}>
-                {translate(
-                  'auto.components.settings.PluginManager.browseAll',
-                  'Browse all plugins'
-                )}
-              </Button>
-            }
-          />
-        ) : filter === 'all' ? (
+          <PluginNoneInstalled onBrowse={() => setTab('all')} />
+        ) : everythingInstalled ? (
+          <PluginAllInstalled onShowInstalled={() => setTab('installed')} />
+        ) : filter === 'all' || filter === 'available' ? (
           <div className="@container/plugin-catalog space-y-8">
-            {installedGroup}
-            <PluginCatalogGroups
-              catalog={catalog}
-              available={entries.available}
-              installed={entries.installed}
-              cardHandlers={cardHandlers}
-              matches={matches}
-              narrowed={narrowed}
-              capped={capped}
-              showAll={showAll}
-              openSources={() => setSourcesOpen(true)}
-            />
+            {/* Why the error and loading too: until installed plugins are read, Not installed can't tell what you have. */}
+            {filter === 'all' || pluginsError || pluginsLoading ? installedGroup : null}
+            {filter === 'available' && (pluginsLoading || pluginsError) ? null : (
+              <PluginCatalogGroups
+                catalog={catalog}
+                available={entries.available}
+                installed={catalogInstalled}
+                cardHandlers={cardHandlers}
+                matches={matches}
+                narrowed={narrowed}
+                capped={capped}
+                showAll={showAll}
+                openSources={() => setSourcesOpen(true)}
+              />
+            )}
           </div>
         ) : (
           <div className="@container/plugin-catalog">{installedGroup}</div>
         )}
         <p className="sr-only" aria-live="polite">
-          {narrowed
-            ? resultCountLabel(
-                visibleInstalled.length + (filter === 'all' ? visibleAvailableCount : 0)
-              )
-            : ''}
+          {narrowed ? resultCountLabel(resultCount) : ''}
         </p>
       </PluginCatalogLayout>
       {dialogs}

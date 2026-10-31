@@ -6,6 +6,7 @@ import type {
 } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { PluginPreviewCache } from './plugin-preview-cache'
 
 /** A plugin page's manifest read; a failure means nothing is known, not "nothing needed". */
 export type PluginPagePreview =
@@ -36,6 +37,21 @@ export function usePluginCatalog({
   const [error, setError] = useState<string | null>(null)
   const mountedRef = useRef(false)
   const requestRef = useRef(0)
+  const [previewCache] = useState(
+    () =>
+      new PluginPreviewCache((listing) =>
+        window.api.plugins
+          .previewMarketplacePlugin({
+            marketplaceSourceId: listing.marketplaceSourceId,
+            pluginKey: listing.pluginKey
+          })
+          .then((preview): PluginPagePreview => ({ ok: true, preview }))
+          .catch((cause: unknown): PluginPagePreview => {
+            console.warn('[plugins] plugin page preview failed:', cause)
+            return { ok: false }
+          })
+      )
+  )
 
   const loadMarketplaceData = useCallback(async (): Promise<void> => {
     const requestId = ++requestRef.current
@@ -47,6 +63,7 @@ export function usePluginCatalog({
       if (mountedRef.current && requestId === requestRef.current) {
         setSources(nextSources)
         setListings(nextListings)
+        previewCache.retainListed(nextListings)
         setError(null)
       }
     } catch (cause) {
@@ -66,7 +83,7 @@ export function usePluginCatalog({
         setLoading(false)
       }
     }
-  }, [])
+  }, [previewCache])
 
   useEffect(() => {
     mountedRef.current = true
@@ -124,29 +141,9 @@ export function usePluginCatalog({
     }
   }, [previewRequest, listings, loading])
 
-  const previewCacheRef = useRef(new Map<string, Promise<PluginPagePreview>>())
   const fetchPreview = useCallback(
-    (listing: PluginMarketplaceHostListing): Promise<PluginPagePreview> => {
-      const key = `${listing.marketplaceSourceId}:${listing.pluginKey}:${listing.marketplaceCommit}`
-      let request = previewCacheRef.current.get(key)
-      if (!request) {
-        request = window.api.plugins
-          .previewMarketplacePlugin({
-            marketplaceSourceId: listing.marketplaceSourceId,
-            pluginKey: listing.pluginKey
-          })
-          .then((preview): PluginPagePreview => ({ ok: true, preview }))
-          .catch((cause: unknown): PluginPagePreview => {
-            console.warn('[plugins] plugin page preview failed:', cause)
-            // Why: only successes are cached, so Retry asks again.
-            previewCacheRef.current.delete(key)
-            return { ok: false }
-          })
-        previewCacheRef.current.set(key, request)
-      }
-      return request
-    },
-    []
+    (listing: PluginMarketplaceHostListing) => previewCache.fetch(listing),
+    [previewCache]
   )
 
   return {

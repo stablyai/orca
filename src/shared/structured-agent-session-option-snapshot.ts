@@ -13,6 +13,10 @@ import type {
   SessionOptionValue
 } from './native-chat/input/native-chat-session-options'
 import type { TrackedNativeChatSessionOption } from './native-chat/input/native-chat-session-option-state'
+import {
+  catalogEffortLevels,
+  effectiveAgentEffort
+} from './structured-agent-session-effective-effort'
 import { effectiveServiceTier } from './structured-agent-session-effective-tier'
 import { serviceTierOption } from './structured-agent-session-discovered-model'
 import {
@@ -116,11 +120,15 @@ export function structuredAgentSessionDrawnValues(
 }
 
 function drawnModelControls(state: StructuredAgentSessionOptionState) {
-  const { catalog, record } = state
-  if (!catalog || state.catalogSource === 'seed') {
+  const { record } = state
+  if (
+    !state.catalog ||
+    (state.catalogSource === 'seed' && structuredAgentSessionModelId(record, 'own') === null)
+  ) {
     return null
   }
-  // A seeded default can name a model the static seed does not list yet.
+  // Before discovery, name only accepted input; static rows cannot supply installed capabilities.
+  const catalog = state.catalogSource === 'seed' ? { ...state.catalog, models: [] } : state.catalog
   const models = withTrackedNativeChatModel(catalog, catalog.models, { model: record.values.model })
   const shown = structuredAgentSessionShownModel(catalog, models, record)
   const controls = shown.controlsModelId
@@ -129,10 +137,28 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
   // Normalize only under the named model’s listed controls; stand-ins/unlisted models preserve host values.
   const normalises =
     shown.shown.currentId !== null &&
-    structuredAgentSessionDescribedModel(state, shown.shown.currentId) !== undefined
-  const values = normalises
+    structuredAgentSessionDescribedModel(
+      { catalog, verifiedModelIds: state.verifiedModelIds },
+      shown.shown.currentId
+    ) !== undefined
+  let values = normalises
     ? valuesUnderControls(catalog, controls, record.values, state.olderHost === true)
     : record.values
+  if (record.agent === 'pi' && state.reportedEffort !== undefined) {
+    values = { ...values, effort: { value: state.reportedEffort, source: 'reported' } }
+  }
+  const requested = values.effort
+  if (
+    normalises &&
+    record.agent === 'pi' &&
+    typeof requested?.value === 'string' &&
+    requested.source !== 'reported'
+  ) {
+    const effort = effectiveAgentEffort(requested.value, catalogEffortLevels(controls))
+    if (effort && effort !== requested.value) {
+      values = { ...values, effort: { ...requested, value: effort } }
+    }
+  }
   return { catalog, models, ...shown, controls, values }
 }
 
@@ -164,7 +190,6 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
     return [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
   }
   const { catalog, models, shown, controlsModelId, isCliDefault, controls, values } = drawn
-  const { record } = state
   const snapshot =
     models.length === 0
       ? []
@@ -183,9 +208,10 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
     ? withUnlistedEffort(
         catalog,
         controlsModelId,
-        record.values.effort,
+        values.effort,
         state.verifiedModelIds,
-        snapshot
+        snapshot,
+        state.record.agent
       )
     : [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
 }
@@ -234,7 +260,9 @@ export function canSetStructuredAgentSessionOption(
     return (
       descriptor?.settable === true &&
       descriptor.kind.type === 'select' &&
-      descriptor.kind.choices.some((choice) => choice.value === value)
+      (value === 'own'
+        ? state.permissionOwnSupported === true
+        : descriptor.kind.choices.some((choice) => choice.value === value))
     )
   }
   return (

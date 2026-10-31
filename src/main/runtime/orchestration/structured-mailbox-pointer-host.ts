@@ -5,7 +5,7 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import type {
   StructuredMailboxPointerHost,
   StructuredPointerSessionFacts
-} from './structured-mailbox-pointer-delivery'
+} from './structured-mailbox-pointer-host-contract'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import {
   structuredSessionGateFacts,
@@ -116,11 +116,14 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             operationId: input.operationId,
             expectedRuntimeFence: input.expectedRuntimeFence,
             beforeRun: () => {
+              if (input.body.from?.orchestration?.message !== 'mail-notice') {
+                return
+              }
+              if (!input.stillOwed()) {
+                throw new StructuredMailObsoleteError()
+              }
               const work = host.currentWork(input.sessionId)
-              if (
-                input.body.from?.orchestration?.message === 'mail-notice' &&
-                (work?.hasActionablePrompt() || (input.holdWhileWorking && work?.working()))
-              ) {
+              if (work?.hasActionablePrompt() || (input.holdWhileWorking && work?.working())) {
                 throw new StructuredMailHeldError()
               }
             }
@@ -129,6 +132,9 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       } catch (error) {
         if (error instanceof StructuredMailHeldError) {
           return { kind: 'held' }
+        }
+        if (error instanceof StructuredMailObsoleteError) {
+          return { kind: 'obsolete' }
         }
         throw error
       }
@@ -153,3 +159,4 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
 }
 
 class StructuredMailHeldError extends Error {}
+class StructuredMailObsoleteError extends Error {}

@@ -1,4 +1,9 @@
 import { readLinkedTaskIssuesWithLimit } from '../../read-linked-task-issues'
+import type {
+  LinearIssueRead,
+  LinearIssueLease,
+  LinearIssueView
+} from '@/store/slices/linear/linear-issue-publication'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearWorkspace } from '../../../../../shared/linear/workspace-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -161,10 +166,109 @@ export function linkedLinearIssueRefsSignature(refs: readonly LinkedLinearIssueR
     .join('|')
 }
 
-export async function readLinkedLinearIssuesWithLimit(
+export function readLinkedLinearIssuesWithLimit(
   refs: readonly LinkedLinearIssueRef[],
-  read: (ref: LinkedLinearIssueRef) => Promise<LinearIssue | null>,
+  read: (ref: LinkedLinearIssueRef) => LinearIssueRead<LinearIssue | null>,
   concurrency = 6
-): Promise<(LinearIssue | null)[]> {
-  return readLinkedTaskIssuesWithLimit(refs, read, concurrency)
+): LinearIssueRead<(LinearIssue | null)[]> {
+  return {
+    acquire: (isLive = () => true) => {
+      let live = true
+      let initializing = true
+      const children = new Map<
+        LinkedLinearIssueRef,
+        {
+          lease: LinearIssueLease<LinearIssue | null>
+          view: LinearIssueView<LinearIssue | null>
+          release: () => void
+        }
+      >()
+      const listeners = new Set<() => void>()
+      let view: LinearIssueView<(LinearIssue | null)[]> = { kind: 'loading', data: null }
+      const notify = () => {
+        // oxlint-disable-next-line unicorn/no-useless-spread -- Why: subscribers may change the listener set synchronously.
+        for (const listener of [...listeners]) {
+          listener()
+        }
+      }
+      const update = () => {
+        if (!live || initializing) {
+          return
+        }
+        const ordered = refs.map((ref) => children.get(ref))
+        if (ordered.some((child) => child?.view.kind === 'abandoned')) {
+          view = { kind: 'abandoned', data: null }
+          notify()
+          return
+        }
+        const loading = ordered.some((child) => child?.view.kind === 'loading')
+        const data = ordered.map((child) =>
+          child?.view.kind === 'data' || child?.view.kind === 'loading' ? child.view.data : null
+        )
+        view = loading ? { kind: 'loading', data } : { kind: 'data', data }
+        notify()
+      }
+      void readLinkedTaskIssuesWithLimit(
+        refs,
+        async (ref) => {
+          if (!live || !isLive() || view.kind === 'abandoned') {
+            return null
+          }
+          const lease = read(ref).acquire(() => live && isLive())
+          const child = { lease, view: lease.currentView(), release: () => {} }
+          children.set(ref, child)
+          child.release = lease.subscribe(() => {
+            child.view = lease.currentView()
+            update()
+          })
+          await lease.waitForCurrentTerminal()
+          return null
+        },
+        concurrency
+      ).then(() => {
+        initializing = false
+        update()
+      })
+      return {
+        currentView: () => (live && isLive() ? view : { kind: 'abandoned', data: null }),
+        subscribe: (listener) => {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+        commit: (expected, previous, reduce) => {
+          if (
+            !live ||
+            !isLive() ||
+            expected !== view ||
+            [...children.values()].some(
+              (child) => !child.lease.commit(child.view, false, () => true)
+            )
+          ) {
+            return previous
+          }
+          return reduce(previous, expected.data)
+        },
+        waitForCurrentTerminal: () =>
+          new Promise((resolve) => {
+            const finish = () => {
+              if (!live || view.kind !== 'loading') {
+                listeners.delete(finish)
+                resolve(live ? view : { kind: 'abandoned', data: null })
+              }
+            }
+            listeners.add(finish)
+            finish()
+          }),
+        release: () => {
+          live = false
+          notify()
+          listeners.clear()
+          for (const child of children.values()) {
+            child.release()
+            child.lease.release()
+          }
+        }
+      }
+    }
+  }
 }

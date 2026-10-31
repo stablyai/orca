@@ -97,6 +97,7 @@
       "connecting": "Bağlanılıyor…",
       "invalidPairingCode": "Geçerli bir eşleştirme kodu değil — bilgisayarınızdan kopyalayıp yeniden yapıştırın",
       "invalidQrCode": "Geçerli bir Orca QR kodu değil",
+      "downloadQrCode": "Bu indirme kodu. Bilgisayarınızdaki 2. adımda bulunan eşleştirme kodunu tarayın.",
       "openDesktopStep": "Bilgisayarınızda Orca'yı açın",
       "openMobileSettingsStep": "Ayarlar → Mobil bölümüne gidin",
       "openSettings": "Ayarları Aç",
@@ -961,8 +962,12 @@
       "removeShortcut": "{{label}} kısayolunu kaldır",
       "resetDefaults": "Varsayılanlara Sıfırla",
       "resetDescription": "Tüm yerleşik kısayol tuşlarını özgün sırayla göster",
-      "shortcutBar": "KISAYOL ÇUBUĞU",
-      "shortcutBarDescription": "Tuşları gösterip gizlemek için düğmeleri açıp kapatın. Terminal kısayol çubuğunda bir tuşun sırasını değiştirmek için tutamacını basılı tutup sürükleyin."
+      "moreKeys": "DİĞER TUŞLAR",
+      "moreKeysDescription": "Bu tuşlar, terminal tuş satırındaki ⋯ altında bulunur. Tuşları göstermek veya gizlemek için açıp kapatın; istediğiniz sıraya sürüklemek için tutamacı basılı tutun. Esc veya oklar gibi satırda zaten bulunan tuşlar ⋯ altında gösterilmez.",
+      "directionPad": "YÖN TUŞ TAKIMI",
+      "showDirectionPad": "Yön tuş takımını göster",
+      "showDirectionPadDescription": "Ok takımını yan çubuğa sabitleyin. Kapalıyken çubukta ayrı ok tuşları listelenir.",
+      "showShortcut": "{{label}} kısayolunu göster"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Hız sınırı sıfırlama hakkı kullanılsın mı?",
@@ -1003,6 +1008,11 @@
       "folder": "Klasör",
       "project": "{{repo}} projesi",
       "remoteHost": "Uzak sunucu"
+    },
+    "nativeScreenRecovery": {
+      "title": "Bir sorun oluştu",
+      "tryAgain": "Tekrar dene",
+      "home": "Ana sayfa"
     }
   },
   "connection": {
@@ -1096,7 +1106,8 @@
       "checkTailnet": "Bilgisayarınızın uyku modunda olmadığını ve tailnet ağınızda bağlı göründüğünü kontrol edin.",
       "desktopTitle": "Masaüstü Uygulaması Çalışmıyor",
       "disableVpn": "Bu VPN'i devre dışı bırakın veya bölünmüş tünellemeyi / \"Allow LAN\" seçeneğini etkinleştirin.",
-      "firewallTitle": "Güvenlik Duvarı 6768 Portunu Engelliyor",
+      "firewallTitle": "Güvenlik Duvarı {{port}} Portunu Engelliyor",
+      "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "100.x.x.x veya *.ts.net gibi sunucu adreslerine Tailscale üzerinden bağlanılır — Tailscale'i AÇIK tutun.",
       "macosFirewall": "macOS: System Settings → Network → Firewall — Orca'ya izin verin.",
       "notificationNetwork": "Hücresel bağlantıyı veya başka bir Wi-Fi ağını deneyin. Ağ değiştirdikten sonra bildirimler geliyorsa ağınız iletimi geciktiriyor olabilir.",
@@ -1387,14 +1398,6 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Çalışma alanı oluşturuluyor…"
     },
-    "hostRailActions": {
-      "accounts": "Hesaplar",
-      "closeSearch": "Aramayı kapat",
-      "floatingWorkspace": "Yüzen Çalışma Alanı",
-      "newWorkspace": "Yeni çalışma alanı",
-      "searchWorkspaces": "Çalışma alanlarını ara",
-      "tasks": "Görevler"
-    },
     "hostScreenHeader": {
       "accounts": "Hesaplar",
       "activeFilters_one": "Çalışma alanı seçenekleri ({{count}} filtre etkin)",
@@ -1406,7 +1409,8 @@
       "reconnect": "Yeniden bağlan",
       "searchWorkspaces": "Çalışma alanlarını ara",
       "tasks": "Görevler",
-      "workspaceOptions": "Çalışma alanı seçenekleri"
+      "workspaceOptions": "Çalışma alanı seçenekleri",
+      "newWorkspace": "Yeni çalışma alanı"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "“{{name}}” ({{branch}}) silinsin mi?",
@@ -1833,16 +1837,17 @@
   },
   "session": {
     "accessoryKeys": {
-      "addCustomShortcut": "Özel kısayol ekle",
       "dismissKeyboard": "Klavyeyi gizle",
-      "dismissKeyboardHint": "Ekran klavyesini gizler ve geçerli terminal oturumunu açık tutar.",
-      "paste": "Yapıştır",
-      "pasteFromClipboard": "Panodan yapıştır",
       "sendKey": "{{label}} gönder",
-      "switchToBufferedInput": "Arabellekli komut girişine geç",
-      "switchToDesktopMode": "Masaüstü moduna geç",
-      "switchToLiveInput": "Canlı terminal girişine geç",
-      "switchToPhoneMode": "Telefon moduna geç"
+      "modifierHint": "Sonraki tuşa uygulanır. Açık tutmak için iki kez dokunun.",
+      "typeCharacter": "{{character}} yaz",
+      "interrupt": "Terminali kesintiye uğrat",
+      "keysModeLabel": "Tuş modu: yazılanlar doğrudan terminale gider. Mesaj moduna geç",
+      "messageModeLabel": "Mesaj modu: yazın, ardından gönderin. Tuş moduna geç",
+      "keysMode": "Tuşlar",
+      "messageMode": "Mesaj",
+      "moreKeys": "Diğer tuşlar ve işlemler",
+      "showKeyboard": "Klavyeyi göster"
     },
     "activeContent": {
       "createTab": "Sekme Oluştur",
@@ -1952,21 +1957,15 @@
       "titleRight": "Sağdaki sekmeler kapatılsın mı?"
     },
     "commandDock": {
-      "commandPlaceholder": "Bir komut yazın…",
       "liveInputHint": "Yazılan metin doğrudan etkin terminale gönderilir",
       "liveInputLabel": "Canlı terminal girişi",
-      "sendCommand": "Komut gönder"
+      "sendCommand": "Komut gönder",
+      "messageAgentPlaceholder": "{{agent}} için mesaj",
+      "writeCommandPlaceholder": "Bir komut yazın ve gönderin",
+      "theAgent": "ajan"
     },
     "contentRow": {
       "dismissCreationWarning": "Çalışma alanı oluşturma uyarısını kapat"
-    },
-    "diffCommentLineRow": {
-      "addNote": "{{line}}. satıra not ekle",
-      "deleteNote": "{{line}}. satırdaki notu sil",
-      "diffLine": "{{title}} diff'i, {{line}}. satır",
-      "line": "Satır {{line}}",
-      "placeholder": "İnceleme notu ekle",
-      "saveNote": "Notu kaydet"
     },
     "diffLineRow": {
       "addNoteLabel": "{{line}} numaralı satıra not ekle",
@@ -2137,13 +2136,19 @@
       "requestFailed": "İstek tamamlanamadı: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Çalışma alanının tam adını ve konumunu gösterir",
       "backToWorktrees": "Worktree'lere dön",
       "moreActions": "Diğer oturum işlemleri",
       "openFileExplorer": "Dosya gezginini aç",
       "openSourceControl": "Kaynak kontrolünü aç",
       "reconnectToDesktop": "Masaüstüne yeniden bağlan",
       "showSidebar": "Kenar çubuğunu göster",
-      "terminalTitle": "Terminal"
+      "terminalTitle": "Terminal",
+      "terminalLayout": "Terminal düzeni",
+      "fileExplorer": "Dosya gezgini",
+      "sourceControl": "Kaynak kontrolü",
+      "newTab": "Yeni sekme",
+      "quickCommands": "Hızlı komutlar"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Ajan Geçmişi",
@@ -2343,10 +2348,8 @@
       "terminal": "Terminal",
       "terminalName": "Terminal adı",
       "unsavedMarkdown": "Kaydedilmemiş Markdown değişiklikleri",
-      "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın."
-    },
-    "sideRail": {
-      "backToWorktrees": "Worktree'lere dön"
+      "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın.",
+      "allowAutoClose": "Otomatik kapatmaya izin ver"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Bu çalışma alanı sunucusunda etkin bir AI ajanı algılanmadı.",
@@ -2363,7 +2366,8 @@
       "checkingCapabilities": "Masaüstü özellikleri kontrol ediliyor — birazdan tekrar deneyin",
       "newTab": "Yeni sekme",
       "quickCommandsUpdateRequired": "Hızlı komutlar için masaüstü uygulaması güncellenmeli",
-      "tabStatus": "{{title}}, {{status}}"
+      "tabStatus": "{{title}}, {{status}}",
+      "terminalLayout": "Terminal düzeni"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminali Temizle",
@@ -2518,7 +2522,8 @@
       "saveFailed": "Hızlı komut kaydedilemedi"
     },
     "useSessionTerminalSendActions": {
-      "inputTooLarge": "Girdi çok büyük (en fazla 256 KiB)"
+      "inputTooLarge": "Girdi çok büyük (en fazla 256 KiB)",
+      "liveInputInterrupted": "Canlı giriş kesildi. Alan temizlendi; devam etmeden önce terminali kontrol edin."
     },
     "useStartup": {
       "wakeAgents": "Uykudaki ajanları uyandırmak için sunucuda Orca'yı açın."
@@ -2624,6 +2629,56 @@
       "waitForStart": "Ajanın başlatılmasının tamamlanmasını bekleyin.",
       "waitForTurn": "Ajanın yanıtını tamamlamasını bekleyin veya durdurun.",
       "waitMoment": "Biraz bekleyin."
+    },
+    "workerAutoClose": {
+      "running": "Geçici orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
+      "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
+      "keepOpen": "Açık tut"
+    },
+    "terminalLayoutSheet": {
+      "title": "Terminal düzeni",
+      "oneTerminal": "Tek terminal",
+      "selected": "Seçili",
+      "auto": "Otomatik",
+      "autoHint": "Kullanılabilir alana sığacak şekilde böl",
+      "sideBySide": "Yan yana",
+      "sideBySideHint": "Kenar çubuğu açıkken bile iki sütun",
+      "stacked": "Alt alta",
+      "stackedHint": "Her yönlendirmede iki satır",
+      "selectedHint": "Seçili · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Düzen kaydedilemedi",
+      "saveFailedMessage": "Bu düzen şimdilik uygulanır. Kaydetmeyi yeniden denemek için tekrar seçin."
+    },
+    "terminalArrowPad": {
+      "label": "Ok tuşları",
+      "hint": "Bir oka bir kez basmak için bir tarafa dokunun; tekrarlamak için basılı tutup sürükleyin",
+      "up": "Yukarı",
+      "down": "Aşağı",
+      "left": "Sol",
+      "right": "Sağ"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "{{label}} gönder",
+      "paste": "Yapıştır",
+      "sending": "Gönderiliyor…",
+      "photo": "Fotoğraf",
+      "file": "Dosya",
+      "desktopWidth": "Masaüstü genişliği",
+      "phoneWidth": "Telefon genişliği",
+      "keys": "Tuşlar",
+      "combos": "Kombinasyonlar",
+      "yourKeys": "Tuşlarınız",
+      "deleteKeyHint": "Bu tuşu silmek için uzun basın",
+      "addCustomKey": "Özel tuş ekle",
+      "addKey": "Tuş ekle"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, odakta",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, odaklamak için dokunun",
+      "inputPane": "{{title}} · Girdi"
     }
   },
   "settings": {
@@ -2710,19 +2765,26 @@
     "notificationDisplayTest": {
       "accepted": "Orca'nın anlık bildirim hizmeti tarafından kabul edildi. Bildirimin gelip gelmediğini kontrol edin.",
       "connectDesktop": "Bir masaüstü bilgisayara bağlanın ve yeniden deneyin.",
-      "description": "Orca'nın anlık bildirim hizmeti üzerinden bir test bildirimi gönderin.",
+      "description": "Anlık bildirim iletimini veya kullanılamıyorsa yerel bir bildirimi test edin.",
       "desktopUnreachable": "Masaüstü bilgisayara ulaşılamadı. Yeniden deneyin.",
       "loadFailed": "Eşleştirilmiş masaüstü bilgisayarlar yüklenemedi.",
       "pairDesktop": "Bir masaüstü bilgisayarla eşleştirin ve yeniden deneyin.",
       "pushServiceFailed": "Orca'nın anlık bildirim hizmeti üzerinden gönderilemedi. Yeniden deneyin.",
       "rateLimited": "Çok fazla bildirim gönderildi. Daha sonra yeniden deneyin.",
-      "reconnectPhone": "Bu telefonu bildirimler için kaydetmek üzere yeniden bağlanın.",
       "sendButton": "Test bildirimi gönder",
       "sendFailed": "Anlık bildirim testi gönderilemedi.",
       "sending": "Gönderiliyor…",
       "troubleReceivingAlerts": "Bildirim almakta sorun mu yaşıyorsunuz?",
       "troubleshooting": "Sorun Giderme",
-      "updateDesktop": "Bu testi çalıştırmak için masaüstü uygulamanızı güncelleyin."
+      "localTitle": "Test bildirimi",
+      "localBody": "Bu telefondan yerel bildirim testi.",
+      "localScheduled": "{{reason}} Yerel test planlandı. Bildirimi kontrol edin. Bu test yalnızca gösterimi denetler; ajan uyarılarının iletimini doğrulamaz.",
+      "disabled": "Orca bildirimleri kapalı. Bildirimleri açıp tekrar deneyin.",
+      "osDisabled": "Sistem ayarlarında bildirimler kapalı. Bildirimlere izin verip tekrar deneyin.",
+      "noToken": "Bu telefonda kullanılabilir anlık bildirim belirteci yok.",
+      "unsupportedHost": "Bu masaüstü anlık bildirimleri desteklemiyor. Almak için güncelleyin.",
+      "registrationPending": "Bu masaüstünde anlık bildirim kaydı henüz hazır değil. Kısa süre sonra tekrar deneyin.",
+      "liveFallbackScheduled": "{{reason}} Yerel test planlandı. Bildirimi kontrol edin. Orca çalışır ve bağlı durumdayken canlı uyarılar alınabilir."
     },
     "notificationSettingsScreen": {
       "description": "Bir ajan sizden yanıt beklediğinde veya bir görevi tamamladığında bu cihazda bildirim alın.",
@@ -2808,7 +2870,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "merge",
       "rebaseState": "rebase",
-      "stagedCount": "{{count}} stage edildi"
+      "stagedCount": "{{count}} stage edildi",
+      "completingMerge": "Tamamlanıyor…",
+      "completeMerge": "Birleştirmeyi tamamla"
     },
     "branchCompare": {
       "commits_one": "{{count}} commit",
@@ -3247,6 +3311,13 @@
       "branchUnavailable": "Branch durumu alınamadı",
       "commitFailed": "Commit'lenemedi",
       "waitingForDesktop": "Masaüstü bekleniyor…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Birleştirme çakışmalarını telefonunuzdan çözmek için bu çalışma alanının çalıştığı bilgisayarda Orca’yı güncelleyin.",
+      "markResolved": "Çözüldü olarak işaretle",
+      "keepFile": "Dosyayı koru",
+      "keepDeletion": "Silmeyi koru",
+      "completeMergeFailed": "Birleştirme tamamlanamadı"
     }
   },
   "tasks": {
@@ -3913,6 +3984,15 @@
       "inProgress": "Devam ediyor",
       "inReview": "İncelemede",
       "pinned": "Sabitlenenler"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Yön tuşu yukarı",
+      "left": "Yön tuşu sol",
+      "right": "Yön tuşu sağ",
+      "down": "Yön tuşu aşağı",
+      "hint": "Bir ok tuşu gönderir. Tekrarlamak için basılı tutun."
     }
   }
 }

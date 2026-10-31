@@ -47,12 +47,12 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
   repoDot: {
     width: 7,
     height: 7,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   pickerRepoDot: {
     width: 9,
     height: 9,
-    borderRadius: 4.5
+    borderRadius: radii.pill
   },
   subtitle: {
     flex: 1,
@@ -89,7 +89,7 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
     alignSelf: 'flex-start',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel,
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 2
@@ -111,7 +111,7 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
   statusPill: {
     maxWidth: 112,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     borderWidth: 1,
@@ -120,7 +120,7 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
   statusPillSelf: {
     alignSelf: 'flex-start',
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     borderWidth: 1,
@@ -135,7 +135,7 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
   linearStateDot: {
     width: 7,
     height: 7,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   linearListTrailing: {
     alignItems: 'flex-end',
@@ -169,7 +169,7 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     paddingVertical: spacing.sm
   },
@@ -184,7 +184,7 @@ export const mobileTasksListStyles = themedStyleSheet(() => ({
   paginationLabelButton: {
     flex: 1,
     alignItems: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.sm
   }

@@ -32,13 +32,13 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     }
     let result = initialResult
     const finalizeSpawnResult = (spawnResult: PtySpawnResult): PtySpawnResult =>
-      this.resultForExitBeforeSpawnReply(sessionId, result, operation) ??
-      (result.isNew && !historyRecovery.identityChanged
-        ? {
-            ...spawnResult,
-            startupCwdSource: effectiveCwd === opts.cwd ? 'request' : 'recovered-history'
-          }
-        : spawnResult)
+      this.resultForExitBeforeSpawnReply(sessionId, result, operation) ?? {
+        ...spawnResult,
+        ...(!result.isNew ? { isReattach: true } : {}),
+        ...(result.isNew && !historyRecovery.identityChanged
+          ? { startupCwdSource: effectiveCwd === opts.cwd ? 'request' : 'recovered-history' }
+          : {})
+      }
     let historySeedSegments = restoreInfo ? getRecoveredHistorySeedSegments(restoreInfo) : null
     const adoptSpawnResultSession = async (spawnResult: CreateOrAttachResult): Promise<void> => {
       const requestedSessionId = sessionId
@@ -75,6 +75,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     // Both ids: adoptSpawnResultSession may have rewritten sessionId to the claim owner.
     this.clearSessionAwaitingDaemonRecovery(requestedSessionId)
     this.clearSessionAwaitingDaemonRecovery(sessionId)
+    this.ptyInventory.spawned(sessionId, result.incarnationId)
     const exitedResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
     if (exitedResult) {
       return exitedResult
@@ -128,8 +129,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         ...daemonSpawnResultIdentity(result),
         pid,
         coldRestore: cachedRestore,
-        ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
-        ...(!result.isNew ? { isReattach: true } : {})
+        ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {})
       })
     }
 
@@ -149,6 +149,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         effectiveRows = restoreInfo.rows
         result = await createOrAttach(historySeedSegments)
         await adoptSpawnResultSession(result)
+        this.ptyInventory.spawned(sessionId, result.incarnationId)
         const exitedRetryResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
         if (exitedRetryResult) {
           return exitedRetryResult
@@ -221,8 +222,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
           pid,
           coldRestore,
           ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
-          ...(providerSequence ? { providerSequence } : {}),
-          ...(!result.isNew ? { isReattach: true } : {})
+          ...(providerSequence ? { providerSequence } : {})
         })
       }
       return finalizeSpawnResult({
@@ -269,15 +269,13 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       }
     }
 
-    const isReattach = !result.isNew
-    if (!isReattach || !result.snapshot) {
+    if (result.isNew || !result.snapshot) {
       return finalizeSpawnResult({
         id: sessionId,
         ...daemonSpawnResultIdentity(result),
         pid,
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
-        ...(providerSequence ? { providerSequence } : {}),
-        ...(isReattach ? { isReattach: true } : {})
+        ...(providerSequence ? { providerSequence } : {})
       })
     }
 
@@ -289,7 +287,6 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     const isAltScreen = reattachSnapshot.modes.alternateScreen
     const snapshotPrefix = reattachSnapshot.scrollbackAnsi + reattachSnapshot.rehydrateSequences
     const snapshotFrame = reattachSnapshot.snapshotAnsi
-    const snapshotPayload = snapshotPrefix + snapshotFrame
     // Reassert kitty flags after payload screen switches; carry known zero separately from unknown.
     const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(
       reattachSnapshot.modes.kittyKeyboardFlags
@@ -299,7 +296,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       ...daemonSpawnResultIdentity(result),
       pid,
       ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
-      snapshot: snapshotPayload,
+      snapshot: snapshotPrefix + snapshotFrame,
       snapshotCols: reattachSnapshot.cols,
       snapshotRows: reattachSnapshot.rows,
       // Only alt frames need a separate restore; normal history can replay at its captured grid.
@@ -317,7 +314,6 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       ...(reattachSnapshot.terminalOwner
         ? { snapshotTerminalOwner: reattachSnapshot.terminalOwner }
         : {}),
-      isReattach: true,
       isAlternateScreen: isAltScreen,
       // Snapshot ANSI lacks title frames; carry the title separately across relaunch.
       ...(reattachSnapshot.lastTitle ? { lastTitle: reattachSnapshot.lastTitle } : {}),
