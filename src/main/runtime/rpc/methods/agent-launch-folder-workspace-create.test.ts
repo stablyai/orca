@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -179,6 +180,7 @@ describe('a replayed folder launch', () => {
 
   afterEach(async () => {
     setAgentLaunchRecordStore(null)
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   })
 

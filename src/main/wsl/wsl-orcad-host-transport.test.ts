@@ -1,4 +1,5 @@
 import { ORCAD_WSL_DISTRO_GUID_ENV } from '../orcad/orcad-migration-wsl-destination'
+import { ORCAD_IDLE_TIMEOUT_ENV } from '../../shared/orcad-idle-exit'
 import { EventEmitter } from 'node:events'
 import { PassThrough, Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
@@ -216,8 +217,11 @@ describe('createWslOrcadHostTransport', () => {
         readDistroRegistryId: async (distro) => (distro === 'Ubuntu-24.04' ? id : null)
       })
     await expect(make('1a2b')?.orcadLaunchEnv?.({ fullVersion: '0.1.0+abc' })).resolves.toEqual([
-      [ORCAD_WSL_DISTRO_GUID_ENV, '1a2b']
+      [ORCAD_WSL_DISTRO_GUID_ENV, '1a2b'],
+      [ORCAD_IDLE_TIMEOUT_ENV, '300000']
     ])
-    await expect(make(null)?.orcadLaunchEnv?.({ fullVersion: '0.1.0+abc' })).resolves.toEqual([])
+    await expect(make(null)?.orcadLaunchEnv?.({ fullVersion: '0.1.0+abc' })).resolves.toEqual([
+      [ORCAD_IDLE_TIMEOUT_ENV, '300000']
+    ])
   })
 })

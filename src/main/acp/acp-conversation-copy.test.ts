@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import { copyAcpConversation } from './acp-conversation-copy'
+import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
 import {
   FakeAcpChild,
@@ -27,6 +28,7 @@ const input = {
 const rigs: AcpAdapterRig[] = []
 afterEach(async () => {
   await Promise.all(rigs.splice(0).map((rig) => rig.adapter.closeAll()))
+  await closeProviderTimelineRigs()
 })
 
 async function open(agent: 'omp' | 'opencode' = 'omp') {

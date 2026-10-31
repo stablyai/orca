@@ -132,7 +132,6 @@ export async function rig(
       formatOrcaSessionAddress(SESSION)
     )
   let dispatch = assign()
-  let enabled = true
   const notify = vi.fn<(handle: string, messageType: string) => void>()
   const deliver = vi.fn<(sessionId: string, journal: AgentSessionJournal) => void>()
   const sessions = new StructuredAgentSessionConversations({
@@ -144,8 +143,8 @@ export async function rig(
   })
   const failures = vi.fn((failure: StructuredAgentSessionRequestFailure) => {
     const operation = escalateChatWorkerError(failure, {
-      db: () => db,
-      enabled: () => enabled,
+      getDb: () => db,
+      isWaitingForMail: () => false,
       notify
     })
     if (owned) {
@@ -190,9 +189,6 @@ export async function rig(
     failures,
     deliver,
     mail: () => db.getUnreadRunMailbox(run.id, 100, ['escalation']),
-    enabled: (value: boolean) => {
-      enabled = value
-    },
     dispatch: () => dispatch,
     unassign: () => db.completeDispatch(dispatch.id),
     reassign: () => {

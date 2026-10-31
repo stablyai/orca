@@ -3,6 +3,7 @@ import type { StructuredAgentSessionRequestFailures } from './structured-agent-s
 import { registerCodexRetryRetirement } from './structured-agent-session-codex-provider-retry-retirement.spec'
 import { registerCodexRetryStop } from './structured-agent-session-codex-provider-retry-stop.spec'
 import { registerCodexRetryAdmission } from './structured-agent-session-codex-provider-retry-admission.spec'
+import { registerReleasedFailureReads } from './structured-agent-session-released-failure-read.spec'
 import {
   CALLER,
   FAILURE,
@@ -14,6 +15,7 @@ import {
   root,
   startHidden
 } from './structured-agent-session-codex-provider-retry-test-support'
+import { withEscalation } from './structured-agent-session-retry-completion-test-support'
 import { JournalStoppedTurns } from '../agent-session-journal/journal-stopped-turns'
 import { expect, it, vi } from 'vitest'
 import {
@@ -51,6 +53,194 @@ const { structuredConversationCommandRunner } = createStructuredConversationComm
 })
 
 export function registerCodexProviderRetry(get: () => Rig): void {
+  registerReleasedFailureReads(get)
+  it.each(['prepare', 'written'] as const)(
+    'admits conditional close once in the lane without cutting a refused %s retry',
+    async (phase) => {
+      const rig = get()
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      await withEscalation(rig, async (mail, drain, _complete, notify) => {
+        notify.mockImplementation(() => {
+          expect(rig.host.hasSession(SESSION)).toBe(false)
+        })
+        await root(rig)
+        const turnId = rig.turns.turnId!
+        if (phase === 'prepare') {
+          await rig.pick('auto')
+        }
+        const reply = Promise.withResolvers<unknown>()
+        const entered = vi.fn(() => reply.promise)
+        rig.codex.routes[phase === 'prepare' ? 'config/read' : 'turn/start'] = entered
+        clock()
+        await fail(rig)
+        const retry = rig.host['providerRetry']
+        const owner = retry['retries'].get(SESSION)!
+        const baseline = rig.host['clientDelivery'].requestFailures['baselines'].get(SESSION)!
+        const slot = baseline.deferred!
+        const timer = owner.timer
+        const currentResult = owner.currentResult
+        const child = owner.child
+        expect(timer).toBeDefined()
+        expect(slot.owner).toBe(owner)
+        const connection = rig.codex.connections.at(-1)!
+        const retire = vi.spyOn(retry, 'retire')
+        const clear = vi.spyOn(globalThis, 'clearTimeout')
+        const aborts = rig.host['runtimeState'].acquireAborts
+        const abort = aborts.abort.bind(aborts)
+        const cut = vi.spyOn(aborts, 'abort').mockImplementation((...args) => {
+          expect(retry['retries'].has(SESSION)).toBe(false)
+          expect(baseline.deferred).toBeUndefined()
+          return abort(...args)
+        })
+        const close = vi.spyOn(connection, 'close')
+        const pending = () => {
+          expect(retry['retries'].get(SESSION)).toBe(owner)
+          expect(baseline.deferred).toBe(slot)
+          expect(slot.owner).toBe(owner)
+          expect(owner.currentResult).toBe(currentResult)
+          expect(owner.abort.signal.aborted).toBe(false)
+          expect(owner.child).toBe(child)
+          expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child).toBe(child)
+          expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal).toBe(
+            owner.journal
+          )
+          expect(connection.closed).toBe(false)
+          expect(child.close).toBeUndefined()
+          expect(retire).not.toHaveBeenCalled()
+          expect(cut).not.toHaveBeenCalled()
+          expect(close).not.toHaveBeenCalled()
+          expect(rig.failures).toHaveLength(0)
+        }
+        const refuse = async (mode: 'false' | 'throw') => {
+          const claim = {
+            phase: owner.phase,
+            written: owner.written,
+            timer: owner.timer,
+            attempt: owner.attempt,
+            startedTurnRef: owner.startedTurnRef
+          }
+          const held = Promise.withResolvers<void>()
+          const laneEntered = Promise.withResolvers<void>()
+          const prior = rig.host['serialize'](SESSION, async () => {
+            laneEntered.resolve()
+            await held.promise
+          })
+          await laneEntered.promise
+          const admit = vi.fn(() => {
+            pending()
+            if (mode === 'throw') {
+              throw undefined
+            }
+            return false
+          })
+          const closing = rig.host.close(SESSION, 'evict', admit).then(
+            () => ({ kind: 'returned' as const }),
+            (error: unknown) => ({ kind: 'threw' as const, error })
+          )
+          try {
+            await Promise.resolve()
+            expect(admit).not.toHaveBeenCalled()
+            pending()
+            held.resolve()
+            await prior
+            const outcome = await closing
+            expect(admit).toHaveBeenCalledOnce()
+            if (mode === 'throw') {
+              expect(outcome).toEqual({ kind: 'threw', error: undefined })
+            } else {
+              expect(outcome).toMatchObject({
+                kind: 'threw',
+                error: new Error('The user kept this chat open.')
+              })
+            }
+            pending()
+            expect(owner).toMatchObject(claim)
+            await drain()
+            expect(mail()).toHaveLength(0)
+          } finally {
+            held.resolve()
+            await prior
+            await closing
+          }
+        }
+        let closing: Promise<void> | undefined
+        let bodyFailed = false
+        let bodyError: unknown
+        const cleanupErrors: unknown[] = []
+        try {
+          await refuse('false')
+          await refuse('throw')
+          expect(owner.timer).toBe(timer)
+          expect(clear).not.toHaveBeenCalledWith(timer)
+          await vi.advanceTimersByTimeAsync(2_000)
+          expect(entered).toHaveBeenCalledOnce()
+          expect(owner.timer).toBeUndefined()
+          expect(owner.phase).toBe('starting')
+          expect(owner.written).toBe(phase === 'written')
+          expect(hidden(rig)).toHaveLength(phase === 'written' ? 1 : 0)
+          await refuse('false')
+          await refuse('throw')
+          const admit = vi.fn(() => {
+            pending()
+            return true
+          })
+          closing = rig.host.close(SESSION, 'evict', admit)
+          await vi.advanceTimersByTimeAsync(0)
+          expect(admit).toHaveBeenCalledOnce()
+          expect(retire).toHaveBeenCalledWith(SESSION)
+          expect(cut).toHaveBeenCalled()
+          expect(owner.abort.signal.aborted).toBe(true)
+          expect(baseline.deferred).toBeUndefined()
+          reply.resolve(phase === 'prepare' ? rig.config : { turn: { id: 'closed-H' } })
+          await closing
+          expect(connection.closed).toBe(true)
+          expect(rig.host.hasSession(SESSION)).toBe(false)
+          await expect(owner.journal.readInOrder(() => null)).rejects.toMatchObject({
+            code: 'journal_closed'
+          })
+          await drain()
+          const id = agentJournalItemKey(codexTurnLifecycleIdentity(SESSION, turnId))
+          expect(rig.failures).toMatchObject([{ id, outcome: 'failure' }])
+          expect(mail()).toHaveLength(1)
+          expect(JSON.parse(mail()[0]!.payload ?? '{}')).toMatchObject({ requestId: id })
+          expect(new Set(mail().map((message) => message.id)).size).toBe(1)
+          expect(notify).toHaveBeenCalledOnce()
+          await vi.advanceTimersByTimeAsync(90_000)
+          expect(hidden(rig)).toHaveLength(phase === 'written' ? 1 : 0)
+          expect(rig.failures).toHaveLength(1)
+          expect(mail()).toHaveLength(1)
+        } catch (error) {
+          bodyFailed = true
+          bodyError = error
+        } finally {
+          reply.resolve(rig.config)
+          for (const cleanup of [
+            () => closing,
+            () => close.mockRestore(),
+            () => cut.mockRestore(),
+            () => clear.mockRestore(),
+            () => retire.mockRestore()
+          ]) {
+            try {
+              await cleanup()
+            } catch (error) {
+              cleanupErrors.push(error)
+            }
+          }
+        }
+        if (cleanupErrors.length > 0) {
+          throw new AggregateError(
+            bodyFailed ? [bodyError, ...cleanupErrors] : cleanupErrors,
+            'conditional close witness cleanup failed'
+          )
+        }
+        if (bodyFailed) {
+          throw bodyError
+        }
+      })
+    }
+  )
+
   registerCodexRetryAdmission(get)
 
   registerCodexRetryStop(get)
@@ -85,7 +275,11 @@ export function registerCodexProviderRetry(get: () => Rig): void {
     rig.host['deps'].onRequestFailure = (failure) => {
       onFailure?.(failure)
       escalations.push(
-        escalateChatWorkerError(failure, { enabled: () => true, db: () => db, notify: () => {} })
+        escalateChatWorkerError(failure, {
+          getDb: () => db,
+          isWaitingForMail: () => false,
+          notify: () => {}
+        })
       )
     }
     try {

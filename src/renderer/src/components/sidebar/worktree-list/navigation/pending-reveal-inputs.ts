@@ -2,6 +2,7 @@ import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-o
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
@@ -15,7 +16,12 @@ import type {
   PinnedWorktreeDisplayPolicy,
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
-import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
+import { getFolderWorkspaceRevealGroupKeys, sidebarWorkspaceStillExists } from './folder-reveal'
+import {
+  findPreferredRenderRowIndexForWorktree,
+  findPreferredRenderRowIndexForWorktreeIdentity,
+  rowKeyMatchesRenderRow
+} from './render-row-lookup'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
 
 export const MAX_REVEAL_RETRIES = 8
@@ -24,8 +30,8 @@ export type PendingSidebarRevealArgs = {
   occurrencePlan?: WorktreeOccurrencePlan<Worktree>
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
-  clearPendingRevealWorktreeId: () => void
-  clearPendingRevealSidebarRow: () => void
+  clearPendingRevealWorktreeId: (expected?: PendingSidebarWorktreeReveal | null) => void
+  clearPendingRevealSidebarRow: (expected?: PendingSidebarRowReveal | null) => void
   agentSendTargetWorktreeId: string | null
   renderRows: RenderRow[]
   virtualizer: Virtualizer<HTMLDivElement, HTMLDivElement>
@@ -104,4 +110,41 @@ export function resolvePendingSidebarReveal(args: {
     return 'scroll-and-clear'
   }
   return args.targetWorktreeStillExists ? 'keep-pending' : 'clear'
+}
+
+export function resolvePendingWorktreeRevealTarget(
+  args: Pick<
+    PendingSidebarRevealArgs,
+    'renderRows' | 'worktrees' | 'folderWorkspaces' | 'pinnedDisplayPolicy'
+  >,
+  request: PendingSidebarWorktreeReveal
+) {
+  const rowKey = request.rowKey
+  const targetIndex = rowKey
+    ? args.renderRows.findIndex((row) => rowKeyMatchesRenderRow(row, rowKey))
+    : request.executionHostId
+      ? findPreferredRenderRowIndexForWorktreeIdentity(
+          args.renderRows,
+          { id: request.worktreeId, hostId: request.executionHostId },
+          args.pinnedDisplayPolicy
+        )
+      : findPreferredRenderRowIndexForWorktree(
+          args.renderRows,
+          request.worktreeId,
+          args.pinnedDisplayPolicy
+        )
+  const outcome = rowKey
+    ? targetIndex === -1
+      ? 'clear'
+      : 'scroll-and-clear'
+    : resolvePendingSidebarReveal({
+        targetIndex,
+        targetWorktreeStillExists: sidebarWorkspaceStillExists(
+          request.worktreeId,
+          args.worktrees,
+          selectFolderWorkspaces(args),
+          request.executionHostId
+        )
+      })
+  return { targetIndex, outcome }
 }

@@ -30,15 +30,15 @@ export function openTestJournalHostDatabase(stateDirectory: string): JournalHost
   return database
 }
 
-export function closeTestJournalHostDatabase(stateDirectory: string): void {
+export async function closeTestJournalHostDatabase(stateDirectory: string): Promise<void> {
   const directory = resolve(stateDirectory)
-  opened.get(directory)?.close()
+  await opened.get(directory)?.close()
   opened.delete(directory)
 }
 
-export function closeTestJournalHostDatabases(): void {
+export async function closeTestJournalHostDatabases(): Promise<void> {
   for (const database of opened.values()) {
-    database.close()
+    await database.close()
   }
   opened.clear()
 }
@@ -73,9 +73,9 @@ export function createTrackedJournalOpener(options: { scoped?: true } = {}): Tra
       if (!profiles.has(owner)) {
         profiles.set(owner, new Set())
         const close = owner.close.bind(owner)
-        owner.close = () => {
+        owner.close = async () => {
           try {
-            close()
+            await close()
           } catch (error) {
             const directory = resolve(owner.stateDirectory)
             retained.set(directory, [...(retained.get(directory) ?? []), error])
@@ -92,8 +92,8 @@ export function createTrackedJournalOpener(options: { scoped?: true } = {}): Tra
       if (!users.has(journal)) {
         users.add(journal)
         const close = journal.close.bind(journal)
-        journal.close = () => {
-          const operation = close()
+        journal.close = (...args) => {
+          const operation = close(...args)
           void operation.then(
             () => completed.add(journal),
             () => {}
@@ -122,7 +122,7 @@ export function createTrackedJournalOpener(options: { scoped?: true } = {}): Tra
         }
         if (errors.length === 0 && !retained.has(directory)) {
           try {
-            owner.close()
+            await owner.close()
             if (opened.get(directory) === owner) {
               opened.delete(directory)
             }
@@ -218,7 +218,7 @@ export function createTrackedJournalOpener(options: { scoped?: true } = {}): Tra
     },
     closeAll: async () => {
       await Promise.allSettled(journals.splice(0).map((journal) => journal.close()))
-      closeTestJournalHostDatabases()
+      await closeTestJournalHostDatabases()
     }
   }
 }

@@ -268,7 +268,7 @@ export async function createQueuedMessageTestRig(options: QueuedMessageRigOption
         return disposeOwned()
       }
       await host.flushAllStreamedEvents()
-      closeTestJournalHostDatabase(root)
+      await closeTestJournalHostDatabase(root)
       await rm(root, { recursive: true, force: true })
     }
 

@@ -4,6 +4,10 @@ import type {
   AccountedRequest
 } from './structured-agent-session-request-failure-observation'
 import { observeRequestFailures } from './structured-agent-session-request-failure-observation'
+import {
+  requestFailureReader,
+  forgetRequestFailureBaseline
+} from './structured-agent-session-released-failure-read'
 import { structuredAgentSessionProviderRetryCompletion } from './structured-agent-session-provider-retry'
 import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
@@ -54,10 +58,16 @@ export class StructuredAgentSessionRequestFailures {
     }
   ) {}
 
-  forget = (sessionId: string): void => {
-    this.baselines.delete(sessionId)
+  forget = (
+    sessionId: string,
+    disposition: 'abandon' | 'retire' = 'abandon'
+  ): (() => void) | undefined =>
+    forgetRequestFailureBaseline(this.baselines, sessionId, disposition)
+  clear = (): void => {
+    for (const id of this.baselines.keys()) {
+      this.forget(id)
+    }
   }
-  clear = (): void => this.baselines.clear()
 
   observe: (
     sessionId: string,
@@ -185,7 +195,12 @@ export class StructuredAgentSessionRequestFailures {
     disposition: ProviderRetryDisposition
   ): void => {
     const baseline = this.baselines.get(sessionId)
-    if (!baseline || baseline.journal !== journal || baseline.epoch !== journal.epoch) {
+    if (
+      !baseline ||
+      baseline.releasedRead?.retiring ||
+      baseline.journal !== journal ||
+      baseline.epoch !== journal.epoch
+    ) {
       return
     }
     if (disposition === 'abandon' || disposition === 'consume') {
@@ -204,7 +219,14 @@ export class StructuredAgentSessionRequestFailures {
       return
     }
     // Retry observes a committed terminal before normal accounting in this same tick.
-    this.account(sessionId, baseline, this.request(baseline, 'turn', completion.itemId), false)
+    this.account(
+      sessionId,
+      baseline,
+      this.request(baseline, 'turn', completion.itemId),
+      false,
+      false,
+      true
+    )
     const slot = baseline.deferred
     if (!slot || slot.owner !== completion.owner) {
       return
@@ -212,7 +234,7 @@ export class StructuredAgentSessionRequestFailures {
     baseline.deferred = undefined
     const final = this.request(baseline, slot.request.kind, slot.request.id)
     if (final) {
-      this.account(sessionId, baseline, final, false, true)
+      this.account(sessionId, baseline, final, false, true, true)
     }
   }
 
@@ -221,7 +243,8 @@ export class StructuredAgentSessionRequestFailures {
     baseline: Baseline,
     request: AccountedRequest | null,
     historical: boolean,
-    release = false
+    release = false,
+    releasedReport = false
   ): void {
     if (!request) {
       return
@@ -257,7 +280,7 @@ export class StructuredAgentSessionRequestFailures {
       return
     }
     mark.disposition = 'reported'
-    const { journal, epoch } = baseline
+    const { journal } = baseline
     const session = this.deps.sessions.get(sessionId)
     const child = session?.child
     const fence = journal.itemFence(request.id)
@@ -272,6 +295,7 @@ export class StructuredAgentSessionRequestFailures {
         .find(({ clientMessageId: id }) => agentJournalSubmissionKey(id) === opener) ?? {}
     const generation = child?.fence === fence ? child?.generation : undefined
     const end = outcome === 'interruption' ? session?.lastEndedChild : undefined
+    const read = requestFailureReader(this.baselines, sessionId, baseline, releasedReport)
     this.deps.onFailure({
       sessionId,
       agent: journal.agent,
@@ -283,12 +307,7 @@ export class StructuredAgentSessionRequestFailures {
         clientMessageId && generation && fence !== undefined
           ? this.deps.capturePendingOutput?.({ sessionId, clientMessageId, fence, generation })
           : undefined,
-      read: () =>
-        journal.readInOrder(() =>
-          this.baselines.get(sessionId) === baseline && journal.epoch === epoch
-            ? journal.snapshot()
-            : null
-        )
+      read
     })
   }
 }

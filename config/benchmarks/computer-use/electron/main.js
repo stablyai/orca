@@ -20,8 +20,16 @@ app.whenReady().then(() => {
     title: 'BenchElectron',
     webPreferences: { nodeIntegration: true, contextIsolation: false, backgroundThrottling: false }
   })
+  const nativeWindowId =
+    process.platform === 'linux' ? w.getNativeWindowHandle().readUInt32LE() : null
   ipcMain.on('st', (_event, state) => {
-    const data = JSON.stringify({ ...state, instance, activeForm: w.isFocused(), pid: process.pid })
+    const data = JSON.stringify({
+      ...state,
+      instance,
+      activeForm: w.isFocused(),
+      pid: process.pid,
+      nativeWindowId
+    })
     try {
       fs.writeFileSync(path.join(dir, 'state.json.tmp'), data)
       fs.renameSync(path.join(dir, 'state.json.tmp'), path.join(dir, 'state.json'))
@@ -42,17 +50,20 @@ app.whenReady().then(() => {
   const { ipcRenderer } = require('electron');
   const field = document.getElementById('field'), decoy = document.getElementById('decoy');
   const color = document.getElementById('color');
-  let count = 0, returns = 0, ack = null, seq = 0;
-  document.getElementById('button').onclick = () => count++;
-  field.addEventListener('keydown', event => { if (event.key === 'Enter') returns++ });
+  let count = 0, returns = 0, ack = null, seq = 0, submittedText = null, clickedColor = null;
+  document.getElementById('button').onclick = () => { count++; clickedColor = color.value };
+  field.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { returns++; submittedText = field.value }
+  });
   function report() {
-    ipcRenderer.send('st', { count, returns, ack, seq: ++seq, text: field.value, decoyText: decoy.value,
+    ipcRenderer.send('st', { count, returns, submittedText, clickedColor, ack, seq: ++seq, text: field.value, decoyText: decoy.value,
       top: window.scrollY, combo: color.value, selStart: field.selectionStart,
       selLen: field.selectionEnd - field.selectionStart, check: false, menuHits: 0, dropOpen: false,
       logicalFocus: document.activeElement === field ? 'field' : document.activeElement === decoy ? 'decoy' : 'other' });
   }
   ipcRenderer.on('cmd', (_event, cmd) => {
     count = returns = 0;
+    submittedText = clickedColor = null;
     field.value = cmd.task === 'replace_submit' ? 'hello' : '';
     field.setSelectionRange(field.value.length, field.value.length);
     decoy.value = 'untouched'; decoy.setSelectionRange(9, 9);
@@ -64,6 +75,17 @@ app.whenReady().then(() => {
   setInterval(report, 30);
   </script></body></html>`)}`
   )
+  if (process.env.BENCH_FOCUS_SIBLING === '1') {
+    const sibling = new BrowserWindow({
+      x: 400,
+      y: 300,
+      width: 300,
+      height: 200,
+      title: 'BenchSibling'
+    })
+    sibling.loadURL('data:text/html,<title>BenchSibling</title><input aria-label="sibling">')
+    w.on('closed', () => sibling.close())
+  }
   setInterval(() => {
     const cmdPath = path.join(dir, 'cmd')
     if (!fs.existsSync(cmdPath)) {

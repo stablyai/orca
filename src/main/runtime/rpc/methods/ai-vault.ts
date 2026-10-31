@@ -49,11 +49,13 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultSearchRequestSchema,
     handler: (params, context) => {
-      const response = searchSessionService(params, context.clientKind ? 'relay' : 'runtime')
+      const transport = context.clientKind ? 'relay' : 'runtime'
+      const response = searchSessionService(params, transport)
       // A client that reads no structured sessions keeps the transcript hit, as before.
       return supportsStructuredAgentSessions(context)
         ? searchWithStructuredOwners(response, {
             ensureHost: () => context.runtime.ensureStructuredAgentSessionHost(),
+            transport,
             opensChat: (agent) => clientOpensStructuredChatFromHistory(context, agent)
           })
         : response

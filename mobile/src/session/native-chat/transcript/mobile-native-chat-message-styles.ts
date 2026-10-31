@@ -28,7 +28,7 @@ export const styles = themedStyleSheet(() => ({
     backgroundColor: colors.chatUserSurface,
     borderWidth: 1,
     borderColor: colors.chatUserBorder,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
@@ -97,7 +97,7 @@ export const styles = themedStyleSheet(() => ({
   imageThumb: {
     width: 200,
     height: 150,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle

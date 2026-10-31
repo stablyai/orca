@@ -2,12 +2,13 @@
 
 import type { ReactElement, ReactNode } from 'react'
 import { cloneElement, isValidElement, StrictMode } from 'react'
-import { act, render, cleanup, fireEvent } from '@testing-library/react'
+import { act, render, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
 import SortableTab from './SortableTab'
+import { ContextMenuContent } from '../ui/context-menu'
 import { requestTerminalTabRename } from './terminal-tab-rename-request'
 
 type ProbeState = {
@@ -70,19 +71,6 @@ vi.mock('@/components/ui/tooltip', () => ({
     )
 }))
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuContent: () => null,
-  DropdownMenuItem: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSeparator: () => null,
-  DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuLabel: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSub: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSubContent: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSubTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
-}))
-
 vi.mock('@/components/ui/input', () => ({
   Input: (props: Record<string, unknown>) => <input {...props} />
 }))
@@ -98,16 +86,16 @@ vi.mock('./TerminalTabLeadingIcon', () => ({
 const menuCompletions: (() => void)[] = []
 vi.mock('./SortableTabContextMenu', () => ({
   SortableTabContextMenu: ({
-    open,
     onSessionSwitchComplete
   }: {
-    open: boolean
     onSessionSwitchComplete: () => void
   }) => {
-    if (open) {
-      menuCompletions.push(onSessionSwitchComplete)
-    }
-    return open ? <div data-testid="open-menu" /> : null
+    menuCompletions.push(onSessionSwitchComplete)
+    return (
+      <ContextMenuContent>
+        <div data-testid="open-menu" />
+      </ContextMenuContent>
+    )
   }
 }))
 
@@ -231,14 +219,14 @@ it('retires completion ownership for repeated gestures and batched blur/reopen',
   const first = menuCompletions.at(-1)!
   act(() => fireEvent.contextMenu(slot))
   act(first)
-  expect(container.querySelector('[data-testid="open-menu"]')).not.toBeNull()
+  expect(screen.queryByTestId('open-menu')).not.toBeNull()
   const second = menuCompletions.at(-1)!
   act(() => {
     window.dispatchEvent(new Event('blur'))
     fireEvent.contextMenu(slot)
   })
   act(second)
-  expect(container.querySelector('[data-testid="open-menu"]')).not.toBeNull()
+  expect(screen.queryByTestId('open-menu')).not.toBeNull()
   act(menuCompletions.at(-1)!)
-  expect(container.querySelector('[data-testid="open-menu"]')).toBeNull()
+  expect(screen.queryByTestId('open-menu')).toBeNull()
 })

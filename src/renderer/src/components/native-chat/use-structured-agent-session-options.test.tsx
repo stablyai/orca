@@ -217,7 +217,7 @@ describe('useStructuredAgentSessionOptions', () => {
     unmount()
   })
 
-  it('treats method_not_found and forbidden as no list: the built-in one, naming nothing', async () => {
+  it('treats method_not_found and forbidden as unavailable discovery without hiding saved input', async () => {
     for (const code of ['method_not_found', 'forbidden']) {
       answer({ modelCatalog: () => Promise.reject(new FakeRpcCallError(code)) })
       const { result, unmount } = renderOptions(
@@ -225,11 +225,10 @@ describe('useStructuredAgentSessionOptions', () => {
         mutateWith(async () => null).mutate
       )
       await waitFor(() =>
-        expect(descriptor(result.current.optionSnapshot, 'model')?.settable).toBe(true)
+        expect(result.current.sendSource.optionStateRef.current.catalogSource).toBe('builtin')
       )
       expect(modelChoiceCount(result.current.optionSnapshot)).toBeGreaterThan(0)
-      // Wait for host labels instead of flashing built-in labels for saved picks.
-      expect(currentValue(result.current.optionSnapshot, 'model')).toBeNull()
+      expect(currentValue(result.current.optionSnapshot, 'model')).toBe(SEED.model)
       unmount()
     }
   })

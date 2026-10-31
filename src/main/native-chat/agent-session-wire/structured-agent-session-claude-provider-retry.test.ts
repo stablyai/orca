@@ -27,6 +27,16 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { structuredAgentSessionProviderRetryPending } from './structured-agent-session-provider-retry'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { OrchestrationDb } from '../../runtime/orchestration/db'
+import { createRootDispatch } from '../../runtime/orchestration/db/root-dispatch-test-fixture'
+import { escalateChatWorkerError } from '../../runtime/orchestration/chat-worker-error-escalation'
+import { chatRequestError } from '../../runtime/orchestration/chat-worker-error-words'
+import {
+  structuredWorkerIdentities,
+  mintStructuredWorkerHandle,
+  mintStructuredWorkerPaneKey
+} from '../../runtime/structured-worker-identity'
+import type { StructuredAgentSessionRequestFailure } from './structured-agent-session-request-failures'
 
 const bytes = readFileSync(
   join(__dirname, '../../claude/__fixtures__/claude-lifecycle-capture-api-overloaded.jsonl')
@@ -260,6 +270,157 @@ it('settles genuine 2.1.312 numeric 529 through adapter/result/turn writer, then
       .snapshot()
       .items.filter((item) => item.body.kind === 'message' && item.body.role === 'user')
   ).toHaveLength(1)
+})
+it('reads a released Claude hidden result after its real post-terminal diagnostic commits', async () => {
+  const db = new OrchestrationDb(':memory:')
+  const worker = structuredWorkerIdentities.register({
+    handle: mintStructuredWorkerHandle(),
+    sessionId: SESSION,
+    agent: 'claude',
+    paneKey: mintStructuredWorkerPaneKey(SESSION),
+    processIncarnation: `structured:${SESSION}`,
+    worktreeId: 'workspace-1',
+    hostScope: { kind: 'local', hostId: 'local' }
+  })
+  const run = db.createRun({
+    objective: 'released result evidence',
+    coordinatorHandle: 'term_coord',
+    coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
+  })
+  createRootDispatch(
+    db,
+    db.createTask({ spec: 'work', runId: run.id }).id,
+    worker.handle,
+    worker.paneKey
+  )
+  const requests: StructuredAgentSessionRequestFailure[] = []
+  const pending: Promise<void>[] = []
+  const notify = vi.fn<(handle: string, messageType: string) => void>()
+  const order: string[] = []
+  const previous = host.deps.onRequestFailure
+  const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const committed = journal['onCommitted']
+  const originalRead = journal.readInOrder
+  const readInOrder = originalRead.bind(journal)
+  const captureReadSource = journal.captureReadSource
+  const snapshot = journal.snapshot
+  let materializing: StructuredAgentSessionRequestFailure['read'] | undefined
+  const materializations: {
+    read: StructuredAgentSessionRequestFailure['read']
+    snapshot: ReturnType<typeof journal.snapshot>
+  }[] = []
+  const sentence = 'The exact hidden result failed: diagnostic detail saved after terminal.'
+  host.deps.onRequestFailure = (request) => {
+    previous?.(request)
+    requests.push(request)
+    expect(readAgentJournalTurn(journal.itemBody(request.id) ?? undefined)?.state).toBe('completed')
+    order.push('terminal-release')
+    pending.push(
+      escalateChatWorkerError(request, { getDb: () => db, isWaitingForMail: () => false, notify })
+    )
+  }
+  const release = journal.observeCommits((rows, applied) => {
+    committed?.(rows, applied)
+    if (
+      rows?.some(
+        (row) => row.kind === 'item' && row.body.kind === 'status' && row.body.text === sentence
+      )
+    ) {
+      order.push('diagnostic-commit')
+    }
+  })
+  journal.captureReadSource = () => {
+    const currentSource = captureReadSource()
+    return () => {
+      const current = currentSource()
+      if (current) {
+        materializing =
+          host['clientDelivery'].requestFailures['baselines'].get(SESSION)?.releasedRead?.read
+      }
+      return current
+    }
+  }
+  journal.readInOrder = <T>(read: () => T): Promise<T> =>
+    readInOrder(() => {
+      const previousMaterializing = materializing
+      materializing = undefined
+      try {
+        return read()
+      } finally {
+        materializing = previousMaterializing
+      }
+    })
+  journal.snapshot = () => {
+    const value = snapshot()
+    if (materializing) {
+      materializations.push({ read: materializing, snapshot: value })
+      order.push('materialize')
+    }
+    return value
+  }
+  try {
+    await failCaptured()
+    expect(requests).toHaveLength(0)
+    expect(db.getUnreadRunMailbox(run.id, 100, ['escalation'])).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(2_000)
+    await host.flushStreamedEvents(SESSION)
+    const sent = claude.connections[0]!.sent.filter((frame) => frame.type === 'user')
+    expect(sent).toHaveLength(2)
+    expect(sent[1]).toMatchObject({
+      message: { content: [{ type: 'text', text: 'Please continue.' }] }
+    })
+    const hidden = journal.runningTurn()!.item
+    expect(host['providerRetry']['retries'].get(SESSION)?.currentResult?.itemId).toBe(hidden.itemId)
+    order.length = 0
+    claude.connections[0]!.handlers.onMessage?.({
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      session_id: sessionId,
+      uuid: 'result-only-hidden-failure',
+      api_error_status: 400,
+      result: sentence,
+      duration_ms: 10
+    })
+    await host.flushStreamedEvents(SESSION)
+    await Promise.all(pending)
+    expect(requests).toMatchObject([{ id: hidden.itemId, outcome: 'failure' }])
+    expect(order).toEqual(['terminal-release', 'diagnostic-commit', 'materialize'])
+    expect(materializations).toHaveLength(1)
+    expect(materializations[0]!.read).toBe(requests[0]!.read)
+    expect(chatRequestError(materializations[0]!.snapshot, requests[0]!)?.text).toBe(sentence)
+    const saved = chatRequestError(journal.snapshot(), requests[0]!)
+    expect(saved?.text).toBe(sentence)
+    const mail = () => db.getUnreadRunMailbox(run.id, 100, ['escalation'])
+    expect(mail()).toHaveLength(1)
+    expect(mail()[0]?.body).toContain(`Error: ${sentence}`)
+    expect(JSON.parse(mail()[0]!.payload ?? '{}')).toMatchObject({
+      requestId: hidden.itemId,
+      error: sentence
+    })
+    expect(notify).toHaveBeenCalledOnce()
+    expect(structuredAgentSessionProviderRetryPending(journal)).toBe(false)
+    expect(
+      host['clientDelivery'].requestFailures['baselines'].get(SESSION)?.releasedRead
+    ).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(90_000)
+    expect(claude.connections[0]!.sent.filter((frame) => frame.type === 'user')).toHaveLength(2)
+    expect(requests).toHaveLength(1)
+    expect(mail()).toHaveLength(1)
+  } finally {
+    host.deps.onRequestFailure = previous
+    journal.readInOrder = originalRead
+    journal.captureReadSource = captureReadSource
+    journal.snapshot = snapshot
+    release()
+    journal['onCommitted'] = committed
+    try {
+      await Promise.all(pending)
+    } finally {
+      structuredWorkerIdentities.forget(worker.handle)
+      db.close()
+    }
+  }
 })
 it.each(['preparation', 'replay'] as const)(
   'accepts new input while hidden Claude %s is held and never revives the old claim',

@@ -835,9 +835,7 @@
         "jira": {
           "856083302c": "Jira 接続は新規リクエストに置き換えられました。"
         },
-        "linear": {
-          "37d36984d0": "Linear 接続は新規リクエストに置き換えられました。"
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "プロファイルの作成に失敗しました",
@@ -7740,19 +7738,6 @@
           "191ac34567": "Agent オーケストレーション",
           "nestedWorkerDepthTitle": "ネストされたワーカーの深さ",
           "nestedWorkerDepthDescription": "起動されたワーカーが、さらに自分のワーカーを起動できる世代数です。1 にすると Agent ツリーはフラットになります。コーディネーターがワーカーを起動し、そのワーカーはワーカーを起動しません。",
-          "chatErrorEscalationTitle": "チャットのエラーをコーディネーターに知らせる",
-          "chatErrorEscalationDescription": "割り当てられた Agent がターンを終了させるエラーに遭遇したとき、そのエラーをそのまま割り当て元のコーディネーターに送ります。タスクは Agent に割り当てられたままです。チャット UI で動作する Agent でのみ機能します。",
-          "chatErrorEscalationNeedsChat": "使用するには、試験的機能の設定でチャット UI をオンにしてください。",
-          "chatErrorEscalationKeywordError": "エラー",
-          "chatErrorEscalationKeywordChat": "チャット",
-          "heartbeatTitle": "ワーカーのハートビート",
-          "heartbeatDescription": "割り当てられたワーカーが数分ごとに状況を知らせるので、コーディネーターは作業中の Agent と応答しなくなった Agent を見分けられます。オフにするとコーディネーターへのメッセージは減りますが、その定期連絡がなくなります。変更後に割り当てられたワーカーに適用されます。",
-          "heartbeatKeywordHeartbeat": "ハートビート",
-          "heartbeatKeywordStalled": "停止",
-          "heartbeatKeywordInterval": "間隔",
-          "heartbeatIntervalTitle": "ハートビートの間隔",
-          "heartbeatIntervalDescription": "間隔を短くするとコーディネーターへの定期連絡が増えますが、メッセージも増えます。長くするとメッセージは減りますが、連絡の間隔が空きます。変更後に割り当てられたワーカーに適用されます。",
-          "heartbeatIntervalSuffix": "分",
           "7bc082f4de": "インストールコマンドのコピー"
         },
         "OrchestrationSetupCard": {
@@ -11420,7 +11405,6 @@
         },
         "PluginThemeUseNow": {
           "label": "今すぐ使う:",
-          "useName": "今すぐ使う: {{value0}}",
           "useForLight": "ライトで使う:",
           "useForDark": "ダークで使う:"
         },
@@ -12545,7 +12529,6 @@
           "previous": "以前のバージョン",
           "updated": "更新日",
           "license": "ライセンス",
-          "homepage": "ホームページ",
           "whatsNew": "新機能",
           "hashCopied": "コンテンツハッシュをコピーしました",
           "hashCopyFailed": "ハッシュをコピーできませんでした。"
@@ -12666,6 +12649,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "この言語パックは未完成の部分が多いため、切り替えられません。"
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} は別のリポジトリから提供されています",
+          "accessTitle": "{{value0}} {{value1}} がより多くのアクセスを求めています",
+          "manyTitle": "{{value0}} 件のプラグイン更新が確認待ちです",
+          "oneDescription": "公開元: {{value0}}。確認するまで更新されません。",
+          "manyDescription": "確認するまで更新されません。",
+          "review": "確認",
+          "dismiss": "閉じる"
         }
       },
       "right": {
@@ -17904,6 +17896,13 @@
           "description": "{{origin}} はユーザー名とパスワードを要求しています。",
           "retry": "ユーザー名またはパスワードが正しくありません。"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} の内容",
+          "anonymousTitle": "このページの内容",
+          "confirm": "OK",
+          "cancel": "キャンセル",
+          "answer": "回答"
+        },
         "sitePermission": {
           "label": {
             "camera": "カメラ",
@@ -19583,6 +19582,10 @@
       "caution": "注意"
     },
     "automations": {
+      "openIn": "開く場所",
+      "chat": "チャット",
+      "terminal": "ターミナル",
+      "runChatUnavailable": "実行チャットを利用できません。ワークスペースを表示しています。保存済みの出力は実行の詳細に残っています。",
       "runTerminalUnavailable": "実行ターミナルを利用できません。"
     },
     "jiraIssueTitleField": {
@@ -21983,12 +21986,7 @@
       "fetchMore": "さらに読み込む",
       "connectionFailed": "接続に失敗しました",
       "listLabel": "Linear リスト",
-      "projectsLoadFailed": "プロジェクトを読み込めませんでした。",
       "projectNotFound": "プロジェクトが見つかりませんでした。",
-      "projectLoadFailed": "プロジェクトを読み込めませんでした。",
-      "projectIssuesLoadFailed": "プロジェクトの Issue を読み込めませんでした。",
-      "viewsLoadFailed": "ビューを読み込めませんでした。",
-      "viewContentsLoadFailed": "ビューの内容を読み込めませんでした。",
       "issuesLoadFailed": "Linear の Issue を読み込めませんでした。",
       "apiKeyHint": "Orca で使う Linear ワークスペースの個人 API キーを貼り付けてください。すでに接続済みの場合、保存されたキーを置き換えます。",
       "remoteKeyStorage": "このキーは現在のリモートランタイムに保存されます。",
@@ -22612,5 +22610,9 @@
       "needsPermission": "Agent に許可が必要です",
       "statusStale": "Agent のステータスが古くなっています"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "WSL ディストリビューション {{distro}} が停止しているため、Orca はこのターミナルを起動しませんでした。ディストリビューションを起動してから、もう一度お試しください。",
+    "terminalUnverifiable": "WSL ディストリビューション {{distro}} が実行中か確認できなかったため、Orca はこのターミナルを起動しませんでした。ディストリビューションを起動してから、もう一度お試しください。"
   }
 }

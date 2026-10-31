@@ -1,7 +1,6 @@
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
 import type {
-  LinearIssueListReadArgs,
   LinearFetchOptions,
   LinearSlice,
   LinearSliceGet,
@@ -12,258 +11,118 @@ import {
   credentialDecryptionMessage,
   isIntegrationCredentialDecryptionError
 } from '../../../../../shared/integration-credential-errors'
-import {
-  isLinearIssueAttributeFilterUnsupportedError,
-  linearListIssues,
-  linearSearchIssues
-} from '@/runtime/runtime-linear-client'
+import { linearListIssues, linearSearchIssues } from '@/runtime/runtime-linear-client'
 import {
   evictStaleEntries,
-  emptyLinearCollection,
   getSelectedWorkspaceId,
-  isFresh,
   linearListCacheKey,
-  linearSearchCacheKey,
-  looksLikeAuthError,
-  shouldRefreshStatusAfterRead
+  linearSearchCacheKey
 } from './linear-cache'
+import { inflightListRequests, inflightSearchRequests } from './linear-slice-request-state'
 import {
-  getLinearCacheGeneration,
-  getLinearMutationGeneration,
-  inflightListRequests,
-  inflightSearchRequests,
-  type InflightLinearListRequest,
-  type InflightLinearPlainListRequest
-} from './linear-slice-request-state'
-import {
-  canWriteLinearReadResult,
   getLinearReadScope,
   normalizeListAttributeFilter,
   scopedLinearCacheKey
 } from './linear-slice-scope'
+import { openStoreLinearIssueRead } from './linear-issue-read-actions'
+
+function throwReadError(error: unknown): never {
+  console.warn('[linear] issue read failed:', error)
+  if (isIntegrationCredentialDecryptionError(error)) {
+    throw new Error(credentialDecryptionMessage('Linear'))
+  }
+  throw error
+}
+
+export function retainFailedWorkspaceIssues(
+  result: LinearCollectionResult<LinearIssue>,
+  cached: LinearIssue[],
+  workspaceId?: string | null
+): LinearCollectionResult<LinearIssue> {
+  if (!result.errors?.length) {
+    return result
+  }
+  const failed = new Set(result.errors.map((error) => error.workspaceId))
+  const returned = new Set(result.items.map((item) => JSON.stringify([item.workspaceId, item.id])))
+  return {
+    ...result,
+    items: [
+      ...result.items,
+      ...cached.filter(
+        (issue) =>
+          failed.has(issue.workspaceId ?? workspaceId ?? '') &&
+          !returned.has(JSON.stringify([issue.workspaceId, issue.id]))
+      )
+    ]
+  }
+}
 
 export function createLinearIssueListActions(
   set: LinearSliceSet,
   get: LinearSliceGet
 ): Pick<LinearSlice, 'searchLinearIssues' | 'listLinearIssues'> {
   return {
-    searchLinearIssues: async (query: string, limit = 20, options?: LinearFetchOptions) => {
+    searchLinearIssues: (query, limit = 20, options?: LinearFetchOptions) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
-      const { contextKey } = scope
       const workspaceId = getSelectedWorkspaceId(get().linearStatus, options)
-      const cacheKey = scopedLinearCacheKey(scope, linearSearchCacheKey(workspaceId, query, limit))
-      const cached = get().linearSearchCache[cacheKey]
-      if (!options?.force && isFresh(cached)) {
-        return cached.data ?? []
-      }
-
-      const inflight = inflightSearchRequests.get(cacheKey)
-      if (
-        inflight &&
-        inflight.contextKey === contextKey &&
-        inflight.mutationGeneration === getLinearMutationGeneration() &&
-        (!options?.force || inflight.force)
-      ) {
-        return inflight.promise
-      }
-
-      let entry: InflightLinearListRequest
-      const requestCacheGeneration = getLinearCacheGeneration()
-      const requestMutationGeneration = getLinearMutationGeneration()
-      const promise = linearSearchIssues(scope.settings, query, limit, workspaceId)
-        .then((issues) => {
-          const data = issues as LinearIssue[]
-          if (
-            inflightSearchRequests.get(cacheKey) === entry &&
-            canWriteLinearReadResult(
-              contextKey,
-              requestCacheGeneration,
-              requestMutationGeneration,
-              get().settings,
-              scope.explicitSource
-            )
-          ) {
-            set((s) => ({
-              linearSearchCache: evictStaleEntries({
-                ...s.linearSearchCache,
-                [cacheKey]: { data, fetchedAt: Date.now() }
-              })
-            }))
-          }
-          return data
-        })
-        .catch((error) => {
-          console.warn('[linear] searchLinearIssues failed:', error)
-          const credentialError = isIntegrationCredentialDecryptionError(error)
-          if (
-            !(scope.explicitSource && options?.workspaceId !== undefined) &&
-            (credentialError || looksLikeAuthError(error)) &&
-            canWriteLinearReadResult(
-              contextKey,
-              requestCacheGeneration,
-              requestMutationGeneration,
-              get().settings,
-              scope.explicitSource
-            )
-          ) {
-            if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
-              void get().checkLinearConnection(true)
-            }
-            if (!credentialError) {
-              return []
-            }
-          }
-          // Why: [] would read as "no matches"; the caller shows this read's own error.
-          if (credentialError) {
-            throw new Error(credentialDecryptionMessage('Linear'))
-          }
-          return get().linearSearchCache[cacheKey]?.data ?? []
-        })
-        .finally(() => {
-          if (inflightSearchRequests.get(cacheKey) === entry) {
-            inflightSearchRequests.delete(cacheKey)
-          }
-          if (
-            !(scope.explicitSource && options?.workspaceId !== undefined) &&
-            shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
-            canWriteLinearReadResult(
-              contextKey,
-              requestCacheGeneration,
-              requestMutationGeneration,
-              get().settings,
-              scope.explicitSource
-            )
-          ) {
-            void get().checkLinearConnection(true)
-          }
-        })
-
-      entry = {
-        promise,
-        force: Boolean(options?.force),
-        generation: requestCacheGeneration,
-        contextKey,
-        mutationGeneration: requestMutationGeneration
-      }
-      inflightSearchRequests.set(cacheKey, entry)
-      return promise
+      const key = scopedLinearCacheKey(scope, linearSearchCacheKey(workspaceId, query, limit))
+      return openStoreLinearIssueRead({
+        set,
+        scope,
+        key,
+        workspaceId,
+        get,
+        force: options?.force,
+        requests: inflightSearchRequests,
+        cached: get().linearSearchCache[key],
+        dispatch: () =>
+          linearSearchIssues(scope.settings, query, limit, workspaceId).catch(throwReadError),
+        publish: (data) =>
+          set((state) => ({
+            linearSearchCache: evictStaleEntries({
+              ...state.linearSearchCache,
+              [key]: { data, fetchedAt: Date.now() }
+            })
+          }))
+      })
     },
-
-    listLinearIssues: async (args: LinearIssueListReadArgs, options?: LinearFetchOptions) => {
+    listLinearIssues: (args, options?: LinearFetchOptions) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
-      const { contextKey } = scope
       const workspaceId = getSelectedWorkspaceId(get().linearStatus, options)
       const filter = args.filter ?? 'assigned'
-      const effectiveLimit = clampLinearIssueListLimit(args.limit)
+      const limit = clampLinearIssueListLimit(args.limit)
       const attributeFilter = normalizeListAttributeFilter(args.attributeFilter)
-      const cacheKey = scopedLinearCacheKey(
+      const key = scopedLinearCacheKey(
         scope,
-        linearListCacheKey(workspaceId, filter, effectiveLimit, attributeFilter)
+        linearListCacheKey(workspaceId, filter, limit, attributeFilter)
       )
-      const cached = get().linearListCache[cacheKey]
-      if (!options?.force && isFresh(cached)) {
-        return cached.data ?? emptyLinearCollection<LinearIssue>()
-      }
-
-      const inflight = inflightListRequests.get(cacheKey)
-      if (
-        inflight &&
-        inflight.contextKey === contextKey &&
-        inflight.mutationGeneration === getLinearMutationGeneration() &&
-        (!options?.force || inflight.force)
-      ) {
-        return inflight.promise
-      }
-
-      let entry: InflightLinearPlainListRequest
-      const requestCacheGeneration = getLinearCacheGeneration()
-      const requestMutationGeneration = getLinearMutationGeneration()
-      const promise: Promise<LinearCollectionResult<LinearIssue>> = linearListIssues(
-        scope.settings,
-        filter,
-        effectiveLimit,
+      return openStoreLinearIssueRead({
+        set,
+        scope,
+        key,
         workspaceId,
-        attributeFilter
-      )
-        .then((result) => {
-          const data = result as LinearCollectionResult<LinearIssue>
-          if (
-            inflightListRequests.get(cacheKey) === entry &&
-            canWriteLinearReadResult(
-              contextKey,
-              requestCacheGeneration,
-              requestMutationGeneration,
-              get().settings,
-              scope.explicitSource
+        get,
+        force: options?.force,
+        requests: inflightListRequests,
+        cached: get().linearListCache[key],
+        dispatch: () =>
+          linearListIssues(scope.settings, filter, limit, workspaceId, attributeFilter)
+            .then((result) =>
+              retainFailedWorkspaceIssues(
+                result,
+                get().linearListCache[key]?.data?.items ?? [],
+                workspaceId
+              )
             )
-          ) {
-            set((s) => ({
-              linearListCache: evictStaleEntries({
-                ...s.linearListCache,
-                [cacheKey]: { data, fetchedAt: Date.now() }
-              })
-            }))
-          }
-          return data
-        })
-        .catch((error) => {
-          console.warn('[linear] listLinearIssues failed:', error)
-          // Surface capability mismatch as actionable runtime update, never misleading empty filter matches.
-          if (isLinearIssueAttributeFilterUnsupportedError(error)) {
-            throw error
-          }
-          const credentialError = isIntegrationCredentialDecryptionError(error)
-          if (
-            !(scope.explicitSource && options?.workspaceId !== undefined) &&
-            (credentialError || looksLikeAuthError(error)) &&
-            canWriteLinearReadResult(
-              contextKey,
-              requestCacheGeneration,
-              requestMutationGeneration,
-              get().settings,
-              scope.explicitSource
-            )
-          ) {
-            if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
-              void get().checkLinearConnection(true)
-            }
-            if (!credentialError) {
-              return emptyLinearCollection<LinearIssue>()
-            }
-          }
-          if (credentialError) {
-            throw new Error(credentialDecryptionMessage('Linear'))
-          }
-          return get().linearListCache[cacheKey]?.data ?? emptyLinearCollection<LinearIssue>()
-        })
-        .finally(() => {
-          if (inflightListRequests.get(cacheKey) === entry) {
-            inflightListRequests.delete(cacheKey)
-          }
-          if (
-            !(scope.explicitSource && options?.workspaceId !== undefined) &&
-            shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
-            canWriteLinearReadResult(
-              contextKey,
-              requestCacheGeneration,
-              requestMutationGeneration,
-              get().settings,
-              scope.explicitSource
-            )
-          ) {
-            void get().checkLinearConnection(true)
-          }
-        })
-
-      entry = {
-        promise,
-        force: Boolean(options?.force),
-        generation: requestCacheGeneration,
-        contextKey,
-        mutationGeneration: requestMutationGeneration
-      }
-      inflightListRequests.set(cacheKey, entry)
-      return promise
+            .catch(throwReadError),
+        publish: (data) =>
+          set((state) => ({
+            linearListCache: evictStaleEntries({
+              ...state.linearListCache,
+              [key]: { data, fetchedAt: data.errors?.length ? 0 : Date.now() }
+            })
+          }))
+      })
     }
   }
 }

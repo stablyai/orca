@@ -475,7 +475,7 @@ export function registerJournalStoreTests(): void {
       bodyError = error
     } finally {
       try {
-        opened.close()
+        await opened.close()
       } catch (cleanup) {
         cleanupErrors.push(cleanup)
       }

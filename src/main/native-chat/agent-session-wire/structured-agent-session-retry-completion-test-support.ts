@@ -74,7 +74,8 @@ export async function withEscalation(
     mail: () => ReturnType<OrchestrationDb['getUnreadRunMailbox']>,
     drain: () => Promise<void>,
     complete: () => void,
-    notify: Mock<(handle: string, messageType: string) => void>
+    notify: Mock<(handle: string, messageType: string) => void>,
+    reassign: () => ReturnType<typeof createRootDispatch>
   ) => Promise<void>
 ) {
   const db = new OrchestrationDb(':memory:')
@@ -103,7 +104,9 @@ export async function withEscalation(
   const notify = vi.fn<(handle: string, messageType: string) => void>()
   rig.host.deps.onRequestFailure = (failure) => {
     previous?.(failure)
-    pending.push(escalateChatWorkerError(failure, { enabled: () => true, db: () => db, notify }))
+    pending.push(
+      escalateChatWorkerError(failure, { getDb: () => db, isWaitingForMail: () => false, notify })
+    )
   }
   try {
     await runTest(
@@ -112,7 +115,16 @@ export async function withEscalation(
         await Promise.all(pending)
       },
       () => db.completeDispatch(dispatch.id),
-      notify
+      notify,
+      () => {
+        db.completeDispatch(dispatch.id)
+        return createRootDispatch(
+          db,
+          db.createTask({ spec: 'replacement work', runId: run.id }).id,
+          worker.handle,
+          worker.paneKey
+        )
+      }
     )
   } finally {
     rig.host.deps.onRequestFailure = previous

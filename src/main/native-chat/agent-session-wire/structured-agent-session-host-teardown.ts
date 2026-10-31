@@ -179,6 +179,7 @@ export async function flushStructuredAgentSessionHost(
 }
 
 export function stopHostDelivery(this: StructuredAgentSessionHost) {
+  this['sessions'].endPublications()
   ;[this['conversationDelivery'], this['queued'].drain].forEach((d) => d.dispose())
   this['providerRetry'].dispose()
   this['clientDelivery'].requestFailures.clear()

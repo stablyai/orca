@@ -43,18 +43,29 @@ export function isPluginTerminalThemeSelected(
   )
 }
 
+export function terminalThemeSlotUpdate(
+  theme: Pick<PluginTerminalThemeRegistration, 'id' | 'mode'>,
+  dark: boolean
+): Partial<
+  Pick<GlobalSettings, 'terminalThemeDark' | 'terminalThemeLight' | 'terminalUseSeparateLightTheme'>
+> {
+  const slot = terminalSlot(theme.mode, dark)
+  return {
+    [slot]: theme.id,
+    ...(slot === 'terminalThemeLight' ? { terminalUseSeparateLightTheme: true } : {})
+  }
+}
+
 export function terminalThemeUpdate(
   settings: GlobalSettings,
   theme: PluginTerminalThemeRegistration,
   dark: boolean,
   terminalThemes: readonly PluginTerminalThemeRegistration[]
 ): Partial<GlobalSettings> {
-  const slot = terminalSlot(theme.mode, dark)
   return withTerminalPluginPalettes(
     settings,
     {
-      [slot]: theme.id,
-      ...(slot === 'terminalThemeLight' ? { terminalUseSeparateLightTheme: true } : {}),
+      ...terminalThemeSlotUpdate(theme, dark),
       // A selected theme must replace overrides or they mask its palette.
       ...(Object.keys(settings.terminalColorOverrides ?? {}).length > 0
         ? { terminalColorOverrides: undefined }

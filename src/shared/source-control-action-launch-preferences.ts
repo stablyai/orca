@@ -11,7 +11,7 @@ import { actionModelSelectionChoices } from './source-control-action-model-selec
 import { normalizeAgentModelOptionChoices } from './agent-launch-choices'
 import type { ExecutionHostId } from './execution-host'
 import {
-  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchRawArgs,
   type AgentLaunchProfileSettings
 } from './tui-agent-launch-defaults'
 import {
@@ -212,7 +212,7 @@ function selectedActionAgentArgs(
   if (agentArgs === undefined || (permission?.agentId === agent && permission.permissionMode)) {
     return agentArgs
   }
-  return resolveTuiAgentLaunchArgs(agent, {
+  return resolveTuiAgentLaunchRawArgs(agent, {
     ...settings,
     agentDefaultArgs: { ...settings?.agentDefaultArgs, [agent]: agentArgs }
   })

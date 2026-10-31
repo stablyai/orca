@@ -9,7 +9,10 @@ import {
   type PluginCatalogType
 } from '../../../../../shared/plugins/catalog/plugin-catalog-release'
 import { compareAppVersions } from '../../../../../shared/app-version'
-import { gitRepositoryOwnerLabel } from '../../../../../shared/plugins/catalog/plugin-marketplace'
+import {
+  gitRepositoryOwnerLabel,
+  splitQualifiedPluginKey
+} from '../../../../../shared/plugins/catalog/plugin-marketplace'
 import { pluginDisplayNameFromKey } from './plugin-display-name'
 import { sanitizePluginDisplayText } from '../../../../../shared/plugins/manifest/plugin-display-text'
 import type { PluginAutoUpdateState } from '../../../../../shared/plugins/catalog/plugin-update-policy'
@@ -187,7 +190,9 @@ export function pluginListEntryFromListing(
     name:
       listingText(listing.name ?? listing.release?.name) ??
       pluginDisplayNameFromKey(listing.pluginKey),
-    publisher: listing.marketplaceOwner || null,
+    // Why the key: it is what an install records, and a catalog's owner is not every entry's author.
+    publisher:
+      splitQualifiedPluginKey(listing.pluginKey)?.publisher || listing.marketplaceOwner || null,
     version: catalogVersion(listing),
     description: listingText(listing.description),
     official: listing.official,

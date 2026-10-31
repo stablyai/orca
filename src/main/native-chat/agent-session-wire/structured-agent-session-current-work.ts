@@ -1,4 +1,10 @@
 import { structuredAgentSessionProviderRetryPending } from './structured-agent-session-provider-retry-view'
+import {
+  reusePromptProjection,
+  type PromptProjection
+} from './structured-agent-session-actionable-prompts'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isHistoricalProviderTimelineItem } from '../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
@@ -11,7 +17,6 @@ import {
   type AgentJournalSubmission,
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
-import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionLatestTurn } from '../../../shared/agent-session-wire'
@@ -29,7 +34,7 @@ export type StructuredAgentSessionCurrentWorkJournal = Pick<
   AgentSessionJournal,
   'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
 > &
-  Partial<Pick<AgentSessionJournal, 'stopMarks' | 'turnEndedSequence'>>
+  Partial<Pick<AgentSessionJournal, 'stopMarks' | 'turnEndedSequence' | 'readSince'>>
 
 export type StructuredAgentSessionWorkEvidence = {
   record: Pick<AgentSessionConversationView, 'ownerObservation' | 'currentFence'> | null
@@ -112,12 +117,6 @@ function structuredAgentSessionHandsOver(
   )
 }
 
-type PromptProjection = {
-  epoch: string
-  sequence: number
-  fence: number | null
-  items: AgentJournalRenderItem[]
-}
 const promptProjections = new WeakMap<StructuredAgentSessionCurrentWorkJournal, PromptProjection>()
 
 /** Re-read lease evidence per decision; immutable prompts share cursor/fence caches. */
@@ -234,22 +233,27 @@ export class StructuredAgentSessionCurrentWork {
   actionablePrompts(): AgentJournalRenderItem[] {
     const cursor = this.journal.cursor()
     const prior = promptProjections.get(this.journal)
-    if (
-      prior?.epoch === cursor.epoch &&
-      prior.sequence === cursor.sequence &&
-      prior.fence === this.liveFence
-    ) {
-      return prior.items
+    const reusable = reusePromptProjection(this.journal, prior, cursor, this.liveFence)
+    if (reusable) {
+      return reusable
     }
+    const dependencies = new Set<string>()
     const items: AgentJournalRenderItem[] = []
     this.journal.visitItems((itemId, _sequence, body) => {
       if (
         (body.kind === 'approval' || body.kind === 'question') &&
-        body.resolution.state === 'pending' &&
-        this.isCurrentItem(itemId)
+        body.resolution.state === 'pending'
       ) {
         const item = this.journal.item(itemId)
-        if (item) {
+        dependencies.add(itemId)
+        if (item?.turnScope?.kind === 'turn') {
+          dependencies.add(item.turnScope.turnItemId)
+          const turn = readAgentJournalTurn(this.journal.item(item.turnScope.turnItemId)?.body)
+          if (turn?.userItemId) {
+            dependencies.add(turn.userItemId)
+          }
+        }
+        if (item && this.isCurrentItem(itemId)) {
           items.push(item)
         }
       }
@@ -260,7 +264,12 @@ export class StructuredAgentSessionCurrentWork {
       items.every((item, index) => item === prior.items[index])
         ? prior.items
         : items
-    promptProjections.set(this.journal, { ...cursor, fence: this.liveFence, items: stable })
+    promptProjections.set(this.journal, {
+      ...cursor,
+      fence: this.liveFence,
+      items: stable,
+      dependencies
+    })
     return stable
   }
 

@@ -622,7 +622,7 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
     bodyError = error
   } finally {
     try {
-      opened.close()
+      await opened.close()
     } catch (cleanup) {
       cleanupErrors.push(cleanup)
     }

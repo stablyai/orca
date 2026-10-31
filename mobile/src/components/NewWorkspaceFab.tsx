@@ -2,7 +2,7 @@ import { Pressable } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Plus } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -44,7 +44,7 @@ const styles = themedStyleSheet(() => ({
     right: spacing.lg,
     width: FAB_SIZE,
     height: FAB_SIZE,
-    borderRadius: FAB_SIZE / 2,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
     // High-contrast monochrome primary action; tight shadow avoids disabled-looking halo (STYLEGUIDE reserves color for state).

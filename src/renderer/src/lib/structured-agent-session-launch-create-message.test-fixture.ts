@@ -57,6 +57,7 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       runtimeEnvironmentCatalogHydrated: true,
+      runtimeStatusByEnvironmentId: new Map(),
       settings: mocks.settings,
       unifiedTabsByWorktree: {},
       groupsByWorktree: {},

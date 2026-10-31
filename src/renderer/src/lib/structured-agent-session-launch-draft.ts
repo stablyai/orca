@@ -1,25 +1,37 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
-import { useAppStore } from '@/store'
+import { findStructuredLaunchTab } from './structured-agent-session-launch-surface'
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
+import type { StructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-registry'
 
-/** Structured chats have no TUI mirror; the legacy forty-line cap would drop prompts instead of protecting TUI clearing. */
 export function seedStructuredAgentLaunchDraft(
-  sessionId: string,
-  agent: TuiAgent,
+  state: StructuredLaunchState,
   options: StructuredAgentLaunchOptions
 ): void {
   if (options.promptDelivery !== 'draft' || !options.prompt) {
     return
   }
-  useAppStore.getState().seedNativeChatLaunchDraft({
-    tabId: structuredAgentSessionTabId(sessionId),
-    agent,
-    text: options.prompt,
-    createdAt: Date.now()
-  })
-}
-
-export function clearStructuredAgentLaunchDraft(sessionId: string): void {
-  useAppStore.getState().clearNativeChatLaunchDraft(structuredAgentSessionTabId(sessionId))
+  const { sessionId, worktreeId, executionHostId } = state.intent
+  const scopeKey = structuredAgentSessionDraftScopeKey(sessionId)
+  const current = readNativeChatComposerDraft(scopeKey)
+  if (current.text !== '' || current.document) {
+    return
+  }
+  const document = promptTextContent(options.prompt)
+  updateNativeChatComposerDraft(
+    scopeKey,
+    { text: options.prompt, document, owner: { workspaceId: worktreeId, executionHostId } },
+    'immediate',
+    undefined,
+    {
+      at: 'end',
+      target: findStructuredLaunchTab(state.intent)?.id ?? structuredAgentSessionTabId(sessionId),
+      pending: true
+    }
+  )
 }

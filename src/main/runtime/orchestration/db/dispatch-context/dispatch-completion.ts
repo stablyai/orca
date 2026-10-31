@@ -104,24 +104,6 @@ export function recordHeartbeat(this: OrchestrationDb, dispatchId: string, at: s
     .run(at, dispatchId)
 }
 
-// Allow first-heartbeat grace and compare parsed dates to handle SQLite and ISO formats (#8452).
-export function getStaleDispatches(
-  this: OrchestrationDb,
-  thresholdIso: string
-): DispatchContextRow[] {
-  const rows = this.db
-    .prepare(
-      `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
-       WHERE status = 'dispatched'
-         AND dispatched_at IS NOT NULL
-         AND julianday(dispatched_at) < julianday(?)
-         AND (last_heartbeat_at IS NULL OR julianday(last_heartbeat_at) < julianday(?))`
-    )
-    .all(thresholdIso, thresholdIso)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing complete Dispatch projection is pinned to this table's schema by row-column-lists.test.ts.
-  return rows as DispatchContextRow[]
-}
-
 export function failDispatch(
   this: OrchestrationDb,
   ctxId: string,
@@ -239,7 +221,6 @@ export type DispatchCompletionMethods = {
   completeActiveDispatchesForTask: typeof completeActiveDispatchesForTask
   failActiveDispatchForTask: typeof failActiveDispatchForTask
   recordHeartbeat: typeof recordHeartbeat
-  getStaleDispatches: typeof getStaleDispatches
   failDispatch: typeof failDispatch
 }
 
@@ -249,7 +230,6 @@ export function attachDispatchCompletion(ctor: { prototype: object }): void {
     completeActiveDispatchesForTask,
     failActiveDispatchForTask,
     recordHeartbeat,
-    getStaleDispatches,
     failDispatch
   })
 }

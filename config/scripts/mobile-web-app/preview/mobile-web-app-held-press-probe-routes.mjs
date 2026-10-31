@@ -63,18 +63,20 @@ export default function HoldDictationProbeRoute() {
 `
 }
 
-export const REPEAT_KEY_LABEL = 'Arrow Up'
-export const TAP_KEY_LABEL = 'Escape'
+export const ARROW_PAD_LABEL = 'Arrow keys'
+export const TAP_KEY_LABEL = 'Send Escape'
 
 export function commandDockProbeRouteSource({
   commandDockModule,
   keyDefinitionsModule,
-  accessorySelectionModule
+  accessorySelectionModule,
+  dockKeysModule
 }) {
   return `import { useLayoutEffect, useRef, useState } from 'react'
 import { MobileSessionCommandDock } from ${JSON.stringify(commandDockModule)}
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from ${JSON.stringify(keyDefinitionsModule)}
 import { useMobileSessionAccessorySelection } from ${JSON.stringify(accessorySelectionModule)}
+import { useTerminalDockKeys } from ${JSON.stringify(dockKeysModule)}
 
 const noop = () => {}
 const KEYS = TERMINAL_ACCESSORY_KEY_DEFINITIONS
@@ -110,6 +112,9 @@ export default function CommandDockProbeRoute() {
     worktreeId: 'held-press-workspace',
     handleAccessoryKey: send
   })
+  const dockKeys = useTerminalDockKeys({ activeHandle, sendInput: send })
+  const liveInputRef = useRef(null)
+  const commandInputRef = useRef(null)
   globalThis.__orcaHeldPressProbe = {
     sent: () => [...sentRef.current],
     deliveries: () => [...deliveriesRef.current],
@@ -123,6 +128,13 @@ export default function CommandDockProbeRoute() {
     autocompleteEnabled: false,
     liveInputCapture: '',
     activeHandle,
+    activeSessionTab: null,
+    dockKeys,
+    liveInputRef,
+    commandInputRef,
+    commandFieldAnchorRef: { current: null },
+    commandDictationPreview: null,
+    liveDictationText: '',
     customKeys: [],
     setShowCustomKeyModal: noop,
     setDeleteKeyTarget: noop,
@@ -130,7 +142,6 @@ export default function CommandDockProbeRoute() {
     terminalModes: new Map(),
     canPaste: false,
     dictationMode: 'toggle',
-    bindCommandField: noop,
     handleLiveInputChange: noop,
     handleLiveInputKeyPress: noop,
     bindLiveInputField: noop,
@@ -172,7 +183,7 @@ export default function CommandDockProbeRoute() {
     activeBrowserTab: null,
     keyboardLift: 0
   }
-  return <MobileSessionCommandDock controller={controller} />
+  return <MobileSessionCommandDock controller={controller} keysInRail={false} />
 }
 `
 }

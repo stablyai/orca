@@ -1278,9 +1278,7 @@
         "jira": {
           "856083302c": "Die Jira-Verbindung wurde durch eine neuere Anfrage ersetzt."
         },
-        "linear": {
-          "37d36984d0": "Die Linear-Verbindung wurde durch eine neuere Anfrage ersetzt."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Profil konnte nicht erstellt werden",
@@ -8374,19 +8372,6 @@
           "191ac34567": "Agenten-Orchestrierung",
           "nestedWorkerDepthTitle": "Verschachtelungstiefe der Arbeitsagenten",
           "nestedWorkerDepthDescription": "Wie viele Generationen beauftragter Arbeitsagenten eigene Arbeitsagenten starten dürfen. Bei 1 bleibt der Agentenbaum flach: Ein Koordinator beauftragt Arbeitsagenten, die selbst keine weiteren beauftragen.",
-          "chatErrorEscalationTitle": "Koordinator über Chat-Fehler informieren",
-          "chatErrorEscalationDescription": "Wenn ein beauftragter Agent auf einen Fehler stößt, der seinen aktuellen Durchlauf beendet, wird die genaue Fehlermeldung an den Koordinator gesendet, der ihn beauftragt hat. Die Aufgabe bleibt dem Agenten zugewiesen. Funktioniert nur für Agenten in der Chat-Oberfläche.",
-          "chatErrorEscalationNeedsChat": "Zur Verwendung die Chat-Oberfläche in den experimentellen Einstellungen aktivieren.",
-          "chatErrorEscalationKeywordError": "Fehler",
-          "chatErrorEscalationKeywordChat": "Chat",
-          "heartbeatTitle": "Lebenszeichen der Arbeitsagenten",
-          "heartbeatDescription": "Beauftragte Arbeitsagenten melden sich alle paar Minuten, damit der Koordinator arbeitende von hängenden Agenten unterscheiden kann. Bei Deaktivierung erhält der Koordinator weniger Nachrichten, aber auch keine Lebenszeichen mehr. Gilt für Arbeitsagenten, die nach der Änderung beauftragt werden.",
-          "heartbeatKeywordHeartbeat": "Lebenszeichen",
-          "heartbeatKeywordStalled": "Blockiert",
-          "heartbeatKeywordInterval": "Intervall",
-          "heartbeatIntervalTitle": "Intervall der Lebenszeichen",
-          "heartbeatIntervalDescription": "Kürzere Intervalle liefern dem Koordinator häufigere Lebenszeichen, senden aber mehr Nachrichten. Längere Intervalle senden weniger Nachrichten, lassen aber längere Pausen zwischen den Lebenszeichen. Gilt für Arbeitsagenten, die nach der Änderung beauftragt werden.",
-          "heartbeatIntervalSuffix": "Minuten",
           "7bc082f4de": "Installationsbefehl kopieren"
         },
         "OrchestrationSetupCard": {
@@ -13016,7 +13001,6 @@
           "previous": "Vorherige",
           "updated": "Aktualisiert",
           "license": "Lizenz",
-          "homepage": "Website",
           "whatsNew": "Neuigkeiten"
         },
         "PluginDetailPage": {
@@ -13143,6 +13127,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "Dieses Sprachpaket ist zu unvollständig, um dorthin zu wechseln."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} stammt aus einem anderen Repository",
+          "accessTitle": "{{value0}} {{value1}} möchte mehr Zugriff",
+          "manyTitle": "{{value0}} Plugin-Updates warten auf deine Prüfung",
+          "oneDescription": "Veröffentlicht von {{value0}}. Es wird erst aktualisiert, wenn du es prüfst.",
+          "manyDescription": "Sie werden erst aktualisiert, wenn du sie prüfst.",
+          "review": "Prüfen",
+          "dismiss": "Schließen"
         }
       },
       "right": {
@@ -18399,6 +18392,13 @@
           "confirm": "Anmelden",
           "cancel": "Abbrechen"
         },
+        "javaScriptDialog": {
+          "title": "{{origin}} meldet",
+          "anonymousTitle": "Diese Seite meldet",
+          "confirm": "OK",
+          "cancel": "Abbrechen",
+          "answer": "Antwort"
+        },
         "sitePermission": {
           "label": {
             "camera": "Kamera",
@@ -22353,10 +22353,7 @@
       "issuesLoadFailed": "Linear-Issues konnten nicht geladen werden.",
       "listLabel": "Linear-Liste",
       "localKeyStorage": "Schlüssel der lokalen Laufzeitumgebung werden auf diesem Gerät gespeichert, nach Möglichkeit im verschlüsselten Speicher von Electron.",
-      "projectIssuesLoadFailed": "Projekt-Issues konnten nicht geladen werden.",
-      "projectLoadFailed": "Projekt konnte nicht geladen werden.",
       "projectNotFound": "Das Projekt wurde nicht gefunden.",
-      "projectsLoadFailed": "Projekte konnten nicht geladen werden.",
       "remoteKeyStorage": "Dieser Schlüssel wird von der aktiven entfernten Laufzeitumgebung gespeichert.",
       "titleUpdateFailed": "Der Titel konnte nicht aktualisiert werden.",
       "truncated": {
@@ -22373,8 +22370,6 @@
       },
       "updateAccess": "Zugriff aktualisieren",
       "updateWorkspaceAccess": "Linear-Zugriff für {{workspace}} aktualisieren",
-      "viewContentsLoadFailed": "Inhalte der Ansicht konnten nicht geladen werden.",
-      "viewsLoadFailed": "Ansichten konnten nicht geladen werden.",
       "workspaceApiKeyHint": "Einen persönlichen API-Schlüssel für {{workspace}} einfügen. Ist dieser Arbeitsbereich bereits verbunden, ersetzt Orca den gespeicherten Schlüssel."
     }
   },
@@ -22761,5 +22756,9 @@
       "needsPermission": "Agent benötigt eine Genehmigung",
       "statusStale": "Agentenstatus ist veraltet"
     }
+  },
+  "wslDistroHold": {
+    "terminalStopped": "Die WSL-Distribution {{distro}} ist gestoppt, daher hat Orca dieses Terminal nicht gestartet. Starte die Distribution und versuche es dann erneut.",
+    "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   }
 }

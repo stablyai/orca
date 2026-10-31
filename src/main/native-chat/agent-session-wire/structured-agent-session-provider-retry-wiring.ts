@@ -106,7 +106,16 @@ export function retryClose(
   retry: StructuredAgentSessionProviderRetry,
   lifetime: () => StructuredAgentSessionConversationLifetime
 ): StructuredAgentSessionConversationLifetime['close'] {
-  return (sessionId, cause) => {
+  return (sessionId, cause, admit) => {
+    if (admit) {
+      return lifetime().close(sessionId, cause, () => {
+        const allowed = admit()
+        if (allowed) {
+          retry.retire(sessionId)
+        }
+        return allowed
+      })
+    }
     retry.retire(sessionId)
     return lifetime().close(sessionId, cause)
   }

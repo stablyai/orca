@@ -173,6 +173,29 @@ describe('PluginDetailPage', () => {
     expect(install.install).toHaveBeenCalledWith(listing, { preview })
   })
 
+  it('shows author links and hotlinked images as nothing, and links only the install source', async () => {
+    const container = await render(
+      pluginListEntryFromListing({
+        ...listing,
+        source: { kind: 'git', url: 'https://github.com/Acme/icons.git', ref: 'main' },
+        description: 'Docs at https://evil.example and [click](javascript:alert(1))',
+        homepage: 'https://evil.example/home',
+        repository: 'https://evil.example/repo',
+        changelog: 'See <a href="https://evil.example">notes</a>',
+        images: { cover: { url: 'https://tracker.example/pixel.png', alt: 'Cover' } }
+      }),
+      () => Promise.resolve({ ok: true, preview })
+    )
+    expect(container.querySelectorAll('a, img')).toHaveLength(0)
+    expect(container.textContent).toContain('See <a href="https://evil.example">notes</a>')
+    expect(container.textContent).not.toContain('Homepage')
+    const repository = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Repository'
+    )
+    await act(async () => repository?.click())
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://github.com/acme/icons')
+  })
+
   it('never claims no access when the plugin could not be read, and retries', async () => {
     const fetchPreview = vi
       .fn<(target: PluginMarketplaceHostListing) => Promise<PluginPagePreview>>()

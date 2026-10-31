@@ -244,11 +244,8 @@ export async function createRestTestRig(
         try {
           await rig.host.flushAllStreamedEvents()
         } finally {
-          try {
-            closeTestJournalHostDatabase(root)
-          } finally {
-            await rm(root, { recursive: true, force: true })
-          }
+          await closeTestJournalHostDatabase(root)
+          await rm(root, { recursive: true, force: true })
         }
       }
     }

@@ -7,6 +7,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { JournalAppliedSubmission } from '../agent-session-journal/journal-reducer'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type { ReleasedFailureRead } from './structured-agent-session-released-failure-read'
 import type {
   StructuredAgentSessionRequestFailure,
   StructuredAgentSessionRequestFailures
@@ -28,6 +29,7 @@ export type Baseline = ReturnType<AgentSessionJournal['cursor']> & {
   floor: number
   marks: Map<string, CompletionMark>
   deferred?: { owner: object; request: AccountedRequest }
+  releasedRead?: ReleasedFailureRead
   ended: StructuredAgentSessionHostSession['lastEndedChild']
 }
 
@@ -101,6 +103,11 @@ export function observeRequestFailures(
     baseline.epoch !== cursor.epoch ||
     cursor.sequence < baseline.sequence
   const historical = replaced || cleared
+  if (replaced) {
+    baseline?.releasedRead?.cancel()
+  } else if (baseline?.releasedRead?.retiring) {
+    return
+  }
   if (historical) {
     // Context clear retires marks, while captured reads still belong to the held journal.
     baseline = Object.assign(replaced ? {} : (baseline ?? {}), {
