@@ -53,6 +53,7 @@ vi.mock(import('react'), async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,
+    useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
     useCallback: <T>(callback: T) => callback,
     useMemo: <T>(factory: () => T) => factory()
   }

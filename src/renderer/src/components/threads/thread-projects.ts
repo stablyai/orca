@@ -35,7 +35,18 @@ export function threadProjectForLocation(
     : null
 }
 
-export function threadProjectCandidates(state: AppState): ThreadProject[] {
+export function threadProjectCandidates(
+  state: Pick<
+    AppState,
+    | 'repos'
+    | 'worktreesByRepo'
+    | 'folderWorkspaces'
+    | 'projectGroups'
+    | 'lastVisitedAtByWorktreeId'
+    | 'activeWorktreeId'
+    | 'activeWorkspaceExecutionHostId'
+  >
+): ThreadProject[] {
   const result = new Map<string, ThreadProject>()
   const visited = new Map<string, number>()
   for (const rows of Object.values(selectWorktreesByRepo(state))) {
@@ -73,7 +84,12 @@ export function threadProjectCandidates(state: AppState): ThreadProject[] {
 }
 
 export async function eligibleThreadProjects(state: AppState): Promise<ThreadProject[]> {
-  const candidates = threadProjectCandidates(state)
+  return supportedThreadProjects(threadProjectCandidates(state))
+}
+
+export async function supportedThreadProjects(
+  candidates: ThreadProject[]
+): Promise<ThreadProject[]> {
   const supported = await Promise.all(
     candidates.map(async (project) => {
       const target = structuredAgentSessionTargetForHost(project.hostId)

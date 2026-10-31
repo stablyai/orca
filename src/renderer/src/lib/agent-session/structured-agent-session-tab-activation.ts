@@ -1,3 +1,4 @@
+import { clearThreadSelection } from '@/components/threads/thread-navigation'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../worktree-runtime-owner'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { useAppStore } from '@/store/index'
@@ -45,6 +46,7 @@ export function activateStructuredAgentSessionTab(args: {
   if (!tab) {
     return false
   }
+  clearThreadSelection()
   state.focusGroup(args.worktreeId, tab.groupId)
   state.activateTab(tab.id, { worktreeId: args.worktreeId })
   state.setActiveTabType('agent-session', args.worktreeId)

@@ -1,7 +1,11 @@
+import {
+  createTabOwnerCache,
+  ownerInputs,
+  ownerInputChanged
+} from './structured-session-tab-owner-cache'
 import { useEffect } from 'react'
 import { publishStructuredSessionSummaries } from './structured-session-summary-store'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { projectStatus } from './structured-agent-session-status-projection'
 import {
@@ -11,13 +15,7 @@ import {
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
-import { worktreeOwnerRowsTokenOf } from '@/lib/worktree-owner-rows-token'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import {
-  structuredAgentSessionOwnerForTab,
-  structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import {
   getStructuredAgentSessionStatusFeed,
   structuredAgentSessionStatusFeedKey,
@@ -60,58 +58,6 @@ type Member = {
   status?: ProjectionInput
   captured?: ProjectionInput
 }
-const ownerInputs: readonly (keyof WorktreeRuntimeOwnerState)[] = [
-  'repos',
-  'settings',
-  'worktreesByRepo',
-  'detectedWorktreesByRepo',
-  'folderWorkspaces',
-  'projectGroups',
-  'restoredRuntimeHostIdByWorkspaceSessionKey',
-  'activeWorktreeId',
-  'activeWorkspaceExecutionHostId',
-  'runtimeEnvironments',
-  'runtimeEnvironmentCatalogHydrated',
-  'removedRuntimeEnvironmentIds'
-]
-
-// Rank/unread/activity row patches keep row ownership, so they must not re-walk every session tab.
-function ownerInputChanged(
-  state: AppState,
-  previous: AppState,
-  key: keyof WorktreeRuntimeOwnerState
-): boolean {
-  return (
-    state[key] !== previous[key] &&
-    (key !== 'worktreesByRepo' ||
-      worktreeOwnerRowsTokenOf(selectWorktreesByRepo(state)) !==
-        worktreeOwnerRowsTokenOf(selectWorktreesByRepo(previous)))
-  )
-}
-
-function ownerInputToken(state: AppState, key: keyof WorktreeRuntimeOwnerState): unknown {
-  return key === 'worktreesByRepo'
-    ? worktreeOwnerRowsTokenOf(selectWorktreesByRepo(state))
-    : state[key]
-}
-
-/** Owners only change with owner inputs, so feed ticks and tab-map edits reuse each tab's resolution. */
-function createTabOwnerCache(): (state: AppState, tab: StructuredTab) => ExecutionHostId | null {
-  let inputs: unknown[] | null = null
-  let owners = new WeakMap<StructuredTab, ExecutionHostId | null>()
-  return (state, tab) => {
-    const next = ownerInputs.map((key) => ownerInputToken(state, key))
-    if (!inputs || next.some((input, index) => input !== inputs?.[index])) {
-      inputs = next
-      owners = new WeakMap()
-    }
-    if (!owners.has(tab)) {
-      owners.set(tab, structuredAgentSessionOwnerForTab(state, tab))
-    }
-    return owners.get(tab) ?? null
-  }
-}
-
 /** Unchanged feed facts for an unchanged tab cannot change its projection or companions. */
 function sameCapturedInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   return (
@@ -227,7 +173,9 @@ function installStatusProjection(): () => void {
         ...removed
           .filter((old) => !membersByTabId.has(old.tab.id))
           .map((old) => ({ tabId: old.tab.id, summary: null })),
-        ...inputs.filter(current).map((input) => ({ tabId: input.tab.id, summary: input.summary }))
+        ...inputs
+          .filter(current)
+          .map((input) => ({ tabId: input.tab.id, tab: input.tab, summary: input.summary }))
       ])
       for (const old of removed) {
         if (!members.has(old.paneKey)) {

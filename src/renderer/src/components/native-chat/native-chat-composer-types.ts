@@ -49,6 +49,7 @@ export type NativeChatStructuredComposerTransport = {
   /** Send is held for this reason, which the disabled button says. */
   sendBlockedReason?: string
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
+  launchPicker?: React.ReactNode
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
   optionPickerRequest?: NativeChatOptionPickerRequest | null

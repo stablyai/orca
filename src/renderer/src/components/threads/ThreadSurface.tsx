@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { X } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -10,24 +10,16 @@ import {
 } from '@/runtime/structured-agent-session-owner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import NativeChatView from '../native-chat/NativeChatView'
-import { useStructuredSessionSummaries } from '../native-chat/structured-session-summary-store'
+import { useThreadRow } from '../native-chat/structured-session-summary-store'
 import { RepoIconGlyph } from '../repo/repo-icon'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { NewThread } from './NewThread'
-import { clearThreadSelection, useThreadNavigation } from './thread-navigation'
+import { useDesktopThreadPage } from './use-desktop-thread-page'
 import { threadProjectForLocation } from './thread-projects'
 
 export function useThreadSurfaceActive(): boolean {
-  const enabled = useAppStore((s) => s.settings?.experimentalThreads === true)
-  const activeView = useAppStore((s) => s.activeView)
-  const selected = useThreadNavigation((s) => s.selection)
-  useEffect(() => {
-    if (!enabled || activeView !== 'terminal') {
-      clearThreadSelection()
-    }
-  }, [enabled, activeView])
-  return enabled && activeView === 'terminal' && selected !== null
+  return useDesktopThreadPage() !== null
 }
 
 export function ThreadSurface({
@@ -36,9 +28,12 @@ export function ThreadSurface({
   reserveCollapsedSidebarHeaderSpace?: boolean
 }): React.JSX.Element | null {
   useUiLanguageRevision()
-  const selected = useThreadNavigation((s) => s.selection)
-  const tab = useAppStore((s) => (selected?.kind === 'thread' ? s.getTab(selected.tabId) : null))
-  const summary = useStructuredSessionSummaries((s) => (tab ? s.byTabId.get(tab.id) : undefined))
+  const selected = useDesktopThreadPage()
+  const worktreeId = selected?.kind === 'thread' ? selected.worktreeId : null
+  const tabId = selected?.kind === 'thread' ? selected.tabId : null
+  const tabs = useAppStore((s) => (worktreeId ? s.unifiedTabsByWorktree[worktreeId] : undefined))
+  const tab = useMemo(() => tabs?.find((item) => item.id === tabId) ?? null, [tabs, tabId])
+  const summary = useThreadRow(tabId ?? '')
   const owner = useAppStore((s) => (tab ? structuredAgentSessionOwnerForTab(s, tab) : null))
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
   const repo = useAppStore((s) =>
@@ -46,11 +41,6 @@ export function ThreadSurface({
       ? threadProjectForLocation(s, { workspaceId: tab.worktreeId, executionHostId: owner })
       : null
   )
-  useEffect(() => {
-    if (selected?.kind === 'thread' && !tab) {
-      clearThreadSelection()
-    }
-  }, [selected, tab])
   if (selected?.kind === 'new') {
     return (
       <NewThread
@@ -63,7 +53,7 @@ export function ThreadSurface({
   if (!tab || !target || tab.contentType !== 'agent-session' || !tab.agentSessionAgent) {
     return null
   }
-  const title = summary?.conversationName || summary?.latestPrompt || tab.label
+  const title = summary?.title || tab.label
   const close = translate('threads.close', 'Close thread')
   return (
     <div className="absolute inset-0 flex min-h-0 flex-col bg-background">

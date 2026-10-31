@@ -1,3 +1,5 @@
+import { desktopThreadIds } from '@/components/threads/desktop-tab-projection'
+import { openDesktopWorkbench } from '@/components/threads/thread-navigation'
 // Main decides content closes; wait for its frame before cleanup and selection, preserving refused tabs and notifying close waiters.
 
 import type { Tab } from '../../../../../shared/tab-types'
@@ -35,14 +37,19 @@ function selectAfterClose(
   }
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const group = state.groupsByWorktree[worktreeId]?.find((entry) => entry.id === tab.groupId)
+  const hidden = desktopThreadIds(state, worktreeId)
+  const visibleOrder = group?.tabOrder.filter((id) => !hidden.has(id)) ?? []
   const next =
-    group && nextActiveTabId && group.tabOrder.includes(nextActiveTabId)
+    group && nextActiveTabId && visibleOrder.includes(nextActiveTabId)
       ? nextActiveTabId
       : group
-        ? pickNextActiveTab(group.tabOrder, group.recentTabIds, tab.id)
+        ? pickNextActiveTab(visibleOrder, group.recentTabIds, tab.id)
         : null
   if (next && group?.activeTabId !== next) {
     state.activateTab(next, { worktreeId, preservePreview: true, recordFocus: false })
+  }
+  if (!next && worktreeId === state.activeWorktreeId) {
+    openDesktopWorkbench(get(), worktreeId)
   }
   // Activation focuses the tab's group; the user's focused group stays, and shows its surface.
   if (activeGroupId) {

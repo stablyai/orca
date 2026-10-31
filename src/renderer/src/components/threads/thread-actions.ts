@@ -1,3 +1,5 @@
+import { getStructuredLaunchStateBySessionId } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -8,6 +10,9 @@ import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { Tab } from '../../../../shared/tab-types'
 import { structuredAgentSessionOwnerForTab } from '@/runtime/structured-agent-session-owner'
 import { eligibleThreadProjects, type ThreadProject } from './thread-projects'
+import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
+import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { useThreadNavigation } from './thread-navigation'
 
 export async function openNewThread(): Promise<void> {
@@ -41,10 +46,18 @@ export function selectThread(tab: Tab): void {
     return
   }
   state.setActiveView('terminal')
-  useThreadNavigation.setState({ selection: { kind: 'thread', tabId: tab.id } })
+  activateStructuredAgentSessionTab({
+    worktreeId: tab.worktreeId,
+    tabId: tab.id,
+    target: structuredAgentSessionTargetForHost(hostId) ?? undefined
+  })
 }
 
-export function sendNewThread(project: ThreadProject, text: string) {
+export function sendNewThread(
+  project: ThreadProject,
+  text: string,
+  choices?: { agent: TuiAgent; launchOptions?: Record<string, string> }
+) {
   const state = useAppStore.getState()
   const agent = state.settings?.defaultTuiAgent
   const plan = adoptAgentSessionLaunchVerdict({
@@ -52,21 +65,33 @@ export function sendNewThread(project: ThreadProject, text: string) {
     requestedSurface: 'chat',
     surface: 'thread',
     requestId: newAgentLaunchRequestId(),
-    agent: agent && agent !== 'blank' ? agent : 'claude',
+    agent: choices?.agent ?? (agent && agent !== 'blank' ? agent : 'claude'),
+    ...(choices?.launchOptions ? { launchOptions: choices.launchOptions } : {}),
     worktreeId: project.worktree.id,
     executionHostId: project.hostId,
     prompt: text,
     promptDelivery: 'auto-submit'
   })
   const selection = useThreadNavigation.getState().selection
+  let openedTabId: string | undefined
+  let openedSessionId: string | undefined
   const launch = beginStructuredAgentSessionProvisionalLaunch({
     plan,
     hooks: {},
     target: { worktreeId: project.worktree.id, executionHostId: project.hostId },
     activate: false,
-    onOpened: (tab) =>
+    onOpened: (tab) => {
+      openedTabId = tab.id
+      openedSessionId = tab.entityId
       afterPendingTab(tab.id, (shown) => {
-        if (!shown || useThreadNavigation.getState().selection !== selection) {
+        const current = useThreadNavigation.getState().selection
+        if (
+          !shown ||
+          selection?.kind !== 'new' ||
+          current?.kind !== 'new' ||
+          current.draftId !== selection.draftId ||
+          current.projectKey !== selection.projectKey
+        ) {
           return
         }
         const visible = useAppStore.getState().getTab(shown)
@@ -74,6 +99,16 @@ export function sendNewThread(project: ThreadProject, text: string) {
           selectThread(visible)
         }
       })
+    }
   })
-  return launch
+  return (
+    launch && {
+      ...launch,
+      ownsPrompt: () =>
+        !!openedTabId &&
+        (isPendingTab(openedTabId) ||
+          !!useAppStore.getState().getTab(openedTabId) ||
+          !!getStructuredLaunchStateBySessionId(openedSessionId ?? ''))
+    }
+  )
 }

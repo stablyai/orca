@@ -1,8 +1,7 @@
 import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 import { useMemo, useState } from 'react'
-import { useAppStore } from '@/store'
 import {
-  useStructuredSessionSummaries,
+  useThreadMembership,
   isThreadTab
 } from '@/components/native-chat/structured-session-summary-store'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
@@ -32,12 +31,14 @@ export function useTabBarItemProjection({
   unifiedTabs,
   unifiedTabByVisibleId,
   generatedTabTitlesEnabled,
+  threadsEnabled = false,
   statusByRelativePath
 }: {
   props: TabBarProps
   resolvedGroupId: string
   unifiedTabs: readonly Tab[]
   unifiedTabByVisibleId: Map<string, Tab>
+  threadsEnabled?: boolean
   generatedTabTitlesEnabled: boolean
   statusByRelativePath: Map<string, GitFileStatus>
 }): TabBarItemProjection {
@@ -55,8 +56,7 @@ export function useTabBarItemProjection({
     activeTabType,
     expandedPaneByTabId
   } = props
-  const threadsEnabled = useAppStore((s) => s.settings?.experimentalThreads === true)
-  const threadTabIds = useStructuredSessionSummaries((s) => s.threadTabIds)
+  const threadTabIds = useThreadMembership(props.worktreeId, threadsEnabled)
   const agentSessionTabs = useMemo(
     () => allAgentSessionTabs?.filter((tab) => !isThreadTab(threadsEnabled, tab.id, threadTabIds)),
     [allAgentSessionTabs, threadsEnabled, threadTabIds]

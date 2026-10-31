@@ -55,6 +55,7 @@ function renderProjection(initialIds: string[]): {
         resolvedGroupId: 'group-1',
         unifiedTabs: [],
         unifiedTabByVisibleId: new Map(),
+        threadsEnabled: true,
         generatedTabTitlesEnabled: false,
         statusByRelativePath: new Map()
       }),

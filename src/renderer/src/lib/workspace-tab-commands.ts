@@ -1,3 +1,7 @@
+import {
+  desktopThreadIds,
+  visibleGroupActiveTabId
+} from '@/components/threads/desktop-tab-projection'
 import { activeThreadSelection, clearThreadSelection } from '@/components/threads/thread-navigation'
 import type { KeybindingContext } from '../../../shared/keybindings'
 import { toVisibleTabType, type Tab } from '../../../shared/tab-types'
@@ -45,7 +49,14 @@ function hasFocusedGroup(state: TabState, worktreeId: string): boolean {
 }
 
 function resolveActiveTab(state: TabState, worktreeId: string): Tab | null {
-  const activeTab = state.getActiveTab(worktreeId)
+  const hidden = desktopThreadIds(state, worktreeId)
+  const group = state.groupsByWorktree[worktreeId]?.find(
+    (g) => g.id === state.activeGroupIdByWorktree[worktreeId]
+  )
+  const visibleId = group ? visibleGroupActiveTabId(group, hidden) : null
+  const activeTab = group
+    ? state.unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.id === visibleId)
+    : state.getActiveTab(worktreeId)
   if (activeTab) {
     return activeTab
   }

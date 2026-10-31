@@ -82,6 +82,7 @@ export type NativeChatComposerFieldProps = {
   onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
+  launchPicker?: React.ReactNode
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   contextUsage?: NativeChatContextUsageSummary | null
@@ -166,6 +167,7 @@ export function NativeChatComposerField({
   onDictationHoldEnd,
   onSend,
   onStop,
+  launchPicker,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
   contextUsage,
@@ -380,6 +382,7 @@ export function NativeChatComposerField({
                 onDictationHoldEnd={dictationHoldEnd}
                 onSend={send}
                 onStop={onStop ? stop : undefined}
+                launchPicker={launchPicker}
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
                 contextUsage={contextUsage}

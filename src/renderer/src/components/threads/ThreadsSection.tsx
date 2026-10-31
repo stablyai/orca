@@ -1,44 +1,26 @@
-import { useMemo } from 'react'
+import { memo } from 'react'
 import { Plus } from 'lucide-react'
-import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentStateDot } from '@/components/AgentStateDot'
-import { agentRowDotState } from '@/lib/agent-row-dot-state'
-import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useNow } from '@/hooks/use-now'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import { useStructuredSessionSummaries } from '../native-chat/structured-session-summary-store'
-import { getStructuredAgentSessionTabs } from '../native-chat/structured-agent-session-tabs'
-import { structuredAgentSessionAgentStatus } from '../../../../shared/structured-agent-session-agent-status'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
+import {
+  useStructuredSessionSummaries,
+  useThreadRow
+} from '../native-chat/structured-session-summary-store'
 import { openNewThread, selectThread } from './thread-actions'
-import { useThreadNavigation } from './thread-navigation'
+import { useDesktopThreadPage } from './use-desktop-thread-page'
 
 export function ThreadsSection(): React.JSX.Element {
   useUiLanguageRevision()
-  const tabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
-  const summaries = useStructuredSessionSummaries((s) => s.byTabId)
-  const selected = useThreadNavigation((s) => s.selection)
-  const activeView = useAppStore((s) => s.activeView)
+  const ids = useStructuredSessionSummaries((s) => s.orderedIds)
+  const selected = useDesktopThreadPage()
   const shortcut = useOptionalShortcutLabel('thread.create')
-  const rows = useMemo(
-    () =>
-      getStructuredAgentSessionTabs(tabsByWorktree)
-        .flatMap((tab) => {
-          const summary = summaries.get(tab.id)
-          return summary?.surface === 'thread' ? [{ tab, summary }] : []
-        })
-        .sort(
-          (a, b) => b.summary.updatedAt - a.summary.updatedAt || a.tab.id.localeCompare(b.tab.id)
-        ),
-    [tabsByWorktree, summaries]
-  )
-  const now = useNow(30_000, rows.length > 0)
   const label = translate('threads.new', 'New thread')
   return (
     <section
@@ -65,44 +47,14 @@ export function ThreadsSection(): React.JSX.Element {
         </Tooltip>
       </div>
       <div className="worktree-sidebar-scrollbar max-h-56 overflow-y-auto px-2">
-        {rows.map(({ tab, summary }) => {
-          const status =
-            summary.status === null
-              ? null
-              : structuredAgentSessionAgentStatus({
-                  ...summary,
-                  status: summary.status,
-                  childWork: summary.children ?? summary.backgroundTasks
-                })
-          const state = status
-            ? (agentVerdictDisplayMark(status) ??
-              agentRowDotState(status.state, status.workingMode))
-            : 'idle'
-          const title =
-            summary.conversationName ||
-            getAgentRowPrimaryText({ prompt: summary.latestPrompt }) ||
-            tab.label
-          const current =
-            activeView === 'terminal' && selected?.kind === 'thread' && selected.tabId === tab.id
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              data-current={current || undefined}
-              aria-current={current ? 'page' : undefined}
-              className={`flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-xs text-muted-foreground hover:bg-sidebar-accent ${current ? 'bg-sidebar-accent text-foreground' : ''}`}
-              onClick={() => selectThread(tab)}
-            >
-              <AgentStateDot state={state} size="sm" />
-              <AgentTypeIcon agentType={summary.agent} size={13} />
-              <span className="min-w-0 flex-1 truncate">{title}</span>
-              <span className="text-3xs tabular-nums text-muted-foreground/60">
-                {formatShortTimeAgo(summary.updatedAt, now)}
-              </span>
-            </button>
-          )
-        })}
-        {rows.length === 0 ? (
+        {ids.map((id) => (
+          <ThreadRow
+            key={id}
+            tabId={id}
+            current={selected?.kind === 'thread' && selected.tabId === id}
+          />
+        ))}
+        {ids.length === 0 ? (
           <p className="px-2 py-2 text-2xs text-muted-foreground">
             {shortcut
               ? translate(
@@ -120,3 +72,27 @@ export function ThreadsSection(): React.JSX.Element {
     </section>
   )
 }
+
+const ThreadRow = memo(function ThreadRow({ tabId, current }: { tabId: string; current: boolean }) {
+  const row = useThreadRow(tabId)
+  const now = useNow(30_000, !!row)
+  if (!row?.tab) {
+    return null
+  }
+  return (
+    <button
+      type="button"
+      data-current={current || undefined}
+      aria-current={current ? 'page' : undefined}
+      className={`flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-xs text-muted-foreground hover:bg-sidebar-accent ${current ? 'bg-sidebar-accent text-foreground' : ''}`}
+      onClick={() => row.tab && selectThread(row.tab)}
+    >
+      <AgentStateDot state={row.state} size="sm" />
+      <AgentTypeIcon agentType={row.agent} size={13} />
+      <span className="min-w-0 flex-1 truncate">{row.title}</span>
+      <span className="text-3xs tabular-nums text-muted-foreground/60">
+        {formatShortTimeAgo(row.updatedAt, now)}
+      </span>
+    </button>
+  )
+})

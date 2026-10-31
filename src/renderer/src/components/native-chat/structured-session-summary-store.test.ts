@@ -15,7 +15,12 @@ const ordinary: AgentSessionStatusSummary = {
 }
 const thread: AgentSessionStatusSummary = { ...ordinary, sessionId: 'thread', surface: 'thread' }
 afterEach(() =>
-  useStructuredSessionSummaries.setState({ byTabId: new Map(), threadTabIds: new Set() })
+  publishStructuredSessionSummaries(
+    [...useStructuredSessionSummaries.getState().threadTabIds].map((tabId) => ({
+      tabId,
+      summary: null
+    }))
+  )
 )
 it('filters host strips and card rows only for classified sessions while Threads is enabled', () => {
   publishStructuredSessionSummaries([
@@ -33,5 +38,5 @@ it('filters host strips and card rows only for classified sessions while Threads
   expect(useStructuredSessionSummaries.getState().threadTabIds).toBe(threadTabIds)
   publishStructuredSessionSummaries([{ tabId: 'thread-tab', summary: null }])
   expect(useStructuredSessionSummaries.getState().threadTabIds.has('thread-tab')).toBe(false)
-  expect(useStructuredSessionSummaries.getState().byTabId.has('thread-tab')).toBe(false)
+  expect(useStructuredSessionSummaries.getState().orderedIds).toEqual([])
 })

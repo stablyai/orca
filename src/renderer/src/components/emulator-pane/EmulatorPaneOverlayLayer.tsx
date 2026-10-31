@@ -1,3 +1,5 @@
+import { useDesktopVisibleGroups } from '../threads/use-desktop-tab-projection'
+import { openDesktopWorkbench } from '../threads/thread-navigation'
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -62,15 +64,24 @@ const EmulatorPaneOverlayLayer = memo(function EmulatorPaneOverlayLayer({
   worktreeId: string
   isWorktreeActive: boolean
 }): React.JSX.Element {
-  const { unifiedTabs, groups } = useAppStore(
+  const {
+    unifiedTabs,
+    groups: hostGroups,
+    threadsEnabled
+  } = useAppStore(
     useShallow((state) => ({
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
+      threadsEnabled: state.settings?.experimentalThreads === true,
       groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS
     }))
   )
+  const groups = useDesktopVisibleGroups(worktreeId, hostGroups, threadsEnabled && isWorktreeActive)
   const focusGroup = useAppStore((state) => state.focusGroup)
   const focusOwningGroup = useCallback(
-    (groupId: string) => focusGroup(worktreeId, groupId),
+    (groupId: string) => {
+      focusGroup(worktreeId, groupId)
+      openDesktopWorkbench(useAppStore.getState(), worktreeId)
+    },
     [focusGroup, worktreeId]
   )
 

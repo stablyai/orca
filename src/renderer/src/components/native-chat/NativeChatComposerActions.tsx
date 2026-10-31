@@ -35,6 +35,7 @@ export type NativeChatComposerActionsProps = {
   onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
+  launchPicker?: React.ReactNode
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
@@ -65,6 +66,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   onDictationHoldEnd,
   onSend,
   onStop,
+  launchPicker,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
   sessionOptionsPickerRequest,
@@ -153,13 +155,15 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
       </div>
       <div className="ml-auto flex items-center gap-1.5">
         {/* Keep option pickers beside the session actions they affect. */}
-        <NativeChatSessionOptionPickers
-          surface={sessionOptionsSurface}
-          snapshot={sessionOptionsSnapshot}
-          isWorking={isWorking}
-          pickerRequest={sessionOptionsPickerRequest}
-          focusComposer={focusComposer}
-        />
+        {launchPicker ?? (
+          <NativeChatSessionOptionPickers
+            surface={sessionOptionsSurface}
+            snapshot={sessionOptionsSnapshot}
+            isWorking={isWorking}
+            pickerRequest={sessionOptionsPickerRequest}
+            focusComposer={focusComposer}
+          />
+        )}
         {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}
         <Tooltip>
           <TooltipTrigger asChild>

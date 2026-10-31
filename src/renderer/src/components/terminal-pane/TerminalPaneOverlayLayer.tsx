@@ -1,3 +1,5 @@
+import { useDesktopVisibleGroups } from '../threads/use-desktop-tab-projection'
+import { openDesktopWorkbench } from '../threads/thread-navigation'
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -57,14 +59,22 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   /** Grant global keyboard chords to one workspace even when another overlay workspace remains visible. */
   ownsNativeChatToggleShortcut?: boolean
 }): React.JSX.Element | null {
-  const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
+  const {
+    terminalTabs,
+    unifiedTabs,
+    groups: hostGroups,
+    threadsEnabled,
+    activeGroupId
+  } = useAppStore(
     useShallow((state) => ({
       terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
+      threadsEnabled: state.settings?.experimentalThreads === true,
       groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
       activeGroupId: state.activeGroupIdByWorktree[worktreeId]
     }))
   )
+  const groups = useDesktopVisibleGroups(worktreeId, hostGroups, threadsEnabled && isWorktreeActive)
   const focusGroup = useAppStore((state) => state.focusGroup)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
 
@@ -76,7 +86,10 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   )
 
   const focusOwningGroup = useCallback(
-    (groupId: string) => focusGroup(worktreeId, groupId),
+    (groupId: string) => {
+      focusGroup(worktreeId, groupId)
+      openDesktopWorkbench(useAppStore.getState(), worktreeId)
+    },
     [focusGroup, worktreeId]
   )
 

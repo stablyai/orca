@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { appendToNativeChatComposerDraft } from '../native-chat/native-chat-composer-draft-store'
+import { useNativeChatComposerRevealFocus } from '../native-chat/use-native-chat-composer-reveal-focus'
 import { Plus } from 'lucide-react'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
@@ -9,7 +10,6 @@ import {
   type NativeChatComposerHandle
 } from '../native-chat/NativeChatComposer'
 import type { NativeChatStructuredComposerTransport } from '../native-chat/native-chat-composer-types'
-import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from '../native-chat/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '../native-chat/use-native-chat-store-appearance-style'
 import { RepoIconGlyph } from '../repo/repo-icon'
@@ -26,13 +26,7 @@ import {
 import { useThreadProjects } from './use-thread-projects'
 import { useThreadNavigation } from './thread-navigation'
 import { sendNewThread } from './thread-actions'
-
-const NO_OPTIONS: SessionOptionsSurface = {
-  getSnapshot: () => [],
-  setOption: async () => ({ snapshot: [] }),
-  invokeAction: async () => ({ snapshot: [] }),
-  subscribe: () => () => {}
-}
+import { useThreadLaunchChoices } from './use-thread-launch-choices'
 
 export function NewThread({
   projectKey,
@@ -46,11 +40,22 @@ export function NewThread({
   const [error, setError] = useState<string | null>(null)
   const sent = useRef(false)
   const composer = useRef<NativeChatComposerHandle>(null)
+  const root = useRef<HTMLDivElement>(null)
+  const modalOpen = useAppStore((s) => s.activeModal !== 'none')
   const [sending, setSending] = useState(false)
   const project = projects.find((item) => item.key === projectKey) ?? projects[0]
-  const agent = useAppStore((s) => s.settings?.defaultTuiAgent)
-  const chosenAgent = agent && agent !== 'blank' ? agent : 'claude'
+  const focusComposer = useCallback(() => composer.current?.focus(), [])
+  const choices = useThreadLaunchChoices(project, focusComposer)
+  const chosenAgent = choices.agent
   const appearance = useNativeChatStoreAppearanceStyle()
+  useNativeChatComposerRevealFocus({
+    tabId: `thread-draft:${draftId}`,
+    rootRef: root,
+    composerRef: composer,
+    isVisible: !pickerOpen && !modalOpen,
+    isFocusedGroup: true,
+    composerReady: !loading && !!project && !sending
+  })
   const transport = useMemo(
     (): NativeChatStructuredComposerTransport => ({
       capturePresentation: () => () => true,
@@ -63,18 +68,24 @@ export function NewThread({
         sent.current = true
         setSending(true)
         try {
-          const launch = sendNewThread(project, text)
+          const launch = sendNewThread(project, text, {
+            agent: choices.agent,
+            launchOptions: choices.launchInputs.sessionOptions
+          })
           if (!launch) {
             sent.current = false
             setSending(false)
             return false
           }
-          void launch.settlement.then(() => {
+          void launch.settlement.then((result) => {
             sent.current = false
             setSending(false)
-            const current = useThreadNavigation.getState().selection
-            if (current?.kind === 'new' && current.draftId === draftId) {
-              composer.current?.appendText(text)
+            if (
+              !launch.ownsPrompt() &&
+              (result.kind === 'failed' ||
+                (result.kind === 'cancelled' && result.sessionId === null))
+            ) {
+              appendToNativeChatComposerDraft(`thread-draft:${draftId}`, { text })
             }
           })
           return true
@@ -91,8 +102,9 @@ export function NewThread({
           return false
         }
       },
-      optionsSurface: NO_OPTIONS,
-      optionSnapshot: [],
+      launchPicker: choices.picker,
+      optionsSurface: choices.surface,
+      optionSnapshot: choices.snapshot,
       acceptsImages: false,
       onError: setError,
       runtime: project?.hostId === 'local' ? 'local' : 'remote',
@@ -100,16 +112,22 @@ export function NewThread({
       runtimeEnvironmentId: project?.hostId.startsWith('runtime:') ? project.hostId.slice(8) : null,
       worktreeId: project?.worktree.id
     }),
-    [project, loading, draftId, chosenAgent]
+    [project, loading, draftId, chosenAgent, choices]
   )
-  const selectedName = useAppStore(
-    (state) =>
-      state.repos.find((repo) => `${getRepoExecutionHostId(repo)}|${repo.id}` === projectKey)
-        ?.displayName
+  const repos = useAppStore((s) => s.repos)
+  const selectedName = useMemo(
+    () =>
+      repos.find(
+        (repo) =>
+          projectKey ===
+          `${repo.executionHostId ?? (repo.connectionId ? `ssh:${repo.connectionId}` : 'local')}|${repo.id}`
+      )?.displayName ?? '',
+    [repos, projectKey]
   )
-  const title = project?.repo.displayName ?? selectedName ?? ''
+  const title = project?.repo.displayName ?? selectedName
   return (
     <div
+      ref={root}
       data-native-chat-root="true"
       data-native-chat-scheme={appearance.colorScheme}
       className={`${NATIVE_CHAT_APPEARANCE_ROOT_CLASS} flex min-h-0 flex-1 items-center justify-center bg-chat-canvas px-6`}

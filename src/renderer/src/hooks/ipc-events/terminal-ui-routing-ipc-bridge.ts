@@ -1,3 +1,4 @@
+import { clearThreadSelection, useThreadNavigation } from '@/components/threads/thread-navigation'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import {
@@ -172,6 +173,11 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
           store.setActiveBrowserTab(browserTarget.workspaceId)
           store.setActiveTabType('browser', worktreeId)
         }
+        return
+      }
+      if (userInitiated) {
+        clearThreadSelection()
+      } else if (useThreadNavigation.getState().selection) {
         return
       }
       revealWorkspaceSurface(store, worktreeId)

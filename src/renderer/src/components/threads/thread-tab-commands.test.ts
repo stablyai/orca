@@ -2,15 +2,12 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { makeUnifiedTab } from '@/store/slices/store-session-test-harness'
+import { makeTabGroup, makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { publishStructuredSessionSummaries } from '../native-chat/structured-session-summary-store'
 import { clearThreadSelection, useThreadNavigation } from './thread-navigation'
 
 const closeItem = vi.hoisted(() => vi.fn())
-vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
-  return { useAppStore: createTestStore() }
-})
 vi.mock('@/components/tab-group/workspace-tab-close-commands', () => ({
   createWorkspaceTabCloseCommands: () => ({ closeItem })
 }))
@@ -27,6 +24,7 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
 
 afterEach(() => {
   clearThreadSelection()
+  publishStructuredSessionSummaries([{ tabId: 'thread', summary: null }])
   vi.clearAllMocks()
 })
 it('closes the selected thread rather than a retained host tab, and leaves host cycling alone', () => {
@@ -38,9 +36,34 @@ it('closes the selected thread rather than a retained host tab, and leaves host 
     activeWorktreeId: 'main',
     settings: { ...settings, experimentalThreads: true },
     unifiedTabsByWorktree: { main: [host, thread] },
+    groupsByWorktree: {
+      main: [
+        makeTabGroup({
+          id: 'g',
+          worktreeId: 'main',
+          activeTabId: thread.id,
+          tabOrder: [host.id, thread.id]
+        })
+      ]
+    },
+    activeGroupIdByWorktree: { main: 'g' },
     getActiveTab: () => host
   })
-  useThreadNavigation.setState({ selection: { kind: 'thread', tabId: thread.id } })
+  publishStructuredSessionSummaries([
+    {
+      tabId: thread.id,
+      tab: thread,
+      summary: {
+        surface: 'thread',
+        sessionId: thread.entityId,
+        workspaceId: 'main',
+        agent: 'codex',
+        status: 'idle',
+        latestPrompt: '',
+        updatedAt: 1
+      }
+    }
+  ])
   expect(dispatchWorkspaceTabCommand({ type: 'close' })).toBe(true)
   expect(closeItem).toHaveBeenLastCalledWith(thread.id, expect.any(Object))
   expect(dispatchWorkspaceTabCommand({ type: 'switch', direction: 1, scope: 'all-types' })).toBe(
@@ -48,7 +71,7 @@ it('closes the selected thread rather than a retained host tab, and leaves host 
   )
   useAppStore.setState({ settings: { ...settings, experimentalThreads: false } })
   expect(dispatchWorkspaceTabCommand({ type: 'close' })).toBe(true)
-  expect(closeItem).toHaveBeenLastCalledWith(host.id, expect.any(Object))
+  expect(closeItem).toHaveBeenLastCalledWith(thread.id, expect.any(Object))
 })
 it('dismisses a new-thread screen without closing the host chat', () => {
   useAppStore.setState({
