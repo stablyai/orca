@@ -238,7 +238,6 @@ export function useGitHubTaskRefresh({
   }, [target, detailsCacheKey, mounted, binding, cache])
 
   return {
-    target,
     binding,
     detailsCacheKey,
     optimisticKey,

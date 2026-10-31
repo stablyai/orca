@@ -615,8 +615,10 @@ export class GitHubTaskRecordCache {
           (Number.isFinite(version(record.base)) &&
             (!Number.isFinite(version(result)) || version(result) < version(record.base)))
         ) {
-          // Unusable is not a reading: keep what is known and park until an external delivery.
-          record.failedAt = nextProviderRequestId()
+          // Unusable is not a reading: keep what is known and park an owed read until an external delivery.
+          if (record.needsRead) {
+            record.failedAt = nextProviderRequestId()
+          }
           return false
         }
         // This reading was captured after every confirmed edit settled, so it covers them.
@@ -643,7 +645,7 @@ export class GitHubTaskRecordCache {
             }
             this.notify()
           }
-        } else if (accepts()) {
+        } else if (accepts() && record.needsRead) {
           record.failedAt = nextProviderRequestId()
         }
         return false

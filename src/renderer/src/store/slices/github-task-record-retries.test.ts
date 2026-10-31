@@ -152,6 +152,37 @@ describe('task record reads across failures and reconnects', () => {
     expect(shown()).toEqual([[], [], []])
   })
 
+  it('parks only owed reads: a failed Refresh with nothing owed leaves a later obligation first in line', async () => {
+    const store = createTestStore()
+    store.setState({ repos: [repo] })
+    const [parked, idle] = [41, 44].map(issue)
+    const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
+    mockApi.gh.listWorkItems.mockResolvedValue({ items: [parked, idle], sources })
+    const deliver = async () => {
+      lookup.mockClear()
+      await store
+        .getState()
+        .fetchWorkItems(repo.id, repo.path, 20, '', { sourceContext, force: true })
+      await flush()
+      return lookup.mock.calls.map(([args]) => args.number)
+    }
+    await deliver()
+    const cache = store.getState().githubTaskCache
+    const binding = cache.capture(repo, sourceContext)!
+    expect(await cache.readCanonical(idle, binding, async () => idle)).toBe(true)
+    lookup.mockResolvedValue(null)
+    cache.operation(parked, binding, { assignees: { alice: user } })(true)
+    await flush()
+    // A user Refresh on the idle issue fails once; it owed nothing, so nothing parks.
+    expect(await cache.readCanonical(idle, binding, async () => null)).toBe(false)
+    // A same-second outside rename now owes a read, which runs on this delivery, not after parked ones.
+    const renamed = { ...idle, title: 'Renamed' }
+    lookup.mockImplementation(async ({ number }) => (number === 44 ? renamed : null))
+    mockApi.gh.listWorkItems.mockResolvedValue({ items: [parked, renamed], sources })
+    expect(await deliver()).toContain(44)
+    expect(cache.projectItem(idle).title).toBe('Renamed')
+  })
+
   it('keeps a record through a reconnect, refusing the old connection and reading on the new one', async () => {
     const { cache, binding, capture, reconnect } = remoteSetup('p34245-reconnect')
     // The dialog's assign was confirmed by a newer reading.
