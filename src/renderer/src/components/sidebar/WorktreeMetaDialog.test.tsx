@@ -634,4 +634,23 @@ describe('workspace linked work editor', () => {
     expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false)
     expect(screen.getByRole('textbox', { name: 'Notes' }).textContent).toBe('Remote draft')
   })
+  it('seeds the saved link and writes only the edited link', async () => {
+    openDialog({ workspaceUrl: 'https://app.test' })
+    const linkInput = screen.getByLabelText<HTMLInputElement>('Link')
+    expect(linkInput.value).toBe('https://app.test')
+    fireEvent.change(linkInput, {
+      target: { value: 'https://app.test/admin' }
+    })
+    await save()
+    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
+    expect(updates.workspaceUrl).toBe('https://app.test/admin')
+    expect(updates).not.toHaveProperty('comment')
+  })
+  it('blocks saving a link that is not http(s)', () => {
+    openDialog()
+    fireEvent.change(screen.getByLabelText('Link'), {
+      target: { value: 'app.test' }
+    })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Save' }).disabled).toBe(true)
+  })
 })

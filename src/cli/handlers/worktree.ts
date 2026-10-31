@@ -1,9 +1,7 @@
-import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord,
-  RuntimeWorktreeSetResult,
   RuntimeWorktreeCreateResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
@@ -22,7 +20,6 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import {
-  getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
   resolveCurrentWorktreeSelection,
   resolveCurrentWorktreeSelector
@@ -41,11 +38,9 @@ import {
 import {
   assertWorktreeParentFlagsCompatible,
   getEnvParentWorkspace,
-  getWorkspaceKeyParentSelector,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
 import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
@@ -54,6 +49,7 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../reference-input'
+import { worktreeSetHandler } from './worktree-set'
 
 function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
   const agent = getPresentStringFlag(flags, 'agent')
@@ -213,56 +209,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printLineageSummary(result.result, json)
     printResult(result, json, formatWorktreeShow)
   },
-  'worktree set': async ({ flags, client, cwd, json }) => {
-    assertWorktreeParentFlagsCompatible(
-      flags,
-      'Choose either --parent-worktree or --no-parent, not both.'
-    )
-    const parentSelector = getOptionalStringFlag(flags, 'parent-worktree')
-    if (parentSelector && getWorkspaceKeyParentSelector(parentSelector)?.startsWith('folder:')) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `Parent selector "${parentSelector}" is a folder. Folder parents are accepted only by orca worktree create.`
-      )
-    }
-    const isUnread = getOptionalWorktreeUnreadFlag(flags)
-    const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
-    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
-      allowNull: true
-    })
-    const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
-    await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
-    const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
-      worktree,
-      displayName: getOptionalStringFlag(flags, 'display-name'),
-      ...reviewLinks,
-      ...linearIssueLink,
-      comment: getOptionalStringFlag(flags, 'comment'),
-      workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
-      isUnread,
-      parentWorktree: await withWorktreeSelectorRecovery(
-        getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
-        parentCwdNextSteps(parentSelector),
-        parentSelector
-      ),
-      noParent: flags.get('no-parent') === true
-    })
-    const result = await withWorktreeSelectorRecovery(
-      pending,
-      parentSelector
-        ? [
-            `Orca could not find the worktree selector "${worktree}" or the parent selector "${parentSelector}". The server did not identify which selector failed.`,
-            'Check both selectors with orca worktree show --worktree <selector> --json.'
-          ]
-        : []
-    )
-    if (!json) {
-      for (const warning of result.result.warnings ?? []) {
-        console.error(`warning: ${warning.message}`)
-      }
-    }
-    printResult(result, json, formatWorktreeShow)
-  },
+  'worktree set': worktreeSetHandler,
   'worktree rm': async ({ flags, client, cwd, json }) => {
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     const resolved = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {

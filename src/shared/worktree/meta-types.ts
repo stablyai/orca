@@ -90,6 +90,8 @@ export type WorktreeMeta = {
   orcaCreationWorkspaceLayout?: OrcaWorkspaceLayout
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
+  /** See {@link Worktree.workspaceUrl}. Empty string means cleared. */
+  workspaceUrl?: string
   diffComments?: DiffComment[]
   /** Prior path-derived IDs let session GC/hydration retain sessions across folder renames. Removed with the worktree. */
   priorWorktreeIds?: string[]
