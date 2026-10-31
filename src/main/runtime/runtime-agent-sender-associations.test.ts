@@ -362,7 +362,12 @@ it.each([100, 1000])(
     await store.setSessionTabVisibility('chat-00000', false)
     const closed = h.projection.build()
     expect(closed.associations.some((r) => r.identity === 'orca_session_id:chat-00000')).toBe(false)
-    expect(h.projection.workForTest()).toEqual({ ...settled, chatReads: settled.chatReads + 1 })
+    // One rebuild, which reads each open chat once (none here has a /clear predecessor).
+    expect(h.projection.workForTest()).toEqual({
+      ...settled,
+      chatReads: settled.chatReads + 1,
+      chatRecords: settled.chatRecords + store.listVisibleSessionIds().length
+    })
   }
 )
 
@@ -496,7 +501,12 @@ it('sends desktop clients the sender scope and strips it from phone frames', () 
     activeTabId: null,
     activeTabType: null,
     tabs: [],
-    agentSenderAssociations: { associations: [], principals: [], attachments: [] }
+    agentSenderAssociations: {
+      associations: [],
+      principals: [],
+      attachments: [],
+      revision: { epoch: 'host', revision: 1 }
+    }
   }
   expect(projectSessionTabsForClient(frame, 'mobile', undefined)).not.toHaveProperty(
     'agentSenderAssociations'

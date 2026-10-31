@@ -8,7 +8,7 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/structured-agent-session-projection'
 import {
-  createCanonicalSessionPaneResolver,
+  createCanonicalSessionResolver,
   type AgentSessionRecordReader
 } from './orchestration/structured-session-lineage'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -234,35 +234,57 @@ function visibleChats(records: AgentSessionRecordReader | null): Set<string> | n
   return visibility?.present ? new Set(visibility.sessionIds) : null
 }
 
+/** Every open chat and, through the store's reverse /clear index, each session whose lineage
+ *  reaches one: a row's chat is where its lineage runs now, so no other saved chat yields a row.
+ *  Null for a reader without the index or visibility, which lists every chat. */
+function senderCandidates(
+  records: AgentSessionRecordReader | null,
+  visible: Set<string> | null
+): Set<string> | null {
+  const clearedFrom = records?.listClearedFrom
+  if (!visible || !clearedFrom) {
+    return null
+  }
+  const seen = new Set<string>()
+  const pending = [...visible]
+  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+    if (!seen.has(id)) {
+      seen.add(id)
+      pending.push(...clearedFrom(id))
+    }
+  }
+  return seen
+}
+
 /** Visible chats under their own and every /clear predecessor's session id. */
 export function readAgentSenderSessions(
-  records: AgentSessionRecordReader | null
+  records: AgentSessionRecordReader | null,
+  work?: { chatRecords: number }
 ): AgentSenderAssociation[] {
-  const sessions = records?.listRecords() ?? []
-  const resolve = createCanonicalSessionPaneResolver(records)
   const visible = visibleChats(records)
-  const byPane = new Map(
-    sessions.map((r) => [
-      structuredAgentSessionPaneKey(structuredAgentSessionTabId(r.sessionId), r.sessionId),
-      r
-    ])
-  )
-  return sessions.flatMap((record) => {
-    const paneKey = resolve(record.sessionId)
-    const destination = byPane.get(paneKey)
-    const sessionId = destination?.sessionId
+  const ids =
+    senderCandidates(records, visible) ?? (records?.listRecords() ?? []).map((r) => r.sessionId)
+  const resolve = createCanonicalSessionResolver(records)
+  return [...ids].flatMap((sessionId) => {
+    if (work) {
+      work.chatRecords++
+    }
+    const destinationId = resolve(sessionId)
+    const destination = records?.getRecord(destinationId)
     return !destination ||
-      !sessionId ||
       // Local chats, WSL ones included, as the sidebar shows them.
       destination.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-      (visible && !visible.has(sessionId))
+      (visible && !visible.has(destinationId))
       ? []
       : [
           {
-            identity: `orca_session_id:${record.sessionId}`,
-            paneKey,
+            identity: `orca_session_id:${sessionId}`,
+            paneKey: structuredAgentSessionPaneKey(
+              structuredAgentSessionTabId(destinationId),
+              destinationId
+            ),
             worktreeId: destination.location.workspaceId,
-            sessionId
+            sessionId: destinationId
           }
         ]
   })

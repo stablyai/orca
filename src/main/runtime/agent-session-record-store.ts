@@ -131,6 +131,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
+  listClearedFrom = (sessionId: string) => this.transactions.clearedFrom.predecessors(sessionId)
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>

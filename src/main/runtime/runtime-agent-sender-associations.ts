@@ -37,12 +37,13 @@ export class RuntimeAgentSenderAssociations {
   private principals: AgentSenderPrincipal[] = []
   private historyReads = 0
   private chatReads = 0
-  private readonly work = { lineageReads: 0 }
+  private readonly work = { lineageReads: 0, chatRecords: 0 }
   workForTest() {
     return {
       historyReads: this.historyReads,
       chatReads: this.chatReads,
-      lineageReads: this.work.lineageReads
+      lineageReads: this.work.lineageReads,
+      chatRecords: this.work.chatRecords
     }
   }
   /** The process each handle was first seen running; a respawn that kept the handle is not it. */
@@ -182,7 +183,7 @@ export class RuntimeAgentSenderAssociations {
     const chatsChanged = !same(chatKey, this.chatKey)
     if (chatsChanged) {
       this.chatReads++
-      this.chats = readAgentSenderSessions(records)
+      this.chats = readAgentSenderSessions(records, this.work)
       this.chatKey = chatKey
     }
     if (terminalChanged) {
