@@ -48,12 +48,6 @@ import {
 } from './codex-structured-prompt-ownership'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
 
-export type {
-  CodexStructuredLaunch,
-  CodexStructuredSessionAdapterDeps,
-  CodexStructuredSessionEvent
-} from './codex-structured-session-state'
-
 export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()

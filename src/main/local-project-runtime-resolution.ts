@@ -36,7 +36,9 @@ import {
 export type ProjectRuntimeResolutionStore = {
   getProjects?: Store['getProjects']
   getRepo?: Store['getRepo']
-  getSettings?: () => Partial<Pick<GlobalSettings, 'localWindowsRuntimeDefault'>>
+  getSettings?: () => Partial<
+    Pick<GlobalSettings, 'localWindowsRuntimeDefault' | 'experimentalWslHosts'>
+  >
 }
 
 type ResolvableStore = ProjectRuntimeResolutionStore & {

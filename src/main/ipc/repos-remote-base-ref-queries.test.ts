@@ -128,7 +128,10 @@ describe('base-ref queries on a drive project whose runtime is WSL', () => {
       .mockReset()
       .mockReturnValue([{ id: 'p1', sourceRepoIds: ['r1'], createdAt: 0, updatedAt: 0 }])
     Object.assign(mockStore, {
-      getSettings: () => ({ localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } })
+      getSettings: () => ({
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
+        experimentalWslHosts: true
+      })
     })
     gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
     vi.mocked(getBaseRefDefault).mockClear()

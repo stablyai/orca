@@ -1,7 +1,7 @@
 // Derive settled-turn answers from the last assistant prose or system failure; the journal has no answer marker.
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
 
-import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-session-compaction'
+import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-session/agent-session-compaction'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../agent-session-turn-notice'
 import { nativeChatRowRendersContent } from '../../native-chat-row-content'
