@@ -1,9 +1,11 @@
-import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft, ExternalLink, RefreshCw, X } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useRef, useState } from 'react'
+import type { View } from 'react-native'
+import { ChevronLeft, ExternalLink, MoreHorizontal, RefreshCw, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { styles } from './mobile-source-control-styles'
+import type { ActionSheetAction } from '../components/ActionSheetModal'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 
 type Props = {
   embedded: boolean
@@ -28,75 +30,76 @@ export function MobileSourceControlHeader({
   onOpenPrWeb,
   prNumber = null
 }: Props) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
-  return (
-    <View style={styles.topBar}>
-      {/* Dock dismissal and route Back have distinct semantics. */}
-      {embedded ? (
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={onClose}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('sourceControl.header.close', 'Close source control')}
-        >
-          <X size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
-      ) : (
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={onBack}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('sourceControl.header.backToSession', 'Back to session')}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
-      )}
-      <View style={styles.titleBlock}>
-        <Text style={styles.title} numberOfLines={1}>
-          {t('sourceControl.header.title', 'Source Control')}
-        </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {worktreeLabel}
-        </Text>
-      </View>
-      {onOpenPrWeb ? (
-        <Pressable
-          style={({ pressed }) => [styles.refreshButton, pressed && styles.refreshButtonPressed]}
-          onPress={onOpenPrWeb}
-          hitSlop={8}
-          accessibilityRole="link"
-          accessibilityLabel={
-            prNumber != null
-              ? t(
-                  'sourceControl.header.openNumberedPrWeb',
-                  'Open pull request #{{number}} on the web',
-                  {
-                    number: prNumber
-                  }
-                )
-              : t('sourceControl.header.openPrWeb', 'Open pull request on the web')
+  const moreRef = useRef<View>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const actions: ActionSheetAction[] = [
+    {
+      id: 'refresh',
+      label: t('sourceControl.header.refresh', 'Refresh source control'),
+      icon: RefreshCw,
+      disabled: ioBusy,
+      onPress: onRefresh
+    },
+    ...(onOpenPrWeb
+      ? [
+          {
+            id: 'openPrWeb',
+            label:
+              prNumber != null
+                ? t(
+                    'sourceControl.header.openNumberedPrWeb',
+                    'Open pull request #{{number}} on the web',
+                    { number: prNumber }
+                  )
+                : t('sourceControl.header.openPrWeb', 'Open pull request on the web'),
+            icon: ExternalLink,
+            closeBeforePress: true,
+            onPress: onOpenPrWeb
           }
-        >
-          <ExternalLink size={18} color={colors.textSecondary} strokeWidth={2.1} />
-        </Pressable>
-      ) : null}
-      <Pressable
-        style={({ pressed }) => [
-          styles.refreshButton,
-          ioBusy && styles.refreshButtonDisabled,
-          pressed && styles.refreshButtonPressed
-        ]}
-        onPress={onRefresh}
-        disabled={ioBusy}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={t('sourceControl.header.refresh', 'Refresh source control')}
-      >
-        <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
-      </Pressable>
-    </View>
+        ]
+      : [])
+  ]
+  return (
+    <>
+      <NavBar
+        // Dock dismissal and route Back have distinct semantics.
+        leading={
+          embedded ? (
+            <NavBarButton
+              icon={X}
+              onPress={onClose}
+              accessibilityLabel={t('sourceControl.header.close', 'Close source control')}
+            />
+          ) : (
+            <NavBarButton
+              icon={ChevronLeft}
+              onPress={onBack}
+              accessibilityLabel={t('sourceControl.header.backToSession', 'Back to session')}
+            />
+          )
+        }
+        title={t('sourceControl.header.title', 'Source Control')}
+        subtitle={worktreeLabel}
+        trailing={
+          <NavBarButton
+            ref={moreRef}
+            icon={MoreHorizontal}
+            onPress={() => setMenuOpen(true)}
+            active={menuOpen}
+            accessibilityLabel={t(
+              'sourceControl.header.moreActions',
+              'More source control actions'
+            )}
+          />
+        }
+      />
+      <PullDownMenu
+        visible={menuOpen}
+        anchorRef={moreRef}
+        groups={[actions]}
+        onClose={() => setMenuOpen(false)}
+      />
+    </>
   )
 }

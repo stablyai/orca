@@ -24,7 +24,8 @@ import {
 
 export function renderMobileTasksLinearList(
   model: ConnectionPresentationModel,
-  colorScheme: MobileColorScheme
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
 ) {
   const {
     effectiveLinearDisplayProperties,
@@ -42,18 +43,21 @@ export function renderMobileTasksLinearList(
     setLinearStatusPickerItem
   } = model
   return loading ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : linearIssuesForView.length === 0 ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <Text style={styles.emptyText}>{emptyLabel}</Text>
     </View>
   ) : linearViewMode === 'board' ? (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={[styles.boardContainer, { paddingBottom: spacing.lg + insets.bottom }]}
+      contentContainerStyle={[
+        styles.boardContainer,
+        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
+      ]}
     >
       {linearBoardSections.map((section) => (
         <View key={section.key} style={styles.boardColumn}>
@@ -132,7 +136,10 @@ export function renderMobileTasksLinearList(
           <View style={styles.separator} />
         )
       }
-      contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
+      contentContainerStyle={[
+        styles.list,
+        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
+      ]}
       refreshing={refreshing}
       onRefresh={refreshTasks}
       renderItem={({ item: entry }) => {

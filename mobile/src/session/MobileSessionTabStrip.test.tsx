@@ -12,7 +12,7 @@ import {
 import { mobileSessionFrameStyles } from './mobile-session-frame-styles'
 import { MobileSessionTabCardFooter } from './MobileSessionTabCardFooter'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
-import type { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
+import type { NavBarButton } from '../components/nav-bar/NavBarButton'
 import type * as TabModule from './MobileSessionTab'
 import type * as FooterModule from './MobileSessionTabCardFooter'
 import type * as TabContentModule from './mobile-session-tab-card-content'
@@ -105,11 +105,9 @@ vi.mock('../components/MobileAgentIcon', () => ({
 vi.mock('../components/AgentStateDot', () => ({
   AgentStateDot: (props: Parameters<typeof AgentStateDot>[0]) => createElement('StateDot', props)
 }))
-vi.mock('./MobileSessionHeaderIconButton', () => ({
-  MobileSessionHeaderIconButton: (props: Parameters<typeof MobileSessionHeaderIconButton>[0]) =>
-    createElement('HeaderButton', props)
+vi.mock('../components/nav-bar/NavBarButton', () => ({
+  NavBarButton: (props: Parameters<typeof NavBarButton>[0]) => createElement('HeaderButton', props)
 }))
-vi.mock('./QuickCommandsTabButton', () => ({ QuickCommandsTabButton: () => null }))
 vi.mock('./mobile-session-styles', async () => {
   const { mobileSessionFrameStyles } = await import('./mobile-session-frame-styles')
   return {
@@ -126,8 +124,8 @@ vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () =
 vi.mock('../layout/host-sidebar-reveal', () => ({ useHostSidebarReveal: () => null }))
 vi.mock('../layout/use-top-chrome-space', () => ({ useTopChromeSpace: () => ({}) }))
 vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => work.sideRail }))
-vi.mock('./MobileSessionHeaderMoreActionsSheet', () => ({
-  MobileSessionHeaderMoreActionsSheet: () => null
+vi.mock('./MobileSessionHeaderMoreMenu', () => ({
+  MobileSessionHeaderMoreMenu: () => null
 }))
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: work.landscape, width: 800 })

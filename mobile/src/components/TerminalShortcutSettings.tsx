@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AppState, View, Text, Pressable, Switch, type AppStateStatus } from 'react-native'
+import { AppState, View, Text, Pressable, type AppStateStatus } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { ChevronRight, X } from 'lucide-react-native'
 import type Animated from 'react-native-reanimated'
@@ -24,6 +24,7 @@ import {
   saveTerminalAccessoryLayout,
   setTerminalAccessoryBuiltInVisible
 } from '../terminal/terminal-accessory-layout'
+import { MobileSwitch } from './MobileSwitch'
 
 // Absolutely positioned DragReorderList rows require one fixed height per section.
 const REORDER_ROW_HEIGHT = 56
@@ -47,7 +48,7 @@ function ShortcutBarRow({
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>{shortcutKey.accessibilityLabel ?? shortcutKey.label}</Text>
       </View>
-      <Switch
+      <MobileSwitch
         accessibilityLabel={t(
           'components.terminalShortcutSettings.showShortcut',
           'Show {{label}} shortcut',
@@ -57,8 +58,6 @@ function ShortcutBarRow({
         )}
         value={visible}
         onValueChange={onToggle}
-        trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
-        thumbColor={colors.textPrimary}
       />
     </View>
   )
@@ -199,7 +198,7 @@ export function TerminalShortcutSettings({
                   )}
                 </Text>
               </View>
-              <Switch
+              <MobileSwitch
                 accessibilityLabel={t(
                   'components.terminalShortcutSettings.showDirectionPad',
                   'Show D-pad'
@@ -212,8 +211,6 @@ export function TerminalShortcutSettings({
                     return next
                   })
                 }
-                trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
-                thumbColor={colors.textPrimary}
               />
             </View>
           </View>
@@ -298,7 +295,7 @@ export function TerminalShortcutSettings({
                     {key.bytes.replace(/\r/g, ' ↵')}
                   </Text>
                 </View>
-                <Switch
+                <MobileSwitch
                   accessibilityLabel={t(
                     'components.terminalShortcutSettings.showShortcut',
                     'Show {{label}} shortcut',
@@ -316,8 +313,6 @@ export function TerminalShortcutSettings({
                       return next
                     })
                   }
-                  trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
-                  thumbColor={colors.textPrimary}
                 />
                 <Pressable
                   style={({ pressed }) => [

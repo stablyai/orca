@@ -42,7 +42,7 @@ export type PaneConnectionDeps = {
 }
 
 export function buildPaneConnectionDeps(
-  getState: () => StoreState,
+  getState: () => Pick<StoreState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>,
   overrides: Record<string, unknown> = {}
 ): PaneConnectionDeps {
   return {

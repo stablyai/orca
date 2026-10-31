@@ -345,7 +345,7 @@ describe('worker-start honours the settings default', () => {
         })
         expect(response.code, response.stderr + response.stdout).toBe(0)
         expect(JSON.parse(response.stdout)).toMatchObject({
-          result: { state: 'ready', mode: { mode: chat ? 'structured' : 'terminal' } }
+          result: { state: 'ready', mode: chat ? 'structured' : 'terminal' }
         })
       }
       expect(requests.filter((name) => name === 'orchestration.workerStart')).toHaveLength(2)

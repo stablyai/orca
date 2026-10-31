@@ -2,6 +2,7 @@ import { createElement, useLayoutEffect, useRef, useState } from 'react'
 import { act, create } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
+import type { MobileSessionController } from './use-mobile-session-controller'
 
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
@@ -35,22 +36,13 @@ vi.mock('../platform/haptics', () => ({ triggerMediumImpact: vi.fn(), triggerSel
 vi.mock('../hooks/use-now', () => ({ useNow: () => 0 }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../components/AgentStateDot', () => ({ AgentStateDot: () => null }))
-vi.mock('./MobileSessionHeaderIconButton', () => ({
-  MobileSessionHeaderIconButton: 'HeaderButton'
-}))
-vi.mock('./QuickCommandsTabButton', () => ({ QuickCommandsTabButton: () => null }))
 vi.mock('./mobile-session-styles', () => ({ styles: {} }))
 vi.mock('../transport/use-host-profile', () => ({ useHostProfile: () => null }))
 vi.mock('expo-router', async () => {
   const { useEffect } = await import('react')
   return { useFocusEffect: (effect: () => () => void) => useEffect(effect, [effect]) }
 })
-vi.mock('../platform/keyboard-persisting-taps', () => ({
-  useKeyboardPersistingTaps: () => () => {}
-}))
-vi.mock('../layout/side-safe-area', () => ({
-  useWindowSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 })
-}))
+vi.mock('../platform/keyboard-persisting-taps', () => ({ useKeyboardPersistingTaps: () => null }))
 vi.mock('../navigation/workspace-execution-host', () => ({ useWorkspaceExecutionHost: () => ({}) }))
 vi.mock('../browser/MobileBrowserPane', () => ({ MobileBrowserPane: () => null }))
 vi.mock('./MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
@@ -67,7 +59,6 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   }
 }))
 import { useTerminalSplitLayout } from './use-terminal-split-layout'
-import { MobileSessionTabStrip } from './MobileSessionTabStrip'
 import { MobileSessionTerminalLayoutSheet } from './MobileSessionTerminalLayoutSheet'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { TerminalPaneView } from './TerminalPaneView'
@@ -76,24 +67,16 @@ import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-w
 import { resolveTerminalPaneHandles } from './mobile-terminal-pane-layout'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 
-type Controller = Parameters<typeof MobileSessionTabStrip>[0]['controller']
+type Controller = MobileSessionController
 
 it('lets the split menu override sidebar width and rotation without remounting panes or changing focus', async () => {
   let setKeyboard!: (height: number) => void
+  let openLayoutMenu!: () => void
   function Harness() {
     const preference = useTerminalSplitLayout()
-    const details: Parameters<typeof MobileSessionTabStrip>[0]['details'] = {
-      barRef: useRef(null),
-      boundaryRefs: useRef([]),
-      dismiss: () => {},
-      refreshSource: () => {},
-      registerSource: () => () => {},
-      toggleSource: () => {},
-      activeKey: undefined,
-      requestedKey: null
-    }
     const [split, setSplit] = useState(true)
     const [showTerminalLayout, setShowTerminalLayout] = useState(false)
+    openLayoutMenu = () => setShowTerminalLayout(true)
     const [active, setActive] = useState('b')
     const [keyboard, setKeyboardState] = useState(0)
     setKeyboard = setKeyboardState
@@ -135,7 +118,6 @@ it('lets the split menu override sidebar width and rotation without remounting p
     return createElement(
       'Screen',
       null,
-      createElement(MobileSessionTabStrip, { controller, inTopBar: false, details }),
       createElement(MobileSessionTerminalLayoutSheet, {
         controller,
         visible: showTerminalLayout,
@@ -165,12 +147,7 @@ it('lets the split menu override sidebar width and rotation without remounting p
     (node) => typeof node.type === 'string' && String(node.type) === 'TerminalWebView'
   )
   const choose = (label: string) => {
-    act(() =>
-      tree.root
-        .findAll((node) => typeof node.type === 'string' && String(node.type) === 'HeaderButton')
-        .find((node) => node.props.icon !== undefined && node.props.active !== undefined)!
-        .props.onPress()
-    )
+    act(() => openLayoutMenu())
     const row = tree.root
       .findAll((node) => typeof node.type === 'string' && String(node.type) === 'Pressable')
       .find((node) =>

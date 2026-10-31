@@ -1,3 +1,4 @@
+import { installLocalAgentInventoryWorkCorpus } from './local-agent-inventory-work-corpus.test-fixture'
 import { exerciseLocalAgentProjectGitRetarget } from './local-agent-project-git-retarget.test-fixture'
 import {
   exerciseInvalidatedLocalAgentFirstProbe,
@@ -9,7 +10,6 @@ import {
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { makeProjectGroup } from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
 import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
 import * as runtime from '../../../shared/project-execution-runtime'
 import * as folderHost from '../../../shared/folder-workspace-execution-host'
@@ -22,19 +22,11 @@ import * as agentCatalog from '@/lib/agent-catalog'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
 import { useLocalAgentPreflightContext } from './useLocalAgentPreflightContext'
 import { useAppStore } from '@/store'
-import {
-  makeWorktree,
-  makeFolderWorkspace,
-  TEST_REPO
-} from '@/store/slices/worktrees-slice-test-fixtures'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
-import type { Project } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { useDetectedAgents, type AgentDetectionTarget } from './useDetectedAgents'
 
 const initialState = useAppStore.getInitialState()
@@ -103,6 +95,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
   const resolution = vi.spyOn(runtime, 'resolveProjectExecutionRuntime')
   const selection = vi.spyOn(preflight, 'selectLocalAgentPreflightInput')
   const candidates = vi.spyOn(folderHost, 'findFolderWorkspaceCandidateRepos')
+  const folderQualifications = vi.spyOn(folderHost, 'resolveQualifiedFolderWorkspaceResult')
+  const folderAssociations = vi.spyOn(folderHost, 'findLocalFolderWorkspaceRuntimeRepo')
   let indexing = false
   let indexRows = 0
   const getIndexed = projectIndex.getIndexedLocalRuntimeProject
@@ -122,75 +116,22 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
     let projectFixtureCopies = 0
     let workspaceRows = 0
     let folderRows = 0
-    const repos: Repo[] = Array.from({ length: 1000 }, (_, index) => ({
-      ...TEST_REPO,
-      id: `repo-${index}`,
-      path: `C:\\project-${index}`
-    }))
-    repos[0] = { ...repos[0], projectGroupId: 'folder-group' }
-    const catalog = projectHostSetupProjectionFromRepos(repos)
-    const projects = (rows: readonly Project[]) =>
-      rows.map((project) => {
+    const { repos, catalog, projects, worktrees } = installLocalAgentInventoryWorkCorpus(count, {
+      projectRead: () => {
+        projectRows += 1
+        if (indexing) {
+          indexRows += 1
+        }
+      },
+      projectCopy: () => {
         projectFixtureCopies += 1
-        return {
-          ...project,
-          get id() {
-            projectRows += 1
-            if (indexing) {
-              indexRows += 1
-            }
-            return project.id
-          },
-          get sourceRepoIds() {
-            projectRows += 1
-            if (indexing) {
-              indexRows += 1
-            }
-            return project.sourceRepoIds
-          }
-        }
-      })
-    const worktrees = repos.slice(-count - 1).map((repo) => {
-      const worktree = makeWorktree({
-        id: `${repo.id}::${repo.path}`,
-        repoId: repo.id,
-        path: repo.path
-      })
-      return {
-        ...worktree,
-        get id() {
-          workspaceRows += 1
-          return worktree.id
-        }
+      },
+      workspaceRead: () => {
+        workspaceRows += 1
+      },
+      folderRead: () => {
+        folderRows += 1
       }
-    })
-    const folderWorkspace = makeFolderWorkspace({
-      id: 'folder',
-      projectGroupId: 'folder-group',
-      folderPath: 'C:\\folder',
-      executionHostId: 'local'
-    })
-    useAppStore.setState({
-      repos,
-      projects: projects(
-        catalog.projects.map((project) => ({
-          ...project,
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-        }))
-      ),
-      folderWorkspaces: [
-        {
-          ...folderWorkspace,
-          get id() {
-            folderRows += 1
-            return folderWorkspace.id
-          }
-        }
-      ],
-      projectGroups: [{ ...makeProjectGroup(), id: 'folder-group' }],
-      projectHostSetups: [...catalog.setups],
-      worktreesByRepo: Object.fromEntries(worktrees.map((wt) => [wt.repoId, [wt]])),
-      settings: getDefaultSettings('/tmp')
     })
     const keys = worktrees.map((wt) =>
       localAgentInventoryContextKey(
@@ -230,6 +171,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
     resolution.mockClear()
     selection.mockClear()
     candidates.mockClear()
+    folderQualifications.mockClear()
+    folderAssociations.mockClear()
     const unrelated = [
       () => useAppStore.setState({ isDetectingAgents: false }),
       () =>
@@ -258,6 +201,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
       expect(projectFixtureCopies).toBe(0)
       expect(folderRows).toBe(0)
       expect(candidates).not.toHaveBeenCalled()
+      expect(folderQualifications).not.toHaveBeenCalled()
+      expect(folderAssociations).not.toHaveBeenCalled()
     }
     measured.push(reads)
     const inputReads = selection.mock.calls.length
@@ -278,6 +223,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
     expect(folderRows).toBe(0)
     expect(resolution).not.toHaveBeenCalled()
     expect(candidates).not.toHaveBeenCalled()
+    expect(folderQualifications).not.toHaveBeenCalled()
+    expect(folderAssociations).not.toHaveBeenCalled()
     // Shared worktree-index rebuild plus the producer's own reads, never M rebuilds.
     expect(workspaceRows).toBeLessThanOrEqual(8 * (count + 1))
     const activityRows = workspaceRows
@@ -287,6 +234,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
       }))
     })
     expect(candidates).not.toHaveBeenCalled()
+    expect(folderQualifications).not.toHaveBeenCalled()
+    expect(folderAssociations).not.toHaveBeenCalled()
     expect(resolution).not.toHaveBeenCalled()
     expect(folderRenders).toBe(0)
     expect(folderRows).toBeGreaterThan(0)
@@ -307,6 +256,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
     expect(indexRows).toBeLessThanOrEqual(5000)
     expect(resolution).not.toHaveBeenCalled()
     expect(renders).toEqual(Array(count).fill(0))
+    expect(folderQualifications).not.toHaveBeenCalled()
+    expect(folderAssociations).not.toHaveBeenCalled()
     // A real selected runtime changes only its owner; the new catalog index is shared.
     await act(async () => {
       useAppStore.setState((s) => ({
@@ -333,6 +284,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
     expect(mounted[0].result.current.detectedIds).toEqual(['codex'])
     expect(renders.slice(1)).toEqual(Array(count - 1).fill(0))
     expect(folderRenders).toBe(0)
+    expect(folderQualifications).not.toHaveBeenCalled()
+    expect(folderAssociations).not.toHaveBeenCalled()
     // Restore the original key without relying on the acquisition result.
     await act(async () => {
       useAppStore.setState({
@@ -369,7 +322,12 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
     })
     expect(mounted[0].result.current.detectionFailed).toBe(true)
     expect(resolution).not.toHaveBeenCalled()
+    expect(folderQualifications).not.toHaveBeenCalled()
+    expect(folderAssociations).not.toHaveBeenCalled()
     // Same selector follows real folder path, owner and candidate-cardinality changes.
+    candidates.mockClear()
+    folderQualifications.mockClear()
+    folderAssociations.mockClear()
     await act(async () => {
       useAppStore.setState((s) => ({
         projects: s.projects.map((project, index) =>
@@ -382,7 +340,35 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
       }))
     })
     expect(folder.result.current?.wslDistro).toBe('Debian')
-    expect(candidates).toHaveBeenCalled()
+    const currentFolderState = useAppStore.getState()
+    expect(
+      folderQualifications.mock.results.some((result, index) => {
+        const [source, folderId] = folderQualifications.mock.calls[index]
+        return (
+          result.type === 'return' &&
+          result.value.kind === 'selected' &&
+          result.value.value.workspace === currentFolderState.folderWorkspaces[0] &&
+          folderId === 'folder' &&
+          source.folderWorkspaces === currentFolderState.folderWorkspaces &&
+          source.projectGroups === currentFolderState.projectGroups &&
+          source.repos === currentFolderState.repos
+        )
+      })
+    ).toBe(true)
+    expect(
+      folderAssociations.mock.results.some((result, index) => {
+        const [source, folderId, selectedFolder] = folderAssociations.mock.calls[index]
+        return (
+          result.type === 'return' &&
+          result.value === currentFolderState.repos[0] &&
+          folderId === 'folder' &&
+          selectedFolder?.id === currentFolderState.folderWorkspaces[0].id &&
+          source.folderWorkspaces === currentFolderState.folderWorkspaces &&
+          source.projectGroups === currentFolderState.projectGroups &&
+          source.repos === currentFolderState.repos
+        )
+      })
+    ).toBe(true)
     await act(async () => {
       useAppStore.setState((s) => ({
         folderWorkspaces: s.folderWorkspaces.map((entry) => ({
@@ -463,7 +449,9 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
         routes,
         rows,
         metadata,
-        selections
+        selections,
+        folderQualifications,
+        folderAssociations
       ]) {
         spy.mockClear()
       }
@@ -518,6 +506,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
       expect.soft(work.wakeContext, 'F33 imperative context before selected failure').toBe(0)
       expect.soft(work.hostProjectRuntime, 'F35 unused route runtime before host equality').toBe(0)
       expect.soft(work.sharedRuntime).toBe(0)
+      expect.soft(folderQualifications).not.toHaveBeenCalled()
+      expect.soft(folderAssociations).not.toHaveBeenCalled()
       expect.soft(work.routes).toBe(0)
       expect
         .soft([projectRows, indexRows, workspaceRows, folderRows, projectFixtureCopies])
@@ -562,6 +552,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
     expect.soft(projectRuntime).not.toHaveBeenCalled()
     expect.soft(resolution).not.toHaveBeenCalled()
     expect.soft(workspaceRows).toBe(0)
+    expect.soft(folderQualifications).not.toHaveBeenCalled()
+    expect.soft(folderAssociations).not.toHaveBeenCalled()
     expect.soft(menuRenders).toEqual(Array(count).fill(0))
     expect(selection.mock.calls.length).toBeLessThanOrEqual(12 * count)
     expect(reads).toBeLessThanOrEqual(12 * count)
@@ -600,6 +592,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
       metadata.mock.calls.length,
       selections.mock.calls.length
     ]).toEqual(Array(12).fill(0))
+    expect(folderQualifications).not.toHaveBeenCalled()
+    expect(folderAssociations).not.toHaveBeenCalled()
     expect(menuRenders).toEqual(Array(count).fill(0))
     menus.forEach((menu, index) =>
       expect(menu.result.current.detection.detectedIds).toBe(retainedArrays[index])
@@ -796,6 +790,8 @@ it('bounds repeated inventory work at N/10N and renders only the observed contex
   resolution.mockRestore()
   selection.mockRestore()
   candidates.mockRestore()
+  folderQualifications.mockRestore()
+  folderAssociations.mockRestore()
   indexReads.mockRestore()
 })
 
