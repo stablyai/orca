@@ -3,7 +3,16 @@ import { useAppStore } from '@/store'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import { supportsStructuredAgentSessionCliSource } from '@/runtime/structured-agent-session-client'
+import {
+  supportsStructuredAgentSessionCliSource,
+  supportsStopTerminalAgentForChat,
+  callStructuredAgentSession
+} from '@/runtime/structured-agent-session-client'
+import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
+import { translate } from '@/i18n/i18n'
+import { agentLabel } from '../../../../shared/ai-vault-session-filters'
+import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
+import type { ConfirmationDialogContextValue } from '../confirmation-dialog-context'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
@@ -36,7 +45,8 @@ export function useCliChatResumePending(source: CliChatResumeSource | null): boo
 
 export async function runCliChatResume(
   source: CliChatResumeSource,
-  openOwner = false
+  openOwner = false,
+  confirm?: ConfirmationDialogContextValue
 ): Promise<void> {
   const key = keyFor(source)
   if (pending.has(key) || source.hostUpdateRequired) {
@@ -80,11 +90,12 @@ export async function runCliChatResume(
       release()
     }
   })
-  const timer = setTimeout(
+  let timer = setTimeout(
     () => controller.abort(new Error('Conversation preparation timed out.')),
     30_000
   )
   let dispatched = false
+  let stopped = false
   const handoff = () => {
     if (dispatched) {
       return true
@@ -112,6 +123,78 @@ export async function runCliChatResume(
     if (!isCurrent()) {
       return
     }
+    const cliSource = {
+      workspaceId: source.workspaceId,
+      paneKey: toHostSessionPaneKey(source.paneKey)
+    }
+    if (
+      await waitForPromiseWithSignal(supportsStopTerminalAgentForChat(target), controller.signal)
+    ) {
+      const stop = async (consented: boolean) => {
+        const result = await waitForPromiseWithSignal(
+          callStructuredAgentSession<
+            { ok: true } | { ok: false; refusal: AgentSessionRefusalReference }
+          >(target, 'agentSession.stopTerminalAgentForChat', {
+            worktree: source.workspaceId,
+            agent,
+            providerSessionId: source.providerSessionId,
+            cliSource,
+            consented
+          }),
+          controller.signal
+        )
+        if (!result.ok) {
+          throw Object.assign(new Error(result.refusal.code), { refusal: result.refusal })
+        }
+      }
+      if (!isCurrent()) {
+        return
+      }
+      try {
+        await stop(false)
+      } catch (error) {
+        const reason = structuredLaunchFailure(error)?.details?.reason
+        if (reason !== 'turnActive' && reason !== 'backgroundTasksRunning') {
+          throw error
+        }
+        // Waiting for a person is not part of the host's bounded preparation deadline.
+        clearTimeout(timer)
+        const accepted = await confirm?.({
+          title:
+            reason === 'turnActive'
+              ? translate(
+                  'components.native-chat.surfaceSwitch.stopReplyTitle',
+                  '{{agent}} is replying. Stop it and continue in chat?',
+                  { agent: agentLabel(source.agent) }
+                )
+              : translate(
+                  'components.native-chat.surfaceSwitch.stopBackgroundTitle',
+                  '{{agent}} has background tasks running. Stop them and continue in chat?',
+                  { agent: agentLabel(source.agent) }
+                ),
+          confirmLabel: translate(
+            'components.native-chat.surfaceSwitch.stopAndContinue',
+            'Stop and continue'
+          ),
+          cancelLabel: translate('common.cancel', 'Cancel'),
+          compact: true,
+          cancelVariant: 'ghost',
+          signal: controller.signal
+        })
+        if (!accepted || !isCurrent()) {
+          return
+        }
+        timer = setTimeout(
+          () => controller.abort(new Error('Conversation preparation timed out.')),
+          30_000
+        )
+        await stop(true)
+      }
+      stopped = true
+    }
+    if (!isCurrent()) {
+      return
+    }
     const plan = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
       requestId: newAgentLaunchRequestId(),
@@ -123,10 +206,7 @@ export async function runCliChatResume(
         // The host matches its own pane keys, not this client's mirrored ones.
         ...(cliSourceSupported
           ? {
-              cliSource: {
-                workspaceId: source.workspaceId,
-                paneKey: toHostSessionPaneKey(source.paneKey)
-              }
+              cliSource
             }
           : {})
       }
@@ -141,11 +221,11 @@ export async function runCliChatResume(
     }
     const result = await waitForPromiseWithSignal(launch.settlement, controller.signal)
     if (result.kind === 'failed' && !result.notified && pending.get(key) === controller) {
-      await reportCliChatResumeFailure(source, result.error, openOwner, target)
+      await reportCliChatResumeFailure(source, result.error, openOwner, target, stopped)
     }
   } catch (error) {
     if (pending.get(key) === controller) {
-      await reportCliChatResumeFailure(source, error, false, target)
+      await reportCliChatResumeFailure(source, error, openOwner, target, stopped)
     }
   } finally {
     clearTimeout(timer)

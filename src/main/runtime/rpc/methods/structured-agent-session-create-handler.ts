@@ -3,7 +3,7 @@ import type { z } from 'zod'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { agentSessionFingerprintConflict } from '../../../../shared/agent-session-mutation-envelope'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
-import type { RpcContext } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireStructuredHost as requireHost,
@@ -11,7 +11,7 @@ import {
   structuredCallerFor as callerFor
 } from './structured-agent-session-gate'
 import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
-import type { AttachParams, CreateParams } from './structured-agent-session-schemas'
+import { AttachParams, type CreateParams } from './structured-agent-session-schemas'
 import {
   commitStructuredAgentSessionCreate,
   prepareStructuredAgentSessionCreateForWorktree,
@@ -120,3 +120,12 @@ export async function handleStructuredAgentSessionCreate(
       : {})
   })
 }
+
+export const STRUCTURED_AGENT_SESSION_ENSURE_METHODS = [
+  defineMethod({
+    name: 'agentSession.ensure',
+    permission: 'workspace',
+    params: AttachParams,
+    handler: async (params, ctx) => attachClientSuppliedLocation(params, ctx)
+  })
+]

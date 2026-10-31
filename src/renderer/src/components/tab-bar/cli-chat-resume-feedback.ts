@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
@@ -12,9 +13,48 @@ export async function reportCliChatResumeFailure(
   source: CliChatResumeSource,
   error: unknown,
   openOwner: boolean,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  stopped = false
 ): Promise<void> {
   const refusal = structuredLaunchFailure(error)
+  const values = { agent: agentLabel(source.agent) }
+  const stopReason = refusal?.details?.reason
+  const stopMessages: Record<string, string> = {
+    agentPaused:
+      '{{agent}} is paused in this terminal. Resume it there with fg or quit it, then try again.',
+    conversationMoved: '{{agent}} moved to a different conversation in this terminal. Try again.',
+    agentAmbiguous:
+      'Another agent is also running in this terminal with {{agent}}. Quit it, then try again.',
+    shellReplaced:
+      "{{agent}} replaced this terminal's shell, so stopping it would close the terminal. Quit {{agent}} there, then try again.",
+    writerTopologyUnproven:
+      "Orca can't confirm {{agent}} is owned by this terminal. Quit {{agent}} and any shared server it uses, then try again.",
+    ownerUnproven:
+      "Orca couldn't confirm {{agent}} stopped in this terminal. Check the terminal, then try again."
+  }
+  if (stopReason && stopMessages[stopReason]) {
+    toast.error(
+      translate(
+        `components.native-chat.resumeInNewChat.${stopReason}`,
+        stopMessages[stopReason],
+        values
+      )
+    )
+    return
+  }
+  if (stopped) {
+    toast.error(
+      translate(
+        'components.native-chat.resumeInNewChat.startFailedAfterStop',
+        "{{agent}} was stopped, but the chat couldn't start. Check the agent's installation and sign-in, then try Continue in Chat UI again.",
+        values
+      )
+    )
+    return
+  }
+  const row = useAppStore.getState().agentStatusByPaneKey[source.paneKey]
+  const inThisTerminal =
+    !!row && !row.agentPresence?.ended && row.providerSession?.id === source.providerSessionId
   if (
     refusal?.code === 'agent_session_conflict' ||
     refusal?.code === 'agent_session_ownership_unknown'
@@ -28,7 +68,7 @@ export async function reportCliChatResumeFailure(
       refusal.code === 'agent_session_conflict' &&
         refusal.details?.reason === 'conversationHeldElsewhere' &&
         !owner
-        ? cliConversationExitGuidance(source.agent, true)
+        ? cliConversationExitGuidance(source.agent, inThisTerminal)
         : translate(
             'auto.components.right.sidebar.AiVaultPanel.resumeInChatConflict',
             'Another chat is already holding this conversation.'
@@ -41,7 +81,7 @@ export async function reportCliChatResumeFailure(
     refusal?.code === 'agent_session_operation_invalid' &&
     refusal.details?.reason === 'conversationOpenInTerminal'
   ) {
-    toast.error(cliConversationExitGuidance(source.agent, true))
+    toast.error(cliConversationExitGuidance(source.agent, inThisTerminal))
     return
   }
   if (refusal?.code === 'agent_session_identity_required') {
@@ -63,8 +103,9 @@ export async function reportCliChatResumeFailure(
   }
   toast.error(
     translate(
-      'auto.components.right.sidebar.AiVaultPanel.resumeInChatFailed',
-      'Could not resume this session in a new chat.'
+      'components.native-chat.resumeInNewChat.resumeFailed',
+      "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again.",
+      values
     )
   )
 }

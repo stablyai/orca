@@ -616,6 +616,7 @@ import {
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session-rename-params'
+import { StopTerminalAgentForChatParams } from './structured-agent-session-stop-terminal-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
@@ -794,6 +795,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.send': SendParams,
   'agentSession.setOption': SetOptionParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,
+  'agentSession.stopTerminalAgentForChat': StopTerminalAgentForChatParams,
   'agentSession.subscribe': SubscribeParams,
   'agentSession.subscribeAvailability': AvailabilityParams,
   'agentSession.subscribeStatus': null,

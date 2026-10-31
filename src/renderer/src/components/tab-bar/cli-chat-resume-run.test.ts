@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
   return {
     ...state,
     sourceCapability: vi.fn(),
+    stopCapability: vi.fn(),
     createCapability: vi.fn(),
     call: vi.fn(),
     toast: vi.fn(),
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.source }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
+  supportsStopTerminalAgentForChat: mocks.stopCapability,
   supportsStructuredAgentSessionCreateMessage: mocks.createCapability,
   callStructuredAgentSession: (...args: unknown[]) =>
     args[1] === 'agentSession.createSupport'
@@ -155,6 +157,7 @@ beforeEach(async () => {
   mocks.source = SOURCE
   mocks.frameDrawn = false
   mocks.sourceCapability.mockResolvedValue(true)
+  mocks.stopCapability.mockResolvedValue(false)
   mocks.createCapability.mockResolvedValue(true)
   mocks.call.mockImplementation(
     async (_target, method, params: StructuredAgentSessionCreateParams) => {
@@ -205,6 +208,63 @@ async function seedTabs() {
 const HOST_LEAF = '11111111-1111-4111-8111-111111111111'
 
 describe('CLI identity resume through the existing launch owner', () => {
+  it.each([true, false])(
+    'stops on the host before create, consent accepted: %s',
+    async (accepted) => {
+      mocks.stopCapability.mockResolvedValue(true)
+      const confirm = vi.fn(async () => accepted)
+      mocks.call.mockImplementation(async (_target, method, params) => {
+        if (method === 'agentSession.stopTerminalAgentForChat') {
+          return params.consented
+            ? { ok: true }
+            : {
+                ok: false,
+                refusal: {
+                  code: 'agent_session_operation_invalid',
+                  details: { reason: 'turnActive' }
+                }
+              }
+        }
+        return { ok: true, value: { sessionId: params.envelope.sessionId, fence: 1 } }
+      })
+      await runCliChatResume(SOURCE, false, confirm)
+      expect(confirm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Claude is replying. Stop it and continue in chat?',
+          compact: true
+        })
+      )
+      expect(mocks.call.mock.calls.map((call) => call[1])).toEqual(
+        accepted
+          ? [
+              'agentSession.stopTerminalAgentForChat',
+              'agentSession.stopTerminalAgentForChat',
+              'agentSession.create'
+            ]
+          : ['agentSession.stopTerminalAgentForChat']
+      )
+      expect(mocks.call.mock.calls[0][2]).toEqual({
+        worktree: 'wt-1',
+        agent: 'claude',
+        providerSessionId: 'provider-1',
+        cliSource: { workspaceId: 'wt-1', paneKey: SOURCE.paneKey },
+        consented: false
+      })
+      expect(mocks.toast).not.toHaveBeenCalled()
+    }
+  )
+
+  it('never creates after stop loses contact', async () => {
+    mocks.stopCapability.mockResolvedValue(true)
+    mocks.call.mockRejectedValue(new Error('private transport details'))
+    await runCliChatResume(SOURCE)
+    expect(mocks.call).toHaveBeenCalledOnce()
+    expect(mocks.call.mock.calls[0][1]).toBe('agentSession.stopTerminalAgentForChat')
+    expect(tabs()).toEqual([])
+    expect(mocks.toast).toHaveBeenCalledOnce()
+    expect(mocks.toast.mock.calls[0][0]).not.toContain('private')
+  })
+
   it.each([true, false])(
     'resumes on the owning server with optional CLI-source capability: %s',
     async (supported) => {
@@ -352,7 +412,7 @@ describe('CLI identity resume through the existing launch owner', () => {
     }
   })
 
-  it('keeps the terminal and directs a refused terminal writer to Session History', async () => {
+  it('keeps the terminal and gives retry guidance for a refused terminal writer', async () => {
     mocks.call.mockResolvedValue({
       ok: false,
       refusal: {
@@ -365,7 +425,7 @@ describe('CLI identity resume through the existing launch owner', () => {
     await runCliChatResume(SOURCE, true)
     expect(mocks.toast).toHaveBeenCalledTimes(1)
     expect(mocks.toast.mock.calls[0]?.[0]).toBe(
-      'Claude is already running this conversation in another terminal. Quit Claude there or close that terminal, then open this conversation from Session History.'
+      'Claude is running this conversation in another terminal. Quit it there, then try again.'
     )
     expect(mocks.activate).not.toHaveBeenCalled()
     expect(tabs()).toEqual([])

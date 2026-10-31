@@ -5,7 +5,6 @@ import {
 } from '../../../shared/agent-session-resume'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-listing'
 import { getProviderForPty } from '../../ipc/pty/provider/registry'
 import { LocalPtyProvider } from '../../providers/local-pty-provider'
 import { inspectPtyProviderProcess } from '../../providers/pty-process-inspection'
@@ -25,8 +24,15 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { recordConversationKey } from '../../native-chat/structured-conversation-key'
 import type { StructuredAgentCliSourceRoute } from '../../native-chat/structured-agent-cli-source'
+import { OrcaRuntimeWithTerminalAgentStopPreparation } from './terminal-agent-stop-preparation'
+import type { TerminalAgentStopPreparation } from './terminal-agent-stop-for-chat'
 
-export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends OrcaRuntimeWithGetWorktreePs {
+export type CliWriterPrediction = {
+  source: { workspaceId: string; paneKey: string }
+  prepared: TerminalAgentStopPreparation
+}
+
+export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends OrcaRuntimeWithTerminalAgentStopPreparation {
   getStructuredAgentCliSourceRoute(source: {
     workspaceId: string
     paneKey: string
@@ -149,7 +155,8 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
   async assertStructuredAdoptionTerminalWritersExited(
     agent: StructuredAgentId,
     providerSessionId: string,
-    source?: { workspaceId: string; paneKey: string }
+    source?: { workspaceId: string; paneKey: string },
+    prediction?: CliWriterPrediction
   ): Promise<void> {
     await assertCliConversationWritersExited(
       {
@@ -159,7 +166,20 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
             this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
               ?.sleepingAgentSessionsByPaneKey ?? {}
           ),
-        observation: (row) => this.readHookCliWriterObservationFn?.(row) ?? null,
+        observation: (row) => {
+          const observed = this.readHookCliWriterObservationFn?.(row) ?? null
+          return observed &&
+            prediction &&
+            row.paneKey === prediction.source.paneKey &&
+            row.providerSession?.id === providerSessionId &&
+            observed.topology === 'pane-owned'
+            ? {
+                ...observed,
+                current: () => observed.current() && prediction.prepared.current(),
+                presence: async () => 'exited' as const
+              }
+            : observed
+        },
         terminal: (coordinates) => this.cliWriterTerminal(coordinates),
         links: () =>
           [...this.ptysById.values()].flatMap((pty) => {
@@ -176,6 +196,14 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
             })
             return [...conversations.byKey.values()].map((conversation) => ({
               ...conversation,
+              ...(prediction &&
+              this.cliWriterTerminal({
+                paneKey: prediction.source.paneKey,
+                worktreeId: prediction.source.workspaceId
+              })?.pane?.identity === this.cliWriterPtyPane(pty.ptyId)?.identity &&
+              conversation.id === providerSessionId
+                ? { process: undefined }
+                : {}),
               worktreeId: pty.worktreeId,
               terminal
             }))
@@ -185,6 +213,15 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
             hostSleepKey(LOCAL_EXECUTION_HOST_ID, workspaceId)
           ),
         shellAlone: async (pane) => {
+          if (
+            prediction &&
+            this.cliWriterTerminal({
+              paneKey: prediction.source.paneKey,
+              worktreeId: prediction.source.workspaceId
+            })?.pane?.identity === pane.identity
+          ) {
+            return prediction.prepared.current() && (await prediction.prepared.released(true))
+          }
           if (process.platform === 'win32') {
             const provider = getProviderForPty(pane.ptyId)
             const inspection = await inspectPtyProviderProcess(provider, pane.ptyId, {

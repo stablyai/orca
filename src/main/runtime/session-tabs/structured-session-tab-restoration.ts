@@ -1,6 +1,6 @@
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
-import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './structured-session-create-support'
+import { OrcaRuntimeWithStopTerminalAgentForChat } from './terminal-agent-stop-for-chat-runtime'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
@@ -35,7 +35,7 @@ export type AgentLaunchScope = Parameters<
   OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce['getAgentLaunchPlatformForWorkspace']
 >[0]
 
-export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithGetStructuredAgentSessionCreateSupport {
+export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithStopTerminalAgentForChat {
   protected abstract notifyMobileSessionTabSnapshots(
     ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['notifyMobileSessionTabSnapshots']>
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['notifyMobileSessionTabSnapshots']>

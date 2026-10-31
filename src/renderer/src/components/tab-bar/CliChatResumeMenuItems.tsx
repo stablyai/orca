@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useConfirmationDialog } from '../confirmation-dialog-context'
 import { useAppStore } from '@/store'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -17,6 +18,7 @@ export function CliChatResumeMenuItems({
 }): React.JSX.Element | null {
   const [source] = useState(() => resolveCliChatResumeSource(useAppStore.getState(), { tab }))
   const pending = useCliChatResumePending(source)
+  const confirm = useConfirmationDialog()
   // Radix disables pointer events on disabled items, so a tooltip-less "update" item would only confuse.
   if (!source || source.hostUpdateRequired) {
     return null
@@ -31,7 +33,7 @@ export function CliChatResumeMenuItems({
         chatPending={pending}
         onResumeInNewChat={(event) => {
           event.preventDefault()
-          void runCliChatResume(source).finally(() => onComplete?.())
+          void runCliChatResume(source, false, confirm).finally(() => onComplete?.())
         }}
       />
     </>
