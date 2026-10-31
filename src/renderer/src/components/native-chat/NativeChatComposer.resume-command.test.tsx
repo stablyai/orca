@@ -354,7 +354,7 @@ describe('/resume in the native chat composer', () => {
     act(() => mocks.fieldProps?.onSend?.())
 
     expect(mocks.openHistory).not.toHaveBeenCalled()
-    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/resume')
+    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/resume', undefined)
   })
 
   it('derives inline catalog from the same action boundary before resolving namesake skills', () => {

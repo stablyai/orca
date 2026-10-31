@@ -471,7 +471,7 @@ describe('NativeChatComposer', () => {
 
     act(() => mocks.fieldProps?.onSend?.())
 
-    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/status')
+    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/status', undefined)
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
