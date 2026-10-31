@@ -733,7 +733,6 @@
       "tryDifferentFilter": "Попробуйте другой фильтр проверки."
     },
     "diffReviewDrawers": {
-      "actionsTitle": "Действия при проверке",
       "addNote": "Добавить заметку",
       "cancelNote": "Отменить ввод заметки",
       "clearSentNotes": "Удалить отправленные заметки",
@@ -896,9 +895,6 @@
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Закрыть панель"
-    },
-    "newWorkspaceFab": {
-      "newWorkspace": "Новое рабочее пространство"
     },
     "newWorkspaceSetupScriptField": {
       "hooks": "ХУКИ",
@@ -1486,19 +1482,11 @@
     },
     "hostScreenHeader": {
       "accounts": "Учётные записи",
-      "activeFilters_few": "Параметры рабочих пространств (активны {{count}} фильтра)",
-      "activeFilters_many": "Параметры рабочих пространств (активно {{count}} фильтров)",
-      "activeFilters_one": "Параметры рабочих пространств (активен {{count}} фильтр)",
-      "activeFilters_other": "Параметры рабочих пространств (активно {{count}} фильтра)",
       "backToHosts": "Назад к серверам",
-      "closeSearch": "Закрыть поиск",
       "floatingWorkspace": "Плавающее рабочее пространство",
       "hideSidebar": "Скрыть боковую панель",
       "reconnect": "Подключиться снова",
-      "searchWorkspaces": "Поиск рабочих пространств",
-      "tasks": "Задачи",
-      "workspaceOptions": "Параметры рабочих пространств",
-      "newWorkspace": "Новое рабочее пространство"
+      "tasks": "Задачи"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Удалить «{{name}}» ({{branch}})?",
@@ -1509,10 +1497,6 @@
       "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
       "sleep": "Перевести в сон",
       "unpin": "Открепить"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "Поиск рабочих пространств…",
-      "searchWorkspaces": "Поиск рабочих пространств"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Проверки: не пройдены",
@@ -1571,7 +1555,6 @@
       "backToOptions": "Вернуться к параметрам рабочих пространств",
       "cardDisplay": "Отображение карточек",
       "cardLayout": "Вид карточек",
-      "clearFilters": "Сбросить фильтры",
       "exceptDefaultBranch": "Кроме ветки по умолчанию",
       "filters": "Фильтры",
       "groupBy": "Группировать по",
@@ -2287,7 +2270,6 @@
       "workspaceDetailsHint": "Показывает полное название рабочего пространства и его расположение",
       "backToWorktrees": "Вернуться к рабочим деревьям",
       "moreActions": "Другие действия с сессией",
-      "openFileExplorer": "Открыть файловый проводник",
       "openSourceControl": "Открыть управление версиями",
       "reconnectToDesktop": "Переподключиться к компьютеру",
       "showSidebar": "Показать боковую панель",
@@ -2456,9 +2438,6 @@
       "title": "Быстрые команды",
       "untitled": "Без названия"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "Быстрые команды"
-    },
     "routeHelpers": {
       "connected": "Подключён",
       "connecting": "Подключение",
@@ -2516,8 +2495,7 @@
       "checkingCapabilities": "Проверяем возможности Orca на компьютере — повторите попытку чуть позже",
       "newTab": "Новая вкладка",
       "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере",
-      "tabStatus": "{{title}}, {{status}}",
-      "terminalLayout": "Расположение терминалов"
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Очистить терминал",
@@ -3228,7 +3206,8 @@
       "openNumberedPrWeb": "Открыть пул-реквест #{{number}} в браузере",
       "openPrWeb": "Открыть пул-реквест в браузере",
       "refresh": "Обновить данные управления версиями",
-      "title": "Управление версиями"
+      "title": "Управление версиями",
+      "moreActions": "Другие действия управления версиями"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3592,17 +3571,13 @@
       "recent": "Недавние",
       "retryHint": "Нажмите, чтобы повторить.",
       "searchProjects": "Поиск проектов",
-      "sort": "Сортировка проекта",
       "subtitle": "Выберите представление проекта для страницы «Задачи».",
       "title": "Проекты GitHub",
       "unsupportedLayout": "Orca пока не поддерживает этот макет проекта GitHub.",
       "view": "Представление проекта"
     },
     "githubViewControls": {
-      "fields": "Поля: {{fields}}",
-      "openView": "Открыть представление в GitHub",
-      "sort": "Сортировка: {{sort}}",
-      "source": "Источник: {{source}}"
+      "openView": "Открыть представление в GitHub"
     },
     "itemActions": {
       "changeStatus": "Изменить статус",
@@ -3694,17 +3669,8 @@
     "linearList": {
       "changeStatusFrom": "Изменить статус «{{status}}»"
     },
-    "linearViewControls": {
-      "displayButton": "Отображение",
-      "groupLabel": "Группировка: {{group}}",
-      "orderLabel": "Порядок: {{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "Отображаемые поля",
-      "linearGroupTitle": "Группировка задач Linear",
-      "linearOrderTitle": "Сортировка задач Linear",
-      "linearViewTitle": "Вид задач Linear",
-      "sortTasksTitle": "Сортировка задач"
+      "displayPropertiesTitle": "Отображаемые поля"
     },
     "listSurface": {
       "connectLinearButton": "Подключить Linear",
@@ -3773,8 +3739,6 @@
       "allSites": "Все сайты",
       "currentlyAscending": "По возрастанию · нажмите для сортировки по убыванию",
       "currentlyDescending": "По убыванию · нажмите для сортировки по возрастанию",
-      "fieldAscending": "{{field}} по возрастанию",
-      "fieldDescending": "{{field}} по убыванию",
       "fields": "Поля",
       "repos_few": "{{count}} репозитория",
       "repos_many": "{{count}} репозиториев",
@@ -3889,8 +3853,7 @@
     },
     "providerControls": {
       "myTodos": "Мои дела",
-      "projectMergeRequests": "MR проекта",
-      "sort": "Сортировка: {{sortLabel}}"
+      "projectMergeRequests": "MR проекта"
     },
     "providerItemList": {
       "intoBranch": "в {{base}}",
@@ -3918,7 +3881,6 @@
       "queryingSource": "Запрос к {{source}}",
       "repoDescription": "Выберите репозитории для поиска.",
       "repos": "Репозитории",
-      "taskSource": "Источник задач",
       "upstream": "Вышестоящий репозиторий"
     },
     "providerViewProjection": {
@@ -3930,10 +3892,7 @@
       "default": "По умолчанию",
       "defaultSubtitle": "{{subtitle}} · По умолчанию",
       "issues": "Задачи",
-      "list": "Список",
-      "noGrouping": "Без группировки",
       "openState": "Открытые",
-      "priority": "Приоритет",
       "projects": "Проекты",
       "pullRequests": "PR",
       "teams_few": "{{count}} команды",
@@ -3947,7 +3906,6 @@
       "unassigned": "Не назначено"
     },
     "screenChrome": {
-      "connectLinear": "Подключить Linear",
       "newGitHubIssue": "Новая задача GitHub",
       "newLinearIssue": "Новая задача Linear",
       "refreshGitHub": "Обновить задачи GitHub",

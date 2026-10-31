@@ -661,7 +661,6 @@
       "tryDifferentFilter": "Einen anderen Review-Filter ausprobieren."
     },
     "diffReviewDrawers": {
-      "actionsTitle": "Review-Aktionen",
       "addNote": "Notiz hinzufügen",
       "cancelNote": "Notizeingabe abbrechen",
       "clearSentNotes": "Gesendete Notizen löschen",
@@ -812,9 +811,6 @@
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Bereich schließen"
-    },
-    "newWorkspaceFab": {
-      "newWorkspace": "Arbeitsbereich erstellen"
     },
     "newWorkspaceSetupScriptField": {
       "hooks": "HOOKS",
@@ -1400,17 +1396,11 @@
     },
     "hostScreenHeader": {
       "accounts": "Konten",
-      "activeFilters_one": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
-      "activeFilters_other": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
       "backToHosts": "Zurück zu den Hosts",
-      "closeSearch": "Suche schließen",
       "floatingWorkspace": "Schwebender Arbeitsbereich",
       "hideSidebar": "Seitenleiste ausblenden",
       "reconnect": "Erneut verbinden",
-      "searchWorkspaces": "Arbeitsbereiche durchsuchen",
-      "tasks": "Aufgaben",
-      "workspaceOptions": "Arbeitsbereichsoptionen",
-      "newWorkspace": "Neuer Arbeitsbereich"
+      "tasks": "Aufgaben"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "„{{name}}“ ({{branch}}) löschen?",
@@ -1421,10 +1411,6 @@
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "sleep": "In Ruhezustand versetzen",
       "unpin": "Anheftung aufheben"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "Arbeitsbereiche durchsuchen…",
-      "searchWorkspaces": "Arbeitsbereiche durchsuchen"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fehlgeschlagen",
@@ -1483,7 +1469,6 @@
       "backToOptions": "Zurück zu den Arbeitsbereichsoptionen",
       "cardDisplay": "Kartendarstellung",
       "cardLayout": "Kartenlayout",
-      "clearFilters": "Filter zurücksetzen",
       "exceptDefaultBranch": "Außer Standard-Branch",
       "filters": "Filter",
       "groupBy": "Gruppieren nach",
@@ -2139,7 +2124,6 @@
       "workspaceDetailsHint": "Zeigt den vollständigen Namen des Arbeitsbereichs und wo er sich befindet",
       "backToWorktrees": "Zurück zu den Worktrees",
       "moreActions": "Weitere Sitzungsaktionen",
-      "openFileExplorer": "Datei-Explorer öffnen",
       "openSourceControl": "Quellcodeverwaltung öffnen",
       "reconnectToDesktop": "Erneut mit dem Desktop verbinden",
       "showSidebar": "Seitenleiste anzeigen",
@@ -2306,9 +2290,6 @@
       "title": "Schnellbefehle",
       "untitled": "Ohne Titel"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "Schnellbefehle"
-    },
     "routeHelpers": {
       "connected": "Verbunden",
       "connecting": "Verbindung wird hergestellt",
@@ -2366,8 +2347,7 @@
       "checkingCapabilities": "Desktop-Funktionen werden geprüft – gleich erneut versuchen",
       "newTab": "Neuen Tab erstellen",
       "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich",
-      "tabStatus": "{{title}}, {{status}}",
-      "terminalLayout": "Terminal-Layout"
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminal leeren",
@@ -3036,7 +3016,8 @@
       "openNumberedPrWeb": "Pull Request #{{number}} im Web öffnen",
       "openPrWeb": "Pull Request im Web öffnen",
       "refresh": "Quellcodeverwaltung aktualisieren",
-      "title": "Quellcodeverwaltung"
+      "title": "Quellcodeverwaltung",
+      "moreActions": "Weitere Aktionen der Quellcodeverwaltung"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3392,17 +3373,13 @@
       "recent": "Zuletzt verwendet",
       "retryHint": "Zum Wiederholen tippen.",
       "searchProjects": "Projekte suchen",
-      "sort": "Projektsortierung",
       "subtitle": "Eine Projektansicht für die Seite „Aufgaben“ auswählen.",
       "title": "GitHub Projects",
       "unsupportedLayout": "Orca unterstützt dieses Layout in GitHub Projects noch nicht.",
       "view": "Projektansicht"
     },
     "githubViewControls": {
-      "fields": "Felder: {{fields}}",
-      "openView": "Ansicht in GitHub öffnen",
-      "sort": "Sortierung: {{sort}}",
-      "source": "Quelle: {{source}}"
+      "openView": "Ansicht in GitHub öffnen"
     },
     "itemActions": {
       "changeStatus": "Status ändern",
@@ -3492,17 +3469,8 @@
     "linearList": {
       "changeStatusFrom": "Status ändern (aktuell: {{status}})"
     },
-    "linearViewControls": {
-      "displayButton": "Anzeige",
-      "groupLabel": "Gruppierung: {{group}}",
-      "orderLabel": "Sortierung: {{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "Angezeigte Eigenschaften",
-      "linearGroupTitle": "Linear-Issues gruppieren",
-      "linearOrderTitle": "Linear-Issues sortieren",
-      "linearViewTitle": "Linear-Ansicht",
-      "sortTasksTitle": "Aufgaben sortieren"
+      "displayPropertiesTitle": "Angezeigte Eigenschaften"
     },
     "listSurface": {
       "connectLinearButton": "Linear verbinden",
@@ -3571,8 +3539,6 @@
       "allSites": "Alle Websites",
       "currentlyAscending": "Aktuell aufsteigend · für absteigende Sortierung tippen",
       "currentlyDescending": "Aktuell absteigend · für aufsteigende Sortierung tippen",
-      "fieldAscending": "{{field}} aufsteigend",
-      "fieldDescending": "{{field}} absteigend",
       "fields": "Felder",
       "repos_one": "{{count}} Repo",
       "repos_other": "{{count}} Repos",
@@ -3681,8 +3647,7 @@
     },
     "providerControls": {
       "myTodos": "Meine To-dos",
-      "projectMergeRequests": "Projekt-MRs",
-      "sort": "Sortierung: {{sortLabel}}"
+      "projectMergeRequests": "Projekt-MRs"
     },
     "providerItemList": {
       "intoBranch": "in {{base}}",
@@ -3710,7 +3675,6 @@
       "queryingSource": "Abfrage von {{source}}",
       "repoDescription": "Abzufragende Repositorys auswählen.",
       "repos": "Repositorys",
-      "taskSource": "Aufgabenquelle",
       "upstream": "Upstream"
     },
     "providerViewProjection": {
@@ -3722,10 +3686,7 @@
       "default": "Standard",
       "defaultSubtitle": "{{subtitle}} · Standard",
       "issues": "Issues",
-      "list": "Liste",
-      "noGrouping": "Keine Gruppierung",
       "openState": "Offen",
-      "priority": "Priorität",
       "projects": "Projekte",
       "pullRequests": "PRs",
       "teams_one": "{{count}} Team",
@@ -3737,7 +3698,6 @@
       "unassigned": "Nicht zugewiesen"
     },
     "screenChrome": {
-      "connectLinear": "Linear verbinden",
       "newGitHubIssue": "Neues GitHub-Issue",
       "newLinearIssue": "Neues Linear-Issue",
       "refreshGitHub": "GitHub-Aufgaben aktualisieren",
