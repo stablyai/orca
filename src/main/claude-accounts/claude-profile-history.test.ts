@@ -1,3 +1,5 @@
+import { loadHistoryFilesystem } from '../../shared/history-filesystem'
+import { observeHistoryFilesystem } from '../../shared/history-filesystem-test-boundary'
 import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -96,19 +98,20 @@ describe('Claude profile history sharing', () => {
     for (const name of ['a.json', 'b.json', 'c.json']) {
       fs.writeFileSync(join(f.profileHome, 'todos', name), name)
     }
-    const actual = vi.mocked(fs.renameSync).getMockImplementation()!
-    vi.mocked(fs.renameSync).mockImplementation((from, to) => {
-      if (String(from).endsWith('b.json')) {
-        throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+    const restore = observeHistoryFilesystem(
+      loadHistoryFilesystem(),
+      (operation, _parent, args) => {
+        if (operation === 'move' && args[0] === 'b.json') {
+          throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+        }
       }
-      actual(from, to)
-    })
+    )
     const report = await f.share()
     expect(fs.readdirSync(join(f.defaultHome, 'todos')).sort()).toEqual(['a.json', 'c.json'])
     expect(report.warnings).toContainEqual(
       expect.objectContaining({ surface: 'todos', code: 'failed' })
     )
-    vi.mocked(fs.renameSync).mockReset()
+    restore()
     await f.share()
     expect(fs.readdirSync(join(f.defaultHome, 'todos')).sort()).toEqual([
       'a.json',
@@ -120,12 +123,10 @@ describe('Claude profile history sharing', () => {
     const f = fixture()
     fs.mkdirSync(join(f.profileHome, 'plans'))
     fs.writeFileSync(join(f.profileHome, 'plans/p.md'), 'plan')
-    const actual = vi.mocked(fs.statSync).getMockImplementation()!
-    vi.mocked(fs.statSync).mockImplementation((file, options) => {
-      const stats = actual(file, options)
-      return file === join(f.profileHome, 'plans') && stats
-        ? Object.assign(stats, { dev: -1 })
-        : stats
+    const restore = observeHistoryFilesystem(loadHistoryFilesystem(), (operation) => {
+      if (operation === 'sameDevice') {
+        throw Object.assign(new Error('cross-device'), { code: 'EXDEV' })
+      }
     })
     const report = await f.share()
     expect(report.warnings).toContainEqual(
@@ -133,6 +134,7 @@ describe('Claude profile history sharing', () => {
     )
     expect(fs.lstatSync(join(f.profileHome, 'plans')).isDirectory()).toBe(true)
     expect(fs.readFileSync(join(f.profileHome, 'plans/p.md'), 'utf8')).toBe('plan')
+    restore()
   })
   itLinks('retains prompt cursors, drains late appends and repairs a CLI replacement', async () => {
     const f = fixture()
@@ -256,5 +258,118 @@ describe('Claude profile history sharing', () => {
     expect(fs.realpathSync(join(f.profileHome, 'projects'))).toBe(join(userConfigDir, 'projects'))
     expect(fs.readFileSync(join(userConfigDir, 'history.jsonl'), 'utf8')).toBe('p1\n')
     expect(fs.readdirSync(f.defaultHome)).toEqual([])
+  })
+})
+
+describe('consuming publication interleavings with the actual addon', () => {
+  it('retains two concurrent same-name variants and never promotes a source subtree into shared', async () => {
+    const f = fixture(),
+      other = join(f.userHome, 'other-profile')
+    fs.mkdirSync(other)
+    for (const [home, text] of [
+      [f.profileHome, 'A'],
+      [other, 'B']
+    ]) {
+      fs.mkdirSync(join(home, 'projects', 'nested'), { recursive: true })
+      fs.writeFileSync(join(home, 'projects', 'nested', 'entry'), text)
+    }
+    const { mergeClaudeProfileDirectory } = await import('./claude-profile-history')
+    const { createClaudeProfileReport } = await import('./claude-profile-report')
+    let rival = false
+    const moved: string[] = []
+    const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation, path, args) => {
+      if (operation !== 'move') {
+        return
+      }
+      moved.push(String(args[0]))
+      if (
+        !rival &&
+        path === join(f.profileHome, 'projects.orca-profile-merge', 'nested') &&
+        args[0] === 'entry'
+      ) {
+        rival = true
+        mergeClaudeProfileDirectory(
+          other,
+          f.defaultHome,
+          'projects',
+          process.platform,
+          createClaudeProfileReport()
+        )
+      }
+    })
+    try {
+      const report = await f.share()
+      expect(rival).toBe(true)
+      expect(moved).not.toContain('nested')
+      expect(fs.readFileSync(join(f.defaultHome, 'projects', 'nested', 'entry'), 'utf8')).toBe('B')
+      expect(
+        fs.readFileSync(
+          join(f.profileHome, 'projects.orca-profile-merge', 'nested', 'entry'),
+          'utf8'
+        )
+      ).toBe('A')
+      expect(report.warnings).toContainEqual(
+        expect.objectContaining({ surface: 'projects', code: 'retained-conflict' })
+      )
+    } finally {
+      stop()
+    }
+  })
+
+  it('does not follow a reused pending pathname while its original directory is open', async () => {
+    const f = fixture(),
+      pending = join(f.profileHome, 'projects.orca-profile-merge')
+    const old = join(f.profileHome, 'opened-pending'),
+      s0 = join(f.userHome, 's0')
+    fs.mkdirSync(pending)
+    fs.mkdirSync(s0)
+    fs.writeFileSync(join(pending, 'original'), 'A')
+    fs.writeFileSync(join(s0, 'never-drain'), 'S0')
+    let reused = false
+    const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation, path) => {
+      if (!reused && operation === 'entries' && path === pending) {
+        reused = true
+        fs.renameSync(pending, old)
+        fs.symlinkSync(s0, pending, process.platform === 'win32' ? 'junction' : 'dir')
+      }
+    })
+    try {
+      await f.share()
+      expect(reused).toBe(true)
+      expect(fs.readFileSync(join(s0, 'never-drain'), 'utf8')).toBe('S0')
+      expect(fs.readFileSync(join(f.defaultHome, 'projects', 'original'), 'utf8')).toBe('A')
+      expect(fs.existsSync(join(f.defaultHome, 'projects', 'never-drain'))).toBe(false)
+      expect(fs.lstatSync(pending).isSymbolicLink()).toBe(true)
+    } finally {
+      stop()
+    }
+  })
+
+  it('collects merge-back conflicts when native recreates the private root before a failed link', async () => {
+    const f = fixture()
+    fs.mkdirSync(join(f.profileHome, 'projects'))
+    fs.writeFileSync(join(f.profileHome, 'projects', 'entry'), 'A')
+    let denied = false
+    const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation, path, args) => {
+      if (!denied && operation === 'link' && path === f.profileHome && args[0] === 'projects') {
+        denied = true
+        fs.mkdirSync(join(f.profileHome, 'projects'))
+        fs.writeFileSync(join(f.profileHome, 'projects', 'entry'), 'B')
+        throw Object.assign(new Error('publication denied'), { code: 'EACCES' })
+      }
+    })
+    try {
+      const report = await f.share()
+      expect(report.surfaces.projects).toBe('failed')
+      expect(report.warnings).toContainEqual(
+        expect.objectContaining({ surface: 'projects', code: 'retained-conflict' })
+      )
+      expect(fs.readFileSync(join(f.profileHome, 'projects', 'entry'), 'utf8')).toBe('B')
+      expect(
+        fs.readFileSync(join(f.profileHome, 'projects.orca-profile-merge', 'entry'), 'utf8')
+      ).toBe('A')
+    } finally {
+      stop()
+    }
   })
 })

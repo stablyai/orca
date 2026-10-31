@@ -30,9 +30,10 @@ export function runClaudeProfileSetupInWorker(
 ): Promise<ClaudeProfileSetupReport> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(path, { workerData: job })
+    let failure: Error | undefined
     // Bound the wait for launches blocked on this setup.
     const timer = setTimeout(() => {
-      reject(new Error('Claude account setup timed out'))
+      failure = new Error('Claude account setup timed out')
       void worker.terminate()
     }, timeoutMs)
     let result:
@@ -42,10 +43,14 @@ export function runClaudeProfileSetupInWorker(
     worker.once('message', (message) => {
       result = message
     })
-    worker.once('error', reject)
+    worker.once('error', (error) => {
+      failure = error
+    })
     worker.once('exit', (code) => {
       clearTimeout(timer)
-      if (result?.ok) {
+      if (failure) {
+        reject(failure)
+      } else if (result?.ok) {
         resolve(result.report)
       } else {
         reject(new Error(result?.error ?? `Claude account setup worker exited (${code})`))

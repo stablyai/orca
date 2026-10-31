@@ -170,6 +170,10 @@ writeFileSync(
   `${runtimeAsset.executableSha256}\n`
 )
 stageNodePty(BUILD_TARGET)
+copyFileSync(
+  join(PREBUILDS_DIR, BUILD_TARGET, 'history-filesystem.node'),
+  join(OUT_DIR, 'history-filesystem.node')
+)
 await stageParcelWatcher(BUILD_TARGET)
 stageOrcadWindowsProcessTree(ROOT, OUT_DIR, BUILD_TARGET)
 stageOrcadWindowsCliLauncher(ROOT, OUT_DIR, BUILD_TARGET)

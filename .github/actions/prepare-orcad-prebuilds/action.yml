@@ -47,7 +47,7 @@ runs:
         path: ${{ steps.orcad-prebuild-cache-identity.outputs.path }}
         key: ${{ steps.orcad-prebuild-cache-identity.outputs.key }}
 
-    - name: Build and smoke this runner's node-pty prebuild slot under the pinned Node
+    - name: Build and smoke this runner's PTY and history-filesystem prebuild slot under the pinned Node
       shell: bash
       env:
         WINDOWS_PREBUILD_CACHE_HIT: ${{ steps.orcad-prebuild-cache-restore.outputs.cache-hit }}

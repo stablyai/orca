@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
@@ -32,6 +32,25 @@ it('runs account setup in the built worker entry, off the calling thread', async
     external: ['electron'],
     logLevel: 'silent'
   })
+
+  await expect(
+    runClaudeProfileSetupInWorker(
+      {
+        dataRoot,
+        profile,
+        userHome,
+        userConfigDir: undefined,
+        hooks: false,
+        claudeVersion: undefined
+      },
+      entry
+    )
+  ).rejects.toThrow('History filesystem build is unavailable')
+  expect(existsSync(join(dataRoot, 'claude-profiles', 'a', 'profile.json'))).toBe(false)
+  copyFileSync(
+    resolve('native/history-filesystem/build/Release/history_filesystem.node'),
+    join(root, 'history-filesystem.node')
+  )
 
   const report = await runClaudeProfileSetupInWorker(
     {

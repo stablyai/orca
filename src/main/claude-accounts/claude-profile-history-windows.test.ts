@@ -61,11 +61,6 @@ describe('Claude profile history sharing on Windows', () => {
     expect(report.warnings).toEqual([])
     expect(report.surfaces.projects).toBe('linked')
     expect(report.surfaces['history.jsonl']).toBe('linked')
-    expect(fs.symlinkSync).toHaveBeenCalledWith(
-      join(f.defaultHome, 'projects'),
-      join(f.profileHome, 'projects'),
-      'junction'
-    )
     expect(fs.lstatSync(join(f.profileHome, 'projects')).isSymbolicLink()).toBe(true)
     expect(fs.readFileSync(join(f.defaultHome, 'projects/session.jsonl'), 'utf8')).toBe('own')
     expect(f.isHardlinked()).toBe(true)

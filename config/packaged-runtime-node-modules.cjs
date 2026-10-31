@@ -21,6 +21,7 @@ const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
 
 const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
+  '@orca/history-filesystem',
   '@anthropic-ai/claude-agent-sdk',
   '@linear/sdk',
   '@orca/process-host',

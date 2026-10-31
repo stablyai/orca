@@ -1,3 +1,4 @@
+import { loadHistoryFilesystem } from '../../shared/history-filesystem'
 import { existsSync } from 'node:fs'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { shareClaudeProfileHistory } from './claude-profile-history'
@@ -29,6 +30,7 @@ export async function provisionClaudeAccountProfile(args: {
   installHooks: ((target: { configDir: string }) => AgentHookInstallStatus) | null
   platform?: NodeJS.Platform
 }): Promise<ClaudeProfileSetupReport> {
+  loadHistoryFilesystem()
   const platform = args.platform ?? process.platform
   const report = createClaudeProfileReport()
   const firstSetup = !existsSync(claudeProfileMarkerPath(args.profile))

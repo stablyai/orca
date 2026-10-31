@@ -196,6 +196,9 @@ importers:
 
   .:
     dependencies:
+      '@orca/history-filesystem':
+        specifier: workspace:*
+        version: link:native/history-filesystem
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.284
         version: 0.3.284(@anthropic-ai/sdk@0.122.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)
@@ -675,6 +678,12 @@ importers:
       sherpa-onnx-win-x64:
         specifier: 1.12.37
         version: 1.12.37
+
+  native/history-filesystem:
+    dependencies:
+      node-addon-api:
+        specifier: ^8.5.0
+        version: 8.9.2
 
   native/windows-registry:
     dependencies:
