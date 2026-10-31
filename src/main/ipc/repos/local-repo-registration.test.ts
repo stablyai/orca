@@ -4,9 +4,19 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { Store } from '../../persistence'
+import type { GitRepoRegistrationInfo } from '../../git/repo-detection'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repo'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { addLocalRepoFromPath } from './local-repo-registration'
+
+vi.mock(import('../../git/repo'), async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    inspectGitRepoForRegistrationAsync: vi.fn(actual.inspectGitRepoForRegistrationAsync)
+  }
+})
 
 vi.mock('../../repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
@@ -148,6 +158,44 @@ describe('addLocalRepoFromPath through a symlink alias', () => {
       error: 'The project was removed while it was being added.'
     })
     await expect(addLocalRepoFromPath(store, path, 'folder')).resolves.toHaveProperty('repo')
+  })
+
+  it('does not transfer a joining caller to a replacement identity during Git validation', async () => {
+    const path = join(root, 'chats')
+    await mkdir(path)
+    const repos: Repo[] = []
+    const store = createStore(repos)
+    let release = () => {}
+    vi.mocked(prepareLocalWorktreeRootForRepo).mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = () => resolve()
+      })
+    )
+    const creator = addLocalRepoFromPath(store, path, 'folder')
+    await vi.waitFor(() => expect(repos).toHaveLength(1))
+    let validate = (_info: GitRepoRegistrationInfo) => {}
+    vi.mocked(inspectGitRepoForRegistrationAsync).mockReturnValueOnce(
+      new Promise((resolve) => {
+        validate = resolve
+      })
+    )
+    const reads = vi.spyOn(store, 'getRepos')
+    const joining = addLocalRepoFromPath(store, path, 'git')
+    await vi.waitFor(() => expect(reads).toHaveBeenCalled())
+    release()
+    const created = await creator
+    await vi.waitFor(() => expect(inspectGitRepoForRegistrationAsync).toHaveBeenCalledOnce())
+    repos.splice(0)
+    const replacement = await addLocalRepoFromPath(store, path, 'folder')
+    expect(
+      'repo' in created && 'repo' in replacement && created.repo.id !== replacement.repo.id
+    ).toBe(true)
+    validate({ isRepo: true, rootPath: path, mainRepoPath: null })
+    await expect(joining).resolves.toMatchObject({
+      error: 'The project was removed while it was being added.'
+    })
+    expect(repos).toHaveLength(1)
+    expect(detectRepoIconAndUpstream).toHaveBeenCalledTimes(2)
   })
 })
 

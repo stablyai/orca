@@ -86,7 +86,8 @@ export async function addLocalRepoFromPath(
       }
       return addLocalRepoFromPath(store, path, kind, displayName)
     })
-    return currentResult(own)
+    const settled = currentResult(result)
+    return 'repo' in result && 'error' in settled ? settled : currentResult(own)
   } finally {
     if (pending.get(canonical) === registration) {
       pending.delete(canonical)
