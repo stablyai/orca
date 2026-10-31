@@ -1,5 +1,3 @@
-import { shouldSoftHideTaskPageGitHubWorkItem } from './task-page-github-work-item-filter-membership'
-import { shouldSkipLocalViewerQualifiers } from '@/hooks/useTaskPageGitHubWorkItemMutation'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
@@ -35,7 +33,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   } = model
   // Why: defense-in-depth — keep stale cache rows from leaking across the issue/PR split tabs.
   const applyTypeFilter = useCallback(
-    (items: readonly GitHubWorkItem[]) => {
+    (items: GitHubWorkItem[]) => {
       return items.filter((item) => {
         return activeGithubTaskKind === 'prs' ? item.type === 'pr' : item.type === 'issue'
       })
@@ -51,29 +49,13 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   // Retain membership-exit rows for rollback/cursors while sticky and pending hides remove them from display.
   const filteredWorkItems = useMemo(
     () =>
-      typeFilteredCurrentPageItems.filter((workItem) => {
-        const repo = getWorkItemRepo(repos, workItem)
-        return (
-          !shouldSoftHideTaskPageGitHubWorkItem({
-            item: workItem,
-            query: model.appliedTaskQuery,
-            viewerLogin: model.githubViewerLogin,
-            skipMeQualifiers: shouldSkipLocalViewerQualifiers(
-              repo ? getTaskPageRepoSourceContext(repo, 'github') : undefined
-            )
-          }) &&
+      typeFilteredCurrentPageItems.filter(
+        (workItem) =>
           !githubWorkItemMutation.softHiddenItemKeys.has(
             taskPageGitHubItemKey(workItem.repoId, workItem.id)
           )
-        )
-      }),
-    [
-      githubWorkItemMutation.softHiddenItemKeys,
-      typeFilteredCurrentPageItems,
-      model.appliedTaskQuery,
-      model.githubViewerLogin,
-      repos
-    ]
+      ),
+    [githubWorkItemMutation.softHiddenItemKeys, typeFilteredCurrentPageItems]
   )
   const softHiddenVisibleCount = useMemo(
     () => typeFilteredCurrentPageItems.length - filteredWorkItems.length,

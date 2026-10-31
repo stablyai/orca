@@ -209,7 +209,7 @@ describe('opened issue assignee ownership', () => {
     await click()
     expect(selected()).toBe('candidate-user')
     await render(item, [])
-    expect(selected()).toBe('')
+    expect(selected()).toBe('candidate-user')
 
     await render({ ...item, url: 'https://github.com/fork/widgets/issues/5' }, ['fork-user'])
     expect(selected()).toBe('fork-user')
@@ -263,10 +263,8 @@ describe('opened issue assignee ownership', () => {
   it('preserves optimistic edits across canonical URL casing and trailing paths', async () => {
     await render()
     await click()
-    await render({ ...item, url: 'https://GITHUB.COM/Upstream/Widgets/issues/5#activity' }, [
-      'canonical-user'
-    ])
-    expect(selected()).toBe('canonical-user')
+    await render({ ...item, url: 'https://GITHUB.COM/Upstream/Widgets/issues/5#activity' }, [])
+    expect(selected()).toBe('candidate-user')
   })
 
   it('uses the Project row repository before an unrelated item URL', async () => {
@@ -286,7 +284,7 @@ describe('opened issue assignee ownership', () => {
       [],
       projectOrigin
     )
-    expect(selected()).toBe('')
+    expect(selected()).toBe('candidate-user')
     await render(item, ['fork-user'], { ...projectOrigin, owner: 'fork' })
     expect(selected()).toBe('fork-user')
   })

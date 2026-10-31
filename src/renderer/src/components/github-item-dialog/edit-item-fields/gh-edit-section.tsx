@@ -1,5 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { githubWorkItemWriteKey } from '@/lib/github-work-item-writes'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
@@ -27,6 +26,15 @@ import {
 import { GHEditSectionTopColumns } from './gh-edit-section-top-columns'
 import { GHEditSectionHorizontal } from './gh-edit-section-horizontal'
 import { useGitHubDuplicateIssueCandidates } from '@/components/github/github-duplicate-issue-candidates'
+
+function sameLogins(a: string[] | undefined, b: string[]): boolean {
+  const key = (list: string[]) =>
+    list
+      .map((value) => value.toLowerCase())
+      .sort()
+      .join('\0')
+  return !!a && key(a) === key(b)
+}
 
 export function GHEditSection(props: GitHubItemDialogEditSectionProps): React.JSX.Element | null {
   const { item, projectOrigin } = props
@@ -62,26 +70,17 @@ function GHEditSectionItem({
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
   const [assigneeEdit, setAssigneeEdit] = useState<{
     value: string[]
-    input: string[]
-    edited: boolean
+    input: string[] | undefined
     acceptedRefresh: number
   } | null>(null)
-  const editedAssigneesItemKeyRef = useRef<string | null>(null)
   const mountedRef = useMountedRef()
-  const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
   const ownerTarget = useAppStore(
     useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? null, sourceContext))
   )
-  const { isPending, run: runMutation } = useImmediateMutation()
-  const writeKey = githubWorkItemWriteKey(item, sourceContext)
-  const run: typeof runMutation = useCallback(
-    (key, options) =>
-      runMutation(key, { ...options, writeKey: item.type === 'issue' ? writeKey : undefined }),
-    [runMutation, writeKey, item.type]
-  )
+  const { isPending, run } = useImmediateMutation()
   // Patch Project rows too; patchWorkItem updates only workItemsCache, leaving projectViewCache stale.
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
@@ -164,28 +163,25 @@ function GHEditSectionItem({
     onUse(item)
   }, [item, onOpenOrUse, onUse])
 
-  const assigneePending = isPending('assignees')
+  // The selection holds until a new reading changes the logins (or Refresh lands); unknown input keeps it.
   const staleEdit =
     assigneeEdit &&
-    !assigneePending &&
-    (assigneeEdit.acceptedRefresh !== acceptedRefresh || assigneeEdit.input !== assignees)
+    !isPending('assignees') &&
+    (assigneeEdit.acceptedRefresh !== acceptedRefresh ||
+      (assignees !== undefined && !sameLogins(assigneeEdit.input, assignees)))
   if (staleEdit) {
     setAssigneeEdit(null)
-  } else if (assigneeEdit && assigneeEdit.input !== assignees) {
-    setAssigneeEdit({ ...assigneeEdit, input: assignees })
   }
-  const localAssignees = !staleEdit && assigneeEdit ? assigneeEdit.value : assignees
+  const localAssignees = !staleEdit && assigneeEdit ? assigneeEdit.value : (assignees ?? [])
   const setLocalAssignees = useCallback(
     (value: string[]) => {
-      const edited = editedAssigneesItemKeyRef.current === assigneesItemKey
       setAssigneeEdit((current) => ({
         value,
-        input: current?.input ?? assignees,
-        edited,
+        input: current ? current.input : assignees,
         acceptedRefresh: current?.acceptedRefresh ?? acceptedRefresh
       }))
     },
-    [assignees, assigneesItemKey, acceptedRefresh]
+    [assignees, acceptedRefresh]
   )
 
   const handleStateChange = useCallback(
@@ -307,8 +303,6 @@ function GHEditSectionItem({
         item,
         login,
         localAssignees,
-        assigneesItemKey,
-        editedAssigneesItemKeyRef,
         itemNumber: item.number,
         itemRepoId: item.repoId,
         repoPath,
@@ -322,9 +316,7 @@ function GHEditSectionItem({
       })
     },
     [
-      item.number,
       item,
-      assigneesItemKey,
       repoPath,
       sourceContext,
       projectOrigin,

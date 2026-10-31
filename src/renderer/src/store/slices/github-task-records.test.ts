@@ -134,10 +134,10 @@ describe('shared GitHub task records through production store actions', () => {
       a(true)
       a(true)
       expect(lookup).not.toHaveBeenCalled()
-      expect(cache.projectItem(row, binding).assignees).toEqual([user])
+      expect(cache.projectItem(row).assignees).toEqual([user])
       b(success)
       expect(lookup).toHaveBeenCalledTimes(1)
-      expect(cache.projectItem(row, binding).labels).toEqual(success ? ['bug'] : [])
+      expect(cache.projectItem(row).labels).toEqual(success ? ['bug'] : [])
       canonical.resolve({
         ...row,
         assignees: [user],
@@ -145,7 +145,7 @@ describe('shared GitHub task records through production store actions', () => {
         updatedAt: '2026-10-31T12:00:03Z'
       })
       await flush()
-      expect(cache.projectItem(row, binding).assignees).toEqual([user])
+      expect(cache.projectItem(row).assignees).toEqual([user])
     }
   )
 
@@ -163,7 +163,7 @@ describe('shared GitHub task records through production store actions', () => {
     expect(lookup).toHaveBeenCalledTimes(1)
     c2.resolve({ ...row, labels: ['new'] })
     await flush()
-    expect(cache.projectItem(row, binding).labels).toEqual(['new'])
+    expect(cache.projectItem(row).labels).toEqual(['new'])
   })
 
   it('serializes full and light reads and allows a same-second external reversal', async () => {
@@ -178,7 +178,7 @@ describe('shared GitHub task records through production store actions', () => {
     first.resolve({ ...row, assignees: [user] })
     expect(await refresh).toBe(true)
     expect(full).toHaveBeenCalledTimes(1)
-    expect(cache.projectItem(row, binding).assignees).toEqual([])
+    expect(cache.projectItem(row).assignees).toEqual([])
   })
 
   it('keeps failed canonical data, retries on the next conflicting search and adopts recovery', async () => {
@@ -187,13 +187,11 @@ describe('shared GitHub task records through production store actions', () => {
     const edit = cache.operation(row, binding, (base) => ({ ...base, labels: ['confirmed'] }))
     edit(true)
     await flush()
-    expect(cache.hasFailed(row, binding)).toBe(true)
     const external = { ...row, labels: ['outside'], updatedAt: '2026-10-31T12:00:03Z' }
     lookup.mockResolvedValueOnce(external)
     expect(cache.acceptSearch([external], binding)[0].labels).toEqual(['confirmed'])
     await flush()
-    expect(cache.projectItem(row, binding).labels).toEqual(['outside'])
-    expect(cache.hasFailed(row, binding)).toBe(false)
+    expect(cache.projectItem(row).labels).toEqual(['outside'])
     expect(lookup).toHaveBeenCalledTimes(2)
   })
 
@@ -208,7 +206,7 @@ describe('shared GitHub task records through production store actions', () => {
     }
     expect(cache.acceptSearch([unknown], binding)[0].assignees).toEqual([user])
     expect(await cache.readCanonical(row, binding, async () => row)).toBe(false)
-    expect(cache.projectItem(row, binding).title).toBe('Newer')
+    expect(cache.projectItem(row).title).toBe('Newer')
   })
 
   it('retires relevant confirmed masks while preserving unrelated PR controls', async () => {
@@ -217,7 +215,7 @@ describe('shared GitHub task records through production store actions', () => {
     setLastConfirmedClientValue(null, row.repoId, row.id, 'state', 'closed')
     setLastConfirmedClientValue(null, row.repoId, row.id, 'autoMerge', true)
     await cache.readCanonical(row, binding, async () => row)
-    const merged = getRegistryMergedTaskPageGitHubWorkItem(cache.projectItem(row, binding), null)
+    const merged = getRegistryMergedTaskPageGitHubWorkItem(cache.projectItem(row), null)
     expect(merged.assignees).toEqual([])
     expect(merged.state).toBe('open')
     expect(merged.autoMergeEnabled).toBe(true)
@@ -225,7 +223,6 @@ describe('shared GitHub task records through production store actions', () => {
 
   it('disposes an account incarnation and rejects its deferred result after A to B to A', async () => {
     const { store, cache, binding } = setup()
-    const old = cache.acceptSearch([row], binding)[0]
     const response = deferred<GitHubWorkItem>()
     const read = cache.readCanonical(row, binding, () => response.promise)
     const listener = vi.fn()
@@ -234,8 +231,8 @@ describe('shared GitHub task records through production store actions', () => {
     store.setState({ repos: [repo] })
     response.resolve({ ...row, title: 'Old Alice' })
     expect(await read).toBe(false)
-    expect(cache.isObservedCurrent(old)).toBe(false)
     expect(cache.current(binding)).toBe(false)
+    expect(cache.projectItem(row).title).toBe('Original')
     expect(listener).toHaveBeenCalled()
     expect(cache.capture(repo)!.incarnation).not.toBe(binding.incarnation)
   })
@@ -244,49 +241,52 @@ describe('shared GitHub task records through production store actions', () => {
     const { cache, binding } = setup()
     await cache.readCanonical(row, binding, async () => ({ ...row, title: 'Confirmed' }))
     const enterprise = { ...row, url: 'https://ghe.example:8443/acme/widgets/issues/42' }
-    expect(cache.projectItem(enterprise, binding).title).toBe('Original')
+    expect(cache.projectItem(enterprise).title).toBe('Original')
   })
 
-  it('retains a visible pinned row during bounded eviction without extra reads for unrelated rows', async () => {
+  it('treats presentation-only differences as the same reading and never records pull requests', async () => {
     const { cache, binding } = setup()
-    const visible = cache.acceptSearch([row], binding)[0]
-    const unpin = cache.pinObserved(visible)
-    await cache.readCanonical(row, binding, async () => ({ ...row, title: 'Visible' }))
-    for (let n = 100; n < 620; n++) {
-      const item = {
-        ...row,
-        id: `issue:${n}`,
-        number: n,
-        url: `https://github.com/acme/widgets/issues/${n}`
-      }
-      await cache.readCanonical(item, binding, async () => item)
+    await cache.readCanonical(row, binding, async () => ({ ...row, assignees: [user] }))
+    const enriched = {
+      ...row,
+      authorAvatarUrl: 'https://avatars.example/u/1?s=48&v=4',
+      assignees: [{ ...user, name: 'Alice Profile', avatarUrl: 'alice-48.png' }]
     }
-    expect(cache.projectObserved(visible).title).toBe('Visible')
+    expect(cache.acceptSearch([enriched], binding)[0]).toBe(enriched)
     expect(lookup).not.toHaveBeenCalled()
-    unpin()
+    const pr = {
+      ...row,
+      id: 'pr:7',
+      type: 'pr' as const,
+      number: 7,
+      url: 'https://github.com/acme/widgets/pull/7'
+    }
+    expect(
+      cache.operation(pr, binding, (base) => ({ ...base, state: 'merged' }))(true)?.state
+    ).toBe('merged')
+    expect(await cache.readCanonical(pr, binding, async () => pr)).toBe(false)
+    expect(cache.projectItem({ ...pr, state: 'merged' }).state).toBe('merged')
   })
 
-  it('keeps legacy servers without a safe item route on simple confirmed patches', () => {
-    const { store, cache, binding } = setup()
-    Object.assign(mockApi.gh, { workItemByOwnerRepo: undefined })
-    const patch = vi.spyOn(store.getState(), 'patchWorkItem')
-    const edit = cache.operation(row, binding, (base) => ({ ...base, assignees: [user] }))
-    edit(true)
-    expect(patch).toHaveBeenCalledWith(
-      row.id,
-      expect.objectContaining({ assignees: [user] }),
-      row.repoId,
-      expect.anything()
-    )
+  it('serves a verification joined to a discarded Refresh read with exactly one item read', async () => {
+    const { cache, binding } = setup()
+    await cache.readCanonical(row, binding, async () => row)
+    const full = deferred<GitHubWorkItem | null>()
+    const refresh = cache.readCanonical(row, binding, () => full.promise)
+    await flush()
+    cache.acceptSearch([{ ...row, title: 'Same second' }], binding)
     expect(lookup).not.toHaveBeenCalled()
-    expect(cache.hasFailed(row, binding)).toBe(false)
+    full.resolve(null)
+    expect(await refresh).toBe(false)
+    await flush()
+    expect(lookup).toHaveBeenCalledTimes(1)
   })
 
   it('projects only issue facts into another account board, preserving board data and ambiguity', async () => {
     const bobRepo = { ...repo, id: 'bob-repo', ghAccount: { host: 'github.com', user: 'bob' } }
     const { cache, binding } = setup([repo, bobRepo])
     const source = projectRow()
-    const table = cache.observeProject(board([source]), { kind: 'local' })
+    const table = board([source])
     await cache.readCanonical(row, binding, async () => ({
       ...row,
       title: 'Confirmed',
@@ -303,7 +303,7 @@ describe('shared GitHub task records through production store actions', () => {
       labels: ['original', 'new'],
       assignees: [user]
     }))
-    const projected = cache.projectObservedTable(table).rows[0]
+    const projected = cache.projectTable(table, 'local').rows[0]
     expect(projected.content.title).toBe('Confirmed')
     expect(projected.content.state).toBe('CLOSED')
     expect(projected.content.assignees).toEqual(source.content.assignees)
@@ -327,9 +327,8 @@ describe('shared GitHub task records through production store actions', () => {
           : kind === 'hostless'
             ? { ...source, content: { ...source.content, url: '/acme/widgets/issues/42' } }
             : { ...source, itemType: kind }
-      const table = cache.observeProject(board([changed]), { kind: 'local' })
       await cache.readCanonical(row, binding, async () => ({ ...row, title: 'Confirmed' }))
-      expect(cache.projectObservedTable(table).rows[0].content.title).toBe('Indexed')
+      expect(cache.projectTable(board([changed]), 'local').rows[0].content.title).toBe('Indexed')
     }
   )
   it('returns accepted rows on page N and never invents query membership', async () => {
@@ -374,42 +373,52 @@ describe('shared GitHub task records through production store actions', () => {
     cache.operation(row, binding, (base) => ({ ...base, labels: ['first'] }))(true)
     await flush()
     expect(cache.canTrack(binding)).toBe(false)
-    expect(cache.hasFailed(row, binding)).toBe(false)
     expect(
       cache.operation(row, binding, (base) => ({ ...base, labels: ['next'] }))(true)?.labels
     ).toEqual(['next'])
     expect(lookup).toHaveBeenCalledTimes(1)
   })
 
-  it('removes disposed Project projections and preserves local board fields', async () => {
+  it('verifies conflicting board rows once per fetch, never from truncation or re-render', async () => {
     const { store, cache, binding } = setup()
-    const raw = board([projectRow()])
-    const observed = cache.observeProject(raw, { kind: 'local' })
-    await cache.readCanonical(row, binding, async () => ({ ...row, title: 'Confirmed' }))
-    const projected = cache.projectObservedTable(observed)
-    const moved = cache.copyProjectTable(projected, {
-      ...projected,
-      rows: [{ ...projected.rows[0], position: 9 }]
-    })
+    const labels = Array.from({ length: 11 }, (_, n) => `label-${n}`)
+    const confirmed = { ...row, title: 'Confirmed', labels, assignees: [user] }
+    await cache.readCanonical(row, binding, async () => confirmed)
+    const truncated = projectRow()
+    truncated.content = {
+      ...truncated.content,
+      title: 'Confirmed',
+      labels: labels.slice(0, 10).map((name) => ({ name, color: 'abcdef' }))
+    }
+    cache.observeProject(board([truncated]), { kind: 'local' })
+    expect(cache.projectTable(board([truncated]), 'local').rows[0]).toBe(truncated)
+    expect(lookup).not.toHaveBeenCalled()
+    lookup.mockResolvedValue(confirmed)
+    for (let fetch = 1; fetch <= 2; fetch++) {
+      const stale = board([projectRow()])
+      cache.observeProject(stale, { kind: 'local' })
+      await flush()
+      for (let render = 0; render < 3; render++) {
+        expect(cache.projectTable(stale, 'local').rows[0].content.title).toBe('Confirmed')
+      }
+      expect(lookup).toHaveBeenCalledTimes(fetch)
+    }
     store.setState({ repos: [{ ...repo, ghAccount: { host: 'github.com', user: 'bob' } }] })
-    const released = cache.projectObservedTable(moved)
-    expect(released.rows[0].content.title).toBe('Indexed')
-    expect(released.rows[0].position).toBe(9)
+    expect(cache.projectTable(board([projectRow()]), 'local').rows[0].content.title).toBe('Indexed')
   })
-  it('disposes deferred rows and reads on a connection incarnation change', async () => {
+  it('keeps every row through a connection change and drops only the old record', async () => {
     setRuntimeEnvironmentConnectionGenerationForTests('p34245-test', 1)
     const remote = { ...repo, executionHostId: 'runtime:p34245-test' }
     const { store, cache, binding } = setup([remote])
-    const observed = cache.acceptSearch([row], binding)[0]
+    const rows = [row, { ...row, id: 'issue:43', number: 43, url: `${row.url.slice(0, -2)}43` }]
+    await cache.readCanonical(row, binding, async () => ({ ...row, title: 'Confirmed' }))
     const response = deferred<GitHubWorkItem>()
     const read = cache.readCanonical(row, binding, () => response.promise)
-    const listener = vi.fn()
-    cache.subscribe(listener)
     setRuntimeEnvironmentConnectionGenerationForTests('p34245-test', 2)
     store.setState({ runtimeStatusByEnvironmentId: new Map() })
     response.resolve({ ...row, title: 'Old connection' })
     expect(await read).toBe(false)
-    expect(cache.isObservedCurrent(observed)).toBe(false)
-    expect(listener).toHaveBeenCalled()
+    expect(cache.projectItems(rows)).toBe(rows)
+    expect(cache.acceptSearch(rows, binding)).toEqual(rows)
   })
 })

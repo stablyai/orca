@@ -69,7 +69,9 @@ export async function getWorkItemDetails(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference,
-  repositoryOverride?: unknown
+  repositoryOverride?: unknown,
+  // Only an explicit Refresh asks for uncached reads whose required parts fail instead of collapsing to empty.
+  canonical = false
 ): Promise<GitHubWorkItemDetails | null> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
     let issueRepositoryOverride: GitHubApiRepository | null = null
@@ -137,7 +139,7 @@ export async function getWorkItemDetails(
                 connectionId,
                 localGitOptions,
                 false,
-                !!issueRepositoryOverride
+                canonical && !!issueRepositoryOverride
               )
             : issueDetails
         if (collapsed) {
@@ -160,7 +162,7 @@ export async function getWorkItemDetails(
             resolvedRepository,
             connectionId,
             localGitOptions,
-            !!issueRepositoryOverride
+            canonical && !!issueRepositoryOverride
           ),
           getWorkItemParticipants(repoPath, item, resolvedRepository, connectionId, localGitOptions)
         ])

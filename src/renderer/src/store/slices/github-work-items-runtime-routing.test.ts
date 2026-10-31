@@ -442,7 +442,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const result = await queued
     await Promise.all(blockers)
 
-    expect(result).toEqual([])
+    expect(result).toEqual([{ ...item, repoId: 'caller-repo-id' }])
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-start',
       method: 'github.listWorkItems',
@@ -540,9 +540,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'new-runtime' }
     })
-    await expect(newFetch).resolves.toEqual([
-      expect.objectContaining({ ...newRuntimeItem, repoId: 'caller-repo-id' })
-    ])
+    await expect(newFetch).resolves.toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
 
     const oldRuntimeItem = {
       type: 'issue',
@@ -560,12 +558,12 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       },
       _meta: { runtimeId: 'old-runtime' }
     })
-    await expect(oldFetch).resolves.toEqual([])
+    await expect(oldFetch).resolves.toEqual([{ ...oldRuntimeItem, repoId: 'caller-repo-id' }])
     expect(
       store.getState().workItemsCache[
         workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-new')
       ]?.data
-    ).toEqual([expect.objectContaining({ ...newRuntimeItem, repoId: 'caller-repo-id' })])
+    ).toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
   })
 
   it('bounds work-item cache entries across many repos', async () => {

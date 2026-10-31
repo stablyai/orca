@@ -115,7 +115,9 @@ export class RuntimeGitHubRepositoryQueryCommands {
       getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       repo.issueSourcePreference,
-      ownerRepo
+      ownerRepo,
+      // Ordinary remote loads never send ownerRepo; the optional field marks a capability-gated Refresh.
+      !!ownerRepo
     )
   }
 

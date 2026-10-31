@@ -218,6 +218,34 @@ describe('getWorkItemDetails issue source', () => {
     expect(ghExecFileAsyncMock.mock.calls[0][1]).toMatchObject({ host: 'github.com' })
   })
 
+  it('keeps an ordinary open with an issue repository cached and lenient', async () => {
+    getWorkItemByOwnerRepoMock.mockResolvedValue({
+      type: 'issue',
+      number: 5,
+      title: 'Upstream issue',
+      url: 'https://github.com/upstream-owner/widgets/issues/5',
+      author: null
+    })
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.some((arg) => arg.includes('/timeline?'))) {
+        throw new Error('timeline 502')
+      }
+      return graphQLIssueResponse('upstream-assignee')
+    })
+
+    const details = await getWorkItemDetails('/repo-root', 5, 'issue', null, {}, undefined, {
+      ...REMOTES.upstream,
+      host: 'github.com'
+    })
+
+    expect(details?.body).toBe('upstream-assignee body')
+    expect(
+      ghExecFileAsyncMock.mock.calls.find(([args]) =>
+        (args as string[]).some((arg) => arg.includes('/timeline?'))
+      )?.[0]
+    ).toContain('--cache')
+  })
+
   it('normalizes host-less issue targets before loading the conversation', async () => {
     getWorkItemByOwnerRepoMock.mockResolvedValue({
       type: 'issue',

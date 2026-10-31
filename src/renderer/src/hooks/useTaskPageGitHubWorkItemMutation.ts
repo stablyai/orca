@@ -3,7 +3,6 @@ import {
   buildTaskPageGitHubWorkItemMutationPatch,
   applyTaskPageGitHubListOps
 } from '@/components/task-page/github/task-page-github-work-item-mutation-patches'
-import { withGitHubWorkItemWrite, githubWorkItemWriteKey } from '@/lib/github-work-item-writes'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { parseExecutionHostId } from '../../../shared/execution-host'
@@ -134,7 +133,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
       const common =
         input.item.type === 'issue' &&
         (input.intent.type === 'setState' || input.intent.type === 'toggleAssignee')
-      const currentItem = cache?.projectItem(input.item, binding) ?? input.item
+      const currentItem = cache?.projectItem(input.item) ?? input.item
       const built = buildTaskPageGitHubWorkItemMutationPatch(currentItem, input.intent)
       let settle: ((success: boolean) => GitHubWorkItem | null) | undefined
       const settleAccepted =
@@ -164,10 +163,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
         )
       }
       try {
-        const result = await withGitHubWorkItemWrite(
-          githubWorkItemWriteKey(input.item, input.sourceContext),
-          input.mutate
-        )
+        const result = await input.mutate()
         const activeQuery = activeQueryRef.current
         const typed = result
         if (typed && typeof typed === 'object' && typed.ok === false) {

@@ -1,19 +1,14 @@
-import { githubTaskBinding, captureGitHubTaskObservation } from './github-task-observation'
+import { githubTaskBinding } from './github-task-observation'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import {
-  getTaskSourceCacheScope,
-  areTaskSourceContextsEqual,
-  buildTaskSourceContextFromRepo
-} from '../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
 import { parseGitHubIssueOrPRLink } from '../../../shared/github/links'
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { parseHostAuthorityKey } from '../../../shared/host-authority'
 import type { AppState } from '@/store/types'
 import { getWorkItemRepo } from './work-item-repo-row'
-import { getGitHubSourceRuntimeTarget } from './github-source-runtime-context'
 import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
 import { captureHostIdentityFence, isHostIdentityFenceCurrent } from '@/store/host-catalog-fencing'
 
@@ -58,12 +53,6 @@ export function addressedGitHubIssueItem(
 export function githubTaskSourceKey(source?: TaskSourceContext | null): string {
   return source?.provider === 'github' ? getTaskSourceCacheScope(source) : ''
 }
-export function githubTaskWriteKey(
-  item: Pick<GitHubWorkItem, 'url'>,
-  source?: TaskSourceContext | null
-): string {
-  return `${JSON.stringify(getGitHubSourceRuntimeTarget(source))}\0${githubTaskIdentity(item)}`
-}
 export function githubTaskExecutionIdentity(repo: Repo | undefined): string {
   const authority = repo && parseHostAuthorityKey(getRepoExecutionHostId(repo))
   if (!authority) {
@@ -75,8 +64,7 @@ export function githubTaskExecutionIdentity(repo: Repo | undefined): string {
 export function captureGitHubTaskTarget(
   get: () => Pick<AppState, 'repos' | 'runtimeStatusByEnvironmentId'>,
   item: GitHubWorkItem,
-  source: TaskSourceContext,
-  taskPageSource: TaskSourceContext | null
+  source: TaskSourceContext
 ) {
   const resolve = () =>
     getWorkItemRepo(get().repos, {
@@ -89,38 +77,18 @@ export function captureGitHubTaskTarget(
     return null
   }
   const hostId = getRepoExecutionHostId(repo)
-  if (hostId !== source.hostId) {
-    return null
-  }
-  const unstamped = getWorkItemRepo(get().repos, { repoId: item.repoId })
   const authority = parseHostAuthorityKey(hostId)
-  if (!authority) {
+  if (hostId !== source.hostId || !authority) {
     return null
   }
   const fence = captureHostIdentityFence(hostRouteForAuthority(authority))
   const binding = (row: typeof repo | undefined) => row && githubTaskBinding(row)
-  const legacySource = buildTaskSourceContextFromRepo({
-    provider: 'github',
-    projectId: repo.id,
-    repo
-  })
-  const ordinarySource = areTaskSourceContextsEqual(source, legacySource) ? taskPageSource : null
-  const sources =
-    ordinarySource && !areTaskSourceContextsEqual(ordinarySource, source)
-      ? [source, ordinarySource]
-      : [source]
-  const identity = githubTaskIdentity(item)
-  const key = `${githubTaskSourceKey(source)}\0${binding(repo)}\0${githubTaskExecutionIdentity(repo)}\0${githubTaskIdentity(item)}`
   return {
     item,
     source,
-    sources,
-    observations: sources.map((context) => captureGitHubTaskObservation(repo, context)),
-    observation: captureGitHubTaskObservation(repo, source),
     repo,
     ownerRepo,
-    hostId,
-    key,
+    key: `${githubTaskSourceKey(source)}\0${binding(repo)}\0${githubTaskExecutionIdentity(repo)}\0${githubTaskIdentity(item)}`,
     current: () => binding(resolve()) === binding(repo) && isHostIdentityFenceCurrent(fence),
     rpcOptions: {
       expectedEnvironmentPairingRevision: fence.pairingRevision,
@@ -129,15 +97,8 @@ export function captureGitHubTaskTarget(
           ? get().runtimeStatusByEnvironmentId.get(fence.route.target.environmentId)?.status
               ?.runtimeId
           : undefined
-    },
-    matches: (row: GitHubWorkItem) =>
-      row.repoId === item.repoId &&
-      (row.repoHostId
-        ? row.repoHostId === hostId
-        : !!unstamped && getRepoExecutionHostId(unstamped) === hostId) &&
-      githubTaskIdentity(row) === identity
+    }
   }
 }
 
 export type GitHubTaskTarget = NonNullable<ReturnType<typeof captureGitHubTaskTarget>>
-export type GitHubTaskRefreshHandler = (item: GitHubWorkItem, target: GitHubTaskTarget) => void

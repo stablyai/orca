@@ -20,13 +20,14 @@ import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-sourc
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
 import { workItemDetailsCache } from './work-item-details-cache'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
-import { withGitHubWorkItemWrite, githubWorkItemWriteKey } from '@/lib/github-work-item-writes'
 
 const mocks = vi.hoisted(() => ({
   store: null as ReturnType<typeof createTestStore> | null,
   details: vi.fn(),
-  item: vi.fn()
+  item: vi.fn(),
+  toastError: vi.fn()
 }))
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (s: AppState) => unknown) => useStore(mocks.store!, selector),
@@ -101,7 +102,7 @@ function Harness() {
   const projected = useGitHubTaskItems(rows)
   return (
     <output>
-      {projected[0]?.title}|{model.refreshing ? 'loading' : 'idle'}|{model.refreshError ?? ''}
+      {projected[0]?.title}|{model.refreshing ? 'loading' : 'idle'}
     </output>
   )
 }
@@ -156,13 +157,16 @@ describe('Refresh task with real shared record and mounted copy', () => {
     await act(async () => {
       await model.refreshTask()
     })
-    expect(node.textContent).toContain('Fresh|idle|Unable to refresh this task. Try again.')
-    expect(node.textContent).not.toContain('raw provider detail')
+    expect(node.textContent).toBe('Fresh|idle')
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      'Unable to refresh this task. Try again.'
+    )
     mocks.details.mockResolvedValueOnce({ ...details, item: { ...row, title: 'Recovered' } })
     await act(async () => {
       await model.refreshTask()
     })
-    expect(node.textContent).toBe('Recovered|idle|')
+    expect(node.textContent).toBe('Recovered|idle')
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
   })
 
   it('waits for a pending write, cancels a read crossed by an edit and reloads after settlement', async () => {
@@ -176,22 +180,25 @@ describe('Refresh task with real shared record and mounted copy', () => {
       refresh = model.refreshTask()
       await Promise.resolve()
     })
-    const mutation = deferred<void>()
-    let write!: Promise<void>
+    const cache = mocks.store!.getState().githubTaskCache
+    let settle!: (success: boolean) => GitHubWorkItem | null
     await act(async () => {
-      write = withGitHubWorkItemWrite(githubWorkItemWriteKey(row, source), () => mutation.promise)
+      settle = cache.operation(row, cache.capture(repo, source)!, (base) => ({
+        ...base,
+        labels: ['edited']
+      }))
       await Promise.resolve()
     })
     first.resolve({ ...details, item: { ...row, title: 'Pre-edit' } })
     await flush()
     expect(node.textContent).not.toContain('Pre-edit')
     await act(async () => {
-      mutation.resolve()
-      await write
+      settle(true)
       await refresh
     })
     expect(mocks.details).toHaveBeenCalledTimes(2)
-    expect(node.textContent).toBe('After edit|idle|')
+    expect(node.textContent).toBe('After edit|idle')
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('discards old-account deferred mounted copies on A to B to A', async () => {
@@ -214,7 +221,8 @@ describe('Refresh task with real shared record and mounted copy', () => {
       await refresh
     })
     expect(node.textContent).not.toContain('Old binding')
-    expect(node.textContent).not.toContain('Visible')
+    // Rows are never hidden for a binding change; only the old record is dropped.
+    expect(node.textContent).toBe('Visible|idle')
   })
   it('confirms a Tasks-row remove against the accepted base and lets external state replace it', async () => {
     const cache = mocks.store!.getState().githubTaskCache,
@@ -229,7 +237,7 @@ describe('Refresh task with real shared record and mounted copy', () => {
     let result!: Promise<'confirmed' | 'rolled_back' | 'stale'>
     await act(async () => {
       result = mutationModel.run({
-        item: cache.projectItem(row, binding),
+        item: cache.projectItem(row),
         intent: { type: 'toggleAssignee', user: alice },
         sourceContext: source,
         mutate: () => pending.promise,
@@ -237,28 +245,52 @@ describe('Refresh task with real shared record and mounted copy', () => {
       })
       await Promise.resolve()
     })
-    expect(cache.projectItem(row, binding).assignees).toEqual([])
+    expect(cache.projectItem(row).assignees).toEqual([])
     await act(async () => {
       pending.resolve()
       expect(await result).toBe('confirmed')
     })
-    expect(cache.projectItem(row, binding).assignees).toEqual([])
+    expect(cache.projectItem(row).assignees).toEqual([])
     await act(async () => {
       canonical.resolve({ ...row, assignees: [alice], updatedAt: '2026-10-31T12:00:03Z' })
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(cache.projectItem(row, binding).assignees).toEqual([alice])
-    expect(mutationModel.softHiddenItemKeys.size).toBe(0)
+    expect(cache.projectItem(row).assignees).toEqual([alice])
+  })
+
+  it('rolls a failed Tasks-row assign back through the record without a canonical read', async () => {
+    const cache = mocks.store!.getState().githubTaskCache
+    await render()
+    const alice = { login: 'alice', name: null, avatarUrl: '' }
+    const failure = deferred<{ ok: false; error: string }>()
+    let result!: Promise<'confirmed' | 'rolled_back' | 'stale'>
+    await act(async () => {
+      result = mutationModel.run({
+        item: row,
+        intent: { type: 'toggleAssignee', user: alice },
+        sourceContext: source,
+        mutate: () => failure.promise,
+        errorToast: 'Unable to update'
+      })
+      await Promise.resolve()
+    })
+    expect(cache.projectItem(row).assignees).toEqual([alice])
+    await act(async () => {
+      failure.resolve({ ok: false, error: 'denied' })
+      expect(await result).toBe('rolled_back')
+    })
+    expect(cache.projectItem(row).assignees).toEqual([])
+    expect(mocks.item).not.toHaveBeenCalled()
   })
 
   it('waits when Refresh begins during a pending edit without disabling the edit', async () => {
     await render()
-    const mutation = deferred<void>()
-    const write = withGitHubWorkItemWrite(
-      githubWorkItemWriteKey(row, source),
-      () => mutation.promise
-    )
+    const cache = mocks.store!.getState().githubTaskCache
+    const settle = cache.operation(row, cache.capture(repo, source)!, (base) => ({
+      ...base,
+      labels: ['pending']
+    }))
     mocks.details.mockResolvedValueOnce({ ...details, item: { ...row, title: 'After pending' } })
     let refresh!: Promise<void>
     await act(async () => {
@@ -268,10 +300,9 @@ describe('Refresh task with real shared record and mounted copy', () => {
     expect(mocks.details).not.toHaveBeenCalled()
     expect(node.textContent).toContain('Visible|loading')
     await act(async () => {
-      mutation.resolve()
-      await write
+      settle(true)
       await refresh
     })
-    expect(node.textContent).toBe('After pending|idle|')
+    expect(node.textContent).toBe('After pending|idle')
   })
 })

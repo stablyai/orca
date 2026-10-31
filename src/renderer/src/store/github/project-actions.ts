@@ -1,4 +1,3 @@
-import { captureHostIdentityFence, isHostIdentityFenceCurrent } from '../host-catalog-fencing'
 import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
@@ -28,8 +27,6 @@ export const createProjectActions = (
   'fetchProjectViewTable' | 'updateProjectFieldValue' | 'clearProjectFieldValue'
 > => ({
   fetchProjectViewTable: async (target, args, options) => {
-    const cache = get().githubTaskCache
-    const fence = captureHostIdentityFence({ target, at: 'local' })
     const sourceScope = projectViewSourceScope(target)
     const requestKey = projectViewRequestKey(args, sourceScope)
 
@@ -74,7 +71,7 @@ export const createProjectActions = (
     const request = (async (): Promise<GetProjectViewTableResult> => {
       await acquireWorkItemSlot()
       try {
-        let envelope =
+        const envelope =
           target.kind === 'environment'
             ? await callRuntimeRpc<GetProjectViewTableResult>(
                 target,
@@ -83,14 +80,9 @@ export const createProjectActions = (
                 { timeoutMs: 60_000 }
               )
             : await window.api.gh.getProjectViewTable(args)
-        if (!isHostIdentityFenceCurrent(fence)) {
-          return {
-            ok: false,
-            error: { type: 'unknown', message: 'Task source changed. Try again.' }
-          }
-        }
         if (envelope.ok) {
-          envelope = { ...envelope, data: cache.observeProject(envelope.data, target, fence) }
+          // Board rows are partial and unversioned: they can only ask task records to verify.
+          get().githubTaskCache.observeProject(envelope.data, target)
         }
         // Bounded waits may overlap stronger requests; late non-OK results must not overwrite their newer data/errors.
         if (!ownsInflightRequest(inflightProjectViewRequests, requestKey, requestId)) {

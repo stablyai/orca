@@ -92,7 +92,7 @@ export function GitHubItemDialogIssueBody({
               assignees={
                 details
                   ? (details.item.assignees?.map((user) => user.login) ?? details.assignees ?? [])
-                  : []
+                  : displayWorkItem?.assignees?.map((user) => user.login)
               }
               onUse={onUse}
               onOpenOrUse={onOpenOrUse}

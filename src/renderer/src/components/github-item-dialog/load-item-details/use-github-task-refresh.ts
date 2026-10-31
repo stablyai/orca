@@ -1,18 +1,12 @@
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import {
   getGitHubSourceRuntimeHost,
   canUseGitHubRepoContext
 } from '@/lib/github-source-runtime-context'
 import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../../../shared/task-source-runtime-capabilities'
-import {
-  githubTaskExecutionIdentity,
-  captureGitHubTaskTarget,
-  type GitHubTaskRefreshHandler,
-  githubTaskWriteKey
-} from '@/lib/github-task-target'
-import { observeGitHubWorkItemWrites } from '@/lib/github-work-item-writes'
+import { githubTaskExecutionIdentity, captureGitHubTaskTarget } from '@/lib/github-task-target'
 import {
   useCallback,
   useLayoutEffect,
@@ -20,8 +14,7 @@ import {
   useEffectEvent,
   useMemo,
   useRef,
-  useState,
-  useSyncExternalStore
+  useState
 } from 'react'
 import { useAppStore } from '@/store'
 
@@ -50,14 +43,14 @@ export function useGitHubTaskRefresh({
   effectiveRepoId,
   sourceContext,
   issueRepository,
-  onTaskRefresh
+  onAccepted
 }: {
   workItem: GitHubWorkItem | null
   repoPath: string | null
   effectiveRepoId: string | null
   sourceContext?: TaskSourceContext | null
   issueRepository: GitHubOwnerRepo | null
-  onTaskRefresh?: GitHubTaskRefreshHandler
+  onAccepted?: (item: GitHubWorkItem) => void
 }) {
   const registeredRepo = useAppStore((s) =>
     workItem
@@ -74,12 +67,7 @@ export function useGitHubTaskRefresh({
       executionIdentity,
       target:
         workItem?.type === 'issue' && sourceContext && registeredRepo
-          ? captureGitHubTaskTarget(
-              useAppStore.getState,
-              workItem,
-              sourceContext,
-              getTaskPageRepoSourceContext(registeredRepo, 'github')
-            )
+          ? captureGitHubTaskTarget(useAppStore.getState, workItem, sourceContext)
           : null
     }),
     [workItem, sourceContext, registeredRepo, executionIdentity]
@@ -90,9 +78,11 @@ export function useGitHubTaskRefresh({
     [cache, target]
   )
   const bindingKey = binding ? `${target?.key}\0${cache.bindingIdentity(binding)}` : target?.key
-  useSyncExternalStore(cache.subscribe, cache.snapshot, cache.snapshot)
-  const verificationFailed = !!target && cache.hasFailed(target.item, binding)
-  const [refreshCapability, setRefreshCapability] = useState<string | null>(null)
+  // Disabled until known; a server known to lack canonical details explains why in the tooltip.
+  const [refreshCapability, setRefreshCapability] = useState<{
+    key: string
+    supported: boolean
+  } | null>(null)
   const checkRefreshCapability = useEffectEvent(() => {
     let cancelled = false
     if (!target) {
@@ -100,7 +90,7 @@ export function useGitHubTaskRefresh({
     }
     const host = getGitHubSourceRuntimeHost(target.source)
     if (!host) {
-      setRefreshCapability(target.key)
+      setRefreshCapability({ key: target.key, supported: true })
       return
     }
     void runtimeEnvironmentSupportsCapability(
@@ -109,7 +99,7 @@ export function useGitHubTaskRefresh({
     )
       .then((supported) => {
         if (!cancelled && target.current()) {
-          setRefreshCapability(supported ? target.key : null)
+          setRefreshCapability({ key: target.key, supported })
         }
       })
       .catch(() => {
@@ -122,25 +112,14 @@ export function useGitHubTaskRefresh({
     }
   })
   useEffect(() => checkRefreshCapability(), [target?.key])
+  const capability = target && refreshCapability?.key === target.key ? refreshCapability : null
   const [refreshing, setRefreshing] = useState(false)
-  const [refreshFailure, setRefreshFailure] = useState<{ key: string; message: string } | null>(
-    null
-  )
-  const refreshError =
-    refreshFailure?.key === bindingKey
-      ? (refreshFailure?.message ?? null)
-      : verificationFailed
-        ? translate(
-            'auto.components.GitHubItemDialog.refreshTaskFailed',
-            'Unable to refresh this task. Try again.'
-          )
-        : null
   const [acceptedRefresh, setAcceptedRefresh] = useState(0)
   const mounted = useMountedRef()
-  const onRefreshRef = useRef(onTaskRefresh)
+  const onAcceptedRef = useRef(onAccepted)
   useLayoutEffect(() => {
-    onRefreshRef.current = onTaskRefresh
-  }, [onTaskRefresh])
+    onAcceptedRef.current = onAccepted
+  }, [onAccepted])
   const intentRef = useRef<(() => void) | null>(null)
   useEffect(
     () => () => {
@@ -173,30 +152,25 @@ export function useGitHubTaskRefresh({
       : ordinaryCacheKey
   const optimisticKey = target?.key ?? detailsCacheKey ?? ''
   const refreshTask = useCallback(async () => {
-    if (!target || !canonicalCacheKey || !target.current()) {
+    if (!target || !binding || !canonicalCacheKey || !target.current()) {
       return
     }
     intentRef.current?.()
     let live = true
     let attempt: ReturnType<typeof startWorkItemDetailsFetch> | undefined
     let wake = () => {}
-    let cancelWait = () => {}
-    const disposed = new Promise<void>((resolve) => {
-      cancelWait = resolve
-    })
-    const writes = observeGitHubWorkItemWrites(
-      githubTaskWriteKey(target.item, target.source),
-      () => {
-        attempt?.cancel()
-        wake()
+    // The record's own pending edits and write revision fence this read; no second registry.
+    const unsubscribeCache = cache.subscribe(() => wake())
+    const unsubscribeStore = useAppStore.subscribe(() => {
+      if (!target.current()) {
+        dispose()
       }
-    )
+    })
     const dispose = () => {
       live = false
       attempt?.cancel()
-      writes.dispose()
-      unsubscribe()
-      cancelWait()
+      unsubscribeCache()
+      unsubscribeStore()
       wake()
       if (intentRef.current === dispose) {
         intentRef.current = null
@@ -205,39 +179,25 @@ export function useGitHubTaskRefresh({
         }
       }
     }
-    const unsubscribe = useAppStore.subscribe(() => {
-      if (!target.current()) {
-        dispose()
-      }
-    })
+    const alive = () => live && target.current() && cache.current(binding)
     intentRef.current = dispose
     setRefreshing(true)
-    setRefreshFailure(null)
     try {
-      while (live && target.current()) {
-        await Promise.race([writes.wait(), disposed])
-        if (!live || !target.current()) {
-          break
-        }
-        const interrupted = new Promise<null>((resolve) => {
-          wake = () => resolve(null)
-        })
-        if (!binding) {
-          break
+      while (alive()) {
+        if (cache.isPending(target.item, binding)) {
+          await new Promise<void>((resolve) => {
+            wake = resolve
+          })
+          continue
         }
         const revision = cache.readRevision(target.item, binding)
-        const accepts = () =>
-          live &&
-          target.current() &&
-          cache.current(binding) &&
-          cache.readRevision(target.item, binding) === revision &&
-          !writes.changed()
+        const accepts = () => alive() && cache.readRevision(target.item, binding) === revision
         attempt = startWorkItemDetailsFetch(
           canonicalCacheKey,
           () => loadCanonicalGitHubTaskDetails(cache, binding, target, accepts),
           {
             seed: workItemDetailsCache.get(detailsCacheKey ?? ''),
-            route: { ownerRepo: target.ownerRepo, bindingKey },
+            route: { ownerRepo: target.ownerRepo, bindingKey: bindingKey ?? target.key },
             accepts,
             onAccepted: (result) => {
               // Publication renews Map insertion order, so iterate a snapshot.
@@ -253,28 +213,31 @@ export function useGitHubTaskRefresh({
                   })
                 }
               }
-              onRefreshRef.current?.(result.item, target)
+              onAcceptedRef.current?.(result.item)
               if (mounted.current) {
                 setAcceptedRefresh((n) => n + 1)
               }
             }
           }
         )
-        const outcome = await Promise.race([attempt.settled, interrupted])
-        if (!live || !target.current()) {
+        const outcome = await attempt.settled
+        if (!alive()) {
           break
         }
-        if (writes.changed()) {
+        // An edit or details invalidation that crossed this read restarts it after pending edits settle.
+        if (
+          outcome.status === 'superseded' ||
+          cache.readRevision(target.item, binding) !== revision
+        ) {
           continue
         }
-        if (outcome?.status !== 'accepted') {
-          setRefreshFailure({
-            key: bindingKey ?? target.key,
-            message: translate(
+        if (outcome.status !== 'accepted') {
+          toast.error(
+            translate(
               'auto.components.GitHubItemDialog.refreshTaskFailed',
               'Unable to refresh this task. Try again.'
             )
-          })
+          )
         }
         break
       }
@@ -289,9 +252,9 @@ export function useGitHubTaskRefresh({
     optimisticKey,
     refreshTask,
     refreshing,
-    refreshError,
     acceptedRefresh,
     showRefreshTask: !!target,
-    canRefreshTask: !!target && refreshCapability === target.key
+    canRefreshTask: !!binding && !!capability?.supported,
+    refreshUnsupported: capability?.supported === false
   }
 }

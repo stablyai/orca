@@ -77,6 +77,7 @@ export type GithubWorkItemApi = {
       number: number
       type?: 'issue' | 'pr'
       ownerRepo?: GitHubOwnerRepo
+      canonical?: boolean
     }
   ) => Promise<GitHubWorkItemDetails | null>
   notifyWorkItemMutated: (args: {

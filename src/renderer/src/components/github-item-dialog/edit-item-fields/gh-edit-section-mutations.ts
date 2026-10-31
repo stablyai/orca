@@ -203,8 +203,6 @@ export function runGHEditAssigneeToggle({
   item,
   login,
   localAssignees,
-  assigneesItemKey,
-  editedAssigneesItemKeyRef,
   itemNumber,
   itemRepoId,
   repoPath,
@@ -218,8 +216,6 @@ export function runGHEditAssigneeToggle({
 }: GHEditMutationBase & {
   login: string
   localAssignees: string[]
-  assigneesItemKey: string
-  editedAssigneesItemKeyRef: { current: string | null }
   setLocalAssignees: (value: string[]) => void
 }): void {
   const isAssigned = localAssignees.includes(login)
@@ -267,7 +263,6 @@ export function runGHEditAssigneeToggle({
         sourceContext,
         delta
       )
-      editedAssigneesItemKeyRef.current = assigneesItemKey
       setLocalAssignees(newAssignees)
       patchProjectRowIfNeeded({ assignees: newAssignees })
     },
@@ -277,7 +272,6 @@ export function runGHEditAssigneeToggle({
         return
       }
       const current = accepted.assignees?.map((user) => user.login) ?? prevAssignees
-      editedAssigneesItemKeyRef.current = null
       setLocalAssignees(current)
       patchProjectRowIfNeeded({ assignees: current })
     },
@@ -285,7 +279,6 @@ export function runGHEditAssigneeToggle({
       if (!settle(true)) {
         return
       }
-      editedAssigneesItemKeyRef.current = null
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       onMutated()
     },

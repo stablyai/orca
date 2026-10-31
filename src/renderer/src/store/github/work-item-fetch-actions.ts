@@ -96,7 +96,7 @@ export const createWorkItemFetchActions = (
     const binding = requestState.githubTaskCache.capture(repo, options?.sourceContext)
     const cached = get().workItemsCache[key]
     if (!options?.force && isFresh(cached, WORK_ITEMS_CACHE_TTL)) {
-      return get().githubTaskCache.projectObservedItems(cached.data ?? [])
+      return get().githubTaskCache.projectItems(cached.data ?? [])
     }
 
     const requestInvalidationNonce = requestState.workItemsInvalidationNonce
@@ -148,11 +148,18 @@ export const createWorkItemFetchActions = (
           repoPath,
           options?.sourceContext
         )
-        let items: GitHubWorkItem[] = envelope.items.map((item) => ({
-          ...item,
-          repoId,
-          ...(repoHostId ? { repoHostId } : {})
-        }))
+        // Older search rows can't undo an accepted task record; newer ones still show.
+        const items: GitHubWorkItem[] = [
+          ...get().githubTaskCache.acceptSearch(
+            envelope.items.map((item) => ({
+              ...item,
+              repoId,
+              ...(repoHostId ? { repoHostId } : {})
+            })),
+            binding,
+            get().workItemsCache[key]?.data ?? []
+          )
+        ]
         if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
           throw new Error('GitHub work-item fetch returned a partial result.')
         }
@@ -169,25 +176,15 @@ export const createWorkItemFetchActions = (
           issuesError && envelope.sources.issues
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
-        if (binding && !get().githubTaskCache.current(binding)) {
-          return []
-        }
-        items = [
-          ...get().githubTaskCache.acceptSearch(
-            items,
-            binding,
-            get().workItemsCache[key]?.data ?? []
-          )
-        ]
         const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
         const currentHostId = getGitHubWorkItemSourceHostId(currentRepo, options?.sourceContext)
         // Why: repo ownership changed, so this response belongs to an older execution-host bucket (host focus changes alone are fine).
         if ((currentHostId ?? null) !== (ownerHostId ?? null)) {
-          return []
+          return items
         }
         // Why: the old promise can still settle after the in-flight clear; don't let pre-flip source data repopulate the cache once the invalidation nonce changed.
         if (get().workItemsInvalidationNonce !== requestInvalidationNonce) {
-          return get().githubTaskCache.projectObservedItems(get().workItemsCache[key]?.data ?? [])
+          return items
         }
         // Only current key owner writes: force-only still permits gh cache, so late weaker results would bury fresher rows under new fetchedAt for a full TTL.
         if (!ownsInflightRequest(inflightWorkItemsRequests, inflightKey, requestId)) {
@@ -237,7 +234,7 @@ export const createWorkItemFetchActions = (
             })
           }
         })
-        return get().workItemsCache[key]?.data ?? items
+        return items
       } catch (err) {
         // Why: rethrow but keep the stale cache entry so the UI still renders while the user retries.
         if (!isGitHubWorkItemsSshRemoteRequiredError(err)) {

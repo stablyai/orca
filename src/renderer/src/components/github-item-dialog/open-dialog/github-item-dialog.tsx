@@ -1,4 +1,3 @@
-import { plainGitHubWorkItem } from '@/lib/github-task-observation'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAllWorktrees } from '@/store/selectors'
@@ -7,7 +6,6 @@ import { findGithubIssueWorkspaceAttachment } from '@/lib/github-work-item-works
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { translate } from '@/i18n/i18n'
-import type { GitHubTaskRefreshHandler } from '@/lib/github-task-target'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubItemDialogProps } from '../load-item-details/github-item-dialog-types'
 import { GitHubItemDialogIssueBody } from './github-item-dialog-issue-body'
@@ -27,7 +25,6 @@ export default function GitHubItemDialog({
   backLabel = 'Back',
   projectOrigin,
   onUse,
-  onTaskRefresh,
   onReviewRequestsChange,
   onClose
 }: GitHubItemDialogProps): React.JSX.Element {
@@ -36,10 +33,6 @@ export default function GitHubItemDialog({
   const workItemId = workItem?.id
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
-  const handleTaskRefresh: GitHubTaskRefreshHandler = (item, target) => {
-    setLocalLabels(item.labels)
-    onTaskRefresh?.(item, target)
-  }
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
   const allWorktrees = useAllWorktrees()
   const issueAttachedWorkspace = useMemo(
@@ -67,7 +60,7 @@ export default function GitHubItemDialog({
         item.url
       )
       if (!currentAttached) {
-        onUse(plainGitHubWorkItem(item))
+        onUse(item)
         return
       }
 
@@ -89,9 +82,9 @@ export default function GitHubItemDialog({
   const {
     refreshTask,
     refreshing,
-    refreshError,
     acceptedRefresh,
     canRefreshTask,
+    refreshUnsupported,
     showRefreshTask,
     tab,
     setTab,
@@ -103,7 +96,6 @@ export default function GitHubItemDialog({
     detailsLoaded,
     displayWorkItem,
     addressedWorkItem,
-    itemContextKey,
     appendOptimisticComment,
     invalidateCurrentDetailsCache,
     handlePRFileViewedChange,
@@ -116,7 +108,7 @@ export default function GitHubItemDialog({
     sourceContext,
     initialTab,
     projectOrigin,
-    onTaskRefresh: handleTaskRefresh,
+    onRefreshAccepted: (item: GitHubWorkItem) => setLocalLabels(item.labels),
     onReviewRequestsChange
   })
   const { linkCopied, setLinkCopyButtonRef, handleCopyWorkItemLink } =
@@ -128,10 +120,10 @@ export default function GitHubItemDialog({
     if (resolvedWorkItemState) {
       setLocalState(resolvedWorkItemState)
     }
-  }, [workItemId, resolvedWorkItemState])
-  useEffect(() => {
-    setLocalLabels(workItemLabels ?? [])
-  }, [itemContextKey, workItemId, workItemLabels])
+    if (workItemLabels) {
+      setLocalLabels(workItemLabels)
+    }
+  }, [workItemId, resolvedWorkItemState, workItemLabels])
 
   // Why: a just-closed Radix overlay can leave `pointer-events: none` on <body>, killing header button clicks; poll a few frames to clear it.
   useEffect(() => {
@@ -170,6 +162,7 @@ export default function GitHubItemDialog({
           refreshTask={showRefreshTask ? refreshTask : undefined}
           refreshing={refreshing}
           canRefreshTask={canRefreshTask}
+          refreshUnsupported={refreshUnsupported}
           backLabel={backLabel}
           onClose={onClose}
           linkCopied={linkCopied}
@@ -218,13 +211,8 @@ export default function GitHubItemDialog({
         />
       )}
 
-      {refreshError ? (
-        <div role="alert" className="flex items-center gap-2 px-6 py-2 text-xs text-destructive">
-          {refreshError}
-        </div>
-      ) : null}
       <div className="min-h-0 flex-1">
-        {error && !refreshError ? (
+        {error ? (
           <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
         ) : isIssuePage ? (
           <GitHubItemDialogIssueBody

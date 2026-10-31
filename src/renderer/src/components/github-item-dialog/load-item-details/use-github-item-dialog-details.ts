@@ -1,7 +1,7 @@
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
 
-import { addressedGitHubIssueItem, type GitHubTaskRefreshHandler } from '@/lib/github-task-target'
+import { addressedGitHubIssueItem } from '@/lib/github-task-target'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
@@ -41,7 +41,7 @@ export function useGitHubItemDialogDetails({
   initialTab,
   projectOrigin,
   onReviewRequestsChange,
-  onTaskRefresh
+  onRefreshAccepted
 }: {
   workItem: GitHubWorkItem | null
   repoPath: string | null
@@ -49,7 +49,7 @@ export function useGitHubItemDialogDetails({
   sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
   projectOrigin?: GitHubItemDialogProjectOrigin
-  onTaskRefresh?: GitHubTaskRefreshHandler
+  onRefreshAccepted?: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
     itemKey: { id: string; repoId: string },
     reviewRequests: GitHubAssignableUser[]
@@ -71,7 +71,7 @@ export function useGitHubItemDialogDetails({
     effectiveRepoId,
     sourceContext,
     issueRepository,
-    onTaskRefresh
+    onAccepted: onRefreshAccepted
   })
   // Why: reset during render so an item switch never paints the previous item's tab.
   const tabResetKey =
@@ -130,20 +130,20 @@ export function useGitHubItemDialogDetails({
   }, [cachedEntry, workItem, optimisticKey, optimisticTick])
 
   const cache = useAppStore((s) => s.githubTaskCache)
-  const detailItems = useMemo(() => (rawDetails ? [rawDetails.item] : []), [rawDetails])
-  const projectedItems = useGitHubTaskItems(detailItems)
+  // The opened row and the loaded item both show the current record's facts.
+  const taskItems = useMemo(
+    () => [...(workItem ? [workItem] : []), ...(rawDetails ? [rawDetails.item] : [])],
+    [workItem, rawDetails]
+  )
+  const projectedItems = useGitHubTaskItems(taskItems)
+  const projectedWorkItem = workItem ? (projectedItems[0] ?? workItem) : null
+  const projectedDetailsItem = rawDetails ? projectedItems[workItem ? 1 : 0] : undefined
   const details = useMemo(
     () =>
-      rawDetails && projectedItems[0]
-        ? {
-            ...rawDetails,
-            item: projectedItems[0],
-            ...(projectedItems[0].assignees === undefined
-              ? {}
-              : { assignees: projectedItems[0].assignees.map((user) => user.login) })
-          }
+      rawDetails && projectedDetailsItem && projectedDetailsItem !== rawDetails.item
+        ? withWorkItemDetailsItem(rawDetails, projectedDetailsItem)
         : rawDetails,
-    [rawDetails, projectedItems]
+    [rawDetails, projectedDetailsItem]
   )
 
   const loading = !!cachedEntry?.pending && !cachedEntry?.details
@@ -189,14 +189,12 @@ export function useGitHubItemDialogDetails({
         accepts: cached?.route ? target?.current : undefined,
         rpcOptions: cached?.route ? target?.rpcOptions : undefined
       })
-      if (binding && !cache.current(binding)) {
-        return null
-      }
-      if (!result || !binding) {
-        return result
-      }
-      const accepted = cache.acceptSearch([{ ...workItem, ...result.item }], binding)[0]
-      return accepted ? withWorkItemDetailsItem(result, accepted) : null
+      return result && binding
+        ? withWorkItemDetailsItem(
+            result,
+            cache.acceptSearch([{ ...workItem, ...result.item }], binding)[0]
+          )
+        : result
     })
   }, [
     canUseDetailsRepoContext,
@@ -213,17 +211,17 @@ export function useGitHubItemDialogDetails({
   ])
 
   const addressedWorkItem = useMemo(
-    () => (workItem ? addressedGitHubIssueItem(workItem, details?.item) : null),
-    [workItem, details?.item]
+    () => (projectedWorkItem ? addressedGitHubIssueItem(projectedWorkItem, details?.item) : null),
+    [projectedWorkItem, details?.item]
   )
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
     if (!workItem || !details?.item) {
-      return workItem
+      return projectedWorkItem
     }
     return workItem.type === 'issue' && addressedWorkItem !== workItem
       ? addressedWorkItem
       : { ...workItem, ...details.item, repoId: workItem.repoId }
-  }, [details?.item, workItem, addressedWorkItem])
+  }, [details?.item, workItem, addressedWorkItem, projectedWorkItem])
 
   useEffect(() => {
     if (!workItem || details?.item.reviewRequests === undefined) {
@@ -327,7 +325,6 @@ export function useGitHubItemDialogDetails({
     detailsLoaded,
     displayWorkItem,
     addressedWorkItem,
-    itemContextKey: optimisticKey,
     appendOptimisticComment,
     invalidateCurrentDetailsCache,
     handlePRFileViewedChange,

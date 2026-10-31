@@ -83,7 +83,8 @@ describe('registered direct details transport', () => {
         'ssh-target',
         options,
         'upstream',
-        ownerRepo
+        ownerRepo,
+        !!ownerRepo
       )
     }
   )

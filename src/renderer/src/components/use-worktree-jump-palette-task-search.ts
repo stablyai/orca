@@ -162,26 +162,19 @@ export function useWorktreeJumpPaletteTaskSearch({
   )
   const projected = useGitHubTaskItems(githubItems)
   const taskItems = useMemo(() => {
-    const byKey = new Map(
-      projected.map((item) => [`${item.repoHostId ?? ''}\0${item.repoId}\0${item.url}`, item])
-    )
-    return (current?.results ?? EMPTY_RESULTS).flatMap((raw) => {
-      let result = raw
-      if (raw.task.provider === 'github') {
-        const item = byKey.get(
-          `${raw.task.issue.repoHostId ?? ''}\0${raw.task.issue.repoId}\0${raw.task.issue.url}`
-        )
-        if (!item) {
-          return []
-        }
-        result = makeCmdJTaskSearchResult(
-          { provider: 'github', issue: item },
-          raw.sourceContext,
-          raw.initialRepoId,
-          raw.hostLabel
-        )
-      }
-      return [{ id: result.id, type: 'task' as const, result }]
+    let index = 0
+    return (current?.results ?? EMPTY_RESULTS).map((raw) => {
+      const issue = raw.task.provider === 'github' ? projected[index++] : undefined
+      const result =
+        raw.task.provider === 'github' && issue && issue !== raw.task.issue
+          ? makeCmdJTaskSearchResult(
+              { provider: 'github', issue },
+              raw.sourceContext,
+              raw.initialRepoId,
+              raw.hostLabel
+            )
+          : raw
+      return { id: result.id, type: 'task' as const, result }
     })
   }, [current?.results, projected])
   const retryTaskSearch = (): void => setRetryNonce((value) => value + 1)

@@ -1,5 +1,4 @@
 import { getWorkItemRepo } from './work-item-repo-row'
-import { observeGitHubWorkItem } from './github-task-observation'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
@@ -80,10 +79,8 @@ export async function lookupGitHubWorkItemForSource(
           number: args.number,
           type: args.type
         })
-  if (binding && !cache.current(binding)) {
-    return null
-  }
-  return item ? (cache?.acceptSearch([{ ...item, repoId: args.repoId }], binding)[0] ?? null) : null
+  const row = item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
+  return row && cache ? cache.acceptSearch([row], binding)[0] : row
 }
 
 export async function lookupGitHubWorkItemByOwnerRepoForSource(
@@ -121,7 +118,7 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
             timeoutMs: 30_000,
             ...args.rpcOptions,
             beforeSend: () => {
-              if (args.accepts?.() === false || (binding && !cache.current(binding))) {
+              if (args.accepts?.() === false) {
                 throw new Error('Task source changed.')
               }
             }
@@ -138,14 +135,12 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           type: args.type,
           ...(args.preview ? { preview: true } : {})
         })
-  if (args.accepts?.() === false || (binding && !cache.current(binding))) {
+  if (args.accepts?.() === false) {
     return null
   }
-  return item
-    ? args.accepts
-      ? observeGitHubWorkItem({ ...item, repoId: args.repoId }, binding?.observation)
-      : (cache?.acceptSearch([{ ...item, repoId: args.repoId }], binding)[0] ?? null)
-    : null
+  const row = item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
+  // A canonical verification read publishes through its record, not as a search reading.
+  return row && cache && !args.accepts ? cache.acceptSearch([row], binding)[0] : row
 }
 
 export async function lookupGitHubWorkItemDetailsForSource(
@@ -164,7 +159,8 @@ export async function lookupGitHubWorkItemDetailsForSource(
       GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY
     ))
   ) {
-    throw new Error('Task refresh is unavailable on this server. Update the server and try again.')
+    // A canonical read an old server can't serve is unavailable, never an ordinary cached read.
+    return null
   }
   if (args.accepts?.() === false) {
     return null
@@ -199,7 +195,8 @@ export async function lookupGitHubWorkItemDetailsForSource(
         sourceContext,
         number: args.number,
         type: args.type,
-        ...(args.ownerRepo ? { ownerRepo: args.ownerRepo } : {})
+        ...(args.ownerRepo ? { ownerRepo: args.ownerRepo } : {}),
+        ...(args.canonical ? { canonical: true } : {})
       }))
   if (args.accepts?.() === false) {
     return null
@@ -215,7 +212,7 @@ export async function lookupGitHubWorkItemDetailsForSource(
       returned.number !== args.number ||
       githubRepoIdentityKey(returned.slug) !== githubRepoIdentityKey(args.ownerRepo)
     ) {
-      throw new Error('GitHub returned a different task. Refresh this task again.')
+      return null
     }
     return result.item.assignees === undefined
       ? result

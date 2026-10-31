@@ -202,7 +202,7 @@ describe('GitHub source lookup routing', () => {
         canonical: true,
         ownerRepo: { owner: 'acme', repo: 'widgets' }
       })
-    ).rejects.toThrow('unavailable')
+    ).resolves.toBeNull()
     expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
   })
 })

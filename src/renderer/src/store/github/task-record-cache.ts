@@ -1,11 +1,5 @@
-/* eslint-disable max-lines -- Binding disposal, write settlement and canonical publication share one accepted record and ownership lane. */
-import {
-  deleteConfirmedListSnapshot,
-  deleteStickyHideEntry,
-  getTaskPageGitHubSoftHiddenItemKeys,
-  updateSoftHiddenItemKey,
-  notifyTaskPageGitHubMutationRegistry
-} from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
+/* eslint-disable max-lines -- Binding disposal, write settlement, canonical reads and Project projection share one accepted record and ownership lane. */
+import { deleteConfirmedListSnapshot } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 import { deleteLastConfirmedClientValue } from '@/components/task-page/github/task-page-github-confirmed-client-values'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -14,26 +8,19 @@ import type { AppState } from '../types'
 import type { StoreApi } from 'zustand'
 import {
   captureGitHubTaskObservation,
-  isGitHubTaskObservationCurrent,
   githubTaskBinding,
-  observeGitHubWorkItem,
-  getGitHubTaskObservation,
   type GitHubTaskObservation
 } from '@/lib/github-task-observation'
-import { githubTaskIdentity, githubTaskContent } from '@/lib/github-task-target'
+import { githubTaskIdentity } from '@/lib/github-task-target'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/github-work-item-source-lookup'
-import { getGitHubSourceRuntimeTarget } from '@/lib/github-source-runtime-context'
+import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { nextProviderRequestId } from './request-coordination'
 import { projectViewSourceScope } from './cache-identity'
-import {
-  captureHostIdentityFence,
-  isHostIdentityFenceCurrent,
-  type HostIdentityFence
-} from '../host-catalog-fencing'
+import { isHostIdentityFenceCurrent } from '../host-catalog-fencing'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { patchGitHubProjectRowContent } from './project-row-actions'
@@ -49,30 +36,79 @@ type AcceptedTask = {
   revision: number
   readOrder: number
   needsRead: boolean
-  failed: boolean
-  read?: { revision: number; promise: Promise<boolean> }
+  read?: { revision: number; light: boolean; promise: Promise<boolean> }
 }
+// Project rows carry the first 10 labels and 5 assignees (project-view-query-fragments.ts).
+const PROJECT_LABEL_LIMIT = 10
+const PROJECT_ASSIGNEE_LIMIT = 5
 const version = (item: GitHubWorkItem) => Date.parse(item.updatedAt)
-const sameContent = (a: GitHubWorkItem, b: GitHubWorkItem) =>
-  structuralValuesEqual(githubTaskContent(a), githubTaskContent(b))
+const login = (value: string) => value.toLowerCase()
+const sorted = (values: readonly string[]) => [...values].sort().join('\0')
+const logins = (item: GitHubWorkItem) => item.assignees?.map((user) => login(user.login))
+const bindingKey = (repo: Repo) => `${getRepoExecutionHostId(repo)}\0${repo.id}`
+
+/** Records own state, label-name and assignee-login membership; profiles and presentation follow the latest row. */
+function sameFacts(a: GitHubWorkItem, b: GitHubWorkItem, unknownAssigneesMatch = true): boolean {
+  const left = logins(a),
+    right = logins(b)
+  return (
+    a.title === b.title &&
+    a.state === b.state &&
+    sorted(a.labels) === sorted(b.labels) &&
+    (left && right ? sorted(left) === sorted(right) : unknownAssigneesMatch || left === right)
+  )
+}
+function facts(item: GitHubWorkItem): Partial<GitHubWorkItem> {
+  const { title, state, labels, assignees } = item
+  return { title, state, labels, ...(assignees === undefined ? {} : { assignees }) }
+}
+function withFacts(row: GitHubWorkItem, visible: GitHubWorkItem): GitHubWorkItem {
+  const users = new Map(row.assignees?.map((user) => [login(user.login), user]))
+  return {
+    ...row,
+    ...facts(visible),
+    ...(visible.assignees === undefined
+      ? {}
+      : { assignees: visible.assignees.map((user) => users.get(login(user.login)) ?? user) }),
+    ...(version(visible) > version(row) ? { updatedAt: visible.updatedAt } : {})
+  }
+}
+/** A full-length Project list may be truncated, so only a name it carries that the record lacks conflicts. */
+function projectListConflicts(partial: string[], full: string[], limit: number) {
+  const known = new Set(full)
+  return (
+    partial.some((name) => !known.has(name)) ||
+    (partial.length < limit && partial.length !== known.size)
+  )
+}
+function projectList(partial: string[], full: string[], limit: number, norm = (v: string) => v) {
+  const has = (list: string[], value: string) => list.some((entry) => norm(entry) === norm(value))
+  const kept = partial.filter((name) => has(full, name))
+  return partial.length < limit ? [...kept, ...full.filter((name) => !has(partial, name))] : kept
+}
+function newestFirst(a: AcceptedTask, b: AcceptedTask) {
+  if (
+    b.revision !== a.revision &&
+    (a.needsRead || a.pending.size || b.needsRead || b.pending.size)
+  ) {
+    return b.revision - a.revision
+  }
+  const av = version(a.base),
+    bv = version(b.base)
+  return (Number.isFinite(av) && Number.isFinite(bv) ? bv - av : 0) || b.readOrder - a.readOrder
+}
 
 export class GitHubTaskRecordCache {
   private bindings = new Map<string, { signature: string; incarnation: object; id: number }>()
   private records = new Map<string, AcceptedTask>()
   private listeners = new Set<() => void>()
-  private projectSources = new WeakMap<
-    GitHubProjectTable,
-    { raw: GitHubProjectTable; scope: string; fence: HostIdentityFence }
-  >()
   private projections = new WeakMap<
     GitHubWorkItem,
     { visible: GitHubWorkItem; value: GitHubWorkItem }
   >()
-  private pins = new Map<string, number>()
   private revision = 0
-  private observations = new WeakMap<GitHubTaskObservation, object>()
   private unsupported = new WeakSet<object>()
-  constructor(private store: Pick<StoreApi<AppState>, 'getState' | 'setState'>) {}
+  constructor(private store: Pick<StoreApi<AppState>, 'getState'>) {}
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
     return () => {
@@ -80,24 +116,23 @@ export class GitHubTaskRecordCache {
     }
   }
   snapshot = () => this.revision
-  syncBindings(repos: readonly Repo[], sourceChanged = false) {
-    let changed = sourceChanged
+  /** A changed account/source binding gets a fresh incarnation even when its string later repeats (A→B→A). */
+  syncBindings(repos: readonly Repo[]) {
     const live = new Set<string>()
     for (const repo of repos) {
-      const key = `${getRepoExecutionHostId(repo)}\0${repo.id}`
-      live.add(key)
+      const key = bindingKey(repo)
       const signature = githubTaskBinding(repo)
+      live.add(key)
       if (this.bindings.get(key)?.signature !== signature) {
         this.bindings.set(key, { signature, incarnation: {}, id: nextProviderRequestId() })
-        changed = true
       }
     }
     for (const key of this.bindings.keys()) {
       if (!live.has(key)) {
         this.bindings.delete(key)
-        changed = true
       }
     }
+    let changed = false
     for (const [key, record] of this.records) {
       if (!this.current(record.binding)) {
         this.records.delete(key)
@@ -105,77 +140,79 @@ export class GitHubTaskRecordCache {
       }
     }
     if (changed) {
-      this.publishProjects()
       this.notify()
     }
   }
   capture(repo: Repo | undefined, source?: TaskSourceContext | null): TaskBinding | undefined {
-    if (!repo) {
-      return undefined
-    }
-    this.syncBindings(this.store.getState().repos ?? [])
-    const observation = captureGitHubTaskObservation(repo, source)
-    const incarnation = this.bindings.get(
-      `${getRepoExecutionHostId(repo)}\0${repo.id}`
-    )?.incarnation
-    if (observation && incarnation) {
-      this.observations.set(observation, incarnation)
-      return { observation, incarnation }
-    }
-    return undefined
+    const entry = repo && this.bindings.get(bindingKey(repo))
+    const observation =
+      repo && entry?.signature === githubTaskBinding(repo)
+        ? captureGitHubTaskObservation(repo, source)
+        : undefined
+    return entry && observation ? { observation, incarnation: entry.incarnation } : undefined
   }
   current(binding: TaskBinding): boolean {
-    const owner = binding.observation
-    const repo = (this.store.getState().repos ?? []).find(
-      (r) => r.id === owner.repoId && getRepoExecutionHostId(r) === owner.hostId
-    )
+    const { hostId, repoId, fence } = binding.observation
     return (
-      !!repo &&
-      this.bindings.get(`${owner.hostId}\0${owner.repoId}`)?.incarnation === binding.incarnation &&
-      isGitHubTaskObservationCurrent(owner, repo)
+      this.bindings.get(`${hostId}\0${repoId}`)?.incarnation === binding.incarnation &&
+      isHostIdentityFenceCurrent(fence)
     )
   }
-  private key(item: GitHubWorkItem, binding: TaskBinding) {
-    return `${binding.observation.aliases.slice().sort().join('\0')}\0${githubTaskIdentity(item)}`
+  bindingIdentity(binding: TaskBinding) {
+    const { hostId, repoId } = binding.observation
+    return this.bindings.get(`${hostId}\0${repoId}`)?.id ?? 0
+  }
+  private key(item: GitHubWorkItem, hostId: string) {
+    return `${hostId}\0${item.repoId}\0${githubTaskIdentity(item)}`
   }
   private record(item: GitHubWorkItem, binding: TaskBinding) {
-    const record = this.records.get(this.key(item, binding))
+    const record = this.records.get(this.key(item, binding.observation.hostId))
     return record?.binding.incarnation === binding.incarnation && this.current(binding)
       ? record
       : undefined
+  }
+  private remember(item: GitHubWorkItem, binding: TaskBinding) {
+    let record = this.record(item, binding)
+    if (!record) {
+      record = {
+        binding,
+        base: item,
+        visible: item,
+        pending: new Map(),
+        revision: 0,
+        readOrder: 0,
+        needsRead: false
+      }
+      this.records.set(this.key(item, binding.observation.hostId), record)
+    }
+    return record
   }
   private emit(record: AcceptedTask) {
     let visible = record.base
     for (const delta of record.pending.values()) {
       visible = delta(visible)
     }
-    const changed = !sameContent(visible, record.visible)
-    record.visible = observeGitHubWorkItem(visible, record.binding.observation)
-    const state = this.store.getState()
-    const scopes: (string | null)[] = record.binding.observation.associations.map((a) => a.scope)
-    if (record.binding.observation.hostId === 'local') {
+    const changed = !sameFacts(visible, record.visible, false)
+    record.visible = visible
+    const { associations, hostId } = record.binding.observation
+    const scopes: (string | null)[] = associations.map((association) => association.scope)
+    if (hostId === 'local') {
       scopes.push(null)
     }
+    // The record supersedes the older confirmed-value holds for these families.
     for (const scope of scopes) {
       deleteLastConfirmedClientValue(scope, visible.repoId, visible.id, 'state')
       deleteConfirmedListSnapshot(scope, visible.repoId, visible.id, 'assignees')
     }
-    const itemKey = `${visible.repoId}\0${visible.id}`
-    if (getTaskPageGitHubSoftHiddenItemKeys().has(itemKey)) {
-      deleteStickyHideEntry(itemKey)
-      updateSoftHiddenItemKey(itemKey, false)
-      notifyTaskPageGitHubMutationRegistry()
-    }
-    const ownerRepo = parseGitHubIssueOrPRLink(visible.url)?.slug
     if (changed) {
-      for (const source of record.binding.observation.associations.map((a) => a.source)) {
-        state.patchWorkItem(visible.id, githubTaskContent(record.visible), visible.repoId, {
+      const ownerRepo = parseGitHubIssueOrPRLink(visible.url)?.slug
+      for (const { source } of associations) {
+        this.store.getState().patchWorkItem(visible.id, facts(visible), visible.repoId, {
           sourceContext: source,
           ownerRepo
         })
       }
     }
-    this.publishProjects()
     this.notify()
   }
   private notify() {
@@ -184,213 +221,96 @@ export class GitHubTaskRecordCache {
       listener()
     }
   }
-  private publishProjects() {
-    for (const [key, entry] of Object.entries(this.store.getState().projectViewCache)) {
-      if (!entry.data) {
-        continue
-      }
-      const data = this.projectObservedTable(entry.data)
-      if (data !== entry.data) {
-        this.store.setState((state) => ({
-          projectViewCache: { ...state.projectViewCache, [key]: { ...entry, data } }
-        }))
-      }
-    }
-  }
-  private remember(item: GitHubWorkItem, binding: TaskBinding) {
-    let record = this.record(item, binding)
-    if (!record) {
-      const base = observeGitHubWorkItem(item, binding.observation)
-      record = {
-        binding,
-        base,
-        visible: base,
-        pending: new Map(),
-        revision: 0,
-        readOrder: 0,
-        needsRead: false,
-        failed: false
-      }
-      this.records.set(this.key(item, binding), record)
-    }
-    return record
-  }
-  private evict() {
-    if (this.records.size <= 500) {
-      return
-    }
-    for (const [key, record] of this.records) {
-      if (!this.pins.has(key) && !record.read && !record.pending.size) {
-        this.records.delete(key)
-      }
-      if (this.records.size <= 500) {
-        break
-      }
-    }
-  }
-  pin(item: GitHubWorkItem, binding: TaskBinding) {
-    const key = this.key(item, binding)
-    this.pins.set(key, (this.pins.get(key) ?? 0) + 1)
-    return () => {
-      const n = (this.pins.get(key) ?? 1) - 1
-      if (n) {
-        this.pins.set(key, n)
-      } else {
-        this.pins.delete(key)
-      }
-      this.evict()
-    }
-  }
-  projectItem(item: GitHubWorkItem, binding?: TaskBinding): GitHubWorkItem {
-    if (!binding || !this.current(binding)) {
-      return item
-    }
-    const record = this.record(item, binding)
+  private projectWith(row: GitHubWorkItem, record: AcceptedTask): GitHubWorkItem {
+    const visible = record.visible
     if (
-      !record ||
-      (sameContent(item, record.visible) &&
-        getGitHubTaskObservation(item) &&
-        this.isObservedCurrent(item))
+      sameFacts(row, visible) &&
+      (row.assignees !== undefined || visible.assignees === undefined)
     ) {
-      return item
+      return row
     }
-    const previous = this.projections.get(item)
-    if (previous?.visible === record.visible) {
+    const previous = this.projections.get(row)
+    if (previous?.visible === visible) {
       return previous.value
     }
-    const value = observeGitHubWorkItem(
-      { ...item, ...githubTaskContent(record.visible) },
-      binding.observation
-    )
-    this.projections.set(item, { visible: record.visible, value })
+    const value = withFacts(row, visible)
+    this.projections.set(row, { visible, value })
     return value
   }
-  isObservedCurrent(item: GitHubWorkItem) {
-    const owner = getGitHubTaskObservation(item)
-    if (!owner) {
-      return true
+  /** Rows are never filtered; a current record for the row's own repo binding overlays its facts. */
+  projectItem(row: GitHubWorkItem): GitHubWorkItem {
+    if (!this.records.size || row.type !== 'issue') {
+      return row
     }
-    const incarnation = this.observations.get(owner)
-    return !!incarnation && this.current({ observation: owner, incarnation })
+    const repo = row.repoHostId
+      ? undefined
+      : getWorkItemRepo(this.store.getState().repos ?? [], row)
+    const hostId = row.repoHostId ?? (repo && getRepoExecutionHostId(repo))
+    const record = hostId && this.records.get(this.key(row, hostId))
+    return record && this.current(record.binding) ? this.projectWith(row, record) : row
   }
-  pinObserved(item: GitHubWorkItem) {
-    const owner = getGitHubTaskObservation(item)
-    const incarnation = owner && this.observations.get(owner)
-    return owner && incarnation ? this.pin(item, { observation: owner, incarnation }) : () => {}
-  }
-  hasFailed(item: GitHubWorkItem, binding: TaskBinding | undefined) {
-    return !!binding && !!this.record(item, binding)?.failed
-  }
-  bindingIdentity(binding: TaskBinding) {
-    return (
-      this.bindings.get(`${binding.observation.hostId}\0${binding.observation.repoId}`)?.id ?? 0
-    )
-  }
-  projectObserved(item: GitHubWorkItem): GitHubWorkItem {
-    const observation = getGitHubTaskObservation(item)
-    if (!observation) {
-      return item
-    }
-    const record = this.records.get(
-      `${observation.aliases.slice().sort().join('\0')}\0${githubTaskIdentity(item)}`
-    )
-    if (
-      record &&
-      record.binding.incarnation === this.observations.get(observation) &&
-      this.current(record.binding)
-    ) {
-      return this.projectItem(item, record.binding)
-    }
-    return item
-  }
-  projectObservedItems(rows: readonly GitHubWorkItem[]): readonly GitHubWorkItem[] {
-    const projected = rows
-      .filter((item) => this.isObservedCurrent(item))
-      .map((item) => this.projectObserved(item))
-    return projected.length === rows.length &&
-      projected.every((item, index) => item === rows[index])
-      ? rows
-      : projected
+  projectItems(rows: readonly GitHubWorkItem[]): readonly GitHubWorkItem[] {
+    const projected = rows.map((row) => this.projectItem(row))
+    return projected.every((row, index) => row === rows[index]) ? rows : projected
   }
   acceptSearch(
     rows: readonly GitHubWorkItem[],
     binding: TaskBinding | undefined,
     previous: readonly GitHubWorkItem[] = []
   ): readonly GitHubWorkItem[] {
-    if (binding && !this.current(binding)) {
-      return []
-    }
     const knownRows = new Map(previous.map((item) => [githubTaskIdentity(item), item]))
-    return rows
-      .filter((item) => this.isObservedCurrent(item))
-      .map((item) => {
+    return rows.map((item) => {
+      const record = binding && this.record(item, binding)
+      if (!record) {
         const known = knownRows.get(githubTaskIdentity(item))
-        const record = binding && this.record(item, binding)
-        if (!record) {
-          return known &&
-            Number.isFinite(version(known)) &&
-            (!Number.isFinite(version(item)) || version(known) > version(item))
-            ? known
-            : observeGitHubWorkItem(item, binding?.observation)
-        }
-        const conflict = !sameContent(item, record.base)
-        if (
-          !record.needsRead &&
-          !record.pending.size &&
-          Number.isFinite(version(item)) &&
-          version(item) > version(record.base)
-        ) {
-          const incomplete = item.assignees === undefined && record.base.assignees !== undefined
-          record.base = observeGitHubWorkItem(
-            {
-              ...item,
-              ...(item.assignees === undefined ? { assignees: record.base.assignees } : {})
-            },
-            record.binding.observation
-          )
-          if (incomplete) {
-            record.needsRead = true
-          }
-          this.emit(record)
-          if (record.needsRead) {
-            void this.verify(record)
-          }
-        } else if (
-          conflict &&
-          (record.needsRead ||
-            !Number.isFinite(version(item)) ||
-            !Number.isFinite(version(record.base)) ||
-            version(item) >= version(record.base))
-        ) {
-          record.needsRead = true
-          void this.verify(record)
-        } else if (record.needsRead) {
-          void this.verify(record)
-        }
-        return this.projectItem(item, binding)
-      })
+        return known &&
+          Number.isFinite(version(known)) &&
+          (!Number.isFinite(version(item)) || version(known) > version(item))
+          ? known
+          : item
+      }
+      if (
+        !record.needsRead &&
+        !record.pending.size &&
+        Number.isFinite(version(item)) &&
+        version(item) > version(record.base)
+      ) {
+        // A newer search row for a complete field family is the newest reading; unknown assignees stay owed.
+        record.needsRead = item.assignees === undefined && record.base.assignees !== undefined
+        record.base =
+          item.assignees === undefined ? { ...item, assignees: record.base.assignees } : item
+        this.emit(record)
+      } else if (
+        !sameFacts(item, record.base) &&
+        (record.needsRead ||
+          !Number.isFinite(version(item)) ||
+          !Number.isFinite(version(record.base)) ||
+          version(item) >= version(record.base))
+      ) {
+        record.needsRead = true
+      }
+      if (record.needsRead) {
+        void this.verify(record)
+      }
+      return this.projectWith(item, record)
+    })
   }
   canTrack(binding: TaskBinding) {
-    return (
-      this.current(binding) &&
-      !this.unsupported.has(binding.incarnation) &&
-      (getGitHubSourceRuntimeTarget(binding.observation.source).kind !== 'local' ||
-        typeof window.api.gh.workItemByOwnerRepo === 'function')
-    )
+    return this.current(binding) && !this.unsupported.has(binding.incarnation)
   }
   operation(
     item: GitHubWorkItem,
     binding: TaskBinding,
     delta: TaskDelta
   ): (success: boolean) => GitHubWorkItem | null {
-    if (!this.canTrack(binding)) {
+    if (item.type !== 'issue' || !this.canTrack(binding)) {
       return (success: boolean) => {
         if (!this.current(binding)) {
           return null
         }
         const value = success ? delta(item) : item
         if (success) {
-          this.store.getState().patchWorkItem(item.id, githubTaskContent(value), item.repoId, {
+          this.store.getState().patchWorkItem(item.id, facts(value), item.repoId, {
             sourceContext: binding.observation.source,
             ownerRepo: parseGitHubIssueOrPRLink(item.url)?.slug
           })
@@ -403,14 +323,13 @@ export class GitHubTaskRecordCache {
     record.pending.set(token, delta)
     record.revision = nextProviderRequestId()
     this.emit(record)
-    this.evict()
     let settled = false
     return (success: boolean) => {
       if (settled) {
         return this.current(binding) ? record.visible : null
       }
       settled = true
-      if (!this.current(binding) || this.record(item, binding) !== record) {
+      if (this.record(item, binding) !== record) {
         return null
       }
       if (success) {
@@ -420,62 +339,75 @@ export class GitHubTaskRecordCache {
       record.pending.delete(token)
       record.revision = nextProviderRequestId()
       this.emit(record)
-      if (record.needsRead) {
+      if (this.unsupported.has(binding.incarnation) && !record.pending.size) {
+        // A server without the item route keeps no unresolved record once its last edit settles.
+        this.records.delete(this.key(item, binding.observation.hostId))
+      } else if (record.needsRead) {
         void this.verify(record)
       }
       return record.visible
     }
+  }
+  isPending(item: GitHubWorkItem, binding: TaskBinding) {
+    return !!this.record(item, binding)?.pending.size
+  }
+  readRevision(item: GitHubWorkItem, binding: TaskBinding) {
+    return this.record(item, binding)?.revision ?? 0
   }
   private verify(record: AcceptedTask): Promise<boolean> {
     if (!this.current(record.binding) || record.pending.size) {
       return Promise.resolve(false)
     }
     if (record.read) {
-      return record.read.promise
+      // A Refresh read serves this obligation; if it doesn't publish, its completion owes one item read.
+      return record.read.light ? record.read.promise : Promise.resolve(false)
     }
-    return this.readCanonical(record.base, record.binding, async (accepts) => {
-      const repo = (this.store.getState().repos ?? []).find(
-        (r) =>
-          r.id === record.binding.observation.repoId &&
-          getRepoExecutionHostId(r) === record.binding.observation.hostId
-      )
-      const link = parseGitHubIssueOrPRLink(record.base.url)
-      if (!repo || !link) {
-        return null
-      }
-      return lookupGitHubWorkItemByOwnerRepoForSource({
-        repoPath: repo.path,
-        repoId: repo.id,
-        sourceContext: record.binding.observation.source,
-        accepts,
-        ...link.slug,
-        number: link.number,
-        type: link.type
-      })
-    })
+    return this.readCanonical(
+      record.base,
+      record.binding,
+      async (accepts) => {
+        const { repoId, hostId, source } = record.binding.observation
+        const repo = (this.store.getState().repos ?? []).find(
+          (r) => r.id === repoId && getRepoExecutionHostId(r) === hostId
+        )
+        const link = parseGitHubIssueOrPRLink(record.base.url)
+        if (!repo || !link) {
+          return null
+        }
+        return lookupGitHubWorkItemByOwnerRepoForSource({
+          repoPath: repo.path,
+          repoId: repo.id,
+          sourceContext: source,
+          accepts,
+          ...link.slug,
+          number: link.number,
+          type: link.type
+        })
+      },
+      true
+    )
   }
   async readCanonical(
     item: GitHubWorkItem,
     binding: TaskBinding,
-    load: (accepts: () => boolean) => Promise<GitHubWorkItem | null>
+    load: (accepts: () => boolean) => Promise<GitHubWorkItem | null>,
+    light = false
   ): Promise<boolean> {
-    if (!this.current(binding) || this.unsupported.has(binding.incarnation)) {
+    if (item.type !== 'issue' || !this.canTrack(binding)) {
       return false
     }
     const record = this.remember(item, binding)
-    // A full conversation read waits for the existing item read; verification joins either kind.
+    // A full conversation read waits for the existing item read.
     while (record.read) {
       await record.read.promise
     }
-    if (!this.current(binding) || record.pending.size || this.record(item, binding) !== record) {
+    if (record.pending.size || this.record(item, binding) !== record) {
       return false
     }
-    record.failed = false
     const revision = record.revision,
       readOrder = nextProviderRequestId()
-    const attempt = { revision, promise: Promise.resolve(false) }
+    const attempt = { revision, light, promise: Promise.resolve(false) }
     const accepts = () =>
-      this.current(binding) &&
       this.record(item, binding) === record &&
       record.revision === revision &&
       record.read === attempt &&
@@ -496,24 +428,20 @@ export class GitHubTaskRecordCache {
         ) {
           return false
         }
-        record.base = observeGitHubWorkItem({ ...item, ...result }, binding.observation)
+        record.base = { ...item, ...result }
         record.readOrder = readOrder
         record.needsRead = false
-        record.failed = false
         this.emit(record)
         return true
       } catch (error) {
-        if (
-          error instanceof RuntimeRpcCallError &&
-          ['method_not_found', 'unknown_method', 'not_found'].includes(error.code)
-        ) {
+        if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
           this.unsupported.add(binding.incarnation)
+          // Records with edits in flight stay until those settle so a failure still rolls back.
           for (const [key, entry] of this.records) {
-            if (entry.binding.incarnation === binding.incarnation) {
+            if (entry.binding.incarnation === binding.incarnation && !entry.pending.size) {
               this.records.delete(key)
             }
           }
-          this.publishProjects()
           this.notify()
         }
         return false
@@ -521,56 +449,18 @@ export class GitHubTaskRecordCache {
         if (record.read === attempt) {
           record.read = undefined
         }
+        // A write that crossed this read, or a Refresh that didn't publish, leaves one item read owed.
         if (
-          this.record(item, binding) === record &&
-          record.revision === revision &&
-          record.needsRead
-        ) {
-          record.failed = true
-          this.notify()
-        }
-        if (
-          record.revision !== revision &&
+          (record.revision !== revision || !light) &&
           record.needsRead &&
           !record.pending.size &&
-          this.current(binding)
+          this.record(item, binding) === record
         ) {
           void this.verify(record)
         }
-        this.evict()
       }
     })()
     return attempt.promise
-  }
-  readRevision(item: GitHubWorkItem, binding: TaskBinding) {
-    return this.remember(item, binding).revision
-  }
-  copyProjectTable(previous: GitHubProjectTable, next: GitHubProjectTable) {
-    const source = this.projectSources.get(previous)
-    if (!source) {
-      return next
-    }
-    const originals = new Map(source.raw.rows.map((row) => [row.id, row]))
-    const previousRows = new Map(previous.rows.map((row) => [row.id, row]))
-    const raw = {
-      ...next,
-      rows: next.rows.map((row) => {
-        const prior = previousRows.get(row.id),
-          original = originals.get(row.id)
-        if (!prior || !original) {
-          return row
-        }
-        const content = { ...row.content }
-        for (const field of ['title', 'state', 'labels', 'assignees'] as const) {
-          if (structuralValuesEqual(prior.content[field], row.content[field])) {
-            Object.assign(content, { [field]: original.content[field] })
-          }
-        }
-        return { ...row, content }
-      })
-    }
-    this.projectSources.set(next, { ...source, raw })
-    return next
   }
   projectOperation(
     row: GitHubProjectRow,
@@ -597,16 +487,14 @@ export class GitHubTaskRecordCache {
                 for (const label of updates.removeLabels ?? []) {
                   labels.delete(label)
                 }
-                const users = new Map(
-                  base.assignees?.map((user) => [user.login.toLowerCase(), user])
-                )
-                for (const login of updates.addAssignees ?? []) {
-                  if (!users.has(login.toLowerCase())) {
-                    users.set(login.toLowerCase(), { login, name: null, avatarUrl: '' })
+                const users = new Map(base.assignees?.map((user) => [login(user.login), user]))
+                for (const value of updates.addAssignees ?? []) {
+                  if (!users.has(login(value))) {
+                    users.set(login(value), { login: value, name: null, avatarUrl: '' })
                   }
                 }
-                for (const login of updates.removeAssignees ?? []) {
-                  users.delete(login.toLowerCase())
+                for (const value of updates.removeAssignees ?? []) {
+                  users.delete(login(value))
                 }
                 return {
                   ...base,
@@ -626,116 +514,97 @@ export class GitHubTaskRecordCache {
       }
     }
   }
-  pinProject(table: GitHubProjectTable) {
-    const source = this.projectSources.get(table)
-    if (!source) {
-      return () => {}
-    }
-    const identities = new Set(
-      table.rows
-        .filter((row) => row.itemType === 'ISSUE' && row.content.repository && row.content.url)
-        .map((row) => {
-          const link = parseGitHubIssueOrPRLink(row.content.url ?? '')
-          return link ? `${githubRepoIdentityKey(link.slug)}\0${link.type}:${link.number}` : ''
-        })
-    )
-    const releases = [...this.records.values()]
-      .filter(
-        (record) =>
-          record.binding.observation.hostId === source.scope &&
-          identities.has(githubTaskIdentity(record.base))
-      )
-      .map((record) => this.pin(record.base, record.binding))
-    return () => {
-      for (const release of releases) {
-        release()
-      }
-    }
-  }
-  observeProject(
-    table: GitHubProjectTable,
-    target: RuntimeClientTarget,
-    fence = captureHostIdentityFence({ target, at: 'local' })
-  ) {
-    this.projectSources.set(table, { raw: table, scope: projectViewSourceScope(target), fence })
-    return this.projectObservedTable(table, true)
-  }
-  projectObservedTable(table: GitHubProjectTable, verify = false): GitHubProjectTable {
-    const source = this.projectSources.get(table)
-    if (!source || !isHostIdentityFenceCurrent(source.fence)) {
-      return table
-    }
+  /** Matching records per Project row: execution source, GitHub host, owner/repo and issue number. */
+  private projectRecords(table: GitHubProjectTable, scope: string) {
     const groups = new Map<string, AcceptedTask[]>()
     for (const record of this.records.values()) {
-      if (!this.current(record.binding) || record.binding.observation.hostId !== source.scope) {
-        continue
+      if (record.binding.observation.hostId === scope && this.current(record.binding)) {
+        const key = githubTaskIdentity(record.base)
+        groups.set(key, [...(groups.get(key) ?? []), record])
       }
-      const key = githubTaskIdentity(record.base)
-      groups.set(key, [...(groups.get(key) ?? []), record])
     }
-    let changed = false
-    const rows = source.raw.rows.map((row) => {
-      const link = row.content.url && parseGitHubIssueOrPRLink(row.content.url)
+    return (row: GitHubProjectRow) => {
+      const link = row.content.url ? parseGitHubIssueOrPRLink(row.content.url) : null
+      const [owner, repo] = row.content.repository?.split('/') ?? []
       if (
         row.itemType !== 'ISSUE' ||
-        !row.content.repository ||
         !link ||
         link.type !== 'issue' ||
         link.number !== row.content.number ||
+        !owner ||
+        !repo ||
         githubRepoIdentityKey(link.slug) !==
-          githubRepoIdentityKey({
-            owner: row.content.repository.split('/')[0],
-            repo: row.content.repository.split('/')[1],
-            host: source.raw.project.host
-          })
+          githubRepoIdentityKey({ owner, repo, host: table.project.host })
       ) {
-        return row
+        return []
       }
-      const matches =
-        groups.get(`${githubRepoIdentityKey(link.slug)}\0${link.type}:${link.number}`) ?? []
-      if (!matches.length) {
-        return row
-      }
-      matches.sort((a, b) => {
-        if (a.revision || b.revision) {
-          const order = b.revision - a.revision
-          if (order && (a.needsRead || a.pending.size || b.needsRead || b.pending.size)) {
-            return order
-          }
-        }
-        const av = version(a.base),
-          bv = version(b.base)
-        return (
-          (Number.isFinite(av) && Number.isFinite(bv) ? bv - av : 0) || b.readOrder - a.readOrder
-        )
-      })
-      const record = matches[0],
-        item = record.visible,
-        content = row.content
-      const conflict =
-        content.title !== item.title ||
-        content.state?.toLowerCase() !== item.state ||
-        !structuralValuesEqual(
-          content.labels.map((label) => label.name),
-          item.labels
-        ) ||
-        !structuralValuesEqual(
-          content.assignees.map((user) => user.login),
-          item.assignees?.map((user) => user.login)
-        )
-      if (verify && conflict) {
+      const key = `${githubRepoIdentityKey(link.slug)}\0issue:${link.number}`
+      return [...(groups.get(key) ?? [])].sort(newestFirst)
+    }
+  }
+  /** Project rows are partial and unversioned: a conflict only triggers verification, never acceptance. */
+  observeProject(table: GitHubProjectTable, target: RuntimeClientTarget) {
+    if (!this.records.size) {
+      return
+    }
+    const matchesFor = this.projectRecords(table, projectViewSourceScope(target))
+    for (const row of table.rows) {
+      const matches = matchesFor(row)
+      const item = matches[0]?.visible
+      const users = item?.assignees?.map((user) => login(user.login))
+      if (
+        item &&
+        (row.content.title !== item.title ||
+          row.content.state?.toLowerCase() !== item.state ||
+          projectListConflicts(
+            row.content.labels.map((label) => label.name),
+            item.labels,
+            PROJECT_LABEL_LIMIT
+          ) ||
+          (!!users &&
+            projectListConflicts(
+              row.content.assignees.map((user) => login(user.login)),
+              users,
+              PROJECT_ASSIGNEE_LIMIT
+            )))
+      ) {
         for (const candidate of matches) {
           candidate.needsRead = true
           void this.verify(candidate)
         }
       }
+    }
+  }
+  /** Publish only title, state and label/assignee membership; board fields and profiles stay the row's. */
+  projectTable(table: GitHubProjectTable, scope: string): GitHubProjectTable {
+    if (!this.records.size) {
+      return table
+    }
+    const matchesFor = this.projectRecords(table, scope)
+    let changed = false
+    const rows = table.rows.map((row) => {
+      const item = matchesFor(row)[0]?.visible
+      if (!item) {
+        return row
+      }
       const next = patchGitHubProjectRowContent(row, {
         title: item.title,
         state: item.state,
-        labels: item.labels,
+        labels: projectList(
+          row.content.labels.map((label) => label.name),
+          item.labels,
+          PROJECT_LABEL_LIMIT
+        ),
         ...(item.assignees === undefined
           ? {}
-          : { assignees: item.assignees.map((user) => user.login) })
+          : {
+              assignees: projectList(
+                row.content.assignees.map((user) => user.login),
+                item.assignees.map((user) => user.login),
+                PROJECT_ASSIGNEE_LIMIT,
+                login
+              )
+            })
       })
       if (structuralValuesEqual(row, next)) {
         return row
@@ -743,11 +612,22 @@ export class GitHubTaskRecordCache {
       changed = true
       return next
     })
-    const projected = changed ? { ...source.raw, rows } : source.raw
-    if (structuralValuesEqual(projected, table)) {
-      return table
-    }
-    this.projectSources.set(projected, source)
-    return projected
+    return changed ? { ...table, rows } : table
   }
+}
+
+export function createGitHubTaskRecordCache(store: StoreApi<AppState>) {
+  const cache = new GitHubTaskRecordCache(store)
+  store.subscribe((state, previous) => {
+    if (
+      state.repos !== previous.repos ||
+      state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
+      state.runtimeEnvironments !== previous.runtimeEnvironments ||
+      state.sshConnectionStates !== previous.sshConnectionStates ||
+      state.sshStateByEnvironment !== previous.sshStateByEnvironment
+    ) {
+      cache.syncBindings(state.repos ?? [])
+    }
+  })
+  return cache
 }

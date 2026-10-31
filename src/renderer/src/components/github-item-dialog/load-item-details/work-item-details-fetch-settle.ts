@@ -18,6 +18,7 @@ export async function loadCanonicalGitHubTaskDetails(
 ): Promise<GitHubWorkItemDetails | null> {
   const loaded: { details: GitHubWorkItemDetails | null } = { details: null }
   const accepted = await cache.readCanonical(target.item, binding, async (owned) => {
+    // A failed required read is a failed Refresh, never an empty conversation or a raw message.
     loaded.details = await lookupGitHubWorkItemDetailsForSource({
       repoPath: target.repo.path,
       repoId: target.repo.id,
@@ -28,7 +29,7 @@ export async function loadCanonicalGitHubTaskDetails(
       canonical: true,
       accepts: () => accepts() && owned(),
       rpcOptions: target.rpcOptions
-    })
+    }).catch(() => null)
     return loaded.details && accepts() && owned()
       ? { ...target.item, ...loaded.details.item }
       : null
@@ -36,7 +37,7 @@ export async function loadCanonicalGitHubTaskDetails(
   return accepted && loaded.details
     ? withWorkItemDetailsItem(
         loaded.details,
-        cache.projectItem({ ...target.item, ...loaded.details.item }, binding)
+        cache.projectItem({ ...target.item, ...loaded.details.item })
       )
     : null
 }

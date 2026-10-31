@@ -185,7 +185,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       timeoutMs: 30_000
     })
     expect(result).toEqual({
-      items: [expect.objectContaining({ ...item, repoId: 'caller-repo-id' })],
+      items: [{ ...item, repoId: 'caller-repo-id' }],
       failedCount: 0,
       errorTypes: []
     })
