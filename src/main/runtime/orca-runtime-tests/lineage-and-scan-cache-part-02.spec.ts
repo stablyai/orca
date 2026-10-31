@@ -3,6 +3,7 @@ import { OrcaRuntimeService, join, listWorktrees, tmpdir } from '../orca-runtime
 import type { WorktreeLineage, WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_REPO_ID,
+  TEST_REPO_PATH,
   TEST_WORKTREE_ID,
   makeWorktreeInfo,
   makeWorktreeMeta,
@@ -263,8 +264,16 @@ describe('OrcaRuntimeService', () => {
       }),
       setWorktreeLineage
     }
+    const mainRow = {
+      path: TEST_REPO_PATH,
+      head: 'aaa',
+      branch: 'main',
+      isBare: false,
+      isMainWorktree: true
+    }
     vi.mocked(listWorktrees)
       .mockResolvedValueOnce([
+        mainRow,
         {
           path: childPath,
           head: 'def',
@@ -274,6 +283,7 @@ describe('OrcaRuntimeService', () => {
         }
       ])
       .mockResolvedValue([
+        mainRow,
         {
           path: childPath,
           head: 'def',

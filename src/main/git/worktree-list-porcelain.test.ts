@@ -45,6 +45,7 @@ import {
 } from './remove-worktree-test-harness'
 
 import { listWorktrees, WORKTREE_LIST_TIMEOUT_MS } from './worktree'
+import { listWorktreesStrictAllowingTrueEmpty } from './worktree-listing'
 
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
@@ -180,6 +181,26 @@ describe('listWorktrees', () => {
     })
     expect(warnSpy).not.toHaveBeenCalled()
     warnSpy.mockRestore()
+  })
+
+  it('reports a refusal as a failure when only the path or message mentions a non-repo', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          "fatal: detected dubious ownership in repository at '/work/not a git repository'"
+        ),
+        {
+          code: 128,
+          stdout: '',
+          stderr:
+            "fatal: detected dubious ownership in repository at '/work/not a git repository'\n"
+        }
+      )
+    )
+
+    await expect(
+      listWorktreesStrictAllowingTrueEmpty('/work/not a git repository')
+    ).rejects.toThrow()
   })
 
   it('detects sparse checkout after translating paths when porcelain omits sparse token', async () => {

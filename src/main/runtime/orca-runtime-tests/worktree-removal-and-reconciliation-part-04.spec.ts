@@ -517,10 +517,11 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
 
     // Orphan cleanup must invalidate the raw scan cache rather than wait 30s (#8882).
-    vi.mocked(listWorktrees).mockResolvedValue([])
-    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
-      { worktrees: [] }
-    )
+    vi.mocked(listWorktrees).mockResolvedValue([
+      { path: TEST_REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
+    ])
+    const listed = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    expect(listed.worktrees.map((worktree) => worktree.id)).not.toContain(TEST_WORKTREE_ID)
   })
 
   it('runs archive hooks for CLI worktree removal when hooks are explicitly enabled', async () => {

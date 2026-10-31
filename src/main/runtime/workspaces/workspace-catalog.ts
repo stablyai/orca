@@ -37,6 +37,7 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host'
 import { withUnregisteredRemovalCheckouts } from '../../worktree-removal-listing'
+import { retainKnownWorktreesInListing } from '../../known-worktree-listing-retention'
 import { withoutInFlightWorktreeCreates } from '../../worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from '../orca-runtime-core'
@@ -220,7 +221,10 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
             ok: true,
             worktrees: await withUnregisteredRemovalCheckouts(
               repo.id,
-              withoutInFlightWorktreeCreates(repo.id, scan.worktrees)
+              withoutInFlightWorktreeCreates(
+                repo.id,
+                await retainKnownWorktreesInListing(this.requireStore(), repo, scan.worktrees)
+              )
             )
           }
         : scan

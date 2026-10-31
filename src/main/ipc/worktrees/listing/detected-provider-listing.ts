@@ -39,6 +39,7 @@ import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
 import { withoutInFlightWorktreeCreates } from '../../../worktree-create-in-flight'
+import { retainKnownWorktreesInListing } from '../../../known-worktree-listing-retention'
 import { releaseWslStoppedWorktreeRescan } from '../../../wsl-stopped-worktree-rescan-registry'
 import {
   listWslStoppedWorktrees,
@@ -121,7 +122,8 @@ export async function listDetectedWorktreesForCapturedRepo(
     if (scan.superseded) {
       return abortedResult() ?? null
     }
-    const { gitWorktrees, fresh: freshScan, sideEffectToken, metadataPrune, hygieneDue } = scan
+    const { fresh: freshScan, sideEffectToken, metadataPrune, hygieneDue } = scan
+    const gitWorktrees = await retainKnownWorktreesInListing(store, repo, scan.gitWorktrees)
     const localRows = await withUnregisteredRemovalCheckouts(
       repo.id,
       withoutInFlightWorktreeCreates(repo.id, gitWorktrees)

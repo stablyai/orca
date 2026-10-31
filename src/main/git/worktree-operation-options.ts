@@ -2,7 +2,7 @@ import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
 } from '../../shared/worktree/base-ref-drift-types'
-import { readGitCommandFailureText } from '../../shared/git-command-failure-text'
+import { readGitCommandFailureStderr } from '../../shared/git-command-failure-text'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
@@ -119,8 +119,9 @@ export function getErrorCode(error: unknown): string | undefined {
     : undefined
 }
 
+/** Only Git's own fatal line counts: the same words inside a path or shell output are an ordinary failure. */
 export function isNotGitRepositoryError(error: unknown): boolean {
-  return /not a git repository/i.test(readGitCommandFailureText(error))
+  return /^fatal: not a git repository\b/m.test(readGitCommandFailureStderr(error) ?? '')
 }
 
 export function normalizeLocalBranchRef(branch: string): string {
