@@ -73,6 +73,33 @@ export type HostedReviewForBranchArgs = {
   active?: boolean
   /** Desktop IPC only: an explicit Refresh, which may start a stopped WSL distro (E9). */
   wakeWslDistro?: boolean
+  /** Ask for a HostedReviewForBranchOutcome; older hosts drop it and answer with the bare review. */
+  reportReadOutcome?: boolean
+}
+
+/** 'provider' only when this answer came from a provider read the host stored as current; cache hits and last-good fallbacks are 'cached'. */
+export type HostedReviewForBranchOutcome = {
+  review: HostedReviewInfo | null
+  readOutcome: 'provider' | 'cached'
+}
+
+export type HostedReviewForBranchReply = HostedReviewInfo | null | HostedReviewForBranchOutcome
+
+/** Callers that asked for it learn whether a provider read the host stored as current answered them. */
+export function hostedReviewForBranchReply(
+  read: { review: HostedReviewInfo | null; fresh: boolean },
+  reportReadOutcome: boolean | undefined
+): HostedReviewForBranchReply {
+  return reportReadOutcome === true
+    ? { review: read.review, readOutcome: read.fresh ? 'provider' : 'cached' }
+    : read.review
+}
+
+/** An older host drops reportReadOutcome and answers bare; that answer proves nothing about the provider. */
+export function hostedReviewForBranchOutcome(
+  reply: HostedReviewForBranchReply
+): HostedReviewForBranchOutcome {
+  return reply !== null && 'readOutcome' in reply ? reply : { review: reply, readOutcome: 'cached' }
 }
 
 export type HostedReviewSummary = {

@@ -51,7 +51,12 @@ vi.mock('../source-control/stacked-hosted-review-creation', () => ({
 }))
 
 vi.mock('../source-control/hosted-review', () => ({
-  getHostedReviewForBranch: getHostedReviewForBranchMock
+  getHostedReviewForBranch: getHostedReviewForBranchMock,
+  // Handlers read through this; keep asserting on the one mock.
+  readHostedReviewForBranch: async (input: unknown) => ({
+    review: await getHostedReviewForBranchMock(input),
+    fresh: false
+  })
 }))
 
 vi.mock('./registered-worktree-roots-cache', () => ({

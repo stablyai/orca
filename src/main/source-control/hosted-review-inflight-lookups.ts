@@ -9,11 +9,14 @@ declare const inflightTokenBrand: unique symbol
 /** Identity token for one lookup; only ever compared by reference. */
 export type InflightToken = { readonly [inflightTokenBrand]?: never }
 
+/** What one caller got; `fresh` only when it waited on a provider read the host stored as current. */
+export type HostedReviewBranchRead = { review: HostedReviewInfo | null; fresh: boolean }
+
 export type InflightRecord = {
   /** Identity, so a detached lookup can only ever clear its own entry. */
   token: InflightToken
   startedAt: number
-  promise: Promise<HostedReviewInfo | null>
+  promise: Promise<HostedReviewBranchRead>
   /** Releases the callers and unpins the branch; idempotent. */
   expire: () => void
 }

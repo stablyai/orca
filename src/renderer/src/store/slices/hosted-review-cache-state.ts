@@ -3,12 +3,17 @@ import type {
   CreateHostedReviewInput,
   CreateStackedHostedReviewInput,
   HostedReviewCreationEligibility,
+  HostedReviewForBranchArgs,
+  HostedReviewForBranchOutcome,
+  HostedReviewForBranchReply,
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
+import { hostedReviewForBranchOutcome } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type HostedReviewCacheEntry<T> = {
@@ -17,6 +22,8 @@ export type HostedReviewCacheEntry<T> = {
   stale?: boolean
   linkedReviewHintKey?: string
   branchLookupGitHubPRNumber?: number
+  /** Lookup generation of the newest request the host answered from a provider read it stored as current. */
+  providerReadGeneration?: number
 }
 export type HostedReviewCache = Record<string, HostedReviewCacheEntry<HostedReviewInfo>>
 
@@ -231,6 +238,8 @@ export function hostedReviewBranchLookupArgs(
     branch,
     ...(options?.force === true ? { force: true } : {}),
     ...(options?.userRefresh === true ? { userRefresh: true } : {}),
+    // Only this store asks, so the Checks panel can tell a real provider read from a cached answer.
+    reportReadOutcome: true,
     ...(options?.admissionTier ? { admissionTier: options.admissionTier } : {}),
     ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
     currentHeadOid: options?.currentHeadOid ?? null,
@@ -242,6 +251,33 @@ export function hostedReviewBranchLookupArgs(
     linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: options?.linkedGiteaPR ?? null
   }
+}
+
+export async function requestHostedReviewForBranch(
+  target: RuntimeClientTarget,
+  runtimeParams: Record<string, unknown>,
+  ipcArgs: HostedReviewForBranchArgs
+): Promise<HostedReviewForBranchOutcome> {
+  return hostedReviewForBranchOutcome(
+    target.kind === 'environment'
+      ? await callRuntimeRpc<HostedReviewForBranchReply>(
+          target,
+          'hostedReview.forBranch',
+          runtimeParams,
+          // Remote git/gh, especially Windows paths, can be slow; main queue bounds concurrency so longer timeout cannot cause stampedes.
+          { timeoutMs: 30_000 }
+        )
+      : await window.api.hostedReview.forBranch(ipcArgs)
+  )
+}
+
+/** Cache hits, fallbacks and older hosts' bare replies keep the newest provider-read generation already seen. */
+export function providerReadGenerationField(
+  providerReadGeneration: number | undefined,
+  previous: HostedReviewCacheEntry<HostedReviewInfo> | undefined
+): { providerReadGeneration?: number } {
+  const generation = providerReadGeneration ?? previous?.providerReadGeneration
+  return generation === undefined ? {} : { providerReadGeneration: generation }
 }
 
 export function hostedReviewCallerSettlement(

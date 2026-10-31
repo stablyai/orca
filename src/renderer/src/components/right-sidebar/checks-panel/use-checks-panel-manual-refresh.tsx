@@ -92,7 +92,6 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     const refreshStartedAt = Date.now()
     const refreshProvider = checksPanelManualRefreshProvider(model)
     let refreshOutcome = 'started'
-    let hostedReviewFailedAt: number | null = null
     setIsRefreshing(true)
     recordChecksPanelPRRefreshBreadcrumb({
       event: 'start',
@@ -217,16 +216,13 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       if (!isCurrentRequest()) {
         return
       }
-      // GitHub checks and comments come from the PR read above, so a failed review-card read must not skip them.
-      hostedReviewFailedAt = await refreshHostedReviewForClick(
+      // The PR read above owns GitHub's refresh status, checks and comments; the review card read only refreshes the card.
+      await refreshHostedReviewForClick(
         model,
         repo,
         branch,
         refreshedPR?.number ?? fallbackGitHubPRNumber
-      ).then(
-        () => null,
-        () => Date.now()
-      )
+      ).catch(() => null)
       if (!isCurrentRequest()) {
         return
       }
@@ -312,17 +308,11 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         setComments([])
         refreshOutcome = 'no-pr'
       }
-      if (hostedReviewFailedAt !== null) {
-        throw new Error('Hosted review refresh failed')
-      }
     } catch {
       refreshOutcome = 'error'
-      if (isCurrentRequest()) {
-        setManualFailure({
-          contextKey: panelContextKey,
-          message: getHostedReviewManualRefreshError(refreshProvider),
-          failedAt: hostedReviewFailedAt ?? Date.now()
-        })
+      // GitHub failures surface through the PR store's own classified state, which clears itself.
+      if (isCurrentRequest() && refreshProvider !== 'github') {
+        setManualFailure(getHostedReviewManualRefreshError(refreshProvider))
       }
     } finally {
       recordChecksPanelPRRefreshBreadcrumb({
@@ -342,7 +332,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       })
       if (isCurrentRequest()) {
         if (['review', 'no-review', 'pr', 'no-pr'].includes(refreshOutcome)) {
-          setManualFailure({ contextKey: panelContextKey, message: null, failedAt: 0 })
+          setManualFailure(null)
         }
         refreshInFlightRef.current = false
         setIsRefreshing(false)

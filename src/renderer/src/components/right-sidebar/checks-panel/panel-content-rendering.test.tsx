@@ -12,7 +12,10 @@ import { ChecksPanelActiveContent } from './active-content'
 import { ChecksPanelEmptyContent } from './empty-content'
 import { getHostedReviewManualRefreshError } from '../github-refresh-error-copy'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('checks panel concrete content', () => {
   it('renders the no-workspace empty state with its guidance', () => {
@@ -122,7 +125,9 @@ describe('checks panel concrete content', () => {
   ] as const)(
     'keeps the classified GitHub empty state over a manual failure (%s)',
     (_name, refresh, title, nextStep, retryDisabled) => {
-      const now = Date.now()
+      const now = Date.parse('2026-10-30T12:00:00Z')
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(now)
       const model = {
         activeReview: null,
         activeWorktree: { id: 'worktree-1' },

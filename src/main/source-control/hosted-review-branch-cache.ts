@@ -21,6 +21,7 @@ import {
   retireInflightWithPrefix,
   retireInflightLookup,
   trackInflight,
+  type HostedReviewBranchRead,
   type InflightToken
 } from './hosted-review-inflight-lookups'
 import {
@@ -36,6 +37,7 @@ import {
   dropFailuresWithPrefix,
   noteFailure
 } from './hosted-review-lookup-backoff'
+import { observeProviderRead } from './hosted-review-provider-read'
 import {
   ACTIVE_REFRESH_INTERVAL_MS,
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
@@ -184,16 +186,16 @@ function startLookup(
   headOid: string | null,
   revisionScope: string,
   lookup: () => Promise<HostedReviewInfo | null>
-): Promise<HostedReviewInfo | null> {
+): Promise<HostedReviewBranchRead> {
   const startedAt = Date.now()
   const generation = scopeGeneration(scope)
   const revision = scopeGeneration(revisionScope)
   const token: InflightToken = {}
   let timedOut = false
   let completed = false
-  let release: (review: HostedReviewInfo | null) => void = () => {}
+  let release: (read: HostedReviewBranchRead) => void = () => {}
   let fail: (error: unknown) => void = () => {}
-  const promise = new Promise<HostedReviewInfo | null>((resolve, reject) => {
+  const promise = new Promise<HostedReviewBranchRead>((resolve, reject) => {
     release = resolve
     fail = reject
   })
@@ -233,7 +235,7 @@ function startLookup(
 
   void (async () => {
     try {
-      const review = await lookup()
+      const { value: review, answeredFromProviderCache } = await observeProviderRead(lookup)
       // Generation invalidates pre-creation answers; without key ownership, stragglers must prove their result still outranks the cache.
       const stored =
         generation === scopeGeneration(scope) &&
@@ -246,7 +248,7 @@ function startLookup(
       if (stored && !timedOut) {
         clearFailures(key)
       }
-      release(review)
+      release({ review, fresh: stored && !answeredFromProviderCache })
     } catch (error) {
       // Deadline already counted failure; never count late rejection twice.
       if (timedOut) {
@@ -273,12 +275,20 @@ function startLookup(
   return promise
 }
 
-/** Share fresh answers/in-flight lookups across clients and back off failed branches. */
 export async function withHostedReviewBranchCache(
   identity: HostedReviewBranchCacheIdentity,
   options: HostedReviewBranchCacheOptions,
   lookup: () => Promise<HostedReviewInfo | null>
 ): Promise<HostedReviewInfo | null> {
+  return (await readHostedReviewBranchCache(identity, options, lookup)).review
+}
+
+/** Share fresh answers/in-flight lookups across clients and back off failed branches. */
+export async function readHostedReviewBranchCache(
+  identity: HostedReviewBranchCacheIdentity,
+  options: HostedReviewBranchCacheOptions,
+  lookup: () => Promise<HostedReviewInfo | null>
+): Promise<HostedReviewBranchRead> {
   const key = hostedReviewBranchCacheKey(identity)
   const headOid = options.headOid
   // Sweep wall-clock deadlines before joining so suspended timers cannot pin a branch after sleep.
@@ -291,7 +301,7 @@ export async function withHostedReviewBranchCache(
 
   const cached = entries.get(key)
   if (!options.userRefresh && !options.force && cached && isFresh(cached, headOid, active)) {
-    return cached.review
+    return { review: cached.review, fresh: false }
   }
 
   // Admission is keyed independently of revision; a refused click cannot retire an admitted owner.
@@ -305,13 +315,13 @@ export async function withHostedReviewBranchCache(
     retireInflightLookup(key)
   }
 
-  const settleForCaller = async (promise: Promise<HostedReviewInfo | null>) => {
+  const settleForCaller = async (promise: Promise<HostedReviewBranchRead>) => {
     try {
       return await promise
     } catch (error) {
       const stale = entries.get(key)
       if (!options.userRefresh && stale) {
-        return stale.review
+        return { review: stale.review, fresh: false }
       }
       throw error
     }
@@ -324,7 +334,7 @@ export async function withHostedReviewBranchCache(
   const refusal = options.userRefresh ? null : lookupUnavailableReason(key)
   if (refusal !== null) {
     if (cached) {
-      return cached.review
+      return { review: cached.review, fresh: false }
     }
     throw new Error(refusal)
   }

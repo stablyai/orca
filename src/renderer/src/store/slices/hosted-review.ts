@@ -22,6 +22,8 @@ import {
   hostedReviewCallerSettlement,
   hostedReviewBranchLookupArgs,
   isFreshHostedReview,
+  providerReadGenerationField,
+  requestHostedReviewForBranch,
   isStaleMergedGitHubReviewForHead,
   hostedReviewRepoOwnerTarget,
   shouldRefetchForLinkedHint,
@@ -206,20 +208,11 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       const request = (async () => {
         try {
           const args = hostedReviewBranchLookupArgs(branch, options)
-          const review =
-            target.kind === 'environment'
-              ? await callRuntimeRpc<HostedReviewInfo | null>(
-                  target,
-                  'hostedReview.forBranch',
-                  { repo: repo?.id ?? options?.repoId ?? repoPath, repoPath, ...args },
-                  // Remote git/gh, especially Windows paths, can be slow; main queue bounds concurrency so longer timeout cannot cause stampedes.
-                  { timeoutMs: 30_000 }
-                )
-              : await window.api.hostedReview.forBranch({
-                  repoPath,
-                  ...hostedReviewOwnerIpcArgs(options),
-                  ...args
-                })
+          const { review, readOutcome } = await requestHostedReviewForBranch(
+            target,
+            { repo: repo?.id ?? options?.repoId ?? repoPath, repoPath, ...args },
+            { repoPath, ...hostedReviewOwnerIpcArgs(options), ...args }
+          )
           if (requestGenerations.get(cacheKey) === generation) {
             set((state) => {
               if (
@@ -250,6 +243,10 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   data: review,
                   fetchedAt: Date.now(),
                   linkedReviewHintKey: hintKey,
+                  ...providerReadGenerationField(
+                    readOutcome === 'provider' ? generation : undefined,
+                    state.hostedReviewCache[cacheKey]
+                  ),
                   // Why: fallback PR hints come from this branch's PR cache; preserve that provenance separately from request identity.
                   ...(review?.provider === 'github' &&
                   options?.linkedGitHubPR == null &&

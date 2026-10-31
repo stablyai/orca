@@ -323,50 +323,24 @@ describe('useChecksPanelManualRefresh failures', () => {
     headSha: 'head-2',
     prRepo: { owner: 'orca', repo: 'app', host: 'github.com' }
   } as NonNullable<RefreshInput['pr']>
-  const gitLabReview: HostedReviewInfo = {
-    provider: 'gitlab',
-    number: 7,
-    title: 'MR',
-    url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
-    state: 'merged',
-    status: 'success',
-    mergeable: 'UNKNOWN',
-    updatedAt: '2026-10-30'
-  }
 
-  it('drops a manual failure once a newer read for the panel lands, but not for an older one', async () => {
-    const original = useAppStore.getState()
-    const input = makeInput()
-    input.isGitLabReviewContext = true
-    input.linkedGitLabMR = 7
-    input.fetchHostedReviewForBranch = vi.fn().mockRejectedValueOnce(new Error('offline'))
-    const entry = (fetchedAt: number) => ({
-      hostedReviewCache: { 'hosted-review-key': { data: gitLabReview, fetchedAt } }
-    })
-    try {
-      useAppStore.setState(entry(Date.now() - 1_000))
+  it.each([
+    ['a PR', refreshedPR],
+    ['no PR', null]
+  ])(
+    'on GitHub, a failed review-card read with %s leaves the status to the PR read',
+    async (_name, found) => {
+      const input = makeInput()
+      input.pr = found
+      input.fetchPRForBranch = vi.fn(async () => found)
+      input.fetchHostedReviewForBranch = vi.fn().mockRejectedValue(new Error('raw provider text'))
       const { result } = renderHook(() => useChecksPanelManualRefresh(input))
       await act(async () => result.current.handleRefresh())
-      expect(result.current.manualRefreshError).toBe("Couldn't refresh from GitLab. Try again.")
-      // A background poll succeeding after the failed click replaces the failure, as a newer success would.
-      act(() => useAppStore.setState(entry(Date.now() + 1_000)))
+      expect(input.fetchPRChecks).toHaveBeenCalledTimes(found ? 1 : 0)
+      expect(input.fetchPRComments).toHaveBeenCalledTimes(found ? 1 : 0)
       expect(result.current.manualRefreshError).toBeNull()
-    } finally {
-      useAppStore.setState(original)
     }
-  })
-
-  it('still refreshes GitHub checks and comments when only the hosted-review read fails', async () => {
-    const input = makeInput()
-    input.pr = refreshedPR
-    input.fetchPRForBranch = vi.fn(async () => refreshedPR)
-    input.fetchHostedReviewForBranch = vi.fn().mockRejectedValue(new Error('raw provider text'))
-    const { result } = renderHook(() => useChecksPanelManualRefresh(input))
-    await act(async () => result.current.handleRefresh())
-    expect(input.fetchPRChecks).toHaveBeenCalledTimes(1)
-    expect(input.fetchPRComments).toHaveBeenCalledTimes(1)
-    expect(result.current.manualRefreshError).toBe("Couldn't refresh from GitHub. Try again.")
-  })
+  )
 
   // Old path: every provider without a GitLab review went through the GitHub branch (PR lookup + lists cleared).
   it.each([
@@ -376,9 +350,9 @@ describe('useChecksPanelManualRefresh failures', () => {
     ['unlinked Gitea', { hostedReviewCreateProvider: 'gitea' }, 'Gitea', false],
     ['GitLab with no MR', { hostedReviewCreateProvider: 'gitlab' }, 'GitLab', false],
     ['GitLab with an MR', { linkedGitLabMR: 7, isGitLabReviewContext: true }, 'GitLab', false],
-    ['GitHub', {}, 'GitHub', true]
+    ['GitHub', {}, null, true]
   ] as const)(
-    '%s: routes the click to its provider and names it on failure',
+    '%s: routes the click to its provider and names it on a failure it owns',
     async (_name, overrides, providerName, readsGitHubPR) => {
       const input = Object.assign(makeInput(), overrides)
       input.fetchHostedReviewForBranch = vi.fn().mockRejectedValue(new Error('unreachable'))
@@ -394,8 +368,9 @@ describe('useChecksPanelManualRefresh failures', () => {
       // Only the GitHub path owns checks and comments; it clears them when no PR is found.
       expect(vi.mocked(input.setChecks).mock.calls.length > 0).toBe(readsGitHubPR)
       expect(vi.mocked(input.setComments).mock.calls.length > 0).toBe(readsGitHubPR)
+      // GitHub's refresh status comes from its PR read, not this card read.
       expect(result.current.manualRefreshError).toBe(
-        `Couldn't refresh from ${providerName}. Try again.`
+        providerName ? `Couldn't refresh from ${providerName}. Try again.` : null
       )
     }
   )

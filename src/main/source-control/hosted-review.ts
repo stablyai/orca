@@ -5,14 +5,15 @@ import { assertRemoteUrlReadable } from '../git/remote-url-probe'
 import { forgetGiteaPullRequestReads } from '../gitea/pull-request-read-forgetting'
 import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
-import { withHostedReviewBranchCache } from './hosted-review-branch-cache'
+import { readHostedReviewBranchCache } from './hosted-review-branch-cache'
+import type { HostedReviewBranchRead } from './hosted-review-inflight-lookups'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
 
 function reviewLinkForProvider(
-  input: Parameters<typeof getHostedReviewForBranch>[0],
+  input: Parameters<typeof readHostedReviewForBranch>[0],
   provider: ForgeProviderId
 ): { linkedReviewNumber?: number | null; fallbackReviewNumber?: number | null } {
   switch (provider) {
@@ -33,6 +34,12 @@ function reviewLinkForProvider(
 }
 
 export async function getHostedReviewForBranch(
+  input: Parameters<typeof readHostedReviewForBranch>[0]
+): Promise<HostedReviewInfo | null> {
+  return (await readHostedReviewForBranch(input)).review
+}
+
+export async function readHostedReviewForBranch(
   input: {
     repoPath: string
     executionHostId: ExecutionHostId
@@ -49,7 +56,7 @@ export async function getHostedReviewForBranch(
     force?: boolean
     userRefresh?: boolean
   } & HostedReviewExecutionOptions
-): Promise<HostedReviewInfo | null> {
+): Promise<HostedReviewBranchRead> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
   // Detached HEAD skips branch lookup but still permits exact provider ids.
   if (
@@ -61,7 +68,7 @@ export async function getHostedReviewForBranch(
     input.linkedAzureDevOpsPR == null &&
     input.linkedGiteaPR == null
   ) {
-    return null
+    return { review: null, fresh: false }
   }
 
   const connectionId = hostedReviewSshConnectionId(input.executionHostId)
@@ -85,10 +92,10 @@ export async function getHostedReviewForBranch(
     }
   )
 
-  function lookup(resolvedInput: Parameters<typeof getHostedReviewForBranch>[0]) {
+  function lookup(resolvedInput: Parameters<typeof readHostedReviewForBranch>[0]) {
     const headOid = input.currentHeadOid?.trim() || null
     // Cache review API results by the resolved account and execution identity (#11532).
-    return withHostedReviewBranchCache(
+    return readHostedReviewBranchCache(
       { ...resolvedInput, branch: branchName },
       {
         headOid,

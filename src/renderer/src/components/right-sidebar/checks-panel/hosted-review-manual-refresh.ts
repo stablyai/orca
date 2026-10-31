@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { HostedReviewProvider } from '../../../../../shared/hosted-review'
 import { useAppStore } from '@/store'
+import { latestLookupGeneration } from '@/store/lookup-generation-sequence'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
 import type { ChecksPanelManualRefreshInput } from './manual-refresh-dependencies'
 
@@ -23,26 +24,38 @@ export function checksPanelManualRefreshProvider(
   )
 }
 
-/** A failed click's message, kept until a click succeeds, the context changes or a newer read lands. */
+/** A failed click's message, kept until a click succeeds, the context changes or a provider read issued after the failure answers. */
 export function useChecksPanelManualRefreshFailure(
   panelContextKey: string,
   hostedReviewCacheKey: string
 ) {
-  const [failure, setManualFailure] = useState<{
+  const [failure, setFailure] = useState<{
     contextKey: string
     message: string | null
-    failedAt: number
-  }>({ contextKey: panelContextKey, message: null, failedAt: 0 })
+    failedAfterGeneration: number
+  }>({ contextKey: panelContextKey, message: null, failedAfterGeneration: 0 })
   if (failure.contextKey !== panelContextKey) {
-    setManualFailure({ contextKey: panelContextKey, message: null, failedAt: 0 })
+    setFailure({ contextKey: panelContextKey, message: null, failedAfterGeneration: 0 })
   }
-  // A read that lands after the failure, from any caller, supersedes it; the data on screen is current again.
-  const fetchedAt = useAppStore((s) =>
-    hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.fetchedAt ?? 0) : 0
+  // Last-good fallbacks and cache hits don't move this, so only a real provider read can clear the failure.
+  const providerReadGeneration = useAppStore((s) =>
+    hostedReviewCacheKey
+      ? (s.hostedReviewCache[hostedReviewCacheKey]?.providerReadGeneration ?? 0)
+      : 0
+  )
+  const setManualFailure = useCallback(
+    (message: string | null) =>
+      setFailure({
+        contextKey: panelContextKey,
+        message,
+        failedAfterGeneration: latestLookupGeneration()
+      }),
+    [panelContextKey]
   )
   return {
     manualRefreshError:
-      failure.contextKey === panelContextKey && fetchedAt <= failure.failedAt
+      failure.contextKey === panelContextKey &&
+      providerReadGeneration <= failure.failedAfterGeneration
         ? failure.message
         : null,
     setManualFailure
