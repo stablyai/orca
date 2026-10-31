@@ -162,6 +162,9 @@ export async function startLocalWorker(args: {
   let terminalHandle = params.terminal
   let placed: Awaited<ReturnType<typeof placeWorkerAgent>> | undefined
   let failedStage = 'terminal_create'
+  const onStage = (stage: string) => {
+    failedStage = stage
+  }
   let result: unknown
   try {
     placed = await placeWorkerAgent({
@@ -177,9 +180,7 @@ export async function startLocalWorker(args: {
       agent,
       launchPreferences: launch.preferences,
       effects,
-      onStage: (stage) => {
-        failedStage = stage
-      },
+      onStage,
       followUp: args.followUp
     })
     // New worktrees resolve host support after creation, so the final mode receipt may differ from preflight.
@@ -277,9 +278,7 @@ export async function startLocalWorker(args: {
       readinessDeadline,
       effects,
       terminalRevealWarning: placed.warning,
-      onStage: (stage) => {
-        failedStage = stage
-      }
+      onStage
     })
   } catch (error) {
     result = await failWorkerStartWithReceipt({
