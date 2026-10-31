@@ -1,6 +1,8 @@
 import type {
   LinearAttachResult,
   LinearCommentAddResult,
+  LinearCommentDeleteResult,
+  LinearCommentEditResult,
   LinearCreateResult,
   LinearIssueListResult,
   LinearMcpIssueListResult,
@@ -16,33 +18,36 @@ import type {
   LinearTeamMembersResult,
   LinearTeamStatesResult,
   LinearStatusSetResult
-} from '../shared/linear-agent-access'
+} from '../shared/linear/agent-access'
+import { appendLinearListTruncation } from '../shared/linear/list-truncation-format'
+import { linearPriorityLabel } from '../shared/linear/priority-label'
 import {
   formatLinearProjectListRows,
   linearProjectListWarningLines
-} from '../shared/linear-project-list-format'
+} from '../shared/linear/project-list-format'
+import { terminalSafeLine as safe } from '../shared/terminal-safe-text'
 
 export function formatLinearIssue(result: LinearIssueContextResult): string {
   const issue = result.issue
   const lines = [
-    `${issue.identifier} ${issue.title}`,
-    `URL: ${issue.url}`,
-    `State: ${issue.state?.name ?? 'unknown'}`,
-    `Assignee: ${issue.assignee?.displayName ?? 'unassigned'}`,
-    `Project: ${issue.project?.name ?? 'none'}`
+    `${safe(issue.identifier)} ${safe(issue.title)}`,
+    `URL: ${safe(issue.url)}`,
+    `State: ${safe(issue.state?.name ?? 'unknown')}`,
+    `Assignee: ${safe(issue.assignee?.displayName ?? 'unassigned')}`,
+    `Project: ${safe(issue.project?.name ?? 'none')}`
   ]
   lines.push(`Priority: ${formatPriority(issue.priority)}`)
   lines.push(`Estimate: ${issue.estimate ?? 'none'}`)
   if (issue.labels.length > 0) {
     lines.push(
       `Labels: ${issue.labels
-        .map((label) => label.name)
+        .map((label) => safe(label.name ?? ''))
         .filter(Boolean)
         .join(', ')}`
     )
   }
   if (issue.dueDate) {
-    lines.push(`Due: ${issue.dueDate}`)
+    lines.push(`Due: ${safe(issue.dueDate)}`)
   }
   const sections = result.meta.sections
   if (sections.comments) {
@@ -70,7 +75,11 @@ export function formatLinearSearch(result: LinearSearchResult): string {
   if (result.issues.length === 0) {
     return 'No Linear issues found.'
   }
-  return result.issues.map(formatSearchRow).join('\n')
+  return appendLinearListTruncation(
+    result.issues.map(formatSearchRow).join('\n'),
+    result.issues.length,
+    result.truncated ?? result.meta.limitReached
+  )
 }
 
 export function formatLinearTeamList(result: LinearTeamListResult): string {
@@ -79,63 +88,76 @@ export function formatLinearTeamList(result: LinearTeamListResult): string {
   }
   return result.teams
     .map((team) => {
-      const workspace = team.workspace ? ` ${team.workspace.name}` : ''
-      return `${team.key.padEnd(10)} ${team.name}${workspace}`
+      const workspace = team.workspace ? ` ${safe(team.workspace.name)}` : ''
+      return `${safe(team.key).padEnd(10)} ${safe(team.name)}${workspace}`
     })
     .join('\n')
 }
 
 export function formatLinearTeamMembers(result: LinearTeamMembersResult): string {
   if (result.members.length === 0) {
-    return `No Linear members found for ${result.team.key}.`
+    return `No Linear members found for ${safe(result.team.key)}.`
   }
   return result.members
-    .map((member) => `${(member.displayName ?? 'unknown').padEnd(24)} ${member.id ?? ''}`)
+    .map((member) => `${safe(member.displayName ?? 'unknown').padEnd(24)} ${safe(member.id ?? '')}`)
     .join('\n')
 }
 
 export function formatLinearTeamStates(result: LinearTeamStatesResult): string {
   if (result.states.length === 0) {
-    return `No Linear workflow states found for ${result.team.key}.`
+    return `No Linear workflow states found for ${safe(result.team.key)}.`
   }
   return result.states
-    .map((state) => `${state.name.padEnd(24)} ${(state.type ?? '').padEnd(12)} ${state.id}`)
+    .map(
+      (state) =>
+        `${safe(state.name).padEnd(24)} ${safe(state.type ?? '').padEnd(12)} ${safe(state.id)}`
+    )
     .join('\n')
 }
 
 export function formatLinearTeamLabels(result: LinearTeamLabelsResult): string {
   if (result.labels.length === 0) {
-    return `No Linear labels found for ${result.team.key}.`
+    return `No Linear labels found for ${safe(result.team.key)}.`
   }
-  return result.labels.map((label) => `${label.name.padEnd(24)} ${label.id}`).join('\n')
+  return result.labels.map((label) => `${safe(label.name).padEnd(24)} ${safe(label.id)}`).join('\n')
 }
 
 export function formatLinearIssueList(result: LinearIssueListResult): string {
   if (result.issues.length === 0) {
     return 'No Linear issues found.'
   }
-  return result.issues.map(formatSearchRow).join('\n')
+  return appendLinearListTruncation(
+    result.issues.map(formatSearchRow).join('\n'),
+    result.issues.length,
+    result.truncated ?? result.meta.hasMore
+  )
 }
 
 export function formatLinearMcpIssueList(result: LinearMcpIssueListResult): string {
   if (result.issues.length === 0) {
     return 'No Linear issues found.'
   }
-  return result.issues.map(formatSearchRow).join('\n')
+  return appendLinearListTruncation(
+    result.issues.map(formatSearchRow).join('\n'),
+    result.issues.length,
+    result.truncated ?? result.meta.hasMore
+  )
 }
 
 export function printLinearMcpIssueListWarnings(result: LinearMcpIssueListResult): void {
   if (result.meta.hasMore) {
     const workspaceHint =
       result.meta.nextCursor && result.meta.workspaceId !== 'all' && result.meta.workspaceId
-        ? `; continue with --workspace ${result.meta.workspaceId}`
+        ? `; continue with --workspace ${safe(result.meta.workspaceId)}`
         : ''
     console.error(
-      `warning: more results available; next cursor: ${result.meta.nextCursor ?? 'n/a'}${workspaceHint}`
+      `warning: more results available; next cursor: ${safe(result.meta.nextCursor ?? 'n/a')}${workspaceHint}`
     )
   }
   for (const error of result.meta.workspaceErrors) {
-    console.error(`warning: ${error.workspace.name} unavailable for Linear: ${error.message}`)
+    console.error(
+      `warning: ${safe(error.workspace.name)} unavailable for Linear: ${safe(error.message)}`
+    )
   }
 }
 
@@ -145,36 +167,44 @@ export function formatLinearProjectList(result: LinearProjectListResult): string
 
 export function formatLinearStatusSet(result: LinearStatusSetResult): string {
   const suffix = result.meta.alreadyInState ? ' (already set)' : ''
-  return `Set ${result.issue.identifier} to ${result.state.name}${suffix}.`
+  return `Set ${safe(result.issue.identifier)} to ${safe(result.state.name)}${suffix}.`
 }
 
 export function formatLinearCommentAdd(result: LinearCommentAddResult): string {
   const suffix = result.meta.deduplicated ? ' (already posted)' : ''
-  return `Added comment ${result.comment.id} to ${result.issue.identifier}${suffix}.`
+  return `Added comment ${safe(result.comment.id)} to ${safe(result.issue.identifier)}${suffix}.`
+}
+
+export function formatLinearCommentEdit(result: LinearCommentEditResult): string {
+  return `Edited comment ${safe(result.comment.id)} on ${safe(result.issue.identifier)}.`
+}
+
+export function formatLinearCommentDelete(result: LinearCommentDeleteResult): string {
+  return `Deleted comment ${safe(result.comment.id)} from ${safe(result.issue.identifier)}.`
 }
 
 export function formatLinearAttach(result: LinearAttachResult): string {
   const suffix = result.meta.deduplicated ? ' (already attached)' : ''
-  return `Attached ${result.attachment.title} to ${result.issue.identifier}${suffix}.`
+  return `Attached ${safe(result.attachment.title)} to ${safe(result.issue.identifier)}${suffix}.`
 }
 
 export function formatLinearCreate(result: LinearCreateResult | LinearSaveIssueResult): string {
-  const parent = result.issue.parent ? ` under ${result.issue.parent.identifier}` : ''
-  const project = result.issue.project?.name ? ` in ${result.issue.project.name}` : ''
+  const parent = result.issue.parent ? ` under ${safe(result.issue.parent.identifier)}` : ''
+  const project = result.issue.project?.name ? ` in ${safe(result.issue.project.name)}` : ''
   const suffix = result.meta.deduplicated ? ' (already created)' : ''
-  return `Created ${result.issue.identifier}${parent}${project}: ${result.issue.title}${suffix}.`
+  return `Created ${safe(result.issue.identifier)}${parent}${project}: ${safe(result.issue.title)}${suffix}.`
 }
 
 export function formatLinearSaveIssue(result: LinearSaveIssueResult): string {
   if (result.meta.created) {
     return formatLinearCreate(result)
   }
-  return `Saved ${result.issue.identifier}: ${result.issue.title}.`
+  return `Saved ${safe(result.issue.identifier)}: ${safe(result.issue.title)}.`
 }
 
 export function formatLinearTaskUpdate(result: LinearIssueTaskUpdateResult): string {
   const suffix = result.meta.alreadySet ? ' (already set)' : ''
-  return `Updated ${result.issue.identifier} ${taskOperationLabel(result.operation)}${suffix}.`
+  return `Updated ${safe(result.issue.identifier)} ${taskOperationLabel(result.operation)}${suffix}.`
 }
 
 export function formatLinearRelationWrite(result: LinearIssueRelationWriteResult): string {
@@ -184,12 +214,12 @@ export function formatLinearRelationWrite(result: LinearIssueRelationWriteResult
       ? ' (already present)'
       : ' (already absent)'
     : ''
-  return `${verb} ${result.issue.identifier} ${result.relation.relationship} ${result.relatedIssue.identifier}${suffix}.`
+  return `${verb} ${safe(result.issue.identifier)} ${result.relation.relationship} ${safe(result.relatedIssue.identifier)}${suffix}.`
 }
 
 export function printLinearIssueWarnings(result: LinearIssueContextResult): void {
   for (const error of result.meta.includeErrors) {
-    console.error(`warning: ${error.include} unavailable: ${error.message}`)
+    console.error(`warning: ${error.include} unavailable: ${safe(error.message)}`)
   }
   for (const [name, meta] of Object.entries(result.meta.sections)) {
     if (meta?.capReached) {
@@ -204,7 +234,7 @@ export function printLinearSearchWarnings(result: LinearSearchResult): void {
   }
   for (const error of result.meta.workspaceErrors ?? []) {
     console.error(
-      `warning: ${error.workspace.name} unavailable for Linear search: ${error.message}`
+      `warning: ${safe(error.workspace.name)} unavailable for Linear search: ${safe(error.message)}`
     )
   }
 }
@@ -220,7 +250,9 @@ export function printLinearListWarnings(
     console.error(`warning: showing first ${meta.returned} Linear issues`)
   }
   for (const error of meta.workspaceErrors ?? []) {
-    console.error(`warning: ${error.workspace.name} unavailable for Linear: ${error.message}`)
+    console.error(
+      `warning: ${safe(error.workspace.name)} unavailable for Linear: ${safe(error.message)}`
+    )
   }
 }
 
@@ -231,27 +263,13 @@ export function printLinearProjectListWarnings(result: LinearProjectListResult):
 }
 
 function formatSearchRow(issue: LinearSearchIssueSummary): string {
-  const state = issue.state?.name ?? 'unknown'
-  const assignee = issue.assignee?.displayName ?? 'unassigned'
-  return `${issue.identifier.padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${issue.title}`
+  const state = safe(issue.state?.name ?? 'unknown')
+  const assignee = safe(issue.assignee?.displayName ?? 'unassigned')
+  return `${safe(issue.identifier).padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${safe(issue.title)}`
 }
 
 function formatPriority(priority: number | null | undefined): string {
-  if (priority == null || priority === 0) {
-    return 'none'
-  }
-  switch (priority) {
-    case 1:
-      return 'urgent'
-    case 2:
-      return 'high'
-    case 3:
-      return 'medium'
-    case 4:
-      return 'low'
-    default:
-      return 'none'
-  }
+  return linearPriorityLabel(priority)
 }
 
 function taskOperationLabel(operation: LinearIssueTaskUpdateResult['operation']): string {

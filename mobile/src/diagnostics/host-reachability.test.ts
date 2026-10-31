@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { testHostReachability, unreachableHostDetail } from './host-reachability'
+import { formatEndpoint, testHostReachability, unreachableHostDetail } from './host-reachability'
 
 describe('unreachableHostDetail', () => {
   it('points at Tailscale for tailnet CGNAT endpoints', () => {
@@ -20,6 +20,10 @@ describe('unreachableHostDetail', () => {
 
   it('does not treat non-CGNAT 100.x addresses as Tailscale', () => {
     expect(unreachableHostDetail('ws://100.20.1.5:6768')).toBe('Cannot reach 100.20.1.5:6768')
+  })
+
+  it('does not echo malformed endpoints that may contain credentials', () => {
+    expect(formatEndpoint('not-a-url?token=secret')).toBe('invalid endpoint')
   })
 })
 

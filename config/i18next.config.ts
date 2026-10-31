@@ -16,10 +16,9 @@ export default defineConfig({
     ],
     output,
     defaultNS: false,
-    functions: ['t', '*.t', 'translate', 'translateMain'],
+    functions: ['t', '*.t', 'translate', 'translateMain', 'translateSearchKeyword'],
     useTranslationNames: ['useTranslation'],
     sort: true,
-    disablePlurals: true,
     removeUnusedKeys: true
   }
 })

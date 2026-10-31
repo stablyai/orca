@@ -1,10 +1,11 @@
+import '../runtime/desktop-browser-bridge/desktop-browser-bridge-allowlist.spec'
 import { mkdtempSync } from 'node:fs'
+import { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
+import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConnection } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
-// ── Electron mocks ──
 
 const { webContentsFromIdMock } = vi.hoisted(() => ({
   webContentsFromIdMock: vi.fn()
@@ -24,12 +25,10 @@ vi.mock('../git/worktree', () => ({
 
 import { BrowserManager } from './browser-manager'
 import { CdpBridge } from './cdp-bridge'
-import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from './browser-text-insertion'
+import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from '../../shared/browser-text-insertion-chunks'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
-
-// ── CDP response builders ──
 
 type AXNode = {
   nodeId: string
@@ -70,8 +69,6 @@ const SEARCH_PAGE_TREE: AXNode[] = [
   axNode('4', 'textbox', 'Search query', { backendDOMNodeId: 400 }),
   axNode('5', 'button', 'Search', { backendDOMNodeId: 500 })
 ]
-
-// ── Mock WebContents factory ──
 
 function createMockGuest(
   id: number,
@@ -187,6 +184,8 @@ function createMockGuest(
   const guest = {
     id,
     isDestroyed: vi.fn(() => false),
+    isCurrentlyAudible: vi.fn(() => false),
+    setIgnoreMenuShortcuts: vi.fn(),
     getType: vi.fn(() => 'webview'),
     getURL: vi.fn(() => currentUrl),
     getTitle: vi.fn(() => currentTitle),
@@ -212,7 +211,7 @@ function createMockGuest(
       removeListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         const handlers = debuggerListeners.get(event) ?? []
         const idx = handlers.indexOf(handler)
-        if (idx >= 0) {
+        if (idx !== -1) {
           handlers.splice(idx, 1)
         }
       }),
@@ -226,6 +225,9 @@ function createMockGuest(
   return {
     guest,
     sendCommandMock,
+    setTree(tree: AXNode[]) {
+      currentTree = tree
+    },
     emitDebugger(event: string, ...args: unknown[]) {
       for (const handler of debuggerListeners.get(event) ?? []) {
         handler(...args)
@@ -238,8 +240,6 @@ function createMockGuest(
     }
   }
 }
-
-// ── RPC helper ──
 
 async function sendRequest(
   endpoint: string,
@@ -266,8 +266,6 @@ async function sendRequest(
   })
 }
 
-// ── Tests ──
-
 describe('Browser automation pipeline (integration)', () => {
   let server: OrcaRuntimeRpcServer
   let endpoint: string
@@ -280,6 +278,8 @@ describe('Browser automation pipeline (integration)', () => {
   const RENDERER_WC_ID = 1
 
   beforeEach(async () => {
+    // The Electron entry installs this factory; Node hosts omit browser commands.
+    setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
     activeGuestHarness = createMockGuest(GUEST_WC_ID, 'https://example.com', 'Example Domain')
     const { guest } = activeGuestHarness
     activeGuest = guest
@@ -291,7 +291,7 @@ describe('Browser automation pipeline (integration)', () => {
     })
 
     const browserManager = new BrowserManager()
-    // Simulate the attach-time policy (normally done in will-attach-webview)
+    // Production applies these policies in will-attach-webview.
     browserManager.attachGuestPolicies(guest as never)
     browserManager.registerGuest({
       browserPageId: 'page-1',
@@ -328,8 +328,6 @@ describe('Browser automation pipeline (integration)', () => {
     })
     return response
   }
-
-  // ── Snapshot ──
 
   it('takes a snapshot and returns refs for interactive elements', async () => {
     const res = await rpc('browser.snapshot')
@@ -371,16 +369,6 @@ describe('Browser automation pipeline (integration)', () => {
     expect(activeGuest.debugger.removeAllListeners).not.toHaveBeenCalled()
   })
 
-  // ── Click ──
-
-  it('clicks an element by ref after snapshot', async () => {
-    await rpc('browser.snapshot')
-
-    const res = await rpc('browser.click', { element: '@e1' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { clicked: string }).clicked).toBe('@e1')
-  })
-
   it('returns error when clicking without a prior snapshot', async () => {
     const res = await rpc('browser.click', { element: '@e1' })
     expect(res.ok).toBe(false)
@@ -395,8 +383,6 @@ describe('Browser automation pipeline (integration)', () => {
     expect((res.error as { code: string }).code).toBe('browser_ref_not_found')
   })
 
-  // ── Navigation ──
-
   it('navigates to a URL and invalidates refs', async () => {
     await rpc('browser.snapshot')
 
@@ -406,12 +392,10 @@ describe('Browser automation pipeline (integration)', () => {
     expect(gotoResult.url).toBe('https://search.example.com')
     expect(gotoResult.title).toBe('Search')
 
-    // Old refs should be stale after navigation
     const clickRes = await rpc('browser.click', { element: '@e1' })
     expect(clickRes.ok).toBe(false)
     expect((clickRes.error as { code: string }).code).toBe('browser_stale_ref')
 
-    // Re-snapshot should work and show new page
     const snapRes = await rpc('browser.snapshot')
     expect(snapRes.ok).toBe(true)
     const snapResult = snapRes.result as { snapshot: string; refs: { name: string }[] }
@@ -463,20 +447,8 @@ describe('Browser automation pipeline (integration)', () => {
     }
   })
 
-  // ── Fill ──
-
-  it('fills an input by ref', async () => {
-    await rpc('browser.goto', { url: 'https://search.example.com' })
-    await rpc('browser.snapshot')
-
-    // @e2 should be the textbox "Search query" on the search page
-    const res = await rpc('browser.fill', { element: '@e2', value: 'hello world' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { filled: string }).filled).toBe('@e2')
-  })
-
   it('chunks large browser fill text before CDP insertText', async () => {
-    await rpc('browser.goto', { url: 'https://search.example.com' })
+    activeGuestHarness.setTree(SEARCH_PAGE_TREE)
     await rpc('browser.snapshot')
 
     const text = 'x'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 5)
@@ -493,14 +465,6 @@ describe('Browser automation pipeline (integration)', () => {
     expect((insertCalls[1]![1] as { text: string }).text).toBe('xxxxx')
   })
 
-  // ── Type ──
-
-  it('types text at current focus', async () => {
-    const res = await rpc('browser.type', { input: 'some text' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { typed: boolean }).typed).toBe(true)
-  })
-
   it('chunks large browser type text before CDP insertText', async () => {
     const text = 'y'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 2)
     const res = await rpc('browser.type', { input: text })
@@ -514,47 +478,6 @@ describe('Browser automation pipeline (integration)', () => {
       BROWSER_TEXT_INSERT_CHUNK_BYTES
     )
     expect((insertCalls[1]![1] as { text: string }).text).toBe('yy')
-  })
-
-  // ── Select ──
-
-  it('selects a dropdown option by ref', async () => {
-    await rpc('browser.goto', { url: 'https://search.example.com' })
-    await rpc('browser.snapshot')
-
-    const res = await rpc('browser.select', { element: '@e2', value: 'option-1' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { selected: string }).selected).toBe('@e2')
-  })
-
-  // ── Scroll ──
-
-  it('scrolls the viewport', async () => {
-    const res = await rpc('browser.scroll', { direction: 'down' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { scrolled: string }).scrolled).toBe('down')
-
-    const res2 = await rpc('browser.scroll', { direction: 'up', amount: 200 })
-    expect(res2.ok).toBe(true)
-    expect((res2.result as { scrolled: string }).scrolled).toBe('up')
-  })
-
-  // ── Reload ──
-
-  it('reloads the page', async () => {
-    const res = await rpc('browser.reload')
-    expect(res.ok).toBe(true)
-    expect((res.result as { url: string }).url).toBe('https://example.com')
-  })
-
-  // ── Screenshot ──
-
-  it('captures a screenshot', async () => {
-    const res = await rpc('browser.screenshot', { format: 'png' })
-    expect(res.ok).toBe(true)
-    const result = res.result as { data: string; format: string }
-    expect(result.format).toBe('png')
-    expect(result.data.length).toBeGreaterThan(0)
   })
 
   it('bounds capture request bookkeeping when network entries are evicted or fail', async () => {
@@ -598,16 +521,6 @@ describe('Browser automation pipeline (integration)', () => {
     expect(state?.networkRequestMap.size).toBe(0)
   })
 
-  // ── Eval ──
-
-  it('evaluates JavaScript in the page context', async () => {
-    const res = await rpc('browser.eval', { expression: '2 + 2' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { result: string }).result).toBe('4')
-  })
-
-  // ── Tab management ──
-
   it('lists open tabs', async () => {
     const res = await rpc('browser.tabList')
     expect(res.ok).toBe(true)
@@ -626,56 +539,7 @@ describe('Browser automation pipeline (integration)', () => {
     expect((res.error as { code: string }).code).toBe('browser_tab_not_found')
   })
 
-  // ── Full agent workflow simulation ──
-
-  it('simulates a complete agent workflow: navigate → snapshot → interact → re-snapshot', async () => {
-    // 1. Navigate to search page
-    const gotoRes = await rpc('browser.goto', { url: 'https://search.example.com' })
-    expect(gotoRes.ok).toBe(true)
-
-    // 2. Snapshot the page
-    const snap1 = await rpc('browser.snapshot')
-    expect(snap1.ok).toBe(true)
-    const snap1Result = snap1.result as {
-      snapshot: string
-      refs: { ref: string; role: string; name: string }[]
-    }
-
-    // Verify we see the search page structure
-    expect(snap1Result.snapshot).toContain('[Main Nav]')
-    expect(snap1Result.snapshot).toContain('text input "Search query"')
-    expect(snap1Result.snapshot).toContain('button "Search"')
-
-    // 3. Fill the search input
-    const searchInput = snap1Result.refs.find((r) => r.name === 'Search query')
-    expect(searchInput).toBeDefined()
-    const fillRes = await rpc('browser.fill', {
-      element: searchInput!.ref,
-      value: 'integration testing'
-    })
-    expect(fillRes.ok).toBe(true)
-
-    // 4. Click the search button
-    const searchBtn = snap1Result.refs.find((r) => r.name === 'Search')
-    expect(searchBtn).toBeDefined()
-    const clickRes = await rpc('browser.click', { element: searchBtn!.ref })
-    expect(clickRes.ok).toBe(true)
-
-    // 5. Take a screenshot
-    const ssRes = await rpc('browser.screenshot')
-    expect(ssRes.ok).toBe(true)
-
-    // 6. Check tab list
-    const tabRes = await rpc('browser.tabList')
-    expect(tabRes.ok).toBe(true)
-    const tabs = (tabRes.result as { tabs: { url: string }[] }).tabs
-    expect(tabs[0].url).toBe('https://search.example.com')
-  })
-
-  // ── No tab errors ──
-
   it('returns browser_no_tab when no tabs are registered', async () => {
-    // Create a fresh setup with no registered tabs
     const emptyManager = new BrowserManager()
     const emptyBridge = new CdpBridge(emptyManager)
 

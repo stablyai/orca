@@ -3,17 +3,7 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-
-function hasModelFlag(tokens: readonly string[]): boolean {
-  return tokens.some(
-    (token) =>
-      token === '-m' ||
-      token === '--model' ||
-      token.startsWith('-m=') ||
-      (token.startsWith('-m') && !token.startsWith('--')) ||
-      token.startsWith('--model=')
-  )
-}
+import { agentChoiceCliApply } from './agent-choice-cli-apply'
 
 export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   models: [
@@ -23,8 +13,17 @@ export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', options: [] }
   ],
   modelApply: {
-    launchArgs: (value) => ['-m', String(value)],
-    agentArgsOverride: hasModelFlag,
+    ...agentChoiceCliApply(
+      'gemini',
+      [
+        {
+          kind: 'value',
+          names: ['-m', '--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '-m'
+    ),
     midSession: { kind: 'agent-picker', command: '/model' }
   }
 }
@@ -77,6 +76,7 @@ function parseCursorModels(stdout: string): CatalogModel[] {
 }
 
 export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+  supportsWorkerLaunchPreferences: true,
   models: [
     { id: 'auto', label: 'Auto', isDefault: true, options: [] },
     {
@@ -91,8 +91,17 @@ export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   ],
   modelApply: {
-    launchArgs: (value) => ['--model', String(value)],
-    agentArgsOverride: hasModelFlag,
+    ...agentChoiceCliApply(
+      'cursor',
+      [
+        {
+          kind: 'value',
+          names: ['-m', '--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--model'
+    ),
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
   composeModelValue: (modelId, values) => {

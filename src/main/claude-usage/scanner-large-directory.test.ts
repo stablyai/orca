@@ -59,7 +59,7 @@ describe('listClaudeTranscriptFiles large directories', () => {
       throw new Error(`Unexpected readdir path: ${dirPath}`)
     })
 
-    const { listClaudeTranscriptFiles } = await import('./scanner')
+    const { listClaudeTranscriptFiles } = await import('./transcript-file-discovery')
 
     await expect(listClaudeTranscriptFiles()).resolves.toHaveLength(FILE_COUNT)
   })

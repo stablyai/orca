@@ -1,20 +1,29 @@
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { LinearCollectionResult } from '../../../../shared/linear/workspace-types'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import type * as ReactI18nextModule from 'react-i18next'
+import type * as I18nModule from '@/i18n/i18n'
 
 vi.mock('@/store', () => {
   const state = {
     repos: [],
     addRepo: vi.fn(),
     checkLinearConnection: vi.fn(),
+    fetchLinearIssue: vi.fn(),
     fetchWorkItems: vi.fn(),
     fetchWorkItemsAcrossRepos: vi.fn(),
     getCachedWorkItems: vi.fn(() => null),
     linearStatus: { connected: false },
     linearStatusChecked: false,
+    linearStatusContextKey: '',
     listLinearIssues: vi.fn(),
     preflightStatus: null,
     preflightStatusChecked: false,
@@ -25,6 +34,7 @@ vi.mock('@/store', () => {
   }
   const useAppStore = (selector: (s: typeof state) => unknown): unknown => selector(state)
   useAppStore.getState = () => state
+  useAppStore.setState = (patch: Partial<typeof state>) => Object.assign(state, patch)
   return { useAppStore }
 })
 
@@ -33,11 +43,13 @@ vi.mock('@/lib/local-preflight-context', () => ({
   localPreflightContextKey: () => 'test-preflight-context'
 }))
 
-vi.mock('react-i18next', () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactI18nextModule>()),
   useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key })
 }))
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18nModule>()),
   translate: (_key: string, fallback: string) => fallback
 }))
 
@@ -79,6 +91,16 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
+  useAppStore.setState({
+    linearStatus: { connected: false, viewer: null },
+    linearStatusChecked: false,
+    linearStatusContextKey: getProviderRuntimeContextKey(null),
+    fetchLinearIssue: vi.fn(() => linearIssueReadFixture<LinearIssue | null>(async () => null)),
+    listLinearIssues: vi.fn(() =>
+      linearIssueReadFixture<LinearCollectionResult<LinearIssue>>(async () => ({ items: [] }))
+    ),
+    searchLinearIssues: vi.fn(() => linearIssueReadFixture<LinearIssue[]>(async () => []))
+  })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -88,6 +110,7 @@ afterEach(() => {
   act(() => {
     root.unmount()
   })
+  vi.useRealTimers()
   container.remove()
 })
 
@@ -171,9 +194,7 @@ function renderEmojiField(value: string, onValueChange: (value: string) => void)
   return input
 }
 
-// Why: the guard must short-circuit before the `open && rows.length > 0`
-// row-select branch, so drive the field into that state — smart mode with a
-// typed value synchronously yields a highlighted "use this name" row.
+// Open the highlighted smart-name row so IME suppression must precede the row-select branch.
 function openSourcePopover(input: HTMLInputElement): void {
   const event = new Event('pointerdown', { bubbles: true, cancelable: true })
   act(() => {
@@ -236,8 +257,6 @@ describe('SmartWorkspaceNameField IME Enter guard', () => {
 
     pressEnter(input, { isComposing: true })
 
-    // The guard runs before the row-select branch, so neither the row commit
-    // (onValueChange) nor the fall-through (onPlainEnter) should fire.
     expect(onValueChange).not.toHaveBeenCalled()
     expect(onBranchSelect).not.toHaveBeenCalled()
     expect(onPlainEnter).not.toHaveBeenCalled()
@@ -252,12 +271,92 @@ describe('SmartWorkspaceNameField IME Enter guard', () => {
 
     pressEnter(input)
 
-    // With the popover open and a highlighted "use this name" row, a plain
-    // Enter commits that row (onValueChange) and does NOT fall through to
-    // onPlainEnter — proving the composition case above was really suppressed
-    // at the row-select branch, not merely inert.
+    // Plain Enter must commit the same highlighted row, proving the IME case suppressed an active path.
     expect(onValueChange).toHaveBeenCalledWith('배포')
     expect(onPlainEnter).not.toHaveBeenCalled()
+  })
+})
+
+describe('SmartWorkspaceNameField Linear URL loading', () => {
+  it('blocks Enter and delays visible loading feedback while preserving its layout', async () => {
+    vi.useFakeTimers()
+    const url = 'https://linear.app/stably/issue/STA-4084/restore-shell-integration'
+    const onPlainEnter = vi.fn()
+    const onValueChange = vi.fn()
+    const onLinearIssueSelect = vi.fn()
+    useAppStore.setState({
+      linearStatus: {
+        connected: true,
+        viewer: null,
+        activeWorkspaceId: 'workspace-1',
+        selectedWorkspaceId: 'workspace-1',
+        workspaces: [
+          {
+            id: 'workspace-1',
+            displayName: 'Stably User',
+            email: null,
+            organizationId: 'organization-stably',
+            organizationName: 'Stably',
+            organizationUrlKey: 'stably'
+          }
+        ]
+      },
+      linearStatusChecked: true,
+      fetchLinearIssue: vi.fn(() =>
+        linearIssueReadFixture<LinearIssue | null>(() => new Promise<null>(() => {}))
+      )
+    })
+
+    await act(async () => {
+      root.render(
+        <SmartWorkspaceNameField
+          repos={[]}
+          repoId="repo-1"
+          onRepoChange={vi.fn()}
+          value={url}
+          onValueChange={onValueChange}
+          onGitHubItemSelect={vi.fn()}
+          onBranchSelect={vi.fn()}
+          onLinearIssueSelect={onLinearIssueSelect}
+          selectedSource={null}
+          onClearSelectedSource={vi.fn()}
+          onPlainEnter={onPlainEnter}
+        />
+      )
+    })
+
+    const input = container.querySelector<HTMLInputElement>('[data-workspace-name-input="true"]')
+    const describedBy = input?.getAttribute('aria-describedby')
+    const status = describedBy ? container.querySelector<HTMLElement>(`#${describedBy}`) : null
+    const reservedResults = container.querySelector<HTMLElement>('[aria-hidden="true"].space-y-1')
+    expect(input?.getAttribute('aria-busy')).toBe('true')
+    expect(status?.getAttribute('role')).toBe('status')
+    expect(status?.getAttribute('aria-live')).toBe('polite')
+    expect(status?.textContent).toContain('Loading Linear issue…')
+    expect(container.textContent).not.toContain('Start typing to create a name or find a source.')
+    expect(reservedResults?.classList.contains('invisible')).toBe(true)
+    expect(reservedResults?.children).toHaveLength(3)
+
+    if (!input) {
+      throw new Error('workspace name input not rendered')
+    }
+    pressEnter(input)
+    expect(onPlainEnter).not.toHaveBeenCalled()
+    expect(onValueChange).not.toHaveBeenCalled()
+    expect(onLinearIssueSelect).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(199)
+    })
+    expect(reservedResults?.classList.contains('invisible')).toBe(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    const visibleResults = container.querySelector<HTMLElement>('[aria-hidden="true"].space-y-1')
+    expect(visibleResults).toBe(reservedResults)
+    expect(visibleResults?.classList.contains('invisible')).toBe(false)
+    expect(visibleResults?.querySelectorAll('.animate-pulse')).toHaveLength(3)
   })
 })
 
@@ -289,6 +388,6 @@ describe('SmartWorkspaceNameField emoji shortcodes', () => {
     })
     pressEnter(input)
 
-    expect(onValueChange).toHaveBeenCalledWith('Launch 😉')
+    expect(onValueChange).toHaveBeenCalledWith('Launch 😉 ')
   })
 })

@@ -1,40 +1,16 @@
 import React from 'react'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
-import type { GitHubAssignableUser, GitHubWorkItem } from '../../../../shared/types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
+import { getTaskPageGitHubWorkItemStateLabel } from '@/components/task-page/github/task-page-github-work-item-status'
 
 export function formatRelativeTime(input: string): string {
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) {
-    return 'recently'
-  }
-  const diffMs = date.getTime() - Date.now()
-  const diffMinutes = Math.round(diffMs / 60_000)
-  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-  if (Math.abs(diffMinutes) < 60) {
-    return formatter.format(diffMinutes, 'minute')
-  }
-  const diffHours = Math.round(diffMinutes / 60)
-  if (Math.abs(diffHours) < 24) {
-    return formatter.format(diffHours, 'hour')
-  }
-  const diffDays = Math.round(diffHours / 24)
-  return formatter.format(diffDays, 'day')
+  return formatUiRelativeTimeFromDate(input)
 }
 
 export function getStateLabel(item: GitHubWorkItem): string {
-  if (item.type === 'pr') {
-    if (item.state === 'merged') {
-      return 'Merged'
-    }
-    if (item.state === 'draft') {
-      return 'Draft'
-    }
-    if (item.state === 'closed') {
-      return 'Closed'
-    }
-    return 'Open'
-  }
-  return item.state === 'closed' ? 'Closed' : 'Open'
+  return getTaskPageGitHubWorkItemStateLabel(item)
 }
 export function ReviewerAvatar({
   login,

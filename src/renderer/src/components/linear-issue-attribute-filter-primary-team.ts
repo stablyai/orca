@@ -1,4 +1,4 @@
-import type { LinearTeam } from '../../../shared/types'
+import type { LinearTeam } from '../../../shared/linear/workspace-types'
 
 function compareTeamNameId(a: LinearTeam, b: LinearTeam): number {
   const nameCmp = a.name.localeCompare(b.name)
@@ -14,17 +14,19 @@ export function resolveLinearIssueAttributeFilterPrimaryTeam(options: {
   availableTeams: LinearTeam[]
 }): LinearTeam | null {
   const { selectedTeamIds, availableTeams } = options
-  if (availableTeams.length === 0) {
-    return null
+  const selectedIds = new Set(selectedTeamIds)
+  let firstAvailable: LinearTeam | null = null
+  let firstSelected: LinearTeam | null = null
+  for (const team of availableTeams) {
+    if (!firstAvailable || compareTeamNameId(team, firstAvailable) < 0) {
+      firstAvailable = team
+    }
+    if (
+      selectedIds.has(team.id) &&
+      (!firstSelected || compareTeamNameId(team, firstSelected) < 0)
+    ) {
+      firstSelected = team
+    }
   }
-  if (selectedTeamIds.length === 0) {
-    return [...availableTeams].sort(compareTeamNameId)[0] ?? null
-  }
-  const selected = availableTeams
-    .filter((team) => selectedTeamIds.includes(team.id))
-    .sort(compareTeamNameId)
-  if (selected.length > 0) {
-    return selected[0] ?? null
-  }
-  return [...availableTeams].sort(compareTeamNameId)[0] ?? null
+  return firstSelected ?? firstAvailable
 }

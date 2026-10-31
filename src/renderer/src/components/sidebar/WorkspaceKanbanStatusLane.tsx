@@ -1,11 +1,11 @@
 import React, { useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
   WORKSPACE_BOARD_COLUMN_WIDTH_MIN
@@ -15,8 +15,10 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import WorkspaceKanbanLaneCardList from './WorkspaceKanbanLaneCardList'
 import { serializeWorkspaceLaneFullIds } from './workspace-kanban-filtered-drop-index'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type WorkspaceKanbanStatusLaneProps = {
   status: WorkspaceStatusDefinition
@@ -26,11 +28,10 @@ type WorkspaceKanbanStatusLaneProps = {
   hasQuery?: boolean
   fullWorktreeIds?: readonly string[]
   repoMap: Map<string, Repo>
-  activeWorktreeId: string | null
+  activeWorktreeIdentity: string | null
   columnWidth: number
   isResizingColumn: boolean
   isDragTarget: boolean
-  canCreateWorktree: boolean
   nativeDragEnabled?: boolean
   renderCards: boolean
   selectedWorktreeIds: ReadonlySet<string>
@@ -57,11 +58,10 @@ function WorkspaceKanbanStatusLane({
   hasQuery = false,
   fullWorktreeIds,
   repoMap,
-  activeWorktreeId,
+  activeWorktreeIdentity,
   columnWidth,
   isResizingColumn,
   isDragTarget,
-  canCreateWorktree,
   nativeDragEnabled = true,
   renderCards,
   selectedWorktreeIds,
@@ -77,26 +77,27 @@ function WorkspaceKanbanStatusLane({
   onColumnResizeStart,
   onColumnResizeKeyDown
 }: WorkspaceKanbanStatusLaneProps): React.JSX.Element {
+  useUiLanguageRevision()
   const laneScrollRef = useRef<HTMLDivElement | null>(null)
   const meta = getWorkspaceStatusVisualMeta(status)
-  // Why: a lane that is empty on its own merits is still "Empty" under a query —
-  // only a lane whose cards were filtered away has anything to say about matches.
+  // Only filtered-away cards justify No matches; intrinsically empty lanes remain Empty.
   const laneTotalCount = totalCount ?? items.length
   const isFiltered = hasQuery && laneTotalCount > 0
-  // Why: this joins every id in the lane, so it must not rerun on unrelated
-  // board re-renders — at a few hundred cards it is ~25KB of string per pass.
+  // Memoize full-lane ID serialization to avoid rebuilding large strings on unrelated board renders.
   const laneFullIdsAttribute = useMemo(() => {
     if (!hasQuery) {
       return undefined
     }
     return (
-      serializeWorkspaceLaneFullIds(fullWorktreeIds ?? items.map((worktree) => worktree.id)) ??
+      serializeWorkspaceLaneFullIds(fullWorktreeIds ?? items.map(getWorktreeHostIdentity)) ??
       undefined
     )
   }, [fullWorktreeIds, hasQuery, items])
-  const createTooltip = canCreateWorktree
-    ? `New workspace in ${status.label}`
-    : 'Add a project to create workspaces'
+  const createTooltip = translate(
+    'auto.components.sidebar.WorkspaceKanbanStatusLane.newWorkspaceIn',
+    'New workspace in {{status}}',
+    { status: status.label }
+  )
   const createButton = (
     <Button
       type="button"
@@ -104,7 +105,6 @@ function WorkspaceKanbanStatusLane({
       size="icon-xs"
       className="size-6 text-muted-foreground"
       aria-label={createTooltip}
-      disabled={!canCreateWorktree}
       onClick={() => onCreateWorktree(status.id)}
     >
       <Plus className="size-3.5" />
@@ -115,10 +115,7 @@ function WorkspaceKanbanStatusLane({
     <section
       data-workspace-status-drop-target=""
       data-workspace-status={status.id}
-      // Why: sidebar→board drops read lane membership straight out of the DOM,
-      // where a search query would otherwise leave them only the rendered cards.
-      // Unfiltered lanes stay off this channel — the rendered scan already is the
-      // full lane, and every board id in an attribute is real DOM weight.
+      // Filtered drag/drop needs full membership beyond rendered cards; omit the extra DOM payload when unfiltered.
       data-workspace-lane-full-ids={laneFullIdsAttribute}
       data-contextual-tour-target={
         status.id === 'completed' ? 'workspace-board-done-lane' : undefined
@@ -192,7 +189,7 @@ function WorkspaceKanbanStatusLane({
             <WorkspaceKanbanLaneCardList
               items={items}
               repoMap={repoMap}
-              activeWorktreeId={activeWorktreeId}
+              activeWorktreeIdentity={activeWorktreeIdentity}
               scrollRef={laneScrollRef}
               selectedWorktreeIds={selectedWorktreeIds}
               selectedWorktrees={selectedWorktrees}
@@ -224,7 +221,6 @@ function WorkspaceKanbanStatusLane({
                 'group-hover/lane:opacity-100 group-focus-within/lane:opacity-100'
               )}
               aria-label={createTooltip}
-              disabled={!canCreateWorktree}
               onClick={() => onCreateWorktree(status.id)}
             >
               <Plus className="size-3.5" />

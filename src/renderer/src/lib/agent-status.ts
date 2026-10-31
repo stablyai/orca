@@ -1,11 +1,13 @@
-import type { TerminalTab, TuiAgent, Worktree } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { AgentStatusState, AgentType } from '../../../shared/agent-status-types'
-import { tabHasLivePty } from './tab-has-live-pty'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import type { WorktreeStatus } from './worktree-status'
 import { tuiAgentToAgentKind } from '../../../shared/agent-kind'
+import { agentTypeToIconAgent } from '../../../shared/agent-type-icon-agent'
 import type { AgentKind } from '../../../shared/telemetry-events'
 
-// Re-export from shared so existing renderer imports work; main process now shares the detection logic.
 export {
   type AgentStatus,
   detectAgentStatusFromTitle,
@@ -91,78 +93,17 @@ export function getWorkingAgentsPerWorktree({
   return result
 }
 
-// Re-export: shared so mobile shows the same agent labels; kept here for existing importers.
 export { formatAgentTypeLabel } from '../../../shared/agent-type-label'
+export { agentTypeToIconAgent }
 
-// Why: Record<TuiAgent, true> (not a Set) forces a build error if a TuiAgent member is added without being listed here.
-const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
-  claude: true,
-  'claude-agent-teams': true,
-  openclaude: true,
-  codex: true,
-  autohand: true,
-  opencode: true,
-  'mimo-code': true,
-  pi: true,
-  omp: true,
-  gemini: true,
-  antigravity: true,
-  aider: true,
-  goose: true,
-  amp: true,
-  kilo: true,
-  kiro: true,
-  crush: true,
-  aug: true,
-  cline: true,
-  codebuff: true,
-  'command-code': true,
-  continue: true,
-  cursor: true,
-  droid: true,
-  kimi: true,
-  'mistral-vibe': true,
-  'qwen-code': true,
-  rovo: true,
-  hermes: true,
-  openclaw: true,
-  copilot: true,
-  grok: true,
-  devin: true,
-  ante: true,
-  trae: true
-}
-
-// Why: return null (not a 'claude' fallback) for unknown so Codex panes don't flash the Claude icon before the hook fires.
-export function agentTypeToIconAgent(agentType: AgentType | null | undefined): TuiAgent | null {
-  if (!agentType || agentType === 'unknown') {
-    return null
-  }
-  return Object.prototype.hasOwnProperty.call(ICONABLE_AGENT_TYPES, agentType)
-    ? (agentType as TuiAgent)
-    : null
-}
-
-// Why: shared resolver so all send paths stamp identical agent_kind on agent_prompt_sent telemetry.
 export function agentKindForAgentType(agentType: AgentType | null | undefined): AgentKind {
   const tuiAgent = agentTypeToIconAgent(agentType)
-  return tuiAgent ? tuiAgentToAgentKind(tuiAgent) : 'other'
+  return isTuiAgent(tuiAgent) ? tuiAgentToAgentKind(tuiAgent) : 'other'
 }
 
-// Re-export: freshness gate moved into pane-agent-evidence; keeps existing importers unchanged.
 export { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 
-/**
- * Map an explicit AgentStatusState to the visual Status used by
- * StatusIndicator and WorktreeCard.
- *
- * | Explicit State | Visual Status | Meaning                        |
- * |----------------|---------------|--------------------------------|
- * | working        | working       | agent actively executing       |
- * | blocked        | permission    | agent needs user attention     |
- * | waiting        | permission    | agent needs user attention     |
- * | done           | done          | task complete but pane live    |
- */
+/** Map explicit agent states to shared visual statuses; blocked and waiting both require permission attention. */
 export function mapAgentStatusStateToVisualStatus(state: AgentStatusState): WorktreeStatus {
   switch (state) {
     case 'working':

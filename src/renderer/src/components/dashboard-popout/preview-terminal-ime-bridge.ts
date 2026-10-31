@@ -2,7 +2,6 @@ import type { Terminal } from '@xterm/xterm'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { installTerminalImeCompositionTracker } from '@/components/terminal-pane/terminal-ime-composition-tracker'
 import { installTerminalImeNativeTextForwarder } from '@/components/terminal-pane/terminal-ime-native-text-forwarder'
-import { getMacNativeTextInputSourceTracker } from '@/components/terminal-pane/terminal-ime-input-source'
 
 export type PreviewImeBridge = {
   /** True when the forwarder owns this keydown, so xterm must not encode it. */
@@ -10,25 +9,27 @@ export type PreviewImeBridge = {
   dispose: () => void
 }
 
-/**
- * Native-text bridge for the preview terminal.
- *
- * Why: xterm's kitty encoder can encode+cancel a printable keydown before
- * Chromium commits IME/native text, silently dropping the glyph. Mirrors
- * TerminalPane's forwarder, macOS-only like the pane's install.
- */
-export function installPreviewImeBridge(terminal: Terminal): PreviewImeBridge | null {
-  if (getShortcutPlatform() !== 'darwin') {
+export type PreviewImeBridgeOptions = {
+  /** Read the live kitty mirror once per commit; a default zero would send legacy text to TUIs requiring CSI-u. */
+  getKittyKeyboardFlags: () => number
+}
+
+/** Bypass xterm’s printable-keydown cancellation until native text commits; forward the full kitty flag word unchanged to shared encoding policy. */
+export function installPreviewImeBridge(
+  terminal: Terminal,
+  options: PreviewImeBridgeOptions
+): PreviewImeBridge | null {
+  const platform = getShortcutPlatform()
+  const isDesktopLinux = platform === 'linux' && !/Android|CrOS/.test(navigator.userAgent)
+  if (platform !== 'darwin' && !isDesktopLinux) {
     return null
   }
-  // Why: prewarm the async input-source lookup before the first native-text key needs classification.
-  const inputSourceTracker = getMacNativeTextInputSourceTracker()
   const compositionTracker = installTerminalImeCompositionTracker(terminal.element)
   const forwarder = installTerminalImeNativeTextForwarder({
     terminalElement: terminal.element,
     isComposing: () => compositionTracker?.isActive() ?? false,
     sendInput: (data) => terminal.input(data),
-    getInputSourceFeatures: () => inputSourceTracker.getFeatures()
+    getKittyKeyboardFlags: options.getKittyKeyboardFlags
   })
   return {
     claimKeyEvent: (event) => forwarder?.claimKeyEvent(event) ?? false,

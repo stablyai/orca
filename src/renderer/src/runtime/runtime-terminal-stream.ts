@@ -1,49 +1,16 @@
-import type { GlobalSettings } from '../../../shared/types'
-import { RuntimeRpcCallError, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { getRemoteRuntimeTerminalMultiplexer } from './remote-runtime-terminal-multiplexer'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
+import type { RemoteTerminalTransportCloseEvent } from './remote-runtime-terminal-multiplexer-types'
 
-const REMOTE_PTY_ID_PREFIX = 'remote:'
-const REMOTE_PTY_OWNER_SEPARATOR = '@@'
 const LIVE_TAIL_SUBSCRIPTION_TIMEOUT_MS = 10_000
-
-export type RemoteRuntimePtyIdParts = {
-  environmentId: string | null
-  handle: string
-}
 
 export type RuntimeTerminalDataSubscriptionOptions = {
   startAtLiveTail?: boolean
   onSnapshot?: (data: string, meta?: { pendingEscapeTailAnsi?: string }) => void
   onEnd?: () => void
   onError?: (message: string) => void
-  onTransportClose?: (event: { recoverable: boolean; retryWithBackoff?: boolean }) => void
-}
-
-export function toRemoteRuntimePtyId(handle: string, environmentId?: string | null): string {
-  const owner = environmentId?.trim()
-  if (!owner) {
-    return `${REMOTE_PTY_ID_PREFIX}${handle}`
-  }
-  return `${REMOTE_PTY_ID_PREFIX}${encodeURIComponent(owner)}${REMOTE_PTY_OWNER_SEPARATOR}${encodeURIComponent(handle)}`
-}
-
-export function parseRemoteRuntimePtyId(ptyId: string): RemoteRuntimePtyIdParts | null {
-  if (!ptyId.startsWith(REMOTE_PTY_ID_PREFIX)) {
-    return null
-  }
-  const rest = ptyId.slice(REMOTE_PTY_ID_PREFIX.length)
-  const separatorIndex = rest.indexOf(REMOTE_PTY_OWNER_SEPARATOR)
-  if (separatorIndex === -1) {
-    return { environmentId: null, handle: rest }
-  }
-  try {
-    return {
-      environmentId: decodeURIComponent(rest.slice(0, separatorIndex)),
-      handle: decodeURIComponent(rest.slice(separatorIndex + REMOTE_PTY_OWNER_SEPARATOR.length))
-    }
-  } catch {
-    return null
-  }
+  onTransportClose?: (event: RemoteTerminalTransportCloseEvent) => void
 }
 
 export function getRemoteRuntimeTerminalHandle(ptyId: string): string | null {
@@ -54,6 +21,22 @@ export function getRemoteRuntimePtyEnvironmentId(ptyId: string): string | null {
   return parseRemoteRuntimePtyId(ptyId)?.environmentId ?? null
 }
 
+/**
+ * The server a remote PTY belongs to, named by the id itself. An id without an owner segment names
+ * no server, so it is never dialed on whichever server happens to be focused.
+ */
+export function getRemoteRuntimePtyOwner(
+  ptyId: string
+): { target: { kind: 'environment'; environmentId: string }; terminal: string } | null {
+  const parsed = parseRemoteRuntimePtyId(ptyId)
+  return parsed?.environmentId && parsed.handle
+    ? {
+        target: { kind: 'environment', environmentId: parsed.environmentId },
+        terminal: parsed.handle
+      }
+    : null
+}
+
 export function runtimeTerminalErrorMessage(error: unknown): string {
   if (error instanceof RuntimeRpcCallError) {
     return error.message
@@ -62,20 +45,16 @@ export function runtimeTerminalErrorMessage(error: unknown): string {
 }
 
 export async function subscribeToRuntimeTerminalData(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   clientId: string,
   watcher: (data: string) => void,
   options?: RuntimeTerminalDataSubscriptionOptions
 ): Promise<() => void> {
-  const terminal = getRemoteRuntimeTerminalHandle(ptyId)
-  const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
-  const target = ownerEnvironmentId
-    ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
-    : getActiveRuntimeTarget(settings)
-  if (target.kind !== 'environment' || !terminal) {
+  const owner = getRemoteRuntimePtyOwner(ptyId)
+  if (!owner) {
     return () => {}
   }
+  const { target, terminal } = owner
 
   let resolveLiveTail: (() => void) | null = null
   let rejectLiveTail: ((error: Error) => void) | null = null
@@ -130,8 +109,7 @@ export async function subscribeToRuntimeTerminalData(
       LIVE_TAIL_SUBSCRIPTION_TIMEOUT_MS
     )
     try {
-      // Why: outcome observers must ignore historical snapshots and be armed
-      // before the command whose output they classify, including over SSH.
+      // Arm outcome observers before commands and exclude historical snapshots, including SSH.
       await liveTailReady
     } catch (error) {
       stream.close()

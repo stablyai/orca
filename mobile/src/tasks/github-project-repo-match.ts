@@ -1,17 +1,35 @@
 import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
-} from '../../../src/shared/github-repository-identity-key'
+} from '../../../src/shared/github/repository-identity-key'
 
 export type GitHubProjectRepoMatch = {
   id: string
   path: string
   displayName: string
+  // Absent fork parent means non-fork or not yet resolved.
+  upstream?: { owner: string; repo: string; host?: string } | null
 }
 
 export type GitHubRepoSlugCacheEntry = {
   path: string
   repository: { owner: string; repo: string; host?: string } | null
+  failed?: boolean
+}
+
+// Drop cached slug failures on refresh so transient errors cannot hide Project rows forever.
+export function dropFailedGitHubRepoSlugEntries(
+  slugsByRepoId: Record<string, GitHubRepoSlugCacheEntry | undefined>
+): Record<string, GitHubRepoSlugCacheEntry | undefined> {
+  const retryable = Object.entries(slugsByRepoId).filter(([, entry]) => entry?.failed === true)
+  if (retryable.length === 0) {
+    return slugsByRepoId
+  }
+  const next = { ...slugsByRepoId }
+  for (const [repoId] of retryable) {
+    delete next[repoId]
+  }
+  return next
 }
 
 type CachedSlugState =
@@ -43,6 +61,24 @@ function cachedSlugStateForRepo(
     return { status: 'stale' }
   }
   return { status: 'resolved', repository: cached.repository }
+}
+
+// Legacy fork metadata may omit upstream.host; inherit resolved origin host to avoid mapping GHES to github.com.
+function upstreamIdentityKeyForRepo(
+  repo: GitHubProjectRepoMatch,
+  originState: CachedSlugState | undefined
+): string | null {
+  const upstream = repo.upstream
+  if (!upstream?.owner || !upstream.repo) {
+    return null
+  }
+  if (originState?.status !== 'resolved' || !originState.repository) {
+    return null
+  }
+  return githubRepoIdentityKey({
+    ...upstream,
+    host: upstream.host ?? originState.repository.host
+  })
 }
 
 export function findRepoForGitHubProjectRepository(
@@ -79,9 +115,19 @@ export function findRepoForGitHubProjectRepository(
     return null
   }
 
+  // Match origin before fork parent so upstream clones win, while personal forks still receive upstream Project rows.
+  const upstreamMatches = repos.filter(
+    (repo) => upstreamIdentityKeyForRepo(repo, slugStates.get(repo.id)) === requestedIdentityKey
+  )
+  if (upstreamMatches.length === 1) {
+    return upstreamMatches[0]!
+  }
+  if (upstreamMatches.length > 1) {
+    return null
+  }
+
   if (!isDefaultGitHubHost(projectHost)) {
-    // Why: display names and local paths contain no host evidence, so using
-    // them for GHES rows could bind an Enterprise item to a github.com repo.
+    // Names and paths give no host evidence; using them could map GHES items onto github.com repos.
     return null
   }
 
@@ -106,9 +152,17 @@ export function filterGitHubProjectRowsForRepos<
   slugsByRepoId: Record<string, GitHubRepoSlugCacheEntry | undefined> = {},
   projectHost?: string
 ): Row[] {
-  return rows.filter((row) =>
-    Boolean(
-      findRepoForGitHubProjectRepository(row.content.repository, repos, slugsByRepoId, projectHost)
+  const matchedRepositories = new Map<string | null | undefined, boolean>()
+  return rows.filter((row) => {
+    const repository = row.content.repository
+    const cached = matchedRepositories.get(repository)
+    if (cached !== undefined) {
+      return cached
+    }
+    const matched = Boolean(
+      findRepoForGitHubProjectRepository(repository, repos, slugsByRepoId, projectHost)
     )
-  )
+    matchedRepositories.set(repository, matched)
+    return matched
+  })
 }

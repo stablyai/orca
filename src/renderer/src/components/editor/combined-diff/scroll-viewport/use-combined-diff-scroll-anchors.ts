@@ -1,0 +1,186 @@
+import { useCallback, useMemo } from 'react'
+import type React from 'react'
+import type { Virtualizer } from '@tanstack/react-virtual'
+import {
+  useVirtualizedScrollAnchor,
+  VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
+  type VirtualizedScrollAnchor
+} from '@/hooks/useVirtualizedScrollAnchor'
+import { getVirtualizedScrollAnchorForOffset } from '@/hooks/virtualized-scroll-anchor-recording'
+import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import type { DiffSection } from '../../diff-section-types'
+import {
+  rememberCombinedDiffView,
+  type CombinedDiffViewLease
+} from '../remember-view/combined-diff-view-cache'
+
+export type CombinedDiffScrollAnchors = {
+  persistScrollAnchor: (refreshDomAnchor?: boolean) => void
+  scrollToSectionIndex: (index: number) => void
+  recordDomScrollAnchor: () => boolean
+  recordVirtualScrollAnchor: (scrollTop: number) => void
+  writeScrollAnchor: () => void
+}
+
+export function useCombinedDiffScrollAnchors({
+  clampRestoreCount,
+  generation,
+  hasDirectScrollInput,
+  latestDomScrollAnchorRef,
+  programmaticScrollMarks,
+  scrollAnchorRef,
+  scrollContainerRef,
+  scrollOffsetRef,
+  sectionIndexByKey,
+  sections,
+  sectionsRef,
+  sideBySide,
+  structureRevision,
+  totalSize,
+  memoryLeaseRef,
+  virtualizer
+}: {
+  clampRestoreCount: number
+  generation: number
+  hasDirectScrollInput: () => boolean
+  latestDomScrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
+  programmaticScrollMarks: ProgrammaticScrollMarks
+  scrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  scrollOffsetRef: React.RefObject<number>
+  sectionIndexByKey: ReadonlyMap<string, number>
+  sections: DiffSection[]
+  sectionsRef: React.RefObject<DiffSection[]>
+  sideBySide: boolean
+  structureRevision: number
+  totalSize: number
+  memoryLeaseRef: React.RefObject<CombinedDiffViewLease | null>
+  virtualizer: Virtualizer<HTMLDivElement, Element>
+}): CombinedDiffScrollAnchors {
+  const getCombinedDiffSectionKey = useCallback((section: DiffSection): string => section.key, [])
+  const getCombinedDiffSectionElementKey = useCallback(
+    (element: Element): string | null =>
+      element instanceof HTMLElement ? (element.dataset.combinedDiffSectionKey ?? null) : null,
+    []
+  )
+  const recordVirtualScrollAnchor = useCallback(
+    (scrollTop: number): void => {
+      scrollAnchorRef.current = getVirtualizedScrollAnchorForOffset({
+        getRowKey: getCombinedDiffSectionKey,
+        rows: sectionsRef.current,
+        scrollTop,
+        virtualItems: virtualizer.getVirtualItems()
+      })
+      latestDomScrollAnchorRef.current = null
+    },
+    [getCombinedDiffSectionKey, latestDomScrollAnchorRef, scrollAnchorRef, sectionsRef, virtualizer]
+  )
+  const recordDomScrollAnchor = useCallback((): boolean => {
+    const container = scrollContainerRef.current
+    if (!container) {
+      return false
+    }
+
+    const containerRect = container.getBoundingClientRect()
+    const visibleRows = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-combined-diff-section-row]')
+    )
+      .map((row) => {
+        const key = row.dataset.combinedDiffSectionKey
+        if (!key || !row.isConnected) {
+          return null
+        }
+        const rect = row.getBoundingClientRect()
+        if (
+          rect.height <= 0 ||
+          rect.bottom <= containerRect.top ||
+          rect.top >= containerRect.bottom
+        ) {
+          return null
+        }
+        return { key, rect }
+      })
+      .filter((row): row is { key: string; rect: DOMRect } => row !== null)
+      .sort((a, b) => a.rect.top - b.rect.top)
+
+    const firstVisible = visibleRows[0]
+    if (!firstVisible) {
+      return false
+    }
+
+    const anchor: NonNullable<VirtualizedScrollAnchor> = {
+      fallbackKeys: visibleRows.slice(1).map((row) => row.key),
+      key: firstVisible.key,
+      offset: Math.min(
+        firstVisible.rect.height,
+        Math.max(0, containerRect.top - firstVisible.rect.top)
+      ),
+      scrollTop: container.scrollTop
+    }
+    scrollAnchorRef.current = anchor
+    latestDomScrollAnchorRef.current = anchor
+    return true
+  }, [latestDomScrollAnchorRef, scrollAnchorRef, scrollContainerRef])
+  const writeScrollAnchor = useCallback((): void => {
+    rememberCombinedDiffView(memoryLeaseRef.current, {
+      scrollAnchor: scrollAnchorRef.current ?? undefined
+    })
+  }, [memoryLeaseRef, scrollAnchorRef])
+  const persistScrollAnchor = useCallback(
+    (refreshDomAnchor = true): void => {
+      if (refreshDomAnchor) {
+        recordDomScrollAnchor()
+      }
+      writeScrollAnchor()
+    },
+    [recordDomScrollAnchor, writeScrollAnchor]
+  )
+
+  // Restore on structural changes only; measurement churn must not overwrite active wheel scrolling.
+  const combinedDiffRestoreSignal = useMemo(
+    () =>
+      // Reload generations invalidate row heights; structureRevision captures those and collapse/key changes without full key joins.
+      `${generation}|${sideBySide ? 'sbs' : 'inline'}|${clampRestoreCount}|${structureRevision}`,
+    [clampRestoreCount, generation, sideBySide, structureRevision]
+  )
+
+  useVirtualizedScrollAnchor({
+    anchorRef: scrollAnchorRef,
+    getItemElementKey: getCombinedDiffSectionElementKey,
+    getRowKey: getCombinedDiffSectionKey,
+    hasDirectScrollInput,
+    itemElementSelector: '[data-combined-diff-section-row]',
+    programmaticScrollMarks,
+    recordAnchorOnCleanup: false,
+    recordAnchorOnScroll: false,
+    restoreSignal: combinedDiffRestoreSignal,
+    rowIndexByKey: sectionIndexByKey,
+    rows: sections,
+    scrollElementRef: scrollContainerRef,
+    shouldSkipRestore: hasDirectScrollInput,
+    scrollOffsetRef,
+    totalSize,
+    virtualizer
+  })
+
+  const scrollToSectionIndex = useCallback(
+    (index: number): void => {
+      scrollAnchorRef.current = null
+      latestDomScrollAnchorRef.current = null
+      virtualizer.scrollToIndex(index, { align: 'start' })
+      // Programmatic jumps emit no anchor-recording scroll; snapshot the destination after layout settles.
+      window.requestAnimationFrame(() => {
+        scrollContainerRef.current?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
+      })
+    },
+    [latestDomScrollAnchorRef, scrollAnchorRef, scrollContainerRef, virtualizer]
+  )
+
+  return {
+    persistScrollAnchor,
+    recordDomScrollAnchor,
+    recordVirtualScrollAnchor,
+    scrollToSectionIndex,
+    writeScrollAnchor
+  }
+}

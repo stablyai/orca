@@ -9,6 +9,7 @@ import {
   type TerminalTabRetirementState
 } from '@/store/slices/terminal-tab-retirement'
 import { reserveTerminalRetirementTeardowns } from '@/store/slices/terminal-retirement-teardown-reservation'
+import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/daemon-session-inventory-invalidation'
 
 const CLOSE_BATCH_SIZE = 2
 
@@ -16,6 +17,7 @@ type DaemonKillAllResult = {
   killedCount: number
   remainingCount: number
   killedSessionIds?: string[]
+  listingIncomplete?: boolean
 }
 
 export type KillAllTerminalSurfaceState = TerminalTabRetirementState &
@@ -42,6 +44,7 @@ export type KillAllTerminalSurfacesSummary = {
 type KillAllTerminalSurfaceDependencies = {
   getState: () => KillAllTerminalSurfaceState
   killDaemonSessions: () => Promise<DaemonKillAllResult>
+  notifyInventoryInvalidated: () => void
   closeSurface: (
     tabId: string,
     options: {
@@ -127,6 +130,7 @@ function createDefaultDependencies(): KillAllTerminalSurfaceDependencies {
   return {
     getState: useAppStore.getState,
     killDaemonSessions: () => window.api.pty.management.killAll(),
+    notifyInventoryInvalidated: notifyDaemonSessionInventoryInvalidated,
     closeSurface: closeTerminalTab,
     killPty: (ptyId) => window.api.pty.kill(ptyId),
     now: () => globalThis.performance?.now() ?? Date.now(),
@@ -157,6 +161,12 @@ export async function runKillAllTerminalSurfaces(
   } catch {
     daemon = { status: 'rejected' }
   }
+  try {
+    // Management sweeps omit per-PTY exit events; invalidate cached inventories explicitly.
+    deps.notifyInventoryInvalidated()
+  } catch {
+    // A stale badge must not abort the destructive action already in progress.
+  }
 
   const cleanupState = deps.getState()
   const remainingTargetIds = new Set(targetIds)
@@ -172,8 +182,7 @@ export async function runKillAllTerminalSurfaces(
       }
     }
     const activeWorktreeId = state.activeWorktreeId
-    // Why: keeping the active worktree until its targets close lets the existing
-    // tab action choose editor/browser/deactivation without spawning a replacement.
+    // Close the active worktree last so existing tab actions can select another surface without spawning one.
     const closeOrder = [
       ...presentTargetIds.filter((targetId) => ownerByTargetId.get(targetId) !== activeWorktreeId),
       ...presentTargetIds.filter((targetId) => ownerByTargetId.get(targetId) === activeWorktreeId)
@@ -233,8 +242,7 @@ export async function runKillAllTerminalSurfaces(
       const failedTargetSurvived =
         closeFailed && snapshotKillAllTerminalSurfaceIds(deps.getState()).includes(targetId)
       if (failedTargetSurvived) {
-        // Why: a pre-mutation failure leaves the tab as a live non-target owner.
-        // Replan before touching siblings so it still protects counts and PTYs.
+        // A failed pre-mutation tab remains an owner; replan before siblings can lose protected PTYs.
         for (const owner of newlyScheduledPtyOwners) {
           scheduledPtyOwners.delete(owner)
         }
@@ -255,8 +263,7 @@ export async function runKillAllTerminalSurfaces(
     }
     maxCloseBatchDurationMs = Math.max(maxCloseBatchDurationMs, deps.now() - closeBatchStartedAt)
     if (remainingTargetIds.size > 0) {
-      // Why: closeTab cascades clone several store maps, so large confirmed
-      // snapshots yield between bounded batches instead of monopolizing a frame.
+      // closeTab clones store maps; yield between bounded batches to avoid monopolizing a frame.
       const stateAfterBatch = deps.getState()
       try {
         await deps.yieldToRenderer()
@@ -267,16 +274,14 @@ export async function runKillAllTerminalSurfaces(
       closeBatchStartedAt = deps.now()
       const stateAfterYield = deps.getState()
       if (mustReplanAfterYield || stateAfterYield !== stateAfterBatch) {
-        // Why: a yield lets tabs move, detach, or appear. Replanning the
-        // remaining snapshot prevents stale ownership from killing a survivor.
+        // Tabs may move/detach/appear during yields; replan remaining targets to protect survivors.
         closeWave = createCloseWave(stateAfterYield)
       }
     }
   }
   const closeDurationMs = Math.max(0, deps.now() - closeStartedAt)
 
-  // Why: the management sweep already settled daemon-owned IDs; awaiting only
-  // reserved exact kills keeps each provider at one request per ownership identity.
+  // The sweep already settled daemon IDs; await reserved exact kills once per provider identity.
   const exactKillResults = await Promise.allSettled(exactKillTasks)
   const exactKillAcceptedCount = exactKillResults.filter(
     (result) => result.status === 'fulfilled'

@@ -35,9 +35,7 @@ type CapabilityRefreshResponse = {
 }
 
 export class OrcaCloudRequestError extends Error {
-  // Why: `errorCode` carries the server's JSON `{error}` discriminator (e.g.
-  // 'already_member', 'cannot_remove_self') so callers can distinguish the
-  // precise 4xx cause without re-reading the response body.
+  // Preserve the server error discriminator so callers can distinguish business 4xx outcomes.
   constructor(
     public readonly statusCode: number,
     public readonly errorCode?: string
@@ -159,19 +157,30 @@ function normalizeSessionResponse(value: unknown): OrcaCloudSessionExchangeRespo
 
 const CLOUD_REQUEST_TIMEOUT_MS = 30_000
 
-async function postJson<T>(url: string, body: unknown, accessToken?: string): Promise<T> {
+// A lost rotating-token response makes retries ambiguous; one longer attempt avoids replay.
+const CLOUD_REFRESH_TIMEOUT_MS = 60_000
+
+type PostJsonOptions = {
+  accessToken?: string
+  timeoutMs?: number
+}
+
+// Without an explicit rejection, a rotating credential may already be spent.
+export function isAmbiguousCloudRequestFailure(error: unknown): boolean {
+  return !(error instanceof OrcaCloudRequestError)
+}
+
+async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions): Promise<T> {
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {})
+      ...(options?.accessToken ? { authorization: `Bearer ${options.accessToken}` } : {})
     },
     body: JSON.stringify(body),
-    // Why: these are fixed first-party token endpoints; following a redirect
-    // would re-send refresh tokens/code verifiers to another origin, and a
-    // stalled server must not hang the renderer's awaited IPC call forever.
+    // Redirects could leak rotating credentials; timeout bounds renderer IPC waits.
     redirect: 'error',
-    signal: AbortSignal.timeout(CLOUD_REQUEST_TIMEOUT_MS)
+    signal: AbortSignal.timeout(options?.timeoutMs ?? CLOUD_REQUEST_TIMEOUT_MS)
   })
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
@@ -204,7 +213,7 @@ export async function refreshOrcaCloudCapabilities(
     cloud?: unknown
     organizations?: unknown
     capabilities: unknown
-  }>(config.capabilitiesEndpoint, {}, session.accessToken)
+  }>(config.capabilitiesEndpoint, {}, { accessToken: session.accessToken })
   return {
     cloud: response.cloud === undefined ? undefined : normalizeCloudSummary(response.cloud),
     organizations: normalizeOrganizations(response.organizations),
@@ -217,9 +226,11 @@ export async function refreshOrcaCloudSession(
   session: OrcaCloudSession
 ): Promise<OrcaCloudSessionExchangeResponse> {
   return normalizeSessionResponse(
-    await postJson(config.refreshEndpoint, {
-      refreshToken: session.refreshToken
-    })
+    await postJson(
+      config.refreshEndpoint,
+      { refreshToken: session.refreshToken },
+      { timeoutMs: CLOUD_REFRESH_TIMEOUT_MS }
+    )
   )
 }
 
@@ -235,7 +246,7 @@ export async function createOrcaCloudProfile(
         orgId: args.orgId,
         name: args.name
       },
-      session.accessToken
+      { accessToken: session.accessToken }
     )
   )
 }
@@ -249,7 +260,7 @@ export async function selectOrcaCloudOrg(
     cloud: unknown
     organizations?: unknown
     capabilities: unknown
-  }>(config.orgEndpoint, { orgId }, session.accessToken)
+  }>(config.orgEndpoint, { orgId }, { accessToken: session.accessToken })
   return {
     cloud: normalizeCloudSummary(response.cloud),
     organizations: normalizeOrganizations(response.organizations),
@@ -261,5 +272,9 @@ export async function revokeOrcaCloudSession(
   config: OrcaCloudAuthConfig,
   session: OrcaCloudSession
 ): Promise<void> {
-  await postJson(config.logoutEndpoint, { refreshToken: session.refreshToken }, session.accessToken)
+  await postJson(
+    config.logoutEndpoint,
+    { refreshToken: session.refreshToken },
+    { accessToken: session.accessToken }
+  )
 }

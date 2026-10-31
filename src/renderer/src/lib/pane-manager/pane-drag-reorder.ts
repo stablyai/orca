@@ -4,14 +4,11 @@ import type {
   ManagedPaneInternal,
   PaneExternalDropHandler,
   PaneExternalDropResolver,
+  PaneDropTaker,
   PaneExternalDropTarget,
   PaneStyleOptions
 } from './pane-manager-types'
 import { detachPaneFromTree, findPaneChildren, insertPaneNextTo } from './pane-tree-ops'
-
-// ---------------------------------------------------------------------------
-// Drag-to-reorder panes
-// ---------------------------------------------------------------------------
 
 export type DragReorderState = {
   dragSourcePaneId: number | null
@@ -35,6 +32,8 @@ export type DragReorderCallbacks = {
   onDragActiveChange?: (active: boolean) => void
   resolveExternalDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
+  onDividerRatiosCommitted?: () => void
+  takePaneDrop?: PaneDropTaker
 }
 
 export function createDragReorderState(): DragReorderState {
@@ -58,7 +57,6 @@ export function cancelActivePaneDrag(state: DragReorderState): void {
   state.currentExternalDropTarget = null
 }
 
-/** True when dropping source onto target in zone would leave pane order unchanged. */
 export function isPaneDropNoOp(
   sourcePaneId: number,
   targetPaneId: number,
@@ -99,7 +97,6 @@ export function isPaneDropNoOp(
     : sourceIndex === targetIndex - 1
 }
 
-/** Move a pane from its current position to a new position relative to a target pane. */
 export function handlePaneDrop(
   sourcePaneId: number,
   targetPaneId: number,
@@ -114,19 +111,33 @@ export function handlePaneDrop(
   if (isPaneDropNoOp(sourcePaneId, targetPaneId, zone, panes)) {
     return
   }
+  if (!panes.has(sourcePaneId) || !panes.has(targetPaneId)) {
+    return
+  }
+  const move = (): void => movePaneNextTo(sourcePaneId, targetPaneId, zone, callbacks)
+  if (!callbacks.takePaneDrop?.({ sourcePaneId, targetPaneId, zone }, move)) {
+    move()
+  }
+}
+
+function movePaneNextTo(
+  sourcePaneId: number,
+  targetPaneId: number,
+  zone: DropZone,
+  callbacks: DragReorderCallbacks
+): void {
+  const panes = callbacks.getPanes()
   const source = panes.get(sourcePaneId)
   const target = panes.get(targetPaneId)
-  if (!source || !target) {
+  // Why re-read: a taken drop moves later, when either pane may have closed.
+  if (!source || !target || callbacks.isDestroyed()) {
     return
   }
 
-  // 1. Detach source pane from the tree (without disposing its terminal)
   detachPaneFromTree(source, callbacks)
 
-  // 2. Insert source next to target in the requested zone
   insertPaneNextTo(source, target, zone, callbacks)
 
-  // 3. Refit all panes and persist
   for (const p of panes.values()) {
     callbacks.safeFit(p)
   }
@@ -153,7 +164,6 @@ export function hideDropOverlay(state: DragReorderState): void {
   }
 }
 
-/** Add/remove .has-multiple-panes on root to control drag handle visibility. */
 export function updateMultiPaneState(callbacks: DragReorderCallbacks): void {
   if (callbacks.getPanes().size >= 2) {
     callbacks.getRoot().classList.add('has-multiple-panes')

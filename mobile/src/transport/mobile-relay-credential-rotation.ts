@@ -1,15 +1,17 @@
 import * as ExpoCrypto from 'expo-crypto'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceResumeConfirmed,
-  type MobileRelayEndpoint
+import type {
+  DeviceResumeConfirmed,
+  MobileRelayEndpoint
 } from '../../../src/shared/mobile-relay-credential-contract'
 import {
   MobileRelayCredentialBundleSchema,
   type MobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
+import {
+  relayCredentialProvision,
+  relayPairingEndpointsRead
+} from './mobile-relay-pairing-operations'
 import type { RpcClient } from './rpc-client'
 
 const CREDENTIAL_ROTATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
@@ -37,8 +39,7 @@ export async function rotateMobileRelayCredential(args: {
         reqId: `rotate-${encodeBase64Url(randomBytes(16))}`
       }
     })
-    // Why: a crash or lost response must leave enough material to query the
-    // one global install key before any second authorization attempt.
+    // Persist enough install material to query the same global key after a crash/lost reply before authorizing another.
     await args.writeBundle(bundle)
   }
 
@@ -48,15 +49,12 @@ export async function rotateMobileRelayCredential(args: {
   }
   let endpoints = await getEndpoints(args.client, pending.reqId)
   if (endpoints.installStatus?.state !== 'committed') {
-    const response = await args.client.sendRequest('pairing.provisionRelay', {
+    const installReply = await relayCredentialProvision.request(args.client, {
       reqId: pending.reqId,
       newResumeTokenHash: pending.hash,
       expectedCurrentHash: bundle.current.hash
     })
-    if (!response.ok) {
-      throw new Error(`${response.error.code}: ${response.error.message}`)
-    }
-    const installed = DeviceCredentialInstalledSchema.parse(response.result)
+    const installed = relayCredentialProvision.interpret(installReply)
     endpoints = await getEndpoints(args.client, pending.reqId)
     if (
       endpoints.installStatus?.state !== 'committed' ||
@@ -90,8 +88,7 @@ export function mobileRelayCredentialNeedsRotation(
   bundle: MobileRelayCredentialBundle,
   now: number
 ): boolean {
-  // Why: pre-release clients hashed decoded random bytes. Direct connectivity
-  // can safely replace that unusable cloud credential using its stored hash.
+  // Repair pre-release decoded-byte hashes over authenticated direct connectivity using the stored hash.
   const malformedCurrentHash =
     bundle.current.hash !== hashMobileRelayCredential(bundle.current.token)
   return (
@@ -130,12 +127,34 @@ export function applyResumeConfirmation(
   return bundle
 }
 
-async function getEndpoints(client: RpcClient, installReqId: string) {
-  const response = await client.sendRequest('pairing.getEndpoints', { installReqId })
-  if (!response.ok) {
-    throw new Error(`${response.error.code}: ${response.error.message}`)
+// Rotate against resume expiry, not the hello’s short attach-reservation deadline.
+// Skip unrenewed confirmations: repeating the same expiry would churn replacements at every clamp floor.
+export async function persistResumeConfirmation(args: {
+  session: {
+    getResumeConfirmation(): DeviceResumeConfirmed | null
+    getResumeExpiresAt(): number | null
   }
-  return PairingGetEndpointsResultSchema.parse(response.result)
+  bundle: MobileRelayCredentialBundle
+  usedCredentialVersion: number
+  writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
+}): Promise<{ bundle: MobileRelayCredentialBundle; leaseExpiry: number | null }> {
+  const confirmation = args.session.getResumeConfirmation()
+  let bundle = args.bundle
+  if (confirmation) {
+    bundle = applyResumeConfirmation(bundle, args.usedCredentialVersion, confirmation)
+    // Persistence failure after relay authentication must not trigger another dial or transport cooldown.
+    await args.writeBundle(bundle).catch(() => {})
+  }
+  const leaseExpiry =
+    confirmation?.renewed === false
+      ? null
+      : (confirmation?.resumeExpiresAt ?? args.session.getResumeExpiresAt())
+  return { bundle, leaseExpiry }
+}
+
+async function getEndpoints(client: RpcClient, installReqId: string) {
+  const reply = await relayPairingEndpointsRead.request(client, { installReqId })
+  return relayPairingEndpointsRead.interpret(reply)
 }
 
 function encodeBase64Url(value: Uint8Array): string {

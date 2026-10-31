@@ -1,7 +1,11 @@
-import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode
+} from '../../../../shared/terminal-tab-types'
 import { isTerminalLeafId, type TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
-import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/terminal-layout-pty-ownership'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 
 const EMPTY_TERMINAL_LAYOUT: TerminalLayoutSnapshot = {
   root: null,
@@ -51,7 +55,7 @@ function remapLeafRecord(
 
 function collectLeafCounts(
   node: TerminalPaneLayoutNode,
-  counts: Map<string, number> = new Map()
+  counts = new Map<string, number>()
 ): Map<string, number> {
   if (node.type === 'leaf') {
     counts.set(node.leafId, (counts.get(node.leafId) ?? 0) + 1)
@@ -73,17 +77,7 @@ function hasLeafPtyBinding(
   ptyIdsByLeafId: Record<string, string> | undefined,
   leafId: string
 ): boolean {
-  return ptyIdsByLeafId ? Object.prototype.hasOwnProperty.call(ptyIdsByLeafId, leafId) : false
-}
-
-export function resolveRootlessTerminalLayoutLeafId(
-  snapshot: Pick<TerminalLayoutSnapshot, 'activeLeafId' | 'ptyIdsByLeafId'>
-): string | null {
-  if (snapshot.activeLeafId && isTerminalLeafId(snapshot.activeLeafId)) {
-    return snapshot.activeLeafId
-  }
-  const boundLeafIds = Object.keys(snapshot.ptyIdsByLeafId ?? {}).filter(isTerminalLeafId)
-  return boundLeafIds.length === 1 ? boundLeafIds[0] : null
+  return ptyIdsByLeafId ? Object.hasOwn(ptyIdsByLeafId, leafId) : false
 }
 
 export function resolveTerminalLayoutActiveLeafId(opts: {
@@ -175,10 +169,10 @@ function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null 
   }
   const rewrite: LeafIdRewrite = { nextLeafIdByInputLeafId, duplicatedInputLeafIds }
   const root = changed ? cloneLayoutWithLeafRewrite(snapshot.root, rewrite) : snapshot.root
-  // Why: split panes can be restored after a leaf was closed elsewhere; stale
-  // selection ids must not strand focus on a missing pane.
+  // Closed/restored splits can leave stale selection IDs; fall back instead of stranding focus.
   const remappedActiveLeafId = getRemappedLeafId(activeLeafId, rewrite) ?? firstLeafId(root)
   const remappedExpandedLeafId = getRemappedLeafId(expandedLeafId, rewrite)
+  const remappedChatLeafId = getRemappedLeafId(snapshot.chatLeafId, rewrite)
   const ptyIdsByLeafId = remapLeafRecord(snapshot.ptyIdsByLeafId, rewrite)
   const buffersByLeafId = remapLeafRecord(snapshot.buffersByLeafId, rewrite)
   const scrollbackRefsByLeafId = remapLeafRecord(snapshot.scrollbackRefsByLeafId, rewrite)
@@ -188,6 +182,7 @@ function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null 
     buffersByLeafId: _oldBuffersByLeafId,
     scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
+    chatLeafId: _oldChatLeafId,
     ...snapshotWithoutLeafRecords
   } = snapshot
   return {
@@ -200,6 +195,7 @@ function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null 
         ptyIdsByLeafId
       }),
       expandedLeafId: remappedExpandedLeafId,
+      ...(remappedChatLeafId ? { chatLeafId: remappedChatLeafId } : {}),
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
       ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),
@@ -260,9 +256,7 @@ function collectReplayCreatedPaneLeafIds(
   node: Extract<TerminalPaneLayoutNode, { type: 'split' }>,
   leafIdsInReplayCreationOrder: string[]
 ): void {
-  // Why: replayTerminalLayout() creates one new pane per split and assigns it
-  // to the split's second subtree before recursing, so the new pane maps to
-  // the leftmost leaf reachable within that second subtree.
+  // Replay creates a split’s second-subtree pane before recursion, so map it to that subtree’s leftmost leaf.
   leafIdsInReplayCreationOrder.push(getLeftmostLeafId(node.second))
 
   if (node.first.type === 'split') {

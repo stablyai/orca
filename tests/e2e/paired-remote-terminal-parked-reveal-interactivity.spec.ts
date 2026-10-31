@@ -1,0 +1,541 @@
+// Reveal a hidden/parked terminal on a paired desktop and require live input/echo without a tab flip.
+// Use a desktop host and client; keep an asserted sibling stream alive so closeIfIdle cannot release the old wedged multiplexer.
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import os from 'node:os'
+import path from 'node:path'
+import type { Page } from '@stablyai/playwright-test'
+import {
+  HOST_TERMINAL_SURFACE_SEPARATOR,
+  toWebTerminalSurfaceTabId
+} from '../../src/shared/terminal-surface-id'
+import { expect, test } from './helpers/orca-app'
+import {
+  createRuntimeDesktopPairingOffer,
+  launchPairedElectronClient,
+  type PairedElectronClient
+} from './helpers/paired-electron-client'
+import { focusActiveTerminalInput } from './helpers/terminal'
+import { waitForTabParked } from './helpers/terminal-hidden-parking'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+
+const PARK_DELAY_MS = 2_000
+const LIVE_PAINT_BUDGET_MS = 12_000
+const REVEAL_BUDGET_MS = 20_000
+const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-parked-reveal-'))
+const fixturePath = path.join(scratch, 'parked-reveal-terminal.mjs')
+writeFileSync(
+  fixturePath,
+  [
+    "import { appendFileSync } from 'node:fs'",
+    'const sink = process.argv[2]',
+    'const size = () => `${process.stdout.columns}x${process.stdout.rows}`',
+    'const record = (line) => appendFileSync(sink, `${line}\\n`)',
+    'record(`READY:${size()}`)',
+    'process.stdout.write(`READY:${size()}\\r\\n`)',
+    "process.stdout.on('resize', () => {",
+    '  record(`SIZE:${size()}`)',
+    '  process.stdout.write(`SIZE:${size()}\\r\\n`)',
+    '})',
+    "process.stdin.setEncoding('utf8')",
+    "let pending = ''",
+    "process.stdin.on('data', (data) => {",
+    '  pending += data',
+    '  const lines = pending.split(/\\r\\n|\\r|\\n/)',
+    "  pending = lines.pop() ?? ''",
+    '  for (const line of lines) {',
+    '    record(`LINE:${line}`)',
+    '    process.stdout.write(`LINE:${line}\\r\\n`)',
+    '  }',
+    '})',
+    'process.stdin.resume()'
+  ].join('\n')
+)
+
+test.afterAll(() => {
+  rmSync(scratch, { recursive: true, force: true })
+})
+
+function fixtureCommand(sinkPath: string): string {
+  const command = [process.execPath, fixturePath, sinkPath]
+  return process.platform === 'win32'
+    ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
+    : command.map(quotePosixShell).join(' ')
+}
+
+function readSink(sinkPath: string): string {
+  try {
+    return readFileSync(sinkPath, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
+async function callEnvironment<TResult>(
+  page: Page,
+  environmentId: string,
+  method: string,
+  params: unknown
+): Promise<TResult> {
+  return page.evaluate(
+    async ({ environmentId, method, params }) => {
+      const response = await window.api.runtimeEnvironments.call({
+        selector: environmentId,
+        method,
+        params
+      })
+      if (!response.ok) {
+        throw new Error(`${response.error.code}: ${response.error.message}`)
+      }
+      return response.result
+    },
+    { environmentId, method, params }
+  ) as Promise<TResult>
+}
+
+type HostTerminal = {
+  hostTabId: string
+  sinkPath: string
+  terminal: string
+  webTabId: string
+}
+
+async function createHostTerminal(
+  page: Page,
+  environmentId: string,
+  worktreeId: string
+): Promise<HostTerminal> {
+  const sinkPath = path.join(scratch, `sink-${randomUUID()}.log`)
+  const result = await callEnvironment<{ tab: { id: string; terminal: string | null } }>(
+    page,
+    environmentId,
+    'session.tabs.createTerminal',
+    {
+      worktree: `id:${worktreeId}`,
+      command: fixtureCommand(sinkPath),
+      activate: false,
+      select: false,
+      navigation: 'caller'
+    }
+  )
+  if (!result.tab.terminal) {
+    throw new Error('host session terminal was not created')
+  }
+  // Why: the host answers with a `tabId::leafId` surface id; client tabs mirror the parent tab.
+  const hostTabId = result.tab.id.split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]
+  return {
+    hostTabId,
+    sinkPath,
+    terminal: result.tab.terminal,
+    webTabId: toWebTerminalSurfaceTabId(hostTabId)
+  }
+}
+
+async function openClientTab(page: Page, worktreeId: string, webTabId: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (id) => (window.__store?.getState().tabsByWorktree[id] ?? []).map((tab) => tab.id),
+          worktreeId
+        ),
+      { timeout: 60_000, message: `client never mirrored host tab ${webTabId}` }
+    )
+    .toContain(webTabId)
+  await page.evaluate(
+    ({ webTabId, worktreeId }) => {
+      const state = window.__store?.getState()
+      state?.setActiveView('terminal')
+      state?.setActiveWorktree(worktreeId)
+      state?.setActiveTab(webTabId)
+      state?.setActiveTabType('terminal', worktreeId)
+    },
+    { webTabId, worktreeId }
+  )
+  await expect
+    .poll(() => page.evaluate((id) => window.__paneManagers?.has(id) ?? false, webTabId), {
+      timeout: 60_000,
+      message: `client pane for ${webTabId} did not mount`
+    })
+    .toBe(true)
+}
+
+async function readActivePaneGrid(
+  page: Page,
+  webTabId: string
+): Promise<{ cols: number; rows: number } | null> {
+  return page.evaluate((id) => {
+    const manager = window.__paneManagers?.get(id)
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    return pane ? { cols: pane.terminal.cols, rows: pane.terminal.rows } : null
+  }, webTabId)
+}
+
+/** The pane's grid, or null while it differs from what its container fits. */
+async function readFittedPaneGrid(
+  page: Page,
+  webTabId: string
+): Promise<{ cols: number; rows: number } | null> {
+  return page.evaluate((id) => {
+    const manager = window.__paneManagers?.get(id)
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const fit = pane?.fitAddon.proposeDimensions()
+    if (!pane || !fit || pane.terminal.cols !== fit.cols || pane.terminal.rows !== fit.rows) {
+      return null
+    }
+    return { cols: fit.cols, rows: fit.rows }
+  }, webTabId)
+}
+
+// Read this tab’s buffer; active-tab lookup can hide reveal failures.
+async function readPaneContent(page: Page, webTabId: string): Promise<string> {
+  return page.evaluate((id) => {
+    const manager = window.__paneManagers?.get(id)
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    return pane?.serializeAddon?.serialize?.() ?? ''
+  }, webTabId)
+}
+
+async function readPaneDiagnostics(
+  page: Page,
+  worktreeId: string,
+  webTabId: string
+): Promise<unknown> {
+  return page.evaluate(
+    ({ webTabId, worktreeId }) => {
+      const manager = window.__paneManagers?.get(webTabId)
+      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      const state = window.__store?.getState()
+      const tab = (state?.tabsByWorktree[worktreeId] ?? []).find((entry) => entry.id === webTabId)
+      return {
+        mounted: Boolean(manager),
+        ptyId: pane?.container?.dataset?.ptyId ?? null,
+        recoveryState: pane?.container?.dataset?.ptyRecoveryState ?? null,
+        cols: pane?.terminal?.cols ?? null,
+        rows: pane?.terminal?.rows ?? null,
+        bufferLength: pane?.serializeAddon?.serialize?.()?.length ?? null,
+        paneLeafIds: manager?.getPanes?.().map((entry) => entry.leafId ?? null) ?? null,
+        storeTabPtyId: tab?.ptyId ?? null,
+        storePtyIdsByTab: state?.ptyIdsByTabId?.[webTabId] ?? null
+      }
+    },
+    { webTabId, worktreeId }
+  )
+}
+
+async function waitForPaneMarker(
+  page: Page,
+  webTabId: string,
+  marker: string,
+  budgetMs: number
+): Promise<boolean> {
+  const deadline = Date.now() + budgetMs
+  while (Date.now() < deadline) {
+    if ((await readPaneContent(page, webTabId)).includes(marker)) {
+      return true
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  return false
+}
+
+function readPtyGridFromContent(content: string): { cols: number; rows: number } | null {
+  const sizes = [...content.matchAll(/(?:READY|SIZE):(\d+)x(\d+)/g)]
+  const last = sizes.at(-1)
+  return last ? { cols: Number(last[1]), rows: Number(last[2]) } : null
+}
+
+type ScenarioResult = {
+  name: string
+  restoredBuffer: boolean
+  hostReceivedInput: boolean
+  paintedLive: boolean
+  paintedAfterFlip: boolean
+  paneGrid: { cols: number; rows: number } | null
+  ptyGrid: { cols: number; rows: number } | null
+  diagnostics: unknown
+}
+
+// Record host input receipt, live client echo and, on failure, the tab-flip workaround.
+async function probeInteractivity(
+  page: Page,
+  worktreeId: string,
+  target: HostTerminal,
+  flipTo: HostTerminal,
+  name: string
+): Promise<ScenarioResult> {
+  const token = `probe-${name}`
+  // Why: a human types once the pane looks restored; typing earlier would race the reattach.
+  const restoredBuffer = await waitForPaneMarker(page, target.webTabId, 'READY:', REVEAL_BUDGET_MS)
+  await focusActiveTerminalInput(page)
+  await page.keyboard.type(token)
+  await page.keyboard.press('Enter')
+  const paintedLive = await waitForPaneMarker(
+    page,
+    target.webTabId,
+    `LINE:${token}`,
+    LIVE_PAINT_BUDGET_MS
+  )
+  let paneGrid = await readActivePaneGrid(page, target.webTabId)
+  let ptyGrid = readPtyGridFromContent(readSink(target.sinkPath))
+  console.log(`[paired-grid-initial] ${JSON.stringify({ name, paneGrid, ptyGrid })}`)
+  const diagnostics = await readPaneDiagnostics(page, worktreeId, target.webTabId)
+  const screenshotPath = test.info().outputPath(`paired-terminal-${name}.png`)
+  await page.screenshot({ path: screenshotPath })
+  await test.info().attach(`paired-terminal-${name}`, {
+    path: screenshotPath,
+    contentType: 'image/png'
+  })
+  let paintedAfterFlip = paintedLive
+  if (!paintedLive) {
+    await openClientTab(page, worktreeId, flipTo.webTabId)
+    await openClientTab(page, worktreeId, target.webTabId)
+    paintedAfterFlip = await waitForPaneMarker(
+      page,
+      target.webTabId,
+      `LINE:${token}`,
+      LIVE_PAINT_BUDGET_MS
+    )
+  }
+  // Preserve the scenario report even when geometry fails to converge.
+  await expect
+    .configure({ soft: true })
+    .poll(
+      async () => {
+        paneGrid = await readActivePaneGrid(page, target.webTabId)
+        ptyGrid = readPtyGridFromContent(readSink(target.sinkPath))
+        return {
+          paneGrid,
+          ptyGrid,
+          converged:
+            paneGrid !== null &&
+            ptyGrid !== null &&
+            paneGrid.cols > 0 &&
+            paneGrid.rows > 0 &&
+            paneGrid.cols === ptyGrid.cols &&
+            paneGrid.rows === ptyGrid.rows
+        }
+      },
+      {
+        timeout: REVEAL_BUDGET_MS,
+        message: `${name}: revealed pane and host PTY grids did not converge`
+      }
+    )
+    .toMatchObject({ converged: true })
+  const sink = readSink(target.sinkPath)
+  return {
+    name,
+    restoredBuffer,
+    hostReceivedInput: sink.includes(`LINE:${token}`),
+    paintedLive,
+    paintedAfterFlip,
+    paneGrid,
+    ptyGrid,
+    diagnostics
+  }
+}
+
+// Require a sibling stream at reveal; S1 also requires its target never parked.
+async function expectStillMounted(page: Page, webTabId: string, label: string): Promise<void> {
+  expect(
+    await page.evaluate((id) => window.__paneManagers?.has(id) ?? false, webTabId),
+    `${label} parked before the reveal it is supposed to survive`
+  ).toBe(true)
+}
+
+/** Logged unconditionally: on failure this line is the whole diagnosis. */
+function logResult(result: ScenarioResult): ScenarioResult {
+  console.log(`[paired-reveal] ${JSON.stringify(result)}`)
+  return result
+}
+
+async function seedScenario(
+  client: PairedElectronClient,
+  worktreeId: string
+): Promise<{ target: HostTerminal; decoys: HostTerminal[] }> {
+  const target = await createHostTerminal(client.page, client.environmentId, worktreeId)
+  const decoys = [
+    await createHostTerminal(client.page, client.environmentId, worktreeId),
+    await createHostTerminal(client.page, client.environmentId, worktreeId)
+  ]
+  await openClientTab(client.page, worktreeId, target.webTabId)
+  await expect
+    .poll(() => readPaneContent(client.page, target.webTabId), {
+      timeout: 60_000,
+      message: 'target terminal never painted its READY marker'
+    })
+    .toContain('READY:')
+  return { target, decoys }
+}
+
+test('paired client keeps revealed remote terminals interactive', async ({
+  orcaPage
+}, testInfo) => {
+  test.setTimeout(600_000)
+  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  // Restore the inherited parking delay so reused workers cannot leak it to later specs.
+  const previousParkDelay = process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS
+  process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS = String(PARK_DELAY_MS)
+  const client = await launchPairedElectronClient(offer, testInfo, 'parked-reveal')
+  const createdTerminals: string[] = []
+  const results: ScenarioResult[] = []
+  try {
+    const worktreeId = await orcaPage.evaluate(() => {
+      const id = window.__store?.getState().activeWorktreeId
+      if (!id) {
+        throw new Error('headed host has no active worktree')
+      }
+      return id
+    })
+    await expect
+      .poll(
+        () =>
+          client.page.evaluate(
+            (id) =>
+              window.__store
+                ?.getState()
+                .allWorktrees()
+                .some((worktree) => worktree.id === id) ?? false,
+            worktreeId
+          ),
+        { timeout: 60_000, message: 'paired client never saw the host worktree' }
+      )
+      .toBe(true)
+    await client.page.evaluate((id) => {
+      const state = window.__store?.getState()
+      state?.setActiveView('terminal')
+      state?.setActiveWorktree(id)
+    }, worktreeId)
+
+    // S1 — hidden tab that stays mounted, then revealed.
+    {
+      const { target, decoys } = await seedScenario(client, worktreeId)
+      createdTerminals.push(target.terminal, ...decoys.map((decoy) => decoy.terminal))
+      await openClientTab(client.page, worktreeId, decoys[0].webTabId)
+      const originalGrid = await readActivePaneGrid(client.page, target.webTabId)
+      await client.page.setViewportSize({ width: 960, height: 800 })
+      // Why fitted: a late reveal replay briefly parses at the host's old grid before refitting (#7279, #18132).
+      const fitted: { lastKey: string | null; settled: { cols: number; rows: number } | null } = {
+        lastKey: null,
+        settled: null
+      }
+      await expect
+        .poll(
+          async () => {
+            const grid = await readFittedPaneGrid(client.page, decoys[0].webTabId)
+            const key = grid && JSON.stringify(grid)
+            const isNewFit = key !== null && key !== JSON.stringify(originalGrid)
+            fitted.settled = isNewFit && key === fitted.lastKey ? grid : null
+            fitted.lastKey = isNewFit ? key : null
+            return fitted.settled !== null
+          },
+          { timeout: 60_000, message: 'decoy never settled at the new viewport fit' }
+        )
+        .toBe(true)
+      const revealGrid = fitted.settled
+      if (!revealGrid) {
+        throw new Error('visible decoy has no grid')
+      }
+      // Hidden xterm changes locally, but its authority gate drops the PTY resize.
+      await client.page.evaluate(
+        ({ id, grid }) => {
+          const pane = window.__paneManagers?.get(id)?.getPanes()[0]
+          if (!pane) {
+            throw new Error('hidden target parked before resize injection')
+          }
+          pane.terminal.resize(grid.cols, grid.rows)
+        },
+        { id: target.webTabId, grid: revealGrid }
+      )
+      expect(readPtyGridFromContent(readSink(target.sinkPath))).toEqual(originalGrid)
+      expect(await readActivePaneGrid(client.page, target.webTabId)).toEqual(revealGrid)
+      expect(revealGrid).not.toEqual(originalGrid)
+      // Pins the scenario label: this reveal must not have gone through a park.
+      await expectStillMounted(client.page, target.webTabId, 'hidden-mounted target')
+      await openClientTab(client.page, worktreeId, target.webTabId)
+      results.push(
+        logResult(
+          await probeInteractivity(client.page, worktreeId, target, decoys[1], 'hidden-mounted')
+        )
+      )
+    }
+
+    // S2 — cold-parked tab (renderer unmounted), then revealed.
+    {
+      const { target, decoys } = await seedScenario(client, worktreeId)
+      createdTerminals.push(target.terminal, ...decoys.map((decoy) => decoy.terminal))
+      await openClientTab(client.page, worktreeId, decoys[0].webTabId)
+      await openClientTab(client.page, worktreeId, decoys[1].webTabId)
+      await waitForTabParked(client.page, target.webTabId, { parkDelayMs: PARK_DELAY_MS })
+      await expectStillMounted(client.page, decoys[1].webTabId, 'cold-parked flip decoy')
+      await openClientTab(client.page, worktreeId, target.webTabId)
+      results.push(
+        logResult(
+          await probeInteractivity(client.page, worktreeId, target, decoys[1], 'cold-parked')
+        )
+      )
+    }
+
+    // S3: reconnect the runtime while the target remains cold-parked.
+    {
+      const { target, decoys } = await seedScenario(client, worktreeId)
+      createdTerminals.push(target.terminal, ...decoys.map((decoy) => decoy.terminal))
+      await openClientTab(client.page, worktreeId, decoys[0].webTabId)
+      await openClientTab(client.page, worktreeId, decoys[1].webTabId)
+      await waitForTabParked(client.page, target.webTabId, { parkDelayMs: PARK_DELAY_MS })
+      await client.page.evaluate(async (selector) => {
+        await window.api.runtimeEnvironments.disconnect({ selector })
+      }, client.environmentId)
+      await expect
+        .poll(
+          async () =>
+            client.page.evaluate(async (selector) => {
+              const response = await window.api.runtimeEnvironments.connect({ selector })
+              return response.ok
+            }, client.environmentId),
+          { timeout: 60_000, message: 'paired client never reconnected to the host runtime' }
+        )
+        .toBe(true)
+      await expectStillMounted(client.page, decoys[1].webTabId, 'reconnect-parked flip decoy')
+      await openClientTab(client.page, worktreeId, target.webTabId)
+      results.push(
+        logResult(
+          await probeInteractivity(client.page, worktreeId, target, decoys[1], 'reconnect-parked')
+        )
+      )
+    }
+
+    for (const result of results) {
+      expect(
+        {
+          scenario: result.name,
+          restoredBuffer: result.restoredBuffer,
+          hostReceivedInput: result.hostReceivedInput,
+          paintedLive: result.paintedLive
+        },
+        `${result.name}: revealed pane was not interactive (painted after tab flip: ${result.paintedAfterFlip})`
+      ).toEqual({
+        scenario: result.name,
+        restoredBuffer: true,
+        hostReceivedInput: true,
+        paintedLive: true
+      })
+      expect(
+        { scenario: result.name, ptyGrid: result.ptyGrid },
+        `${result.name}: host PTY geometry never converged on the revealed pane grid`
+      ).toEqual({ scenario: result.name, ptyGrid: result.paneGrid })
+    }
+  } finally {
+    if (previousParkDelay === undefined) {
+      delete process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS
+    } else {
+      process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS = previousParkDelay
+    }
+    for (const terminal of createdTerminals) {
+      await callEnvironment(client.page, client.environmentId, 'terminal.closeTab', {
+        terminal
+      }).catch(() => undefined)
+    }
+    await client.dispose()
+  }
+})

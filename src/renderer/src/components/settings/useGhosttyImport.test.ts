@@ -1,5 +1,6 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/types'
+import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
 
 const mockStateValues: unknown[] = []
 let mockStateIndex = 0
@@ -28,7 +29,7 @@ function resetMockState() {
 }
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useEffect: (effect: () => void | (() => void)) => {
@@ -84,7 +85,6 @@ describe('useGhosttyImport', () => {
 
     const updateSettings = vi.fn()
 
-    // Initial render
     let ghostty = useGhosttyImport(updateSettings, baseSettings)
     expect(ghostty.open).toBe(false)
     expect(ghostty.loading).toBe(false)
@@ -92,11 +92,10 @@ describe('useGhosttyImport', () => {
     expect(ghostty.applied).toBe(false)
     expect(previewMock).not.toHaveBeenCalled()
 
-    // User clicks "Import from Ghostty"
     resetMockState()
     await ghostty.handleClick()
 
-    // After async preview resolves, re-render to get fresh closures
+    // Re-render after async preview to observe fresh closures.
     resetMockState()
     ghostty = useGhosttyImport(updateSettings, baseSettings)
     expect(ghostty.open).toBe(true)
@@ -105,20 +104,17 @@ describe('useGhosttyImport', () => {
     expect(ghostty.applied).toBe(false)
     expect(previewMock).toHaveBeenCalledTimes(1)
 
-    // User applies the previewed changes
     await ghostty.handleApply()
     expect(updateSettings).toHaveBeenCalledTimes(1)
     expect(updateSettings).toHaveBeenCalledWith(previewResponse.diff)
 
-    // After apply, re-render
     resetMockState()
     ghostty = useGhosttyImport(updateSettings, baseSettings)
     expect(ghostty.applied).toBe(true)
 
-    // User closes the modal
     ghostty.handleOpenChange(false)
 
-    // After close, re-render — state is fully reset
+    // Re-render after closing to observe reset state.
     resetMockState()
     ghostty = useGhosttyImport(updateSettings, baseSettings)
     expect(ghostty.open).toBe(false)

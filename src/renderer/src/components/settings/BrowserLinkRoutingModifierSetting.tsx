@@ -1,10 +1,10 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitchRow } from './SettingsFormControls'
 import {
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
-} from './browser-link-routing-modifier-copy'
+} from './browser-link-routing-copy'
 
 type BrowserLinkRoutingModifierSettingProps = {
   settings: Pick<GlobalSettings, 'openLinksInApp' | 'openLinksInAppModifierInverts'>
@@ -36,7 +36,6 @@ export function BrowserLinkRoutingModifierSetting({
         isMac ? 'cmd' : 'ctrl'
       ]}
     >
-      {/* Nested under Link Routing: this row only describes what its modifier does. */}
       <div className="ml-4 border-l border-border pl-4">
         <SettingsSwitchRow
           label={title}

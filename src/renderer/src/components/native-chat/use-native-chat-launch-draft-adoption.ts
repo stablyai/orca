@@ -6,38 +6,30 @@ import {
   launchDraftResolvedByTranscript,
   nativeChatLaunchDraftTurnBaseline,
   type NativeChatLaunchDraftTurnBaseline
-} from './native-chat-launch-draft-resolution'
+} from '../../../../shared/native-chat-launch-draft-resolution'
 
-/** Select the pane's launch draft and whether the transcript has resolved it. */
 export function useNativeChatLaunchDraftSignal(args: {
   terminalTabId: string
   agent: string
   messages: NativeChatMessage[]
-  /** The transcript read is still in flight, so `messages` is not yet the
-   *  session's real history. Same gate mobile's drafts hook uses. */
+  /** In-flight messages may not be this session’s history; defer baseline capture as mobile does. */
   transcriptLoading?: boolean
 }): { launchDraft: NativeChatLaunchDraft | null; launchDraftResolved: boolean } {
+  // Keep the signal pane-agnostic so losing ownership after a split cannot strand an adopted copy.
   const launchDraft = useAppStore((s) => s.nativeChatLaunchDraftByTabId[args.terminalTabId] ?? null)
   const paneLaunchDraft = launchDraft?.agent === args.agent ? launchDraft : null
   const messages = args.messages
   const transcriptLoading = args.transcriptLoading === true
-  // Timestamp-free backstop: snapshot the transcript's user turns the first time
-  // this draft is seen, so a host clock skewed past the slack still resolves.
-  // Deferred until the read settles — a baseline taken on the empty in-flight
-  // list would be exceeded by the backfill itself, dropping a draft the user
-  // never saw.
+  // Capture settled user turns to survive host clock skew; an in-flight baseline would mistake backfill for submission.
   const [heldBaseline, setHeldBaseline] = useState<{
     key: string
     baseline: NativeChatLaunchDraftTurnBaseline
   } | null>(null)
-  // Keyed on draft identity alone: a reload mid-draft must not discard a
-  // baseline already taken from a settled transcript — re-taking it from the
-  // fuller list would swallow the very user turn that resolves the draft.
+  // Key only by draft identity so reloads cannot replace the baseline and swallow the resolving turn.
   const baselineKey = paneLaunchDraft
     ? `${paneLaunchDraft.tabId} ${paneLaunchDraft.createdAt}`
     : null
-  // Adjusted during render, not in an effect: the same render that first sees a
-  // settled transcript must already resolve against the captured baseline.
+  // Capture during render so the first settled transcript already resolves against its baseline.
   let held = heldBaseline
   if (baselineKey === null) {
     if (heldBaseline !== null) {
@@ -60,48 +52,67 @@ export function useNativeChatLaunchDraftSignal(args: {
   return { launchDraft: paneLaunchDraft, launchDraftResolved }
 }
 
-/**
- * Adopt launch-time draft context (e.g. a linked issue URL prefilled into the
- * TUI input buffer) into the chat composer, and drop it again once the
- * transcript shows the TUI-side copy was resolved (submitted or cleared).
- *
- * State machine per seeded draft:
- * - unadopted + composer empty  → copy text into the composer, mark adopted
- * - unadopted + composer in use → mark adopted without copying (never stomp)
- * - resolved by transcript      → clear the seed; also clear the composer copy
- *                                 only when it is still the untouched seed text
- */
+/** Only the owning pane adopts a seed into an empty composer; resolution clears untouched copies even after ownership ends. */
 export function useNativeChatLaunchDraftAdoption(args: {
   terminalTabId: string
   agent: string
   launchDraft: NativeChatLaunchDraft | null | undefined
   launchDraftResolved: boolean
   draft: string
-  setDraft: (next: string) => void
+  setDraft: (next: string, options?: { unsaved?: boolean }) => void
   setCaret: (next: number) => void
+  /** Splits remove ownership from every pane; gate pickup, never cleanup. */
+  ownsTabWideLaunchDraft: boolean
 }): void {
-  const { terminalTabId, agent, launchDraft, launchDraftResolved, draft, setDraft, setCaret } = args
+  const {
+    terminalTabId,
+    agent,
+    launchDraft,
+    launchDraftResolved,
+    draft,
+    setDraft,
+    setCaret,
+    ownsTabWideLaunchDraft
+  } = args
   useEffect(() => {
     if (!launchDraft || launchDraft.agent !== agent) {
       return
     }
     if (launchDraftResolved) {
-      if (launchDraft.adopted && draft === launchDraft.text) {
+      // After a split neither pane owns the seed; the pane with the untouched copy must still clean up.
+      const holdsUntouchedCopy = launchDraft.adopted && draft === launchDraft.text
+      if (holdsUntouchedCopy) {
         setDraft('')
         setCaret(0)
       }
-      useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
+      // Only the owner or its untouched copy may drop a seed; the owner may not have mirrored it yet.
+      if (ownsTabWideLaunchDraft || holdsUntouchedCopy) {
+        useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
+      }
       return
     }
     if (launchDraft.adopted) {
       return
     }
-    // Mark adopted before copying so a composer that already holds user text
-    // declines the seed permanently instead of resurrecting it on a later clear.
+    // The seed belongs to the tab’s original sole pane; splits must never pick it up (#16695).
+    if (!ownsTabWideLaunchDraft) {
+      return
+    }
+    // Mark before copying so existing user text permanently declines the seed, even after clearing.
     useAppStore.getState().markNativeChatLaunchDraftAdopted(terminalTabId)
     if (draft === '') {
-      setDraft(launchDraft.text)
+      // Do not persist the untouched copy; after reload its seed can no longer replace the TUI input.
+      setDraft(launchDraft.text, { unsaved: true })
       setCaret(launchDraft.text.length)
     }
-  }, [agent, draft, launchDraft, launchDraftResolved, setCaret, setDraft, terminalTabId])
+  }, [
+    agent,
+    draft,
+    launchDraft,
+    launchDraftResolved,
+    ownsTabWideLaunchDraft,
+    setCaret,
+    setDraft,
+    terminalTabId
+  ])
 }

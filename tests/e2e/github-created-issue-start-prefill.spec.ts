@@ -95,12 +95,9 @@ installFakeCli('gh', fakeGhSource)
 installFakeCli('claude', fakeClaudeSource)
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`
+  }
 })
 
 test.afterAll(() => {
@@ -119,13 +116,25 @@ function configureGitHubRemote(repoPath: string): void {
   })
 }
 
+// Add origin before repos.add caches no-remote for five minutes, which would disable GitHub issue creation.
+test.beforeAll(({ testRepoPath }) => {
+  configureGitHubRemote(testRepoPath)
+})
+
 test('starting a just-created GitHub issue launches Claude with its URL prefilled', async ({
   orcaPage,
-  testRepoPath
+  electronApp
 }) => {
-  configureGitHubRemote(testRepoPath)
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
+  // Why: the gh preflight merges the login-shell PATH ahead of launchEnv, so the fake gh can lose to a real one.
+  await electronApp.evaluate(
+    ({ ipcMain }, created) => {
+      ipcMain.removeHandler('gh:createIssue')
+      ipcMain.handle('gh:createIssue', () => ({ ok: true, ...created }))
+    },
+    { number: ISSUE_NUMBER, url: ISSUE_URL }
+  )
 
   await orcaPage.evaluate(async () => {
     const store = window.__store
@@ -166,6 +175,16 @@ test('starting a just-created GitHub issue launches Claude with its URL prefille
   })
 
   await orcaPage.getByRole('button', { name: 'Start workspace from issue' }).click()
+
+  // Issue start opens the quick-create composer, which must carry its URL into the submitted agent command.
+  const composer = orcaPage.getByRole('dialog', { name: /Create (workspace|worktree)/i })
+  await expect(composer).toBeVisible({ timeout: 15_000 })
+  const createWorkspaceButton = composer.getByRole('button', {
+    name: /Create (workspace|worktree)/i
+  })
+  await expect(createWorkspaceButton).toBeEnabled({ timeout: 15_000 })
+  await createWorkspaceButton.click()
+  await expect(composer).toBeHidden({ timeout: 20_000 })
 
   let terminalText = ''
   await expect

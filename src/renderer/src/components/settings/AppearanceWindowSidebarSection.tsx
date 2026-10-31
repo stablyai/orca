@@ -1,6 +1,7 @@
 import type React from 'react'
 
-import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
 import { SearchableSetting } from './SearchableSetting'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
@@ -14,6 +15,7 @@ import {
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
 import {
   getLayoutEntries,
+  getFollowSymlinkedDirectoriesEntry,
   getSidebarEntries,
   getStatusBarToggles,
   getUsagePercentageDisplayEntry
@@ -52,7 +54,8 @@ function recordStatusBarToggleInteraction(
     id === 'kimi' ||
     id === 'antigravity' ||
     id === 'minimax' ||
-    id === 'grok'
+    id === 'grok' ||
+    id === 'cursor'
   ) {
     recordFeatureInteraction('usage-tracking')
   }
@@ -77,6 +80,7 @@ export function AppearanceWindowSidebarSection({
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
+  const followSymlinkEntry = getFollowSymlinkedDirectoriesEntry()
   const statusBarTitle = translate(
     'auto.components.settings.AppearancePane.3e4175e5c6',
     'Status Bar'
@@ -202,8 +206,6 @@ export function AppearanceWindowSidebarSection({
                   title={translate('auto.components.settings.AppearancePane.dc29f3cc0d', 'Sidebar')}
                 />
                 <div className="ml-4 divide-y divide-border/40">
-                  {/* Why: this setting lives with the sidebar layout controls; Settings only
-                  names that ownership so we do not create a second stateful control. */}
                   <SearchableSetting
                     title={workspaceCardLayoutEntry.title}
                     description={workspaceCardLayoutEntry.description}
@@ -297,8 +299,7 @@ export function AppearanceWindowSidebarSection({
                         'auto.components.settings.AppearancePane.9da1020447',
                         'Show Orca Mobile Button'
                       )}
-                      // Why: clarify where the shortcut still lives after hiding it, so users
-                      // don't think the feature is gone.
+                      // Explain the remaining Toolbox route so hiding the shortcut cannot imply feature removal.
                       description={translate(
                         'auto.components.settings.AppearancePane.61d842eca0',
                         'Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.'
@@ -320,8 +321,7 @@ export function AppearanceWindowSidebarSection({
                         'auto.components.settings.AppearancePane.showPinnedWorktreesInGroups.title',
                         'Also show pinned worktrees in their original lists'
                       )}
-                      // Why: pinned worktrees show only in Pinned by default; this opt-in
-                      // keeps them in Pinned and also re-lists them in their natural groups.
+                      // This opt-in duplicates pinned worktrees into natural groups while preserving Pinned.
                       description={translate(
                         'auto.components.settings.AppearancePane.showPinnedWorktreesInGroups.description',
                         'Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR.'
@@ -365,8 +365,6 @@ export function AppearanceWindowSidebarSection({
                         'auto.components.settings.AppearancePane.0fafabcf35',
                         'Show Git-Ignored Files'
                       )}
-                      // Why: define what "git-ignored" matches; the location (file explorer)
-                      // is obvious from the section header.
                       description={translate(
                         'auto.components.settings.AppearancePane.gitIgnoredGlossary',
                         'Files matched by .gitignore.'
@@ -375,6 +373,18 @@ export function AppearanceWindowSidebarSection({
                       onChange={() =>
                         updateSettings({
                           showGitIgnoredFiles: !(settings.showGitIgnoredFiles ?? true)
+                        })
+                      }
+                    />
+                  </SearchableSetting>
+                  <SearchableSetting {...followSymlinkEntry}>
+                    <SettingsSwitchRow
+                      label={followSymlinkEntry.title}
+                      description={followSymlinkEntry.description}
+                      checked={settings.followSymlinkedDirectories ?? false}
+                      onChange={() =>
+                        updateSettings({
+                          followSymlinkedDirectories: !settings.followSymlinkedDirectories
                         })
                       }
                     />

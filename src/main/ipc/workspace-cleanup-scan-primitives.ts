@@ -1,12 +1,25 @@
 import { basename } from 'node:path'
-import type { Repo } from '../../shared/types'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import type { Repo } from '../../shared/repo-types'
 import type { WorkspaceCleanupScanError } from '../../shared/workspace-cleanup'
 
 export const WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS = 8_000
 
+export class WorkspaceCleanupScanCancelledError extends Error {
+  constructor() {
+    super('Workspace cleanup scan cancelled')
+    this.name = 'WorkspaceCleanupScanCancelledError'
+  }
+}
+
+export function throwIfWorkspaceCleanupScanAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new WorkspaceCleanupScanCancelledError()
+  }
+}
+
 export function appendWorkspaceCleanupItems<T>(target: T[], entries: readonly T[]): void {
-  // Why: cleanup can aggregate generated-size worktree batches; spreading
-  // those batches into push can exceed JavaScript's argument limit.
+  // Large fleet batches can exceed JavaScript's spread argument limit.
   for (const entry of entries) {
     target.push(entry)
   }
@@ -35,21 +48,34 @@ export async function mapWorkspaceCleanupWithConcurrency<T, R>(
 export async function withWorkspaceCleanupTimeout<T>(
   run: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
-  message: string
+  message: string,
+  parentSignal?: AbortSignal
 ): Promise<T> {
   const controller = new AbortController()
   let timeoutId: NodeJS.Timeout | undefined
+  let onParentAbort: (() => void) | undefined
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => {
       controller.abort()
       reject(new Error(message))
     }, timeoutMs)
+    onParentAbort = () => {
+      controller.abort()
+      reject(new WorkspaceCleanupScanCancelledError())
+    }
+    parentSignal?.addEventListener('abort', onParentAbort, { once: true })
+    if (parentSignal?.aborted) {
+      onParentAbort()
+    }
   })
   try {
     return await Promise.race([run(controller.signal), timeoutPromise])
   } finally {
     if (timeoutId) {
       clearTimeout(timeoutId)
+    }
+    if (onParentAbort) {
+      parentSignal?.removeEventListener('abort', onParentAbort)
     }
   }
 }
@@ -65,12 +91,12 @@ export function createWorkspaceCleanupScanError(
   return {
     repoId: repo.id,
     repoName: repo.displayName || basename(repo.path),
-    message
+    message,
+    executionHostId: getRepoExecutionHostId(repo)
   }
 }
 
-// Why: git errors often include absolute paths or command output. Keep the
-// cause useful without leaking raw local/remote filesystem details to the UI.
+// Git errors can expose paths/output; map causes without leaking local or remote filesystem details.
 export function toSafeWorkspaceCleanupRepoScanError(error: unknown): string {
   const message = toWorkspaceCleanupErrorMessage(error)
   if (message === 'Timed out listing SSH worktrees.') {

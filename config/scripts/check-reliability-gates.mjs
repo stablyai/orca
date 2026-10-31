@@ -166,9 +166,7 @@ function isIsoDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
-// Why: cross-field validators run even after an earlier type check flagged a
-// malformed field, so coerce to an array before `.includes` to report the error
-// instead of throwing on hand-edited manifests.
+// Cross-field validators still run after type errors; coerce malformed input to report instead of throwing.
 function asArray(value) {
   return Array.isArray(value) ? value : []
 }
@@ -197,8 +195,13 @@ function validateEvidenceRun(gate, run, index, failures) {
   }
   if (!isNonEmptyString(run.command)) {
     failures.push(`${owner}.command must be a non-empty string`)
-  } else if (!asArray(gate.commands).includes(run.command)) {
-    failures.push(`${owner}.command must match one of the gate commands`)
+  }
+  // Preserve the executed command when test roots move to a new gate command.
+  const commandField = run.currentCommand === undefined ? 'command' : 'currentCommand'
+  if (commandField === 'currentCommand' && !isNonEmptyString(run.currentCommand)) {
+    failures.push(`${owner}.currentCommand must be a non-empty string`)
+  } else if (isNonEmptyString(run.command) && !asArray(gate.commands).includes(run[commandField])) {
+    failures.push(`${owner}.${commandField} must match one of the gate commands`)
   }
   if (!Number.isFinite(run.durationSeconds) || run.durationSeconds < 0) {
     failures.push(`${owner}.durationSeconds must be a non-negative number`)

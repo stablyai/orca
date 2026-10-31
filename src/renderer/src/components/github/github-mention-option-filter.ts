@@ -8,7 +8,7 @@ export type GitHubMentionOption = {
 export const GITHUB_MENTION_QUERY_MAX_BYTES = 2 * 1024
 export const GITHUB_MENTION_OPTION_LIMIT = 8
 
-export function isGitHubMentionQueryTooLarge(
+function isGitHubMentionQueryTooLarge(
   query: string,
   maxBytes = GITHUB_MENTION_QUERY_MAX_BYTES
 ): boolean {

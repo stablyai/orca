@@ -1,7 +1,17 @@
+import { quoteCmdDoubleQuoted, quotePosixShellUnlessPlainNoAt } from './shell-argument-quoting'
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
+import {
+  buildWindowsCmdRunnerDelayedLaunchCommand,
+  windowsRunnerPathNeedsCmdGuard
+} from './windows-cmd-runner-delayed-launch'
 
 export type SetupRunnerCommandPlatform = 'windows' | 'posix'
+export type SetupRunnerShellFamily = 'posix' | 'cmd'
 export type SetupRunnerCommandShell = 'posix' | 'windows'
+export type SetupRunnerShell = {
+  family: SetupRunnerShellFamily
+  executable?: string
+}
 
 export type SetupRunnerCommandResolution = {
   command: string
@@ -11,9 +21,10 @@ export type SetupRunnerCommandResolution = {
 
 export function buildSetupRunnerCommand(
   runnerScriptPath: string,
-  platform: SetupRunnerCommandPlatform
+  platform: SetupRunnerCommandPlatform,
+  shell?: SetupRunnerShell
 ): string {
-  return resolveSetupRunnerCommand(runnerScriptPath, platform).command
+  return resolveSetupRunnerCommand(runnerScriptPath, platform, shell).command
 }
 
 export function getSetupRunnerCommandPlatformForPath(
@@ -31,36 +42,67 @@ export function getSetupRunnerCommandPlatformForPath(
 
 export function resolveSetupRunnerCommand(
   runnerScriptPath: string,
-  platform: SetupRunnerCommandPlatform
+  platform: SetupRunnerCommandPlatform,
+  shell?: SetupRunnerShell
 ): SetupRunnerCommandResolution {
   if (platform === 'windows') {
     if (isWslUncPath(runnerScriptPath)) {
       const linuxPath = wslUncToLinuxPath(runnerScriptPath)
       return {
-        command: `bash ${quotePosixArg(linuxPath)}`,
+        command: `bash ${quotePosixShellUnlessPlainNoAt(linuxPath)}`,
         runnerScriptPathForShell: linuxPath,
         shell: 'posix'
       }
     }
     if (runnerScriptPath.startsWith('/') && !isWindowsAbsolutePathLike(runnerScriptPath)) {
       return {
-        command: `bash ${quotePosixArg(runnerScriptPath)}`,
+        command: `bash ${quotePosixShellUnlessPlainNoAt(runnerScriptPath)}`,
         runnerScriptPathForShell: runnerScriptPath,
         shell: 'posix'
       }
     }
+    // Runner extension decides its interpreter; a POSIX terminal still sends batch files to cmd.
+    const cmdRunnerFile = isWindowsCmdRunnerPath(runnerScriptPath)
+    if (!cmdRunnerFile && (shell?.family === 'posix' || /\.sh$/i.test(runnerScriptPath))) {
+      // Why: WSL shells need /mnt/... paths, while Git Bash expects /c/... when replaying deferred setup scripts.
+      if (isWslExecutable(shell?.executable)) {
+        const wslPath = nativeWindowsPathToWslShellPath(runnerScriptPath)
+        return {
+          command: `bash ${quotePosixShellUnlessPlainNoAt(wslPath)}`,
+          runnerScriptPathForShell: wslPath,
+          shell: 'posix'
+        }
+      }
+      // Why: queued setup launches can outlive the process that generated them, so convert native paths before handing off to POSIX shells.
+      const posixPath = nativeWindowsPathToPosixShellPath(runnerScriptPath)
+      return {
+        command: `bash ${quotePosixShellUnlessPlainNoAt(posixPath)}`,
+        runnerScriptPathForShell: posixPath,
+        shell: 'posix'
+      }
+    }
     return {
-      command: `cmd.exe /c ${quoteWindowsArg(runnerScriptPath)}`,
+      // Guard hostile cmd path characters and Git Bash’s rewriting of bare /c (#6896) with delayed expansion
+      // through PowerShell ProcessStartInfo; retain plain invocation for other cases.
+      command:
+        shell?.family === 'posix' || windowsRunnerPathNeedsCmdGuard(runnerScriptPath)
+          ? buildWindowsCmdRunnerDelayedLaunchCommand(runnerScriptPath)
+          : `cmd.exe /c ${quoteCmdDoubleQuoted(runnerScriptPath)}`,
       runnerScriptPathForShell: runnerScriptPath,
       shell: 'windows'
     }
   }
 
   return {
-    command: `bash ${quotePosixArg(runnerScriptPath)}`,
+    command: `bash ${quotePosixShellUnlessPlainNoAt(runnerScriptPath)}`,
     runnerScriptPathForShell: runnerScriptPath,
     shell: 'posix'
   }
+}
+
+/** True when the runner file is a batch script, which only cmd can execute. */
+export function isWindowsCmdRunnerPath(runnerScriptPath: string): boolean {
+  return /\.(cmd|bat)$/i.test(runnerScriptPath)
 }
 
 export function isWslUncPath(path: string): boolean {
@@ -74,14 +116,23 @@ export function wslUncToLinuxPath(windowsPath: string): string {
   return match?.[2] || '/'
 }
 
-function quotePosixArg(value: string): string {
-  if (/^[A-Za-z0-9_./:-]+$/.test(value)) {
-    return value
+export function nativeWindowsPathToPosixShellPath(value: string): string {
+  const driveMatch = value.match(/^([A-Za-z]):[\\/](.*)$/)
+  if (driveMatch) {
+    return `/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
   }
-
-  return `'${value.replace(/'/g, `'\\''`)}'`
+  return value.replace(/\\/g, '/')
 }
 
-function quoteWindowsArg(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
+function nativeWindowsPathToWslShellPath(value: string): string {
+  const driveMatch = value.match(/^([A-Za-z]):[\\/](.*)$/)
+  if (driveMatch) {
+    return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
+  }
+  return value.replace(/\\/g, '/')
+}
+
+function isWslExecutable(value: string | undefined): boolean {
+  const basename = value?.trim().replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
+  return basename === 'wsl.exe' || basename === 'wsl'
 }

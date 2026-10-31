@@ -1,10 +1,15 @@
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import type { TerminalTab } from '../../../shared/types'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   isFreshNonDoneAgentStatus,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
-import { resolveAgentStatusWorktreeId } from './agent-status-worktree-attribution'
+import { resolveAgentStatusWorktreeId } from '../../../shared/agent-status-worktree-attribution'
+import {
+  liveAgentStatusOf,
+  strongerLiveAgentStatus,
+  type LiveAgentWorktreeStatus
+} from '../../../shared/sidebar-list/workspace-activity-facts'
 
 type TerminalLikeTab = Pick<TerminalTab, 'id'>
 type BrowserLikeTab = { id: string }
@@ -12,15 +17,11 @@ type BrowserLikeTab = { id: string }
 type TabsByWorktree = Record<string, readonly TerminalLikeTab[]>
 type PtyIdsByTabId = Record<string, string[]>
 type BrowserTabsByWorktree = Record<string, readonly BrowserLikeTab[]>
-export type LiveAgentWorktreeStatus = 'working' | 'permission'
+export type { LiveAgentWorktreeStatus }
 
-/**
- * Worktree ids that currently have a live agent session, derived from the
- * live `agentStatusByPaneKey` map.
- *
- * Why only fresh in-progress rows: disconnected SSH and completed headless
- * agents can retain status entries without an open session.
- */
+const EMPTY_WORKTREE_IDS: ReadonlySet<string> = new Set()
+
+/** Keep only fresh in-progress agents; disconnected SSH/completed headless rows can outlive actual open sessions. */
 export function getWorktreeIdsWithLiveAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | null | undefined,
   tabsByWorktree: TabsByWorktree | null | undefined,
@@ -50,10 +51,10 @@ export function getLiveAgentStatusByWorktreeId(
   for (const entry of entries) {
     const worktreeId = resolveAgentStatusWorktreeId(entry, worktreeIdByTabId)
     if (worktreeId) {
-      const status = entry.state === 'working' ? 'working' : 'permission'
-      if (status === 'permission' || !result.has(worktreeId)) {
-        result.set(worktreeId, status)
-      }
+      result.set(
+        worktreeId,
+        strongerLiveAgentStatus(result.get(worktreeId), liveAgentStatusOf(entry))
+      )
     }
   }
   return result
@@ -64,7 +65,8 @@ export function hasActiveWorkspaceActivity(
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
   browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
-  worktreeIdsWithLiveAgent: ReadonlySet<string>
+  worktreeIdsWithLiveAgent: ReadonlySet<string>,
+  worktreeIdsWithStructuredChat: ReadonlySet<string> = EMPTY_WORKTREE_IDS
 ): boolean {
   const tabs = tabsByWorktree?.[worktreeId] ?? []
   const hasLiveTerminal =
@@ -73,7 +75,9 @@ export function hasActiveWorkspaceActivity(
   // Why: a running agent keeps the workspace visible through brief PTY gaps
   // such as an SSH reconnect or an unmounted remote pane. #7197
   const hasLiveAgent = worktreeIdsWithLiveAgent.has(worktreeId)
-  return hasLiveTerminal || hasBrowser || hasLiveAgent
+  // Structured chats lack PTYs/tabsByWorktree entries; their visibility evidence must remain separate from terminal signals.
+  const hasStructuredChat = worktreeIdsWithStructuredChat.has(worktreeId)
+  return hasLiveTerminal || hasBrowser || hasLiveAgent || hasStructuredChat
 }
 
 export function isInactiveWorkspace(
@@ -81,13 +85,15 @@ export function isInactiveWorkspace(
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
   browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
-  worktreeIdsWithLiveAgent: ReadonlySet<string>
+  worktreeIdsWithLiveAgent: ReadonlySet<string>,
+  worktreeIdsWithStructuredChat: ReadonlySet<string> = EMPTY_WORKTREE_IDS
 ): boolean {
   return !hasActiveWorkspaceActivity(
     worktreeId,
     tabsByWorktree,
     ptyIdsByTabId,
     browserTabsByWorktree,
-    worktreeIdsWithLiveAgent
+    worktreeIdsWithLiveAgent,
+    worktreeIdsWithStructuredChat
   )
 }

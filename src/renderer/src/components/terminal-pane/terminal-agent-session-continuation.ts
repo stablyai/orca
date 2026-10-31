@@ -2,12 +2,13 @@ import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import {
   buildAgentSessionContinuationPrompt,
+  resolveAgentSessionContinuationTranscriptPath,
   type AgentSessionContinuationRequest
 } from '@/lib/agent-session-continuation'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
 
 type PrepareAgentSessionContinuationFromPaneArgs = {
@@ -53,7 +54,10 @@ export function prepareAgentSessionContinuationFromPane({
   const paneKey = makePaneKey(tabId, pane.leafId)
   const status = state.agentStatusByPaneKey[paneKey]
   const sourceAgent = resolveSourceAgent({ pane, tabId, worktreeId })
-  const transcriptPath = status?.providerSession?.transcriptPath?.trim() || null
+  const transcriptPath = resolveAgentSessionContinuationTranscriptPath({
+    sourceAgent,
+    transcriptPath: status?.providerSession?.transcriptPath
+  })
   const capturedText = transcriptPath ? '' : pane.serializeAddon.serialize({ scrollback: 800 })
   const source = {
     // Why: prefer the same-host transcript so opening the dialog does not serialize large scrollback.

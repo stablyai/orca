@@ -1,25 +1,19 @@
+import { compareFileNames } from '../../../src/shared/file-name-sort'
+import { translate } from '../i18n/mobile-i18n'
 import type {
-  GitBranchChangeEntry,
-  GitBranchCompareResult,
-  GitBranchCompareSummary
-} from '../../../src/shared/types'
+  MobileGitBranchChangeEntry,
+  MobileGitBranchCompareReply,
+  MobileGitBranchCompareSummary
+} from './git-compare-reply-schema'
 
-export type MobileGitBranchChangeEntry = GitBranchChangeEntry
-export type MobileGitBranchCompareSummary = GitBranchCompareSummary
-export type MobileGitBranchCompareResult = GitBranchCompareResult
+export type { MobileGitBranchChangeEntry, MobileGitBranchCompareSummary }
+export type MobileGitBranchCompareResult = MobileGitBranchCompareReply
 
 export type MobileBranchCompareSection<
   TEntry extends MobileGitBranchChangeEntry = MobileGitBranchChangeEntry
 > = {
-  title: 'Committed on Branch'
+  title: string
   data: TEntry[]
-}
-
-function compareBranchEntries(
-  a: MobileGitBranchChangeEntry,
-  b: MobileGitBranchChangeEntry
-): number {
-  return a.path.localeCompare(b.path, undefined, { numeric: true })
 }
 
 export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchChangeEntry>(
@@ -28,9 +22,11 @@ export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchCh
   if (entries.length === 0) {
     return null
   }
+  const data = [...entries]
+  data.sort((a, b) => compareFileNames(a.path, b.path))
   return {
-    title: 'Committed on Branch',
-    data: [...entries].sort(compareBranchEntries)
+    title: translate('sourceControl.branchCompare.sectionTitle', 'Committed on Branch'),
+    data
   }
 }
 
@@ -40,12 +36,30 @@ export function formatMobileBranchCompareSummary(
   if (summary.status !== 'ready') {
     return summary.errorMessage ?? null
   }
-  const parts = [`${summary.changedFiles} ${summary.changedFiles === 1 ? 'file' : 'files'}`]
-  if (summary.commitsAhead !== undefined) {
-    parts.push(`${summary.commitsAhead} ${summary.commitsAhead === 1 ? 'commit' : 'commits'}`)
+  const files = branchCompareFiles(summary.changedFiles)
+  if (summary.commitsAhead === undefined) {
+    return translate('sourceControl.branchCompare.summary', '{{files}} - vs {{baseRef}}', {
+      files,
+      baseRef: summary.baseRef
+    })
   }
-  parts.push(`vs ${summary.baseRef}`)
-  return parts.join(' - ')
+  return translate(
+    'sourceControl.branchCompare.summaryWithCommits',
+    '{{files}} - {{commits}} - vs {{baseRef}}',
+    { files, commits: branchCompareCommits(summary.commitsAhead), baseRef: summary.baseRef }
+  )
+}
+
+function branchCompareFiles(count: number): string {
+  return count === 1
+    ? translate('sourceControl.branchCompare.files_one', '{{count}} file', { count })
+    : translate('sourceControl.branchCompare.files_other', '{{count}} files', { count })
+}
+
+function branchCompareCommits(count: number): string {
+  return count === 1
+    ? translate('sourceControl.branchCompare.commits_one', '{{count}} commit', { count })
+    : translate('sourceControl.branchCompare.commits_other', '{{count}} commits', { count })
 }
 
 export function canOpenMobileBranchCompareDiff(summary: MobileGitBranchCompareSummary): boolean {

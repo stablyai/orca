@@ -7,7 +7,7 @@ import {
 } from './agent-pane-authority'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 
 const WORKTREE_ID = 'repo::/repo/worktree'
@@ -129,7 +129,7 @@ function collect(args: {
   terminalHandle?: string
   previousProviderSession?: AgentStatusEntry['providerSession']
   currentProviderSession?: AgentStatusEntry['providerSession']
-  retiredPaneKeys?: Record<string, true>
+  retiredPaneKeys?: Record<string, true | string>
   tabIndex?: Map<string, { tab: TerminalTab }>
 }) {
   return collectRetainedAgentsOnDisappear({
@@ -326,9 +326,7 @@ describe('detach completed split pane → sidebar retention', () => {
     })
 
     detach(store, SOURCE_TAB, TARGET_TAB)
-    // Why: recordAgentProviderSession is its own IPC event, so the destination can be
-    // stamped while the pre-move snapshot is not. A one-sided session is not evidence
-    // of a different run.
+    // Provider session arrives in separate IPC; a stamped destination and unstamped source do not prove separate runs.
     const result = collect({
       currentPaneKey: TARGET_PANE_KEY,
       currentTabId: TARGET_TAB,
@@ -366,8 +364,7 @@ describe('detach completed split pane → sidebar retention', () => {
     })
 
     detach(store, SOURCE_TAB, TARGET_TAB)
-    // Why: ordinary local PTY statuses route with connectionId only, so terminalHandle
-    // is undefined on both sides — requiring a handle here would resurrect the ghost.
+    // Local PTY rows can lack terminalHandle; requiring it would revive moved-row ghosts.
     const result = collect({ currentPaneKey: TARGET_PANE_KEY, currentTabId: TARGET_TAB })
 
     expect(result.toRetain[0]?.entry.terminalHandle).toBeUndefined()
@@ -416,8 +413,7 @@ describe('detach completed split pane → sidebar retention', () => {
     expect(retained).toHaveLength(1)
     expect(retained[0]?.entry.paneKey).toBe(TARGET_PANE_KEY)
     expect(retained[0]?.entry.tabId).toBe(TARGET_TAB)
-    // Why: the row must carry the DESTINATION tab's identity, not the source tab's
-    // title/launchAgent relabeled with a new id — sidebar agent-type resolution reads both.
+    // Retain destination tab identity; sidebar agent resolution reads its title and launchAgent.
     expect(retained[0]?.tab).toBe(destinationTab)
     expect(retained[0]?.tab.title).toBe('Destination')
   })

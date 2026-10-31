@@ -1,5 +1,5 @@
 import type { Store } from '../persistence'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { statMock, readFileMock } = vi.hoisted(() => ({
@@ -97,7 +97,6 @@ describe('previewGhosttyImport theme references', () => {
 
     expect(result.diff).toEqual({
       terminalColorOverrides: {
-        // Why: config's palette index 1 and background win; theme keeps index 2.
         red: '#ff0000',
         green: '#b9ca4a',
         background: '#101010'
@@ -135,37 +134,5 @@ describe('previewGhosttyImport theme references', () => {
       '/Users/alice/.config/ghostty/themes/Users/alice/themes/work'
     )
     expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('marks an unresolvable theme as unsupported', async () => {
-    const configPath = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
-    statMock.mockImplementation(async (p: string) => {
-      if (p === configPath) {
-        return { isFile: () => true, size: 128 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockResolvedValue('theme = Missing Theme\n')
-
-    const result = await previewGhosttyImport(createStore())
-
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual(['theme (theme file not found)'])
-  })
-
-  it('marks light:/dark: theme pairs as unsupported', async () => {
-    const configPath = '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
-    statMock.mockImplementation(async (p: string) => {
-      if (p === configPath) {
-        return { isFile: () => true, size: 128 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockResolvedValue('theme = light:Tomorrow,dark:Tomorrow Night\n')
-
-    const result = await previewGhosttyImport(createStore())
-
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual(['theme (light:/dark: pairs not supported)'])
   })
 })

@@ -2,15 +2,9 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
-/**
- * Notice for a post-launch paste that never landed — a stalled readiness wait
- * would otherwise drop the user's text silently.
- *
- * `wasNotified()` reports whether the user already heard about it, so a
- * deferred caller can suppress a duplicate toast.
- */
+/** Report otherwise-silent lost launch text; wasNotified lets deferred callers suppress duplicate toasts. */
 export function createPasteReadinessTimeoutNotice(args: {
   worktreeId: string
   tabId: string

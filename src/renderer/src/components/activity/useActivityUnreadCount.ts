@@ -1,10 +1,12 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
+import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+
+import { freshActivityLiveAgentState, isHistoricalActivityState } from './activity-event-state'
 
 type ActivityUnreadCountSource = Pick<
   AppState,
@@ -12,71 +14,54 @@ type ActivityUnreadCountSource = Pick<
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
-  | 'worktreesByRepo'
->
-
-type ActivityUnreadCountMode = 'agent-events' | 'sidebar-badge'
-
-const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
-const EMPTY_MIGRATION_UNSUPPORTED: AppState['migrationUnsupportedByPtyId'] = {}
-const EMPTY_RETAINED_AGENTS: AppState['retainedAgentsByPaneKey'] = {}
-const EMPTY_ACKNOWLEDGED_AGENTS: AppState['acknowledgedAgentsByPaneKey'] = {}
-
-const DISABLED_ACTIVITY_UNREAD_INPUTS = {
-  sortEpoch: 0,
-  worktreesByRepo: EMPTY_WORKTREES_BY_REPO,
-  migrationUnsupportedByPtyId: EMPTY_MIGRATION_UNSUPPORTED,
-  retainedAgentsByPaneKey: EMPTY_RETAINED_AGENTS,
-  acknowledgedAgentsByPaneKey: EMPTY_ACKNOWLEDGED_AGENTS
+> & {
+  /** Per-pane "Clear completed" cutoffs; hidden events must not count as unread. */
+  activityClearedAtByPaneKey?: Record<string, number>
 }
 
-function isUnreadAgentState(state: AgentStatusState): boolean {
-  return state === 'done' || state === 'blocked' || state === 'waiting'
-}
-
-export function countActivityUnread(
-  source: ActivityUnreadCountSource,
-  mode: ActivityUnreadCountMode
-): number {
+/** Counts unread historical activity and fresh current turns. */
+export function countActivityUnread(source: ActivityUnreadCountSource, now = Date.now()): number {
   let count = 0
+  const seenPaneKeys = new Set<string>()
 
-  if (mode === 'sidebar-badge') {
-    for (const worktrees of Object.values(source.worktreesByRepo)) {
-      for (const worktree of worktrees) {
-        if (worktree.createdAt && worktree.isUnread) {
-          count += 1
-        }
+  // Workspace unread flags have no Activity row to clear and must not light this badge.
+  const countEntry = (entry: AgentStatusEntry, ackAt: number, live = false): void => {
+    // Treat Clear completed’s per-pane cutoff as an acknowledgement floor so hidden events cannot keep the badge lit.
+    const clearedAt = source.activityClearedAtByPaneKey?.[entry.paneKey] ?? 0
+    const mutedAt = Math.max(ackAt, clearedAt)
+    // Mirror the feed’s historical done/blocked/waiting event count.
+    for (const history of entry.stateHistory) {
+      if (isHistoricalActivityState(history.state) && mutedAt < history.startedAt) {
+        count += 1
       }
     }
-  }
-
-  const countEntry = (entry: AgentStatusEntry, ackAt: number): void => {
-    if (mode === 'agent-events') {
-      // Why: Activity feed surfaces historical done/blocked/waiting events
-      // from stateHistory, so the titlebar badge must mirror that event count.
-      for (const history of entry.stateHistory) {
-        if (isUnreadAgentState(history.state) && ackAt < history.startedAt) {
-          count += 1
-        }
-      }
-    }
-    if (isUnreadAgentState(entry.state) && ackAt < entry.stateStartedAt) {
+    // Session-boundary idle connects (STA-3386) and monitoring snapshots create no unread events, so counting either would leave a badge with no row to clear.
+    if (
+      (isHistoricalActivityState(entry.state) ||
+        (live && freshActivityLiveAgentState(entry, now) === 'working')) &&
+      entry.sessionBoundary !== true &&
+      mutedAt < entry.stateStartedAt
+    ) {
       count += 1
     }
   }
 
   for (const [paneKey, entry] of Object.entries(source.agentStatusByPaneKey)) {
-    countEntry(entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
+    seenPaneKeys.add(paneKey)
+    countEntry(entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0, true)
   }
   for (const [paneKey, retained] of Object.entries(source.retainedAgentsByPaneKey)) {
-    if (mode === 'sidebar-badge' && retained.entry.state !== 'done') {
+    // Live status is the primary source; retained is a handoff cache and may briefly overlap it.
+    if (seenPaneKeys.has(paneKey)) {
       continue
     }
+    seenPaneKeys.add(paneKey)
     countEntry(retained.entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
   }
   for (const unsupported of Object.values(source.migrationUnsupportedByPtyId)) {
     const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
-    if (entry) {
+    if (entry && !seenPaneKeys.has(entry.paneKey)) {
+      seenPaneKeys.add(entry.paneKey)
       countEntry(entry, source.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0)
     }
   }
@@ -84,53 +69,38 @@ export function countActivityUnread(
   return count
 }
 
-export function useActivityUnreadCount(enabled: boolean, mode: ActivityUnreadCountMode): number {
+export function useActivityUnreadCount(): number {
   const {
-    sortEpoch,
-    worktreesByRepo,
+    agentStatusEpoch,
     migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey,
-    acknowledgedAgentsByPaneKey
+    acknowledgedAgentsByPaneKey,
+    activityClearedAtByPaneKey
   } = useAppStore(
-    useShallow((state) => {
-      if (!enabled) {
-        return DISABLED_ACTIVITY_UNREAD_INPUTS
-      }
-      return {
-        // Why: live status prompt/tool updates churn agentStatusByPaneKey but
-        // cannot change unread count unless a sort-relevant state transition
-        // or removal occurred. sortEpoch is the cheap invalidation signal.
-        sortEpoch: state.sortEpoch,
-        worktreesByRepo: state.worktreesByRepo,
-        migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
-        retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
-        acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey
-      }
-    })
+    useShallow((state) => ({
+      // Same-turn heartbeats preserve receipts; reducer/freshness epoch changes cover turn/state changes, stale revival and expiry.
+      agentStatusEpoch: state.agentStatusEpoch,
+      migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
+      retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+      acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey,
+      activityClearedAtByPaneKey: state.activityClearedAtByPaneKey
+    }))
   )
 
   return useMemo(() => {
-    if (!enabled) {
-      return 0
-    }
-    void sortEpoch
-    return countActivityUnread(
-      {
-        agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
-        migrationUnsupportedByPtyId,
-        retainedAgentsByPaneKey,
-        worktreesByRepo,
-        acknowledgedAgentsByPaneKey
-      },
-      mode
-    )
+    void agentStatusEpoch
+    return countActivityUnread({
+      agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
+      migrationUnsupportedByPtyId,
+      retainedAgentsByPaneKey,
+      acknowledgedAgentsByPaneKey,
+      activityClearedAtByPaneKey
+    })
   }, [
     acknowledgedAgentsByPaneKey,
-    enabled,
+    activityClearedAtByPaneKey,
     migrationUnsupportedByPtyId,
-    mode,
     retainedAgentsByPaneKey,
-    sortEpoch,
-    worktreesByRepo
+    agentStatusEpoch
   ])
 }

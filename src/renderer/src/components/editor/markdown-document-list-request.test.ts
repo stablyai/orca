@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { MarkdownDocument } from '../../../../shared/types'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import {
   getMarkdownDocumentListRequestKey,
   requestSharedMarkdownDocumentList
@@ -8,7 +8,7 @@ import {
 
 function context(overrides: Partial<RuntimeFileOperationArgs> = {}): RuntimeFileOperationArgs {
   return {
-    settings: { activeRuntimeEnvironmentId: null },
+    target: { kind: 'local' as const },
     worktreeId: 'worktree-1',
     worktreePath: '/repo',
     ...overrides
@@ -79,6 +79,40 @@ describe('shared Markdown document list requests', () => {
     await expect(initialRequest).resolves.toBe(staleDocuments)
   })
 
+  it('bypasses a pre-change scan but joins a scan started after the same watcher burst', async () => {
+    const old = deferred<MarkdownDocument[]>()
+    const fresh = deferred<MarkdownDocument[]>()
+    const load = vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise)
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1_000)
+    try {
+      const initial = requestSharedMarkdownDocumentList(context(), '/watch-burst', {}, load)
+      now.mockReturnValue(1_200)
+      const afterChange = { freshAfter: 1_000 }
+      const refreshed = requestSharedMarkdownDocumentList(
+        context(),
+        '/watch-burst',
+        afterChange,
+        load
+      )
+      expect(refreshed).not.toBe(initial)
+      expect(requestSharedMarkdownDocumentList(context(), '/watch-burst', afterChange, load)).toBe(
+        refreshed
+      )
+      old.resolve([])
+      await initial
+      expect(requestSharedMarkdownDocumentList(context(), '/watch-burst', afterChange, load)).toBe(
+        refreshed
+      )
+      expect(load).toHaveBeenCalledTimes(2)
+      fresh.resolve([])
+      await refreshed
+    } finally {
+      old.resolve([])
+      fresh.resolve([])
+      now.mockRestore()
+    }
+  })
+
   it('allows an ordinary retry after an older scan stops settling', async () => {
     const stale = deferred<MarkdownDocument[]>()
     const retry = deferred<MarkdownDocument[]>()
@@ -115,8 +149,7 @@ describe('shared Markdown document list requests', () => {
         load
       )
       now.mockReturnValue(31_001)
-      // A request for a different route sweeps the expired entry so the map
-      // does not pin the abandoned promise for the renderer's lifetime.
+      // A different route must release expired entries, including abandoned promises.
       await expect(
         requestSharedMarkdownDocumentList(context(), '/other-route', {}, load)
       ).resolves.toEqual([])
@@ -137,7 +170,9 @@ describe('shared Markdown document list requests', () => {
   it('keeps runtime routes isolated and encodes unusual paths losslessly', () => {
     const local = context()
     const ssh = context({ connectionId: 'ssh-1' })
-    const runtime = context({ settings: { activeRuntimeEnvironmentId: ' runtime-1 ' } })
+    const runtime = context({
+      target: { kind: 'environment' as const, environmentId: ' runtime-1 ' }
+    })
     const unusualRoot = '/repo\nwith-newline'
     const windowsRoot = 'C:\\repo\\docs'
     const uncRoot = '\\\\server\\share\\repo'

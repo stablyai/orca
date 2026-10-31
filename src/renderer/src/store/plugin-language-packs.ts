@@ -1,58 +1,24 @@
-import { useEffect } from 'react'
-import { create } from 'zustand'
-import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { useMemo } from 'react'
+import {
+  isPluginLanguagePackRegistration,
+  type PluginLanguagePackRegistration
+} from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
+import { isUsablePluginLanguagePack } from '../../../shared/plugins/languages/plugin-language-pack-coverage'
+import { createPluginContentListStore } from './plugin-content-list-store'
 
-type PluginLanguagePackState = {
-  packs: PluginLanguagePackRegistration[]
-  loaded: boolean
-  fetchPacks: () => Promise<void>
-}
+const languagePacks = createPluginContentListStore<PluginLanguagePackRegistration>({
+  kind: 'language packs',
+  list: (api) => api.listLanguagePacks,
+  isEntry: isPluginLanguagePackRegistration
+})
 
-let requestGeneration = 0
-let changeSubscriptionStarted = false
-
-export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((set) => ({
-  packs: [],
-  loaded: false,
-  fetchPacks: async () => {
-    const generation = ++requestGeneration
-    const api = window.api?.plugins
-    if (!api?.listLanguagePacks) {
-      if (generation === requestGeneration) {
-        set({ packs: [], loaded: true })
-      }
-      return
-    }
-    try {
-      const packs = await api.listLanguagePacks()
-      if (generation === requestGeneration) {
-        set({ packs, loaded: true })
-      }
-    } catch {
-      if (generation === requestGeneration) {
-        set({ packs: [], loaded: true })
-      }
-    }
-  }
-}))
-
-export function ensurePluginLanguagePacksLoaded(): void {
-  const state = usePluginLanguagePackStore.getState()
-  if (!state.loaded) {
-    void state.fetchPacks()
-  }
-  if (!changeSubscriptionStarted && window.api?.plugins?.onChanged) {
-    changeSubscriptionStarted = true
-    window.api.plugins.onChanged((event) => {
-      if (event?.contentPacksChanged ?? true) {
-        void usePluginLanguagePackStore.getState().fetchPacks()
-      }
-    })
-  }
-}
-
+export const usePluginLanguagePackStore = languagePacks.useStore
+export const ensurePluginLanguagePacksLoaded = languagePacks.ensureLoaded
+/** Packs complete enough to switch the UI to. */
 export function usePluginLanguagePacks(): PluginLanguagePackRegistration[] {
-  const packs = usePluginLanguagePackStore((state) => state.packs)
-  useEffect(() => ensurePluginLanguagePacksLoaded(), [])
-  return packs
+  const entries = languagePacks.useEntries()
+  return useMemo(() => {
+    const usable = entries.filter(isUsablePluginLanguagePack)
+    return usable.length === entries.length ? entries : usable
+  }, [entries])
 }

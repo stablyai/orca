@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { computeVisibleWorktreeIds } from './visible-worktrees'
-import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
+import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
+import { getPairedDeviceIdsByEnvironment } from '../../../../shared/workspace-creator-visibility'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
@@ -79,6 +83,8 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    hideWorkspacesFromOtherDevices: false,
+    pairedDeviceIdsByEnvironment: new Map(),
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -88,6 +94,68 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
 }
 
 describe('computeVisibleWorktreeIds', () => {
+  it('prefers the authenticated live device id over cached pairing metadata', () => {
+    const deviceIds = getPairedDeviceIdsByEnvironment(
+      [{ id: 'env-1', pairedDeviceId: 'cached-device' } as never],
+      new Map([
+        [
+          'env-1',
+          {
+            status: { pairedDeviceId: 'authenticated-device' } as never
+          }
+        ]
+      ])
+    )
+
+    expect(deviceIds.get('env-1')).toBe('authenticated-device')
+  })
+
+  it('hides only known workspaces created by another device', () => {
+    const own = {
+      ...makeWorktree('own'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-a' }
+    }
+    const other = {
+      ...makeWorktree('other'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-b' }
+    }
+    const host = {
+      ...makeWorktree('host'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'host' as const }
+    }
+    const legacy = { ...makeWorktree('legacy'), runtimeOwnerEnvironmentId: 'env-1' }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [own, other, host, legacy] },
+      [own.id, other.id, host.id, legacy.id],
+      visibleOptions({
+        hideWorkspacesFromOtherDevices: true,
+        pairedDeviceIdsByEnvironment: new Map([['env-1', 'device-a']])
+      })
+    )
+
+    expect(result).toEqual([own.id, legacy.id])
+  })
+
+  it('fails open when an older host does not publish the requester device id', () => {
+    const other = {
+      ...makeWorktree('other'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-b' }
+    }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [other] },
+      [other.id],
+      visibleOptions({ hideWorkspacesFromOtherDevices: true })
+    )
+
+    expect(result).toEqual([other.id])
+  })
+
   it('keeps browser-tab worktrees visible when sleeping workspaces are hidden', () => {
     const wt = makeWorktree('wt-browser')
 
@@ -185,8 +253,7 @@ describe('computeVisibleWorktreeIds', () => {
   })
 
   it('keeps workspaces without CLI provenance visible when the CLI filter is enabled', () => {
-    // Why: workspaces persisted before cliProvenance existed have no marker and
-    // must never be filtered as CLI-created.
+    // Legacy rows without provenance must remain visible.
     const legacy = makeWorktree('legacy')
 
     const result = computeVisibleWorktreeIds(
@@ -225,8 +292,7 @@ describe('computeVisibleWorktreeIds', () => {
   })
 
   it('keeps headless workspaces visible when the detached filter is enabled', () => {
-    // Why: folder workspaces and SSH-synthesized rows carry an empty branch AND
-    // an empty head. Only a real head means a genuine detached checkout.
+    // Folder and SSH-synthesized rows have neither branch nor head; only a head proves detachment.
     const folder = { ...makeWorktree('folder'), branch: '', head: '', isMainWorktree: true }
 
     const result = computeVisibleWorktreeIds(
@@ -263,7 +329,6 @@ describe('computeVisibleWorktreeIds', () => {
       [wt.id],
       visibleOptions({
         showSleepingWorkspaces: false,
-        // No live PTY for the tab, but the agent session is live.
         tabsByWorktree: { [wt.id]: [makeTab('tab-agent', wt.id, null)] },
         ptyIdsByTabId: { 'tab-agent': [] },
         worktreeIdsWithLiveAgent: new Set([wt.id])
@@ -321,18 +386,18 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([feature.id])
   })
 
-  it('keeps folder-mode main worktrees visible when default branch workspaces are hidden', () => {
-    const folder = makeWorktree('folder')
-    folder.isMainWorktree = true
-    folder.branch = ''
+  it('keeps an empty-branch git main visible when default branch workspaces are hidden', () => {
+    const detached = makeWorktree('detached')
+    detached.isMainWorktree = true
+    detached.branch = ''
 
     const result = computeVisibleWorktreeIds(
-      { repo1: [folder] },
-      [folder.id],
+      { repo1: [detached] },
+      [detached.id],
       visibleOptions({ hideDefaultBranchWorkspace: true })
     )
 
-    expect(result).toEqual([folder.id])
+    expect(result).toEqual([detached.id])
   })
 
   it('filters worktrees to a selected SSH host scope', () => {
@@ -492,9 +557,6 @@ describe('computeVisibleWorktreeIds', () => {
     main.isMainWorktree = true
     const feature = makeWorktree('feature')
 
-    // Why: verifies filter ordering — the default-branch hide runs before
-    // sleeping visibility, so the hidden main does not slip back in while the
-    // feature survives because it has a live PTY.
     const result = computeVisibleWorktreeIds(
       { repo1: [main, feature] },
       [main.id, feature.id],
@@ -517,11 +579,6 @@ describe('computeVisibleWorktreeIds', () => {
     main2.isMainWorktree = true
     const feature2 = makeWorktree('feature2', 'repo2')
 
-    // Why: the filterRepoIds=['repo1'] already drops everything in repo2, so
-    // to actually prove the hide filter is scoped to the selected repos we
-    // need to flip the situation — select repo2 instead. Only main2 should be
-    // dropped by hide; main1 survives because the repo filter has already
-    // removed it from consideration.
     const result = computeVisibleWorktreeIds(
       { repo1: [main1, feature1], repo2: [main2, feature2] },
       [main1.id, feature1.id, main2.id, feature2.id],
@@ -551,6 +608,65 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([parent.id, child.id])
+  })
+
+  it('gives a sleeping-exempt main its cached-sort slot, not a position at the end', () => {
+    const awakeA = makeWorktree('awake-a')
+    const main = { ...makeWorktree('main'), isMainWorktree: true }
+    const awakeB = makeWorktree('awake-b')
+
+    const options = {
+      showSleepingWorkspaces: false,
+      tabsByWorktree: {
+        [awakeA.id]: [makeTab('t-a', awakeA.id, 'p-a')],
+        [awakeB.id]: [makeTab('t-b', awakeB.id, 'p-b')]
+      },
+      ptyIdsByTabId: { 't-a': ['p-a'], 't-b': ['p-b'] }
+    }
+    const byRepo = { repo1: [awakeA, main, awakeB] }
+    const sortedIds = [awakeA.id, main.id, awakeB.id]
+
+    expect(
+      computeVisibleWorktreeIds(
+        byRepo,
+        sortedIds,
+        visibleOptions({ ...options, alwaysShowDefaultBranchWorkspace: true })
+      )
+    ).toEqual([awakeA.id, main.id, awakeB.id])
+
+    expect(
+      computeVisibleWorktreeIds(
+        byRepo,
+        sortedIds,
+        visibleOptions({ ...options, alwaysShowDefaultBranchWorkspace: false })
+      )
+    ).toEqual([awakeA.id, awakeB.id])
+  })
+
+  it('leaves lineage ordering untouched when the exempted main is also a parent', () => {
+    const parent = { ...makeWorktree('parent'), isMainWorktree: true }
+    const child = makeWorktree('child')
+    const sibling = makeWorktree('sibling')
+    const lineage = makeWorktreeLineage(child, parent)
+
+    const run = (alwaysShowDefaultBranchWorkspace: boolean): string[] =>
+      computeVisibleWorktreeIds(
+        { repo1: [parent, child, sibling] },
+        [sibling.id, child.id, parent.id],
+        visibleOptions({
+          showSleepingWorkspaces: false,
+          alwaysShowDefaultBranchWorkspace,
+          tabsByWorktree: {
+            [child.id]: [makeTab('t-child', child.id, 'p-child')],
+            [sibling.id]: [makeTab('t-sib', sibling.id, 'p-sib')]
+          },
+          ptyIdsByTabId: { 't-child': ['p-child'], 't-sib': ['p-sib'] },
+          worktreeLineageById: { [child.id]: lineage }
+        })
+      )
+
+    expect(run(true)).toEqual([sibling.id, parent.id, child.id])
+    expect(run(false)).toEqual(run(true))
   })
 
   it('includes a filtered parent from resolved inline lineage when hydration has no side-map entry', () => {
@@ -758,7 +874,7 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([child.id])
   })
 
-  it('does not include a known cross-project parent hidden by another filter', () => {
+  it('keeps a cross-project ancestor visible through the default-branch filter', () => {
     const parent = Object.assign(makeWorktree('parent'), {
       projectId: 'project-b',
       isMainWorktree: true
@@ -775,6 +891,6 @@ describe('computeVisibleWorktreeIds', () => {
       })
     )
 
-    expect(result).toEqual([child.id])
+    expect(result).toEqual([parent.id, child.id])
   })
 })

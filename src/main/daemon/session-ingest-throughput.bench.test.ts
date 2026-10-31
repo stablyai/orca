@@ -1,17 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { performance } from 'node:perf_hooks'
-import { Session, type SubprocessHandle } from './session'
+import { Session } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
-// Benchmark harness for the terminal performance initiative: measures the
-// daemon-side ingest rate (Session.handleSubprocessData -> HeadlessEmulator
-// write + pending-output recording + client fanout) for the same workload
-// shapes as tests/tools/benchmarks/terminal-pipeline-bench.mjs. Bare headless
-// xterm parses these at ~80-100 MB/s; the end-to-end Orca pipeline measured
-// 2-15 MB/s (baseline-jul02) — this isolates the daemon layer's share.
-// Run with:
-//   ORCA_TERMINAL_PERF_BENCH=1 pnpm vitest run \
-//     src/main/daemon/session-ingest-throughput.bench.test.ts \
-//     --config config/vitest.config.ts
+// Enable ORCA_TERMINAL_PERF_BENCH=1 to isolate daemon ingest cost with terminal-pipeline-bench workloads.
 const benchEnabled = process.env.ORCA_TERMINAL_PERF_BENCH === '1'
 
 const COLS = 114
@@ -68,6 +60,7 @@ function makeSubprocess(): SubprocessHandle & { emit: (data: string) => void } {
     write: () => {},
     resize: () => {},
     kill: () => {},
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: () => {},
     signal: () => {},
     onData: (cb) => {
@@ -89,7 +82,6 @@ function ingest(fixture: string, drainPendingEveryChunks: number | null): number
     shellReadySupported: false
   })
   session.attachClient({ onData: () => {}, onExit: () => {} })
-  // Warmup primes JIT paths.
   subprocess.emit(fixture.slice(0, 256 * 1024))
   session.takePendingOutput(false)
   const start = performance.now()
@@ -97,9 +89,7 @@ function ingest(fixture: string, drainPendingEveryChunks: number | null): number
   for (let i = 0; i < fixture.length; i += CHUNK) {
     subprocess.emit(fixture.slice(i, i + CHUNK))
     chunks++
-    // Why: without periodic takes the 2MB pending cap overflows and recording
-    // short-circuits, understating the real steady-state cost. The 5s adapter
-    // tick drains in production; drain per ~1.5MB approximates a hot session.
+    // Drain before overflow stops record accounting, or the benchmark understates steady-state cost.
     if (drainPendingEveryChunks && chunks % drainPendingEveryChunks === 0) {
       session.takePendingOutput(false)
     }
@@ -123,7 +113,6 @@ describe.skipIf(!benchEnabled)('daemon session ingest throughput', () => {
         `${name}: ${rate.toFixed(1)} MB/s (${ms.toFixed(0)}ms for ${(bytes / 1024 / 1024).toFixed(1)}MB)`
       )
     }
-    // eslint-disable-next-line no-console -- bench harness output
     console.log(`\n[session-ingest] ${COLS}x${ROWS}\n  ${rows.join('\n  ')}`)
     expect(rows.length).toBe(2)
   })

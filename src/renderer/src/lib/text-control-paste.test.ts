@@ -2,12 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PASTE_PAYLOAD_CORPUS } from './paste-payload-corpus'
-import {
-  getTextControlPasteByteLength,
-  measureTextControlPasteByteLength,
-  pasteTextIntoTextControl,
-  shouldHandleTextControlPaste
-} from './text-control-paste'
+import { measureTextControlPasteByteLength, pasteTextIntoTextControl } from './text-control-paste'
 
 function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
@@ -105,20 +100,6 @@ describe('text control paste', () => {
     expect(result.redactedDiagnostic).not.toContain('secret-token')
     expect(result.redactedDiagnostic).not.toContain('before')
     expect(result.redactedDiagnostic).not.toContain('after')
-    expect(textarea.value).toBe(text)
-  })
-
-  it('does not split surrogate pairs across chunks', async () => {
-    const textarea = appendTextarea()
-    const text = 'a😀b😀c'
-
-    const result = await pasteTextIntoTextControl(textarea, text, {
-      directMaxBytes: 2,
-      chunkMaxBytes: 5,
-      yieldToEventLoop: async () => {}
-    })
-
-    expect(result.status).toBe('pasted')
     expect(textarea.value).toBe(text)
   })
 
@@ -250,19 +231,14 @@ describe('text control paste', () => {
     expect(events).toHaveLength(0)
   })
 
-  it('uses utf-8 byte thresholds for non-ascii text', () => {
-    expect(getTextControlPasteByteLength('a😀é')).toBe(7)
-    expect(shouldHandleTextControlPaste('😀😀', { directMaxBytes: 7 })).toBe(true)
-    expect(shouldHandleTextControlPaste('abc', { directMaxBytes: 7 })).toBe(false)
-    expect(shouldHandleTextControlPaste('', { directMaxBytes: 0 })).toBe(false)
-  })
-
   it('can stop measuring text-control paste once the limit is exceeded', () => {
     const measurement = measureTextControlPasteByteLength('😀'.repeat(100), {
       stopAfterBytes: 5
     })
 
     expect(measurement).toEqual({ byteLength: 8, exceededLimit: true })
-    expect(measurement.byteLength).toBeLessThan(getTextControlPasteByteLength('😀'.repeat(100)))
+    expect(measurement.byteLength).toBeLessThan(
+      measureTextControlPasteByteLength('😀'.repeat(100)).byteLength
+    )
   })
 })

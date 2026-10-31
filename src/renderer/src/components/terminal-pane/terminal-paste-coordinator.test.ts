@@ -8,19 +8,21 @@ import {
 } from './terminal-bracketed-paste'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import { chunkTerminalPastePlan, iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
 import {
-  chunkTerminalPastePlan,
   createTerminalPastePayload,
-  executeTerminalPastePlan,
-  getTerminalPasteOperationTimeoutMs,
-  iterateTerminalPastePlanChunks,
   planTerminalPaste,
-  planTerminalPasteWithYield,
-  TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
-  TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS,
-  type TerminalPasteRuntime,
-  type TerminalPasteTarget
+  planTerminalPasteWithYield
 } from './terminal-paste-coordinator'
+import {
+  executeTerminalPastePlan,
+  getTerminalPasteOperationTimeoutMs
+} from './terminal-paste-executor'
+import {
+  TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
+  TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
+} from './terminal-paste-limits'
+import type { TerminalPasteRuntime, TerminalPasteTarget } from './terminal-paste-model'
 
 const textEncoder = new TextEncoder()
 
@@ -78,19 +80,11 @@ const RUNTIME_MATRIX: { name: string; runtime: TerminalPasteRuntime }[] = [
     }
   },
   {
-    name: 'SSH Linux',
-    runtime: {
-      platform: 'linux',
-      runtimeKey: 'ssh:linux-prod',
-      kind: 'ssh'
-    }
-  },
-  {
-    name: 'SSH Windows',
+    name: 'Windows remote runtime',
     runtime: {
       platform: 'win32',
-      runtimeKey: 'ssh:windows-prod',
-      kind: 'ssh'
+      runtimeKey: 'remote-runtime:win32',
+      kind: 'remote-runtime'
     }
   },
   {
@@ -178,7 +172,7 @@ describe('terminal paste coordinator', () => {
       text,
       source: 'context-menu',
       target: terminalTarget({
-        runtime: { platform: 'linux', runtimeKey: 'ssh:prod', kind: 'ssh' }
+        runtime: { platform: 'linux', runtimeKey: 'remote:prod', kind: 'remote-runtime' }
       }),
       maxDirectBytes: 32,
       maxChunkBytes: 24
@@ -194,7 +188,7 @@ describe('terminal paste coordinator', () => {
 
     expect(result.status).toBe('pasted')
     expect(plan.mode).toBe('chunked')
-    expect(plan.runtimeKey).toBe('ssh:prod')
+    expect(plan.runtimeKey).toBe('remote:prod')
     expect(pasteText).not.toHaveBeenCalled()
     expect(writePty.mock.calls.map((call) => call[0]).join('')).toBe(
       normalizeTerminalPasteLineEndings(text)
@@ -222,8 +216,7 @@ describe('terminal paste coordinator', () => {
   })
 
   it('normalizes forced multiline chunked paste line endings like xterm native paste', () => {
-    // Why: 4-byte chunks would split this CRLF pair ('abc\r' | '\ndef'), so the
-    // pre-chunk normalization is what keeps the LF half away from ConPTY.
+    // Normalize before chunking so the CRLF split cannot leak LF into ConPTY.
     const plan = planTerminalPaste({
       text: 'abc\r\ndef\nghi',
       source: 'keyboard',
@@ -240,6 +233,64 @@ describe('terminal paste coordinator', () => {
     expect(chunks.at(-1)).toBe(BRACKETED_PASTE_END)
     expect(chunks.slice(1, -1).join('')).toBe('abc\rdef\rghi')
     expect(chunks.join('')).not.toContain('\n')
+  })
+
+  it('streams large Windows input-record paste with atomic modified Enter newlines', () => {
+    const plan = planTerminalPaste({
+      text: '\nabc\r\ndef\x1b[201~ghi',
+      source: 'keyboard',
+      target: terminalTarget(),
+      windowsInputRecordNewline: 'alt-enter',
+      terminalBracketedPasteMode: true,
+      maxDirectBytes: 4,
+      maxChunkBytes: 4
+    })
+    const chunks = chunkTerminalPastePlan(plan)
+
+    expect(plan.mode).toBe('chunked')
+    expect(plan.bracketed).toBe(false)
+    expect(plan.newlinePolicy).toBe('windows-input-record')
+    expect(chunks.join('')).toBe('\x1b\rabc\x1b\rdef␛[201~ghi')
+    expect(chunks).not.toContain('\x1b[200~')
+    expect(chunks).not.toContain('\x1b[201~')
+  })
+
+  it('accounts for modified-Enter expansion before choosing bounded chunks', () => {
+    const plan = planTerminalPaste({
+      text: '\n\n\n\n',
+      source: 'keyboard',
+      target: terminalTarget(),
+      windowsInputRecordNewline: 'alt-enter',
+      maxDirectBytes: 6,
+      maxBytes: 16
+    })
+
+    expect(plan.mode).toBe('chunked')
+    expect(chunkTerminalPastePlan(plan).join('')).toBe('\x1b\r\x1b\r\x1b\r\x1b\r')
+  })
+
+  it('counts CRLF by its exact encoded size at paste limits', () => {
+    const altEnter = planTerminalPaste({
+      text: 'a\r\n',
+      source: 'keyboard',
+      target: terminalTarget(),
+      windowsInputRecordNewline: 'alt-enter',
+      maxDirectBytes: 3,
+      maxBytes: 3
+    })
+    const csiU = planTerminalPaste({
+      text: 'a\r\n',
+      source: 'keyboard',
+      target: terminalTarget(),
+      windowsInputRecordNewline: 'csi-u',
+      maxDirectBytes: 8,
+      maxBytes: 8
+    })
+
+    expect(altEnter.mode).toBe('windows-input-record')
+    expect(chunkTerminalPastePlan(altEnter).join('')).toBe('a\x1b\r')
+    expect(csiU.mode).toBe('windows-input-record')
+    expect(chunkTerminalPastePlan(csiU).join('')).toBe('a\x1b[13;2u')
   })
 
   it('chunks escape-heavy bracketed paste without per-character string sanitizer scans', () => {
@@ -379,7 +430,7 @@ describe('terminal paste coordinator', () => {
       })
 
       expect(getTerminalPasteOperationTimeoutMs(plan), name).toBe(
-        runtime.kind === 'ssh' || runtime.kind === 'remote-runtime'
+        runtime.kind === 'remote-runtime'
           ? TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
           : TERMINAL_PASTE_OPERATION_TIMEOUT_MS
       )
@@ -438,7 +489,7 @@ describe('terminal paste coordinator', () => {
 
     expect(result).toMatchObject({ status: 'cancelled', reason: 'target-disconnected' })
     expect(writePty).toHaveBeenCalledTimes(1)
-    expect(writePty).toHaveBeenCalledWith('x'.repeat(8))
+    expect(writePty).toHaveBeenCalledWith('x'.repeat(8), expect.any(AbortSignal))
     expect(codePointAt.mock.calls.length).toBeLessThan(text.length)
   })
 
@@ -746,8 +797,7 @@ describe('terminal paste coordinator', () => {
   })
 
   it('skips the bracketed close when the paste target is already gone', async () => {
-    // Why: canContinue false means the pane/PTY is unmounted, so an end marker has
-    // nowhere to land — the frame dies with the target.
+    // A vanished pane/PTY cannot receive the end marker; its open frame dies with the target.
     let writable = true
     const writes: string[] = []
 

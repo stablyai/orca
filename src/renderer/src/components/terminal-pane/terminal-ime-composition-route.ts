@@ -1,10 +1,10 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 
 export const XTERM_COMPOSITION_SESSION_START_EVENT = 'xterm-composition-session-start'
 export const XTERM_COMPOSITION_SESSION_END_EVENT = 'xterm-composition-session-end'
 
-type CompositionSessionDetail = {
+export type TerminalImeCompositionSessionDetail = {
   id: number
   data?: string
   dataPendingReconciliation?: boolean
@@ -14,33 +14,81 @@ type CapturedCompositionSession = {
   ptyId: string | null
 }
 
-const pendingCompositionCountByElement = new WeakMap<HTMLElement, number>()
+export type TerminalImeCompositionSessionSnapshot = ReadonlySet<number>
 
-function adjustPendingCompositionCount(terminalElement: HTMLElement, delta: number): void {
-  const count = Math.max(0, (pendingCompositionCountByElement.get(terminalElement) ?? 0) + delta)
-  if (count === 0) {
-    pendingCompositionCountByElement.delete(terminalElement)
+// Count owners per session: overlapping routes must release independently, and waits must distinguish captured sessions from later ones.
+const pendingCompositionSessionCountsByElement = new WeakMap<HTMLElement, Map<number, number>>()
+
+function addPendingCompositionSession(terminalElement: HTMLElement, sessionId: number): void {
+  const sessionCounts = pendingCompositionSessionCountsByElement.get(terminalElement) ?? new Map()
+  sessionCounts.set(sessionId, (sessionCounts.get(sessionId) ?? 0) + 1)
+  pendingCompositionSessionCountsByElement.set(terminalElement, sessionCounts)
+}
+
+function removePendingCompositionSession(terminalElement: HTMLElement, sessionId: number): void {
+  const sessionCounts = pendingCompositionSessionCountsByElement.get(terminalElement)
+  const count = sessionCounts?.get(sessionId)
+  if (!sessionCounts || count === undefined) {
     return
   }
-  pendingCompositionCountByElement.set(terminalElement, count)
+  if (count > 1) {
+    sessionCounts.set(sessionId, count - 1)
+  } else {
+    sessionCounts.delete(sessionId)
+  }
+  if (!sessionCounts.size) {
+    pendingCompositionSessionCountsByElement.delete(terminalElement)
+  }
 }
 
-export function hasPendingTerminalImeComposition(
+export function capturePendingTerminalImeCompositionSessions(
   terminalElement: HTMLElement | null | undefined
-): boolean {
-  return Boolean(terminalElement && pendingCompositionCountByElement.has(terminalElement))
+): TerminalImeCompositionSessionSnapshot {
+  if (!terminalElement) {
+    return new Set()
+  }
+  return new Set(pendingCompositionSessionCountsByElement.get(terminalElement)?.keys())
 }
 
-function getCompositionDetail(event: Event): CompositionSessionDetail | null {
+/** With a snapshot, only the sessions it captured count as pending. */
+export function hasPendingTerminalImeComposition(
+  terminalElement: HTMLElement | null | undefined,
+  snapshot?: TerminalImeCompositionSessionSnapshot
+): boolean {
+  if (!terminalElement) {
+    return false
+  }
+  const sessionCounts = pendingCompositionSessionCountsByElement.get(terminalElement)
+  if (!sessionCounts) {
+    return false
+  }
+  if (!snapshot) {
+    return true
+  }
+  for (const sessionId of snapshot) {
+    if (sessionCounts.has(sessionId)) {
+      return true
+    }
+  }
+  return false
+}
+
+export function readTerminalImeCompositionSessionDetail(
+  event: Event
+): TerminalImeCompositionSessionDetail | null {
   if (!(event instanceof CustomEvent)) {
     return null
   }
-  const detail = event.detail as Partial<CompositionSessionDetail> | null
-  if (!detail || !Number.isSafeInteger(detail.id) || detail.id! <= 0) {
+  const detail = event.detail as Partial<TerminalImeCompositionSessionDetail> | null
+  if (!detail) {
+    return null
+  }
+  const id = detail.id
+  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
     return null
   }
   return {
-    id: detail.id!,
+    id,
     data: typeof detail.data === 'string' ? detail.data : undefined,
     dataPendingReconciliation: detail.dataPendingReconciliation === true
   }
@@ -49,8 +97,8 @@ function getCompositionDetail(event: Event): CompositionSessionDetail | null {
 export function installTerminalImeCompositionRoute(args: {
   terminalElement: HTMLElement | null | undefined
   terminal: Pick<Terminal, 'input'>
-  capturedTransport: PtyTransport
-  getCurrentTransport: () => PtyTransport | undefined
+  capturedTransport: Pick<PtyTransport, 'getPtyId'>
+  getCurrentTransport: () => Pick<PtyTransport, 'getPtyId'> | undefined
 }): IDisposable {
   const terminalElement = args.terminalElement
   const sessions = new Map<number, CapturedCompositionSession>()
@@ -65,12 +113,12 @@ export function installTerminalImeCompositionRoute(args: {
   }
 
   const onSessionStart = (event: Event): void => {
-    const detail = getCompositionDetail(event)
+    const detail = readTerminalImeCompositionSessionDetail(event)
     if (!detail || disposed) {
       return
     }
     if (!sessions.has(detail.id)) {
-      adjustPendingCompositionCount(terminalElement, 1)
+      addPendingCompositionSession(terminalElement, detail.id)
     }
     sessions.set(detail.id, {
       ptyId: args.capturedTransport.getPtyId()
@@ -78,17 +126,19 @@ export function installTerminalImeCompositionRoute(args: {
   }
 
   const onSessionEnd = (event: Event): void => {
-    const detail = getCompositionDetail(event)
+    const detail = readTerminalImeCompositionSessionDetail(event)
     if (!detail) {
       return
     }
-    event.preventDefault()
     const captured = sessions.get(detail.id)
     if (!captured) {
+      // Installed mid-composition: xterm still owns this commit because the route never saw its start.
       return
     }
+    // Owned, so xterm stands down even on the drop paths below: that drop is this route's call.
+    event.preventDefault()
     sessions.delete(detail.id)
-    adjustPendingCompositionCount(terminalElement, -1)
+    removePendingCompositionSession(terminalElement, detail.id)
     if (
       disposed ||
       detail.dataPendingReconciliation ||
@@ -108,7 +158,9 @@ export function installTerminalImeCompositionRoute(args: {
   return {
     dispose: () => {
       disposed = true
-      adjustPendingCompositionCount(terminalElement, -sessions.size)
+      for (const sessionId of sessions.keys()) {
+        removePendingCompositionSession(terminalElement, sessionId)
+      }
       sessions.clear()
       terminalElement.removeEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, onSessionStart)
       terminalElement.removeEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, onSessionEnd)

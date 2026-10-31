@@ -24,7 +24,9 @@ export const EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE: TerminalReplyQueryScanState 
   pendingStartSeq: null
 }
 
-function isReplyElicitingCsi(sequence: string): boolean {
+/** Scrollback snapshots omit control bytes, so late views must replay queries once.
+ * 2031 subscribe/withdraw are state, not queries: carry both or a retired TUI subscription remains armed (#9993). */
+export function isReplayableCsi(sequence: string): boolean {
   if (DEVICE_ATTRIBUTES_QUERY_RE.test(sequence)) {
     return true
   }
@@ -41,7 +43,9 @@ function isReplyElicitingCsi(sequence: string): boolean {
     sequence === '\x1b[16t' ||
     sequence === '\x1b[18t' ||
     sequence === '\x1b[?u' ||
-    sequence === '\x1b[?2031h'
+    sequence === '\x1b[?2031h' ||
+    // Replay only exact withdrawal; combined DECRST would also change unrelated modes in the attaching emulator.
+    sequence === '\x1b[?2031l'
   )
 }
 
@@ -81,7 +85,7 @@ export function scanTerminalReplyQuerySequences(
     if (input.startsWith(`${ESC}[`, candidateIndex)) {
       endIndex = findCsiFinalByteIndex(input, candidateIndex + 2)
       if (endIndex !== -1) {
-        matches = isReplyElicitingCsi(input.slice(candidateIndex, endIndex + 1))
+        matches = isReplayableCsi(input.slice(candidateIndex, endIndex + 1))
       }
     } else if (input.startsWith(`${ESC}]`, candidateIndex)) {
       const osc = parseTerminalOscColorQuery(input, candidateIndex)

@@ -1,0 +1,44 @@
+import { describe, expect, it } from 'vitest'
+import {
+  buildInjectRejectionMessage,
+  taskNotStartableRefusal
+} from './orchestration-dispatch-refusal-contract'
+import { recognizeAgentProcess } from './agent-process-recognition'
+
+describe('buildInjectRejectionMessage', () => {
+  const message = buildInjectRejectionMessage('term_a')
+
+  it('keeps the substring callers and scripts match on', () => {
+    expect(message).toContain('Cannot dispatch --inject to terminal term_a')
+    expect(message).toContain('no recognized agent detected')
+  })
+
+  it('lists only names detection actually resolves, deduped and sorted', () => {
+    const listed = (/\(([^)]+)\)/.exec(message)?.[1] ?? '').split(', ')
+
+    expect(listed.length).toBeGreaterThan(0)
+    expect(new Set(listed).size).toBe(listed.length)
+    expect([...listed].sort()).toEqual(listed)
+    for (const name of listed) {
+      expect(recognizeAgentProcess(name)).not.toBeNull()
+    }
+  })
+})
+
+// Pin published receipt literals independently so refactors cannot change builders and expectations together.
+describe('dispatch refusal receipts keep their published messages', () => {
+  it('tailors nextSteps to retry, dependency, occupancy, and terminal-status refusals', () => {
+    const base = { taskId: 'task_1', status: 'failed', unmetDependencies: [] }
+    expect(taskNotStartableRefusal('m', { ...base, retryOf: 'ctx_1' }).data.nextSteps[0]).toMatch(
+      /--retry-of.*ctx_1/
+    )
+    expect(
+      taskNotStartableRefusal('m', { ...base, status: 'pending', unmetDependencies: ['task_0'] })
+        .data.nextSteps[0]
+    ).toMatch(/task_0.*unblock failed/)
+    expect(
+      taskNotStartableRefusal('m', { ...base, status: 'dispatched' }).data.nextSteps[0]
+    ).toMatch(/dispatch-show --task task_1/)
+    expect(taskNotStartableRefusal('m', base).data.nextSteps[0]).toMatch(/failed Task cannot/)
+  })
+})

@@ -1,0 +1,81 @@
+import { defineStreamingMethod } from '../../core'
+import { TerminalStreamOpcode } from '../../../../../shared/terminal-stream-protocol'
+import {
+  TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
+  TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
+  TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION
+} from '../../../../../shared/terminal-multiplex-flow-control'
+import { TerminalMultiplex } from '../../../../../shared/rpc-contract/terminal-stream-params'
+import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
+import type { TerminalMultiplexStream } from './terminal-stream-types'
+import { installMultiplexFrameDelivery } from './terminal-multiplex-frame-delivery'
+import { installMultiplexFlowControl } from './terminal-multiplex-flow-control'
+import { installMultiplexCleanup } from './terminal-multiplex-cleanup'
+import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
+import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
+import { createMultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
+
+export const TERMINAL_MULTIPLEX_METHODS = [
+  defineStreamingMethod({
+    name: 'terminal.multiplex',
+    permission: 'workspace',
+    params: TerminalMultiplex,
+    handler: async (
+      _params,
+      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      emit
+    ) => {
+      if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
+        throw new Error('binary_terminal_stream_required')
+      }
+      let resolveMultiplex = (): void => {}
+      const multiplexClosed = new Promise<void>((resolve) => {
+        resolveMultiplex = resolve
+      })
+      // Installers only close over this per-connection state; none of it is module-global.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: installers below fill every method synchronously, and no frame can arrive before the control handler is registered after them.
+      const state = {
+        runtime,
+        connectionId,
+        sendBinary,
+        registerBinaryStreamHandler,
+        signal,
+        emit,
+        closed: false,
+        cursor: 0,
+        streams: new Map<number, TerminalMultiplexStream>(),
+        pendingPtyWaitControllers: new Map<number, Set<AbortController>>(),
+        ptyWaitAdmission: createMultiplexPtyWaitAdmission(
+          TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
+          TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION
+        ),
+        ackTotalInFlightBytes: 0,
+        ackTotalWindowBytes: TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
+        ackFlushCursorStreamId: null,
+        resolveMultiplex,
+        multiplexClosed,
+        unregisterControlHandler: () => {}
+      } as TerminalMultiplexConnection
+
+      installMultiplexFrameDelivery(state)
+      installMultiplexFlowControl(state)
+      installMultiplexCleanup(state)
+      installMultiplexSlotFrames(state)
+      installMultiplexSubscribeFrame(state)
+
+      state.unregisterControlHandler = registerBinaryStreamHandler(0, (frame) => {
+        if (frame.opcode === TerminalStreamOpcode.Subscribe) {
+          void state.handleSubscribeFrame(frame.payload)
+        }
+      })
+      signal?.addEventListener('abort', state.cancelAllPendingPtyWaits, { once: true })
+      runtime.registerSubscriptionCleanup(
+        `terminal-multiplex:${connectionId}`,
+        state.closeMultiplex,
+        connectionId
+      )
+      emit({ type: 'ready' })
+      await multiplexClosed
+    }
+  })
+]

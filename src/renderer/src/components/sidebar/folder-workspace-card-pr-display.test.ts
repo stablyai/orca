@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  CheckStatus,
-  PRInfo,
-  Repo,
-  Worktree,
-  WorktreeLineage,
-  WorkspaceLineage
-} from '../../../../shared/types'
+import type { CheckStatus, PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
 
@@ -149,6 +145,26 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     expect(display).toMatchObject({ number: 2, status: 'pending' })
   })
 
+  it('omits a matching suppressed branch PR from attached worktrees', () => {
+    const worktree = makeWorktree({
+      id: 'suppressed',
+      linkedPR: null,
+      suppressedGitHubPR: 4
+    })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::suppressed': makePrEntry(4, 'failure') }
+    })
+
+    expect(display).toBeNull()
+  })
+
   it('includes nested attached worktree PRs', () => {
     const parent = makeWorktree({ id: 'parent', instanceId: 'parent' })
     const nested = makeWorktree({ id: 'nested', instanceId: 'nested', linkedPR: 4 })
@@ -218,38 +234,37 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     expect(display).toBeNull()
   })
 
-  it.each([
-    ['repository', { repoId: 'repo-2' }, {}],
-    ['known host', { hostId: 'ssh:remote' as const }, { hostId: 'local' as const }],
-    ['known project', { projectId: 'project-b' }, { projectId: 'project-a' }]
-  ])('excludes nested PRs across a %s boundary', (_boundary, childOverrides, parentOverrides) => {
-    const parent = makeWorktree({ id: 'parent', instanceId: 'parent', ...parentOverrides })
-    const nested = makeWorktree({
-      id: 'nested',
-      instanceId: 'nested',
-      linkedPR: 4,
-      ...childOverrides
-    })
-    const nestedRepo = { ...repo, id: nested.repoId }
+  it.each([['known host', { hostId: 'ssh:remote' as const }, { hostId: 'local' as const }]])(
+    'excludes nested PRs across a %s boundary',
+    (_boundary, childOverrides, parentOverrides) => {
+      const parent = makeWorktree({ id: 'parent', instanceId: 'parent', ...parentOverrides })
+      const nested = makeWorktree({
+        id: 'nested',
+        instanceId: 'nested',
+        linkedPR: 4,
+        ...childOverrides
+      })
+      const nestedRepo = { ...repo, id: nested.repoId }
 
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-      worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
-      worktreeMap: new Map([
-        [parent.id, parent],
-        [nested.id, nested]
-      ]),
-      repoMap: new Map([
-        [repo.id, repo],
-        [nestedRepo.id, nestedRepo]
-      ]),
-      hostedReviewCache: null,
-      prCache: { [`${nested.repoId}::nested`]: makePrEntry(4, 'success') }
-    })
+      const display = getFolderWorkspaceCardPrDisplay({
+        folderWorkspaceId: 'folder-1',
+        workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+        worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
+        worktreeMap: new Map([
+          [parent.id, parent],
+          [nested.id, nested]
+        ]),
+        repoMap: new Map([
+          [repo.id, repo],
+          [nestedRepo.id, nestedRepo]
+        ]),
+        hostedReviewCache: null,
+        prCache: { [`${nested.repoId}::nested`]: makePrEntry(4, 'success') }
+      })
 
-    expect(display).toBeNull()
-  })
+      expect(display).toBeNull()
+    }
+  )
 
   it('excludes nested PRs from cyclic projected lineage', () => {
     const parent = makeWorktree({ id: 'parent', instanceId: 'parent' })

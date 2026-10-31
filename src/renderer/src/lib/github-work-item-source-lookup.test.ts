@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
-import { lookupGitHubWorkItemDetailsForSource } from './github-work-item-source-lookup'
+import {
+  lookupGitHubWorkItemDetailsForSource,
+  lookupGitHubWorkItemByOwnerRepoForSource
+} from './github-work-item-source-lookup'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
@@ -26,10 +29,67 @@ describe('GitHub source lookup routing', () => {
     vi.stubGlobal('window', {
       api: {
         gh: {
-          workItemDetails: vi.fn()
+          workItemDetails: vi.fn(),
+          workItemByOwnerRepo: vi.fn().mockResolvedValue(null)
         }
       }
     })
+  })
+
+  it.each(['local', 'ssh:build-box'] as const)(
+    'forwards %s source identity to exact repository IPC',
+    async (hostId) => {
+      const sourceContext: TaskSourceContext = { ...runtimeSourceContext, hostId, repoId: 'repo' }
+      await lookupGitHubWorkItemByOwnerRepoForSource({
+        repoPath: '/repo',
+        repoId: 'repo',
+        sourceContext,
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.com',
+        number: 42,
+        type: 'pr'
+      })
+      expect(window.api.gh.workItemByOwnerRepo).toHaveBeenCalledWith({
+        repoPath: '/repo',
+        repoId: 'repo',
+        sourceContext,
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.com',
+        number: 42,
+        type: 'pr'
+      })
+      expect(callRuntimeRpc).not.toHaveBeenCalled()
+    }
+  )
+
+  it('routes exact repository lookup to its source runtime instead of local IPC', async () => {
+    vi.mocked(callRuntimeRpc).mockResolvedValue(null)
+    await lookupGitHubWorkItemByOwnerRepoForSource({
+      repoPath: '/repo',
+      repoId: 'renderer-repo',
+      sourceContext: runtimeSourceContext,
+      owner: 'acme',
+      repo: 'orca',
+      host: 'github.com',
+      number: 42,
+      type: 'pr'
+    })
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'github.workItemByOwnerRepo',
+      {
+        repo: 'runtime-repo',
+        owner: 'acme',
+        ownerRepo: 'orca',
+        host: 'github.com',
+        number: 42,
+        type: 'pr'
+      },
+      { timeoutMs: 30_000 }
+    )
+    expect(window.api.gh.workItemByOwnerRepo).not.toHaveBeenCalled()
   })
 
   it('routes runtime-owned GitHub details through runtime RPC', async () => {
@@ -41,7 +101,8 @@ describe('GitHub source lookup routing', () => {
         repoId: 'renderer-repo',
         sourceContext: runtimeSourceContext,
         number: 42,
-        type: 'issue'
+        type: 'issue',
+        ownerRepo: { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
       })
     ).resolves.toBeNull()
 
@@ -51,29 +112,6 @@ describe('GitHub source lookup routing', () => {
       { repo: 'runtime-repo', number: 42, type: 'issue' },
       { timeoutMs: 30_000 }
     )
-    expect(window.api.gh.workItemDetails).not.toHaveBeenCalled()
-  })
-
-  // Regression for #6429: a runtime-sourced details lookup must never reach the
-  // local Electron IPC, which rejects unregistered remote repos with
-  // "Access denied: unknown repository path". On main this routed through
-  // window.api.gh.workItemDetails and surfaced that error.
-  it('does not invoke the local IPC (which throws access-denied) for runtime sources', async () => {
-    vi.mocked(callRuntimeRpc).mockResolvedValue(null)
-    vi.mocked(window.api.gh.workItemDetails).mockRejectedValue(
-      new Error('Access denied: unknown repository path')
-    )
-
-    await expect(
-      lookupGitHubWorkItemDetailsForSource({
-        repoPath: '/home/runtime/app',
-        repoId: 'renderer-repo',
-        sourceContext: runtimeSourceContext,
-        number: 42,
-        type: 'issue'
-      })
-    ).resolves.toBeNull()
-
     expect(window.api.gh.workItemDetails).not.toHaveBeenCalled()
   })
 
@@ -121,6 +159,24 @@ describe('GitHub source lookup routing', () => {
       number: 42,
       type: 'issue'
     })
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('sends a local issue row repository to the repo-scoped details route', async () => {
+    const ownerRepo = { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
+    vi.mocked(window.api.gh.workItemDetails).mockResolvedValue(null)
+
+    await lookupGitHubWorkItemDetailsForSource({
+      repoPath: '/home/fixture/widgets',
+      repoId: 'local-repo',
+      number: 12,
+      type: 'issue',
+      ownerRepo
+    })
+
+    expect(window.api.gh.workItemDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ repoPath: '/home/fixture/widgets', ownerRepo })
+    )
     expect(callRuntimeRpc).not.toHaveBeenCalled()
   })
 })

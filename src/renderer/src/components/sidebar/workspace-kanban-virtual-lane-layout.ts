@@ -2,6 +2,7 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 
 type VirtualLaneLayoutRegistration = {
   spacerElement: HTMLElement
+  /** Card host identities, the board's lane keys. */
   getItemIds: () => readonly string[]
   getMeasurements: () => readonly Pick<VirtualItem, 'index' | 'start' | 'end'>[]
 }
@@ -44,14 +45,12 @@ export function registerWorkspaceKanbanVirtualLaneLayout(args: {
   }
 }
 
-/**
- * The lane's item ids in the index space `resolveWorkspaceKanbanVirtualLaneDropIndex`
- * reports — every item in the lane view, not just the mounted virtual window.
- */
+/** Return every item in the virtual drop-index space, including unmounted rows. */
 export function getWorkspaceKanbanVirtualLaneItemIds(
   scrollElement: HTMLElement
 ): readonly string[] | null {
-  return virtualLaneLayouts.get(scrollElement)?.getItemIds() ?? null
+  const registration = virtualLaneLayouts.get(scrollElement)
+  return registration?.getItemIds() ?? null
 }
 
 export function getWorkspaceKanbanVirtualLaneItemRects(

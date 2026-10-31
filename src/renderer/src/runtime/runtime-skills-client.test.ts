@@ -21,7 +21,6 @@ function discoveryResult(skillName: string): SkillDiscoveryResult {
         directoryPath: `/home/dev/.agents/skills/${skillName}`,
         skillFilePath: `/home/dev/.agents/skills/${skillName}/SKILL.md`,
         installed: true,
-        fileCount: 1,
         updatedAt: null
       }
     ],
@@ -81,8 +80,29 @@ describe('discoverSkillsForRuntimeTarget', () => {
     )
   })
 
-  // Why: no caller can produce these yet, so the remote params must stay empty
-  // rather than shipping a client-host target the server would misread.
+  it('forwards portable inventory filters without client runtime identity', async () => {
+    const result = discoveryResult('orchestration')
+    runtimeEnvironmentCall.mockResolvedValueOnce({ id: 'skills', ok: true, result })
+
+    await discoverSkillsForRuntimeTarget(
+      { kind: 'environment', environmentId: 'env-1' },
+      {
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        names: ['orchestration'],
+        sourceKinds: ['home']
+      }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'skills.discover',
+        params: { names: ['orchestration'], sourceKinds: ['home'] }
+      })
+    )
+  })
+
+  // Current callers produce only client-host targets; remote calls must omit them or server misroutes.
   it('sends no target at all to a remote runtime', async () => {
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'skills',
@@ -97,6 +117,24 @@ describe('discoverSkillsForRuntimeTarget', () => {
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'skills.discover', params: {} })
+    )
+  })
+
+  // Forward request-scoped refresh so install rechecks reach remote disk beyond shared scan caches.
+  it('forwards an explicit refresh to a remote runtime', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'skills',
+      ok: true,
+      result: discoveryResult('orchestration')
+    })
+
+    await discoverSkillsForRuntimeTarget(
+      { kind: 'environment', environmentId: 'env-1' },
+      { runtime: 'wsl', wslDistro: 'Ubuntu', refresh: true }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'skills.discover', params: { refresh: true } })
     )
   })
 })

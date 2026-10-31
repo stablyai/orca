@@ -4,7 +4,7 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   getFocusedAgentPaneKeyForWorktree,
   type FocusedAgentRowHighlightState
@@ -93,8 +93,6 @@ describe('getFocusedAgentPaneKeyForWorktree', () => {
   })
 
   it('highlights a focused row whose status has decayed past freshness', () => {
-    // Why: the inline card keeps decayed agents visible; clicking one must still
-    // color the row even though its status is no longer fresh.
     const state = makeState({
       agentStatusByPaneKey: {
         [PANE_KEY]: makeAgentStatusEntry(PANE_KEY, 1)

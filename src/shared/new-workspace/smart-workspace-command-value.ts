@@ -30,14 +30,13 @@ export function resolveSmartWorkspaceCommandValue({
     return currentValue
   }
 
-  // Why: freeze the arm while the live input is ahead of debounced search so the
-  // highlight does not thrash to use-name / empty / first-row on every keystroke.
+  // Keep selection stable while live text leads debounced results, avoiding highlight changes on each keystroke.
   if (isQueryStale) {
-    if (rows.some((row) => row.value === currentValue)) {
-      return currentValue
-    }
     const typedTextRow = rows.find((row) => row.kind === 'use-name' || row.kind === 'create-branch')
-    return typedTextRow?.value ?? rows[0]?.value ?? ''
+    if (typedTextRow) {
+      return typedTextRow.value
+    }
+    return rows.some((row) => row.value === currentValue) ? currentValue : (rows[0]?.value ?? '')
   }
 
   if (sourceIntent === 'github') {

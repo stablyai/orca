@@ -1,20 +1,23 @@
 import type {
-  GitStatusResult,
-  GitDiffResult,
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type {
   GitConflictOperation,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GitPushTarget,
   GitStagingArea,
-  GitUpstreamStatus,
-  GitWorktreeInfo,
-  RemoveWorktreeResult
-} from '../../shared/types'
+  GitStatusResult,
+  GitUpstreamStatus
+} from '../../shared/git-status-types'
+import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
+import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { ConflictResolution } from '../../shared/source-control-entry-actions'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 
 export type { GitProviderStatusOptions } from './git-provider-status-options'
 
@@ -28,16 +31,27 @@ export type IGitProvider = {
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  completeMerge(worktreePath: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
     worktreePath: string,
     filePath: string,
     staged: boolean,
-    compareAgainstHead?: boolean
+    compareAgainstHead?: boolean,
+    oldPath?: string
   ): Promise<GitDiffResult>
   stageFile(worktreePath: string, filePath: string): Promise<void>
+  resolveConflict(
+    worktreePath: string,
+    filePath: string,
+    resolution: ConflictResolution
+  ): Promise<void>
   unstageFile(worktreePath: string, filePath: string): Promise<void>
-  bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void>
+  bulkStageFiles(
+    worktreePath: string,
+    filePaths: string[],
+    scope?: GitStageWorktreeScope
+  ): Promise<void>
   bulkUnstageFiles(worktreePath: string, filePaths: string[]): Promise<void>
   discardChanges(worktreePath: string, filePath: string): Promise<void>
   bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void>
@@ -46,7 +60,11 @@ export type IGitProvider = {
   abortRebase(worktreePath: string): Promise<void>
   checkoutBranch(worktreePath: string, branch: string): Promise<void>
   listLocalBranches(worktreePath: string): Promise<{ current: string | null; branches: string[] }>
-  getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
+  getBranchCompare(
+    worktreePath: string,
+    baseRef: string,
+    options?: { admissionTier?: GitAdmissionTier }
+  ): Promise<GitBranchCompareResult>
   getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult>
   getUpstreamStatus(worktreePath: string, pushTarget?: GitPushTarget): Promise<GitUpstreamStatus>
   pushBranch(
@@ -66,7 +84,7 @@ export type IGitProvider = {
   getBranchDiff(
     worktreePath: string,
     baseRef: string,
-    options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
+    options?: { includePatch?: boolean; filePath?: string; oldPath?: string; headOid?: string }
   ): Promise<GitDiffResult[]>
   getCommitDiff(
     worktreePath: string,
@@ -97,7 +115,12 @@ export type IGitProvider = {
     cwd: string,
     options?: { signal?: AbortSignal; timeoutMs?: number }
   ): Promise<{ stdout: string; stderr: string }>
-  getRemoteFileUrl(worktreePath: string, relativePath: string, line: number): Promise<string | null>
+  getRemoteFileUrl(
+    worktreePath: string,
+    relativePath: string,
+    line: number,
+    endLine?: number
+  ): Promise<string | null>
   getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null>
   worktreeIsClean(
     worktreePath: string,

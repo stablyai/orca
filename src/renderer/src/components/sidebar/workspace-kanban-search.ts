@@ -1,43 +1,59 @@
-import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
-import { searchWorktrees, type PaletteMatchedField } from '@/lib/worktree-palette-search'
-import type { Repo, WorkspaceStatus, Worktree } from '../../../../shared/types'
+import { isWorktreePaletteQueryTooLarge } from '../../../../shared/palette-match/worktree-palette-query-bounds'
+import { searchWorktreeDocuments } from '@/lib/worktree-palette-search'
+import { buildWorktreePaletteDocuments } from '@/lib/worktree-palette-document'
+import type { PaletteDocument } from '../../../../shared/palette-match/palette-document'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 
 export type WorkspaceKanbanLaneView = {
   items: readonly Worktree[]
   totalCount: number
 }
 
-// Why: the board is a drag surface for named workspaces, so a card may only be
-// hidden by fields the user can read on it. PR/issue/port matches are palette-only.
-const BOARD_MATCHED_FIELDS: ReadonlySet<PaletteMatchedField> = new Set<PaletteMatchedField>([
-  'displayName',
-  'branch',
-  'repo',
-  'comment'
-])
+/** Reuse normalized search documents across keystrokes and agent-status ticks. */
+export function buildWorkspaceBoardPaletteDocuments(args: {
+  worktrees: readonly Worktree[]
+  repoMap: ReadonlyMap<string, Repo>
+}): Map<string, PaletteDocument> {
+  // Board search may hide cards only by printed text; ports, reviews and automation remain palette-only.
+  return buildWorktreePaletteDocuments(args.worktrees, {
+    repoMap: args.repoMap,
+    evidencePolicy: 'board'
+  })
+}
 
-/**
- * Returns `null` when no filtering is active — distinct from an empty set, which
- * means a real query matched nothing.
- */
+/** Null means no active filter; an empty set means the query matched nothing. */
 export function matchWorkspaceBoardWorktrees(args: {
   worktrees: Worktree[]
   query: string
   repoMap: Map<string, Repo>
+  documents?: ReadonlyMap<string, PaletteDocument>
 }): ReadonlySet<string> | null {
   if (!args.query.trim()) {
     return null
   }
-  // Why: searchWorktrees returns [] for an over-bound query, which downstream
-  // reads as "matched nothing" and blanks the whole board on a paste accident.
+  // Ignore oversized queries so an accidental paste cannot blank the board.
   if (isWorktreePaletteQueryTooLarge(args.query)) {
     return null
   }
 
   const matched = new Set<string>()
-  for (const result of searchWorktrees(args.worktrees, args.query, args.repoMap, null, null)) {
-    if (result.matchedField && BOARD_MATCHED_FIELDS.has(result.matchedField)) {
-      matched.add(result.worktreeId)
+  const documents =
+    args.documents ??
+    buildWorkspaceBoardPaletteDocuments({ worktrees: args.worktrees, repoMap: args.repoMap })
+  for (const result of searchWorktreeDocuments({
+    worktrees: args.worktrees,
+    query: args.query,
+    documents,
+    repoMap: args.repoMap
+  })) {
+    if (result.matchedFields.length) {
+      // Qualify matches by host so same-ID cards remain independently searchable.
+      matched.add(composeWorktreeHostIdentity(result.worktreeHostId, result.worktreeId))
     }
   }
   return matched
@@ -51,9 +67,9 @@ export function buildWorkspaceKanbanLaneViews(args: {
   const views = new Map<WorkspaceStatus, WorkspaceKanbanLaneView>()
   for (const [status, items] of args.worktreesByStatus) {
     views.set(status, {
-      // Why: the no-query path must not reallocate a lane array per keystroke.
+      // Keep the no-query lane array stable across keystrokes.
       items: matchingWorktreeIds
-        ? items.filter((worktree) => matchingWorktreeIds.has(worktree.id))
+        ? items.filter((worktree) => matchingWorktreeIds.has(getWorktreeHostIdentity(worktree)))
         : items,
       totalCount: items.length
     })

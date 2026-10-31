@@ -1,17 +1,29 @@
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
+import { areLocalWindowsWslPathAliases } from '../../../../shared/cross-platform-path'
+import { externalChangePathKeyFor } from '@/store/slices/editor/buffers/editor-buffer-identity'
+import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
 } from '../../../../shared/constants'
 import { clampNumber } from '@/lib/terminal-theme'
+import { isAutosavePausedForNonUtf8File } from './editor-non-utf8-autosave-pause'
 
 export const ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT = 'orca:editor-quiesce-file-saves'
 export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file-change'
 export const ORCA_EDITOR_SAVE_FILE_EVENT = 'orca:editor-save-file'
 export const ORCA_EDITOR_SAVE_AND_CLOSE_EVENT = 'orca:save-and-close'
 export const ORCA_EDITOR_FILE_SAVED_EVENT = 'orca:editor-file-saved'
+// Drop sibling content caches when their disk baseline advances without cached text.
+export const ORCA_EDITOR_FILE_CACHE_STALE_EVENT = 'orca:editor-file-cache-stale'
+
+export function notifyEditorFileCacheStale(fileId: string): void {
+  window.dispatchEvent(
+    new CustomEvent<{ fileId: string }>(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, { detail: { fileId } })
+  )
+}
 export const ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT = 'orca:editor-request-cmd-save'
 export const ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT = 'orca:editor-request-file-close'
 
@@ -20,18 +32,40 @@ export type EditorPathMutationTarget = {
   worktreePath: string
   relativePath: string
   runtimeEnvironmentId?: string | null
+  allowLocalWindowsWslAliases?: true
+  indexedOpenFiles?: {
+    matches: (openFiles: OpenFile[]) => OpenFile[]
+  }
 }
 
-export type EditorSaveQuiesceTarget = { fileId: string } | EditorPathMutationTarget
+export type EditorSaveQuiesceTarget =
+  | {
+      fileId: string
+      /** Don't Save: no flush, and autosave held until the release runs. */ discard?: true
+    }
+  | EditorPathMutationTarget
 
 export type EditorSaveQuiesceDetail = EditorSaveQuiesceTarget & {
   claim: () => void
   resolve: () => void
+  reject?: (message: string) => void
+  /** A path or discard quiesce holds autosave of that file in every workspace until this release runs. */
+  onHold?: (release: () => void) => void
 }
 
 export type EditorSaveFileTarget = {
   fileId: string
   fallbackContent?: string
+  /** Only the conflict banner's Overwrite sets this. */
+  overwrite?: true
+  /** Only the user's confirmation to replace a non-UTF-8 file's unreadable characters sets this. */
+  convertToUtf8?: true
+}
+
+export type EditorSaveAndCloseDetail = {
+  fileId: string
+  /** Called at once when the tab stays open, so a waiting dialog needn't time out. */
+  onNotClosed?: (reason: 'blocked-stale' | 'not-utf8' | 'not-saved') => void
 }
 
 export type EditorSaveFileDetail = EditorSaveFileTarget & {
@@ -43,9 +77,17 @@ export type EditorSaveFileDetail = EditorSaveFileTarget & {
 export type EditorFileSavedDetail = {
   fileId: string
   content: string
+  /** Every view of the saved record, read when the write landed: the saving view may close. */
+  recordViewIds?: readonly string[]
 }
 
 export type EditorRequestFileCloseDetail = {
+  fileId: string
+  /** Runs once the file actually closes — after save or discard, never on cancel. */
+  onClosed?: () => void
+}
+
+export type EditorRequestCmdSaveDetail = {
   fileId: string
 }
 
@@ -57,52 +99,31 @@ export function isExternalReloadableEditorTab(file: OpenFile): boolean {
   )
 }
 
-// Why: combined "Changes"/"All Changes" tabs render working-tree diffs but
-// match no single path (their relativePath is a label, filePath the worktree
-// root). The fs watcher must still notify them so terminal/agent edits reload
-// the affected section. Branch/commit combined diffs compare committed refs, so
-// working-tree changes don't affect them and are intentionally excluded.
-export function isWorkingTreeCombinedDiffTab(file: OpenFile): boolean {
-  return (
-    file.mode === 'diff' &&
-    (file.diffSource === 'combined-uncommitted' || file.diffSource === 'combined-all')
-  )
-}
-
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
-  // Why: read-only tabs (AI Vault View Log) must never autosave — writing an
-  // agent-owned transcript can corrupt the provider's resume history.
-  if (file.readOnly === true) {
+  // Never autosave provider-owned transcripts or CSV preview placeholders; either can overwrite content the editor does not own.
+  if (file.readOnly === true || file.csvPreviewOnly === true) {
     return false
   }
-  // Why: single-file editors and one-file unstaged diffs have an unambiguous
-  // write target. Combined diff and conflict-review tabs can represent multiple
-  // paths, so autosave must stay out of those surfaces until they have their
-  // own save coordination instead of guessing which file should be written.
+  // Only edit and unstaged single-file diffs have one write target; multi-file surfaces need separate save coordination.
   return file.mode === 'edit' || (file.mode === 'diff' && file.diffSource === 'unstaged')
 }
 
-// Why: autosave must not resolve a changed-on-disk conflict by overwriting
-// the newer external content, nor write over a restored tab whose disk
-// baseline is still unverified (the conflict may simply not be marked YET).
-// One predicate so the save-queue gate and the timer scheduler cannot drift.
+// Share one suspension rule across queue and timers: marked conflicts pause until resolved; unmarked conflicts are still rejected by guarded writes.
 export function isAutosaveSuspendedForFile(
   file: Pick<
     OpenFile,
-    'externalMutation' | 'pendingDiskBaselineVerification' | 'pendingLiveDiskVerification'
+    'externalMutation' | 'pendingOwnerMigration' | 'filePath' | 'runtimeEnvironmentId'
   >
 ): boolean {
   return (
     file.externalMutation === 'changed' ||
-    file.pendingDiskBaselineVerification === true ||
-    file.pendingLiveDiskVerification === true
+    file.pendingOwnerMigration === true ||
+    isAutosavePausedForNonUtf8File(file)
   )
 }
 
 export function normalizeAutoSaveDelayMs(value: unknown): number {
-  // Why: settings are persisted locally and can be missing or hand-edited.
-  // Clamp the delay at the write site so autosave never degenerates into an
-  // effectively immediate save loop or an unexpectedly huge wait.
+  // Clamp missing or hand-edited persisted settings so autosave cannot become an immediate loop or an excessive wait.
   const numericValue =
     typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : null
   const normalizedValue =
@@ -116,8 +137,13 @@ export function getOpenFilesForExternalFileChange(
   openFiles: OpenFile[],
   target: EditorPathMutationTarget
 ): OpenFile[] {
+  if (target.indexedOpenFiles) {
+    return target.indexedOpenFiles.matches(openFiles)
+  }
   const absolutePath = joinPath(target.worktreePath, target.relativePath)
-  const hasRuntimeOwnerFilter = Object.prototype.hasOwnProperty.call(target, 'runtimeEnvironmentId')
+  const pathKey = externalChangePathKeyFor(target.worktreePath)
+  const absolutePathKey = pathKey(absolutePath)
+  const hasRuntimeOwnerFilter = Object.hasOwn(target, 'runtimeEnvironmentId')
   const targetRuntimeOwner = target.runtimeEnvironmentId?.trim() || null
   return openFiles.filter((file) => {
     if (file.worktreeId !== target.worktreeId) {
@@ -130,7 +156,12 @@ export function getOpenFilesForExternalFileChange(
       return false
     }
     if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-      return file.filePath === absolutePath
+      return (
+        pathKey(file.filePath) === absolutePathKey ||
+        (target.allowLocalWindowsWslAliases === true &&
+          isLocalWindowsDesktopClient() &&
+          areLocalWindowsWslPathAliases(file.filePath, absolutePath))
+      )
     }
     if (file.mode === 'diff') {
       return (
@@ -142,8 +173,12 @@ export function getOpenFilesForExternalFileChange(
   })
 }
 
-export async function requestEditorSaveQuiesce(target: EditorSaveQuiesceTarget): Promise<void> {
-  await new Promise<void>((resolve) => {
+/** Resolves to a release for the autosave hold a path quiesce takes; call it once git finishes. */
+export async function requestEditorSaveQuiesce(
+  target: EditorSaveQuiesceTarget
+): Promise<() => void> {
+  let release = (): void => {}
+  await new Promise<void>((resolve, reject) => {
     let claimed = false
     window.dispatchEvent(
       new CustomEvent<EditorSaveQuiesceDetail>(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, {
@@ -152,17 +187,20 @@ export async function requestEditorSaveQuiesce(target: EditorSaveQuiesceTarget):
           claim: () => {
             claimed = true
           },
-          resolve
+          resolve,
+          reject: (message) => reject(new Error(message)),
+          onHold: (hold) => {
+            release = hold
+          }
         }
       })
     )
-    // Why: discard/delete flows also run when no editor tab is mounted. Let
-    // those external mutations proceed immediately instead of hanging forever
-    // waiting on a quiesce listener that does not exist in that UI state.
+    // Discard/delete can run with no mounted controller; unclaimed quiesce requests must resolve rather than hang.
     if (!claimed) {
       resolve()
     }
   })
+  return release
 }
 
 export async function requestEditorFileSave(target: EditorSaveFileTarget): Promise<void> {
@@ -180,27 +218,25 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
         }
       })
     )
-    // Why: a direct save request should never report success unless some
-    // controller actually accepted responsibility for writing the file. Unlike
-    // quiesce, silently no-oping here would make Cmd/Ctrl+S look successful
-    // while dropping the user's save entirely.
+    // Unlike quiesce, unclaimed saves must fail so Cmd/Ctrl+S cannot silently drop the user’s write.
     if (!claimed) {
       reject(new Error('Editor save controller is unavailable.'))
     }
   })
 }
 
-export function requestEditorFileClose(fileId: string): void {
+export function requestEditorFileClose(
+  fileId: string,
+  options?: Pick<EditorRequestFileCloseDetail, 'onClosed'>
+): void {
   window.dispatchEvent(
     new CustomEvent<EditorRequestFileCloseDetail>(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, {
-      detail: { fileId }
+      detail: { fileId, ...options }
     })
   )
 }
 
-// CONTRACT: this event fires even when some tabs of the path are dirty —
-// every consumer MUST skip dirty files per-file. Reloading a dirty tab's
-// content destroys its unsaved draft (the data-loss half of issue #7265).
+// CONTRACT: consumers must skip dirty files individually; this event can include dirty tabs whose drafts must survive reload.
 export function notifyEditorExternalFileChange(target: EditorPathMutationTarget): void {
   window.dispatchEvent(
     new CustomEvent<EditorPathMutationTarget>(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, {

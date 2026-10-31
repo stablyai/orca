@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  buildDashboardSnapshot,
+  type DashboardSnapshotInput as DashboardSnapshotState
+} from './build-dashboard-snapshot'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
@@ -7,14 +10,52 @@ import {
 } from '../../../../shared/agent-status-types'
 import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../shared/dashboard-snapshot'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab, Worktree } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { selectRuntimeAgentOrchestrationBatch } from '../sidebar/worktree-agent-orchestration-batch'
+import { selectRuntimeAgentOrchestrationForWorktree } from '../sidebar/worktree-agent-row-selectors'
+import type * as DashboardSnapshotWorkspacesModule from './dashboard-snapshot-workspaces'
+import type * as AgentRowLineageModule from './agent-row-lineage'
+
+const mapMetadataCalls = vi.hoisted(() => ({
+  hostKind: vi.fn(),
+  parentPaneKey: vi.fn()
+}))
+
+vi.mock('./dashboard-snapshot-workspaces', async (importOriginal) => {
+  const actual = await importOriginal<typeof DashboardSnapshotWorkspacesModule>()
+  return {
+    ...actual,
+    dashboardCardMapWorkspaceMetadata: (
+      ...args: Parameters<typeof actual.dashboardCardMapWorkspaceMetadata>
+    ) => {
+      mapMetadataCalls.hostKind()
+      return actual.dashboardCardMapWorkspaceMetadata(...args)
+    }
+  }
+})
+
+vi.mock('./agent-row-lineage', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentRowLineageModule>()
+  return {
+    ...actual,
+    dashboardCardParentPaneKey: (...args: Parameters<typeof actual.dashboardCardParentPaneKey>) => {
+      mapMetadataCalls.parentPaneKey()
+      return actual.dashboardCardParentPaneKey(...args)
+    }
+  }
+})
 
 const NOW = 1_000_000_000
 const TAB_ID = 'tab1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const CHILD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+const GRANDCHILD_LEAF_ID = '44444444-4444-4444-8444-444444444444'
 const GONE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+const SPLIT_SIBLING_LEAF_ID = '55555555-5555-4555-8555-555555555555'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
+const CHILD_PANE_KEY = makePaneKey(TAB_ID, CHILD_LEAF_ID)
+const GRANDCHILD_PANE_KEY = makePaneKey(TAB_ID, GRANDCHILD_LEAF_ID)
 
 function entry(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
   return {
@@ -68,7 +109,8 @@ function worktree(id = 'w1', displayName = 'wt-one'): Worktree {
 
 function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapshotState {
   return {
-    repos: [{ id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000' }],
+    chatNames: new Map(),
+    repos: [{ id: 'r1', path: '/r1', displayName: 'Repo One', badgeColor: '#000', addedAt: NOW }],
     worktreesByRepo: { r1: [worktree()] },
     tabsByWorktree: { w1: [tab()] },
     agentStatusByPaneKey: {},
@@ -79,14 +121,16 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
       [TAB_ID]: {
         root: { type: 'leaf', leafId: LEAF_ID },
         activeLeafId: LEAF_ID,
+        expandedLeafId: null,
         ptyIdsByLeafId: { [LEAF_ID]: 'pty1' }
       }
     },
     ptyIdsByTabId: { [TAB_ID]: ['pty1'] },
     runtimePaneTitlesByTabId: {},
     acknowledgedAgentsByPaneKey: {},
+    settings: null,
     ...overrides
-  } as unknown as DashboardSnapshotState
+  }
 }
 
 describe('buildDashboardSnapshot', () => {
@@ -110,6 +154,23 @@ describe('buildDashboardSnapshot', () => {
     )
 
     expect(snapshot.cards).toEqual([])
+    expect(snapshot.workspaces).toEqual([
+      expect.objectContaining({
+        repoId: 'r1',
+        worktreeId: 'w1',
+        repoName: 'Repo One',
+        worktreeName: 'wt-one',
+        hostKind: 'local',
+        executionHostId: 'local',
+        workspaceKind: 'worktree'
+      }),
+      expect.objectContaining({
+        repoId: 'r2',
+        worktreeId: 'w2',
+        repoName: 'Repo Two',
+        worktreeName: 'wt-two'
+      })
+    ])
     expect(snapshot.filterOptions).toEqual({
       projects: [
         { id: 'r1', label: 'Repo One' },
@@ -147,6 +208,141 @@ describe('buildDashboardSnapshot', () => {
     expect(card.unseen).toBe(true)
   })
 
+  it('keeps monitoring in the working bucket with a passive dot state', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ state: 'working', workingMode: 'monitoring' })
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0]).toMatchObject({
+      bucket: 'working',
+      dotState: 'working',
+      workingMode: 'monitoring'
+    })
+  })
+
+  it('publishes terminal-backed orchestrated workers under their direct parent', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ paneKey: PANE_KEY }),
+          [CHILD_PANE_KEY]: entry({ paneKey: CHILD_PANE_KEY }),
+          [GRANDCHILD_PANE_KEY]: entry({ paneKey: GRANDCHILD_PANE_KEY })
+        },
+        runtimeAgentOrchestrationByPaneKey: {
+          [CHILD_PANE_KEY]: {
+            taskId: 'worker-task',
+            dispatchId: 'worker-dispatch',
+            parentPaneKey: PANE_KEY
+          },
+          [GRANDCHILD_PANE_KEY]: {
+            taskId: 'nested-worker-task',
+            dispatchId: 'nested-worker-dispatch',
+            parentPaneKey: CHILD_PANE_KEY
+          }
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: LEAF_ID },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: {
+              [LEAF_ID]: 'pty1',
+              [CHILD_LEAF_ID]: 'pty-child',
+              [GRANDCHILD_LEAF_ID]: 'pty-grandchild'
+            }
+          }
+        },
+        ptyIdsByTabId: { [TAB_ID]: ['pty1', 'pty-child', 'pty-grandchild'] }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards.map((card) => card.paneKey)).toEqual([
+      PANE_KEY,
+      CHILD_PANE_KEY,
+      GRANDCHILD_PANE_KEY
+    ])
+    expect(snapshot.cards[1]).toMatchObject({
+      paneKey: CHILD_PANE_KEY,
+      parentPaneKey: PANE_KEY,
+      ptyId: 'pty-child'
+    })
+    expect(snapshot.cards[2]).toMatchObject({
+      paneKey: GRANDCHILD_PANE_KEY,
+      parentPaneKey: CHILD_PANE_KEY,
+      ptyId: 'pty-grandchild'
+    })
+  })
+
+  it('preserves explicit lineage when a child runs in another worktree', () => {
+    const childTabId = 'child-tab'
+    const childPaneKey = makePaneKey(childTabId, CHILD_LEAF_ID)
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        worktreesByRepo: { r1: [worktree(), worktree('w2', 'wt-two')] },
+        tabsByWorktree: { w1: [tab()], w2: [tab(childTabId, 'w2')] },
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ paneKey: PANE_KEY }),
+          [childPaneKey]: entry({
+            paneKey: childPaneKey,
+            tabId: childTabId,
+            worktreeId: 'w2',
+            orchestration: {
+              taskId: 'child-task',
+              dispatchId: 'child-dispatch',
+              parentPaneKey: PANE_KEY
+            }
+          })
+        },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: LEAF_ID },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF_ID]: 'pty1' }
+          },
+          [childTabId]: {
+            root: { type: 'leaf', leafId: CHILD_LEAF_ID },
+            activeLeafId: CHILD_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [CHILD_LEAF_ID]: 'pty-child' }
+          }
+        },
+        ptyIdsByTabId: { [TAB_ID]: ['pty1'], [childTabId]: ['pty-child'] }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards.find((item) => item.paneKey === childPaneKey)).toMatchObject({
+      worktreeName: 'wt-two',
+      parentPaneKey: PANE_KEY
+    })
+  })
+
+  it('does not publish malformed self-parent lineage', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({
+            orchestration: {
+              taskId: 'self-task',
+              dispatchId: 'self-dispatch',
+              parentPaneKey: PANE_KEY
+            }
+          })
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0].parentPaneKey).toBeUndefined()
+  })
+
   it('carries the tab conversation name and drops status-only titles', () => {
     const named = buildDashboardSnapshot(
       baseState({
@@ -165,8 +361,46 @@ describe('buildDashboardSnapshot', () => {
     expect(unnamed.cards[0].conversationName).toBeUndefined()
   })
 
-  // Why: `orca terminal rename --title` is unbounded, and the main-process
-  // validator drops any card whose label exceeds the shared bound.
+  it('names each pane of a split tab from its own title', () => {
+    const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({}),
+          [siblingPaneKey]: entry({ paneKey: siblingPaneKey })
+        },
+        // The tab title is whichever pane has focus, so it must not name both.
+        tabsByWorktree: { w1: [{ ...tab(), title: '\u2733 Linear work log' }] },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: LEAF_ID },
+              second: { type: 'leaf', leafId: SPLIT_SIBLING_LEAF_ID }
+            },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF_ID]: 'pty1', [SPLIT_SIBLING_LEAF_ID]: 'pty2' }
+          }
+        },
+        ptyIdsByTabId: { [TAB_ID]: ['pty1', 'pty2'] },
+        // Pane ids are replay-creation-ordered: 1 -> first leaf, 2 -> second.
+        runtimePaneTitlesByTabId: {
+          [TAB_ID]: { 1: '\u2733 Linear work log', 2: '\u2733 Redis cache strategy' }
+        }
+      }),
+      NOW
+    )
+
+    const nameByPaneKey = new Map(
+      snapshot.cards.map((card) => [card.paneKey, card.conversationName])
+    )
+    expect(nameByPaneKey.get(PANE_KEY)).toBe('Linear work log')
+    expect(nameByPaneKey.get(siblingPaneKey)).toBe('Redis cache strategy')
+  })
+
+  // Unbounded terminal labels must fit the shared validator or the card is dropped.
   it('truncates labels to the length the snapshot validator accepts', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -179,8 +413,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].conversationName).toHaveLength(DASHBOARD_MAX_LABEL_LENGTH)
   })
 
-  // Why: filterOptions is snapshot-level, so an over-long project label is not
-  // recoverable by dropping a card — it invalidates the entire board.
+  // Overlong snapshot-level filter labels reject the entire board rather than one card.
   it('truncates the project filter label the whole snapshot rides on', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -247,8 +480,7 @@ describe('buildDashboardSnapshot', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
         agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
-        // Layout still remembers pty1 (it survives restarts), but the live
-        // set says that pty is gone — e.g. a parked tab after an app restart.
+        // Layouts retain old PTY IDs after restart; only the live set proves preview availability.
         ptyIdsByTabId: { [TAB_ID]: [] }
       }),
       NOW
@@ -256,16 +488,18 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].ptyId).toBeNull()
   })
 
-  it('mutes unseen once the agent is acknowledged after its state change', () => {
+  it('moves an acknowledged completion to idle while retaining its raw done state', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
-        agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+        agentStatusByPaneKey: { [PANE_KEY]: entry({ state: 'done' }) },
         acknowledgedAgentsByPaneKey: { [PANE_KEY]: NOW - 1000 }
       }),
       NOW
     )
     // ack (NOW-1000) is after stateStartedAt (NOW-5000) → seen.
     expect(snapshot.cards[0].unseen).toBe(false)
+    expect(snapshot.cards[0].dotState).toBe('done')
+    expect(snapshot.cards[0].bucket).toBe('idle')
   })
 
   it('does not mark title-derived rows unseen from synthetic timestamps', () => {
@@ -346,7 +580,13 @@ describe('buildDashboardSnapshot', () => {
           { id: 'reviewing', label: 'Reviewing', color: 'emerald' }
         ],
         worktreesByRepo: {
-          r1: [{ ...worktree(), workspaceStatus: 'reviewing' }]
+          r1: [
+            {
+              ...worktree(),
+              workspaceStatus: 'reviewing',
+              parentWorktreeId: 'parent-worktree'
+            } as Worktree & { parentWorktreeId: string }
+          ]
         },
         agentStatusByPaneKey: {
           [PANE_KEY]: entry({
@@ -369,12 +609,16 @@ describe('buildDashboardSnapshot', () => {
       workspaceStatusId: 'reviewing',
       workspaceStatusLabel: 'Reviewing',
       workspaceStatusColor: 'emerald',
+      parentWorktreeId: 'parent-worktree',
       subagents: [{ name: 'Review loop', dotState: 'working' }]
     })
   })
 
   it('skips card-only context for count snapshots', () => {
+    mapMetadataCalls.hostKind.mockClear()
+    mapMetadataCalls.parentPaneKey.mockClear()
     let linkedReviewReads = 0
+    let hostIdentityReads = 0
     const countWorktree = worktree()
     Object.defineProperty(countWorktree, 'linkedPR', {
       enumerable: true,
@@ -383,8 +627,20 @@ describe('buildDashboardSnapshot', () => {
         return null
       }
     })
+    const countRepo = {
+      id: 'r1',
+      path: '/r1',
+      displayName: 'Repo One',
+      badgeColor: '#000',
+      addedAt: 0,
+      get connectionId() {
+        hostIdentityReads += 1
+        return null
+      }
+    }
     const snapshot = buildDashboardSnapshot(
       baseState({
+        repos: [countRepo],
         worktreesByRepo: { r1: [countWorktree] },
         agentStatusByPaneKey: { [PANE_KEY]: entry({}) }
       }),
@@ -394,11 +650,62 @@ describe('buildDashboardSnapshot', () => {
 
     expect(snapshot.cards[0].workspaceStatusId).toBeUndefined()
     expect(snapshot.cards[0].subagents).toBeUndefined()
-    // Why: the card has a live pty, so only the count-path gate keeps the
-    // host-input resolution off the sidebar's per-status-tick rebuild.
+    expect(snapshot.cards[0].parentPaneKey).toBeUndefined()
+    expect(snapshot.cards[0].parentWorktreeId).toBeUndefined()
+    expect(snapshot.cards[0].hostKind).toBeUndefined()
+    expect(snapshot.cards[0].workspaceKind).toBeUndefined()
+    // A live PTY alone must not trigger host-input resolution on sidebar count rebuilds.
     expect(snapshot.cards[0].ptyId).toBe('pty1')
     expect(snapshot.cards[0].terminalInput).toBeUndefined()
+    expect(snapshot.workspaces).toBeUndefined()
     expect(linkedReviewReads).toBe(0)
+    expect(hostIdentityReads).toBe(0)
+    expect(mapMetadataCalls.hostKind).not.toHaveBeenCalled()
+    expect(mapMetadataCalls.parentPaneKey).not.toHaveBeenCalled()
+  })
+
+  it('indexes runtime host labels once per detailed snapshot', () => {
+    let environmentIdReads = 0
+    const environmentCount = 24
+    const runtimeEnvironments = Array.from({ length: environmentCount }, (_, index) => {
+      const environment = { id: `environment-${index}`, name: `Builder ${index}` }
+      Object.defineProperty(environment, 'id', {
+        enumerable: true,
+        get: () => {
+          environmentIdReads += 1
+          return `environment-${index}`
+        }
+      })
+      return environment
+    }) as unknown as DashboardSnapshotState['runtimeEnvironments']
+    const executionHostId = `runtime:environment-${environmentCount - 1}` as const
+
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        repos: [
+          {
+            id: 'r1',
+            path: '/r1',
+            displayName: 'Repo One',
+            badgeColor: '#000',
+            addedAt: 0,
+            executionHostId
+          }
+        ],
+        worktreesByRepo: {
+          r1: [
+            { ...worktree(), hostId: executionHostId },
+            { ...worktree('w2', 'wt-two'), hostId: executionHostId }
+          ]
+        },
+        runtimeEnvironments,
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0].hostLabel).toBe(`Builder ${environmentCount - 1}`)
+    expect(environmentIdReads).toBe(environmentCount)
   })
 
   it("resolves a live pty's host-input profile for card snapshots", () => {
@@ -448,7 +755,8 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].task).toBe('Batched orchestration task')
   })
 
-  it('releases stale batch references when production moves from multi to singleton to zero', () => {
+  // Singleton/zero dashboard transitions must not release the shared orchestration index still read by mounted sidebar cards.
+  it('keeps batch records live and correct when production moves from multi to singleton to zero', () => {
     const secondLeafId = '77777777-7777-4777-8777-777777777777'
     const firstPaneKey = makePaneKey('tab-w1', LEAF_ID)
     const secondPaneKey = makePaneKey('tab-w2', secondLeafId)
@@ -483,13 +791,17 @@ describe('buildDashboardSnapshot', () => {
       NOW
     )
     const afterSingleton = selectRuntimeAgentOrchestrationBatch(multiState, requested)
-    expect(afterSingleton).not.toBe(firstBatch)
-    expect(afterSingleton.get('w1')).not.toBe(firstW1)
+    expect(afterSingleton).toBe(firstBatch)
+    expect(afterSingleton.get('w1')).toBe(firstW1)
 
     buildDashboardSnapshot(baseState({ repos: [], worktreesByRepo: {} }), NOW)
     const afterZero = selectRuntimeAgentOrchestrationBatch(multiState, requested)
-    expect(afterZero).not.toBe(afterSingleton)
-    expect(afterZero.get('w1')).not.toBe(afterSingleton.get('w1'))
+    expect(afterZero).toBe(firstBatch)
+    for (const worktreeId of requested) {
+      expect(afterZero.get(worktreeId)).toBe(
+        selectRuntimeAgentOrchestrationForWorktree(multiState, worktreeId)
+      )
+    }
   })
 
   it('scans orchestration runtime once for a dashboard snapshot', () => {

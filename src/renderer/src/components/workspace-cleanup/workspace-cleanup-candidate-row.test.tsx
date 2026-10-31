@@ -3,7 +3,9 @@ import type { ReactNode } from 'react'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getWorkspaceCleanupCandidateIdentity } from './workspace-cleanup-host-identity'
 import { CandidateRow } from './workspace-cleanup-candidate-row'
+import { getWorkspaceCleanupCandidateAccessibleName } from './workspace-cleanup-host-label'
 import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -37,6 +39,7 @@ describe('CandidateRow', () => {
     act(() => {
       root?.render(
         <CandidateRow
+          identity={getWorkspaceCleanupCandidateIdentity(candidate)}
           candidate={candidate}
           expanded={false}
           last
@@ -59,7 +62,50 @@ describe('CandidateRow', () => {
       )
     })
 
-    expect(container?.querySelector(`[aria-label="Select ${candidate.displayName}"]`)).toBeNull()
-    expect(container?.querySelector(`[aria-label="Remove ${candidate.displayName}"]`)).toBeNull()
+    const accessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
+    expect(container?.querySelector(`[aria-label="Select ${accessibleName}"]`)).toBeNull()
+    expect(container?.querySelector(`[aria-label="Remove ${accessibleName}"]`)).toBeNull()
+  })
+
+  it('visibly and accessibly distinguishes colliding local and SSH rows', () => {
+    const local = makeCandidate({ executionHostId: 'local' })
+    const remote = makeCandidate({ connectionId: 'builder', executionHostId: 'ssh:builder' })
+
+    act(() => {
+      root?.render(
+        <>
+          {[local, remote].map((candidate) => (
+            <CandidateRow
+              key={candidate.executionHostId}
+              identity={getWorkspaceCleanupCandidateIdentity(candidate)}
+              candidate={candidate}
+              expanded={false}
+              last={false}
+              lastActivityLabel="1d ago"
+              reviewInfo={{
+                hasReview: false,
+                label: null,
+                provider: null,
+                state: null,
+                title: null
+              }}
+              selected={false}
+              onIgnore={vi.fn()}
+              onRemove={vi.fn()}
+              onToggleExpanded={vi.fn()}
+              onToggleSelected={vi.fn()}
+              onView={vi.fn()}
+            />
+          ))}
+        </>
+      )
+    })
+
+    const localName = getWorkspaceCleanupCandidateAccessibleName(local)
+    const remoteName = getWorkspaceCleanupCandidateAccessibleName(remote)
+    expect(localName).not.toBe(remoteName)
+    expect(container?.querySelector(`[aria-label="Select ${localName}"]`)).not.toBeNull()
+    expect(container?.querySelector(`[aria-label="Select ${remoteName}"]`)).not.toBeNull()
+    expect(container?.querySelector(`[aria-label="Host: builder"]`)).not.toBeNull()
   })
 })

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
-import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -158,8 +159,7 @@ describe('repo slice host identity routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    // Focus is local (no active runtime env); without the explicit hostId this
-    // would route to the focused (local) row.
+    // Explicit hostId must override locally focused fallback.
     store.setState({ repos: [localDuplicate, remoteDuplicate] })
 
     await store
@@ -180,8 +180,7 @@ describe('repo slice host identity routing', () => {
   })
 
   it('updateRepo with an explicit local hostId stays local even when a runtime is focused', async () => {
-    // The self-pair case: a repo id exists on both local and a focused runtime.
-    // An explicit local hostId must route to local IPC, not the runtime RPC.
+    // Self-paired same-ID rows still require explicit local hostId to route IPC, not runtime RPC.
     reposUpdate.mockResolvedValue(undefined)
     const store = createTestStore()
     store.setState({
@@ -300,7 +299,7 @@ describe('repo slice host identity routing', () => {
     ])
   })
 
-  it('removes only the focused host row and worktrees for duplicate repo ids', async () => {
+  it('removes only the named host row and worktrees for duplicate repo ids', async () => {
     const localWorktree = makeWorktree({
       id: 'same-repo::/local/wt',
       repoId: 'same-repo'
@@ -313,6 +312,8 @@ describe('repo slice host identity routing', () => {
     const store = createTestStore()
     store.setState({
       repos: [localDuplicate, remoteDuplicate],
+      activeRepoId: 'same-repo',
+      filterRepoIds: ['same-repo'],
       projects: [
         {
           id: 'repo:same-repo',
@@ -342,9 +343,12 @@ describe('repo slice host identity routing', () => {
       }
     })
 
-    await store.getState().removeProject('same-repo')
+    await store.getState().removeProject('same-repo', { hostId: 'local' })
 
     expect(store.getState().repos).toEqual([remoteDuplicate])
+    // Current contract: bare-ID UI selections clear even though the sibling host row survives.
+    expect(store.getState().activeRepoId).toBeNull()
+    expect(store.getState().filterRepoIds).toEqual([])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([remoteWorktree])
     expect(store.getState().tabsByWorktree[localWorktree.id]).toBeUndefined()
     expect(store.getState().tabsByWorktree[remoteWorktree.id]).toEqual([
@@ -357,12 +361,85 @@ describe('repo slice host identity routing', () => {
     expect(store.getState().projects).toEqual([
       expect.objectContaining({ id: 'repo:same-repo', sourceRepoIds: ['same-repo'] })
     ])
-    // Why: the id also exists on runtime:env-1, so the local-side removal must be
-    // host-scoped in main to avoid deleting the other host's persisted repo row.
+    // Host-scope local removal or main also deletes runtime twin’s persisted row.
     expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
+
     expect(reposRemove).not.toHaveBeenCalled()
     expect(ptyKill).toHaveBeenCalledWith('local-pty')
     expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
+  })
+  it('keeps a tab with no host evidence when two hosts collide on repoId and path', async () => {
+    const sharedWorktreeId = 'same-repo::/shared'
+    const localWorktree = makeWorktree({
+      id: sharedWorktreeId,
+      repoId: 'same-repo'
+    })
+    const remoteWorktree = makeWorktree({
+      id: sharedWorktreeId,
+      repoId: 'same-repo',
+      hostId: 'runtime:env-1'
+    })
+    const store = createTestStore()
+    store.setState({
+      repos: [localDuplicate, remoteDuplicate],
+      worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] },
+      tabsByWorktree: {
+        [sharedWorktreeId]: [{ id: 'shared-tab', worktreeId: sharedWorktreeId }] as never
+      },
+      lastVisitedAtByWorktreeId: { [sharedWorktreeId]: 10 }
+    })
+
+    await store.getState().removeProject('same-repo', { hostId: 'local' })
+
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([remoteWorktree])
+    // Why kept: nothing says which host this tab is on, so it may be the surviving twin's.
+    expect(store.getState().tabsByWorktree[sharedWorktreeId]?.map((tab) => tab.id)).toEqual([
+      'shared-tab'
+    ])
+    expect(store.getState().lastVisitedAtByWorktreeId[sharedWorktreeId]).toBe(10)
+  })
+
+  it('allows two removals of the same owner row to overlap', async () => {
+    const { promise: firstRemoval, resolve: resolveFirstRemoval } = Promise.withResolvers<void>()
+    const { promise: secondRemoval, resolve: resolveSecondRemoval } = Promise.withResolvers<void>()
+    reposRemoveForHost.mockReturnValueOnce(firstRemoval).mockReturnValueOnce(secondRemoval)
+    const store = createTestStore()
+    store.setState({ repos: [localDuplicate] })
+
+    const first = store.getState().removeProject(localDuplicate.id, { hostId: 'local' })
+    const second = store.getState().removeProject(localDuplicate.id, { hostId: 'local' })
+    expect(reposRemoveForHost).toHaveBeenCalledTimes(2)
+
+    resolveSecondRemoval()
+    resolveFirstRemoval()
+    await Promise.all([first, second])
+
+    expect(store.getState().repos).toEqual([])
+  })
+
+  it('preserves qualified recency for an exact-id sibling host', async () => {
+    const worktreeId = 'same-repo::/shared/wt'
+    const localWorktree = makeWorktree({ id: worktreeId, repoId: 'same-repo' })
+    const remoteWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'same-repo',
+      hostId: 'runtime:env-1'
+    })
+    const store = createTestStore()
+    store.setState({
+      repos: [localDuplicate, remoteDuplicate],
+      worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] },
+      lastVisitedAtByWorktreeId: {
+        [`local|${worktreeId}`]: 10,
+        [`runtime:env-1|${worktreeId}`]: 20
+      }
+    })
+
+    await store.getState().removeProject('same-repo', { hostId: 'local' })
+
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      [`runtime:env-1|${worktreeId}`]: 20
+    })
   })
 
   it('removeProject with an explicit hostId routes to that host, not the focused one', async () => {
@@ -379,9 +456,7 @@ describe('repo slice host identity routing', () => {
       hostId: 'runtime:env-1'
     })
     const store = createTestStore()
-    // Focus is local (no active runtime env). Without deriving the target from the
-    // explicit hostId, this would route to the focused (local) host and delete the
-    // wrong row. It must target runtime:env-1 via that host's RPC.
+    // Derive runtime target from explicit hostId despite local focus or removal deletes the wrong row.
     store.setState({
       repos: [localDuplicate, remoteDuplicate],
       worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] }
@@ -389,24 +464,25 @@ describe('repo slice host identity routing', () => {
 
     await store.getState().removeProject('same-repo', { hostId: 'runtime:env-1' })
 
-    // Routes to the runtime host's repo.rm (not the local removeForHost/remove),
-    // and the local row is left intact.
+    // Use runtime repo.rm and retain local twin.
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'repo.rm',
       params: { repo: 'same-repo' },
       timeoutMs: 15_000
     })
-    expect(reposRemoveForHost).not.toHaveBeenCalled()
+    // Host-scoped residue cleanup for the runtime row only; the local row is never addressed.
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      hostId: 'runtime:env-1'
+    })
     expect(reposRemove).not.toHaveBeenCalled()
     expect(store.getState().repos).toEqual([localDuplicate])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
 
   it('removeProject of an SSH host row routes local even when a runtime is focused', async () => {
-    // Regression: removing an SSH host's repo (explicit ssh hostId) must NOT route
-    // repo.rm to the focused runtime env. settingsForRepoOwner clears the focused
-    // runtime for SSH owners, so removal stays on the host-scoped local path.
+    // SSH ownership must route host-scoped local removal even with runtime focused.
     const sshDuplicate: Repo = {
       id: 'same-repo',
       path: '/home/orca/project',
@@ -474,7 +550,7 @@ describe('repo slice host identity routing', () => {
       }
     })
 
-    await store.getState().removeProject('same-repo')
+    await store.getState().removeProject('same-repo', { hostId: 'runtime:env-1' })
 
     expect(store.getState().repos).toEqual([localDuplicate])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
@@ -625,9 +701,59 @@ describe('repo slice host identity routing', () => {
     })
     expect(reposReorderForHost).toHaveBeenCalledWith({
       hostId: 'ssh:target',
+
       orderedIds: ['delta', 'charlie']
     })
     expect(reposReorder).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+  it('treats an occurrence-invalid reorder as a total no-op', async () => {
+    const store = createTestStore()
+    store.setState({ repos: [localDuplicate, remoteDuplicate] })
+
+    await store.getState().reorderRepos(['same-repo'])
+
+    expect(store.getState().repos).toEqual([localDuplicate, remoteDuplicate])
+    expect(reposReorderForHost).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(uiSet).not.toHaveBeenCalled()
+  })
+
+  it('resyncs after a host rejects an optimistic reorder', async () => {
+    reposReorderForHost.mockResolvedValue({ status: 'rejected' })
+    const resync = vi.fn().mockResolvedValue(undefined)
+    const alpha = { ...localDuplicate, id: 'alpha' }
+    const bravo = { ...localDuplicate, id: 'bravo' }
+    const store = createTestStore()
+    store.setState({
+      repos: [alpha, bravo],
+      fetchReposForAllHosts: resync
+    })
+
+    await store.getState().reorderRepos(['bravo', 'alpha'])
+
+    expect(store.getState().repos).toEqual([bravo, alpha])
+    expect(resync).toHaveBeenCalledOnce()
+  })
+
+  it('resyncs after host persistence throws during an optimistic reorder', async () => {
+    reposReorderForHost.mockRejectedValue(new Error('persist failed'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const resync = vi.fn().mockResolvedValue(undefined)
+    const alpha = { ...localDuplicate, id: 'alpha' }
+    const bravo = { ...localDuplicate, id: 'bravo' }
+    const store = createTestStore()
+    store.setState({
+      repos: [alpha, bravo],
+      fetchReposForAllHosts: resync
+    })
+    try {
+      await store.getState().reorderRepos(['bravo', 'alpha'])
+    } finally {
+      errorSpy.mockRestore()
+    }
+
+    expect(store.getState().repos).toEqual([bravo, alpha])
+    expect(resync).toHaveBeenCalledOnce()
   })
 })

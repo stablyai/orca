@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../shared/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
@@ -20,6 +23,27 @@ function makeRepo(overrides: Partial<Repo> & { id: string }): Repo {
     displayName: 'repo',
     badgeColor: '#000',
     addedAt: 0,
+    ...overrides
+  }
+}
+
+function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: string }): Worktree {
+  return {
+    path: '/srv/repo',
+    head: 'abc123',
+    branch: 'refs/heads/main',
+    isBare: false,
+    isMainWorktree: false,
+    displayName: 'Workspace',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
     ...overrides
   }
 }
@@ -497,8 +521,7 @@ describe('getConnectionIdFromState', () => {
   })
 
   it('resolves a folder workspace connectionId from a passed-in state without reading the global store', () => {
-    // Why: the Quick Open hook subscribes to store slices and must resolve from
-    // the snapshot it receives, not by re-reading useAppStore.getState().
+    // Resolve Quick Open ownership from the subscribed snapshot, never a second getState read.
     const getStateSpy = vi.spyOn(useAppStore, 'getState')
     const state: ConnectionContextState = {
       folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
@@ -520,6 +543,124 @@ describe('getConnectionIdFromState', () => {
     }
 
     expect(getConnectionIdFromState(state, 'repo-ssh::/home/neil/repo-feature')).toBe('ssh-2')
+  })
+
+  it('refuses to resolve a connection when duplicate repo rows disagree about the owning host', () => {
+    // Same-ID repo rows with conflicting owners must not lend a client SSH connection to a runtime (#17799).
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [
+        makeRepo({ id: 'repo-dup', executionHostId: 'runtime:env-a' }),
+        makeRepo({ id: 'repo-dup', connectionId: 'ssh-client' })
+      ],
+      worktreesByRepo: {}
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-dup::/home/neil/repo-feature')).toBeUndefined()
+  })
+
+  it('still resolves duplicate repo rows that agree about the owning host', () => {
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [
+        makeRepo({ id: 'repo-dup', connectionId: 'ssh-same' }),
+        makeRepo({ id: 'repo-dup', connectionId: 'ssh-same', path: '/home/neil/other' })
+      ],
+      worktreesByRepo: {}
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-dup::/home/neil/repo-feature')).toBe('ssh-same')
+  })
+
+  it('never hands a worktree the SSH connection of a different host', () => {
+    // Host lookup misses must not fall back by repo ID to another SSH machine’s connection (#11163).
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [makeRepo({ id: 'repo-shared', connectionId: 'openclaw' })],
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: 'repo-shared::/srv/repo',
+            repoId: 'repo-shared',
+            hostId: 'ssh:m4air'
+          })
+        ]
+      }
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-shared::/srv/repo')).toBe('m4air')
+  })
+
+  it('never hands a runtime-hosted worktree a client-owned SSH connection', () => {
+    // A row stamped ssh:openclaw cannot establish this runtime-owned worktree’s owner.
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [makeRepo({ id: 'repo-shared', connectionId: 'openclaw' })],
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: 'repo-shared::/srv/repo',
+            repoId: 'repo-shared',
+            hostId: 'runtime:awin'
+          })
+        ]
+      }
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-shared::/srv/repo')).toBeNull()
+  })
+
+  it('keeps a runtime host nested SSH target, which decides local readability', () => {
+    // Retain nested SSH ownership with its publishing runtime; null would authorize a local transcript read on the wrong machine.
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [
+        makeRepo({
+          id: 'repo-runtime',
+          connectionId: 'ssh-nested',
+          executionHostId: 'runtime:env-a'
+        })
+      ],
+      worktreesByRepo: {
+        'repo-runtime': [
+          makeWorktree({
+            id: 'repo-runtime::/srv/repo',
+            repoId: 'repo-runtime',
+            hostId: 'runtime:env-a',
+            runtimeOwnerEnvironmentId: 'env-a'
+          })
+        ]
+      }
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-runtime::/srv/repo')).toBe('ssh-nested')
+  })
+
+  it('resolves the row on the SSH host the worktree names when both hosts carry the id', () => {
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [
+        makeRepo({ id: 'repo-shared', connectionId: 'openclaw' }),
+        makeRepo({ id: 'repo-shared', connectionId: 'm4air', path: '/srv/repo' })
+      ],
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: 'repo-shared::/srv/repo',
+            repoId: 'repo-shared',
+            hostId: 'ssh:m4air'
+          })
+        ]
+      }
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-shared::/srv/repo')).toBe('m4air')
   })
 
   it('indexes immutable worktree and repo snapshots once across repeated selector calls', () => {
@@ -570,6 +711,43 @@ describe('getConnectionIdFromState', () => {
 
     expect(worktreeIdReads).toBe(10_000)
     expect(repoIdReads).toBe(100)
+  })
+
+  it('invalidates folder connection inference for each catalog slice and preserves tri-state answers', () => {
+    const key = folderWorkspaceKey('folder-workspace-1')
+    const state: ConnectionContextState = {
+      folderWorkspaces: [makeFolderWorkspace()],
+      projectGroups: [makeProjectGroup()],
+      repos: [makeRepo({ id: 'repo-1', projectGroupId: 'group-1', connectionId: 'ssh-1' })],
+      worktreesByRepo: {}
+    }
+    expect(getConnectionIdFromState(state, key)).toBe('ssh-1')
+    const local = {
+      ...state,
+      repos: [makeRepo({ id: 'repo-1', projectGroupId: 'group-1' })]
+    }
+    expect(getConnectionIdFromState(local, key)).toBeNull()
+    const contested = {
+      ...local,
+      projectGroups: [makeProjectGroup()],
+      repos: [
+        ...local.repos,
+        makeRepo({ id: 'repo-2', projectGroupId: 'group-1', connectionId: 'ssh-2' })
+      ]
+    }
+    expect(getConnectionIdFromState(contested, key)).toBeUndefined()
+    expect(getConnectionIdFromState(contested, key)).toBeUndefined()
+    const pinned = {
+      ...contested,
+      folderWorkspaces: [
+        makeFolderWorkspace({ executionHostId: 'runtime:host-a', connectionId: 'nested-ssh' })
+      ]
+    }
+    expect(getConnectionIdFromState(pinned, key)).toBe('nested-ssh')
+    expect(getConnectionIdFromState({ ...pinned, folderWorkspaces: [] }, key)).toBeUndefined()
+    // Retained snapshots remain independent when React reads them between current publications.
+    expect(getConnectionIdFromState(state, key)).toBe('ssh-1')
+    expect(getConnectionIdFromState(local, key)).toBeNull()
   })
 
   it('returns null for a null worktreeId', () => {

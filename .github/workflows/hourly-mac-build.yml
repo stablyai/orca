@@ -1,39 +1,6 @@
 name: Hourly macOS Dev Build
 
-# Why: gives developers a signed macOS build of main every hour that the in-app
-# updater can install directly, without waiting for an RC cut.
-#
-# Deliberately narrow scope:
-#   - macOS only. Other platforms keep using RC/stable.
-#   - No tests, no lint, no e2e. This channel trades safety for latency; PR CI
-#     and release-cut remain the gates that matter.
-#   - Signed AND notarized, exactly like a release. The notary round trip is the
-#     one slow step kept: macOS anchors a notarized app's TCC grants on identifier
-#     + team rather than on its cdhash, so those grants survive an update. Without
-#     a ticket every hourly reads as a new client and silently loses file access
-#     under Documents/Desktop/Downloads — 24 times a day.
-#
-# Artifacts publish to stablyai/orca-hourly, never to stablyai/orca: the main
-# repo's releases atom feed exposes only its 10 newest entries, so 24 hourly
-# tags a day would evict every stable/RC entry and break updates for real users.
-#
-# GITHUB_TOKEN is scoped to this repo and cannot publish there, so writes use a
-# GitHub App installed on orca-hourly with Contents: Read and write. Its private
-# key does not expire, unlike a PAT — nothing here needs yearly rotation, and the
-# credential belongs to the org rather than to whoever created it.
-#
-# Provision the two secrets with `bash config/scripts/setup-hourly-release-token.sh`:
-#   HOURLY_RELEASE_APP_ID           the App's numeric id
-#   HOURLY_RELEASE_APP_PRIVATE_KEY  the App's .pem private key
-#
-# Installation tokens live one hour, which is why this mints twice. Install and
-# build need no token at all, and notarization can hold the publish step for tens
-# of minutes; minting again once the build is done starts the clock at the first
-# call that actually uses it rather than burning a third of it on `pnpm install`.
-# A pathological retry can still outrun the second token, but the release is an
-# unpublished draft until the manifest check passes, so the damage is a stranded
-# invisible draft — and the build-number query counts drafts, so it holds its
-# number and the next run does not reuse it.
+# Publish signed/notarized main builds to orca-hourly; notarization preserves TCC grants across updates. PR/release gates own validation. Separate repo avoids hourly tags crowding stable/RC Atom entries. Provision shared HOURLY_RELEASE_APP_ID/private key with setup-hourly-release-token.sh and App write access there. Refresh one-hour token after read-only build; a retry may still outlive it, leaving only an invisible draft whose build number remains reserved until manifests validate.
 
 on:
   schedule:
@@ -60,28 +27,15 @@ env:
   HOURLY_RETAIN_COUNT: 72
 
 jobs:
-  build-hourly-mac:
+  # Avoid occupying the limited Mac pool when main has not moved.
+  preflight:
     if: github.repository == 'stablyai/orca'
-    runs-on: blacksmith-6vcpu-macos-15
-    # Why 150: it must exceed the worst case the retry budgets below can produce
-    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
-    # the job is killed mid-retry and no cleanup step runs at all. A typical run
-    # is far shorter — this is the notary queue's tail, not its median.
-    timeout-minutes: 150
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      should_build: ${{ steps.freshness.outputs.should_build }}
+      head_sha: ${{ steps.freshness.outputs.head_sha }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: main
-          fetch-depth: 0
-          # Why: this job only reads stablyai/orca and never pushes; every write
-          # goes to the hourly repo through a minted App token passed by env.
-          # Not persisting the checkout credential shrinks the blast radius if a
-          # build step is compromised (zizmor: artipacked).
-          persist-credentials: false
-
       - name: Mint hourly repo token
         id: app_token
         uses: actions/create-github-app-token@v2
@@ -90,27 +44,26 @@ jobs:
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
           repositories: orca-hourly
+          permission-contents: read
 
-      # Why: main is often idle overnight. Rebuilding an unchanged commit burns a
-      # runner hour and adds a redundant tag to the retention window.
       - name: Check whether main moved since the last hourly
         id: freshness
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          MAIN_REPO_TOKEN: ${{ github.token }}
           FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
         run: |
           set -euo pipefail
-          head_sha="$(git rev-parse HEAD)"
+          head_sha="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Could not resolve main"; exit 1; }
           echo "head_sha=$head_sha" >>"$GITHUB_OUTPUT"
           if [[ "$FORCED" == "true" ]]; then
             echo "should_build=true" >>"$GITHUB_OUTPUT"
             echo "Forced dispatch; building $head_sha."
             exit 0
           fi
-          # The previous hourly records its source commit in the release body.
-          # Drafts are excluded: an unpublished leftover never shipped, so treating
-          # it as "the last build" would skip a build that never actually happened.
+          # Drafts never shipped; exclude them when comparing the previous hourly’s source commit.
           last_body="$(gh release list --repo "$HOURLY_REPO" --limit 20 --json tagName,isDraft \
             --jq 'map(select(.isDraft | not)) | .[0].tagName // empty' 2>/dev/null || true)"
           if [[ -z "$last_body" ]]; then
@@ -128,21 +81,79 @@ jobs:
             echo "main moved to $head_sha (last hourly built $last_sha); building."
           fi
 
-      - name: Setup pnpm
-        if: steps.freshness.outputs.should_build == 'true'
-        uses: pnpm/action-setup@v6
+  # As release-cut does: every SSH host runs orcad, deployed from the template this build ships.
+  orcad-template:
+    needs: preflight
+    if: needs.preflight.outputs.should_build == 'true'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/node-server-tests.yml
+    with:
+      ref: ${{ needs.preflight.outputs.head_sha }}
+      build_template: true
+      fast_runners: false
+
+  build-hourly-mac:
+    needs:
+      - preflight
+      - orcad-template
+    if: needs.preflight.outputs.should_build == 'true'
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.hourly.outputs.version }}
+      head_sha: ${{ needs.preflight.outputs.head_sha }}
+      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+    # Hosted macos-15 cannot boot the packaged x64 terminal host that afterPack verifies.
+    runs-on: blacksmith-6vcpu-macos-15
+    # Allow 150min for install 3×10 + publish 2×45 + ~25 setup/build/verify; outer timeout otherwise interrupts cleanup.
+    timeout-minutes: 150
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
-          run_install: false
+          ref: ${{ needs.preflight.outputs.head_sha }}
+          # Version helpers only read HEAD; published versions come from git tags.
+          fetch-depth: 1
+          # Read this repo without persisted credentials; write orca-hourly via env App token (zizmor: artipacked).
+          persist-credentials: false
+
+      - name: Mint hourly repo token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-hourly
+
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
 
       - name: Setup Node.js
-        if: steps.freshness.outputs.should_build == 'true'
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      # Cache bundled host Node by exact pin without restore keys.
+      - name: Locate the pinned Node runtime cache
+        shell: bash
+        run: echo "ORCA_NODE_RUNTIME_CACHE_DIR=$HOME/Library/Caches/orca-node-runtime" >>"$GITHUB_ENV"
+
+      - name: Cache the pinned Node runtime
+        uses: actions/cache@v5
+        with:
+          path: ~/Library/Caches/orca-node-runtime
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
 
       - name: Cache electron-builder downloads
-        if: steps.freshness.outputs.should_build == 'true'
         uses: actions/cache@v5
         with:
           path: |
@@ -152,19 +163,20 @@ jobs:
           restore-keys: |
             electron-builder-mac-
 
+      # Install both x64/arm64 optional natives for both macOS packages.
       - name: Install dependencies
-        if: steps.freshness.outputs.should_build == 'true'
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: pnpm install --frozen-lockfile
+          command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
-      # Why: signing is what makes an hourly installable over an existing Orca, so
-      # a missing cert must fail here rather than after a 20-minute build.
+      # Build required out/mobile-web from mobile’s React Native/Expo install.
+      - uses: ./.github/actions/install-mobile-dependencies
+
+      # Require cert before expensive build; signing enables installation over existing Orca.
       - name: Verify macOS signing environment
-        if: steps.freshness.outputs.should_build == 'true'
         run: node config/scripts/verify-macos-release-env.mjs
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
@@ -175,33 +187,32 @@ jobs:
 
       - name: Compute hourly version
         id: hourly
-        if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          MAIN_REPO_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Why read the highest number off existing titles rather than counting
-          # releases: the prune step trims to HOURLY_RETAIN_COUNT, so a count would
-          # roll backwards after three days and reissue numbers already in use. The
-          # maximum is always among the retained builds, because pruning drops the
-          # oldest. `capture(...)?` swallows the non-match on legacy titles, which
-          # were the raw tag, so the series simply starts at 01.
-          #
-          # Why drafts count here but not in the freshness check: that check asks
-          # "did this commit ship", where a draft is a no. This one asks "is the
-          # number free", where a stranded draft still holds one.
-          last_number="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json name,isDraft \
-            --jq '[.[] | (.name // "") | capture(" • (?<n>[0-9]+) • ")? | .n | tonumber] | max // 0')"
-          build_number=$(( last_number + 1 ))
-          echo "Hourly build number $build_number (previous high: $last_number)"
-          ORCA_HOURLY_BUILD_NUMBER="$build_number" node config/scripts/hourly-build-version.mjs \
+          # The script continues numbering for its resolved base version; stranded drafts still reserve numbers,
+          # although freshness checks exclude them because they never shipped.
+          names="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json name \
+            --jq '.[].name // empty')"
+          # Tags survive release deletion, preventing updater version regression. Use a separate token because
+          # GH_TOKEN’s App grant is scoped to the channel repo; lookup failure falls back to package.json.
+          # 2026-09-14: deleting v1.4.202 made release-list fallback ship 1.4.202-hourly below installed 1.4.203-hourly.
+          main_tags="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh api \
+            "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
+            --jq '.[].ref | sub("^refs/tags/"; "")' || true)"
+          # Already-shipped channel tags also floor versions: never follow installed 1.4.203-hourly with 1.4.202-hourly.
+          channel_tags="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json tagName \
+            --jq '.[].tagName' || true)"
+          published="$main_tags"$'\n'"$channel_tags"
+          echo "Published version sources: $(grep -c . <<<"$main_tags" || true) main tags, $(grep -c . <<<"$channel_tags" || true) channel tags"
+          ORCA_PUBLISHED_VERSIONS="$published" ORCA_HOURLY_RELEASE_NAMES="$names" \
+            node config/scripts/hourly-build-version.mjs \
             >"$RUNNER_TEMP/hourly-identity.txt"
-          # Why check rather than trust: the checkout above pins `ref: main`, but a
-          # workflow_dispatch runs this file from whatever branch was dispatched. A
-          # branch that edits this step while main still has the old script yields
-          # an empty name and an untitled release — silent, and only visible once
-          # someone opens the releases page. Fail here instead.
+          grep -E '^(version|build_number)=' "$RUNNER_TEMP/hourly-identity.txt"
+          # Dispatch YAML can be newer than the pinned source’s version script; reject missing output before publishing an untitled release.
           if ! grep -q '^name=' "$RUNNER_TEMP/hourly-identity.txt"; then
             echo "::error::hourly-build-version.mjs emitted no release name; this workflow and main's copy of the script are out of sync."
             exit 1
@@ -209,23 +220,22 @@ jobs:
           cat "$RUNNER_TEMP/hourly-identity.txt" >>"$GITHUB_OUTPUT"
 
       - name: Build app
-        if: steps.freshness.outputs.should_build == 'true'
         run: pnpm build:release
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-          # Why: hourly builds are not an official channel — telemetry's transport
-          # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
-          # silent, which is correct for unvetted dev artifacts.
+          # Unset dev identity so official-only stable/rc telemetry stays silent.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
 
-      # Why a second mint: everything from here on writes to the hourly repo, and
-      # the notary round trip inside the publish step can be tens of minutes. The
-      # token minted at the top has already spent install + build of its one hour
-      # on steps that never touched it; restarting the clock here gives the slow
-      # part the full budget.
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
+
+      # Refresh write token after build to give long notary/upload work a full hour.
       - name: Re-mint hourly repo token for publish
         id: app_token_publish
-        if: steps.freshness.outputs.should_build == 'true'
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
@@ -235,74 +245,61 @@ jobs:
 
       - name: Create hourly release
         id: release
-        if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           TAG: v${{ steps.hourly.outputs.version }}
           NAME: ${{ steps.hourly.outputs.name }}
-          SHA: ${{ steps.freshness.outputs.head_sha }}
+          SHA: ${{ needs.preflight.outputs.head_sha }}
         run: |
           set -euo pipefail
-          # Kept at 12 even though the title shows 7: the freshness check above
-          # parses this back out of the body to decide whether main has moved.
+          # Freshness parses the 12-character source SHA from the body even though titles show seven.
           short_sha="${SHA:0:12}"
-          # Why create it up front: electron-builder then uploads into a known tag
-          # rather than inferring one from package.json.
-          #
-          # Why --draft: everything between here and the manifest check is a window
-          # where the release exists but has no installable assets. A draft is
-          # absent from the releases list and from listReleaseBuilds, so a job that
-          # dies in that window — including a hard kill by the job timeout, which
-          # runs no cleanup step at all — leaves something invisible rather than a
-          # tag the picker offers and the download 404s on. It is flipped live only
-          # after the manifest is verified.
+          # Precreate a known tag as draft so builder cannot infer it from package.json.
+          # Keep incomplete assets invisible until manifest verification, even if timeout kills the job without cleanup.
           gh release create "$TAG" \
             --repo "$HOURLY_REPO" \
             --title "$NAME" \
             --draft \
-            --notes "Automated hourly macOS dev build from commit \`$short_sha\`.
+            --notes "Automated hourly macOS and Windows dev build from commit \`$short_sha\`.
 
           Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
 
-          **Unvetted.** No tests ran. Signed and notarized like a release, so it
-          installs through Orca's in-app updater and opens from a manual download
-          without a Gatekeeper prompt — but nothing here has been reviewed."
+          **Unvetted.** No tests ran. The macOS build is signed and notarized like a
+          release, so it installs through Orca's in-app updater and opens from a manual
+          download without a Gatekeeper prompt — but nothing here has been reviewed.
+
+          **Windows builds are unsigned.** They install and update normally once you
+          are on one, but a signed Stable or RC build cannot install one through the
+          in-app updater — download \`orca-windows-setup.exe\` below and run it once
+          (SmartScreen will warn about an unknown publisher). Every later switch,
+          including back to Stable, works in-app from there."
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
 
       - name: Publish hourly macOS artifacts
-        if: steps.freshness.outputs.should_build == 'true'
         uses: nick-fields/retry@v4
         with:
-          # Why 45 like the release pipeline: an attempt is pack + notarize +
-          # upload, and the notary queue is the unbounded part. Why 2 attempts and
-          # not 3: a missed hourly costs an hour, and the next cron picks the same
-          # commit up, so a third attempt buys less than it costs in runner time.
+          # Allow two 45min pack/notarize/upload attempts; next hourly picks the same commit rather than paying for a third.
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_HOURLY=1 node config/scripts/build-mac-notarization-overlap.mjs --publish always; else ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always; fi
         env:
-          # Why: electron-builder's github publisher targets the repo named in the
-          # config; the token must therefore carry write access to orca-hourly.
+          # Give publisher token write access to configured orca-hourly repo.
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           ORCA_HOURLY_BUILD_VERSION: ${{ steps.hourly.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ steps.hourly.outputs.commit }}
+          # beforePack and afterPack fail the package when the template is absent.
+          ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
-          # Why all three: electron-builder's notarize step authenticates to the
-          # Apple notary service with the app-specific password, not with the
-          # signing cert. Omitting them fails the build rather than skipping it,
-          # since `notarize` is now on for this path.
+          # Require Apple id/app-specific password/team for notarization, separate from signing cert.
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      # Why: the updater resolves a tag, then fetches latest-mac.yml from it. A
-      # release missing that manifest is a tag the picker offers and the download
-      # 404s on, so fail loudly instead of leaving a broken entry.
+      # Verify latest-mac.yml before exposing release; missing manifests cause picker download 404s.
       - name: Verify update manifest published
-        if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
@@ -312,10 +309,7 @@ jobs:
           assets="$(gh release view "$TAG" --repo "$HOURLY_REPO" --json assets --jq '.assets[].name')"
           echo "Published assets:"
           echo "$assets"
-          # Why exit 1 without deleting here: the release is still a draft, so it is
-          # already invisible to users, and the failure handler below owns cleanup.
-          # Deleting inline under `set -e` would also let the delete's exit code
-          # preempt this explicit failure.
+          # Drafts are already invisible; let failure cleanup delete them so set -e cannot mask this explicit failure.
           for required in latest-mac.yml; do
             if ! grep -qx "$required" <<<"$assets"; then
               echo "::error::Hourly draft $TAG is missing $required; the updater could not install it."
@@ -327,12 +321,9 @@ jobs:
             exit 1
           fi
 
-      # Why this is the last mutating step: publishing the draft is what makes the
-      # build visible to listReleaseBuilds. Doing it only after the manifest check
-      # means the picker can never offer a release whose assets are incomplete.
+      # Publish only after manifests verify so picker never offers incomplete assets.
       - name: Publish the verified release
         id: publish_live
-        if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
@@ -340,21 +331,11 @@ jobs:
           NAME: ${{ steps.hourly.outputs.name }}
         run: |
           set -euo pipefail
-          # --title again: electron-builder resolves this draft by tag and may
-          # rewrite its title on upload. Re-asserting here means the name the
-          # picker reads is the one composed above, whatever it did in between.
+          # Reassert the picker title after electron-builder may rewrite the tag’s draft on upload.
           gh release edit "$TAG" --repo "$HOURLY_REPO" --draft=false --prerelease --title "$NAME"
           echo "Published $TAG as \"$NAME\""
 
-      # Why: a draft left behind by a failed publish is invisible to users but still
-      # holds its tag name, so the next run for the same minute would collide.
-      #
-      # Why it is gated on publish_live not having succeeded: a later failure (the
-      # prune step) must not delete a release that already went live and that users
-      # may already be installing. A job killed by the outer timeout runs no steps
-      # at all — which is exactly why the release stays a draft until verified.
-      # Why cancelled() too: a run stopped from the Actions UI is not a failure(),
-      # so without it a manual cancel mid-publish would strand the draft.
+      # Delete failed/cancelled drafts but never publish_live releases, including after prune failure; outer timeouts run no cleanup.
       - name: Discard the draft release on failure
         if: >-
           (failure() || cancelled()) && steps.release.outputs.tag != '' &&
@@ -371,25 +352,55 @@ jobs:
             echo "::warning::Could not discard draft $TAG; remove it manually."
 
       - name: Prune old hourly releases
-        if: steps.freshness.outputs.should_build == 'true'
+        # Prune only after live publish; failed runs leave draft disposal to cleanup.
+        if: steps.publish_live.outcome == 'success'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
+          # Exclude the just-published tag from retention pruning.
+          TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
-          # Why: --cleanup-tag so pruning does not leave orphan tags behind that
-          # keep showing up in tag lists with no release or assets attached.
-          # Drafts are excluded so retention counts shipped builds only; a stale
-          # draft is handled by the failure path, not by the retention window.
-          stale="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json tagName,createdAt,isDraft \
-            --jq "map(select(.isDraft | not)) | sort_by(.createdAt) | reverse | .[${HOURLY_RETAIN_COUNT}:] | .[].tagName")"
+          # Delete pruned tags too; exclude drafts owned by failure cleanup. Rank by publishedAt/tagName:
+          # createdAt ties (bulk import/recreation) can evict the just-published release. Partition $TAG to
+          # the front before slicing so it owns exactly one retained seat without under-pruning or keeping retain+1.
+          jq_filter='map(select(.isDraft | not)) | sort_by(.publishedAt // "", .tagName) | reverse'
+          if [[ -n "${TAG:-}" ]]; then
+            jq_filter+=" | (map(select(.tagName == \"${TAG//\"/\\\"}\")) + map(select(.tagName != \"${TAG//\"/\\\"}\")))"
+          fi
+          jq_filter+=" | .[${HOURLY_RETAIN_COUNT}:] | .[].tagName"
+          stale="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json tagName,publishedAt,isDraft \
+            --jq "$jq_filter")"
           if [[ -z "$stale" ]]; then
             echo "Nothing to prune; at or under $HOURLY_RETAIN_COUNT retained builds."
             exit 0
           fi
           while read -r tag; do
             [[ -n "$tag" ]] || continue
+            # Belt-and-suspenders: partition above should already exclude $TAG.
+            if [[ -n "${TAG:-}" && "$tag" == "$TAG" ]]; then
+              echo "::warning::Prune list still included just-published $tag after protect; skipping delete."
+              continue
+            fi
             echo "Pruning $tag"
             gh release delete "$tag" --repo "$HOURLY_REPO" --yes --cleanup-tag || \
               echo "::warning::Could not prune $tag"
           done <<<"$stale"
+
+  # Wait for mac tag/version before Windows upload; local ./ workflow consistently follows the dispatch ref.
+  build-hourly-win:
+    needs: build-hourly-mac
+    # Publish Windows only into the existing live mac release.
+    if: needs.build-hourly-mac.outputs.published == 'true'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/dev-channel-win-build.yml
+    secrets: inherit
+    with:
+      channel: hourly
+      tag: ${{ needs.build-hourly-mac.outputs.tag }}
+      ref: ${{ needs.build-hourly-mac.outputs.head_sha }}
+      version: ${{ needs.build-hourly-mac.outputs.version }}
+      orcad_template: true
+      fast_release: false

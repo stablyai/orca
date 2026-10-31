@@ -1,38 +1,39 @@
-// SFTP-shaped adapter over the WSL hook relay's fs bridge. Lets the
-// unchanged SSH remote hook installers (`installRemoteManagedAgentHooks`)
-// write into a WSL distro's home over the relay's already-open stdio channel
-// — the WSL twin of the SSH flow's real SFTPWrapper. Only the primitives
-// `installer-utils-remote.ts` touches are implemented.
+// Adapt the guest fs bridge to SFTP so WSL can reuse SSH hook installers over the existing relay.
 import type { SFTPWrapper } from 'ssh2'
 
 import type { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import {
   buildManagedHookDetectionCommands,
-  detectedManagedHookAgents,
+  readManagedHookDetectionResult,
   type ManagedHookDetectionSettings
 } from './managed-hook-detection-commands'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { wslCodexRuntimeHomeForGuestHome } from '../pty/codex-home-wsl-env'
 import { WSL_HOOK_FS_METHODS, type WslFsResult } from '../../shared/wsl-hook-relay-contract'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 
-/** Run the shared remote hook installers against a WSL guest over the relay's
- *  fs bridge. Codex is the one agent whose home Orca redirects for WSL
- *  sessions, so its hooks go to the managed runtime home. */
 export async function installWslGuestHooks(options: {
   mux: SshChannelMultiplexer
   guestHome: string
+  codexHomePath: string | null
   distro: string
   installHooks: typeof installRemoteManagedAgentHooks
   settings: ManagedHookDetectionSettings
   warn: (message: string) => void
+  /** Canonical runtime-host installer for redirected Codex homes. */
+  installCodex: (runtimeHomePath: string, distro: string) => Promise<AgentHookInstallStatus | null>
 }): Promise<void> {
-  const { mux, guestHome, distro, installHooks, settings, warn } = options
+  const { mux, guestHome, codexHomePath, distro, installHooks, settings, warn, installCodex } =
+    options
   let agents
+  let claudeVersion: string | null = null
   try {
-    const detected = (await mux.request('preflight.detectAgents', {
-      commands: buildManagedHookDetectionCommands(settings, 'linux')
-    })) as { agents?: unknown }
-    agents = detectedManagedHookAgents(detected?.agents)
+    const detected = readManagedHookDetectionResult(
+      await mux.request('preflight.detectAgents', {
+        commands: buildManagedHookDetectionCommands(settings, 'linux')
+      })
+    )
+    agents = detected.agents
+    claudeVersion = detected.claudeVersion
   } catch (error) {
     warn(
       `[agent-hooks] WSL agent detection for '${distro}' failed: ${
@@ -44,9 +45,25 @@ export async function installWslGuestHooks(options: {
   if (agents.length === 0) {
     return
   }
+  if (agents.includes('codex') && codexHomePath) {
+    try {
+      const status = await installCodex(codexHomePath, distro)
+      if (status?.state === 'error') {
+        warn(
+          `[agent-hooks] WSL Codex hook install for '${distro}' failed: ${status.detail ?? 'unknown error'}`
+        )
+      }
+    } catch (error) {
+      warn(
+        `[agent-hooks] WSL Codex hook install for '${distro}' failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+  // Redirected Codex homes use the canonical runtime writer; the relay adapter handles other agents.
+  const remoteAgents = agents.filter((agent) => agent !== 'codex')
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
-    codexHomeDir: wslCodexRuntimeHomeForGuestHome(guestHome),
-    agents
+    agents: remoteAgents,
+    ...(claudeVersion ? { claudeVersion } : {})
   })
   const failed = results.filter((r) => r.state === 'error').length
   if (failed > 0) {
@@ -58,9 +75,7 @@ export async function installWslGuestHooks(options: {
 
 type SftpCallback<T = void> = (err: Error | null, value?: T) => void
 
-// Why: installer-utils-remote classifies errors by ssh2's numeric SFTP status
-// codes (ENOENT=2, already-exists=4). Map guest POSIX errno onto those so the
-// shared classifiers keep working across transports.
+// Translate guest errno to ssh2 status codes for the shared installer error classifiers.
 const ERRNO_TO_SFTP_CODE: Record<string, number> = {
   ENOENT: 2,
   ENOTDIR: 2,
@@ -128,9 +143,7 @@ export function createWslHookSftpAdapter(mux: SshChannelMultiplexer): SFTPWrappe
         })
       )
     },
-    // Why: POSIX rename overwrites atomically, which is exactly the OpenSSH
-    // overwrite-rename semantics the installers prefer — so the extension is
-    // "supported" here and plain rename shares the implementation.
+    // Guest POSIX rename supplies OpenSSH atomic overwrite semantics.
     ext_openssh_rename(src: string, dst: string, callback: SftpCallback): void {
       callVoid(WSL_HOOK_FS_METHODS.rename, { src, dst }, callback)
     },

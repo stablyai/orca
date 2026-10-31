@@ -1,4 +1,5 @@
 import type { App } from 'electron'
+import { argvRequestsServeMode } from './serve-mode-argv'
 import { writeStartupDiagnosticLine, type StartupDiagnosticSink } from './startup-diagnostics'
 
 export const SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE =
@@ -7,30 +8,22 @@ export const SINGLE_INSTANCE_LOCK_BYPASS_ENV = 'ORCA_BYPASS_SINGLE_INSTANCE_LOCK
 export const SINGLE_INSTANCE_LOCK_E2E_ENFORCE_ENV = 'ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK'
 export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
   '[single-instance] ORCA_BYPASS_SINGLE_INSTANCE_LOCK=1 is set; bypassing the packaged macOS single-instance lock for diagnostics. Do not use this with another Orca instance running for the same profile.'
+export { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
 
-/**
- * Why: Orca writes two canonical discovery files into `<userData>/`:
- * `orca-runtime.json` (RPC endpoint + authToken for the bundled CLI) and
- * `agent-hooks/endpoint.env` (hook port + token for cursor-agent/claude/codex
- * scripts). Without a single-instance lock, every AppImage/.app double-click
- * boots a fresh Electron main that clobbers both files. When the most recent
- * instance quits, metadata points at a dead pid and `orca status` reports
- * `stale_bootstrap` even though the original process is still running.
- *
- * This helper centralises the lock gate so it is testable in isolation and
- * so `src/main/index.ts` has one clean call site rather than two spread-out
- * Electron calls.
- *
- * Electron derives the lock identity from the current `userData` path, so
- * callers MUST invoke this AFTER `configureDevUserDataPath(is.dev)` — that
- * way dev (`orca-dev` userData) and packaged (`orca` userData) runs lock in
- * separate namespaces instead of serialising against each other.
- */
-export function acquireSingleInstanceLock(app: App, onSecondInstance: () => void): boolean {
+// Supervisor duplicate serve launches must not activate desktop; recognize CLI-form argv too (#12677, #11935). Missing argv preserves activation.
+export function shouldActivateDesktopForSecondInstance(argv: readonly string[] = []): boolean {
+  return !argvRequestsServeMode(argv)
+}
+
+/** Duplicate mains clobber runtime/hook discovery files and leave stale_bootstrap after exit. Acquire after userData overrides so dev/packaged instances lock distinct profile namespaces. */
+export function acquireSingleInstanceLock(
+  app: App,
+  onSecondInstance: (argv: readonly string[]) => void
+): boolean {
   if (!app.requestSingleInstanceLock()) {
     return false
   }
-  app.on('second-instance', onSecondInstance)
+  app.on('second-instance', (_event, argv) => onSecondInstance(argv))
   return true
 }
 
@@ -50,17 +43,36 @@ export function shouldBypassSingleInstanceLock(options: {
   )
 }
 
+// Only disposable E2E profiles skip by default; concurrent dev desktops still corrupt stores without locking.
 export function shouldSkipSingleInstanceLock(options: {
   env?: NodeJS.ProcessEnv
   isDev: boolean
   isServeMode: boolean
 }): boolean {
   const env = options.env ?? process.env
-  return options.isDev && !options.isServeMode && env[SINGLE_INSTANCE_LOCK_E2E_ENFORCE_ENV] !== '1'
+  return (
+    options.isDev &&
+    !options.isServeMode &&
+    Boolean(env.ORCA_E2E_USER_DATA_DIR) &&
+    env[SINGLE_INSTANCE_LOCK_E2E_ENFORCE_ENV] !== '1'
+  )
 }
 
-export function logSingleInstanceLockFailure(write?: StartupDiagnosticSink): void {
-  writeStartupDiagnosticLine(SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE, write)
+export function singleInstanceLockFailureMessage(options: {
+  isDevDesktop: boolean
+  userDataPath: string
+}): string {
+  if (!options.isDevDesktop) {
+    return SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE
+  }
+  return `[single-instance] Another Orca dev instance is already running on the profile at ${options.userDataPath}; exiting this launch after passing it this launch's request. To run another dev copy at the same time, give it its own profile: \`pnpm dev --worktree-profile\` (the default in linked worktrees) or ORCA_DEV_USER_DATA_PATH=<another directory> pnpm dev`
+}
+
+export function logSingleInstanceLockFailure(
+  options: { isDevDesktop: boolean; userDataPath: string },
+  write?: StartupDiagnosticSink
+): void {
+  writeStartupDiagnosticLine(singleInstanceLockFailureMessage(options), write)
 }
 
 export function logSingleInstanceLockBypass(write?: StartupDiagnosticSink): void {

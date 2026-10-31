@@ -41,6 +41,74 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it.each([undefined, 'legacy-orchestration-worker'])(
+    'new host ignores an old client resume fence (%s)',
+    (automaticResumeBlockedBy) => {
+      const record = {
+        paneKey: 'tab1:pane-1',
+        tabId: 'tab1',
+        worktreeId: 'wt',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'codex-session' },
+        prompt: 'continue',
+        state: 'done',
+        capturedAt: 10,
+        updatedAt: 10,
+        origin: 'worktree-sleep'
+      }
+      const result = parseWorkspaceSession({
+        activeRepoId: null,
+        activeWorktreeId: null,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        sleepingAgentSessionsByPaneKey: {
+          [record.paneKey]: { ...record, automaticResumeBlockedBy }
+        }
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.value.sleepingAgentSessionsByPaneKey?.[record.paneKey]).toEqual(record)
+      }
+    }
+  )
+
+  it('hydrates a persisted Kimi sleeping agent record', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'kimi',
+          providerSession: {
+            key: 'session_id',
+            id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'
+          },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9,
+          terminalTitle: 'Kimi',
+          origin: 'live'
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      // Why: the record must survive the resumable-agent refine, or restore silently drops it.
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']).toMatchObject({
+        agent: 'kimi',
+        providerSession: { key: 'session_id', id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' }
+      })
+    }
+  })
+
   it('preserves the authoritative Pi session file through hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -78,6 +146,35 @@ describe('parseWorkspaceSession sleeping agents', () => {
         }
       )
     }
+  })
+
+  it("preserves a Claude session's effort level through hydration", () => {
+    const providerSession = { key: 'session_id', id: 'claude-session', effort: 'max' }
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession,
+          prompt: '',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 10,
+          origin: 'live'
+        }
+      }
+    })
+
+    expect(
+      result.ok && result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.providerSession
+    ).toEqual(providerSession)
   })
 
   it('preserves the AI Vault OMP resume file through hydration', () => {
@@ -219,12 +316,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(
-        Object.prototype.hasOwnProperty.call(
-          result.value.sleepingAgentSessionsByPaneKey ?? {},
-          '__proto__'
-        )
-      ).toBe(false)
+      expect(Object.hasOwn(result.value.sleepingAgentSessionsByPaneKey ?? {}, '__proto__')).toBe(
+        false
+      )
       const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
       expect(record?.agent).toBe('codex')
       expect(record?.launchConfig).toBeUndefined()
@@ -329,6 +423,39 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves the tab-open-only restore flag across hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session' },
+          prompt: 'continue',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 10,
+          origin: 'worktree-sleep',
+          restoreOnTabOpenOnly: true
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      // Why: dropping it on restart resurrects the mobile-wake fan-out this flag exists to stop.
+      expect(
+        result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.restoreOnTabOpenOnly
+      ).toBe(true)
+    }
+  })
+
   it('preserves interrupted sleeping agent records across hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -359,7 +486,13 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
-  it('preserves legacy live sleeping agent origins across hydration', () => {
+  // A record written by a newer build can carry a verdict arm this reader does not know; the same
+  // path an older reader takes for the host-observed arms must drop only the verdict.
+  it.each([
+    ['interruption', { state: 'done', outcome: 'interruption', stateStartedAt: 9 }],
+    ['unconfirmed', { state: 'done', outcome: 'unconfirmed', stateStartedAt: 9 }],
+    ['from-a-newer-host', { state: 'done', stateStartedAt: 9 }]
+  ])('keeps a sleeping agent record whose main agent verdict is %s', (outcome, mainAgent) => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -374,9 +507,10 @@ describe('parseWorkspaceSession sleeping agents', () => {
           agent: 'codex',
           providerSession: { key: 'session_id', id: 'codex-session' },
           prompt: 'continue',
-          state: 'working',
+          state: 'done',
           capturedAt: 10,
           updatedAt: 9,
+          mainAgent: { state: 'done', outcome, stateStartedAt: 9 },
           origin: 'live'
         }
       }
@@ -384,7 +518,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('live')
+      const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
+      expect(record).toMatchObject({ prompt: 'continue' })
+      expect(record?.mainAgent).toEqual(mainAgent)
     }
   })
 

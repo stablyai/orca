@@ -1,8 +1,10 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
+import { defineMethod, type RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { GIT_METHODS } from './git'
+import { GitRemoteFileUrl } from '../../../../shared/rpc-contract/git-params'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -25,7 +27,9 @@ describe('git RPC methods', () => {
 
     const response = await dispatcher.dispatch(makeRequest('git.status', { worktree: 'id:wt-1' }))
 
-    expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1')
+    expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', {
+      admissionTier: 'status'
+    })
     expect(response).toMatchObject({
       ok: true,
       result: { entries: [], branch: 'main', didHitLimit: true, statusLength: 1_001 }
@@ -48,11 +52,29 @@ describe('git RPC methods', () => {
     )
 
     expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', {
+      admissionTier: 'status',
       includeIgnored: true
     })
     expect(response).toMatchObject({
       ok: true,
       result: { ignoredPaths: ['dist/'] }
+    })
+  })
+
+  it('forwards a false line-stats request through the parsed RPC options', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.status', { worktree: 'id:wt-1', includeLineStats: false })
+    )
+
+    expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', {
+      admissionTier: 'status',
+      includeLineStats: false
     })
   })
 
@@ -74,6 +96,7 @@ describe('git RPC methods', () => {
     )
 
     expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', {
+      admissionTier: 'status',
       bypassEffectiveUpstreamNegativeCache: true
     })
     expect(response).toMatchObject({
@@ -99,6 +122,7 @@ describe('git RPC methods', () => {
     )
 
     expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', {
+      admissionTier: 'status',
       reuseLineStats: true,
       signal: controller.signal
     })
@@ -179,7 +203,14 @@ describe('git RPC methods', () => {
       })
     )
 
-    expect(runtime.getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'src/index.ts', false, true)
+    // A local dispatch sets no clientKind, so the transport budget stays undefined.
+    expect(runtime.getRuntimeGitDiff).toHaveBeenCalledWith(
+      'id:wt-1',
+      'src/index.ts',
+      false,
+      true,
+      undefined
+    )
     expect(response).toMatchObject({
       ok: true,
       result: { kind: 'text', modifiedContent: 'hello' }
@@ -314,6 +345,23 @@ describe('git RPC methods', () => {
         line: 3
       })
     )
+    const oldMethods = [
+      defineMethod({
+        name: 'git.remoteFileUrl',
+        permission: 'workspace',
+        params: GitRemoteFileUrl.omit({ endLine: true }),
+        handler: (params, { runtime }) =>
+          runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
+      })
+    ]
+    for (const methods of [GIT_METHODS, oldMethods]) {
+      const owner = new RpcDispatcher({ runtime, methods })
+      const params = { worktree: 'id:wt-1', relativePath: 'src/a.ts', line: 3, endLine: 8 }
+      expect((await owner.dispatch(makeRequest('git.remoteFileUrl', params))).ok).toBe(true)
+      expect(
+        (await owner.dispatch(makeRequest('git.remoteFileUrl', { ...params, line: 0 }))).ok
+      ).toBe(false)
+    }
     const commitUrlResponse = await dispatcher.dispatch(
       makeRequest('git.remoteCommitUrl', {
         worktree: 'id:wt-1',
@@ -336,6 +384,11 @@ describe('git RPC methods', () => {
       undefined
     )
     expect(response).toMatchObject({ ok: true, result: 'https://example.com/file#L3' })
+    expect(vi.mocked(runtime.getRuntimeGitRemoteFileUrl).mock.calls).toEqual([
+      ['id:wt-1', 'src/a.ts', 3, undefined],
+      ['id:wt-1', 'src/a.ts', 3, 8],
+      ['id:wt-1', 'src/a.ts', 3]
+    ])
     expect(runtime.getRuntimeGitRemoteCommitUrl).toHaveBeenCalledWith('id:wt-1', commitOid)
     expect(commitUrlResponse).toMatchObject({ ok: true, result: 'https://example.com/commit/abc' })
   })
@@ -530,7 +583,6 @@ describe('git RPC methods', () => {
         worktree: 'id:wt-1',
         commitMessageAi,
         agentCmdOverrides,
-        enableGitHubAttribution: true,
         commitMessageDiscoveryHostKey: 'runtime:env-1'
       })
     )
@@ -538,7 +590,6 @@ describe('git RPC methods', () => {
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1', {
       commitMessageAi,
       agentCmdOverrides,
-      enableGitHubAttribution: true,
       commitMessageDiscoveryHostKey: 'runtime:env-1'
     })
   })
@@ -672,6 +723,44 @@ describe('git RPC methods', () => {
 
     expect(response.ok).toBe(false)
     expect(runtime.getRuntimeGitBranchCompare).not.toHaveBeenCalled()
+  })
+
+  it('forwards valid branch-compare admission and defaults future tiers', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitBranchCompare: vi.fn().mockResolvedValue({ summary: {}, entries: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const accepted = await dispatcher.dispatch(
+      makeRequest('git.branchCompare', {
+        worktree: 'id:wt-1',
+        baseRef: 'origin/main',
+        admissionTier: 'background'
+      })
+    )
+    const future = await dispatcher.dispatch(
+      makeRequest('git.branchCompare', {
+        worktree: 'id:wt-1',
+        baseRef: 'origin/main',
+        admissionTier: 'urgent'
+      })
+    )
+
+    expect(accepted.ok).toBe(true)
+    expect(runtime.getRuntimeGitBranchCompare).toHaveBeenNthCalledWith(
+      1,
+      'id:wt-1',
+      'origin/main',
+      'background'
+    )
+    expect(future.ok).toBe(true)
+    expect(runtime.getRuntimeGitBranchCompare).toHaveBeenNthCalledWith(
+      2,
+      'id:wt-1',
+      'origin/main',
+      undefined
+    )
   })
 
   it('rejects git history limits above the runtime cap', async () => {

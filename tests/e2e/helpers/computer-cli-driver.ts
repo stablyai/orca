@@ -32,8 +32,7 @@ export async function runOrcaCli(
       options.retryMissingRuntimeMetadata !== false &&
       isMissingRuntimeMetadataError(args, error)
     ) {
-      // Why: Windows CI can let the dev runtime exit while launching the
-      // fixture app; reopen once so the desktop action gets a live runtime.
+      // Windows can lose the dev runtime while launching the fixture app; reopen once before the desktop action.
       await ensureOrcaRuntimeLaunched()
       return await runOrcaCliOnce(args)
     }
@@ -95,8 +94,7 @@ export function parseJsonOutput<T>(stdout: string): T {
 
 async function getComputerE2eOrcaDevUserDataPath(): Promise<string> {
   if (!orcaDevUserDataPath) {
-    // Why: the shared orca-dev profile can keep an older runtime alive across
-    // local test runs, making computer-use E2E exercise stale provider code.
+    // Use a fresh profile so a retained dev runtime cannot execute stale provider code.
     orcaDevUserDataPath = await mkdtemp(join(tmpdir(), 'orca-computer-runtime-'))
   }
   return orcaDevUserDataPath
@@ -166,21 +164,18 @@ async function ensureOrcaRuntimeServed(): Promise<void> {
 async function createComputerE2ERuntimeEnv(): Promise<NodeJS.ProcessEnv> {
   const userDataDir =
     process.env.ORCA_DEV_USER_DATA_PATH ?? (await getComputerE2eOrcaDevUserDataPath())
-  // Why: agent runtimes export ELECTRON_RUN_AS_NODE, which would make the
-  // spawned Electron behave as plain Node; strip it like every other caller.
+  // Strip ELECTRON_RUN_AS_NODE or the Electron child runs as plain Node.
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...inheritedEnv } = process.env
   void _electronRunAsNode
   const isolation = createElectronHomeIsolation({
     inheritedEnv,
     launchEnv: {},
     extraEnv: {},
-    userDataDir,
-    codexRealHomeEnabled: false
+    userDataDir
   })
   return {
     ...isolation.env,
-    // Why: the Node CLI and the Electron child must resolve the same runtime
-    // metadata while the E2E boundary owns their home and Codex paths.
+    // Keep CLI and Electron on the same runtime metadata while fixture HOME/Codex isolation remains in force.
     ORCA_DEV_USER_DATA_PATH: userDataDir
   }
 }

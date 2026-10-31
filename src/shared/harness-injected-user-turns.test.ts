@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
+import {
+  isCompactContinuationUserTurnText,
+  isKnownHarnessInjectedUserTurnText
+} from './harness-injected-user-turns'
 
 describe('isKnownHarnessInjectedUserTurnText', () => {
   it('matches every known harness tag, including attribute-carrying forms', () => {
@@ -59,6 +62,16 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
     ).toBe(true)
   })
 
+  it('distinguishes compact continuation from other harness turns', () => {
+    expect(
+      isCompactContinuationUserTurnText(
+        'This session is being continued from a previous conversation. Summary follows.'
+      )
+    ).toBe(true)
+    expect(isCompactContinuationUserTurnText('<task-notification>done')).toBe(false)
+    expect(isCompactContinuationUserTurnText('<command-name>/review</command-name>')).toBe(false)
+  })
+
   it('is case-insensitive and ignores surrounding whitespace', () => {
     expect(isKnownHarnessInjectedUserTurnText('  <TASK-NOTIFICATION> done')).toBe(true)
     expect(isKnownHarnessInjectedUserTurnText('\n<System-Reminder> hi')).toBe(true)
@@ -73,7 +86,7 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
     expect(isKnownHarnessInjectedUserTurnText('   ')).toBe(false)
   })
 
-  it('classifies from a bounded head so multi-KB pastes stay cheap', () => {
+  it('classifies harness and user prefixes in multi-KB pastes', () => {
     const largePrompt = `<task-notification>done</task-notification>\n${'x'.repeat(20_000)}`
     expect(isKnownHarnessInjectedUserTurnText(largePrompt)).toBe(true)
     expect(isKnownHarnessInjectedUserTurnText(`fix login ${'y'.repeat(20_000)}`)).toBe(false)
@@ -93,16 +106,14 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
   })
 
   it('does not treat unknown kebab tags as machinery', () => {
-    // Only observed harness tags count — a real custom-element paste or a
-    // brand-new tag we have not catalogued stays a user turn.
+    // Only catalogued harness tags are noise; unknown/custom elements remain user input.
     expect(isKnownHarnessInjectedUserTurnText('<my-custom-element>pasted code')).toBe(false)
     expect(isKnownHarnessInjectedUserTurnText('<brand-new-harness-tag id="1">payload')).toBe(false)
     expect(isKnownHarnessInjectedUserTurnText('<queued-notice>\nlater')).toBe(false)
   })
 
   it('only treats the attributed <channel source=…> form as machinery', () => {
-    // The harness emits <channel source="…">; a bare <channel> is a real RSS/XML
-    // paste and must stay a user turn (channel is the only single-word tag).
+    // Only attributed channel source tags are machinery; bare channel is legitimate RSS/XML input.
     expect(isKnownHarnessInjectedUserTurnText('<channel source="general">new post')).toBe(true)
     expect(
       isKnownHarnessInjectedUserTurnText('<channel>general</channel> explain this feed element')

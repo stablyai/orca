@@ -1,11 +1,4 @@
-/**
- * E2E repro for terminal output bursts from many background tabs.
- *
- * This is a scaled-down version of the user report: several terminal tabs are
- * mounted, inactive tabs emit large output bursts, and the focused tab must
- * still render a foreground marker while the background output drains through
- * the shared scheduler instead of direct xterm writes.
- */
+// Burst large output from mounted background tabs while requiring a foreground marker through the shared scheduler.
 
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -26,6 +19,7 @@ type SchedulerDebugSnapshot = {
   flushWriteCount: number
   scheduledDrainCount: number
   drainWrites: number[]
+  drainHighPriority: boolean[]
 }
 
 type SchedulerDebugWindow = Window & {
@@ -75,8 +69,7 @@ async function createTerminalTab(page: Page): Promise<string> {
     if (!worktreeId) {
       throw new Error('createTerminalTab: active worktree id was unavailable')
     }
-    // Why: this scheduler spec cares about mounted PTYs, not the tab menu.
-    // Store creation avoids hiding xterm regressions behind menu hit-testing flakes.
+    // Create tabs through store actions to isolate mounted-PTY scheduling from menu hit-test flakes.
     return state.createTab(worktreeId).id
   })
 
@@ -158,7 +151,7 @@ async function sendPtyCommands(
 ): Promise<void> {
   await page.evaluate((items) => {
     for (const item of items) {
-      window.api.pty.write(item.ptyId, `${item.command}\r`)
+      window.api.pty.write(item.ptyId, `${item.command}\r`, 'driving')
     }
   }, commands)
 }
@@ -213,9 +206,7 @@ test.describe('Terminal output scheduler', () => {
 
     const runId = Date.now()
     const foregroundMarker = `FG_SCHED_${runId}`
-    // Why: the marker is appended AFTER the burst payload so it survives
-    // getTerminalContent's tail-only truncation (charLimit defaults to 4000).
-    // A leading marker would be evicted by the 50000-char x-burst.
+    // Append the marker after the 50000-char burst so getTerminalContent’s default 4000-char tail retains it.
     const backgroundCommands = tabIds.slice(1).map((tabId, index) => ({
       ptyId: ptyIdsByTabId[tabId],
       marker: `BG_SCHED_${runId}_${index}`,
@@ -278,8 +269,9 @@ test.describe('Terminal output scheduler', () => {
 
     const debug = await getSchedulerDebug(orcaPage)
     expect(debug.foregroundWriteCount).toBeGreaterThan(0)
-    if (debug.drainWrites.length > 0) {
-      expect(Math.max(...debug.drainWrites)).toBeLessThanOrEqual(2)
+    expect(debug.drainHighPriority).toHaveLength(debug.drainWrites.length)
+    for (const [index, writes] of debug.drainWrites.entries()) {
+      expect(writes).toBeLessThanOrEqual(debug.drainHighPriority[index] ? 8 : 2)
     }
 
     const firstBackground = backgroundCommands[0]

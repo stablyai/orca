@@ -1,12 +1,4 @@
-/**
- * Compatibility barrel for shared terminal agent-title detection.
- *
- * Why shared: main and renderer both consume OSC titles for facts, stats, and
- * UI state. Keep existing imports stable while the implementation stays split
- * into focused modules that satisfy max-lines. (main's #7612 split into
- * `terminal-title-*` modules coexists — those files stay on disk for their
- * direct `resolveTerminalTitleAgentType`/`synthetic-agent-title` consumers.)
- */
+/** Stable main/renderer OSC-title imports over focused modules; main terminal-title consumers retain their separate direct imports. */
 
 export type { AgentStatus } from './agent-title-core'
 export {
@@ -15,6 +7,7 @@ export {
   isCursorNativeAgentTitle,
   isGeminiTerminalTitle,
   isPiTerminalTitle,
+  shouldSuppressCursorNativeTitle,
   STRONG_IDLE_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE
 } from './agent-title-core'
@@ -24,10 +17,11 @@ export {
   clearWorkingIndicators,
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
-  normalizeTerminalTitle
+  isQuarterCircleSpinnerOnlyAgentTitle,
+  normalizeTerminalTitle,
+  type AgentIdleStatus
 } from './agent-title-status'
 
-// Re-export so existing `agent-detection` importers keep working.
 export { AGENT_NAMES, titleHasAgentName } from './agent-name-token-match'
 export {
   extractAllOscTitles,
@@ -35,4 +29,4 @@ export {
   MAX_OSC_TITLE_CHARS,
   MAX_OSC_TITLES_PER_CHUNK
 } from './osc-title-extraction'
-export { isShellProcess } from './shell-process-detection'
+export { isShellProcess, titleShowsNoAgent } from './shell-process-detection'

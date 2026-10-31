@@ -9,12 +9,19 @@ import {
   isSafeExecutableBasename
 } from '../../shared/managed-agent-command-token'
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import {
+  isUnderWindowsDriveMount,
+  readGuestWindowsDriveMounts
+} from '../ipc/wsl-guest-windows-drive-path'
 
 export type LocalCliPresenceState = 'found' | 'missing' | 'unknown'
 export type LocalCliPresenceByAgent = Partial<
-  Record<AgentHookTarget, { state: LocalCliPresenceState }>
+  Record<
+    AgentHookTarget,
+    { state: 'found'; executablePath: string } | { state: Exclude<LocalCliPresenceState, 'found'> }
+  >
 >
 
 type FileProbe = {
@@ -34,6 +41,8 @@ type DetectOptions = {
   hydratePath?: () => Promise<HydrationResult>
   shouldHydrateShellPath?: boolean
   homeDir?: string
+  /** Windows drive mounts to skip in a WSL guest; defaults to this process's own. */
+  guestWindowsDriveMounts?: readonly string[]
 }
 
 type CommandOverrideSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> | null | undefined
@@ -113,18 +122,18 @@ async function probePathCandidate(
   platform: NodeJS.Platform,
   fileProbe: FileProbe,
   pathExt?: string
-): Promise<boolean> {
+): Promise<string | null> {
   if (!isSafeExecutableBasename(candidate)) {
-    return false
+    return null
   }
   for (const dir of dirs) {
     for (const fileName of candidateFileNames(candidate, platform, pathExt)) {
       if (await fileProbe.isExecutableFile(pathApiForPlatform(platform).join(dir, fileName))) {
-        return true
+        return pathApiForPlatform(platform).join(dir, fileName)
       }
     }
   }
-  return false
+  return null
 }
 
 function isPlatformAbsolutePath(candidate: string, platform: NodeJS.Platform): boolean {
@@ -132,16 +141,20 @@ function isPlatformAbsolutePath(candidate: string, platform: NodeJS.Platform): b
 }
 
 async function maybeHydrateShellPath(options: DetectOptions): Promise<void> {
-  if (!options.shouldHydrateShellPath) {
-    return
+  if (options.shouldHydrateShellPath) {
+    await hydrateAgentCliShellPath(options.hydratePath)
   }
+}
+
+export async function hydrateAgentCliShellPath(
+  hydratePath: () => Promise<HydrationResult> = hydrateShellPath
+): Promise<void> {
   try {
-    const result = await (options.hydratePath ?? hydrateShellPath)()
+    const result = await hydratePath()
     if (result.ok) {
       mergePathSegments(result.segments)
     }
   } catch (error) {
-    // Detection failure must never permit config mutation.
     console.warn('[agent-hooks] Shell PATH hydration failed; using inherited PATH:', error)
   }
 }
@@ -154,7 +167,10 @@ export async function detectLocalManagedAgentCliPresence(
   await maybeHydrateShellPath(options)
   const platform = options.platform ?? process.platform
   const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
-  const dirs = pathEntries(options.pathEnv ?? process.env.PATH ?? '', delimiter)
+  const guestMounts = options.guestWindowsDriveMounts ?? readGuestWindowsDriveMounts()
+  const dirs = pathEntries(options.pathEnv ?? process.env.PATH ?? '', delimiter).filter(
+    (dir) => !isUnderWindowsDriveMount(dir, guestMounts)
+  )
   const homeDir = options.homeDir ?? homedir()
   const fileProbe = options.fileProbe ?? {
     isExecutableFile: (filePath: string) => isExecutableFile(filePath, platform)
@@ -171,10 +187,17 @@ export async function detectLocalManagedAgentCliPresence(
       candidates.add(override)
     }
   }
-  const found = new Set<string>()
+  const found = new Map<string, string>()
   for (const candidate of candidates) {
-    if (await probePathCandidate(candidate, dirs, platform, fileProbe, options.pathExt)) {
-      found.add(candidate)
+    const executablePath = await probePathCandidate(
+      candidate,
+      dirs,
+      platform,
+      fileProbe,
+      options.pathExt
+    )
+    if (executablePath) {
+      found.set(candidate, executablePath)
     }
   }
   const result: LocalCliPresenceByAgent = {}
@@ -187,13 +210,16 @@ export async function detectLocalManagedAgentCliPresence(
         continue
       }
       result[target.agent] = (await fileProbe.isExecutableFile(expanded))
-        ? { state: 'found' }
+        ? { state: 'found', executablePath: expanded }
         : { state: 'missing' }
       continue
     }
     const targetCandidates = [...target.executableCandidates, ...(override ? [override] : [])]
-    result[target.agent] = targetCandidates.some((candidate) => found.has(candidate))
-      ? { state: 'found' }
+    const executablePath = targetCandidates
+      .map((candidate) => found.get(candidate))
+      .find((candidate): candidate is string => candidate !== undefined)
+    result[target.agent] = executablePath
+      ? { state: 'found', executablePath }
       : { state: 'missing' }
   }
   return result

@@ -78,12 +78,47 @@ describe('MobilePairingSetupSection', () => {
     expect(screen.getByText(/must be able to reach this address/i)).toBeVisible()
   })
 
-  it('explains the direct address when Orca Relay is selected', () => {
-    renderSection({ connectionMode: 'automatic' })
-    expect(screen.getByText('This computer’s address')).toBeVisible()
-    expect(screen.getByRole('combobox')).toBeVisible()
-    expect(screen.getByText(/faster direct path when nearby/i)).toBeVisible()
+  it('demotes this computer’s address to a disclosure when Orca Relay is selected', async () => {
+    const { user } = renderSection({
+      connectionMode: 'automatic',
+      selectedAddress: undefined
+    })
+    expect(screen.queryByText('This computer’s address')).toBeNull()
+    expect(screen.queryByRole('combobox')).toBeNull()
     expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeEnabled()
+
+    // Relay still advertises a LAN endpoint, so the picker must stay reachable.
+    await user.click(screen.getByRole('button', { name: /Also use a faster local path/i }))
+    expect(screen.getByRole('combobox')).toBeVisible()
+    expect(screen.getByText(/faster than Relay/i)).toBeVisible()
+  })
+
+  it('opens the Relay address disclosure when a settings search targets it', () => {
+    renderSection({
+      connectionMode: 'automatic',
+      addressDisclosureForcedOpen: true
+    })
+    expect(screen.getByRole('combobox')).toBeVisible()
+    // Pinned-open pickers need no dead collapse trigger claiming aria-expanded ownership.
+    expect(screen.queryByRole('button', { name: /Also use a faster local path/i })).toBeNull()
+  })
+
+  it('never hides a custom address behind the Relay disclosure', () => {
+    const address = 'host.example:6768'
+    renderSection({
+      connectionMode: 'automatic',
+      customAddresses: [address],
+      selectedAddress: address,
+      selectedAddressIsCustom: true
+    })
+    expect(screen.getByRole('combobox')).toHaveTextContent(address)
+    expect(screen.queryByRole('button', { name: /Also use a faster local path/i })).toBeNull()
+  })
+
+  it('disables generate on LAN when no advertise address is selected', () => {
+    renderSection({ connectionMode: 'local-only', selectedAddress: undefined })
+    expect(screen.getByText('This computer’s address')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeDisabled()
   })
 
   it('can move retry recovery into the persistent failure notice', () => {
@@ -92,8 +127,7 @@ describe('MobilePairingSetupSection', () => {
   })
 
   it('disables generate when sign-in is required', () => {
-    // The sign-in explanation lives in the connection panel above, not here, so
-    // this section only gates the button rather than repeating the copy.
+    // Connection controls above own sign-in guidance; only gate Generate here.
     renderSection({ canGenerate: false })
     expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeDisabled()
     expect(screen.queryByText(/Sign in above first/i)).toBeNull()

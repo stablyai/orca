@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
   BROWSER_PALETTE_QUERY_MAX_BYTES,
+  buildSearchableBrowserPageDocument,
   searchBrowserPages,
   formatBrowserPaletteUrl,
   isBlankBrowserUrl,
-  isBrowserPaletteQueryTooLarge,
   type SearchableBrowserPage
 } from './browser-palette-search'
 
@@ -67,6 +68,11 @@ function makePage(overrides: Partial<BrowserPage> = {}): BrowserPage {
   }
 }
 
+/** Mirrors the production builder so fixtures index exactly what Cmd+J indexes. */
+function makeEntry(entry: Omit<SearchableBrowserPage, 'document'>): SearchableBrowserPage {
+  return { ...entry, document: buildSearchableBrowserPageDocument(entry) }
+}
+
 describe('browser-palette-search', () => {
   it('formats browser urls without protocol for palette display', () => {
     expect(formatBrowserPaletteUrl('https://example.com/docs?q=1#hash')).toBe(
@@ -74,10 +80,49 @@ describe('browser-palette-search', () => {
     )
   })
 
+  it('stamps the row execution host so activation never resolves by id alone', () => {
+    // IDs repeat across hosts; retain the row’s owner so activation cannot open its same-ID twin.
+    const [result] = searchBrowserPages(
+      [
+        makeEntry({
+          page: makePage({ id: 'page-1', title: 'Docs' }),
+          workspace: makeWorkspace({ id: 'ws-1' }),
+          worktree: makeWorktree({ id: 'shared', hostId: 'ssh:box' }),
+          repoName: 'repo/one',
+          worktreeSortIndex: 0,
+          isCurrentPage: false,
+          isCurrentWorktree: false
+        })
+      ],
+      ''
+    )
+    expect(result.executionHostId).toBe('ssh:box')
+  })
+
+  it('carries the page favicon into palette results', () => {
+    const faviconUrl = 'https://example.com/favicon.ico'
+    const [result] = searchBrowserPages(
+      [
+        makeEntry({
+          page: makePage({ faviconUrl }),
+          workspace: makeWorkspace(),
+          worktree: makeWorktree(),
+          repoName: 'repo/one',
+          worktreeSortIndex: 0,
+          isCurrentPage: false,
+          isCurrentWorktree: false
+        })
+      ],
+      ''
+    )
+
+    expect(result.faviconUrl).toBe(faviconUrl)
+  })
+
   it('keeps empty-query ordering deterministic and context-first', () => {
     const results = searchBrowserPages(
       [
-        {
+        makeEntry({
           page: makePage({ id: 'page-current', title: 'Current Page' }),
           workspace: makeWorkspace({ id: 'ws-current', activePageId: 'page-current' }),
           worktree: makeWorktree({ id: 'wt-current', displayName: 'Current WT' }),
@@ -85,8 +130,8 @@ describe('browser-palette-search', () => {
           worktreeSortIndex: 1,
           isCurrentPage: true,
           isCurrentWorktree: true
-        },
-        {
+        }),
+        makeEntry({
           page: makePage({
             id: 'page-sibling',
             workspaceId: 'ws-sibling',
@@ -104,8 +149,8 @@ describe('browser-palette-search', () => {
           worktreeSortIndex: 1,
           isCurrentPage: false,
           isCurrentWorktree: true
-        },
-        {
+        }),
+        makeEntry({
           page: makePage({
             id: 'page-other',
             workspaceId: 'ws-other',
@@ -123,7 +168,7 @@ describe('browser-palette-search', () => {
           worktreeSortIndex: 2,
           isCurrentPage: false,
           isCurrentWorktree: false
-        }
+        })
       ],
       ''
     )
@@ -138,7 +183,7 @@ describe('browser-palette-search', () => {
   it('searches against page titles before worktree metadata', () => {
     const results = searchBrowserPages(
       [
-        {
+        makeEntry({
           page: makePage({ id: 'page-1', title: 'Design Spec' }),
           workspace: makeWorkspace({ id: 'ws-1' }),
           worktree: makeWorktree({ id: 'wt-1', displayName: 'Unrelated' }),
@@ -146,8 +191,8 @@ describe('browser-palette-search', () => {
           worktreeSortIndex: 1,
           isCurrentPage: false,
           isCurrentWorktree: false
-        },
-        {
+        }),
+        makeEntry({
           page: makePage({
             id: 'page-2',
             workspaceId: 'ws-2',
@@ -161,21 +206,65 @@ describe('browser-palette-search', () => {
           worktreeSortIndex: 2,
           isCurrentPage: false,
           isCurrentWorktree: false
-        }
+        })
       ],
       'design'
     )
 
     expect(results).toHaveLength(2)
     expect(results[0].pageId).toBe('page-1')
-    expect(results[0].titleRange).toEqual({ start: 0, end: 6 })
-    expect(results[1].worktreeRange).toEqual({ start: 0, end: 6 })
+    expect(results[0].titleRanges).toEqual([{ start: 0, end: 6 }])
+    expect(results[1].worktreeRanges).toEqual([{ start: 0, end: 6 }])
+  })
+
+  it('matches a two-token query across the page title and the url host', () => {
+    const results = searchBrowserPages(
+      [
+        makeEntry({
+          page: makePage({
+            id: 'page-1',
+            title: 'Design Spec',
+            url: 'https://staging.example.com/docs'
+          }),
+          workspace: makeWorkspace({ id: 'ws-1' }),
+          worktree: makeWorktree({ id: 'wt-1', displayName: 'Unrelated' }),
+          repoName: 'repo/one',
+          worktreeSortIndex: 1,
+          isCurrentPage: false,
+          isCurrentWorktree: false
+        })
+      ],
+      'design staging'
+    )
+
+    expect(results).toHaveLength(1)
+    expect(results[0].titleRanges).toEqual([{ start: 0, end: 6 }])
+    expect(results[0].secondaryRanges).toEqual([{ start: 0, end: 7 }])
+  })
+
+  it('drops a row when only one token of a multi-keyword query lands', () => {
+    const results = searchBrowserPages(
+      [
+        makeEntry({
+          page: makePage({ id: 'page-1', title: 'Design Spec' }),
+          workspace: makeWorkspace({ id: 'ws-1' }),
+          worktree: makeWorktree({ id: 'wt-1', displayName: 'Unrelated' }),
+          repoName: 'repo/one',
+          worktreeSortIndex: 1,
+          isCurrentPage: false,
+          isCurrentWorktree: false
+        })
+      ],
+      'design zzzznonexistent'
+    )
+
+    expect(results).toEqual([])
   })
 
   it('matches against formatted URLs when title does not match', () => {
     const results = searchBrowserPages(
       [
-        {
+        makeEntry({
           page: makePage({
             id: 'page-1',
             title: 'Dashboard',
@@ -187,20 +276,20 @@ describe('browser-palette-search', () => {
           worktreeSortIndex: 1,
           isCurrentPage: false,
           isCurrentWorktree: false
-        }
+        })
       ],
       'settings'
     )
 
     expect(results).toHaveLength(1)
-    expect(results[0].secondaryRange).toEqual({ start: 16, end: 24 })
-    expect(results[0].titleRange).toBeNull()
+    expect(results[0].secondaryRanges).toEqual([{ start: 16, end: 24 }])
+    expect(results[0].titleRanges).toEqual([])
   })
 
   it('matches against raw URL when formatted URL does not match', () => {
     const results = searchBrowserPages(
       [
-        {
+        makeEntry({
           page: makePage({ id: 'page-1', title: 'Docs', url: 'https://docs.example.com/' }),
           workspace: makeWorkspace({ id: 'ws-1' }),
           worktree: makeWorktree({ id: 'wt-1' }),
@@ -208,19 +297,20 @@ describe('browser-palette-search', () => {
           worktreeSortIndex: 1,
           isCurrentPage: false,
           isCurrentWorktree: false
-        }
+        })
       ],
       'https'
     )
 
     expect(results).toHaveLength(1)
-    expect(results[0].secondaryRange).toEqual({ start: 0, end: 5 })
+    expect(results[0].secondaryText).toBe('https://docs.example.com/')
+    expect(results[0].secondaryRanges).toEqual([{ start: 0, end: 5 }])
   })
 
   it('returns empty array when query matches nothing', () => {
     const results = searchBrowserPages(
       [
-        {
+        makeEntry({
           page: makePage({ id: 'page-1', title: 'Dashboard', url: 'https://example.com' }),
           workspace: makeWorkspace({ id: 'ws-1' }),
           worktree: makeWorktree({ id: 'wt-1', displayName: 'Feature' }),
@@ -228,7 +318,7 @@ describe('browser-palette-search', () => {
           worktreeSortIndex: 1,
           isCurrentPage: false,
           isCurrentWorktree: false
-        }
+        })
       ],
       'zzzznonexistent'
     )
@@ -249,7 +339,7 @@ describe('browser-palette-search', () => {
 
   it('boosts current page and current worktree in scored results', () => {
     const entries = [
-      {
+      makeEntry({
         page: makePage({ id: 'page-other', title: 'React Docs', url: 'https://react.dev' }),
         workspace: makeWorkspace({
           id: 'ws-other',
@@ -261,8 +351,8 @@ describe('browser-palette-search', () => {
         worktreeSortIndex: 1,
         isCurrentPage: false,
         isCurrentWorktree: false
-      },
-      {
+      }),
+      makeEntry({
         page: makePage({
           id: 'page-current',
           workspaceId: 'ws-current',
@@ -280,7 +370,7 @@ describe('browser-palette-search', () => {
         worktreeSortIndex: 1,
         isCurrentPage: true,
         isCurrentWorktree: true
-      }
+      })
     ]
 
     const results = searchBrowserPages(entries, 'react')
@@ -290,24 +380,84 @@ describe('browser-palette-search', () => {
     expect(results[1].pageId).toBe('page-other')
   })
 
+  it('breaks a rank tie between equally-matching pages by recency', () => {
+    // Ids are ordered so an id-only tiebreak would flip this expectation.
+    const entries = [
+      makeEntry({
+        page: makePage({ id: 'page-a-older', title: 'React Docs' }),
+        workspace: makeWorkspace({ id: 'ws-1' }),
+        worktree: makeWorktree(),
+        repoName: 'repo',
+        worktreeSortIndex: 0,
+        isCurrentPage: false,
+        isCurrentWorktree: false,
+        lastActiveAt: 1000
+      }),
+      makeEntry({
+        page: makePage({ id: 'page-z-newer', title: 'React Docs' }),
+        workspace: makeWorkspace({ id: 'ws-2' }),
+        worktree: makeWorktree(),
+        repoName: 'repo',
+        worktreeSortIndex: 0,
+        isCurrentPage: false,
+        isCurrentWorktree: false,
+        lastActiveAt: 5000
+      })
+    ]
+
+    const results = searchBrowserPages(entries, 'react')
+
+    expect(results.map((result) => result.pageId)).toEqual(['page-z-newer', 'page-a-older'])
+    expect(results[0].lastActiveAt).toBe(5000)
+  })
+
   it('matches the visible workspace label in browser search', () => {
     const results = searchBrowserPages(
       [
-        {
+        makeEntry({
           page: makePage({ id: 'page-1', title: 'Docs' }),
           workspace: makeWorkspace({ id: 'ws-1', label: 'Browser 7' }),
-          worktree: makeWorktree({ id: 'wt-1', displayName: 'Palette Worktree' }),
+          // Branch off the default: it also contains "browser" and would win the tie.
+          worktree: makeWorktree({
+            id: 'wt-1',
+            displayName: 'Palette Worktree',
+            branch: 'refs/heads/main'
+          }),
           repoName: 'repo/one',
           worktreeSortIndex: 1,
           isCurrentPage: false,
           isCurrentWorktree: false
-        }
+        })
       ],
       'browser 7'
     )
 
     expect(results).toHaveLength(1)
-    expect(results[0].workspaceRange).toEqual({ start: 0, end: 9 })
+    // One range per keyword: the tokens are matched independently, not as a phrase.
+    expect(results[0].workspaceRanges).toEqual([
+      { start: 0, end: 7 },
+      { start: 8, end: 9 }
+    ])
+  })
+
+  it('rejects a query with more unique tokens than the matcher accepts', () => {
+    const query = 't0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16'
+    const entries = [
+      makeEntry({
+        page: makePage({ id: 'page-1', title: query }),
+        workspace: makeWorkspace({ id: 'ws-1' }),
+        worktree: makeWorktree({ id: 'wt-1' }),
+        repoName: 'repo/one',
+        worktreeSortIndex: 1,
+        isCurrentPage: false,
+        isCurrentWorktree: false
+      })
+    ]
+
+    expect(
+      searchBrowserPages(entries, 't0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15')
+    ).toHaveLength(1)
+    expect(searchBrowserPages(entries, query)).toEqual([])
   })
 
   it('rejects oversized pasted queries before scanning browser pages', () => {
@@ -321,26 +471,42 @@ describe('browser-palette-search', () => {
       repoName: 'repo',
       worktreeSortIndex: 0,
       isCurrentPage: false,
-      isCurrentWorktree: false
+      isCurrentWorktree: false,
+      document: buildSearchableBrowserPageDocument({
+        page: makePage(),
+        workspace: makeWorkspace(),
+        worktree: makeWorktree(),
+        repoName: 'repo'
+      })
     } as SearchableBrowserPage
 
-    expect(isBrowserPaletteQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchBrowserPages([entry], oversizedQuery)).toEqual([])
   })
 
   it('rejects oversized whitespace before trimming', () => {
-    expect(searchBrowserPages([], ' '.repeat(BROWSER_PALETTE_QUERY_MAX_BYTES + 1))).toEqual([])
+    const entry = makeEntry({
+      page: makePage(),
+      workspace: makeWorkspace(),
+      worktree: makeWorktree(),
+      repoName: 'repo',
+      worktreeSortIndex: 0,
+      isCurrentPage: false,
+      isCurrentWorktree: false
+    })
+    expect(searchBrowserPages([entry], ' '.repeat(2048)).map((result) => result.pageId)).toEqual([
+      'page-1'
+    ])
+    expect(searchBrowserPages([entry], ' '.repeat(2049))).toEqual([])
   })
 
   it('falls back to the branch label when a cleared display name left it undefined', () => {
-    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
-    // so the store-level display-name corruption reaches here too.
+    // Cmd+J shares worktree objects with searchWorktrees, including corrupt raw display names.
     const cleared = makeWorktree({
       displayName: undefined as unknown as string,
       branch: 'refs/heads/feature/browser-search'
     })
-    const entries: SearchableBrowserPage[] = [
-      {
+    const entries = [
+      makeEntry({
         page: makePage(),
         workspace: makeWorkspace(),
         worktree: cleared,
@@ -348,13 +514,13 @@ describe('browser-palette-search', () => {
         worktreeSortIndex: 0,
         isCurrentPage: false,
         isCurrentWorktree: false
-      }
+      })
     ]
 
     const results = searchBrowserPages(entries, 'browser-search')
     expect(results[0]).toMatchObject({
       worktreeName: 'feature/browser-search',
-      worktreeRange: { start: 'feature/'.length, end: 'feature/browser-search'.length }
+      worktreeRanges: [{ start: 'feature/'.length, end: 'feature/browser-search'.length }]
     })
   })
 
@@ -364,8 +530,8 @@ describe('browser-palette-search', () => {
       branch: undefined as unknown as string,
       path: '/repos/design-review'
     })
-    const entries: SearchableBrowserPage[] = [
-      {
+    const entries = [
+      makeEntry({
         page: makePage(),
         workspace: makeWorkspace(),
         worktree: cleared,
@@ -373,12 +539,12 @@ describe('browser-palette-search', () => {
         worktreeSortIndex: 0,
         isCurrentPage: false,
         isCurrentWorktree: false
-      }
+      })
     ]
 
     expect(searchBrowserPages(entries, '')[0]).toMatchObject({
       worktreeName: 'design-review',
-      worktreeRange: null
+      worktreeRanges: []
     })
   })
 })

@@ -3,9 +3,13 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '@/lib/worktree-palette-query-bounds'
+import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '../../../../shared/palette-match/worktree-palette-query-bounds'
 import { useAppStore } from '@/store'
-import type { Repo, Worktree, WorktreeMeta } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import type { WorktreeMetaBatchUpdate } from '../../store/slices/worktree-helpers'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { WorkspaceKanbanLaneView } from './workspace-kanban-search'
 
@@ -35,7 +39,7 @@ type GridCapture = {
 type PointerDragCapture = {
   selectedWorktrees: readonly Worktree[]
   onDropWorktreesInStatus: (args: {
-    worktreeIds: readonly string[]
+    worktreeKeys: readonly string[]
     status: string
     dropIndex: number
   }) => void
@@ -90,7 +94,7 @@ vi.mock('./WorkspaceKanbanPinDropTarget', () => ({ default: () => <div /> }))
 
 vi.mock('./use-visible-workspace-kanban-worktree-ids', () => ({
   useVisibleWorkspaceKanbanWorktreeIds: ({ allWorktrees }: { allWorktrees: readonly Worktree[] }) =>
-    new Set(allWorktrees.map((worktree) => worktree.id))
+    new Set(allWorktrees.map(getWorktreeHostIdentity))
 }))
 
 vi.mock('./use-workspace-kanban-selection', () => ({
@@ -101,7 +105,7 @@ vi.mock('./use-workspace-kanban-selection', () => ({
   ) => {
     selectionScopeState.current = renderedWorktrees ?? boardWorktrees
     return {
-      selectedWorktreeIds: new Set(selectionState.current.map((worktree) => worktree.id)),
+      selectedWorktreeIds: new Set(selectionState.current.map(getWorktreeHostIdentity)),
       selectedWorktrees: selectionState.current,
       selectionAnchorId: null,
       updateSelectionForGesture: vi.fn(),
@@ -127,7 +131,6 @@ vi.mock('./use-workspace-kanban-column-resize', () => ({
 
 vi.mock('./use-workspace-kanban-create-worktree', () => ({
   useWorkspaceKanbanCreateWorktree: () => ({
-    canCreateWorktree: true,
     createWorktreeForStatus: vi.fn()
   })
 }))
@@ -162,7 +165,7 @@ vi.mock('./workspace-board-task-status-sync', async (importOriginal) => ({
 }))
 
 type UpdateWorktreesMeta = (
-  updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
+  updates: readonly WorktreeMetaBatchUpdate[] | ReadonlyMap<string, Partial<WorktreeMeta>>
 ) => Promise<void>
 
 const statuses = [
@@ -306,7 +309,7 @@ describe('WorkspaceKanbanDrawer search', () => {
 
     act(() => {
       pointerDragState.current?.onDropWorktreesInStatus({
-        worktreeIds: [omega.id],
+        worktreeKeys: [getWorktreeHostIdentity(omega)],
         status: 'todo',
         dropIndex: 0
       })
@@ -314,7 +317,7 @@ describe('WorkspaceKanbanDrawer search', () => {
 
     expect(syncWorkspaceBoardTaskStatusesMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        worktreeIds: [omega.id],
+        worktreeKeys: [getWorktreeHostIdentity(omega)],
         targetStatus: { id: 'todo', label: 'Todo' }
       })
     )
@@ -344,7 +347,7 @@ describe('WorkspaceKanbanDrawer search', () => {
     renderDrawer()
     typeQuery('gamma')
 
-    expect(gridState.current?.selectedWorktreeIds.has(alpha.id)).toBe(true)
+    expect(gridState.current?.selectedWorktreeIds.has(getWorktreeHostIdentity(alpha))).toBe(true)
     expect(gridState.current?.selectedWorktrees).toEqual([gamma])
   })
 
@@ -377,8 +380,7 @@ describe('WorkspaceKanbanDrawer search', () => {
   })
 
   it('leaves the whole board unfiltered for an over-bound query', () => {
-    // Why: searchWorktrees returns [] past the byte bound, which would read as
-    // "matched nothing" and blank every lane on a paste accident.
+    // Over-bound search returns no results; treating it as a real filter would blank the board on accidental paste.
     renderDrawer()
 
     typeQuery('x'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES + 1))
@@ -399,16 +401,21 @@ describe('WorkspaceKanbanDrawer search', () => {
     typeQuery('gamma')
 
     act(() => {
-      // Manual order is descending, so the lane is Delta, Gamma, Beta, Alpha.
-      // Rendered index 0 means "above Gamma" — full-lane index 1, not the top.
+      // Descending order is Delta/Gamma/Beta/Alpha; filtered index zero above Gamma maps to full-lane index one.
       pointerDragState.current?.onDropWorktreesInStatus({
-        worktreeIds: [omega.id],
+        worktreeKeys: [getWorktreeHostIdentity(omega)],
         status: 'todo',
         dropIndex: 0
       })
     })
 
-    const dropped = updateWorktreesMeta.mock.calls.at(-1)?.[0].get(omega.id)
+    const payload = updateWorktreesMeta.mock.calls.at(-1)?.[0]
+    let dropped: Partial<WorktreeMeta> | undefined
+    if (Array.isArray(payload)) {
+      dropped = payload.find((entry) => entry.worktreeId === omega.id)?.updates
+    } else if (payload && 'get' in payload) {
+      dropped = payload.get(omega.id)
+    }
     expect(dropped?.workspaceStatus).toBe('todo')
     expect(dropped?.manualOrder).toBeGreaterThan(gamma.manualOrder ?? 0)
     expect(dropped?.manualOrder).toBeLessThan(delta.manualOrder ?? 0)

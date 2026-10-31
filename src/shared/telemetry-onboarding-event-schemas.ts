@@ -1,0 +1,279 @@
+import { z } from 'zod'
+import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
+import type { DiscoveryStatusEmitted } from './onboarding-state-types'
+import type { PathSource, ShellHydrationFailureReason } from './shell-path-hydration-types'
+import { agentKindSchema, featureWallTourDepthStepSchema } from './telemetry-property-schemas'
+import {
+  cohortSchema,
+  hasMatchingOnboardingFeatureSetupSelectedCount,
+  onboardingChecklistItemSchema,
+  onboardingFailureReasonSchema,
+  onboardingFeatureSetupFeatureSchema,
+  onboardingFeatureSetupSelectedCountRefinement,
+  onboardingFeatureSetupSelectionSchema,
+  onboardingPathSchema,
+  onboardingStepSchema,
+  onboardingTaskSourcesExitActionSchema,
+  onboardingTaskSourcesGithubStatusSchema,
+  onboardingTaskSourcesLinearStatusSchema,
+  onboardingTourOutcomeSchema,
+  onboardingValueKindSchema,
+  onboardingWindowsTerminalExitActionSchema,
+  onboardingWindowsTerminalRightClickSchema,
+  onboardingWindowsTerminalShellSchema
+} from './telemetry-onboarding-foundation-schemas'
+
+// Use one button/keyboard shape so skip/dismiss paths need no schema migration.
+export const advancedViaSchema = z.enum(['button', 'keyboard']).optional()
+
+export const onboardingStartedSchema = z
+  .object({ resumed_from_step: onboardingStepSchema.optional(), cohort: cohortSchema })
+  .strict()
+export const onboardingStepViewedSchema = z
+  .object({
+    step: onboardingStepSchema,
+    value_kind: onboardingValueKindSchema,
+    cohort: cohortSchema
+  })
+  .strict()
+export const onboardingStepCompletedSchema = z
+  .object({
+    step: onboardingStepSchema,
+    value_kind: onboardingValueKindSchema,
+    duration_ms: z.number().int().nonnegative().optional(),
+    advanced_via: advancedViaSchema,
+    cohort: cohortSchema
+  })
+  .strict()
+export const onboardingStepSkippedSchema = z
+  .object({
+    step: onboardingStepSchema,
+    value_kind: onboardingValueKindSchema,
+    duration_ms: z.number().int().nonnegative().optional(),
+    advanced_via: advancedViaSchema,
+    cohort: cohortSchema
+  })
+  .strict()
+export type OnboardingTourOutcomeTelemetry = {
+  outcome: z.infer<typeof onboardingTourOutcomeSchema>
+  tour_dwell_ms?: number
+  furthest_step?: z.infer<typeof featureWallTourDepthStepSchema>
+  visited_workflow_count?: number
+  visited_substep_count?: number
+  completed_workflow_count?: number
+  completed_substep_count?: number
+}
+
+export function validateOnboardingTourOutcome(
+  props: OnboardingTourOutcomeTelemetry,
+  ctx: z.RefinementCtx
+): void {
+  if (props.outcome !== 'skipped_intro') {
+    return
+  }
+  for (const key of [
+    'tour_dwell_ms',
+    'furthest_step',
+    'visited_workflow_count',
+    'visited_substep_count',
+    'completed_workflow_count',
+    'completed_substep_count'
+  ] as const) {
+    if (props[key] !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [key],
+        message: `${key} is only valid after the inline tour starts`
+      })
+    }
+  }
+}
+
+export const onboardingTourOutcomeEventSchema = z
+  .object({
+    outcome: onboardingTourOutcomeSchema,
+    intro_duration_ms: z.number().int().min(0).max(FEATURE_WALL_MAX_DWELL_MS).optional(),
+    tour_dwell_ms: z.number().int().min(0).max(FEATURE_WALL_MAX_DWELL_MS).optional(),
+    furthest_step: featureWallTourDepthStepSchema.optional(),
+    visited_workflow_count: z.number().int().min(0).max(5).optional(),
+    visited_substep_count: z.number().int().min(0).max(9).optional(),
+    completed_workflow_count: z.number().int().min(0).max(5).optional(),
+    completed_substep_count: z.number().int().min(0).max(9).optional(),
+    advanced_via: advancedViaSchema,
+    cohort: cohortSchema
+  })
+  .strict()
+  .superRefine(validateOnboardingTourOutcome)
+export const onboardingStep4PathClickedSchema = z
+  .object({ path: onboardingPathSchema, cohort: cohortSchema })
+  .strict()
+export const onboardingStep4PathFailedSchema = z
+  .object({
+    path: onboardingPathSchema,
+    reason: onboardingFailureReasonSchema,
+    cohort: cohortSchema
+  })
+  .strict()
+export const onboardingTaskSourcesSnapshotSchema = z
+  .object({
+    github_status: onboardingTaskSourcesGithubStatusSchema,
+    linear_status: onboardingTaskSourcesLinearStatusSchema,
+    exit_action: onboardingTaskSourcesExitActionSchema,
+    duration_ms: z.number().int().nonnegative().optional(),
+    advanced_via: advancedViaSchema,
+    cohort: cohortSchema
+  })
+  .strict()
+export const onboardingWindowsTerminalSnapshotSchema = z
+  .object({
+    default_shell: onboardingWindowsTerminalShellSchema,
+    right_click_behavior: onboardingWindowsTerminalRightClickSchema,
+    exit_action: onboardingWindowsTerminalExitActionSchema,
+    duration_ms: z.number().int().nonnegative().optional(),
+    advanced_via: advancedViaSchema,
+    cohort: cohortSchema
+  })
+  .strict()
+// Why: no `is_git_repo` here; the signal moved to `repo_added.is_git_repo`.
+export const onboardingCompletedSchema = z
+  .object({
+    path: onboardingPathSchema,
+    total_duration_ms: z.number().int().nonnegative(),
+    cohort: cohortSchema
+  })
+  .strict()
+export const onboardingDismissedSchema = z
+  .object({
+    last_step: onboardingStepSchema,
+    duration_ms: z.number().int().nonnegative().optional(),
+    advanced_via: advancedViaSchema,
+    cohort: cohortSchema
+  })
+  .strict()
+export const activationChecklistItemCompletedSchema = z
+  .object({
+    item: onboardingChecklistItemSchema,
+    time_since_completed_ms: z.number().int().nonnegative()
+  })
+  .strict()
+
+// Distinguish shell-hydration failure from an absent binary; see docs/agent-on-path-detection.md.
+export const pathSourceSchema = z.enum(['shell_hydrate', 'sync_seed_only'])
+export const pathFailureReasonSchema = z.enum([
+  'none',
+  'no_shell',
+  'timeout',
+  'spawn_error',
+  'empty_path'
+])
+
+export type _PathFailureReasonSync =
+  z.infer<typeof pathFailureReasonSchema> extends ShellHydrationFailureReason
+    ? ShellHydrationFailureReason extends z.infer<typeof pathFailureReasonSchema>
+      ? true
+      : never
+    : never
+export const _pathFailureReasonSyncCheck: _PathFailureReasonSync = true
+void _pathFailureReasonSyncCheck
+
+export type _PathSourceSync =
+  z.infer<typeof pathSourceSchema> extends PathSource
+    ? PathSource extends z.infer<typeof pathSourceSchema>
+      ? true
+      : never
+    : never
+export const _pathSourceSyncCheck: _PathSourceSync = true
+void _pathSourceSyncCheck
+
+// Record picks at click time, including mind changes; keep agent_kind closed through tuiAgentToAgentKind.
+export const onboardingAgentPickedSchema = z
+  .object({
+    agent_kind: agentKindSchema,
+    on_path: z.boolean(),
+    detected_count: z.number().int().nonnegative(),
+    // `'pending'` when detection is still running at click time (picked-before-detection vs picked-the-only-agent).
+    detection_state: z.enum(['complete', 'pending']),
+    // `true` when the agent lived under the "Show N more" disclosure — signals demand for less-popular agents.
+    from_collapsed_section: z.boolean(),
+    // Optional so pre-deploy events still validate; see docs/agent-on-path-detection.md.
+    path_source: pathSourceSchema.optional(),
+    path_failure_reason: pathFailureReasonSchema.optional(),
+    cohort: cohortSchema
+  })
+  .strict()
+
+// Discovery mirrors ThemeStep; failed is an import outcome recorded separately.
+export const ghosttyDiscoveryStateSchema = z.enum(['found', 'absent', 'imported'])
+
+export type _GhosttyDiscoveryStateSync =
+  z.infer<typeof ghosttyDiscoveryStateSchema> extends DiscoveryStatusEmitted
+    ? DiscoveryStatusEmitted extends z.infer<typeof ghosttyDiscoveryStateSchema>
+      ? true
+      : never
+    : never
+export const _ghosttyDiscoveryStateSyncCheck: _GhosttyDiscoveryStateSync = true
+void _ghosttyDiscoveryStateSyncCheck
+
+export const onboardingGhosttyDiscoveredSchema = z
+  .object({
+    state: ghosttyDiscoveryStateSchema,
+    // Bucketed not raw: exact group counts fingerprint heavy customizers.
+    field_group_count_bucket: z.enum(['0', '1-3', '4-7', '8+']),
+    cohort: cohortSchema
+  })
+  .strict()
+export const onboardingGhosttyImportClickedSchema = z.object({ cohort: cohortSchema }).strict()
+
+export const onboardingGhosttyImportFailedSchema = z
+  .object({
+    // `'no_config'` is reserved for future use; call sites currently emit `'empty_diff'` or `'unknown'`.
+    reason: z.enum(['no_config', 'empty_diff', 'unknown']),
+    cohort: cohortSchema
+  })
+  .strict()
+export const onboardingFeatureSetupToggledSchema = z
+  .object({
+    feature: onboardingFeatureSetupFeatureSchema,
+    selected: z.boolean(),
+    cohort: cohortSchema
+  })
+  .strict()
+export const onboardingFeatureSetupRunSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    cli_touched: z.boolean(),
+    skill_install_result: z.enum([
+      'installed',
+      'needs_attention',
+      'update_server',
+      'connect_host',
+      'failed'
+    ]),
+    computer_use_permissions_opened: z.boolean(),
+    warning_count: z.number().int().nonnegative(),
+    cohort: cohortSchema
+  })
+  // Validate derived selected_count at the untrusted IPC boundary.
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()
+export const onboardingFeatureSetupTerminalOpenedSchema = z
+  .object({ ...onboardingFeatureSetupSelectionSchema, cohort: cohortSchema })
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()
+export const onboardingFeatureSetupTerminalInteractedSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    method: z.enum(['keyboard', 'pointer']),
+    cohort: cohortSchema
+  })
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()

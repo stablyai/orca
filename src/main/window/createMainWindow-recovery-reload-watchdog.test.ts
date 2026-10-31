@@ -1,0 +1,649 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as DurableCrashBreadcrumbModule from '../crash-reporting/durable-crash-breadcrumb'
+
+const { recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
+  recordDurableCrashBreadcrumbMock: vi.fn()
+}))
+vi.mock('../crash-reporting/durable-crash-breadcrumb', async (importOriginal) => ({
+  ...(await importOriginal<typeof DurableCrashBreadcrumbModule>()),
+  recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
+}))
+
+vi.mock('electron', async () =>
+  (await import('./createMainWindow-test-harness')).electronModuleMock()
+)
+vi.mock('./macos-tahoe-release', async () =>
+  (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
+)
+vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+vi.mock('../browser/browser-manager', async () =>
+  (await import('./createMainWindow-test-harness')).browserManagerMock()
+)
+vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+  const harness = await import('./createMainWindow-test-harness')
+  return {
+    attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
+    retireBrowserClientPageRenderer: harness.retireClientPageRendererMock
+  }
+})
+
+import { createMainWindow } from './createMainWindow'
+import {
+  browserWindowMock,
+  appMock,
+  powerMonitorOnMock,
+  resetMainWindowMocks
+} from './createMainWindow-test-harness'
+import {
+  RENDERER_RECOVERY_DEV_LOAD_TIMEOUT_MS,
+  RENDERER_RECOVERY_LOAD_TIMEOUT_MS
+} from './renderer-recovery-reload-watchdog'
+
+const DOCUMENT_URL = 'file:///opt/orca/renderer/index.html'
+// Use an install file URL the current crash-report path redactor cannot remove.
+const INSTALL_PATH_LOAD_ERROR =
+  "ERR_FILE_NOT_FOUND (-6) loading 'file:///Users/jane.doe/Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'"
+const CRASH = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+
+/** Reproduce a recovery load with no document or failure event; renderer-death accounting alone cannot detect its stall. */
+describe('renderer recovery reload watchdog', () => {
+  beforeEach(() => {
+    resetMainWindowMocks()
+    recordDurableCrashBreadcrumbMock.mockClear()
+    vi.useFakeTimers()
+  })
+
+  const createHarness = () => {
+    // Preserve every lifecycle listener; last-writer-wins mocks could silently omit the watchdog.
+    const registered: Record<string, ((...args: any[]) => void)[]> = {}
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const register = (event: string, handler: (...args: any[]) => void): void => {
+      const handlers = (registered[event] ??= [])
+      handlers.push(handler)
+      windowHandlers[event] ??= (...args: any[]) => {
+        for (const listener of handlers.slice()) {
+          listener(...args)
+        }
+      }
+    }
+    // Keep loads pending until explicitly settled to reproduce the stall.
+    const settleLoad: { resolve: () => void; reject: (error: Error) => void }[] = []
+    const pendingLoad = (): Promise<void> =>
+      new Promise<void>((resolve, reject) => settleLoad.push({ resolve, reject }))
+    const webContents = {
+      id: 143,
+      getURL: vi.fn(() => DOCUMENT_URL),
+      isDestroyed: vi.fn(() => false),
+      on: vi.fn(register),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(register),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      setWindowButtonPosition: vi.fn(),
+      loadFile: vi.fn(pendingLoad),
+      loadURL: vi.fn(pendingLoad)
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const crashRenderer = (): void => {
+      windowHandlers['render-process-gone']?.({} as never, CRASH)
+      vi.advanceTimersByTime(250)
+    }
+    const reachMilestone = (milestone: 'committed' | 'dom-ready'): void =>
+      windowHandlers[milestone === 'committed' ? 'did-navigate' : 'dom-ready']?.()
+    return {
+      browserWindowInstance,
+      consoleError,
+      crashRenderer,
+      reachMilestone,
+      settleLoad,
+      windowHandlers
+    }
+  }
+
+  it('retries once when the recovery reload never produces a document, then hands the user the prompt', () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS - 1)
+    expect(onRecoveryReloadOutcome).not.toHaveBeenCalled()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(1)
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledWith({
+      status: 'timeout',
+      attempt: 1,
+      elapsedMs: RENDERER_RECOVERY_LOAD_TIMEOUT_MS,
+      progress: 'none'
+    })
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS)
+    expect(onRecoveryReloadOutcome).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'timeout', attempt: 2 })
+    )
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith({
+      details: CRASH,
+      webContentsId: 143,
+      recentRecoveryCount: 1,
+      cause: 'reload-stalled',
+      retry: expect.any(Function)
+    })
+
+    consoleError.mockRestore()
+  })
+
+  it('clears the watchdog when the recovery reload finishes loading', async () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer, settleLoad } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    vi.advanceTimersByTime(2_000)
+    settleLoad[1]?.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledWith({
+      status: 'loaded',
+      attempt: 1,
+      elapsedMs: 2_000
+    })
+
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 3)
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledTimes(1)
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+
+    consoleError.mockRestore()
+  })
+
+  it('keeps watching the retry when a stale did-finish-load arrives after it was issued', () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer, windowHandlers } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS)
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
+
+    // An untagged finish event from the abandoned load must not disarm the retry's watchdog.
+    windowHandlers['did-finish-load']?.()
+    expect(onRecoveryReloadOutcome).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'loaded' })
+    )
+
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS)
+    expect(onRecoveryReloadOutcome).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'timeout', attempt: 2 })
+    )
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+
+    consoleError.mockRestore()
+  })
+
+  it('does not take an error page as the retry landing', async () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { consoleError, crashRenderer, settleLoad, windowHandlers } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    settleLoad[1]?.reject(new Error('ERR_FILE_NOT_FOUND (-6)'))
+    await vi.advanceTimersByTimeAsync(0)
+    // Chromium error documents emit did-finish-load too; they do not prove recovery.
+    windowHandlers['did-finish-load']?.()
+
+    expect(onRecoveryReloadOutcome).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'loaded' })
+    )
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+
+    consoleError.mockRestore()
+  })
+
+  it('raises one prompt, however many times recovery gives up underneath it', () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
+
+    // A second renderer death is still breaker-eligible because stalls do not count.
+    crashRenderer()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+
+    // Native dialogs cannot be dismissed programmatically; no unsolicited retry/second dialog may stack on one.
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+    expect(onRecoveryReloadOutcome).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'timeout', attempt: 1 })
+    )
+
+    onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(2)
+
+    consoleError.mockRestore()
+  })
+
+  it('still reloads from a crash-loop prompt raised after an earlier recovery had landed', async () => {
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer, settleLoad } = createHarness()
+
+    createMainWindow(null, { onRendererRecoveryExhausted })
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      crashRenderer()
+      settleLoad[attempt]?.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    crashRenderer()
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+    const loads = browserWindowInstance.loadFile.mock.calls.length
+
+    // The landed document died; manual Reload must remain available.
+
+    onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(loads + 1)
+
+    consoleError.mockRestore()
+  })
+
+  it('does not stack a crash-loop prompt on one that is already up', () => {
+    const onRendererRecoveryExhausted = vi.fn()
+    const { consoleError, crashRenderer } = createHarness()
+
+    createMainWindow(null, { onRendererRecoveryExhausted })
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      crashRenderer()
+    }
+
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+
+    consoleError.mockRestore()
+  })
+
+  it('escalates a rejected recovery load immediately instead of waiting out the watchdog', async () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer, settleLoad } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome })
+    crashRenderer()
+    settleLoad[1]?.reject(new Error("ERR_FILE_NOT_FOUND (-6) loading 'file:///opt/orca'"))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        attempt: 1,
+        errorCode: 'ERR_FILE_NOT_FOUND'
+      })
+    )
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
+
+    consoleError.mockRestore()
+  })
+
+  it('ignores a superseded load rejection so ERR_ABORTED never escalates', async () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer, settleLoad } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    // A superseding renderer death causes Chromium to reject the abandoned load with ERR_ABORTED.
+    crashRenderer()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
+    settleLoad[1]?.reject(new Error('ERR_ABORTED (-3)'))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onRecoveryReloadOutcome).not.toHaveBeenCalled()
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
+
+    consoleError.mockRestore()
+  })
+
+  it('does not escalate when another navigation aborts the live recovery load', async () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer, settleLoad, windowHandlers } =
+      createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+    // An external navigation/close/loadURL can abort this load while its attempt token still appears live.
+    settleLoad[1]?.reject(new Error(`ERR_ABORTED (-3) loading '${DOCUMENT_URL}'`))
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Cold retry would overwrite the superseding load.
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+    expect(onRecoveryReloadOutcome).not.toHaveBeenCalled()
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+
+    // Report replacement-load elapsed time distinctly so budget analysis can exclude it.
+    windowHandlers['did-finish-load']?.()
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'loaded', attempt: 1, superseded: true })
+    )
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+    windowHandlers['did-finish-load']?.()
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledTimes(1)
+
+    consoleError.mockRestore()
+  })
+
+  it('still escalates on silence when an aborted recovery load has nothing behind it', async () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { consoleError, crashRenderer, settleLoad } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    settleLoad[1]?.reject(new Error('ERR_ABORTED (-3)'))
+    await vi.advanceTimersByTimeAsync(0)
+
+    await vi.advanceTimersByTimeAsync(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'timeout', attempt: 1 })
+    )
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
+      expect.objectContaining({ cause: 'reload-stalled' })
+    )
+
+    consoleError.mockRestore()
+  })
+
+  it('gives the dev server a longer budget than a packaged load', () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer } = createHarness()
+    appMock.isPackaged = false
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
+
+    try {
+      createMainWindow(null, { onRecoveryReloadOutcome })
+      crashRenderer()
+      expect(browserWindowInstance.loadURL).toHaveBeenCalledTimes(2)
+
+      vi.advanceTimersByTime(RENDERER_RECOVERY_DEV_LOAD_TIMEOUT_MS - 1)
+      expect(onRecoveryReloadOutcome).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(onRecoveryReloadOutcome).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'timeout', attempt: 1 })
+      )
+    } finally {
+      vi.unstubAllEnvs()
+      consoleError.mockRestore()
+    }
+  })
+
+  it('stays silent when the stalled window is already closing', () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer, windowHandlers } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    windowHandlers.close?.({ preventDefault: vi.fn() } as never)
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+
+    expect(onRecoveryReloadOutcome).not.toHaveBeenCalled()
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+
+    consoleError.mockRestore()
+  })
+  it('keeps the install path out of the outcome breadcrumb', async () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const { consoleError, crashRenderer, settleLoad } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome })
+    crashRenderer()
+    settleLoad[1]?.reject(new Error(INSTALL_PATH_LOAD_ERROR))
+    await vi.advanceTimersByTimeAsync(0)
+
+    const outcome = onRecoveryReloadOutcome.mock.calls[0]?.[0]
+    expect(outcome).toEqual({
+      status: 'failed',
+      attempt: 1,
+      elapsedMs: 0,
+      progress: 'none',
+      errorCode: 'ERR_FILE_NOT_FOUND'
+    })
+    // File URLs evade the path redactor; keep all path-shaped data out of the breadcrumb.
+    expect(JSON.stringify(outcome)).not.toContain('/')
+
+    consoleError.mockRestore()
+  })
+
+  it('records a durable breadcrumb for a rejected load, since console output never reaches the bundle', async () => {
+    const { consoleError, settleLoad } = createHarness()
+
+    createMainWindow(null, {})
+    settleLoad[0]?.reject(new Error(INSTALL_PATH_LOAD_ERROR))
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Handled rejection must no longer produce main_unhandled_rejection.
+    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith('main_window_load_failed', {
+      errorCode: 'ERR_FILE_NOT_FOUND'
+    })
+
+    consoleError.mockRestore()
+  })
+
+  it('escalates to the prompt when both attempts are rejected outright', async () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { consoleError, crashRenderer, settleLoad } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    settleLoad[1]?.reject(new Error('ERR_CONNECTION_REFUSED (-102)'))
+    await vi.advanceTimersByTimeAsync(0)
+    settleLoad[2]?.reject(new Error('ERR_CONNECTION_REFUSED (-102)'))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onRecoveryReloadOutcome).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'failed', attempt: 2, errorCode: 'ERR_CONNECTION_REFUSED' })
+    )
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
+      expect.objectContaining({ cause: 'reload-stalled', recentRecoveryCount: 1 })
+    )
+
+    consoleError.mockRestore()
+  })
+
+  it('hands the prompt a watched retry so a stalled manual reload re-raises it', () => {
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer } = createHarness()
+
+    createMainWindow(null, { onRendererRecoveryExhausted })
+    crashRenderer()
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
+
+    // The dialog defaults to Reload; manual retry must not restore an unbounded silent hang.
+    onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(5)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(2)
+
+    consoleError.mockRestore()
+  })
+
+  it('names the crash-loop cause and gives that prompt a watched retry too', () => {
+    const onRendererRecoveryExhausted = vi.fn()
+    const { consoleError, crashRenderer } = createHarness()
+
+    createMainWindow(null, { onRendererRecoveryExhausted })
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      crashRenderer()
+    }
+
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
+      expect.objectContaining({ cause: 'crash-loop' })
+    )
+    expect(typeof onRendererRecoveryExhausted.mock.calls[0]?.[0].retry).toBe('function')
+
+    consoleError.mockRestore()
+  })
+
+  it('restarts the stall budget when the machine resumes mid-load', () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome })
+    crashRenderer()
+    // Sleep freezes timers; restore the load's full budget after wake.
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS - 1)
+    const resume = powerMonitorOnMock.mock.calls.find(([event]) => event === 'resume')?.[1] as (
+      ...args: unknown[]
+    ) => void
+    resume()
+
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS - 1)
+    expect(onRecoveryReloadOutcome).not.toHaveBeenCalled()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(1)
+    // Record total elapsed load time, not time since resume, for honest laptop diagnostics.
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'timeout',
+        attempt: 1,
+        elapsedMs: RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2 - 1
+      })
+    )
+
+    consoleError.mockRestore()
+  })
+
+  it('never restarts a load that reached a document, and gives it the rest of the cap', () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer, reachMilestone } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    vi.advanceTimersByTime(10_000)
+    reachMilestone('committed')
+
+    // A committed but unfinished document is not a stall; restarting would discard a load that could finish within budget.
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS)
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+    expect(onRecoveryReloadOutcome).not.toHaveBeenCalled()
+
+    reachMilestone('dom-ready')
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS)
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledWith({
+      status: 'timeout',
+      attempt: 1,
+      elapsedMs: RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2,
+      progress: 'dom-ready'
+    })
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+
+    consoleError.mockRestore()
+  })
+
+  it('records a reload that lands after the prompt, and leaves the recovered window alone', async () => {
+    const onRecoveryReloadOutcome = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, consoleError, crashRenderer, settleLoad } = createHarness()
+
+    createMainWindow(null, { onRecoveryReloadOutcome, onRendererRecoveryExhausted })
+    crashRenderer()
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+
+    onRecoveryReloadOutcome.mockClear()
+    vi.advanceTimersByTime(30_000)
+    settleLoad[2]?.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Escalation cannot cancel Chromium loads; keep observing late success or diagnostics falsely report exhaustion.
+    expect(onRecoveryReloadOutcome).toHaveBeenCalledWith({
+      status: 'loaded',
+      attempt: 2,
+      elapsedMs: RENDERER_RECOVERY_LOAD_TIMEOUT_MS + 30_000,
+      afterPrompt: true
+    })
+
+    // Reload after late success would destroy the recovered session; keep the still-open dialog harmless.
+    onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
+
+    consoleError.mockRestore()
+  })
+
+  it('separates the automatic recovery reload from the prompt-driven retry', () => {
+    const onBeforeRecoveryReload = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
+    const { consoleError, crashRenderer } = createHarness()
+
+    createMainWindow(null, { onBeforeRecoveryReload, onRendererRecoveryExhausted })
+    crashRenderer()
+    vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
+    onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
+
+    // Keep manual retries distinct from renderer_recovery_reload automatic-recovery counts.
+    expect(onBeforeRecoveryReload.mock.calls.map(([, trigger]) => trigger)).toEqual([
+      'automatic',
+      'automatic',
+      'manual-retry'
+    ])
+
+    consoleError.mockRestore()
+  })
+
+  it('keeps a shutdown-aborted load out of the crash breadcrumb stream', async () => {
+    const { consoleError, settleLoad } = createHarness()
+
+    createMainWindow(null, {})
+    settleLoad[0]?.reject(new Error(`ERR_ABORTED (-3) loading '${DOCUMENT_URL}'`))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(recordDurableCrashBreadcrumbMock).not.toHaveBeenCalledWith(
+      'main_window_load_failed',
+      expect.anything()
+    )
+
+    consoleError.mockRestore()
+  })
+})

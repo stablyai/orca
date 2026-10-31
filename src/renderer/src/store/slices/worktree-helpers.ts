@@ -1,30 +1,41 @@
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
+import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type {
-  CreateWorktreeResult,
-  CreateWorktreeArgs,
+  CreateWorktreeCallOptions,
+  CreatedWorktreeResult
+} from './worktrees/create/worktree-create-payload'
+import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
+import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
+import type {
+  WorktreeBaseStatusEvent,
+  WorktreeRemoteBranchConflictEvent
+} from '../../../../shared/worktree/base-ref-drift-types'
+import type {
   CreateSparseCheckoutRequest,
+  ForceDeleteWorktreeBranchResult,
+  SetupDecision
+} from '../../../../shared/worktree/create-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type {
   DetectedWorktree,
   DetectedWorktreeListResult,
-  ForceDeleteWorktreeBranchResult,
   GitPushTarget,
-  RemoveWorktreeResult,
-  SetupDecision,
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceLinkedItem,
   WorkspaceStatus,
-  WorkspaceLineage,
-  WorktreeStartupLaunch,
-  Worktree,
-  WorktreeBaseStatusEvent,
-  WorktreeLineage,
-  WorktreeRemoteBranchConflictEvent,
-  WorktreeMeta,
-  WorkspaceKey
-} from '../../../../shared/types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
+  Worktree
+} from '../../../../shared/worktree/types'
+import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { TerminalPaneRecoveryOutcome } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalRecoveryRemountRequest,
+  TerminalRecoveryRemountResult
+} from '../terminals/terminal-tab-recovery-ledger'
+import type { RemoveWorktreeOptions } from './worktree-removal-options'
 import type {
   HostQualifiedDetectedWorktreeResult,
   SshExecutionHostId
@@ -34,22 +45,27 @@ import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
-export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import type { AppState } from '../types'
+import type { WorktreeRefreshAllOptions } from './worktree-refresh-options'
+import type { WorktreeRefreshResult } from './worktrees/listing/worktree-refresh-result'
+export type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
+import type { WorktreePurgeTargets } from './worktree-purge-target'
+export type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-delete-state-types'
+import type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-delete-state-types'
+export { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 
-export type WorktreeDeleteState = {
-  isDeleting: boolean
-  phase?: 'deleting' | 'queued'
-  error: string | null
-  canForceDelete: boolean
-  forceDeleteReason: WorktreeForceDeleteReason | null
-  lockReason?: string | null
-}
+export {
+  applyWorktreeUpdates,
+  withoutErasedRequiredWorktreeFields
+} from './worktree-meta-update-application'
+import type { RendererRemoveWorktreeResult } from './renderer-remove-worktree-result'
 
 export type WorktreeFetchOptions = {
   requireAuthoritative?: boolean
   executionHostId?: ExecutionHostId
   forceLocalOwner?: boolean
+  /** Skip automatic remote lineage when the caller owns a final host-wide refresh. */
+  suppressRemoteLineageRefresh?: boolean
 }
 
 export type DirectSshWorktreeFetchOptions = WorktreeFetchOptions & {
@@ -60,9 +76,16 @@ export type DirectSshWorktreeFetchOptions = WorktreeFetchOptions & {
 export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | undefined) => boolean
 
 export type WorktreeMetaUpdateOptions = {
+  /** Required to mutate one row when the legacy locator exists on multiple hosts. */
+  executionHostId?: ExecutionHostId
   shouldApply?: WorktreeMetaUpdateGuard
   /** Skip the automatic review refetch when the caller owns an equivalent refresh. */
   suppressHostedReviewRefresh?: boolean
+}
+export type WorktreeMetaBatchUpdate = {
+  worktreeId: string
+  updates: Partial<WorktreeMeta>
+  executionHostId?: ExecutionHostId
 }
 
 export type WorktreeRenameRequest = {
@@ -70,28 +93,25 @@ export type WorktreeRenameRequest = {
   rowKey?: string
 }
 
+export type ActiveWorktreeStateTransition = (state: AppState) => {
+  patch: Partial<AppState>
+  activate: boolean
+  preferredActiveUnifiedTabId?: string
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
-  worktreeLineageById: Record<string, WorktreeLineage>
-  workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
+  /** Newest catalog version applied per repo and host; an older publication is never applied. */
+  worktreeCatalogVersionByRepoHost: Record<string, WorktreeCatalogVersion>
+  worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
+  workspaceLineageByChildKey: Readonly<Record<WorkspaceKey, WorkspaceLineage>>
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
-  /**
-   * In-flight / failed background worktree creations, keyed by a renderer
-   * `creationId`. Kept separate from `worktreesByRepo` on purpose — a real
-   * worktree row only exists once `git worktree add` succeeds, so faking one
-   * here would ripple through git-status, the tab model, persistence, and PTY
-   * spawning. Session-only; never persisted.
-   */
+  /** Session-only pending creates stay outside real worktree rows until git succeeds; fake rows would reach status, tabs, persistence and PTY spawn. */
   pendingWorktreeCreations: Record<string, PendingWorktreeCreation>
-  /**
-   * The pending creation currently filling the workspace content area (the
-   * "Creating worktree…" panel). Distinct from `activeWorktreeId`, which stays
-   * strictly real, so navigating to/away from a pending creation never routes a
-   * fake id through `setActiveWorktree` or nav-history.
-   */
+  /** Pending content surface, separate from real activeWorktreeId so navigation/history never receives a fake ID. */
   activePendingCreationId: string | null
   // Why: signals the matching worktree card's inline title editor to open. The
   // workspace.rename shortcut sets this; the card clears it on consume.
@@ -99,42 +119,18 @@ export type WorktreeSlice = {
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
   baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
   remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
-  /**
-   * Monotonically increasing counter that signals when the sidebar sort order
-   * should be recomputed.  Only bumped by events that represent meaningful
-   * external changes (worktree add/remove, terminal activity, backend refresh)
-   * — NOT by selection-triggered side-effects like clearing `isUnread`.
-   */
+  /** External work/activity/refresh epoch for sidebar sorting; selection side effects such as clearing unread must not advance it. */
   sortEpoch: number
-  /**
-   * Worktree IDs that have been activated at least once during this app
-   * session. The first activation of a worktree is special: its
-   * TerminalPane mounts for the first time, tabs reattach or fresh-spawn
-   * their PTYs, and the resulting `updateTabPtyId`/`clearTabPtyId` calls
-   * are all side-effects of the click — not real activity. On first
-   * activation we tag every terminal tab with `pendingActivationSpawn` so
-   * the bump is suppressed. Split-layout tabs may carry a numeric count so
-   * every click-driven pane remount is suppressed. After the first activation
-   * we do NOT re-tag, so subsequent events on the worktree (codex restart,
-   * new pane spawn, agent output) count normally. Session-only; never persisted.
-   */
+  /** sortEpoch after the settle window; the sidebar sort reads this (see store/settled-sort-epoch.ts). */
+  settledSortEpoch: number
+  /** Bumped by sortOrder-only changes, which skip sortEpoch so live Smart can't loop on its own saves. */
+  sortOrderEpoch: number
+  /** Session-only first-activation set; tag click-driven PTY reattach/spawn to suppress activity bumps (counts cover split remounts). Later real work must count normally. */
   everActivatedWorktreeIds: Set<string>
-  /**
-   * Persisted focus-recency timestamp per worktree, used as the primary
-   * ordering signal for Cmd+J's empty-query Worktrees section. Stamped by
-   * `markWorktreeVisited` from user-initiated activations
-   * (activateAndRevealWorktree), NOT from background activity events or raw
-   * `setActiveWorktree` calls. See docs/cmd-j-empty-query-ordering.md.
-   */
+  /** Persisted user-visit recency for empty-query Cmd+J; mark only through user activation, never background/raw setActiveWorktree (cmd-j-empty-query-ordering.md). */
+  /** New host-qualified rows use `${host}|${worktreeId}`; legacy bare ids remain readable. */
   lastVisitedAtByWorktreeId: Record<string, number>
-  /**
-   * Guards the one-shot hydration-time purge in `fetchAllWorktrees`. Set to
-   * `true` only after the first launch where every repo's `worktrees.list` IPC
-   * call succeeded AND at least one repo returned a non-empty result — at that
-   * moment the renderer has enough signal to treat the union of fetched ids as
-   * authoritative and purge stale `tabsByWorktree` keys left behind by pre-fix
-   * sessions (design §4.4). Session-only; never persisted.
-   */
+  /** One-shot authoritative purge after every repo detection succeeds and the union is nonempty; retire stale persisted tab keys only then (design §4.4). Session-only. */
   hasHydratedWorktreePurge: boolean
   /** Startup owns the initial all-host refresh; sidebar repo-change refreshes stay gated until it finishes. */
   startupWorktreeRefreshCompleted: boolean
@@ -146,7 +142,7 @@ export type WorktreeSlice = {
     ): Promise<HostQualifiedDetectedWorktreeResult>
     (repoId: string, options?: WorktreeFetchOptions): Promise<boolean>
   }
-  fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
+  fetchAllWorktrees: (options?: WorktreeRefreshAllOptions) => Promise<WorktreeRefreshResult[]>
   fetchWorktreeLineage: (options?: {
     forceLocalOwner?: boolean
     executionHostId?: ExecutionHostId
@@ -162,9 +158,7 @@ export type WorktreeSlice = {
     baseBranch?: string,
     setupDecision?: SetupDecision,
     sparseCheckout?: CreateSparseCheckoutRequest,
-    /** Telemetry-only: which renderer surface initiated this create. Optional
-     *  so existing callers default to `unknown`; specify when the surface
-     *  matters for the activation funnel. */
+    /** Optional activation-funnel source; existing callers default to unknown. */
     telemetrySource?: WorkspaceCreateTelemetrySource,
     displayName?: string,
     linkedIssue?: number,
@@ -178,8 +172,7 @@ export type WorktreeSlice = {
     linkedGitLabIssue?: number,
     startup?: WorktreeStartupLaunch,
     pendingFirstAgentMessageRename?: boolean,
-    /** When set, correlates the backend's `createWorktree:progress` events to a
-     *  renderer pending creation. Synchronous callers omit it. */
+    /** Correlates backend progress to pending creation; synchronous callers omit. */
     creationId?: string,
     linkedLinearIssueWorkspaceId?: string | null,
     linkedLinearIssueOrganizationUrlKey?: string | null,
@@ -187,12 +180,8 @@ export type WorktreeSlice = {
     linkedAzureDevOpsPR?: number | null,
     linkedGiteaPR?: number | null,
     compareBaseRef?: string,
-    options?: {
-      automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
-      linkedWorkItem?: WorkspaceLinkedItem | null
-      linkedTaskSourceContext?: TaskSourceContext | null
-    }
-  ) => Promise<CreateWorktreeResult>
+    options?: CreateWorktreeCallOptions
+  ) => Promise<CreatedWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
   /** Merge a status patch into an existing pending entry. */
@@ -206,86 +195,90 @@ export type WorktreeSlice = {
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
       provisioningLog?: string
+      checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
+      worktreeId?: string
+      heldChatMessage?: string
     }
   ) => void
-  /** Drop a pending entry, clearing the active surface if it pointed at this
-   *  creation. VM cleanup is for cancellation/dismissal, not successful handoff. */
+  /** Drop pending/active creation; VM cleanup applies to cancellation/dismissal, never successful handoff. */
   removePendingWorktreeCreation: (creationId: string, options?: { cleanupVm?: boolean }) => void
   /** Point the content panel at a pending creation (or clear it with null). */
   setActivePendingWorktreeCreation: (creationId: string | null) => void
   prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
+  /** Destructive: takes a host-qualified target because `id` alone repeats
+   *  across hosts and would delete another host's checkout (STA-4343). */
   removeWorktree: (
-    worktreeId: string,
+    target: WorktreeRemovalTarget,
     force?: boolean,
-    // 'forget-local' drops the workspace from Orca only (no remote Git/FS work)
-    // for workspaces pinned to a removed/disconnected SSH host. Reuses the same
-    // renderer-side teardown/purge as a normal remove.
-    options?: {
-      mode?: 'remove' | 'forget-local'
-      suppressPreservedBranchToast?: boolean
-    }
-  ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
-  markWorktreesDeleting: (worktreeIds: readonly string[]) => void
-  markWorktreesQueuedForDeletion: (worktreeIds: readonly string[]) => void
+    options?: RemoveWorktreeOptions
+  ) => Promise<({ ok: true } & RendererRemoveWorktreeResult) | { ok: false; error: string }>
+  markWorktreesDeleting: (worktrees: readonly (string | WorktreeDeleteStateTarget)[]) => void
+  markWorktreesQueuedForDeletion: (
+    worktrees: readonly (string | WorktreeDeleteStateTarget)[]
+  ) => void
   forceDeletePreservedBranch: (
     worktreeId: string,
     branchName: string,
-    expectedHead: string
+    expectedHead: string,
+    options?: {
+      suppressToast?: boolean
+      hostId?: ExecutionHostId
+      runtimeEnvironmentId?: string
+    }
   ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
-  clearWorktreeDeleteState: (worktreeId: string) => void
+  clearWorktreeDeleteState: (worktreeId: string, executionHostId?: ExecutionHostId) => void
+  /** Never rejects — most callers fire-and-forget. Callers that own a surface
+   *  the user is waiting on should read the result and say what went wrong. */
   updateWorktreeMeta: (
     worktreeId: string,
-    updates: Partial<WorktreeMeta>,
+    updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
     options?: WorktreeMetaUpdateOptions
-  ) => Promise<void>
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
   ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
-  updateWorktreesMeta: (
-    updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
-  ) => Promise<void>
-  /**
-   * Pin/unpin worktrees, then reveal the first changed one. The reveal keeps
-   * the shortcut action visible even though pinned worktrees also remain in
-   * their normal sidebar groups.
-   */
-  setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
-  markWorktreeUnread: (worktreeId: string) => void
-  observeTerminalGitHubPullRequestLink: (worktreeId: string, link: TerminalGitHubPRLink) => void
-  /** Clear the worktree's unread dot. Called on user interaction with any
-   *  terminal pane inside the worktree (keystroke, click) — matches
-   *  ghostty's "show until interact" model. Persists isUnread=false. */
-  clearWorktreeUnread: (worktreeId: string) => void
+  updateWorktreesMeta: (updatesByWorktreeId: readonly WorktreeMetaBatchUpdate[]) => Promise<void>
+  /** Pin/unpin then reveal the first changed target so the shortcut remains visible alongside normal sidebar groups. */
+  /** Each target names its copy; a host-less id two hosts publish is skipped, not guessed. */
+  setWorktreesPinnedAndReveal: (
+    targets: readonly Pick<Worktree, 'id' | 'hostId'>[],
+    isPinned: boolean
+  ) => void
+  observeTerminalGitHubPullRequestLink: (
+    worktreeId: string,
+    link: TerminalGitHubPRLink,
+    context?: WorkspaceReferenceObservationContext
+  ) => void
   bumpWorktreeActivity: (worktreeId: string) => void
-  /**
-   * Monotonic stamp of the focus-recency timestamp for a worktree. No-op if
-   * the supplied (or current) timestamp is not strictly greater than the
-   * stored value. Called from user-initiated activations only. See
-   * docs/cmd-j-empty-query-ordering.md.
-   */
-  markWorktreeVisited: (worktreeId: string, visitedAt?: number) => void
-  /**
-   * Drop `lastVisitedAtByWorktreeId` entries whose worktree IDs no longer
-   * exist. Must be called AFTER worktree hydration completes — repos load
-   * async, so pruning on raw rehydrate would nuke timestamps for worktrees
-   * whose repo hasn't yet hydrated.
-   */
+  /** User-activation-only recency stamp; ignore non-increasing timestamps (cmd-j-empty-query-ordering.md). */
+  markWorktreeVisited: (
+    worktreeId: string,
+    visitedAt?: number,
+    executionHostId?: ExecutionHostId
+  ) => void
+  /** Prune visits only after hydration; early pruning would erase entries for asynchronously loading repos. */
   pruneLastVisitedTimestamps: () => void
-  /**
-   * One-shot migration fixup: if the active worktree has no stored
-   * focus-recency timestamp after session hydration, seed it with the
-   * current time. Different semantics from `markWorktreeVisited` — this
-   * only fills in a missing entry on first load, it does not record a
-   * fresh visit.
-   */
+  /** One-shot migration seed for missing active recency after hydration; never records a fresh visit over an existing timestamp. */
   seedActiveWorktreeLastVisitedIfMissing: () => void
-  setActiveWorktree: (worktreeId: string | null, executionHostId?: ExecutionHostId) => void
-  /**
-   * Health-driven remount of one terminal tab: bumps the tab's generation so
-   * TerminalPane unmounts, detaches (preserving a live PTY), and remounts with
-   * a fresh xterm that reattaches and replays. Used by terminal-pane-recovery
-   * when a pane's write pipeline is certified dead or its input is
-   * undeliverable while the PTY is alive. Returns false when the tab is gone.
-   */
-  remountTerminalTabForRecovery: (tabId: string) => boolean
+  setActiveWorktree: (
+    worktreeId: string | null,
+    executionHostId?: ExecutionHostId,
+    options?: {
+      stateTransition?: ActiveWorktreeStateTransition
+      /** Tabs the caller just created there: their first spawn is new work, not a wake. */
+      createdTabIds?: readonly string[]
+    }
+  ) => boolean
+  /** Recovery remount detaches live PTY then reattaches/replays in fresh xterm. Update generation and row-owned admission ledger atomically; omitted request means external lifecycle remount without admission/ledger. */
+  remountTerminalTabForRecovery: (
+    tabId: string,
+    request?: TerminalRecoveryRemountRequest
+  ) => TerminalRecoveryRemountResult
+  /** Record what a mounted pane observed for its recovery attempt. Ignored
+   *  unless `generation` is the row's current, still-pending ledger epoch. */
+  settleTerminalTabRecovery: (
+    tabId: string,
+    generation: number,
+    outcome: Exclude<TerminalPaneRecoveryOutcome, 'pending'>
+  ) => void
   setActiveFolderWorkspace: (folderWorkspaceId: string, executionHostId?: ExecutionHostId) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]
@@ -293,31 +286,17 @@ export type WorktreeSlice = {
     worktreeId: string,
     executionHostId?: ExecutionHostId
   ) => Worktree | DetectedWorktree | undefined
-  /**
-   * Wipes every terminal- and worktree-scoped map entry for each given id.
-   * Called by the `worktrees:changed` listener on server-side deletions and
-   * one-shot at hydration time. See design §4.4.
-   */
-  purgeWorktreeTerminalState: (worktreeIds: string[]) => void
-  /**
-   * Retires every client-store row (repos, project host setups, worktree +
-   * detected-worktree rows, and their tab/PTY/browser/editor cascade) owned by a
-   * runtime host whose environment id was just removed from the saved list.
-   * Scoped to the removal diff so a serving instance's locally-persisted
-   * runtime-stamped repos — whose env id was never saved here — are never torn
-   * down. No-op when the removed set is empty or nothing matched (#8881).
-   */
+  /** Purge worktree/terminal maps on server deletion and once at hydration (design §4.4). */
+  purgeWorktreeTerminalState: (worktreeTargets: WorktreePurgeTargets) => void
+  /** Retire removed-runtime catalog/worktree/tab/PTY/browser/editor state only from saved-list removal diff. Serving-local runtime stamps never saved here must survive; empty/unmatched diff is inert (#8881). */
   purgeStaleRuntimeHostState: (removedEnvironmentIds: Iterable<string>) => void
-  /**
-   * Re-key every worktree-scoped map + pointer from `oldWorktreeId` to
-   * `newWorktreeId` after a folder rename changed the worktree's path-derived id.
-   * The inverse of purge: move state instead of dropping it, so the live worktree
-   * keeps its tabs, terminals, and selections. No-op when the ids match.
-   */
+  /** Move worktree-scoped maps/pointers on path-derived ID rename, preserving live tabs/selection; equal IDs are inert. */
   migrateWorktreeIdentity: (oldWorktreeId: string, newWorktreeId: string) => void
+  /** `ownerHostId` names the copy git answered for; null patches only an id no twin shares. */
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string | null }
+    identity: { head?: string; branch?: string | null },
+    ownerHostId: ExecutionHostId | null
   ) => void
   updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
   updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void
@@ -335,71 +314,4 @@ export function findWorktreeById(
   }
 
   return undefined
-}
-
-type RequiredKey<T> = { [K in keyof T]-?: undefined extends T[K] ? never : K }[keyof T]
-
-// Why: a present-but-undefined key in a spread ERASES the field. That is the
-// intended wire signal for clearing optional metadata (pushTarget), but on a
-// field Worktree declares required it produced a live `displayName: undefined`
-// that crashed the worktree palette (crash a1f81ea1). Typed off Worktree so a
-// newly-required field is protected automatically.
-const ERASURE_PROTECTED_KEYS: Record<Extract<RequiredKey<Worktree>, keyof WorktreeMeta>, true> = {
-  displayName: true,
-  comment: true,
-  linkedIssue: true,
-  linkedPR: true,
-  linkedLinearIssue: true,
-  isArchived: true,
-  isUnread: true,
-  isPinned: true,
-  sortOrder: true,
-  lastActivityAt: true
-}
-
-export function withoutErasedRequiredWorktreeFields(
-  updates: Partial<WorktreeMeta>
-): Partial<WorktreeMeta> {
-  const erased = Object.keys(ERASURE_PROTECTED_KEYS).filter(
-    (key) =>
-      updates[key as keyof WorktreeMeta] === undefined &&
-      Object.prototype.hasOwnProperty.call(updates, key)
-  )
-  if (erased.length === 0) {
-    return updates
-  }
-
-  const next = { ...updates }
-  for (const key of erased) {
-    delete next[key as keyof WorktreeMeta]
-  }
-  return next
-}
-
-export function applyWorktreeUpdates(
-  worktreesByRepo: Record<string, Worktree[]>,
-  worktreeId: string,
-  rawUpdates: Partial<WorktreeMeta>
-): Record<string, Worktree[]> {
-  const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const worktrees = worktreesByRepo[repoId]
-  if (!worktrees) {
-    return worktreesByRepo
-  }
-
-  let changed = false
-  const nextWorktrees = worktrees.map((worktree) => {
-    if (worktree.id !== worktreeId) {
-      return worktree
-    }
-
-    changed = true
-    return { ...worktree, ...updates }
-  })
-  if (!changed) {
-    return worktreesByRepo
-  }
-
-  return { ...worktreesByRepo, [repoId]: nextWorktrees }
 }

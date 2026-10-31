@@ -2,7 +2,11 @@ import { isAgentSessionOwnerBinding } from '../../shared/agent-session-host-auth
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
 import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
-import type { PtyProcessInfo } from './types'
+import {
+  cloneForegroundProcessEvidence,
+  isForegroundProcessEvidence
+} from '../../shared/foreground-process-evidence'
+import type { PtyProcessInfo } from './pty-provider-contract'
 
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES = 4096
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_BYTES = 32 * 1024 * 1024
@@ -49,17 +53,33 @@ export class PtyProcessListAdmission {
     const idBytes = retainedStringBytes(value.id)
     const cwdBytes = retainedStringBytes(value.cwd)
     const titleBytes = retainedStringBytes(value.title)
+    const foregroundProcessBytes = retainedOptionalStringBytes(value.foregroundProcess)
+    const inventorySourceBytes = retainedOptionalStringBytes(value.inventorySourceId)
     const worktreeIdBytes = retainedOptionalStringBytes(value.worktreeId)
     const terminalHandleBytes = retainedOptionalStringBytes(value.terminalHandle)
+    const paneKeyBytes = retainedOptionalStringBytes(value.paneKey)
     const wslDistroBytes =
       value.wslDistro === null ? 0 : retainedOptionalStringBytes(value.wslDistro)
+    const evidenceBytes =
+      value.foregroundProcessEvidence === undefined
+        ? 0
+        : isForegroundProcessEvidence(value.foregroundProcessEvidence)
+          ? Buffer.byteLength(JSON.stringify(value.foregroundProcessEvidence), 'utf8')
+          : null
     if (
       idBytes === null ||
       cwdBytes === null ||
       titleBytes === null ||
+      foregroundProcessBytes === null ||
+      inventorySourceBytes === null ||
+      (value.routed !== undefined && typeof value.routed !== 'boolean') ||
       worktreeIdBytes === null ||
       terminalHandleBytes === null ||
+      paneKeyBytes === null ||
       wslDistroBytes === null ||
+      evidenceBytes === null ||
+      (value.rootProcessId !== undefined &&
+        (!Number.isSafeInteger(value.rootProcessId) || value.rootProcessId <= 0)) ||
       (value.incarnationId !== undefined && !isPtyIncarnationId(value.incarnationId)) ||
       (value.agentSessionOwners !== undefined && !Array.isArray(value.agentSessionOwners))
     ) {
@@ -88,9 +108,13 @@ export class PtyProcessListAdmission {
       idBytes +
       cwdBytes +
       titleBytes +
+      foregroundProcessBytes +
+      inventorySourceBytes +
       worktreeIdBytes +
       terminalHandleBytes +
+      paneKeyBytes +
       wslDistroBytes +
+      evidenceBytes +
       ownerBytes
     if (
       nextEntries > MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES ||
@@ -107,10 +131,27 @@ export class PtyProcessListAdmission {
       id: value.id,
       cwd: value.cwd,
       title: value.title,
+      ...(value.inventorySourceId !== undefined
+        ? { inventorySourceId: value.inventorySourceId }
+        : {}),
+      ...(value.routed !== undefined ? { routed: value.routed } : {}),
+      ...(value.foregroundProcess !== undefined
+        ? { foregroundProcess: value.foregroundProcess }
+        : {}),
       ...(value.incarnationId !== undefined ? { incarnationId: value.incarnationId } : {}),
+      ...(value.rootProcessId !== undefined ? { rootProcessId: value.rootProcessId } : {}),
       ...(value.worktreeId !== undefined ? { worktreeId: value.worktreeId } : {}),
       ...(value.terminalHandle !== undefined ? { terminalHandle: value.terminalHandle } : {}),
+      ...(value.paneKey !== undefined ? { paneKey: value.paneKey } : {}),
       ...(value.wslDistro !== undefined ? { wslDistro: value.wslDistro } : {}),
+      ...(value.exiting === true ? { exiting: true as const } : {}),
+      ...(value.foregroundProcessEvidence !== undefined
+        ? {
+            foregroundProcessEvidence: cloneForegroundProcessEvidence(
+              value.foregroundProcessEvidence
+            )
+          }
+        : {}),
       ...(normalizedOwners !== undefined ? { agentSessionOwners: normalizedOwners } : {})
     }
   }

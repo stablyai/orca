@@ -1,17 +1,21 @@
-import { createReadStream } from 'node:fs'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { normalizePromptField } from '../../shared/agent-status-field-normalization'
 import {
-  addPreviewContent,
+  accumulatorSessionIdentity,
   cloneSessionAccumulator,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import {
+  consumeCodexCompletedMessage,
+  consumeCodexLegacyEventMessage,
+  consumeCodexResponseMessage
+} from './session-scanner-codex-message-records'
 import type {
   CodexUsageSnapshot,
   FileWithMtime,
@@ -19,27 +23,33 @@ import type {
   ResumableSessionParseState,
   SessionAccumulator
 } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   addCodexUsage,
   asRecord,
-  extractContentText,
   extractGitBranch,
   extractModel,
   extractString,
   normalizeCodexUsage,
-  normalizeTitleText,
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
+import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
+import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'
+import {
+  readCodexNonUserOrigin,
+  type CodexNonUserOrigin
+} from './session-scanner-codex-non-user-origin'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
   codexHome: string | null = null,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
+    input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
 
@@ -49,50 +59,37 @@ export async function parseCodexSessionFile(
     platform,
     codexHome,
     executionHostId,
+    messages,
     titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
-  })
-}
-
-export async function parseCodexSessionContent(args: {
-  file: FileWithMtime
-  content: string
-  platform?: NodeJS.Platform
-  codexHome?: string | null
-  executionHostId?: ExecutionHostId
-  executionHostPlatform?: NodeJS.Platform | null
-  readIndexedTitle?: (sessionId: string) => Promise<string | null>
-}): Promise<AiVaultSession | null> {
-  return parseCodexSessionLines({
-    file: args.file,
-    lines: args.content.split(/\r?\n/),
-    platform: args.platform ?? process.platform,
-    codexHome: args.codexHome ?? null,
-    executionHostId: args.executionHostId,
-    executionHostPlatform: args.executionHostPlatform,
-    titleReader: args.readIndexedTitle
   })
 }
 
 type CodexSessionParseState = {
   accumulator: SessionAccumulator
   previousTotals: CodexUsageSnapshot | null
-  rejectedWorkerSession: boolean
+  // Non-user origin excludes worker and internal transcripts stored alongside user sessions.
+  nonUserOrigin: CodexNonUserOrigin | null
   sawSessionMeta: boolean
-  // Which source set the current title; an index-file title outranks the raw
-  // first user prompt, so finalize must know whether 'meta' already won.
+  historyMode: string | null
+  // Metadata titles outrank indexed titles, which outrank raw user prompts.
   titleSource: 'meta' | 'user' | null
 }
 
-function createCodexParseState(file: FileWithMtime): CodexSessionParseState {
+function createCodexParseState(
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
+): CodexSessionParseState {
   return {
     accumulator: createAccumulator({
       agent: 'codex',
       file,
-      sessionId: sessionIdFromFileName(file.path)
+      sessionId: sessionIdFromFileName(file.path),
+      messages
     }),
     previousTotals: null,
-    rejectedWorkerSession: false,
+    nonUserOrigin: null,
     sawSessionMeta: false,
+    historyMode: null,
     titleSource: null
   }
 }
@@ -106,7 +103,7 @@ function cloneCodexParseState(state: CodexSessionParseState): CodexSessionParseS
 }
 
 function consumeCodexRecordLine(state: CodexSessionParseState, line: string): void {
-  if (state.rejectedWorkerSession) {
+  if (state.nonUserOrigin) {
     return
   }
   const record = parseJsonObject(line)
@@ -118,14 +115,14 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   updateTimeline(accumulator, extractString(record.timestamp))
 
   const payload = asRecord(record.payload)
-  if (record.type === 'session_meta' && payload) {
-    if (isCodexWorkerSession(payload)) {
-      // Why: Codex writes internal worker/sub-agent transcripts into the same
-      // history tree; AI Vault should show user-started sessions only.
-      state.rejectedWorkerSession = true
+  // Forks may copy parent metadata later; the first session_meta defines this thread.
+  if (record.type === 'session_meta' && payload && !state.sawSessionMeta) {
+    state.nonUserOrigin = readCodexNonUserOrigin(payload)
+    if (state.nonUserOrigin) {
       return
     }
     state.sawSessionMeta = true
+    state.historyMode = extractString(payload.history_mode)
     const sessionId = extractString(payload.id)
     if (sessionId) {
       accumulator.sessionId = sessionId
@@ -135,19 +132,13 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
       accumulator.title = metadataTitle
       state.titleSource = 'meta'
     }
-    const cwd = extractString(payload.cwd)
-    if (cwd) {
-      accumulator.cwd = cwd
-    }
+    accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
     accumulator.branch = extractGitBranch(payload.git) ?? accumulator.branch
     return
   }
 
   if (record.type === 'turn_context' && payload) {
-    const cwd = extractString(payload.cwd)
-    if (cwd) {
-      accumulator.cwd = cwd
-    }
+    accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
     const model = extractModel(payload)
     if (model) {
       accumulator.model = model
@@ -159,18 +150,13 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     return
   }
 
-  if (record.type === 'response_item' && payload.type === 'message') {
-    accumulator.messageCount++
-    if (payload.role === 'user' && !accumulator.title) {
-      accumulator.title = extractContentText(payload.content)
-      state.titleSource = accumulator.title ? 'user' : state.titleSource
+  if (record.type === 'response_item') {
+    if (state.historyMode === 'paginated') {
+      return
     }
-    addPreviewContent(
-      accumulator,
-      payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : 'unknown',
-      payload.content,
-      record.timestamp
-    )
+    if (consumeCodexResponseMessage(accumulator, payload, record.timestamp)) {
+      state.titleSource = 'user'
+    }
     return
   }
 
@@ -178,23 +164,17 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     return
   }
 
-  if (payload.type === 'user_message') {
-    accumulator.messageCount++
-    const prompt = normalizePromptField(payload.message)
-    if (prompt) {
-      accumulator.lastUserPrompt = prompt
+  if (state.historyMode === 'paginated' && payload.type === 'item_completed') {
+    if (consumeCodexCompletedMessage(accumulator, payload, record.timestamp)) {
+      state.titleSource = 'user'
     }
-    if (!accumulator.title) {
-      accumulator.title = extractContentText(payload.message)
-      state.titleSource = accumulator.title ? 'user' : state.titleSource
-    }
-    addPreviewContent(accumulator, 'user', payload.message, record.timestamp)
     return
   }
 
-  if (payload.type === 'agent_message') {
-    accumulator.messageCount++
-    addPreviewContent(accumulator, 'assistant', payload.message, record.timestamp)
+  if (payload.type === 'user_message' || payload.type === 'agent_message') {
+    if (consumeCodexLegacyEventMessage(accumulator, payload, record.timestamp)) {
+      state.titleSource = 'user'
+    }
     return
   }
 
@@ -237,14 +217,12 @@ async function finalizeCodexParseState(
     executionHostPlatform?: NodeJS.Platform | null
   }
 ): Promise<AiVaultSession | null> {
-  if (state.rejectedWorkerSession) {
+  if (state.nonUserOrigin) {
     return null
   }
   // Finalize a snapshot: the live state keeps accumulating appended lines.
   const snapshot = cloneCodexParseState(state)
-  // Why: Codex names threads lazily in session_index.jsonl, so the lookup runs
-  // per finalize (the index read is signature-cached) — a title that appears
-  // after the transcript was first parsed must still replace the raw prompt.
+  // Recheck the signature-cached index: a title can arrive after the transcript stops growing.
   if (snapshot.sawSessionMeta && snapshot.titleSource !== 'meta') {
     const indexedTitle = await args.titleReader?.(snapshot.accumulator.sessionId)
     if (indexedTitle) {
@@ -260,10 +238,13 @@ async function finalizeCodexParseState(
 
 export function createCodexSessionResumeState(
   file: FileWithMtime,
-  codexHome: string | null
+  codexHome: string | null,
+  messages?: TranscriptMessageSink
 ): ResumableSessionParseState {
-  return codexResumeStateFromParseState(createCodexParseState(file), codexHome, (sessionId) =>
-    readCodexSessionIndexTitle(file.path, codexHome, sessionId)
+  return codexResumeStateFromParseState(
+    createCodexParseState(file, messages),
+    codexHome,
+    (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
   )
 }
 
@@ -274,6 +255,19 @@ function codexResumeStateFromParseState(
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => consumeCodexRecordLine(state, line),
+    consumeLineBytes: (line) => {
+      const timelineOnlyRecord = readCodexTimelineOnlyRecord(
+        line,
+        state.accumulator.messages.active && state.historyMode !== 'paginated'
+      )
+      if (timelineOnlyRecord) {
+        updateTimeline(state.accumulator, timelineOnlyRecord.timestamp)
+      } else {
+        consumeCodexRecordLine(state, line.toString('utf8'))
+      }
+    },
+    shouldStop: () => state.nonUserOrigin !== null,
+    identity: () => accumulatorSessionIdentity(state.accumulator),
     clone: () =>
       codexResumeStateFromParseState(cloneCodexParseState(state), codexHome, titleReader),
     touchFile: (file) => {
@@ -292,12 +286,12 @@ async function parseCodexSessionLines(args: {
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
   titleReader?: (sessionId: string) => Promise<string | null>
+  messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
-  const state = createCodexParseState(args.file)
+  const state = createCodexParseState(args.file, args.messages)
   for await (const line of args.lines) {
     consumeCodexRecordLine(state, line)
-    if (state.rejectedWorkerSession) {
-      // Worker transcripts are excluded outright; stop reading early.
+    if (state.nonUserOrigin) {
       return null
     }
   }
@@ -307,26 +301,4 @@ async function parseCodexSessionLines(args: {
     executionHostId: args.executionHostId,
     executionHostPlatform: args.executionHostPlatform
   })
-}
-
-function extractCodexThreadSource(payload: Record<string, unknown>): string | null {
-  return extractString(payload.thread_source) ?? extractString(payload.threadSource)
-}
-
-function isCodexWorkerSession(payload: Record<string, unknown>): boolean {
-  const threadSource = extractCodexThreadSource(payload)
-  if (threadSource) {
-    return threadSource.toLowerCase() !== 'user'
-  }
-
-  const source = asRecord(payload.source)
-  return Boolean(asRecord(source?.subagent))
-}
-
-function extractCodexSessionMetadataTitle(payload: Record<string, unknown>): string | null {
-  return (
-    normalizeTitleText(extractString(payload.title) ?? '') ??
-    normalizeTitleText(extractString(payload.thread_name) ?? '') ??
-    normalizeTitleText(extractString(payload.threadName) ?? '')
-  )
 }

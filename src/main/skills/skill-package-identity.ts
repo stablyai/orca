@@ -2,40 +2,50 @@ import { createHash } from 'node:crypto'
 import type { Dirent } from 'node:fs'
 import { lstat, open, opendir } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
-import type { SkillBundleFileIdentity, SkillKnownSnapshot } from '../../shared/skill-freshness'
-import {
-  gitBlobSha,
-  skillPackageGitTreeSha,
-  type SkillGitTreeFileEntry
-} from './skill-git-tree-identity'
+
+export type SkillBundleFileIdentity = {
+  path: string
+  size: number
+  executable: boolean
+  classification: 'text' | 'binary'
+  exactSha256: string
+  textNormalizedSha256: string | null
+  identitySha256: string
+}
 
 type ObservedSkillFile = SkillBundleFileIdentity
 
 export type ObservedSkillPackage = {
   files: ObservedSkillFile[]
   observedDigest: string
-  /** Git tree sha of the raw bytes — comparable against the updater lock's skillFolderHash. */
-  observedGitTreeSha: string
 }
 
-// Why: package identity compares a live user directory against a tree the generator read
-// from a clean checkout, so anything the OS deposits on its own counts as drift the user
-// never caused. One Finder visit writes .DS_Store, and that alone made the copy
-// 'unrecognized' — reported as "may be modified", left out of the update, and unfixable by
-// running it, since the updater compares its lock to the source and never reads disk.
-//
-// Only OS-authored names belong here. Tolerating unexpected files in general would let a
-// modified skill pass: the entry is safe precisely because an official SKILL.md never
-// references these, so no agent can be routed into one. Mirrored in
-// config/scripts/generate-skill-bundle-manifest.mjs so neither side of the comparison can
-// bake one in. Deliberately NOT extended to mode bits — that would weaken identity for
-// real scripts.
+export function observedSkillPackagesMatch(
+  left: ObservedSkillPackage,
+  right: ObservedSkillPackage
+): boolean {
+  return (
+    left.files.length === right.files.length &&
+    left.files.every((file, index) => {
+      const other = right.files[index]
+      return (
+        file.path === other.path &&
+        file.size === other.size &&
+        file.executable === other.executable &&
+        file.classification === other.classification &&
+        file.exactSha256 === other.exactSha256 &&
+        file.identitySha256 === other.identitySha256
+      )
+    })
+  )
+}
+
+// Ignore only plain OS metadata files, mirrored in the bundle generator, or Finder visits mark pristine copies outdated. Preserve mode-bit identity for real scripts.
 const OS_METADATA_FILE_NAMES = new Set(['.ds_store', 'thumbs.db', 'ehthumbs.db', 'desktop.ini'])
 
 export function isOsMetadataSkillEntryName(name: string): boolean {
   const folded = name.toLocaleLowerCase('en-US')
-  // AppleDouble sidecars ('._SKILL.md') appear whenever a skill is copied through a
-  // filesystem that cannot hold macOS metadata inline.
+  // AppleDouble sidecars appear when the filesystem cannot store macOS metadata inline.
   return OS_METADATA_FILE_NAMES.has(folded) || folded.startsWith('._')
 }
 
@@ -58,7 +68,8 @@ type SkillPackageObservationLimits = {
 async function readBoundedSkillFile(
   path: string,
   remainingTotalBytes: number,
-  maximumSingleFileBytes: number
+  maximumSingleFileBytes: number,
+  signal?: AbortSignal
 ): Promise<Buffer> {
   const handle = await open(path, 'r')
   try {
@@ -72,6 +83,9 @@ async function readBoundedSkillFile(
     const bytes = Buffer.alloc(before.size)
     let offset = 0
     while (offset < bytes.length) {
+      if (signal?.aborted) {
+        throw new Error('skill-install-cancelled')
+      }
       const result = await handle.read(bytes, offset, bytes.length - offset, offset)
       if (result.bytesRead === 0) {
         throw new Error('skill-package-changed-during-read')
@@ -113,14 +127,14 @@ export function describeObservedSkillFile(
       normalized = null
     }
   }
-  const classification = normalized ? 'text' : 'binary'
   const exactSha256 = sha256(bytes)
-  const textNormalizedSha256 = normalized ? sha256(normalized) : null
+  const textNormalizedSha256 =
+    normalized && (normalized.equals(bytes) ? exactSha256 : sha256(normalized))
   return {
     path,
     size: bytes.length,
     executable,
-    classification,
+    classification: normalized ? 'text' : 'binary',
     exactSha256,
     textNormalizedSha256,
     identitySha256:
@@ -161,15 +175,25 @@ function matchesFileIdentity(
 
 export async function observeSkillPackage(
   packageRoot: string,
-  limits: SkillPackageObservationLimits = SKILL_PACKAGE_OBSERVATION_LIMITS
+  limits: SkillPackageObservationLimits = SKILL_PACKAGE_OBSERVATION_LIMITS,
+  executablePaths?: ReadonlySet<string>,
+  signal?: AbortSignal,
+  platform: NodeJS.Platform = process.platform,
+  inferShebangExecutables = false
 ): Promise<ObservedSkillPackage> {
   const files: ObservedSkillFile[] = []
-  const treeEntries: SkillGitTreeFileEntry[] = []
   const caseFoldedPaths = new Map<string, string>()
+  const normalizedExecutablePaths =
+    platform === 'win32' && executablePaths
+      ? new Set([...executablePaths].map((path) => path.toLocaleLowerCase('en-US')))
+      : executablePaths
   let entryCount = 0
   let totalBytes = 0
 
   async function visit(directory: string, depth: number): Promise<void> {
+    if (signal?.aborted) {
+      throw new Error('skill-install-cancelled')
+    }
     const directoryHandle = await opendir(directory)
     const entries: Dirent[] = []
     try {
@@ -187,16 +211,14 @@ export async function observeSkillPackage(
     } finally {
       await directoryHandle.close().catch(() => undefined)
     }
-    // Why: runtime Electron and the build's Node may carry different ICU data;
-    // identity order must match the generator without locale-sensitive collation.
+    // Use code-unit ordering so runtime/build ICU differences cannot change identity.
     entries.sort((left, right) => compareCodeUnits(left.name, right.name))
     for (const entry of entries) {
+      if (signal?.aborted) {
+        throw new Error('skill-install-cancelled')
+      }
       const absolutePath = join(directory, entry.name)
-      // Only a plain file is OS-authored, so the type decides and not the name alone: a
-      // directory or link wearing the name would otherwise hide a subtree from identity and
-      // slip past the link and special-file guards below. Decided before the case-fold map
-      // so two spellings of one sidecar cannot collide, and tolerant of a vanished entry so
-      // an unreadable sidecar cannot fail the whole package.
+      // Ignore metadata only when absent or a plain file; links/directories must still pass content guards. Filter before case-folding so sidecar spellings cannot collide.
       if (isOsMetadataSkillEntryName(entry.name)) {
         const sidecarStat = await lstat(absolutePath).catch(() => null)
         if (!sidecarStat || sidecarStat.isFile()) {
@@ -228,18 +250,25 @@ export async function observeSkillPackage(
         }
         await visit(absolutePath, depth + 1)
       } else if (fileStat.isFile()) {
+        if (fileStat.nlink !== 1) {
+          throw new Error('skill-package-link')
+        }
         if (files.length >= limits.maximumFiles) {
           throw new Error('skill-package-file-count-limit')
         }
         const bytes = await readBoundedSkillFile(
           absolutePath,
           limits.maximumTotalBytes - totalBytes,
-          limits.maximumSingleFileBytes
+          limits.maximumSingleFileBytes,
+          signal
         )
         totalBytes += bytes.length
-        const executable = (fileStat.mode & 0o111) !== 0
+        const executable = normalizedExecutablePaths
+          ? normalizedExecutablePaths.has(platform === 'win32' ? folded : manifestPath)
+          : platform === 'win32' && inferShebangExecutables
+            ? bytes.subarray(0, 2).equals(Buffer.from('#!'))
+            : (fileStat.mode & 0o111) !== 0
         files.push(describeObservedSkillFile(manifestPath, bytes, executable))
-        treeEntries.push({ path: manifestPath, executable, blobSha: gitBlobSha(bytes) })
       } else {
         throw new Error('skill-package-special-file')
       }
@@ -247,29 +276,17 @@ export async function observeSkillPackage(
   }
 
   await visit(packageRoot, 0)
-  return {
-    files,
-    observedDigest: skillPackageDigest(files),
-    observedGitTreeSha: skillPackageGitTreeSha(treeEntries)
-  }
+  return { files, observedDigest: skillPackageDigest(files) }
 }
 
-export function matchingKnownSnapshot(
+/** Require every bundled file identity; tolerate extra agent metadata such as agents/openai.yaml beside unchanged official bytes. */
+export function matchesBundledSkillFiles(
   observed: ObservedSkillPackage,
-  snapshots: readonly SkillKnownSnapshot[]
-): SkillKnownSnapshot | null {
-  for (const snapshot of snapshots.toReversed()) {
-    if (snapshot.files.length !== observed.files.length) {
-      continue
-    }
-    if (
-      snapshot.files.every((expected, index) => {
-        const actual = observed.files[index]
-        return Boolean(actual && matchesFileIdentity(actual, expected))
-      })
-    ) {
-      return snapshot
-    }
-  }
-  return null
+  expectedFiles: readonly SkillBundleFileIdentity[]
+): boolean {
+  const observedByPath = new Map(observed.files.map((file) => [file.path, file]))
+  return expectedFiles.every((expected) => {
+    const actual = observedByPath.get(expected.path)
+    return Boolean(actual && matchesFileIdentity(actual, expected))
+  })
 }

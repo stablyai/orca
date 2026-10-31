@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   acknowledgeAgents: vi.fn(),
+  subscribeAgentStatusChanges: vi.fn(() => vi.fn()),
   setActiveWorktree: vi.fn(),
   subscribeStore: vi.fn((_listener: (state: unknown, previousState: unknown) => void) => vi.fn()),
   onRevealAgent: vi.fn(),
@@ -14,27 +15,41 @@ const mocks = vi.hoisted(() => ({
   onSnapshotRequested: vi.fn(),
   getPopoutOpen: vi.fn(async () => false),
   publishSnapshot: vi.fn(async (_snapshot: DashboardSnapshot) => undefined),
-  buildDashboardSnapshot: vi.fn(
-    (_state: unknown, now: number): DashboardSnapshot => ({ generatedAt: now, cards: [] })
-  ),
+  buildDashboardSnapshot: vi.fn((_state: unknown, now: number): DashboardSnapshot => ({
+    generatedAt: now,
+    cards: []
+  })),
   offRevealAgent: vi.fn(),
   offAckAgent: vi.fn(),
   offPopoutOpenChanged: vi.fn(),
-  offSnapshotRequested: vi.fn()
+  offSnapshotRequested: vi.fn(),
+  activateTabAndFocusPane: vi.fn(),
+  activateAndRevealWorkspace: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
+      ...makeSnapshotWatchState(),
       acknowledgeAgents: mocks.acknowledgeAgents,
+      subscribeAgentStatusChanges: mocks.subscribeAgentStatusChanges,
       setActiveWorktree: mocks.setActiveWorktree
     }),
     subscribe: mocks.subscribeStore
   }
 }))
 
+vi.mock('@/runtime/structured-chat-name-observation', () => ({
+  subscribeStructuredChatTabNames: () => () => {},
+  getStructuredChatTabNames: () => new Map()
+}))
+
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
-  activateTabAndFocusPane: vi.fn()
+  activateTabAndFocusPane: mocks.activateTabAndFocusPane
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 
 vi.mock('./build-dashboard-snapshot', () => ({
@@ -48,16 +63,15 @@ import {
   repoIconsUnchanged,
   useDashboardPopoutBridge
 } from './useDashboardPopoutBridge'
-import type { DashboardSnapshotState } from './build-dashboard-snapshot'
-import type { AppState } from '@/store/types'
 
-type DashboardSnapshotWatchState = DashboardSnapshotState & Pick<AppState, 'agentStatusEpoch'>
+type DashboardSnapshotWatchState = Parameters<typeof dashboardSnapshotInputsChanged>[0]
 
 function makeSnapshotWatchState(): DashboardSnapshotWatchState {
   return {
     repos: [],
     worktreesByRepo: {},
     tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
     agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
     migrationUnsupportedByPtyId: {},
@@ -68,8 +82,7 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     acknowledgedAgentsByPaneKey: {},
     settings: null,
     agentStatusEpoch: 0,
-    // Why: seeded with real identities so the profile assertions below compare
-    // two distinct values — omitting them would pass against `undefined`.
+    // Seed distinct real identities so host-profile comparisons cannot pass against undefined.
     sshConnectionStates: new Map(),
     sshStateByEnvironment: new Map(),
     runtimeStatusByEnvironmentId: new Map(),
@@ -77,11 +90,16 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
     projectGroups: [],
+    sshTargetLabels: new Map(),
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     runtimeEnvironments: [],
     runtimeEnvironmentCatalogHydrated: false,
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
+    activeRepoId: null,
+    projects: [],
     removedRuntimeEnvironmentIds: new Set()
-  } as DashboardSnapshotWatchState
+  }
 }
 
 function Harness({ enabled }: { enabled: boolean }): null {
@@ -132,22 +150,89 @@ describe('useDashboardPopoutBridge', () => {
     expect(mocks.subscribeStore).not.toHaveBeenCalled()
   })
 
-  // The whole lazy design exists so an enabled-but-closed pop-out costs nothing:
-  // a live subscriber would rebuild a cross-worktree snapshot on store writes.
+  // Closed pop-outs must not subscribe and rebuild cross-worktree snapshots on store writes.
   it('subscribes to the store only while the pop-out is open', async () => {
     await act(async () => root.render(<Harness enabled />))
 
     expect(mocks.onPopoutOpenChanged).toHaveBeenCalledTimes(1)
     expect(mocks.subscribeStore).not.toHaveBeenCalled()
+    expect(mocks.buildDashboardSnapshot).not.toHaveBeenCalled()
 
     await act(async () => mocks.onPopoutOpenChanged.mock.calls[0][0](true))
 
     expect(mocks.subscribeStore).toHaveBeenCalledTimes(1)
+    expect(mocks.buildDashboardSnapshot).toHaveBeenCalledTimes(1)
     const unsubscribe = mocks.subscribeStore.mock.results[0]?.value as () => void
+    const notifyStore = mocks.subscribeStore.mock.calls[0][0]
 
     await act(async () => mocks.onPopoutOpenChanged.mock.calls[0][0](false))
 
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+    const previousState = makeSnapshotWatchState()
+    await act(async () => notifyStore({ ...previousState, agentStatusEpoch: 1 }, previousState))
+    expect(mocks.buildDashboardSnapshot).toHaveBeenCalledTimes(1)
+  })
+
+  it('reveals the agent on its exact execution host through the full activation', async () => {
+    mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
+    await act(async () => root.render(<Harness enabled />))
+
+    await act(async () =>
+      mocks.onRevealAgent.mock.calls[0][0]({
+        repoId: 'repo-1',
+        worktreeId: 'shared-worktree',
+        executionHostId: 'runtime:env-1',
+        tabId: 'tab-1',
+        leafId: 'leaf-1'
+      })
+    )
+
+    // Shared activation revives parked workspaces and their terminal view before pane focus.
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('shared-worktree', {
+      executionHostId: 'runtime:env-1'
+    })
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('tab-1', 'leaf-1', {
+      flashFocusedPane: true
+    })
+  })
+
+  it('activates a parked SSH workspace before reaching for its pane', async () => {
+    mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
+    await act(async () => root.render(<Harness enabled />))
+
+    await act(async () =>
+      mocks.onRevealAgent.mock.calls[0][0]({
+        repoId: 'repo-1',
+        worktreeId: 'remote-worktree',
+        executionHostId: 'ssh:devbox',
+        tabId: 'tab-1',
+        leafId: 'leaf-1'
+      })
+    )
+
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('remote-worktree', {
+      executionHostId: 'ssh:devbox'
+    })
+    expect(mocks.activateAndRevealWorkspace.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.activateTabAndFocusPane.mock.invocationCallOrder[0] as number
+    )
+  })
+
+  it('skips pane focus when the revealed workspace is gone', async () => {
+    mocks.activateAndRevealWorkspace.mockReturnValue(false)
+    await act(async () => root.render(<Harness enabled />))
+
+    await act(async () =>
+      mocks.onRevealAgent.mock.calls[0][0]({
+        repoId: 'repo-1',
+        worktreeId: 'deleted-worktree',
+        tabId: 'tab-1',
+        leafId: 'leaf-1'
+      })
+    )
+
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
   })
 
   it('ignores unrelated store writes while retaining every snapshot input', () => {
@@ -158,7 +243,7 @@ describe('useDashboardPopoutBridge', () => {
       'repos',
       'worktreesByRepo',
       'tabsByWorktree',
-      'agentStatusByPaneKey',
+      'unifiedTabsByWorktree',
       'retainedAgentsByPaneKey',
       'migrationUnsupportedByPtyId',
       'runtimeAgentOrchestrationByPaneKey',
@@ -178,12 +263,22 @@ describe('useDashboardPopoutBridge', () => {
       ).toBe(true)
     }
     expect(
+      dashboardSnapshotInputsChanged(
+        { ...previousState, agentStatusByPaneKey: { ...previousState.agentStatusByPaneKey } },
+        previousState
+      )
+    ).toBe(false)
+    expect(
       dashboardSnapshotInputsChanged({ ...previousState, agentStatusEpoch: 1 }, previousState)
+    ).toBe(false)
+    expect(
+      dashboardSnapshotInputsChanged(
+        { ...previousState, sshTargetLabels: new Map([['target-1', 'Builder']]) },
+        previousState
+      )
     ).toBe(true)
 
-    // Why: each card's preview terminal keys against a host-input profile
-    // derived from these. Not republishing leaves the pop-out encoding bytes
-    // for the host the pty used to run on.
+    // Host-profile inputs must republish independently; otherwise idle boards keep encoding for the PTY’s former host.
     const profileInputs: Partial<DashboardSnapshotWatchState>[] = [
       { sshConnectionStates: new Map() },
       { sshStateByEnvironment: new Map() },
@@ -204,6 +299,19 @@ describe('useDashboardPopoutBridge', () => {
       )
       .map((next) => Object.keys(next)[0])
     expect(republished).toEqual(profileInputs.map((next) => Object.keys(next)[0]))
+  })
+
+  it('republishes when the unified agent-session tab projection changes', () => {
+    const previousState = makeSnapshotWatchState()
+    expect(
+      dashboardSnapshotInputsChanged(
+        {
+          ...previousState,
+          unifiedTabsByWorktree: { 'worktree-1': [] }
+        },
+        previousState
+      )
+    ).toBe(true)
   })
 
   it('releases every dashboard listener when the experiment is disabled', async () => {
@@ -233,8 +341,7 @@ describe('repoIconsUnchanged', () => {
 
   it('matches on reference, not deep value, so an unchanged repo skips the resend', () => {
     expect(repoIconsUnchanged({ r1: icon }, { r1: icon })).toBe(true)
-    // Why: a structurally identical but freshly allocated icon means the store
-    // record was rebuilt, so the pop-out's copy may genuinely be stale.
+    // Rebuilt immutable icon objects may represent new content; reference replacement must trigger publication.
     expect(repoIconsUnchanged({ r1: { ...icon } }, { r1: icon })).toBe(false)
   })
 
@@ -256,8 +363,7 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
   const icons: Record<string, RepoIcon> = {
     r1: { type: 'image', src: 'data:image/png;base64,AAAA', source: 'upload' }
   }
-  // Longer than PUBLISH_THROTTLE_MS, so the next store change publishes on the
-  // leading edge instead of parking on the trailing timer.
+  // Cross the throttle boundary so changes publish immediately rather than wait on a trailing timer.
   const PAST_THROTTLE_MS = 1_000
   const WITHIN_THROTTLE_MS = 50
   let root: Root
@@ -291,7 +397,7 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
     const previousState = makeSnapshotWatchState()
     act(() =>
       mocks.subscribeStore.mock.calls[0][0](
-        { ...previousState, agentStatusEpoch: 1 },
+        { ...previousState, acknowledgedAgentsByPaneKey: { pane: 1 } },
         previousState
       )
     )
@@ -299,6 +405,19 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
   const notifyUnrelatedStoreWrite = (): void => {
     const previousState = makeSnapshotWatchState()
     act(() => mocks.subscribeStore.mock.calls[0][0]({ ...previousState }, previousState))
+  }
+  const notifyStatusChurn = (): void => {
+    const previousState = makeSnapshotWatchState()
+    act(() =>
+      mocks.subscribeStore.mock.calls[0][0](
+        {
+          ...previousState,
+          agentStatusByPaneKey: { ...previousState.agentStatusByPaneKey },
+          agentStatusEpoch: previousState.agentStatusEpoch + 1
+        },
+        previousState
+      )
+    )
   }
   const mountAndOpen = async (): Promise<void> => {
     await act(async () => root.render(<Harness enabled />))
@@ -322,16 +441,27 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
     await mountAndOpen()
     expect(mocks.publishSnapshot).toHaveBeenCalledTimes(1)
 
-    // Past the throttle, so an ungated write would publish on the leading edge
-    // rather than silently parking on the trailing timer.
+    // Assert beyond the throttle so an ungated publish cannot hide on its trailing timer.
     now += PAST_THROTTLE_MS
     notifyUnrelatedStoreWrite()
 
     expect(mocks.publishSnapshot).toHaveBeenCalledTimes(1)
   })
 
-  // A burst collapses onto the trailing timer, so that edge carries most of the
-  // republishes this PR exists to slim down.
+  it('does no snapshot work during live status churn', async () => {
+    await mountAndOpen()
+    mocks.buildDashboardSnapshot.mockClear()
+    mocks.publishSnapshot.mockClear()
+
+    for (let index = 0; index < 100; index += 1) {
+      notifyStatusChurn()
+    }
+
+    expect(mocks.buildDashboardSnapshot).not.toHaveBeenCalled()
+    expect(mocks.publishSnapshot).not.toHaveBeenCalled()
+  })
+
+  // Bursts publish on the trailing timer; that path must omit unchanged icons too.
   it('omits the icon map on the throttled trailing republish', async () => {
     await mountAndOpen()
     // Date.now stays spied — only the throttle's timer is faked.

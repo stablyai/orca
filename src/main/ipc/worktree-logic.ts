@@ -1,40 +1,31 @@
 import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
-import type { GlobalSettings, OrcaWorkspaceLayout, Repo } from '../../shared/types'
+import type { GlobalSettings, OrcaWorkspaceLayout } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
 import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
-import { isWslUncPath } from '../../shared/wsl-paths'
-import { splitWorktreeId } from '../../shared/worktree-id'
-import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
-import { getWslHome, parseWslPath } from '../wsl'
+import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/wsl-paths'
+import { splitWorktreeId } from '../../shared/worktree/id'
+import {
+  replaceKnownEmojiWithShortcodes,
+  setEmojiShortcodeDatasetLoader
+} from '../../shared/emoji-shortcode-catalog'
+import { requireEmojiShortcodeDataset } from './deferred-emoji-shortcode-dataset'
+import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
 
-type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
+setEmojiShortcodeDatasetLoader(requireEmojiShortcodeDataset)
+
+type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
+  /** Mirror Windows-drive repo worktrees into this project runtime's WSL distro; omitted retains default placement. */
+  wslMirrorDistro?: string
+}
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-export {
-  computeBranchName,
-  getConfiguredBranchPrefix,
-  computeValidatedBranchName
-} from './worktree-branch-name'
-export { mergeWorktree } from './worktree-metadata-merge'
-export { areWorktreePathsEqual } from './worktree-path-comparison'
-
-/**
- * Sanitize a worktree name for use in branch names and directory paths.
- * Strips unsafe characters and collapses runs of special chars to a single hyphen.
- */
 export function sanitizeWorktreeName(input: string): string {
-  // Why: keep Unicode letters/numbers (CJK, accented Latin, etc.) so users can
-  // name workspaces in their own language. Git ref-format permits non-ASCII
-  // bytes, and modern filesystems handle UTF-8 paths. Only strip characters
-  // git or the filesystem actually rejects.
+  // Preserve Unicode letters/numbers: Git permits them and workspace names must support users' languages.
   const sanitized = replaceKnownEmojiWithShortcodes(input)
     .trim()
     .replace(/[^\p{L}\p{N}._-]+/gu, '-')
     .replace(/-+/g, '-')
-    // Why: git check-ref-format rejects any ref containing `..`, so a prompt
-    // like "../../foo" that survives slugification as `..-..-foo` would
-    // produce a branch name git refuses to create. Collapse runs of dots
-    // to a single dot before the leading/trailing trim so internal `..`
-    // sequences can't reach git.
+    // Git rejects internal .. even after path separators are slugified.
     .replace(/\.{2,}/g, '.')
     .replace(/^[.-]+|[.-]+$/g, '')
 
@@ -55,26 +46,6 @@ function containsEmoji(input: string): boolean {
   )
 }
 
-export function sanitizeWorktreeDisplayName(input: string): string | undefined {
-  const withoutControls = Array.from(input, (char) => {
-    const code = char.charCodeAt(0)
-    return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? ' ' : char
-  }).join('')
-  const sanitized = withoutControls
-    // Why: titles come from external systems. Strip bidi override controls so a
-    // malicious title cannot visually reorder adjacent sidebar text.
-    .replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 120)
-    .trim()
-
-  return sanitized || undefined
-}
-
-/**
- * Ensure a target path is within the workspace directory (prevent path traversal).
- */
 export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: string): string {
   const resolvedWorkspaceDir = resolve(workspaceDir)
   const resolvedTargetPath = resolve(targetPath)
@@ -87,44 +58,128 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
   return resolvedTargetPath
 }
 
-/**
- * Compute the filesystem path where the worktree directory will be created.
- *
- * Why WSL special case: when the repo lives on a WSL filesystem, worktrees
- * must also live on the WSL filesystem. Creating them on the Windows side
- * (/mnt/c/...) would be extremely slow due to cross-filesystem I/O and
- * the terminal would open a Windows shell instead of WSL. We mirror the
- * Windows workspace layout inside ~/orca/workspaces on the WSL filesystem
- * (e.g. \\wsl.localhost\Ubuntu\home\user\orca\workspaces\repo\feature).
- */
+/** Keep WSL worktrees on the distro filesystem to avoid cross-filesystem I/O and Windows-shell startup. */
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
-  settings: WorktreePathSettings
+  settings: WorktreePathSettings,
+  workspaceRoot?: string
 ): string {
-  const workspaceRoot = computeWorkspaceRoot(repoPath, settings)
-  const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
+  return computeWorktreePathFromWorkspaceRoot(
+    sanitizedName,
+    repoPath,
+    workspaceRoot ?? computeWorkspaceRoot(repoPath, settings),
+    settings.nestWorkspaces
+  )
+}
 
-  if (settings.nestWorkspaces) {
+function computeWorktreePathFromWorkspaceRoot(
+  sanitizedName: string,
+  repoPath: string,
+  workspaceRoot: string,
+  nestWorkspaces: boolean
+): string {
+  const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
+  if (nestWorkspaces) {
     const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
     return pathOps.join(workspaceRoot, repoName, sanitizedName)
   }
   return pathOps.join(workspaceRoot, sanitizedName)
 }
 
-export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir: string }): string {
-  const wsl = parseWslPath(repoPath)
-  if (wsl && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
-    const wslHome = getWslHome(wsl.distro)
-    if (wslHome) {
-      // Why: WSL UNC paths are still Windows paths from Node's perspective.
-      // Mirror absolute local desktop workspace roots inside the distro so
-      // terminals stay on the WSL filesystem; repo-relative roots can resolve
-      // directly against the WSL repo path.
-      return win32.join(wslHome, 'orca', 'workspaces')
-    }
+/** Resolve WSL home asynchronously so a stopped distro cannot block main. */
+export async function computeWorktreePathAsync(
+  sanitizedName: string,
+  repoPath: string,
+  settings: WorktreePathSettings
+): Promise<string> {
+  return computeWorktreePathFromWorkspaceRoot(
+    sanitizedName,
+    repoPath,
+    await computeWorkspaceRootAsync(repoPath, settings),
+    settings.nestWorkspaces
+  )
+}
+
+/** Async WSL home probes avoid blocking main; synchronous callers retain the matching resolver below. */
+export async function computeWorkspaceRootAsync(
+  repoPath: string,
+  settings: { workspaceDir: string; wslMirrorDistro?: string }
+): Promise<string> {
+  const distro = mirrorDistroForWorkspaceRoot(repoPath, settings)
+  return workspaceRootForMirrorHome(
+    repoPath,
+    settings.workspaceDir,
+    distro ? await getWslHomeAsync(distro) : null
+  )
+}
+
+/**
+ * For authorization: never waits more than `deadlineMs` for a WSL home. Past it the root falls back
+ * as if the home were unknown, while the probe keeps running and fills the cache for later checks.
+ */
+export async function computeWorkspaceRootWithin(
+  repoPath: string,
+  settings: { workspaceDir: string; wslMirrorDistro?: string },
+  deadlineMs: number,
+  // Injected by main so this shared module stays free of main-only gate imports.
+  readHome: (distro: string) => Promise<string | null> = getWslHomeAsync
+): Promise<string> {
+  const distro = mirrorDistroForWorkspaceRoot(repoPath, settings)
+  if (!distro) {
+    return workspaceRootForMirrorHome(repoPath, settings.workspaceDir, null)
   }
-  return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), deadlineMs)
+  })
+  try {
+    const home = await Promise.race([readHome(distro), deadline])
+    return workspaceRootForMirrorHome(repoPath, settings.workspaceDir, home)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+export function computeWorkspaceRoot(
+  repoPath: string,
+  settings: { workspaceDir: string; wslMirrorDistro?: string }
+): string {
+  const distro = mirrorDistroForWorkspaceRoot(repoPath, settings)
+  return workspaceRootForMirrorHome(
+    repoPath,
+    settings.workspaceDir,
+    distro ? getWslHome(distro) : null
+  )
+}
+
+/** Whether the workspace root mirrors into a WSL home, which only a wsl.exe probe can resolve. */
+export function workspaceRootMirrorsIntoWsl(
+  repoPath: string,
+  settings: { workspaceDir: string; wslMirrorDistro?: string }
+): boolean {
+  return mirrorDistroForWorkspaceRoot(repoPath, settings) !== undefined
+}
+
+function mirrorDistroForWorkspaceRoot(
+  repoPath: string,
+  settings: { workspaceDir: string; wslMirrorDistro?: string }
+): string | undefined {
+  const distro = resolveMirrorDistro(repoPath, settings)
+  return distro && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)
+    ? distro
+    : undefined
+}
+
+function workspaceRootForMirrorHome(
+  repoPath: string,
+  workspaceDir: string,
+  wslHome: string | null
+): string {
+  // Desktop absolute roots must mirror into WSL; repo-relative roots already resolve inside the distro.
+  return wslHome
+    ? win32.join(wslHome, 'orca', 'workspaces')
+    : resolveWorkspaceDirForRepo(repoPath, workspaceDir)
 }
 
 export function computeRemoteWorktreePath(
@@ -139,8 +194,7 @@ export function computeRemoteWorktreePath(
   ) {
     return computeWorktreePath(sanitizedName, repoPath, settings)
   }
-  // Why: absolute global workspaceDir values belong to the desktop machine.
-  // SSH falls back to repo-qualified sibling paths so origin/main is not shared.
+  // Desktop absolute roots cannot apply to SSH hosts; qualify sibling paths per repo.
   const pathOps = getRuntimePathOps(repoPath, repoPath)
   const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
   return pathOps.join(repoPath, '..', `${repoName}-${sanitizedName}`)
@@ -148,11 +202,14 @@ export function computeRemoteWorktreePath(
 
 export function getWorktreePathSettings(
   repo: WorktreeBasePathRepo,
-  settings: WorktreePathSettings
+  settings: WorktreePathSettings,
+  wslMirrorDistro?: string
 ): WorktreePathSettings {
   return {
     nestWorkspaces: settings.nestWorkspaces,
-    workspaceDir: getEffectiveWorktreeBasePath(repo, settings)
+    workspaceDir: getEffectiveWorktreeBasePath(repo, settings),
+    // Resolve distro once at the store boundary so create, authorization and watch placement agree.
+    ...(wslMirrorDistro ? { wslMirrorDistro } : {})
   }
 }
 
@@ -194,12 +251,28 @@ function getEffectiveWorktreeBasePath(
   repo: WorktreeBasePathRepo,
   settings: WorktreePathSettings
 ): string {
-  return getRepoWorktreeBasePath(repo) ?? settings.workspaceDir
+  const basePath = getRepoWorktreeBasePath(repo)
+  if (basePath === undefined) {
+    return settings.workspaceDir
+  }
+  return resolveWslRepoWorktreeBasePath(repo.path, basePath)
 }
 
 function getRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): string | undefined {
   const trimmed = repo.worktreeBasePath?.trim()
   return trimmed || undefined
+}
+
+/** Prefer WSL filesystem for WSL-owned repos or Windows-drive repos executed by WSL Git, avoiding slow 9p stats. */
+function resolveMirrorDistro(
+  repoPath: string,
+  settings: { wslMirrorDistro?: string }
+): string | undefined {
+  const wsl = parseWslPath(repoPath)
+  if (wsl) {
+    return wsl.distro
+  }
+  return isWindowsAbsolutePathLike(repoPath) ? settings.wslMirrorDistro : undefined
 }
 
 function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: string): boolean {
@@ -209,22 +282,6 @@ function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: strin
   return !isWslUncPath(workspaceDir)
 }
 
-/**
- * Determine whether a display name should be persisted.
- * A display name is set only when the user's requested name differs from
- * both the branch name and the sanitized name (i.e. it was modified).
- */
-export function shouldSetDisplayName(
-  requestedName: string,
-  branchName: string,
-  sanitizedName: string
-): boolean {
-  return !(branchName === requestedName && sanitizedName === requestedName)
-}
-
-/**
- * Parse a composite worktreeId ("repoId::worktreePath") into its parts.
- */
 export function parseWorktreeId(worktreeId: string): { repoId: string; worktreePath: string } {
   const parsed = splitWorktreeId(worktreeId)
   if (!parsed) {
@@ -233,11 +290,7 @@ export function parseWorktreeId(worktreeId: string): { repoId: string; worktreeP
   return parsed
 }
 
-/**
- * Check whether a git error indicates the worktree is no longer tracked by git.
- * This happens when a worktree's internal git tracking is removed (e.g. via
- * `git worktree prune`) but the directory still exists on disk.
- */
+/** Git can prune tracking while leaving the checkout directory on disk. */
 export function isOrphanedWorktreeError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
@@ -258,8 +311,7 @@ export function isWindowsLongPathWorktreeRemovalError(
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .join('\n')
 
-  // Why: Git for Windows has reported this failure through both stderr and the
-  // thrown message, with wording that varies between "filename" and "path".
+  // Git for Windows varies filename/path wording and may report via stderr or thrown message.
   return /(?:file ?name|path).{0,40}too long|too long.{0,40}(?:file ?name|path)/i.test(details)
 }
 
@@ -282,9 +334,6 @@ export function isOrphanCompatiblePreflightError(error: unknown): boolean {
   return /not a git repository/i.test(details) || /\bENOENT\b/i.test(details)
 }
 
-/**
- * Format a human-readable error message for worktree removal failures.
- */
 export function formatWorktreeRemovalError(
   error: unknown,
   worktreePath: string,

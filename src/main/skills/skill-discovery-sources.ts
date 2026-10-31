@@ -1,53 +1,31 @@
-import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import { basename, join, type posix } from 'node:path'
-import type {
-  DiscoveredSkill,
-  SkillDiscoverySource,
-  SkillProvider,
-  SkillSourceKind
-} from '../../shared/skills'
+import type { SkillDiscoverySource, SkillProvider, SkillSourceKind } from '../../shared/skills'
 import type { AgentType } from '../../shared/agent-status-types'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import {
+  SKILL_INSTALL_PROVIDERS,
+  type SkillInstallProviderId
+} from '../../shared/skill-install-providers'
+import type { SkillProviderRootOverrides } from './skill-provider-destinations'
+import { stablePathId } from './skill-discovery-classification'
+import {
+  resolveDefaultHermesSkillsRoot,
+  resolveEnvironmentHermesSkillsRoot,
+  resolveEnvironmentSkillProviderRoots
+} from './skill-provider-runtime-roots'
 
 export type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
+
+export {
+  sortDiscoveredSkills,
+  sortSkillDiscoverySources,
+  sourceKindForSkill,
+  sourceLabelForSkill,
+  stablePathId
+} from './skill-discovery-classification'
 type SkillDiscoveryPathApi = Pick<typeof posix, 'basename' | 'join'>
-
-export function stablePathId(pathValue: string): string {
-  return createHash('sha1').update(pathValue).digest('hex').slice(0, 16)
-}
-
-// Skill classification and ordering are identical for native and WSL discovery;
-// only the path arithmetic differs (node:path vs pathPosix), so both callers
-// share these and pass the matching path adapter.
-type SkillRelativePathApi = { relative: (from: string, to: string) => string; sep: string }
-
-export function sourceKindForSkill(
-  root: SkillScanRoot,
-  skillFilePath: string,
-  pathApi: SkillRelativePathApi
-): SkillSourceKind {
-  if (
-    root.sourceKind === 'home' &&
-    pathApi.relative(root.path, skillFilePath).split(pathApi.sep)[0] === '.system'
-  ) {
-    return 'bundled'
-  }
-  return root.sourceKind
-}
-
-export function sourceLabelForSkill(root: SkillScanRoot, sourceKind: SkillSourceKind): string {
-  return sourceKind === 'bundled' ? `${root.label} bundled` : root.label
-}
-
-export function compareSkills(a: DiscoveredSkill, b: DiscoveredSkill): number {
-  return (
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
-    a.sourceLabel.localeCompare(b.sourceLabel, undefined, { sensitivity: 'base' }) ||
-    a.skillFilePath.localeCompare(b.skillFilePath)
-  )
-}
 
 function source(
   id: string,
@@ -60,6 +38,56 @@ function source(
   return { id, label, path, sourceKind, providers, owner }
 }
 
+// Why: Claude has its own SkillProvider tag; every other agent shares agent-skills.
+function skillProvidersFor(id: SkillInstallProviderId): SkillProvider[] {
+  return id === 'claude' ? ['claude'] : ['agent-skills']
+}
+
+function providerHomeSources(
+  home: string,
+  pathApi: SkillDiscoveryPathApi,
+  overrides: SkillProviderRootOverrides
+): SkillScanRoot[] {
+  return SKILL_INSTALL_PROVIDERS.flatMap((provider) => {
+    if (!provider.globalSegments) {
+      return []
+    }
+    return [
+      source(
+        `home-${provider.id}`,
+        `${provider.displayName} home`,
+        overrides[provider.id] ?? pathApi.join(home, ...provider.globalSegments),
+        'home',
+        skillProvidersFor(provider.id),
+        provider.id
+      )
+    ]
+  })
+}
+
+function providerRepoSources(
+  repoPath: string,
+  repoLabel: string,
+  pathApi: SkillDiscoveryPathApi
+): SkillScanRoot[] {
+  return SKILL_INSTALL_PROVIDERS.flatMap((provider) => {
+    const segments = provider.workspaceSegments
+    if (!segments) {
+      return []
+    }
+    return [
+      source(
+        `repo-${provider.id}-${stablePathId(repoPath)}`,
+        `${repoLabel} ${segments[0]}`,
+        pathApi.join(repoPath, ...segments),
+        'repo',
+        skillProvidersFor(provider.id),
+        provider.id
+      )
+    ]
+  })
+}
+
 export function buildSkillDiscoverySources(
   args: {
     homeDir?: string
@@ -67,12 +95,20 @@ export function buildSkillDiscoverySources(
     repos?: Repo[]
     includeCwd?: boolean
     pathApi?: SkillDiscoveryPathApi
+    providerRootOverrides?: SkillProviderRootOverrides
   } = {}
 ): SkillScanRoot[] {
   const pathApi = args.pathApi ?? { basename, join }
   const home = args.homeDir ?? homedir()
   const cwd = args.cwd ?? process.cwd()
+  const providerRootOverrides =
+    args.providerRootOverrides ?? (args.pathApi ? {} : resolveEnvironmentSkillProviderRoots())
+  // Read HERMES_HOME only on this process's host; a custom path adapter describes another host with POSIX Hermes defaults.
+  const hermesSkillsRoot = args.pathApi
+    ? pathApi.join(home, '.hermes', 'skills')
+    : (resolveEnvironmentHermesSkillsRoot() ?? resolveDefaultHermesSkillsRoot({ homeDir: home }))
   const roots: SkillScanRoot[] = [
+    // Why: Codex reads `.agents/skills` today; this legacy home still holds older installs.
     source(
       'home-codex',
       'Codex home',
@@ -90,14 +126,6 @@ export function buildSkillDiscoverySources(
       null
     ),
     source(
-      'home-claude',
-      'Claude home',
-      pathApi.join(home, '.claude', 'skills'),
-      'home',
-      ['claude'],
-      'claude'
-    ),
-    source(
       'codex-plugin-cache',
       'Codex plugin cache',
       pathApi.join(home, '.codex', 'plugins', 'cache'),
@@ -105,16 +133,9 @@ export function buildSkillDiscoverySources(
       ['codex', 'agent-skills'],
       'codex'
     ),
-    // Why: `npx skills add --global` writes into each agent's own home skills
-    // directory, so coverage misses them unless we scan every provider root.
-    source(
-      'home-grok',
-      'Grok home',
-      pathApi.join(home, '.grok', 'skills'),
-      'home',
-      ['agent-skills'],
-      'grok'
-    ),
+    // Provider home roots also receive global npx installs; canonical roots alone miss them.
+    ...providerHomeSources(home, pathApi, providerRootOverrides),
+    // Why: discovery-only agent folders; installs for these agents go to the canonical root.
     source(
       'home-opencode',
       'OpenCode home',
@@ -140,28 +161,30 @@ export function buildSkillDiscoverySources(
       'omp'
     ),
     source(
-      'home-gemini',
-      'Gemini home',
-      pathApi.join(home, '.gemini', 'skills'),
+      'home-qoder',
+      'Qoder home',
+      pathApi.join(home, '.qoder', 'skills'),
       'home',
       ['agent-skills'],
-      'gemini'
+      'qoder'
     ),
+    source('home-hermes', 'Hermes home', hermesSkillsRoot, 'home', ['agent-skills'], 'hermes'),
     source(
-      'home-antigravity',
-      'Antigravity home',
-      pathApi.join(home, '.gemini', 'antigravity', 'skills'),
+      'home-prime-agent',
+      'Prime Agent home',
+      pathApi.join(home, '.prime', 'agent', 'skills'),
       'home',
       ['agent-skills'],
-      'antigravity'
+      'prime-agent'
     ),
+    // Why: Muse installs to `.agents/skills` but also reads XDG config home.
     source(
-      'home-cursor',
-      'Cursor home',
-      pathApi.join(home, '.cursor', 'skills'),
+      'home-muse',
+      'Muse home',
+      pathApi.join(home, '.config', 'muse', 'skills'),
       'home',
       ['agent-skills'],
-      'cursor'
+      'muse'
     )
   ]
 
@@ -189,13 +212,23 @@ export function buildSkillDiscoverySources(
         ['agent-skills'],
         null
       ),
+      ...providerRepoSources(repoPath, label, pathApi),
+      // OpenCode and Qoder also read their own project folders; they install into the canonical root above.
       source(
-        `repo-claude-${stablePathId(repoPath)}`,
-        `${label} .claude`,
-        pathApi.join(repoPath, '.claude', 'skills'),
+        `repo-qoder-${stablePathId(repoPath)}`,
+        `${label} .qoder`,
+        pathApi.join(repoPath, '.qoder', 'skills'),
         'repo',
-        ['claude'],
-        'claude'
+        ['agent-skills'],
+        'qoder'
+      ),
+      source(
+        `repo-opencode-${stablePathId(repoPath)}`,
+        `${label} .opencode`,
+        pathApi.join(repoPath, '.opencode', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'opencode'
       )
     )
   }

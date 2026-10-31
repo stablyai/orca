@@ -1,11 +1,13 @@
 import { execFileSync } from 'node:child_process'
 import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { devNull, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearConfiguredWorktreeSharedDirectoriesCacheForTests,
   getConfiguredWorktreeSharedDirectories,
+  getConfiguredWorktreeSharedDirectoriesCacheSizeForTests,
+  MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES,
   getWorktreeSharedLinkPaths,
   resolveWorktreeSharedDirectories
 } from './worktree-shared-directories'
@@ -16,16 +18,40 @@ import {
 import { assertWorktreeCleanForRemoval } from './worktree'
 import { getStatus } from './status'
 
+// An empty config file works with Windows Git (os.devNull does not) and isolates the production runner too.
+let gitConfigRoot: string
+let previousGitConfigGlobal: string | undefined
+let previousGitConfigNosystem: string | undefined
+
+beforeAll(() => {
+  gitConfigRoot = mkdtempSync(join(tmpdir(), 'orca-shared-dirs-gitconfig-'))
+  const emptyGlobalGitConfig = join(gitConfigRoot, 'global.gitconfig')
+  writeFileSync(emptyGlobalGitConfig, '')
+  previousGitConfigGlobal = process.env.GIT_CONFIG_GLOBAL
+  previousGitConfigNosystem = process.env.GIT_CONFIG_NOSYSTEM
+  process.env.GIT_CONFIG_GLOBAL = emptyGlobalGitConfig
+  process.env.GIT_CONFIG_NOSYSTEM = '1'
+})
+
+afterAll(() => {
+  restoreGitEnv('GIT_CONFIG_GLOBAL', previousGitConfigGlobal)
+  restoreGitEnv('GIT_CONFIG_NOSYSTEM', previousGitConfigNosystem)
+  rmSync(gitConfigRoot, { recursive: true, force: true })
+})
+
+function restoreGitEnv(
+  name: 'GIT_CONFIG_GLOBAL' | 'GIT_CONFIG_NOSYSTEM',
+  value: string | undefined
+): void {
+  if (value === undefined) {
+    delete process.env[name]
+    return
+  }
+  process.env[name] = value
+}
+
 const git = (args: string[], cwd: string): void => {
-  execFileSync('git', args, {
-    cwd,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: devNull,
-      GIT_CONFIG_SYSTEM: devNull
-    }
-  })
+  execFileSync('git', args, { cwd, stdio: 'ignore' })
 }
 
 describe('resolveWorktreeSharedDirectories', () => {
@@ -141,6 +167,15 @@ describe('resolveWorktreeSharedDirectories', () => {
 })
 
 describe('getConfiguredWorktreeSharedDirectories', () => {
+  it('bounds cache growth when repository paths churn', () => {
+    for (let index = 0; index < MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES + 4; index += 1) {
+      getConfiguredWorktreeSharedDirectories(`/repo-${index}`)
+    }
+
+    expect(getConfiguredWorktreeSharedDirectoriesCacheSizeForTests()).toBe(
+      MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES
+    )
+  })
   let repo: string
 
   beforeEach(() => {
@@ -153,8 +188,7 @@ describe('getConfiguredWorktreeSharedDirectories', () => {
   })
 
   it('returns the configured names without existence or gitignore filtering', () => {
-    // Why: neither directory exists, yet removal still needs both names to
-    // recognize and unlink the symlinks a previous creation left behind.
+    // Removal needs configured names even after the primary directory disappears.
     writeFileSync(
       join(repo, 'orca.yaml'),
       'worktree:\n  sharedDirectories:\n    - node_modules\n    - .cache\n'
@@ -200,10 +234,7 @@ describe('getConfiguredWorktreeSharedDirectories', () => {
   })
 })
 
-// Why: `node_modules/` is a directory-only ignore rule. It matches the primary's
-// real directory, so the shared directory resolves, but never the worktree's
-// symlink — Git reports that link as untracked and refuses a non-force removal
-// unless deletion is told to tolerate it.
+// Directory-only ignore rules hide the primary directory, but not its worktree symlink.
 describe('shared directories and worktree removal', () => {
   let root: string
   let primary: string
@@ -251,10 +282,7 @@ describe('shared directories and worktree removal', () => {
     ).resolves.toBeUndefined()
   })
 
-  // Why: the halves are tested apart — resolver output here, a hardcoded
-  // `['node_modules']` in the status tests. This pins the seam between them, so a
-  // resolver that ever returns a differently-spelled path can't leave the link
-  // showing as a phantom untracked row.
+  // Pass actual resolver output to status so path spelling cannot drift across the seam.
   it('leaves status clean when the resolved directory is fed back as a shared link', async () => {
     await createWorktreeSharedPaths(
       primary,
@@ -269,10 +297,6 @@ describe('shared directories and worktree removal', () => {
     expect(status.entries).toEqual([])
   })
 
-  // Why: `-z` output is NUL-delimited and `.trim()` leaves interior NULs, so the
-  // raw stdout reached the user as `?? node_modules<NUL>?? precious.txt<NUL>` —
-  // raw control bytes in a message, listing the very link this feature exists to
-  // suppress. The error must name only what the user can actually act on.
   it('reports only genuine blockers in the removal error, with no NUL bytes', async () => {
     await createWorktreeSharedPaths(
       primary,
@@ -289,15 +313,10 @@ describe('shared directories and worktree removal', () => {
     })
 
     await expect(removal).rejects.toThrow('uncommitted or untracked')
-    // Why an exact match: it proves both halves at once — no interior NUL, and
-    // the tolerated `node_modules` link absent from what the user is told to fix.
     await expect(removal).rejects.toMatchObject({ stdout: '?? precious.txt' })
   })
 
-  // Why `-z` is used at all: Git C-quotes non-ASCII paths under `--porcelain`,
-  // so a byte-for-byte comparison against the configured entry would miss and the
-  // link would read as a blocker. A space alone is not quoted but is the case a
-  // naive whitespace split would break.
+  // NUL records preserve C-quoted Unicode names and names with spaces for exact matching.
   it('tolerates shared directories whose names have a space or non-ASCII characters', async () => {
     const names = ['my shared dir', 'ライブラリ']
     for (const name of names) {

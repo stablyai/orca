@@ -1,17 +1,17 @@
-import type { IssueSourcePreference } from '../../shared/types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import { pickPreferredGitRemote } from '../../shared/preferred-git-remote'
 import { getDefaultRemote } from '../git/repo'
 import { getGitHubApiRepositoryForRemote } from './github-api-repository'
 
 type GitExec = (args: string[]) => Promise<{ stdout: string; stderr: string }>
 
-// Why: explicit origin must match issue listing; otherwise hosting identity
-// keeps contributor clones on the upstream project's PR namespace.
+// Explicit origin matches issue listing; otherwise honor the upstream project's PR namespace.
 export async function resolveGitHubReviewHeadRemote(args: {
   repoPath: string
   issueSourcePreference?: IssueSourcePreference
   connectionId?: string | null
-  localGitOptions?: { wslDistro?: string }
+  localGitOptions?: { wslDistro?: string; ghAccount?: GhAccountBinding }
   gitExec: GitExec
 }): Promise<string> {
   const { stdout } = await args.gitExec(['remote'])
@@ -25,8 +25,7 @@ export async function resolveGitHubReviewHeadRemote(args: {
     }
     throw new Error('Repo has no configured origin remote.')
   }
-  // Why: identity probes cost a `remote get-url` (plus a possible gh auth
-  // lookup) each; only multi-remote clones are ambiguous enough to need them.
+  // Avoid per-remote identity/auth probes unless multiple remotes make selection ambiguous.
   if (remotes.length > 1) {
     for (const remote of ['upstream', 'origin']) {
       if (!remotes.includes(remote)) {
@@ -43,10 +42,9 @@ export async function resolveGitHubReviewHeadRemote(args: {
       }
     }
   }
-  // Why: when no remote maps to a GitHub project the hosting identity cannot
-  // guide the choice; keep the legacy per-transport fallback.
+  // Without GitHub identity, retain transport-specific remote selection.
   if (args.connectionId) {
     return pickPreferredGitRemote(remotes)
   }
-  return getDefaultRemote(args.repoPath, args.localGitOptions ?? {})
+  return getDefaultRemote(args.repoPath, args.localGitOptions ?? {}, remotes)
 }

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
-import type { WorkspaceStatus, Worktree } from '../../../../shared/types'
 import {
   CARD_SELECTOR,
   getCardDropTarget,
@@ -31,6 +30,8 @@ type DragState = {
   currentX: number
   currentY: number
   worktreeIds: string[]
+  worktreeIdentities: string[]
+  worktreeKeys: string[]
   sourceCard: HTMLElement
   preview: HTMLElement | null
   previewOffsetX: number
@@ -40,21 +41,11 @@ type DragState = {
   latestDropTarget: WorkspaceKanbanCardTrackedDropTarget | null
 }
 
-type UseWorkspaceKanbanCardPointerDragParams = {
-  open: boolean
-  boardRef: React.RefObject<HTMLElement | null>
-  selectedWorktreeIds: ReadonlySet<string>
-  selectedWorktrees: readonly Worktree[]
-  onDropWorktreesInStatus: (args: {
-    worktreeIds: readonly string[]
-    status: WorkspaceStatus
-    dropIndex: number
-  }) => void
-  onShouldShowDropIndicator: (worktreeIds: readonly string[], status: WorkspaceStatus) => boolean
-  onPinWorktrees: (worktreeIds: readonly string[]) => void
-  onDragTargetChange: (status: WorkspaceStatus | null) => void
-  onPinDragTargetChange: (isOver: boolean) => void
-}
+export { resolveWorkspaceKanbanPointerDragSelection } from './workspace-kanban-pointer-drag-selection'
+import {
+  resolveWorkspaceKanbanPointerDragSelection,
+  type UseWorkspaceKanbanCardPointerDragParams
+} from './workspace-kanban-pointer-drag-selection'
 
 export function useWorkspaceKanbanCardPointerDrag({
   open,
@@ -81,8 +72,7 @@ export function useWorkspaceKanbanCardPointerDrag({
   const dragTargetChangeRef = useRef(onDragTargetChange)
   const pinDragTargetChangeRef = useRef(onPinDragTargetChange)
 
-  // Why: document-level pointer handlers stay stable during drags, but their
-  // selection/drop refs must reflect the latest board state before events run.
+  // Stable document handlers must read current selection and drop callbacks during drags.
   selectedWorktreeIdsRef.current = selectedWorktreeIds
   selectedWorktreesRef.current = selectedWorktrees
   dropWorktreesInStatusRef.current = onDropWorktreesInStatus
@@ -117,7 +107,7 @@ export function useWorkspaceKanbanCardPointerDrag({
       }
       setDraggedCardsDragging({
         board: boardRef.current,
-        worktreeIds: state.worktreeIds,
+        worktreeIdentities: state.worktreeIdentities,
         enabled: false
       })
       removeCardDropIndicator()
@@ -139,7 +129,7 @@ export function useWorkspaceKanbanCardPointerDrag({
         pinWorktreesRef.current(state.worktreeIds)
       } else if (commitTarget.status) {
         dropWorktreesInStatusRef.current({
-          worktreeIds: state.worktreeIds,
+          worktreeKeys: state.worktreeKeys,
           status: commitTarget.status,
           dropIndex: commitTarget.dropIndex
         })
@@ -154,7 +144,7 @@ export function useWorkspaceKanbanCardPointerDrag({
       isPointerDragActiveRef.current = true
       setDraggedCardsDragging({
         board: boardRef.current,
-        worktreeIds: state.worktreeIds,
+        worktreeIdentities: state.worktreeIdentities,
         enabled: true
       })
       state.preview = createDragPreview(state)
@@ -181,7 +171,7 @@ export function useWorkspaceKanbanCardPointerDrag({
       dragTargetChangeRef.current(dropTarget.status)
       if (
         dropTarget.status &&
-        shouldShowDropIndicatorRef.current(state.worktreeIds, dropTarget.status)
+        shouldShowDropIndicatorRef.current(state.worktreeKeys, dropTarget.status)
       ) {
         updateCardDropIndicator(board, dropTarget)
       } else {
@@ -287,10 +277,12 @@ export function useWorkspaceKanbanCardPointerDrag({
         return
       }
       const card = target.closest<HTMLElement>(CARD_SELECTOR)
-      const worktreeId = card?.dataset.workspaceBoardCardId
+      const worktreeIdentity = card?.dataset.workspaceBoardCardId
+      const worktreeId = card?.dataset.workspaceBoardWorktreeId
       const board = boardRef.current
       if (
         !card ||
+        !worktreeIdentity ||
         !worktreeId ||
         !board?.contains(card) ||
         shouldIgnoreWorkspaceKanbanCardPointerDown(target, card)
@@ -299,10 +291,13 @@ export function useWorkspaceKanbanCardPointerDrag({
       }
 
       const selectedWorktrees = selectedWorktreesRef.current
-      const worktreeIds =
-        selectedWorktreeIdsRef.current.has(worktreeId) && selectedWorktrees.length > 1
-          ? selectedWorktrees.map((worktree) => worktree.id)
-          : [worktreeId]
+      const { worktreeIds, worktreeIdentities, worktreeKeys } =
+        resolveWorkspaceKanbanPointerDragSelection({
+          sourceWorktreeId: worktreeId,
+          sourceWorktreeIdentity: worktreeIdentity,
+          selectedWorktreeIds: selectedWorktreeIdsRef.current,
+          selectedWorktrees
+        })
       dragRef.current = {
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -310,6 +305,8 @@ export function useWorkspaceKanbanCardPointerDrag({
         currentX: event.clientX,
         currentY: event.clientY,
         worktreeIds,
+        worktreeIdentities,
+        worktreeKeys,
         sourceCard: card,
         preview: null,
         previewOffsetX: 0,

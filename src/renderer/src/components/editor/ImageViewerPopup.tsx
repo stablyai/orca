@@ -61,7 +61,10 @@ export default function ImageViewerPopup({
                 alt={filename}
                 className={cn(
                   'object-contain',
-                  imageLayoutSize ? 'block h-full w-full' : 'block max-h-full max-w-full'
+                  imageLayoutSize
+                    ? 'block h-full w-full'
+                    : // Percentage maxima cannot constrain the w-max/h-max box before load; use viewport units.
+                      'block max-h-[100vh] max-w-[100vw]'
                 )}
               />
             </div>

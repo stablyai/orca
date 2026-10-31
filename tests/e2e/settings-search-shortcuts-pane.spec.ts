@@ -10,31 +10,28 @@ test.describe('Settings sidebar search on the Shortcuts pane', () => {
       if (!store) {
         throw new Error('window.__store is not available')
       }
-      // Why: the spec asserts on English strings; the host machine may run a
-      // non-English system locale, which 'system' would follow.
+      // Pin English instead of following the host locale.
       await store.getState().updateSettings({ uiLanguage: 'en' })
       store.getState().openSettingsPage()
     })
 
     const searchInput = orcaPage.getByPlaceholder('Search settings')
     await expect(searchInput).toBeVisible()
+    await expect(searchInput).toBeFocused()
     await searchInput.fill('shortcuts')
 
-    // The query matches the pane title, so the Shortcuts pane auto-activates.
     await expect(orcaPage.getByRole('heading', { name: 'Shortcuts', exact: true })).toBeVisible()
 
     // Regression: a pane-title-only query used to blank the whole list (0/112).
     await expect(orcaPage.getByText('Go to File', { exact: true })).toBeVisible()
     await expect(orcaPage.getByText('No shortcuts match those filters.')).not.toBeVisible()
 
-    // Regression: the pane's own search was dead while the global query was
-    // active, because it intersected with an already-empty base list.
+    // Keep pane search working with a global query; the old empty base list broke their intersection.
     const localSearch = orcaPage.getByPlaceholder('Search command or keys')
     await localSearch.fill('go to')
     await expect(orcaPage.getByText('Go to File', { exact: true })).toBeVisible()
     await expect(orcaPage.getByText('Force Reload', { exact: true })).not.toBeVisible()
 
-    // A row-matching global query still narrows the list as before.
     await localSearch.clear()
     await searchInput.fill('worktree')
     await expect(orcaPage.getByText('Create worktree', { exact: true })).toBeVisible()

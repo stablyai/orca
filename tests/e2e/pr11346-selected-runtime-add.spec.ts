@@ -1,9 +1,15 @@
+import { expectSidebarProjectVisible } from './helpers/sidebar-project-visibility'
+import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { rmSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../src/shared/types'
+import type { FolderWorkspace } from '../../src/shared/folder-workspace-types'
+import type { ProjectGroup } from '../../src/shared/project-group-types'
+import type { Repo } from '../../src/shared/repo-types'
 import { expect, test } from './helpers/orca-app'
+import { revealPairedClientWindow } from './helpers/paired-client-window-reveal'
+import { forwardRendererConsole } from './helpers/renderer-console-forwarding'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient
@@ -18,10 +24,7 @@ import {
 } from './pr11346-selected-runtime-identity-oracle'
 
 async function selectRuntimeHost(page: Page, runtimeName: string): Promise<Locator> {
-  await page
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openSidebarProjectDialog(page)
   const dialog = page.getByRole('dialog', { name: /Add a project/i })
   await expect(dialog).toBeVisible()
   const hostPicker = dialog.getByRole('combobox')
@@ -92,6 +95,8 @@ async function runSelectedRuntimeAddJourney(
 
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, runtimeName)
+  // Forward renderer console because contained render failures expose their component stacks only there.
+  forwardRendererConsole(client.page, testInfo)
   const serverUserDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const clientUserDataDir = await client.app.evaluate(({ app }) => app.getPath('userData'))
   const serverRuntime = new RuntimeClient(serverUserDataDir)
@@ -99,16 +104,11 @@ async function runSelectedRuntimeAddJourney(
 
   try {
     const measurements: Record<string, number> = {}
-    if (visible) {
-      await client.app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.show()
-      })
-      expect(
-        await client.app.evaluate(
-          ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isVisible() ?? false
-        )
-      ).toBe(true)
-    }
+    // The client drives both topologies; hidden-window parity is measured on the hub.
+    expect(await revealPairedClientWindow(client)).toMatchObject({
+      isVisible: true,
+      wasVisible: false
+    })
     let startedAt = Date.now()
     await setActiveRuntimePreference(client.page, null)
     await setActiveRuntimePreference(client.page, client.environmentId)
@@ -561,8 +561,10 @@ async function runSelectedRuntimeAddJourney(
       if (!store) {
         throw new Error('Renderer store unavailable')
       }
-      await store.getState().fetchProjectGroups()
-      await store.getState().fetchFolderWorkspaces()
+      await store.getState().fetchProjectGroups({ runtimeEnvironmentId: null, throwOnError: true })
+      await store
+        .getState()
+        .fetchFolderWorkspaces({ runtimeEnvironmentId: null, throwOnError: true })
       return {
         folderWorkspaces: store.getState().folderWorkspaces,
         projectGroups: store.getState().projectGroups
@@ -726,9 +728,15 @@ async function runSelectedRuntimeAddJourney(
       ...fixture.nestedRepoPaths.map((repoPath) => path.basename(repoPath))
     ]) {
       // Why: duplicate checkout names are disambiguated with a parent path.
-      await expect(client.page.getByText(projectName, { exact: false }).first()).toBeVisible()
+      await expectSidebarProjectVisible(client.page, projectName)
     }
     expect(await client.getDirectSshAttemptTargetIds()).toEqual([])
+    // Why: revealing the client must not leak into the HUB's window visibility.
+    expect(
+      await electronApp.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().some((window) => window.isVisible())
+      )
+    ).toBe(visible)
     console.info(`[pr11346-routing] ${JSON.stringify({ topology: runtimeName, ...measurements })}`)
     await client.page.screenshot({
       path: testInfo.outputPath(`${visible ? 'headed' : 'hidden-window'}-selected-runtime-add.png`),

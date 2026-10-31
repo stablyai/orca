@@ -1,0 +1,125 @@
+// Avoid tested-module imports: vi.mock factories must not re-enter fs.
+import { vi } from 'vitest'
+import type { Mock } from 'vitest'
+import type * as Fs from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
+import type * as FilesystemAuth from '../ipc/filesystem/filesystem-auth'
+import type * as GitRunner from '../git/runner'
+import type * as BundledRipgrepPath from '../ripgrep/bundled-ripgrep-path'
+
+// Loose mock payloads allow partial fixtures while suites assert the exact call arguments.
+type WatchCallback = (...args: unknown[]) => void
+
+export const lstatMock: Mock<(path: string) => Promise<unknown>> = vi.fn()
+export const openMock: Mock<(...args: Parameters<typeof FsPromises.open>) => Promise<unknown>> =
+  vi.fn()
+export const readdirMock: Mock<(path: string, options?: unknown) => Promise<unknown>> = vi.fn()
+export const renameMock: Mock<(from: string, to: string) => Promise<unknown>> = vi.fn()
+export const resolveAuthorizedPathMock: Mock<
+  (targetPath: string, store?: unknown, options?: unknown) => Promise<unknown>
+> = vi.fn()
+export const statMock: Mock<(path: string) => Promise<unknown>> = vi.fn()
+export const watchInWatcherProcessMock: Mock<
+  (
+    rootPath: string,
+    onEvents: WatchCallback,
+    onError?: WatchCallback,
+    signal?: AbortSignal
+  ) => Promise<unknown>
+> = vi.fn()
+export const closeWatcherInWatcherProcessMock: Mock<(rootPath: string) => Promise<unknown>> =
+  vi.fn()
+export const getLocalGitOptionsForRegisteredWorktreeMock: Mock<
+  (store: unknown, worktreePath: string, repoPath?: string) => unknown
+> = vi.fn()
+export const bundledRipgrepCommandMock: Mock<(options?: { wsl?: boolean }) => string> = vi.fn()
+export const wslAwareSpawnMock: Mock<
+  (command: string, args: string[], options: unknown) => unknown
+> = vi.fn()
+export const watchMock: Mock<
+  (rootPath: string, options: unknown, callback: WatchCallback) => unknown
+> = vi.fn()
+
+export function enoent(): Error {
+  return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+}
+
+export async function fsModuleMock(): Promise<
+  Omit<typeof Fs, 'watch'> & { watch: typeof watchMock }
+> {
+  const actual = await vi.importActual<typeof Fs>('fs')
+  return {
+    ...actual,
+    watch: watchMock
+  }
+}
+
+export async function fsPromisesModuleMock() {
+  const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+  return {
+    ...actual,
+    lstat: lstatMock,
+    open: (...args: Parameters<typeof actual.open>) => {
+      const impl = openMock.getMockImplementation()
+      return impl ? openMock(...args) : actual.open(...args)
+    },
+    readdir: readdirMock,
+    rename: renameMock,
+    stat: statMock
+  }
+}
+
+export const fileWatcherHostMock = {
+  closeFileExplorerWatcherInWatcherProcess: closeWatcherInWatcherProcessMock,
+  watchFileExplorerInWatcherProcess: watchInWatcherProcessMock
+}
+
+export async function filesystemAuthModuleMock() {
+  const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem/filesystem-auth')
+  return {
+    ...actual,
+    resolveAuthorizedPath: resolveAuthorizedPathMock
+  }
+}
+
+export async function gitRunnerModuleMock() {
+  const actual = await vi.importActual<typeof GitRunner>('../git/runner')
+  return {
+    ...actual,
+    wslAwareSpawn: wslAwareSpawnMock
+  }
+}
+
+export async function bundledRipgrepPathModuleMock() {
+  const actual = await vi.importActual<typeof BundledRipgrepPath>('../ripgrep/bundled-ripgrep-path')
+  return {
+    ...actual,
+    bundledRipgrepCommand: bundledRipgrepCommandMock
+  }
+}
+
+export const localWorktreeRuntimeOptionsMock = {
+  getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
+}
+
+export function resetRuntimeFileMocks(): void {
+  lstatMock.mockReset()
+  openMock.mockReset()
+  readdirMock.mockReset()
+  renameMock.mockReset()
+  resolveAuthorizedPathMock.mockReset()
+  statMock.mockReset()
+  watchInWatcherProcessMock.mockReset()
+  closeWatcherInWatcherProcessMock.mockReset()
+  watchMock.mockReset()
+  bundledRipgrepCommandMock.mockReset()
+  getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
+  wslAwareSpawnMock.mockReset()
+  getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
+  bundledRipgrepCommandMock.mockImplementation((options) =>
+    options?.wsl ? '/bundled/linux/rg' : '/bundled/rg'
+  )
+  readdirMock.mockResolvedValue([])
+  lstatMock.mockRejectedValue(enoent())
+  renameMock.mockResolvedValue(undefined)
+}

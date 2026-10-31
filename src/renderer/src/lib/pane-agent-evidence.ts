@@ -1,60 +1,47 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
 import { detectAgentStatusFromTitle, getAgentLabel } from '../../../shared/agent-detection'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
-import type { TuiAgent } from '../../../shared/types'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
   type AgentStatusState,
   type AgentType
 } from '../../../shared/agent-status-types'
+import { isAgentStatusFresh } from '../../../shared/agent-status-freshness'
 
-// Why: explicit agent status entries (from hook-based reports) can go stale if
-// the agent process exits without sending a final update. This helper lets
-// callers decide whether to trust the entry based on a configurable TTL.
-// (Moved here from agent-status.ts so the evidence resolvers below and the
-// aggregate consumers share one gate without an import cycle.)
+// Hook status can outlive exited agents; share one configurable-TTL freshness gate without aggregate/resolver import cycles.
 export function isExplicitAgentStatusFresh(
-  entry: Pick<AgentStatusEntry, 'updatedAt'>,
+  entry: Pick<
+    AgentStatusEntry,
+    | 'updatedAt'
+    | 'evidenceObservedAt'
+    | 'mirroredEvidenceReceivedAt'
+    | 'restoredUnconfirmed'
+    | 'structuredHostOwned'
+  >,
   now: number,
   staleAfterMs: number
 ): boolean {
-  return now - entry.updatedAt <= staleAfterMs
+  return isAgentStatusFresh(entry, now, staleAfterMs)
 }
 
-/**
- * Title-only activity classification for consumers whose product rule really
- * is "what does this title say" (timer seeding, ready-wait polling, sort-epoch
- * comparison, synthetic-title writing) — they combine no hook/liveness
- * evidence, so routing them through the pane resolver would misstate intent.
- */
+/** Title-only consumers (timers, readiness, sorting, synthetic writes) intentionally ignore hook/liveness evidence. */
 export function classifyTitleActivity(title: string): AgentStatus | null {
   return detectAgentStatusFromTitle(title)
 }
 
-/**
- * The two facets of title-derived agent identity. The ACTIVITY LABEL treats
- * Claude's bare status prefixes (spinner/`✳`/`. `/`* `) as Claude activity;
- * COMMITTED identity rejects them — evidence that something runs is not proof
- * of who. Consumers historically split on this by accident; pick the facet
- * that matches the product rule, never both out of habit.
- */
+/** Activity may treat bare Claude status prefixes as a label; committed identity requires agent proof. Choose the facet matching the product rule. */
 export function resolveTitleActivityLabel(title: string): string | null {
   return getAgentLabel(title)
 }
 
 /** See resolveTitleActivityLabel — the strict facet for identity decisions. */
-export function resolveCommittedTitleAgentType(title: string): TuiAgent | null {
+export function resolveCommittedTitleAgentType(title: string): TerminalAgent | null {
   return resolveExplicitTerminalTitleAgentType(title)
 }
 
-/**
- * Combined pane activity evidence for aggregate consumers. The hook and title
- * layers are exposed separately on purpose: consumers legitimately combine
- * them differently (send targets let a live permission title override a fresh
- * working hook; the worktree dot suppresses titles on hook-covered panes), so
- * a single merged status would silently change behavior.
- */
+/** Expose hook/title layers separately: send menus and workspace dots combine them differently, so merging would change behavior. */
 export type AgentActivityDecision = {
   /** Fresh (within AGENT_STATUS_STALE_AFTER_MS), pane-scoped hook state; null when absent or stale. */
   hookState: AgentStatusState | null
@@ -114,8 +101,3 @@ export function resolvePaneAgentActivity(
     livePtyRequired: false
   }
 }
-
-// Deliberately absent: a resolvePaneAgentOwner precedence resolver. The only
-// Phase 2 identity consumer (native-chat toggle) reads hook identity without a
-// freshness gate, so a gated owner resolver would change its behavior; the
-// owner resolver lands with its first real consumer in a later slice.

@@ -1,15 +1,13 @@
-// Why: buffer rebuilds (snapshot replay clear + rewrite) parse asynchronously.
-// Until the rebuild's bytes have parsed, viewportY/baseY describe a transient
-// half-cleared buffer; any intent capture/enforce latched from it pins the
-// terminal at line 0. Callers bracket the rebuild and re-apply intent once
-// after parse (see terminal-scroll-intent.ts).
-const terminalScrollIntentRebuilds = new WeakMap<object, number>()
+import type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
+
+// Async rebuild exposes transient half-cleared viewportY/baseY; bracket it to prevent capturing line-zero intent, then restore once parsing finishes.
+const terminalScrollIntentRebuilds = new WeakMap<TerminalScrollIntentTarget, number>()
 const terminalScrollIntentRebuildCompletions = new WeakMap<
-  object,
+  TerminalScrollIntentTarget,
   Set<(completed: boolean) => void>
 >()
 const deferredTerminalGeometryMutations = new WeakMap<
-  object,
+  TerminalScrollIntentTarget,
   {
     mutations: Map<string, () => void>
   }
@@ -23,18 +21,17 @@ function notifyRebuildCompletions(
     try {
       completion(completed)
     } catch (error) {
-      // Why: one optional observer must not strand the rebuild or prevent the
-      // coordinator from restoring the authoritative viewport.
+      // Optional observer failures must not strand rebuild or authoritative viewport restoration.
       console.error('[terminal] scroll-intent rebuild completion failed', error)
     }
   }
 }
 
-export function beginTerminalScrollIntentBufferRebuild(terminal: object): void {
+export function beginTerminalScrollIntentBufferRebuild(terminal: TerminalScrollIntentTarget): void {
   terminalScrollIntentRebuilds.set(terminal, (terminalScrollIntentRebuilds.get(terminal) ?? 0) + 1)
 }
 
-export function endTerminalScrollIntentBufferRebuild(terminal: object): void {
+export function endTerminalScrollIntentBufferRebuild(terminal: TerminalScrollIntentTarget): void {
   const count = terminalScrollIntentRebuilds.get(terminal) ?? 0
   if (count <= 1) {
     terminalScrollIntentRebuilds.delete(terminal)
@@ -46,12 +43,14 @@ export function endTerminalScrollIntentBufferRebuild(terminal: object): void {
   terminalScrollIntentRebuilds.set(terminal, count - 1)
 }
 
-export function isTerminalScrollIntentRebuildInFlight(terminal: object): boolean {
+export function isTerminalScrollIntentRebuildInFlight(
+  terminal: TerminalScrollIntentTarget
+): boolean {
   return (terminalScrollIntentRebuilds.get(terminal) ?? 0) > 0
 }
 
 export function onTerminalScrollIntentBufferRebuildComplete(
-  terminal: object,
+  terminal: TerminalScrollIntentTarget,
   completion: (completed: boolean) => void
 ): () => void {
   if (!isTerminalScrollIntentRebuildInFlight(terminal)) {
@@ -72,10 +71,9 @@ export function onTerminalScrollIntentBufferRebuildComplete(
   }
 }
 
-// Why: source-dimension replay must finish and restore its viewport before
-// unrelated fit/resize work is allowed to reflow the rebuilt buffer.
+// Finish source-grid replay/viewport restoration before unrelated fits can reflow the buffer.
 export function deferTerminalGeometryMutationDuringRebuild(
-  terminal: object,
+  terminal: TerminalScrollIntentTarget,
   operationKey: string,
   mutation: () => void
 ): boolean {
@@ -98,14 +96,12 @@ export function deferTerminalGeometryMutationDuringRebuild(
       deferredTerminalGeometryMutations.delete(terminal)
       return
     }
-    // Why: rebuild completion listeners run before the coordinator restores
-    // intent; the microtask makes every geometry mutation post-restore.
+    // Completion listeners precede viewport restore; defer geometry to a microtask after it.
     queueMicrotask(() => {
       if (deferredTerminalGeometryMutations.get(terminal) !== deferred) {
         return
       }
-      // Keep the entry cancellable until execution begins; disposal may land
-      // after rebuild completion but before this post-restore microtask.
+      // Keep cancellation live until execution; disposal can follow rebuild completion but precede the microtask.
       deferredTerminalGeometryMutations.delete(terminal)
       for (const [key, pendingMutation] of mutations) {
         if (!deferTerminalGeometryMutationDuringRebuild(terminal, key, pendingMutation)) {
@@ -117,7 +113,9 @@ export function deferTerminalGeometryMutationDuringRebuild(
   return true
 }
 
-export function cancelTerminalScrollIntentBufferRebuildCompletions(terminal: object): void {
+export function cancelTerminalScrollIntentBufferRebuildCompletions(
+  terminal: TerminalScrollIntentTarget
+): void {
   const completions = terminalScrollIntentRebuildCompletions.get(terminal)
   terminalScrollIntentRebuildCompletions.delete(terminal)
   notifyRebuildCompletions(completions, false)

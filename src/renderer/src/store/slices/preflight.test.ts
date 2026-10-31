@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { create } from 'zustand'
 import type { PreflightStatus } from '../../../../preload/api-types'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '../types'
-import { createPreflightSlice } from './preflight'
-import { createRuntimeStatusSlice } from './runtime-status'
+import { createTestStore } from './store-test-helpers'
+import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const preflightCheck = vi.fn()
 const callRuntimeRpc = vi.fn()
@@ -18,13 +19,8 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
   clearRecentRuntimeCompatibilityFailure: vi.fn(),
   clearRuntimeCompatibilityCache: vi.fn(),
-  unwrapRuntimeRpcResult: <T>(response: { result?: T }) => response.result as T,
-  getActiveRuntimeTarget: (
-    settings?: { activeRuntimeEnvironmentId?: string | null } | null
-  ): { kind: 'local' } | { kind: 'environment'; environmentId: string } => {
-    const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
-    return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
-  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test responses always carry the typed result.
+  unwrapRuntimeRpcResult: <T>(response: { result?: T }) => response.result as T
 }))
 
 globalThis.window = {
@@ -47,20 +43,11 @@ globalThis.window = {
   } as unknown as Window['api']
 } as Window & typeof globalThis
 
-function createTestStore() {
-  return create<AppState>()(
-    (...a) =>
-      ({
-        ...createPreflightSlice(...a),
-        ...createRuntimeStatusSlice(...a)
-      }) as AppState
-  )
-}
-
 function resetPreflightMocks(): void {
   preflightCheck.mockReset()
   callRuntimeRpc.mockReset()
   platformGet.mockReset().mockReturnValue({ platform: 'linux' })
+  resetRendererAppPlatformCacheForTests()
 }
 
 function makeStatus(glabInstalled: boolean): PreflightStatus {
@@ -112,6 +99,15 @@ function deferred<T>() {
     reject = rej
   })
   return { promise, resolve, reject }
+}
+
+function focusWorktree(store: ReturnType<typeof createTestStore>, path: string): void {
+  store.setState({
+    repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+    worktreesByRepo: { 'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path })] },
+    activeRepoId: 'repo-1',
+    activeWorktreeId: 'wt-1'
+  })
 }
 
 describe('createPreflightSlice', () => {
@@ -184,6 +180,40 @@ describe('createPreflightSlice', () => {
     await Promise.all([forced, lazy])
 
     expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+  })
+
+  it('sends a focus wake instead of joining a background forced poll', async () => {
+    resetPreflightMocks()
+    const poll = deferred<PreflightStatus>()
+    preflightCheck.mockReturnValueOnce(poll.promise).mockResolvedValueOnce(makeStatus(true))
+    const store = createTestStore()
+    focusWorktree(store, '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo')
+
+    const background = store.getState().refreshPreflightStatus({ force: true })
+    // The poll may be refused for a stopped WSL distro; the user's focus must still reach main.
+    const focus = store.getState().refreshPreflightStatus({ force: true, wakeWslDistro: true })
+    const again = store.getState().refreshPreflightStatus({ force: true })
+
+    expect(preflightCheck).toHaveBeenCalledTimes(2)
+    expect(preflightCheck).toHaveBeenLastCalledWith({
+      force: true,
+      wakeWslDistro: true,
+      wslDistro: 'Ubuntu'
+    })
+    poll.resolve(makeStatus(false))
+    await Promise.all([background, focus, again])
+    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+  })
+
+  it('a focus with a native workspace active wakes no WSL distro', async () => {
+    resetPreflightMocks()
+    preflightCheck.mockResolvedValue(makeStatus(true))
+    const store = createTestStore()
+    focusWorktree(store, '/home/alice/repo')
+
+    await store.getState().refreshPreflightStatus({ force: true, wakeWslDistro: true })
+
+    expect(preflightCheck).toHaveBeenCalledWith({ force: true })
   })
 
   it('checks integrations inside the active WSL worktree distro', async () => {
@@ -265,11 +295,12 @@ describe('createPreflightSlice', () => {
       new Error('Project runtime requires repair before preflight: wsl-distro-required')
     )
     const store = createTestStore()
+    const repos: AppState['repos'] = [makeRepo({ id: 'repo-1', path: 'C:\\repo' })]
     store.setState({
       settings: {
         localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
       },
-      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      repos,
       worktreesByRepo: {},
       activeRepoId: 'repo-1',
       activeWorktreeId: null
@@ -357,6 +388,58 @@ describe('createPreflightSlice', () => {
     await Promise.all([first, second])
     expect(store.getState().preflightStatusContextKey).toBe('runtime:runtime-2#0')
     expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+  })
+
+  it('checks integrations on the focused worktree host, not the default host', async () => {
+    resetPreflightMocks()
+    callRuntimeRpc.mockResolvedValue(makeStatus(true))
+    preflightCheck.mockResolvedValue(makeStatus(false))
+    const store = createTestStore()
+    const remoteRepo = makeRepo({
+      id: 'repo-r',
+      path: '/srv/repo',
+      executionHostId: 'runtime:runtime-9'
+    })
+    const remoteWorktree = makeWorktree({
+      id: 'repo-r::/srv/repo',
+      repoId: 'repo-r',
+      path: '/srv/repo'
+    })
+    store.setState({
+      repos: [remoteRepo],
+      worktreesByRepo: { 'repo-r': [remoteWorktree] },
+      activeRepoId: 'repo-r',
+      activeWorktreeId: remoteWorktree.id
+    })
+
+    await store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).not.toHaveBeenCalled()
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'runtime-9' },
+      'preflight.check',
+      {}
+    )
+    expect(store.getState().preflightStatusContextKey).toMatch(/^runtime:runtime-9#\d+$/)
+
+    const localRepo = makeRepo({ id: 'repo-l', path: '/Users/a/repo', executionHostId: 'local' })
+    const localWorktree = makeWorktree({
+      id: 'repo-l::/Users/a/repo',
+      repoId: 'repo-l',
+      path: '/Users/a/repo'
+    })
+    store.setState({
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-9' },
+      repos: [remoteRepo, localRepo],
+      worktreesByRepo: { 'repo-r': [remoteWorktree], 'repo-l': [localWorktree] },
+      activeRepoId: 'repo-l',
+      activeWorktreeId: localWorktree.id
+    })
+
+    await store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).toHaveBeenCalledTimes(1)
+    expect(store.getState().preflightStatusContextKey).toBe('host')
   })
 
   it('keeps a paired preflight result bound to the active runtime session', async () => {

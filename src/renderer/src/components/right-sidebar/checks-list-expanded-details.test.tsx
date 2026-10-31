@@ -4,8 +4,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
-import { ChecksList } from './checks-panel-content'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import { ChecksList } from './checks-panel/checks-list'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const openCheckRunDetails = vi.fn()
 const patchOpenCheckRunDetails = vi.fn()
@@ -84,6 +86,9 @@ function renderChecksList(
   props: Partial<{
     worktreeId: string
     detailsStickySurface: 'sidebar' | 'card'
+    checkDetailsContextKey: string
+    checks: PRCheckDetail[]
+    checksError: string
     onLoadCheckDetails: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
   }> = {}
 ): void {
@@ -91,9 +96,10 @@ function renderChecksList(
     root.render(
       <TooltipProvider>
         <ChecksList
-          checks={[failingCheck]}
+          checks={props.checks ?? [failingCheck]}
+          checksError={props.checksError}
           checksLoading={false}
-          checkDetailsContextKey="repo:42"
+          checkDetailsContextKey={props.checkDetailsContextKey ?? 'repo:42'}
           worktreeId={props.worktreeId}
           detailsStickySurface={props.detailsStickySurface ?? 'sidebar'}
           onLoadCheckDetails={
@@ -110,6 +116,51 @@ function renderChecksList(
 }
 
 describe('ChecksList expanded check details', () => {
+  it.each([undefined, 'error'] as const)(
+    'opens cached partial outcome %s without another details request',
+    async (logState) => {
+      const partial = {
+        ...checkDetails,
+        jobs: [{ ...checkDetails.jobs[0], logTail: null, ...(logState ? { logState } : {}) }]
+      }
+      const onLoadCheckDetails = vi.fn(async () => partial)
+      renderChecksList({ worktreeId: 'folder-workspace', onLoadCheckDetails })
+      await act(async () => {
+        await Promise.resolve()
+      })
+      const button = [...container.querySelectorAll('button')].find((candidate) =>
+        candidate.textContent?.includes('View full details')
+      )
+      if (!button) {
+        throw new Error('Missing full-details action')
+      }
+      act(() => {
+        button.click()
+      })
+      expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+      expect(openCheckRunDetails).toHaveBeenCalledWith(
+        'folder-workspace',
+        'repo:42',
+        failingCheck,
+        expect.objectContaining({
+          details: partial,
+          loading: false,
+          error: null,
+          requestId: expect.any(Number)
+        })
+      )
+      renderChecksList({ worktreeId: 'folder-workspace', onLoadCheckDetails })
+      expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+    }
+  )
+  it('shows a failed read as an error instead of "No checks configured"', () => {
+    renderChecksList({ checks: [], checksError: 'Could not load from Build box: 401' })
+
+    expect(container.textContent).toContain('Could not load from Build box: 401')
+    expect(container.textContent).not.toContain('No checks configured')
+    expect(container.querySelector('[role="alert"]')).not.toBeNull()
+  })
+
   it('pins a contextual full-details action with the correct sticky surface', async () => {
     renderChecksList({ worktreeId: 'wt-child-1', detailsStickySurface: 'card' })
 
@@ -121,21 +172,37 @@ describe('ChecksList expanded check details', () => {
     expect(stickyBar).not.toBeNull()
     expect(stickyBar?.className).toContain('bg-card/95')
     expect(stickyBar?.textContent).toContain('verify')
-    expect(stickyBar?.textContent).toContain('View full logs')
+    expect(stickyBar?.textContent).toContain('View full details')
     expect(container.innerHTML).toContain('lucide-panel-right')
     expect(container.innerHTML).toContain('data-variant="outline"')
   })
 
-  it('uses the sidebar sticky surface by default in the hosted checks panel', async () => {
-    activeWorktreeState.current = { id: 'wt-active-1' }
-    renderChecksList()
+  it('keeps every failure outcome together before output in inline details', async () => {
+    renderChecksList({
+      onLoadCheckDetails: async () => ({
+        ...checkDetails,
+        conclusion: 'startup_failure',
+        jobs: [
+          checkDetails.jobs[0]!,
+          {
+            ...checkDetails.jobs[0]!,
+            id: 2,
+            name: 'startup',
+            conclusion: 'startup_failure',
+            logTail: null
+          }
+        ]
+      })
+    })
 
     await act(async () => {
       await Promise.resolve()
     })
 
-    const stickyBar = container.querySelector('.sticky.top-0')
-    expect(stickyBar?.className).toContain('bg-sidebar/95')
+    const text = container.textContent ?? ''
+    expect(text).toContain('Failed jobs')
+    expect(text).toContain('startup')
+    expect(text.indexOf('Failed jobs')).toBeLessThan(text.indexOf('Verify failed'))
   })
 
   it('falls back to the active worktree when no worktree override is provided', async () => {
@@ -147,7 +214,7 @@ describe('ChecksList expanded check details', () => {
     })
 
     const button = [...container.querySelectorAll('button')].find((candidate) =>
-      candidate.textContent?.includes('View full logs')
+      candidate.textContent?.includes('View full details')
     )
     expect(button).toBeDefined()
 
@@ -176,7 +243,7 @@ describe('ChecksList expanded check details', () => {
     })
 
     const button = [...container.querySelectorAll('button')].find((candidate) =>
-      candidate.textContent?.includes('View full logs')
+      candidate.textContent?.includes('View full details')
     )
     expect(button).toBeDefined()
 
@@ -211,6 +278,152 @@ describe('ChecksList expanded check details', () => {
     expect(stickyBar?.textContent).not.toContain('View full logs')
   })
 
+  it('finishes the full-details tab when its sidebar unmounts during loading', async () => {
+    let resolveDetails: (details: PRCheckRunDetails) => void = () => {}
+    const request = new Promise<PRCheckRunDetails>((resolve) => {
+      resolveDetails = resolve
+    })
+    renderChecksList({ worktreeId: 'wt-child-1', onLoadCheckDetails: () => request })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    patchOpenCheckRunDetails.mockClear()
+    const button = [...container.querySelectorAll('button')].find((candidate) =>
+      candidate.textContent?.includes('View full details')
+    )
+
+    act(() => {
+      button!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      root.render(<div />)
+    })
+    await act(async () => {
+      resolveDetails(checkDetails)
+      await request
+    })
+
+    expect(patchOpenCheckRunDetails).toHaveBeenCalledWith(
+      'wt-child-1',
+      'repo:42',
+      failingCheck,
+      expect.objectContaining({ details: checkDetails, loading: false, error: null })
+    )
+  })
+
+  it('shows a load error in the full-details tab after its sidebar unmounts', async () => {
+    let rejectDetails: (error: Error) => void = () => {}
+    const request = new Promise<PRCheckRunDetails>((_resolve, reject) => {
+      rejectDetails = reject
+    })
+    renderChecksList({ worktreeId: 'wt-child-1', onLoadCheckDetails: () => request })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    patchOpenCheckRunDetails.mockClear()
+    const button = [...container.querySelectorAll('button')].find((candidate) =>
+      candidate.textContent?.includes('View full details')
+    )
+
+    act(() => {
+      button!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      root.render(<div />)
+    })
+    await act(async () => {
+      rejectDetails(new Error('GitHub request failed'))
+      await request.catch(() => undefined)
+    })
+
+    expect(patchOpenCheckRunDetails).toHaveBeenCalledWith(
+      'wt-child-1',
+      'repo:42',
+      failingCheck,
+      expect.objectContaining({ details: null, loading: false, error: 'GitHub request failed' })
+    )
+  })
+
+  it('retries an inline details error', async () => {
+    let resolveRetry: (details: PRCheckRunDetails) => void = () => {}
+    const retryRequest = new Promise<PRCheckRunDetails>((resolve) => {
+      resolveRetry = resolve
+    })
+    const onLoadCheckDetails = vi
+      .fn<() => Promise<PRCheckRunDetails | null>>()
+      .mockRejectedValueOnce(new Error('GitHub request failed'))
+      .mockReturnValueOnce(retryRequest)
+    renderChecksList({ onLoadCheckDetails })
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const retry = [...container.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent?.trim() === 'Retry'
+    )
+    retry!.focus()
+
+    await act(async () => {
+      retry!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(2)
+    expect(document.activeElement).toBe(retry)
+    expect(retry?.disabled).toBe(true)
+    expect(retry?.textContent).toContain('Retrying…')
+    expect(retry?.getAttribute('aria-busy')).toBe('true')
+    expect(container.textContent).toContain('GitHub request failed')
+
+    await act(async () => {
+      resolveRetry(checkDetails)
+      await retryRequest
+    })
+
+    expect(container.textContent).toContain('Verify failed')
+  })
+
+  it('ignores a stale inline result after returning to the same context', async () => {
+    const requests: {
+      resolve: (details: PRCheckRunDetails) => void
+      reject: (error: Error) => void
+    }[] = []
+    const onLoadCheckDetails = vi.fn(
+      () =>
+        new Promise<PRCheckRunDetails>((resolve, reject) => {
+          requests.push({ resolve, reject })
+        })
+    )
+
+    renderChecksList({ checkDetailsContextKey: 'repo:A', onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    renderChecksList({ checkDetailsContextKey: 'repo:B', onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    renderChecksList({ checkDetailsContextKey: 'repo:A', onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(requests).toHaveLength(3)
+    await act(async () => {
+      requests[2]!.resolve(checkDetails)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      requests[0]!.reject(new Error('stale request failed'))
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Verify failed')
+    expect(container.textContent).not.toContain('stale request failed')
+  })
+
   it('uses resolved details when showing the action-required fallback hint', async () => {
     renderChecksList({
       onLoadCheckDetails: async () => ({
@@ -227,5 +440,146 @@ describe('ChecksList expanded check details', () => {
 
     expect(container.textContent).toContain('manual action on GitHub')
     expect(container.textContent).not.toContain('No inline details are available')
+  })
+
+  it('renders the log excerpt inline instead of deferring it to the full-details tab', async () => {
+    renderChecksList({ worktreeId: 'wt-child-1' })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Error: assertion failed')
+    expect(container.textContent).not.toContain('Log tail available in full details')
+  })
+
+  // Manual/created GitLab jobs lack web_url and GitHub handles but still have fetchable logs (#7732).
+  it('loads details for a GitLab job that only carries a job id', async () => {
+    const gitLabCheck: PRCheckDetail = {
+      name: 'deploy: production',
+      status: 'completed',
+      conclusion: 'failure',
+      url: null,
+      gitlabJobId: 987654
+    }
+    const onLoadCheckDetails = vi.fn(async () => ({
+      ...checkDetails,
+      name: gitLabCheck.name,
+      jobs: [{ ...checkDetails.jobs[0]!, id: 987654, logTail: 'ERROR: Job failed: exit code 1' }]
+    }))
+
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [gitLabCheck], onLoadCheckDetails })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledWith(gitLabCheck)
+    expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
+    expect(container.textContent).not.toContain('No inline details are available')
+    expect(container.querySelector('.sticky.top-0')?.textContent).toContain('View full details')
+  })
+
+  // No retry button exists; state changes must rearm transient GitLab trace failures.
+  it('retries a failed detail load once the check state moves on', async () => {
+    const runningCheck: PRCheckDetail = {
+      name: 'test: unit',
+      status: 'in_progress',
+      conclusion: 'failure',
+      url: null,
+      gitlabJobId: 5150
+    }
+    const onLoadCheckDetails = vi
+      .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
+      .mockRejectedValueOnce(new Error('401 Unauthorized'))
+      .mockResolvedValueOnce({
+        ...checkDetails,
+        name: runningCheck.name,
+        status: 'completed',
+        conclusion: 'failure',
+        jobs: [{ ...checkDetails.jobs[0]!, id: 5150, logTail: 'ERROR: Job failed: exit code 1' }]
+      })
+
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [runningCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('401 Unauthorized')
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+
+    const finishedCheck: PRCheckDetail = { ...runningCheck, status: 'completed' }
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [finishedCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(2)
+    expect(container.textContent).not.toContain('401 Unauthorized')
+    expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
+  })
+
+  // Running jobs may return null before a trace exists; rearm when state changes.
+  it('retries a detail load that resolved to null once the check state moves on', async () => {
+    const runningCheck: PRCheckDetail = {
+      name: 'test: unit',
+      status: 'in_progress',
+      conclusion: 'failure',
+      url: null,
+      gitlabJobId: 5150
+    }
+    const onLoadCheckDetails = vi
+      .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        ...checkDetails,
+        name: runningCheck.name,
+        jobs: [{ ...checkDetails.jobs[0]!, id: 5150, logTail: 'ERROR: Job failed: exit code 1' }]
+      })
+
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [runningCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('No inline details are available')
+
+    const finishedCheck: PRCheckDetail = { ...runningCheck, status: 'completed' }
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [finishedCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(2)
+    expect(container.textContent).not.toContain('No inline details are available')
+    expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
+  })
+
+  it('keeps a failed detail load pinned while the check state is unchanged', async () => {
+    const onLoadCheckDetails = vi
+      .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
+      .mockRejectedValue(new Error('401 Unauthorized'))
+    const gitLabCheck: PRCheckDetail = {
+      name: 'test: unit',
+      status: 'completed',
+      conclusion: 'failure',
+      url: null,
+      gitlabJobId: 5150
+    }
+
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [gitLabCheck], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // Re-render with an equal-but-new row array, as every 30s poll tick does.
+    renderChecksList({ worktreeId: 'wt-child-1', checks: [{ ...gitLabCheck }], onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    // Why: re-arming on row identity alone would refetch on every poll tick.
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('401 Unauthorized')
   })
 })

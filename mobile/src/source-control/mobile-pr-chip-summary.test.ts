@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import type { PRCheckDetail, PRComment, PRInfo } from '../../../src/shared/types'
+import type { PRCheckDetail } from '../../../src/shared/github/check-types'
+import type { PRComment } from '../../../src/shared/github/comment-types'
+import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
 
@@ -24,7 +26,10 @@ function check(
 }
 
 function ready(prInfo: PRInfo, checks: PRCheckDetail[]): PrSidebarState {
-  return { kind: 'ready', data: { pr: prInfo, checks, details: null } }
+  return {
+    kind: 'ready',
+    data: { pr: prInfo, checks, details: null, checksError: null, pushTarget: null }
+  }
 }
 
 describe('buildMobilePrChipSummary', () => {
@@ -52,7 +57,7 @@ describe('buildMobilePrChipSummary', () => {
     expect(summary.stateLabel).toBe('Draft')
   })
 
-  // Why: a skipped job is a deliberate "not applicable" — desktop and the tasks grid call this 3/3.
+  // Skipped checks count as satisfied, matching desktop and the tasks grid.
   it('rolls up passed checks as passed/total, counting skipped as passed', () => {
     const summary = buildMobilePrChipSummary(
       ready(pr(), [check('success'), check('success'), check('skipped')])

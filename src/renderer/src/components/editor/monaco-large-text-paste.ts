@@ -1,5 +1,6 @@
 import type { editor } from 'monaco-editor'
 import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../../shared/utf8-byte-limits'
 import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield
@@ -44,10 +45,7 @@ export type MonacoLargeTextPasteOptions = {
   ) => void
 }
 
-// Why: getFocusedCodeEditor() (context-menu/command paste) yields the base
-// ICodeEditor, while @monaco-editor/react mounts an IStandaloneCodeEditor (DOM
-// paste path). Both share every method used here, so accept the base type and
-// let the stricter standalone callers pass through unchanged.
+// Accept base ICodeEditor methods for both focused context-menu editors and mounted standalone editors.
 export type MonacoPasteEditor = Pick<
   editor.ICodeEditor,
   | 'getModel'
@@ -59,7 +57,7 @@ export type MonacoPasteEditor = Pick<
   | 'pushUndoStop'
 >
 
-type MonacoPasteSnapshot = {
+export type MonacoPasteSnapshot = {
   container: HTMLElement
   model: editor.ITextModel
 }
@@ -71,39 +69,6 @@ type Position = {
 
 function getPlainTextFromPasteEvent(event: ClipboardEvent): string {
   return event.clipboardData?.getData('text/plain') ?? ''
-}
-
-function getCodePointUtf8ByteLength(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
-}
-
-function getNextChunkBoundary(text: string, startIndex: number, maxBytes: number): number {
-  let byteLength = 0
-  let index = startIndex
-
-  while (index < text.length) {
-    const codePoint = text.codePointAt(index) ?? 0
-    const codeUnitLength = codePoint > 0xffff ? 2 : 1
-    const nextByteLength = getCodePointUtf8ByteLength(codePoint)
-
-    if (byteLength > 0 && byteLength + nextByteLength > maxBytes) {
-      break
-    }
-
-    byteLength += nextByteLength
-    index += codeUnitLength
-  }
-
-  return index
 }
 
 function getEndPositionAfterInsert(start: Position, text: string): Position {
@@ -129,7 +94,9 @@ function getEndPositionAfterInsert(start: Position, text: string): Position {
   return { lineNumber, column }
 }
 
-function snapshotMonacoPasteTarget(monacoEditor: MonacoPasteEditor): MonacoPasteSnapshot | null {
+export function snapshotMonacoPasteTarget(
+  monacoEditor: MonacoPasteEditor
+): MonacoPasteSnapshot | null {
   const model = monacoEditor.getModel()
   const container = monacoEditor.getContainerDomNode()
   if (!model || !container.isConnected || !monacoEditor.hasTextFocus()) {
@@ -138,7 +105,7 @@ function snapshotMonacoPasteTarget(monacoEditor: MonacoPasteEditor): MonacoPaste
   return { container, model }
 }
 
-function isMonacoPasteTargetCurrent(
+export function isMonacoPasteTargetCurrent(
   monacoEditor: MonacoPasteEditor,
   snapshot: MonacoPasteSnapshot
 ): boolean {
@@ -163,10 +130,10 @@ async function insertMonacoTextInChunks(
   monacoEditor: MonacoPasteEditor,
   text: string,
   byteLength: number,
-  options: MonacoLargeTextPasteOptions
+  options: MonacoLargeTextPasteOptions,
+  snapshot: MonacoPasteSnapshot | null
 ): Promise<Exclude<MonacoLargeTextPasteResult, { status: 'ignored' | 'handled' }>> {
-  const snapshot = snapshotMonacoPasteTarget(monacoEditor)
-  if (!snapshot) {
+  if (!snapshot || !isMonacoPasteTargetCurrent(monacoEditor, snapshot)) {
     return { status: 'rejected', reason: 'target-unavailable', byteLength, chunksWritten: 0 }
   }
 
@@ -187,7 +154,11 @@ async function insertMonacoTextInChunks(
       return { status: 'cancelled', reason: 'target-unavailable', byteLength, chunksWritten }
     }
 
-    const nextIndex = getNextChunkBoundary(text, textIndex, chunkMaxBytes)
+    let nextIndex = getUtf8ChunkEndIndex(text, textIndex, chunkMaxBytes)
+    // Monaco normalizes chunks separately, so a CRLF pair must stay in one edit.
+    if (text.charCodeAt(nextIndex - 1) === 13 && text.charCodeAt(nextIndex) === 10) {
+      nextIndex += nextIndex - textIndex === 1 ? 1 : -1
+    }
     const chunk = text.slice(textIndex, nextIndex)
     const endPosition = getEndPositionAfterInsert(
       { lineNumber: selection.startLineNumber, column: selection.startColumn },
@@ -213,15 +184,13 @@ async function insertMonacoTextInChunks(
   return { status: 'pasted', mode: 'chunked', byteLength, chunksWritten }
 }
 
-// Why: shared by the DOM-event paste path (handleMonacoLargeTextPaste) and the
-// context-menu paste path (monaco-context-menu-paste) so both enforce the same
-// too-large rejection and chunked-insert behavior regardless of how the paste
-// was triggered.
+// Share size rejection and chunking across DOM and context-menu paste paths.
 export async function executeMonacoLargeTextPaste(
   monacoEditor: MonacoPasteEditor,
   text: string,
   options: MonacoLargeTextPasteOptions
 ): Promise<Exclude<MonacoLargeTextPasteResult, { status: 'ignored' | 'handled' }>> {
+  const snapshot = snapshotMonacoPasteTarget(monacoEditor)
   const maxBytes = options.maxBytes ?? MONACO_PASTE_MAX_BYTES
   const byteLengthMeasurement = await measureTextControlPasteByteLengthWithYield(text, {
     stopAfterBytes: maxBytes,
@@ -236,7 +205,13 @@ export async function executeMonacoLargeTextPaste(
       chunksWritten: 0
     }
   }
-  return insertMonacoTextInChunks(monacoEditor, text, byteLengthMeasurement.byteLength, options)
+  return insertMonacoTextInChunks(
+    monacoEditor,
+    text,
+    byteLengthMeasurement.byteLength,
+    options,
+    snapshot
+  )
 }
 
 export function handleMonacoLargeTextPaste(
@@ -250,7 +225,8 @@ export function handleMonacoLargeTextPaste(
   if (options.readOnly) {
     return { status: 'ignored', reason: 'read-only' }
   }
-  if (!monacoEditor?.getModel()) {
+  // Why: find/replace/rename overlay inputs sit inside the editor container.
+  if (!monacoEditor?.getModel() || !monacoEditor.hasTextFocus()) {
     return { status: 'ignored', reason: 'no-editor' }
   }
 
@@ -285,6 +261,17 @@ export function handleMonacoLargeTextPaste(
   event.stopPropagation()
 
   options.onPasteStart?.()
-  void executeMonacoLargeTextPaste(monacoEditor, text, options).then(options.onPasteResult)
+  // Why the catch: a throwing paste must still settle, or its start-side state never releases.
+  void executeMonacoLargeTextPaste(monacoEditor, text, options)
+    .catch((error: unknown) => {
+      console.error('[editor] large paste failed', error)
+      return {
+        status: 'cancelled',
+        reason: 'target-unavailable',
+        byteLength: ownershipMeasurement.byteLength,
+        chunksWritten: 0
+      } as const
+    })
+    .then(options.onPasteResult)
   return { status: 'handled' }
 }

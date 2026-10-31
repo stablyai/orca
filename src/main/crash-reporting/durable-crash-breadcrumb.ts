@@ -8,8 +8,7 @@ import { recordCoalescedCrashBreadcrumb, recordCrashBreadcrumb } from './crash-b
 import { getMainProcessLifecycleIdentity } from './main-process-lifecycle-identity'
 
 function buildLifecycleData(data?: CrashReportBreadcrumbData): CrashReportBreadcrumbData {
-  // Why: durable events survive renderer replacement, so carrying the main
-  // identity here distinguishes renderer recovery from a true app relaunch.
+  // Main identity distinguishes renderer replacement from an app relaunch.
   return {
     ...(data ? sanitizeCrashReportDetails(data) : {}),
     ...getMainProcessLifecycleIdentity()
@@ -33,35 +32,35 @@ function traceDurableBreadcrumb(
   } else {
     span.end()
   }
-  // Why: these breadcrumbs explain a missing crash record; losing one to the
-  // normal trace batching window would recreate the diagnostic blind spot.
+  // Flush before a crash can lose the evidence explaining a missing report.
   flushActiveSink()
 }
 
 export function recordDurableCrashBreadcrumb(
   name: string,
   data?: CrashReportBreadcrumbData,
-  failureCause?: string
+  failureCause?: string,
+  origin?: string
 ): void {
   const sanitizedName = sanitizeCrashReportString(name)
   const lifecycleData = buildLifecycleData(data)
-  recordCrashBreadcrumb(sanitizedName, lifecycleData)
+  recordCrashBreadcrumb(sanitizedName, lifecycleData, origin)
   traceDurableBreadcrumb(sanitizedName, lifecycleData, failureCause)
 }
 
-/** Durable counterpart to `recordCoalescedCrashBreadcrumb`: identical repeats
- *  inside `minIntervalMs` collapse into the next emitted breadcrumb's
- *  `suppressedSinceLast` instead of each costing a span plus a forced flush. */
+/** Coalesce durable repeats to avoid a trace span and forced flush for every occurrence. */
 export function recordCoalescedDurableCrashBreadcrumb({
   name,
   data,
   coalesceKey,
-  minIntervalMs
+  minIntervalMs,
+  origin
 }: {
   name: string
   data?: CrashReportBreadcrumbData
   coalesceKey: string
   minIntervalMs: number
+  origin?: string
 }): void {
   const sanitizedName = sanitizeCrashReportString(name)
   const lifecycleData = buildLifecycleData(data)
@@ -69,7 +68,8 @@ export function recordCoalescedDurableCrashBreadcrumb({
     name: sanitizedName,
     data: lifecycleData,
     coalesceKey,
-    minIntervalMs
+    minIntervalMs,
+    ...(origin ? { origin } : {})
   })
   if (!coalesced) {
     return

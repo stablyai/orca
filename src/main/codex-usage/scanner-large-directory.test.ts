@@ -78,7 +78,7 @@ describe('listCodexSessionFiles large directories', () => {
       } as Stats
     })
 
-    const { listCodexSessionFiles } = await import('./scanner')
+    const { listCodexSessionFiles } = await import('./codex-session-file-discovery')
 
     await expect(listCodexSessionFiles()).resolves.toHaveLength(FILE_COUNT)
     expect(getLegacyCopiedCodexSessionBridgeScanPreferenceMock).not.toHaveBeenCalled()

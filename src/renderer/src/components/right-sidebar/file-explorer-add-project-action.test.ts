@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { TreeNode } from './file-explorer-types'
 import {
   buildAddProjectFromFolderModalData,
@@ -45,15 +45,37 @@ describe('file explorer add project action', () => {
     expect(canShowAddAsProjectAction(folderNode, null)).toBe(false)
   })
 
-  it('preserves the selected folder path and active SSH connection', () => {
+  it('hides the action in an SSH-owned folder, which only a paired server can add from', () => {
+    expect(
+      canShowAddAsProjectAction(folderNode, {
+        ...folderRepo,
+        connectionId: 'ssh-1'
+      })
+    ).toBe(false)
+    expect(
+      canShowAddAsProjectAction(folderNode, {
+        ...folderRepo,
+        executionHostId: 'ssh:ssh-1'
+      })
+    ).toBe(false)
+  })
+
+  it('routes a local project subfolder explicitly to local', () => {
+    expect(buildAddProjectFromFolderModalData(folderNode, folderRepo)).toEqual({
+      folderPath: '/projects/child-project',
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it("routes a runtime project subfolder to the repo's runtime", () => {
     expect(
       buildAddProjectFromFolderModalData(folderNode, {
         ...folderRepo,
-        connectionId: 'ssh-target-1'
+        executionHostId: 'runtime:runtime-a'
       })
     ).toEqual({
       folderPath: '/projects/child-project',
-      connectionId: 'ssh-target-1'
+      runtimeEnvironmentId: 'runtime-a'
     })
   })
 })

@@ -1,4 +1,7 @@
-import type { PtyTransport } from './pty-transport'
+import type { TerminalLaunchInputAttemptOwner } from './terminal-launch-input-attempt'
+import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
+import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
+import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import type { ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
@@ -6,52 +9,78 @@ import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinat
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type {
+  SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import type { PtyTransportRecoveryState } from './pty-transport-types'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
-import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
+import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+
+export type PtyPaneStartup = {
+  command: string
+  /** Renderer-delivered startup input for callers that need xterm paste
+   *  semantics before the submit Enter. */
+  delivery?: 'terminal-paste'
+  startupCommandDelivery?: StartupCommandDelivery
+  env?: Record<string, string>
+  envToDelete?: string[]
+  launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
+  /** `saved`: a resume built from saved facts, which the host refuses for a chat's conversation. */
+  resumeOrigin?: 'saved'
+  resumeSource?: SavedResumeStartupSource
+  launchToken?: string
+  launchAgent?: TuiAgent
+  /** The agent launch the pane's own spawn starts, instead of `command`. */
+  agentLaunch?: AgentPaneLaunchRequest
+  /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
+  agentArgsOverride?: string | null
+  draftPrompt?: string
+  sessionOptions?: Record<string, SessionOptionValue>
+  /** Main emits agent_started only after successful spawn. */
+  telemetry?: EventProps<'agent_started'>
+  /** Initial prompt-start status for agents that lack native prompt hooks. */
+  initialAgentStatus?: { agent: TuiAgent; prompt: string }
+  /** Show the restored-session banner when this startup command mounts. */
+  showSessionRestoredBanner?: boolean
+} | null
+
+export type PaneProcessExit = {
+  paneId: number
+  exitCode: number
+  reason: 'git-bash-console-capacity' | 'process-failed'
+  startup: PtyPaneStartup
+}
 
 export type PtyConnectionDeps = {
   tabId: string
   worktreeId: string
   cwd?: string
-  startup?: {
-    command: string
-    /** Renderer-delivered startup input for callers that need xterm paste
-     *  semantics before the submit Enter. */
-    delivery?: 'terminal-paste'
-    startupCommandDelivery?: StartupCommandDelivery
-    env?: Record<string, string>
-    envToDelete?: string[]
-    launchConfig?: SleepingAgentLaunchConfig
-    resumeProviderSession?: AgentProviderSessionMetadata
-    launchToken?: string
-    launchAgent?: TuiAgent
-    /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
-    agentArgsOverride?: string | null
-    draftPrompt?: string
-    sessionOptions?: Record<string, SessionOptionValue>
-    /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
-     *  so main fires the event only after the spawn succeeds. */
-    telemetry?: EventProps<'agent_started'>
-    /** Initial prompt-start status for agents that lack native prompt hooks. */
-    initialAgentStatus?: { agent: TuiAgent; prompt: string }
-    /** Show the restored-session banner when this startup command mounts. */
-    showSessionRestoredBanner?: boolean
-    /** Initial startup may be paired with a setup split that changes its grid. */
-    waitForSetupSplitDirection?: SetupSplitDirection
-  } | null
+  /** Delays a fresh split's spawn without delaying its renderer pane. */
+  cwdPromise?: Promise<string>
+  launchInputAttempt?: TerminalLaunchInputAttemptOwner
+  placement?: TerminalPanePlacement
+  /** Input handed off from a predecessor mount of the same deferred split. */
+  preconnectInput?: readonly PtyPreconnectInputEntry[]
+  /** Captures newly retained input for a remount-safe deferred split handoff. */
+  onPreconnectInput?: (input: PtyPreconnectInputEntry) => void
+  /** Releases a deferred split's detach fence when its initial spawn yields no PTY. */
+  onDeferredCwdSpawnFailed?: () => void
+  startup?: PtyPaneStartup
+  /** The pane's previous PTY; main stops it before this connection's first fresh spawn. */
+  replacesPtyId?: string
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
+  /** Render-time park intent survives watcher disposal and is consumed once after layout replay. */
+  mountFollowsTerminalPark: boolean
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
-  /** Per-pane mirror of the kitty keyboard flags the pane's application
-   *  negotiated. Fed from PTY output here; read by the keyboard policy. */
+  /** Mirror xterm’s negotiated Kitty flags for keyboard policy. */
   paneKittyKeyboardModesRef: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
 
   paneLastThemeModeRef: React.RefObject<Map<number, TerminalColorSchemeMode>>
@@ -59,49 +88,50 @@ export type PtyConnectionDeps = {
   restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
-  onPtyExitRef: React.RefObject<(ptyId: string) => void>
+  onPtyExitRef: React.RefObject<(ptyId: string, exitCode?: number) => void>
   onAgentExitedRef: React.RefObject<(leafId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  onPtyErrorClearedRef?: React.RefObject<(paneId: number, message?: string) => void>
+  onPaneProcessDied?: (processExit: PaneProcessExit) => void
   onPtyRecoveryStateRef?: React.RefObject<
     (paneId: number, state: PtyTransportRecoveryState | null) => void
   >
   clearTabPtyId: (tabId: string, ptyId: string) => void
+  /** Consume queued startup once this pane’s first fresh PTY binds; binding does not prove command delivery, which can precede it or fail with shell startup. */
+  onQueuedStartupSpawned?: () => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
-  updateTabPtyId: (
-    tabId: string,
-    ptyId: string,
-    replacedPtyId?: string,
-    directSshRetryAttemptId?: DirectSshPaneRetryAttemptId
-  ) => void
-  markWorktreeUnread: (worktreeId: string) => void
-  markTerminalTabUnread: (tabId: string) => void
-  markTerminalPaneUnread: (paneKey: string) => void
-  clearWorktreeUnread: (worktreeId: string) => void
-  clearTerminalTabUnread: (tabId: string) => void
-  clearTerminalPaneUnread: (paneKey: string) => void
+  updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
+  markTerminalBell: WorkspaceAttentionSlice['markTerminalBell']
   onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
-  // Why: the renderer dispatches two notification sources — BEL from the PTY
-  // byte stream and agent-task-complete on the working→idle title transition.
-  // shared/types.ts keeps a wider NotificationEventSource union because the
-  // main process can also emit `'test'` from the settings-pane button.
+  // Renderer notifications originate from BEL or completion; main also supports the settings test source.
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
+    ptyId?: string | null
+    workspaceOwner?: NotificationWorkspaceOwner
     terminalTitle?: string
     paneKey?: string
     agentStatusSnapshot?: AgentCompletionStatusSnapshot
-    suppressOsNotification?: boolean
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
+  /** Stable-leaf variant for async callbacks that may outlive a PaneManager instance. */
+  syncPanePtyLayoutBindingForLeaf?: (
+    leafId: string,
+    ptyId: string | null,
+    sourcePaneId: number
+  ) => void
   clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
-  /** Records a DECSET 2031 subscription answered from main's
-   *  '2031-subscribe' fact, mirroring the xterm CSI handler's registry write
-   *  (paneMode2031 + last replied theme) so later theme flips push CSI 997.
-   *  The reply itself is sent by the fact handler — query authority stays
-   *  with the view (model/view contract invariant 6). */
-  recordPaneMode2031Subscription?: (paneId: number, repliedMode: 'dark' | 'light') => void
+  /** Stable-leaf variant for async exit callbacks that may outlive a PaneManager instance. */
+  clearExitedPanePtyLayoutBindingForLeaf?: (leafId: string, exitedPtyId: string) => void
+  /** Settles the captured one-shot startup only after this pane owns a concrete PTY. */
+  onStartupBound?: () => void
+  /** Re-renders mobile lock overlays for fit/driver state that arrived before this pane bound its PTY. */
+  refreshMobileOverlays?: () => void
+  deferPtyInput?: (paneId: number, data: string, forward: (data: string) => void) => void
+  /** Record main’s 2031 subscription and current theme for later flip pushes; subscription itself is silent (#9993). */
+  recordPaneMode2031Subscription?: (paneId: number, subscribedMode: 'dark' | 'light') => void
 }

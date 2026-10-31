@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 import {
   buildImportedHookSettings,
@@ -9,9 +9,10 @@ import {
   getSetupScriptPromptDismissalKey,
   ignoresSharedSetupScripts,
   inspectSetupScriptPromptState,
+  isSilentSetupScriptPromptState,
   isSetupScriptPromptDismissed
 } from './setup-script-prompt'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
@@ -126,6 +127,30 @@ describe('setup script prompt inspection', () => {
     ).resolves.toEqual({ status: 'error', repoId: 'repo-1' })
   })
 
+  it('reports a stopped WSL distro as distro-stopped, not a retryable error', async () => {
+    const inspectImports = vi.fn()
+    await expect(
+      inspectSetupScriptPromptState({
+        repo: makeRepo(),
+        checkHooks: vi.fn().mockResolvedValue({
+          status: 'error',
+          hasHooks: false,
+          hooks: null,
+          mayNeedUpdate: false,
+          unavailable: 'wsl-distro-stopped'
+        }),
+        inspectImports
+      })
+    ).resolves.toEqual({ status: 'distro-stopped', repoId: 'repo-1' })
+    expect(inspectImports).not.toHaveBeenCalled()
+  })
+
+  it('shows nothing for forbidden or distro-stopped states, and still shows errors', () => {
+    expect(isSilentSetupScriptPromptState({ status: 'forbidden' })).toBe(true)
+    expect(isSilentSetupScriptPromptState({ status: 'distro-stopped' })).toBe(true)
+    expect(isSilentSetupScriptPromptState({ status: 'error' })).toBe(false)
+  })
+
   it('preserves import behavior for repos with shared hooks', () => {
     const settings = buildImportedHookSettings(
       makeRepo({ hookSettings: { scripts: { archive: 'cleanup' } } as Repo['hookSettings'] }),
@@ -200,6 +225,56 @@ describe('setup script prompt inspection', () => {
         new Set([localIdentity])
       )
     ).toEqual([getSetupScriptPromptDismissalKey(localIdentity)])
+  })
+
+  it('reuses the input array when it is empty', () => {
+    const input: string[] = []
+    expect(
+      filterSetupScriptPromptDismissalsToValidRepos(
+        input,
+        new Set([getRepoHostIdentityForParts('repo-1', 'local')])
+      )
+    ).toBe(input)
+  })
+
+  it('reuses the input array when every dismissal is already a valid host-identity key', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const remoteIdentity = getRepoHostIdentityForParts('repo-2', 'ssh:host-a')
+    const input = [
+      getSetupScriptPromptDismissalKey(localIdentity),
+      getSetupScriptPromptDismissalKey(remoteIdentity)
+    ]
+    expect(
+      filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity, remoteIdentity]))
+    ).toBe(input)
+  })
+
+  it('allocates when a legacy repo-id dismissal is rewritten to a host identity', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const input = [getSetupScriptPromptDismissalKey('repo-1')]
+    const result = filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity]))
+    expect(result).not.toBe(input)
+    expect(result).toEqual([getSetupScriptPromptDismissalKey(localIdentity)])
+  })
+
+  it('allocates when a stale dismissal is dropped', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const input = [
+      getSetupScriptPromptDismissalKey(localIdentity),
+      getSetupScriptPromptDismissalKey(getRepoHostIdentityForParts('gone', 'local'))
+    ]
+    const result = filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity]))
+    expect(result).not.toBe(input)
+    expect(result).toEqual([getSetupScriptPromptDismissalKey(localIdentity)])
+  })
+
+  it('allocates when a duplicate valid dismissal is deduped', () => {
+    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+    const key = getSetupScriptPromptDismissalKey(localIdentity)
+    const input = [key, key]
+    const result = filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity]))
+    expect(result).not.toBe(input)
+    expect(result).toEqual([key])
   })
 
   it('drops a legacy repo-id dismissal when that id exists on multiple hosts', () => {

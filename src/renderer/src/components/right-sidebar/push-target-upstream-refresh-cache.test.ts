@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import {
   clearGitStatusRefreshOrderingForTests,
   refreshGitStatusForWorktree,
@@ -10,7 +11,8 @@ import {
   invalidateAutomaticPushTargetUpstreamStatusCache,
   storeCachedAutomaticPushTargetUpstreamStatus
 } from './push-target-upstream-refresh-cache'
-import type { GitPushTarget, GitStatusResult, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 const pushTarget: GitPushTarget = {
   remoteName: 'fork',
@@ -68,7 +70,8 @@ async function refreshAutomatically(options: {
   pushTarget?: GitPushTarget
 }): Promise<void> {
   await refreshGitStatusForWorktree({
-    settings: { activeRuntimeEnvironmentId: options.runtimeEnvironmentId ?? null },
+    target: runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId ?? null),
+    ownerHostId: null,
     worktreeId: 'wt-1',
     worktreePath: '/repo',
     connectionId: options.connectionId,
@@ -127,7 +130,7 @@ describe('push-target upstream refresh cache', () => {
 
     await refreshAutomatically({ deps })
     invalidateAutomaticPushTargetUpstreamStatusCache({
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       pushTarget
@@ -203,7 +206,7 @@ describe('push-target upstream refresh cache', () => {
 
     storeCachedAutomaticPushTargetUpstreamStatus(
       {
-        settings: { activeRuntimeEnvironmentId: 'runtime-1' },
+        target: { kind: 'environment' as const, environmentId: 'runtime-1' },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         pushTarget,
@@ -214,7 +217,7 @@ describe('push-target upstream refresh cache', () => {
 
     expect(
       getCachedAutomaticPushTargetUpstreamStatus({
-        settings: { activeRuntimeEnvironmentId: 'runtime-2' },
+        target: { kind: 'environment' as const, environmentId: 'runtime-2' },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         pushTarget,
@@ -229,6 +232,8 @@ describe('push-target upstream refresh cache', () => {
 
     await refreshAutomatically({ deps })
     await refreshGitStatusForWorktreeStrict({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       pushTarget,

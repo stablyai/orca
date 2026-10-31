@@ -9,14 +9,16 @@ const mocks = vi.hoisted(() => ({
   readFitClientSize: vi.fn<(pane: ManagedPane) => { width: number; height: number } | null>(),
   requestStablePaneFit: vi.fn(),
   clearPaneFitContinuationRetry: vi.fn(),
-  resumePendingFitScrollRestoreAfterFit: vi.fn()
+  resumePendingFitScrollRestoreAfterFit: vi.fn(),
+  flushDeferredPaneMetricOptionsIfMeasurable: vi.fn(() => false)
 }))
 
 vi.mock('./pane-fit', () => ({
   safeFit: mocks.safeFit,
   canMeasurePaneForFit: mocks.canMeasurePaneForFit,
   flushPendingSafeFitContinuations: mocks.flushPendingSafeFitContinuations,
-  readFitClientSize: mocks.readFitClientSize
+  readFitClientSize: mocks.readFitClientSize,
+  flushDeferredPaneMetricOptionsIfMeasurable: mocks.flushDeferredPaneMetricOptionsIfMeasurable
 }))
 vi.mock('./pane-fit-resize-observer', () => ({
   requestStablePaneFit: mocks.requestStablePaneFit
@@ -50,6 +52,24 @@ describe('fitRevealedPane routing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.canMeasurePaneForFit.mockReturnValue(true)
+    mocks.flushDeferredPaneMetricOptionsIfMeasurable.mockReturnValue(false)
+  })
+
+  it('repairs on a steady grid when a deferred metric flush lands on a pane the size checks would skip', () => {
+    // Flush parked fonts first, then use stable fitting: unchanged pixels with a changed grid can reflect transient DOM/WebGL metrics that corrupt diff-painted TUIs on raw reflow.
+    mocks.flushDeferredPaneMetricOptionsIfMeasurable.mockReturnValue(true)
+    const pane = createPane({
+      lastFitClientSize: { width: 800, height: 600 },
+      currentSize: { width: 800, height: 600 },
+      terminal: { cols: 80, rows: 24 },
+      proposed: { cols: 80, rows: 24 }
+    })
+
+    fitRevealedPane(pane)
+
+    expect(mocks.flushDeferredPaneMetricOptionsIfMeasurable).toHaveBeenCalledWith(pane)
+    expect(mocks.requestStablePaneFit).toHaveBeenCalledWith(pane)
+    expect(mocks.safeFit).not.toHaveBeenCalled()
   })
 
   it('fits synchronously when the fit element resized while hidden', () => {
@@ -81,8 +101,7 @@ describe('fitRevealedPane routing', () => {
   })
 
   it('skips the fit (no reflow) when pixels are unchanged and the grid already matches', () => {
-    // A metric wobble would move proposed cols WITHOUT moving the element pixels;
-    // here the grid matches, so reveal must not reflow a diff-painting inline TUI.
+    // Metric wobble changes the proposed grid without changing pixels; a matching grid needs no reflow.
     const pane = createPane({
       lastFitClientSize: { width: 800, height: 600 },
       currentSize: { width: 800, height: 600 },
@@ -94,14 +113,12 @@ describe('fitRevealedPane routing', () => {
 
     expect(mocks.safeFit).not.toHaveBeenCalled()
     expect(mocks.requestStablePaneFit).not.toHaveBeenCalled()
-    // Parked replay/reattach continuations still get released.
     expect(mocks.flushPendingSafeFitContinuations).toHaveBeenCalledTimes(1)
     expect(mocks.clearPaneFitContinuationRetry).toHaveBeenCalledTimes(1)
   })
 
   it('repairs on a steady grid when pixels are unchanged but the grid diverged while hidden', () => {
-    // e.g. a hidden snapshot/SSH-reattach did a direct terminal.resize to dims
-    // that differ from the container-fit grid; reveal must refit, not skip.
+    // Snapshot/SSH resize can leave the grid mismatched despite unchanged pixels; reveal must repair it.
     const pane = createPane({
       lastFitClientSize: { width: 800, height: 600 },
       currentSize: { width: 800, height: 600 },
@@ -113,7 +130,6 @@ describe('fitRevealedPane routing', () => {
 
     expect(mocks.requestStablePaneFit).toHaveBeenCalledTimes(1)
     expect(mocks.safeFit).not.toHaveBeenCalled()
-    // Not the plain-release path — the stable fit owns continuation release here.
     expect(mocks.flushPendingSafeFitContinuations).not.toHaveBeenCalled()
   })
 

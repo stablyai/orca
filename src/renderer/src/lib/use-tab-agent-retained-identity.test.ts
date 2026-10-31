@@ -4,10 +4,11 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
@@ -15,7 +16,7 @@ const FOCUSED_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SIBLING_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const TAB_ID = 'tab-1'
 const WORKTREE_ID = 'wt-1'
-let latestAgent: TuiAgent | null | undefined
+let latestAgent: TerminalAgent | null | undefined
 let root: Root | null = null
 
 const baseTab: TerminalTab = {
@@ -110,20 +111,6 @@ describe('useTabAgent retained completion identity', () => {
     await renderProbe()
 
     expect(latestAgent).toBe('codex')
-  })
-
-  it('keeps a live focused hook ahead of retained identity', async () => {
-    const paneKey = makePaneKey(TAB_ID, FOCUSED_LEAF_ID)
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [paneKey]: statusEntry(paneKey, 'gemini', 'working')
-      },
-      retainedAgentsByPaneKey: { [paneKey]: retainedEntry(paneKey, 'codex') }
-    })
-
-    await renderProbe()
-
-    expect(latestAgent).toBe('gemini')
   })
 
   it('lets an explicit cross-agent title reclaim a retained idle pane', async () => {

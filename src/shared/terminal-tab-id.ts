@@ -1,4 +1,4 @@
-import { isWebTerminalSurfaceTabId } from './terminal-surface-id'
+import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './terminal-surface-id'
 
 export function isValidTerminalTabId(value: string): boolean {
   return value.length > 0 && !value.includes(':')
@@ -6,4 +6,7 @@ export function isValidTerminalTabId(value: string): boolean {
 
 export function isValidHostTerminalTabId(value: string): boolean {
   return isValidTerminalTabId(value) && !isWebTerminalSurfaceTabId(value)
+}
+export function isValidMirroredHostTerminalTabId(value: string): boolean {
+  return isWebTerminalSurfaceTabId(value) && isValidHostTerminalTabId(toHostSessionTabId(value))
 }

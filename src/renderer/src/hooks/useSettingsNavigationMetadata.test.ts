@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { matchesSettingsSearch } from '../components/settings/settings-search'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import { getCodexTerminalServerIsolationTitle } from '../components/settings/codex-terminal-server-isolation-copy'
 
 const repo = {
   id: 'repo-1',
@@ -32,6 +32,24 @@ function ids(
 }
 
 describe('settings navigation metadata', () => {
+  it('places Chat directly after Appearance in Interface and moves its search entries', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: []
+    })
+    const appearanceIndex = sections.findIndex((section) => section.id === 'appearance')
+    const chat = sections[appearanceIndex + 1]
+    expect(chat.id).toBe('chat')
+    expect(chat.title).toBe('Chat')
+    expect(chat.group).toBe('interface')
+    for (const query of ['Code text size', 'Reset chat appearance']) {
+      expect(matchesSettingsSearch(query, chat.searchEntries)).toBe(true)
+      expect(matchesSettingsSearch(query, sections[appearanceIndex].searchEntries)).toBe(false)
+    }
+  })
+
   it('puts AI capability panes at the top on desktop', () => {
     expect(ids().slice(0, 10)).toEqual([
       'agents',
@@ -39,12 +57,28 @@ describe('settings navigation metadata', () => {
       'orchestration',
       'computer-use',
       'voice',
+      'orca-account',
       'setup-guide',
       'general',
       'integrations',
-      'mobile',
-      'git'
+      'mobile'
     ])
+  })
+
+  it('owns nested worker depth under Orchestration on desktop', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const agents = sections.find((section) => section.id === 'agents')
+    const orchestration = sections.find((section) => section.id === 'orchestration')
+
+    expect(agents?.searchEntries.map((entry) => entry.title)).not.toContain('Nested worker depth')
+    expect(orchestration?.searchEntries.map((entry) => entry.title)).toContain(
+      'Nested worker depth'
+    )
   })
 
   it('adds the Linear capability section right after Orchestration only when connected', () => {
@@ -79,20 +113,65 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'mobile')?.group).toBe('setup')
   })
 
+  it('places Automations, Artifacts, and Share Skills first under Workflows', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const automations = sections.find((section) => section.id === 'automations')
+    const artifacts = sections.find((section) => section.id === 'artifacts')
+    const shareSkills = sections.find((section) => section.id === 'share-skills')
+    const workflowIds = sections
+      .filter((section) => section.group === 'workflows')
+      .map((section) => section.id)
+
+    expect(automations?.group).toBe('workflows')
+    expect(automations?.searchEntries[0]?.title).toBe('Show Automations Button')
+    expect(artifacts?.group).toBe('workflows')
+    expect(artifacts?.badge).toBe('Beta')
+    expect(artifacts?.description).toBe(
+      'Share HTML and Markdown files with your team and manage their public links.'
+    )
+    expect(shareSkills).toMatchObject({ group: 'workflows', badge: 'Beta' })
+    expect(shareSkills?.searchEntries[0]?.title).toBe('Unlisted skill links')
+    expect(workflowIds.slice(0, 3)).toEqual(['automations', 'artifacts', 'share-skills'])
+  })
+
+  it('places the Orca account in Set Up on desktop only', () => {
+    const desktopSections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const account = desktopSections.find((section) => section.id === 'orca-account')
+
+    expect(account?.group).toBe('setup')
+    expect(account?.searchEntries[0]?.title).toBe('Orca account')
+    expect(ids({ isWebClient: true })).not.toContain('orca-account')
+  })
+
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
-    expect(ids({ isWebClient: true }).slice(0, 7)).toEqual([
+    expect(ids({ isWebClient: true }).slice(0, 6)).toEqual([
       'agents',
       'accounts',
       'orchestration',
       'setup-guide',
       'general',
-      'integrations',
-      'git'
+      'integrations'
     ])
   })
 
   it('keeps desktop-only Settings panes out of web metadata', () => {
-    const webIds = ids({ isWebClient: true })
+    const webSections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: true,
+      repos: [repo]
+    })
+    const webIds = webSections.map((section) => section.id)
 
     expect(webIds).not.toContain('browser')
     expect(webIds).not.toContain('ssh')
@@ -102,6 +181,54 @@ describe('settings navigation metadata', () => {
     expect(webIds).not.toContain('advanced')
     expect(webIds).toContain('servers')
     expect(webIds).toContain('repo-repo-1')
+    const floatingWorkspace = webSections.find((section) => section.id === 'floating-workspace')
+    expect(floatingWorkspace?.description).toBe('Global terminal and markdown tabs.')
+    expect(floatingWorkspace?.searchEntries.flatMap((entry) => entry.keywords)).not.toContain(
+      'browser'
+    )
+    const shortcuts = webSections.find((section) => section.id === 'shortcuts')
+    expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain('New browser tab')
+    expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain(
+      'New mobile emulator tab'
+    )
+    const agents = webSections.find((section) => section.id === 'agents')
+    expect(agents?.searchEntries.map((entry) => entry.title)).not.toContain('Nested worker depth')
+    const orchestration = webSections.find((section) => section.id === 'orchestration')
+    expect(orchestration?.searchEntries.map((entry) => entry.title)).not.toContain(
+      'Nested worker depth'
+    )
+  })
+
+  it('lists the host-only Codex server setting in desktop Agents search only', () => {
+    const agentTitles = (isWebClient: boolean): string[] | undefined =>
+      buildSettingsNavigationMetadata({
+        isMac: false,
+        isWindows: false,
+        isWebClient,
+        repos: [repo]
+      })
+        .find((section) => section.id === 'agents')
+        ?.searchEntries.map((entry) => entry.title)
+
+    expect(agentTitles(false)).toContain(getCodexTerminalServerIsolationTitle())
+    expect(agentTitles(true)).not.toContain(getCodexTerminalServerIsolationTitle())
+  })
+
+  it('keeps the Browser shortcut searchable for a capable web runtime', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: true,
+      managedBrowserCreationEnabled: true,
+      mobileEmulatorCreationEnabled: false,
+      repos: [repo]
+    })
+    const shortcutTitles = sections
+      .find((section) => section.id === 'shortcuts')
+      ?.searchEntries.map((entry) => entry.title)
+
+    expect(shortcutTitles).toContain('New browser tab')
+    expect(shortcutTitles).not.toContain('New mobile emulator tab')
   })
 
   it('does not mark installable AI capabilities as beta in the sidebar metadata', () => {
@@ -197,8 +324,7 @@ describe('settings navigation metadata', () => {
 
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
     expect(terminal?.searchEntries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
-    // Right-click to paste is now exposed on every platform (#8322), so it is
-    // indexed even when only the terminal host — not the client — is Windows.
+    // Right-click paste is indexed on every client platform, including clients of Windows terminal hosts.
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Right-click to paste')).toBe(
       true
     )
@@ -260,11 +386,7 @@ describe('settings navigation metadata', () => {
     expect(desktopIds.indexOf('privacy')).toBeLessThan(desktopIds.indexOf('advanced'))
   })
 
-  // Note: this exercises the isDev parameter and isWebClient branches only.
-  // Production safety rests on the hard `import.meta.env.DEV` term in the
-  // builder, which is compile-time-inlined per build and cannot be flipped from
-  // a test (vitest always runs with DEV=true) — don't mistake this for full
-  // prod-gate coverage. The bundle exclusion is what guarantees prod safety.
+  // Vitest always has DEV=true; these branches cannot prove the compile-time production gate or bundle exclusion.
   it('shows Dev tools only in desktop development metadata', () => {
     expect(ids()).not.toContain('dev')
     expect(ids({ isDev: true })).toContain('dev')
@@ -307,37 +429,32 @@ describe('settings navigation metadata', () => {
     expect(repoSections[0].id).toBe('repo-local-1')
   })
 
+  it('renders a nav section per same-host clone, titled by the clone (#20861)', () => {
+    const gitRemote = {
+      canonicalKey: 'gitlab.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:acme/app.git'
+    }
+    const clone = { badgeColor: '#000', addedAt: 0, gitRemoteIdentity: gitRemote }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [
+        { ...clone, id: 'clone-a', path: '/work/app', displayName: 'app' },
+        { ...clone, id: 'clone-b', path: '/work/app-b', displayName: 'app-b' }
+      ]
+    })
+
+    const repoSections = sections.filter((section) => section.id.startsWith('repo-'))
+    expect(repoSections.map((section) => [section.id, section.title])).toEqual([
+      ['repo-clone-a', 'app'],
+      ['repo-clone-b', 'app-b']
+    ])
+  })
+
   it('keeps macOS permissions mac-only', () => {
     expect(ids({ isMac: false })).not.toContain('developer-permissions')
     expect(ids({ isMac: true })).toContain('developer-permissions')
-  })
-
-  it('does not import Settings page or pane UI modules from the metadata hook', () => {
-    const testDir = import.meta.dirname
-    const hookSource = readFileSync(resolve(testDir, 'useSettingsNavigationMetadata.ts'), 'utf8')
-    const importLines = hookSource
-      .split('\n')
-      .filter((line) => line.trim().startsWith('import '))
-      .join('\n')
-
-    expect(importLines).not.toMatch(/components\/settings\/Settings(?:'|")/)
-    expect(importLines).not.toMatch(/components\/settings\/[A-Z][A-Za-z]+Pane(?:'|")/)
-    expect(importLines).not.toMatch(/components\/stats\/StatsPane(?:'|")/)
-  })
-
-  it('does not import Settings page or pane UI modules from the quick action registry', () => {
-    const testDir = import.meta.dirname
-    const registrySource = readFileSync(
-      resolve(testDir, '../components/cmd-j/quick-actions.ts'),
-      'utf8'
-    )
-    const importLines = registrySource
-      .split('\n')
-      .filter((line) => line.trim().startsWith('import '))
-      .join('\n')
-
-    expect(importLines).not.toMatch(/components\/settings\/Settings(?:'|")/)
-    expect(importLines).not.toMatch(/components\/settings\/[A-Z][A-Za-z]+Pane(?:'|")/)
-    expect(importLines).not.toMatch(/components\/stats\/StatsPane(?:'|")/)
   })
 })

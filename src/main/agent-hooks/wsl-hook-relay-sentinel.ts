@@ -1,17 +1,11 @@
-// Sentinel wait for the WSL agent-hook relay: consume the guest child's
-// stdout until the READY sentinel, then hand the remaining stdio over as a
-// MultiplexerTransport. WSL twin of the SSH deploy's waitForSentinel, over a
-// ChildProcess instead of a ClientChannel.
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
-import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/relay-protocol'
+import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/remote-exec/remote-frame-protocol'
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 
 export const MAX_STARTUP_BUFFER_BYTES = 64 * 1024
 
-// Why: without WSL_UTF8, wsl.exe's own messages arrive UTF-16LE; NUL bytes
-// in breadcrumbs and the catastrophic-failure matcher must not depend on the
-// env var having taken effect (older wsl.exe ignores it).
+// Older wsl.exe ignores WSL_UTF8; strip UTF-16LE ASCII padding before matching failure text.
 export function decodeWslText(value: string): string {
   return value.split(String.fromCharCode(0)).join('')
 }
@@ -22,9 +16,7 @@ export type WslRelayStartupFailure = {
   stderr: string
 }
 
-/** Wait for the relay's ready sentinel on the child's stdout, then hand the
- *  remaining stdio over as a MultiplexerTransport. WSL twin of the SSH
- *  deploy's waitForSentinel, over a ChildProcess instead of a ClientChannel. */
+/** Hand post-sentinel bytes to the mux while preserving wire order. */
 export function waitForWslRelaySentinel(
   child: ChildProcessWithoutNullStreams
 ): Promise<MultiplexerTransport> {
@@ -37,13 +29,7 @@ export function waitForWslRelaySentinel(
     const sentinel = Buffer.from(RELAY_SENTINEL, 'utf8')
     const dataCallbacks: ((data: Buffer) => void)[] = []
     const closeCallbacks: (() => void)[] = []
-    // Why: post-sentinel chunks queue until the mux registers onData, then
-    // flush as a microtask — after the caller's synchronous wiring (the mux
-    // constructor registers onData before the manager can add notification
-    // handlers, so a synchronous flush could dispatch an early envelope to
-    // zero handlers) yet before any subsequent stdout IO event, so the frame
-    // decoder never sees chunks out of order. A setImmediate handoff would
-    // NOT preserve that: it is a macrotask the next 'data' event can beat.
+    // Flush in a microtask after handler wiring but before later stdout events can overtake queued bytes.
     const pendingChunks: Buffer[] = []
     let closedNotified = false
 
@@ -88,6 +74,8 @@ export function waitForWslRelaySentinel(
     child.on('error', (err) =>
       fail({ kind: 'exit', code: null, stderr: `${stderrOutput}\n${err.message}` })
     )
+    // Async EPIPE bypasses write try/catch; listen so guest death cannot crash the host.
+    child.stdin.on('error', () => {})
     child.on('exit', (code) => {
       exitCode = code
     })
@@ -107,8 +95,7 @@ export function waitForWslRelaySentinel(
       stdoutBuffer = Buffer.concat([stdoutBuffer, chunk])
       const idx = stdoutBuffer.indexOf(sentinel)
       if (idx === -1) {
-        // Why: pre-sentinel stdout is untrusted startup noise; cap it so a
-        // broken guest cannot grow memory until the timeout fires.
+        // Bound untrusted startup noise until the sentinel arrives.
         if (stdoutBuffer.length > MAX_STARTUP_BUFFER_BYTES) {
           child.kill()
           fail({ kind: 'exit', code: null, stderr: 'startup output exceeded 64 KiB' })

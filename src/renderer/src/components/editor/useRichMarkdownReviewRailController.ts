@@ -12,7 +12,8 @@ import {
 } from './rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { measureRichMarkdownReviewNotePositions } from './rich-markdown-review-note-positioning'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
+import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 type UseRichMarkdownReviewRailControllerOptions = {
   canAnnotateRichMarkdown: boolean
@@ -182,14 +183,18 @@ export function useRichMarkdownReviewRailController({
       setActiveReviewCommentId(comment.id)
       container.scrollTo({
         top: Math.max(0, (sourceTop + sourceBottom) / 2 - container.clientHeight / 2),
-        behavior: 'smooth'
+        behavior: motionSafeScrollBehavior()
       })
       pulseRichMarkdownSourceRange({ from: bounds.from, to: bounds.to })
     },
     [editorRef, markdownSourceLineOffsetRef, pulseRichMarkdownSourceRange, scrollContainerRef]
   )
 
-  useEffect(() => requestSyncNotePositions(), [content, markdownComments, requestSyncNotePositions])
+  // Replace a queued frame so it measures with the current comments and offset.
+  useEffect(() => {
+    requestSyncNotePositions()
+    return cancelNotePositionFrame
+  }, [cancelNotePositionFrame, content, markdownComments, requestSyncNotePositions])
 
   useEffect(() => {
     if (!reviewRailVisible) {
@@ -257,5 +262,5 @@ function centerReviewNoteCard(
     return
   }
   const targetTop = cardTop - Math.max(0, (container.clientHeight - cardHeight) / 2)
-  container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
+  container.scrollTo({ top: Math.max(0, targetTop), behavior: motionSafeScrollBehavior() })
 }

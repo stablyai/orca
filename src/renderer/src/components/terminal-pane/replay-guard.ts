@@ -2,6 +2,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-foreground-render-settle'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
+import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
 import {
   captureTerminalParseProgressGeneration,
   hasTerminalParseProgressSince,
@@ -9,15 +10,14 @@ import {
   notifyUndeliverableWrite,
   recordTerminalParseProgress
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
+import { writeXtermParseBarrier } from '@/lib/pane-manager/xterm-parse-barrier'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 
-// Why this guard exists: xterm auto-replies to query sequences (DA1/DECRQM/OSC 10-11/CPR) via onData → shell stdin, so replaying recorded PTY bytes leaks stray replies onto the new shell's prompt.
-// No wasUserInput flag distinguishes replay replies from real keystrokes, so a per-pane in-flight counter gates onData; bounded by xterm's parse completion (not a timer), only auto-replies from replayed bytes are dropped.
+// Guard replay auto-replies from shell stdin while xterm’s provenance keeps real typing flowing.
 
 export type ReplayingPanesRef = React.RefObject<Map<number, number>>
 
-// Why stall handling exists: the decrement only runs on xterm's write completion; a wedged WriteBuffer or disposed-terminal race can drop it forever, latching the guard so it eats every keystroke (issue #2836).
-// Why release is probe-certified, not time-based: a blind timeout during a slow replay would leak xterm auto-replies into the shell/agent TUIs, so an empty FIFO probe certifies wedged only after a fully quiet window.
+// Lost completions can latch input forever; certify stalls with a FIFO probe plus a fully quiet window, since blind timeout release could leak replies (#2836).
 const REPLAY_GUARD_STALL_CHECK_MS = 10_000
 
 type ReplayTerminalOptions = {
@@ -78,11 +78,23 @@ type ReplayGuardWriteCallbacks = {
   onWriteFailure: () => void
 }
 
-/**
- * Engage the replay counter for one write and return its settlement callbacks.
- * Release runs exactly once — from write completion or the probe-certified stall
- * path — so a lost completion cannot latch the guard.
- */
+type ReplayGuardReleaseReason = 'parsed' | 'lost-completion' | 'wedged' | 'target-disposed'
+
+const pendingGuardReleasesByTerminal = new WeakMap<
+  ReplayGuardWriteTarget,
+  Set<(reason: ReplayGuardReleaseReason) => void>
+>()
+
+/** Settle replay guards on a just-disposed xterm: it drops queued completions silently, so they would otherwise certify a false wedge. */
+export function releaseReplayGuardsForDisposedTerminal(terminal: ReplayGuardWriteTarget): void {
+  const releases = pendingGuardReleasesByTerminal.get(terminal)
+  pendingGuardReleasesByTerminal.delete(terminal)
+  for (const release of releases ?? []) {
+    release('target-disposed')
+  }
+}
+
+/** One write owns one counter settlement; parse completion, probe-certified failure, or xterm disposal releases it exactly once. */
 function engageReplayGuard(
   map: Map<number, number>,
   paneId: number,
@@ -94,7 +106,7 @@ function engageReplayGuard(
   map.set(paneId, (map.get(paneId) ?? 0) + 1)
   let released = false
   let timer: ReturnType<typeof setTimeout> | null = null
-  const release = (reason: 'parsed' | 'lost-completion' | 'wedged'): void => {
+  const release = (reason: ReplayGuardReleaseReason): void => {
     if (released) {
       return
     }
@@ -103,6 +115,7 @@ function engageReplayGuard(
       clearTimeout(timer)
       timer = null
     }
+    pendingGuardReleasesByTerminal.get(terminal)?.delete(release)
     const remaining = (map.get(paneId) ?? 1) - 1
     if (remaining <= 0) {
       map.delete(paneId)
@@ -124,6 +137,9 @@ function engageReplayGuard(
     }
     onRelease?.()
   }
+  const pendingReleases = pendingGuardReleasesByTerminal.get(terminal) ?? new Set()
+  pendingReleases.add(release)
+  pendingGuardReleasesByTerminal.set(terminal, pendingReleases)
   const armWedgeDeadline = (quietSinceGeneration: number): void => {
     timer = setTimeout(() => {
       if (released) {
@@ -144,7 +160,7 @@ function engageReplayGuard(
     const probeQueuedAtGeneration = captureTerminalParseProgressGeneration(terminal)
     try {
       // FIFO certification: this callback runs only after every replay byte queued before it has parsed.
-      terminal.write('', () => {
+      writeXtermParseBarrier(terminal, () => {
         recordTerminalParseProgress(terminal)
         release('lost-completion')
       })
@@ -167,9 +183,12 @@ function engageReplayGuard(
   }
 }
 
-/** Writes `data` into the pane's terminal with the replay guard engaged, so
- *  xterm's auto-replies to embedded query sequences don't leak to the shell.
- *  The counter increments/decrements so nested replays compose correctly. */
+/** Certified-dead or disposed xterms never parse; a guard there would only wait out another false wedge. */
+function isReplayTargetUnparseable(terminal: ReplayGuardWriteTarget): boolean {
+  return isTerminalWritePipelineCertifiedDead(terminal) || isXtermInstanceDisposed(terminal)
+}
+
+/** Replay with a per-write guard so nested writes suppress auto-replies through their own parse completions. */
 export function replayIntoTerminal(
   pane: ManagedPane,
   replayingPanesRef: ReplayingPanesRef,
@@ -179,8 +198,7 @@ export function replayIntoTerminal(
   if (!data) {
     return
   }
-  // Why: a certified-dead pipeline never parses; retrying only re-arms a guard for another wedged release, so skip it.
-  if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
+  if (isReplayTargetUnparseable(pane.terminal)) {
     return
   }
   ensureArabicShapingJoinerForText(pane.terminal, data)
@@ -211,8 +229,8 @@ export function replayIntoTerminalAsync(
   if (!data) {
     return Promise.resolve()
   }
-  // Why: same certified-dead short-circuit as replayIntoTerminal; resolve so awaited chains don't hang on a dead parser.
-  if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
+  // Why resolve: awaited restore chains must not hang on a dead parser.
+  if (isReplayTargetUnparseable(pane.terminal)) {
     return Promise.resolve()
   }
   ensureArabicShapingJoinerForText(pane.terminal, data)
@@ -237,8 +255,7 @@ export function replayIntoTerminalAsync(
   })
 }
 
-/** Resolves once every replay write queued on this terminal has parsed. A delayed
- *  FIFO probe covers a lost sentinel without treating elapsed time as proof. */
+/** Wait for every queued replay parse; delayed FIFO probes cover lost sentinels without treating elapsed time alone as proof. */
 export function waitForTerminalReplayWritesParsed(
   terminal: ReplayGuardWriteTarget,
   options: Pick<ReplayTerminalOptions, 'stallCheckMs'> = {}
@@ -263,7 +280,7 @@ export function waitForTerminalReplayWritesParsed(
       }
       try {
         // Why: empty write is FIFO after replay bytes; its callback recovers a lost sentinel without changing parser state.
-        terminal.write('', finish)
+        writeXtermParseBarrier(terminal, finish)
       } catch {
         // A disposed terminal cannot parse any remaining replay bytes.
         finish()
@@ -272,7 +289,7 @@ export function waitForTerminalReplayWritesParsed(
     stallTimer = setTimeout(queueProbe, options.stallCheckMs ?? REPLAY_GUARD_STALL_CHECK_MS)
     try {
       // Why empty: keep pendingEscapeTailAnsi as the final replay bytes; xterm still orders this completion after earlier writes.
-      terminal.write('', finish)
+      writeXtermParseBarrier(terminal, finish)
     } catch {
       // A disposed terminal cannot parse any remaining replay bytes.
       finish()

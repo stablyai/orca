@@ -3,18 +3,19 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { resetWindowsTerminalCapabilityReprobeForTests } from './windows-terminal-capability-reprobe'
 import {
   getCachedWindowsTerminalCapabilities,
   getWindowsTerminalCapabilityOwnerKey,
   hasCachedWindowsTerminalCapabilities,
   isWindowsTerminalCapabilityHost,
   loadWindowsTerminalCapabilities,
-  refreshWindowsTerminalCapabilities,
   resetWindowsTerminalCapabilitiesForTests,
   selectWindowsTerminalCapabilitiesForOwner,
   useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
+import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
 
 describe('Windows terminal capability host ownership', () => {
   it.each([
@@ -80,9 +81,9 @@ function stubTerminalCapabilityApi(args: {
   const wslListDistros = vi.fn().mockResolvedValue(args.wslDistros ?? [])
   const pwshIsAvailable = vi.fn().mockResolvedValue(args.pwshAvailable)
   const isGitBashAvailable = vi.fn().mockResolvedValue(args.gitBashAvailable ?? false)
-  const runtimeGetStatus = vi
-    .fn()
-    .mockResolvedValue({ hostPlatform: 'hostPlatform' in args ? args.hostPlatform : 'win32' })
+  const runtimeGetStatus = vi.fn().mockResolvedValue({
+    hostPlatform: 'hostPlatform' in args ? args.hostPlatform : 'win32'
+  })
 
   vi.stubGlobal('window', {
     api: {
@@ -104,6 +105,7 @@ describe('windows terminal capabilities', () => {
       act(() => root.unmount())
     }
     resetWindowsTerminalCapabilitiesForTests()
+    resetWindowsTerminalCapabilityReprobeForTests()
     vi.unstubAllGlobals()
   })
 
@@ -191,7 +193,7 @@ describe('windows terminal capabilities', () => {
     await expect(loadWindowsTerminalCapabilities()).resolves.toMatchObject({
       wslAvailable: false
     })
-    await expect(refreshWindowsTerminalCapabilities()).resolves.toMatchObject({
+    await expect(loadWindowsTerminalCapabilities({ force: true })).resolves.toMatchObject({
       wslAvailable: true
     })
 
@@ -297,13 +299,7 @@ describe('windows terminal capabilities', () => {
         result: resultByMethod[args.method]
       }
     })
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeEnvironmentCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeEnvironmentCall })
 
     await expect(
       loadWindowsTerminalCapabilities({
@@ -432,7 +428,11 @@ describe('windows terminal capabilities', () => {
     })
 
     await expect(
-      refreshWindowsTerminalCapabilities(undefined, { kind: 'local' }, 'ssh-1')
+      loadWindowsTerminalCapabilities({
+        force: true,
+        target: { kind: 'local' },
+        sshConnectionId: 'ssh-1'
+      })
     ).resolves.toEqual({
       wslAvailable: true,
       wslDistros: ['Ubuntu', 'Debian'],
@@ -614,6 +614,43 @@ describe('windows terminal capabilities', () => {
       expect(wslIsAvailable).toHaveBeenCalledTimes(2)
       vi.advanceTimersByTime(30_000)
       expect(wslIsAvailable).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds re-probes for a Windows host that keeps answering "no WSL"', async () => {
+    vi.useFakeTimers()
+    const { wslIsAvailable, pwshIsAvailable } = stubTerminalCapabilityApi({
+      wslAvailable: false,
+      pwshAvailable: false,
+      wslDistros: []
+    })
+
+    function HookProbe(): null {
+      useWindowsTerminalCapabilities(true)
+      return null
+    }
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    hookRoots.push(root)
+
+    try {
+      await act(async () => {
+        root.render(createElement(HookProbe))
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30 * 60_000)
+      })
+
+      // The ceiling poll preserves install discovery while cutting the old 30s spawn rate.
+      expect(wslIsAvailable.mock.calls.length).toBeLessThanOrEqual(10)
+      expect(pwshIsAvailable.mock.calls.length).toBeLessThanOrEqual(10)
     } finally {
       vi.useRealTimers()
     }

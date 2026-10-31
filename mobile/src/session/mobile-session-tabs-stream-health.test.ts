@@ -72,12 +72,10 @@ function makeHarness(options?: {
   } as unknown as RpcClient
   const apply =
     options?.apply ??
-    vi.fn(
-      (value: TestResult): SessionTabsApplyOutcome<string> => ({
-        accepted: true,
-        effectiveTabs: value.tabs
-      })
-    )
+    vi.fn((value: TestResult): SessionTabsApplyOutcome<string> => ({
+      accepted: true,
+      effectiveTabs: value.tabs
+    }))
   const consumeAccepted = vi.fn()
   let recoveryNeeded = false
   const controller = new MobileSessionTabsStreamHealth<TestResult, string>({
@@ -132,6 +130,29 @@ describe('MobileSessionTabsStreamHealth', () => {
     expect(sharedSettled).toBe(true)
     expect(harness.sendRequest).toHaveBeenCalledTimes(2)
     expect(harness.apply).toHaveBeenCalledTimes(2)
+  })
+
+  it('coalesces repeated retries and releases the retry cohort after failure', async () => {
+    const harness = makeHarness()
+    harness.controller.setReconciliationActive(true)
+
+    const halfOpen = harness.controller.requestReconciliation()
+    const retry = harness.controller.retryReconciliation()
+    const repeatedRetry = harness.controller.retryReconciliation()
+    expect(harness.sendRequest).toHaveBeenCalledTimes(2)
+    expect(repeatedRetry).toBe(retry)
+
+    harness.requests[1]!.resolve(failure())
+    await retry
+    const nextRetry = harness.controller.retryReconciliation()
+    expect(harness.sendRequest).toHaveBeenCalledTimes(3)
+    expect(nextRetry).not.toBe(retry)
+
+    harness.requests[2]!.resolve(success(result(3)))
+    await nextRetry
+    harness.requests[0]!.resolve(success(result(1)))
+    await halfOpen
+    expect(harness.apply).toHaveBeenCalledTimes(1)
   })
 
   it('starts distinct pre- and post-snapshot lists and discards the stale barrier', async () => {
@@ -283,9 +304,8 @@ describe('MobileSessionTabsStreamHealth', () => {
   })
 
   it('does not consume a rejected stream snapshot or update', () => {
-    const apply = vi.fn(
-      (value: TestResult): SessionTabsApplyOutcome<string> =>
-        value.type ? { accepted: false } : { accepted: true, effectiveTabs: value.tabs }
+    const apply = vi.fn((value: TestResult): SessionTabsApplyOutcome<string> =>
+      value.type ? { accepted: false } : { accepted: true, effectiveTabs: value.tabs }
     )
     const harness = makeHarness({ apply })
     const subscription = harness.controller.beginSubscription()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveTaskPagePRCheckSummary } from './task-page-pr-check-summary'
+import { deriveTaskPagePRCheckSummary } from './task-page/task-page-pr-check-summary'
 import { getCheckCountChips, getCheckCounts } from './pr-check-counts'
 import { derivePipelineStatus } from '../../../main/gitlab/mappers'
 import { gitLabPipelineJobsToPRChecks } from '../../../shared/gitlab-pipeline-checks'
@@ -9,7 +9,8 @@ import {
   summarizeProviderChecks
 } from '../../../shared/provider-check-summary'
 import type { GitLabPipelineJob } from '../../../shared/gitlab-types'
-import type { PRCheckDetail, ProviderCheckSummary } from '../../../shared/types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
+import type { ProviderCheckSummary } from '../../../shared/github/pull-request-types'
 
 function completed(conclusion: string): PRCheckDetail {
   return {
@@ -22,21 +23,18 @@ function completed(conclusion: string): PRCheckDetail {
 
 function gitLabJobs(...statuses: string[]): PRCheckDetail[] {
   return gitLabPipelineJobsToPRChecks(
-    statuses.map(
-      (status, index): GitLabPipelineJob => ({
-        id: index,
-        name: status,
-        stage: 'deploy',
-        status,
-        webUrl: '',
-        duration: null
-      })
-    )
+    statuses.map((status, index): GitLabPipelineJob => ({
+      id: index,
+      name: status,
+      stage: 'deploy',
+      status,
+      webUrl: '',
+      duration: null
+    }))
   )
 }
 
-// Why: GraphQL rollups arrive upper-cased and status-first; the main process must land on the
-// same verdict as the renderer for the same checks.
+// GraphQL is uppercase/status-first; main and renderer must still agree.
 function toGraphQLRollup(check: PRCheckDetail): { status: string; conclusion: string | null } {
   return {
     status: check.status.toUpperCase(),
@@ -51,14 +49,7 @@ type ParityCase = {
   checks: PRCheckDetail[]
   /** Set when the case also pins the main-process job-array rollup for the same jobs. */
   gitLabJobStatuses?: string[]
-  /**
-   * The `head_pipeline.status` GitLab reports for this same job set. This is the only GitLab path
-   * with production callers (client.ts passes pipeline objects, never job arrays), so it is the
-   * surface that decides the MR card's tone. Left unset for the shapes where the pipeline string
-   * knowingly disagrees with the job rollup — a `manual`/`skipped`/`canceled` pipeline is grey on
-   * the card but its jobs roll up green/red in the Checks tab. Those are the deferred tone changes
-   * documented in `classifyPipelineString`; pinning them here would just freeze the disagreement.
-   */
+  /** Pin production pipeline-string status only where it agrees with jobs; manual/skipped/canceled tone differences remain documented in classifyPipelineString. */
   gitLabPipelineStatus?: string
   expected: ParityExpectation
 }
@@ -172,8 +163,7 @@ describe('provider check classification parity', () => {
       const summary = { ...expected, total: checks.length }
       expect(summarizeProviderChecks(checks)).toEqual(summary)
       expect(deriveTaskPagePRCheckSummary(checks)).toEqual(summary)
-      // Why: the PR page and the work-item dialog share these counts; their absence here is how
-      // their neutral chip kept saying "skipped" for what the sidebar calls "unresolved".
+      // Keep pane counts aligned with sidebar rollups, including the neutral unresolved bucket.
       const paneCounts = getCheckCounts(checks)
       expect({
         passed: paneCounts.passing,
@@ -193,20 +183,17 @@ describe('provider check classification parity', () => {
       expect(derivePRCheckStatus(checks)).toBe(expected.state)
       expect(derivePRCheckStatusFromRollup(checks.map(toGraphQLRollup))).toBe(expected.state)
       if (gitLabJobStatuses) {
-        // Why: the job-array rollup has no production caller today (client.ts only ever passes
-        // pipeline objects) — it is pinned so a future caller cannot inherit a drifted copy.
+        // Pin job-array parity for future callers; current client.ts supplies pipeline objects.
         expect(derivePipelineStatus(gitLabJobStatuses.map((status) => ({ status })))).toBe(
           expected.state
         )
       }
       if (gitLabPipelineStatus) {
-        // Why: this *is* the production GitLab entry point — the MR card and the hosted-review
-        // queue read it, so where it is pinned it must not disagree with the Checks tab for the
-        // same jobs.
+        // Pipeline strings/objects drive production MR cards and review queues; supported cases must match the same jobs’ Checks verdict.
         expect(derivePipelineStatus(gitLabPipelineStatus)).toBe(expected.state)
         expect(derivePipelineStatus({ status: gitLabPipelineStatus })).toBe(expected.state)
       }
-      // Why: the pill's label, tone and icon all read this one summary, so a green pill must never say "unresolved".
+      // Pill label/tone/icon share one verdict; only neutral checks may read unresolved.
       expect(getProviderChecksLabel(summary).includes('Unresolved')).toBe(
         expected.state === 'neutral'
       )

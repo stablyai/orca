@@ -1,17 +1,17 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { collectRendererMemoryProfileCounts } from '../renderer-memory-profile'
 import {
   forEachLivePaneForDesyncSentinel,
   getLivePaneCensus,
+  getLivePaneMemoryProfileCounts,
   refitAndRefreshAllTerminalPanes,
   registerLivePaneManager,
   resetAndRefreshAllTerminalWebglAtlases,
-  resetAllTerminalWebglAtlases,
   unregisterLivePaneManager
 } from './pane-manager-registry'
 
 describe('pane manager registry', () => {
-  // Why: the registry is module-global; unregister in afterEach so a failed
-  // assertion cannot leak fake managers into later tests.
+  // Unregister module-global fake managers even after failures so they cannot leak into later tests.
   const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
 
   function registerManager(): { resetWebglTextureAtlases: Mock<() => void> } {
@@ -27,39 +27,13 @@ describe('pane manager registry', () => {
     }
   })
 
-  it('resets atlases on every registered manager', () => {
-    const first = registerManager()
-    const second = registerManager()
-
-    resetAllTerminalWebglAtlases()
-
-    expect(first.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(second.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-  })
-
   it('stops resetting managers after they unregister', () => {
     const manager = registerManager()
     unregisterLivePaneManager(manager)
 
-    resetAllTerminalWebglAtlases()
+    resetAndRefreshAllTerminalWebglAtlases()
 
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
-  })
-
-  it('continues resetting later managers when one manager throws', () => {
-    const broken = {
-      resetWebglTextureAtlases: vi.fn<() => void>(() => {
-        throw new Error('pane disposed')
-      })
-    }
-    registerLivePaneManager(broken)
-    registeredManagers.push(broken)
-    const healthy = registerManager()
-
-    expect(() => resetAllTerminalWebglAtlases()).not.toThrow()
-
-    expect(broken.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(healthy.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
   })
 
   it('refreshes managers after all atlas resets complete', () => {
@@ -82,9 +56,40 @@ describe('pane manager registry', () => {
     expect(order).toEqual(['first-reset', 'second-reset', 'first-refresh', 'second-refresh'])
   })
 
+  it('clears every recovered atlas before presenting any pane', () => {
+    // Per-pane wipe/present interleaves atlas generations and preserves stale footer pixels; wipe all before presenting.
+    const order: string[] = []
+    const first = {
+      resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('first-reset')),
+      clearWebglTextureAtlases: vi.fn<() => void>(() => order.push('first-clear')),
+      presentViewports: vi.fn<() => void>(() => order.push('first-present')),
+      refreshAllPanes: vi.fn<() => void>(() => order.push('first-refresh')),
+      isVisibleForAtlasRecovery: () => true
+    }
+    const second = {
+      resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('second-reset')),
+      clearWebglTextureAtlases: vi.fn<() => void>(() => order.push('second-clear')),
+      presentViewports: vi.fn<() => void>(() => order.push('second-present')),
+      refreshAllPanes: vi.fn<() => void>(() => order.push('second-refresh')),
+      isVisibleForAtlasRecovery: () => true
+    }
+    registerLivePaneManager(first)
+    registeredManagers.push(first)
+    registerLivePaneManager(second)
+    registeredManagers.push(second)
+
+    resetAndRefreshAllTerminalWebglAtlases()
+
+    expect(order).toEqual(['first-clear', 'second-clear', 'first-present', 'second-present'])
+    expect(first.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(second.refreshAllPanes).not.toHaveBeenCalled()
+  })
+
   it('bounds atlas recovery to visible managers', () => {
     const visible = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
+      clearWebglTextureAtlases: vi.fn<() => void>(),
+      presentViewports: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>(),
       isVisibleForAtlasRecovery: () => true
     }
@@ -92,6 +97,8 @@ describe('pane manager registry', () => {
     registeredManagers.push(visible)
     const hidden = Array.from({ length: 64 }, () => ({
       resetWebglTextureAtlases: vi.fn<() => void>(),
+      clearWebglTextureAtlases: vi.fn<() => void>(),
+      presentViewports: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>(),
       isVisibleForAtlasRecovery: () => false
     }))
@@ -102,12 +109,12 @@ describe('pane manager registry', () => {
 
     resetAndRefreshAllTerminalWebglAtlases()
 
-    expect(visible.resetWebglTextureAtlases).toHaveBeenCalledOnce()
-    expect(visible.refreshAllPanes).toHaveBeenCalledOnce()
+    expect(visible.clearWebglTextureAtlases).toHaveBeenCalledOnce()
+    expect(visible.presentViewports).toHaveBeenCalledOnce()
     expect(
-      hidden.every((manager) => manager.resetWebglTextureAtlases.mock.calls.length === 0)
+      hidden.every((manager) => manager.clearWebglTextureAtlases.mock.calls.length === 0)
     ).toBe(true)
-    expect(hidden.every((manager) => manager.refreshAllPanes.mock.calls.length === 0)).toBe(true)
+    expect(hidden.every((manager) => manager.presentViewports.mock.calls.length === 0)).toBe(true)
   })
 
   it('continues reset-and-refresh recovery when one manager throws', () => {
@@ -208,8 +215,7 @@ describe('pane manager registry', () => {
     expect(after).toEqual([before[1]])
   })
 
-  // Why: this is the number crash reports could never recover from breadcrumb
-  // multiplicity, since every manager's first pane is id 1.
+  // Every manager starts pane IDs at 1; breadcrumb multiplicity cannot recover population counts.
   it('counts panes across managers and drops them on unregister', () => {
     const twoPanes = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
@@ -263,5 +269,73 @@ describe('pane manager registry', () => {
     registeredManagers.push(healthy)
 
     expect(getLivePaneCensus()).toEqual({ managers: 2, panes: 1 })
+  })
+
+  it('estimates scrollback bytes from pane buffers, skipping non-buffer terminals', () => {
+    // 5000 rows x 200 cols x 16B/cell = 15.6MB -> 15625KB.
+    const buffered = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPanes: () => [
+        { id: 1, terminal: { cols: 200, buffer: { active: { length: 5000 } } } },
+        { id: 2, terminal: {} }
+      ]
+    }
+    registerLivePaneManager(buffered)
+    registeredManagers.push(buffered)
+
+    expect(getLivePaneMemoryProfileCounts()).toEqual({
+      managers: 1,
+      estPanes: 2,
+      estBufferKB: 15_625
+    })
+  })
+
+  it('bounds manager and pane sampling while extrapolating totals', () => {
+    let sampledPaneWrappers = 0
+    const managers = Array.from({ length: 100 }, () => ({
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPaneCount: vi.fn(() => 100),
+      getPanes: vi.fn((limit = 100) => {
+        const count = Math.min(limit, 100)
+        sampledPaneWrappers += count
+        return Array.from({ length: count }, (_, id) => ({
+          id,
+          terminal: { cols: 100, buffer: { active: { length: 64 } } }
+        }))
+      })
+    }))
+    for (const manager of managers) {
+      registerLivePaneManager(manager)
+      registeredManagers.push(manager)
+    }
+
+    expect(getLivePaneMemoryProfileCounts()).toEqual({
+      managers: 100,
+      estPanes: 10_000,
+      estBufferKB: 1_000_000
+    })
+    expect(managers.reduce((sum, manager) => sum + manager.getPaneCount.mock.calls.length, 0)).toBe(
+      64
+    )
+    expect(managers.reduce((sum, manager) => sum + manager.getPanes.mock.calls.length, 0)).toBe(3)
+    expect(sampledPaneWrappers).toBe(256)
+    expect(managers[0].getPanes).toHaveBeenCalledWith(256)
+    expect(managers[1].getPanes).toHaveBeenCalledWith(156)
+    expect(managers[2].getPanes).toHaveBeenCalledWith(56)
+    expect(managers[3].getPanes).not.toHaveBeenCalled()
+  })
+
+  it('contributes the pane census to renderer memory profile counts', () => {
+    const manager = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPanes: () => [{ id: 1, terminal: { cols: 100, buffer: { active: { length: 64 } } } }]
+    }
+    registerLivePaneManager(manager)
+    registeredManagers.push(manager)
+
+    const counts = collectRendererMemoryProfileCounts()
+    expect(counts['terminals.managers']).toBe(1)
+    expect(counts['terminals.estPanes']).toBe(1)
+    expect(counts['terminals.estBufferKB']).toBe(100)
   })
 })

@@ -2,8 +2,9 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
-import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import type { PtyTransport } from './pty-transport-types'
+import { useExpandCollapseActions } from './expand-collapse'
+import { useTerminalKeyboardShortcuts } from './terminal-keyboard-hook'
 import {
   installTerminalImeCompositionRoute,
   XTERM_COMPOSITION_SESSION_START_EVENT
@@ -28,9 +29,12 @@ function keyboardEvent(
   return event
 }
 
-function createHarness(): {
+type ShortcutBinding = { markShortcutTerminalInputSent: ReturnType<typeof vi.fn> }
+
+function createHarness(bindings?: Map<number, ShortcutBinding>): {
   deps: KeyboardHandlersDeps
   editable: HTMLInputElement
+  sendInput: ReturnType<typeof vi.fn>
   startComposition: () => void
   terminalInput: HTMLTextAreaElement
   dispose: () => void
@@ -75,7 +79,7 @@ function createHarness(): {
     keyboardScopeRef: { current: scope },
     managerRef: { current: manager },
     paneTransportsRef: { current: new Map([[pane.id, transport]]) },
-    panePtyBindingsRef: { current: new Map() },
+    panePtyBindingsRef: { current: (bindings ?? new Map()) as never },
     paneCwdRef: { current: new Map() },
     fallbackCwd: '',
     expandedPaneIdRef: { current: null },
@@ -85,6 +89,7 @@ function createHarness(): {
     persistLayoutSnapshot: vi.fn(),
     toggleExpandPane: vi.fn(),
     setSearchOpen: vi.fn(),
+    focusSearchInput: vi.fn(),
     onSearchSelectedText: vi.fn(),
     onRequestClosePane: vi.fn(),
     onClearPaneScrollback: vi.fn(),
@@ -97,6 +102,7 @@ function createHarness(): {
   return {
     deps,
     editable,
+    sendInput,
     terminalInput,
     startComposition: () => {
       terminalElement.dispatchEvent(
@@ -161,6 +167,55 @@ describe('Windows IME keyboard ownership', () => {
     harness.terminalInput.dispatchEvent(redispatch)
 
     expect(redispatch.defaultPrevented).toBe(true)
+    hook.unmount()
+    harness.dispose()
+  })
+
+  it('marks a captured shortcut send as interactive input', () => {
+    const binding = { markShortcutTerminalInputSent: vi.fn() }
+    const harness = createHarness(new Map([[1, binding]]))
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        timeStamp: 10,
+        shiftKey: true
+      })
+    )
+
+    expect(harness.sendInput).toHaveBeenCalledTimes(1)
+    expect(binding.markShortcutTerminalInputSent).toHaveBeenCalledTimes(1)
+    hook.unmount()
+    harness.dispose()
+  })
+
+  it('does not mark input for a pane binding replaced between capture and send', () => {
+    // Re-read the captured binding at send time so old owners cannot refresh redraw state after reconnect/rehome.
+    const captured = { markShortcutTerminalInputSent: vi.fn() }
+    const replacement = { markShortcutTerminalInputSent: vi.fn() }
+    const bindings = new Map([[1, captured]])
+    let reads = 0
+    bindings.get = ((paneId: number) =>
+      paneId === 1 ? (reads++ === 0 ? captured : replacement) : undefined) as never
+    const harness = createHarness(bindings)
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        timeStamp: 10,
+        shiftKey: true
+      })
+    )
+
+    expect(harness.sendInput).toHaveBeenCalledTimes(1)
+    expect(captured.markShortcutTerminalInputSent).not.toHaveBeenCalled()
+    expect(replacement.markShortcutTerminalInputSent).not.toHaveBeenCalled()
     hook.unmount()
     harness.dispose()
   })
@@ -271,6 +326,163 @@ describe('Windows IME keyboard ownership', () => {
     harness.terminalInput.dispatchEvent(redispatch)
 
     expect(redispatch.defaultPrevented).toBe(true)
+    hook.unmount()
+    harness.dispose()
+  })
+
+  it('clears held Shift when an IME-consumed keyup reports Process', () => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Shift',
+        code: 'ShiftLeft',
+        keyCode: 16,
+        timeStamp: 1,
+        shiftKey: true
+      })
+    )
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keyup', {
+        key: 'Process',
+        code: 'ShiftLeft',
+        keyCode: 229,
+        timeStamp: 10,
+        isComposing: true
+      })
+    )
+    const enter = keyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      timeStamp: 20
+    })
+
+    harness.terminalInput.dispatchEvent(enter)
+
+    expect(enter.defaultPrevented).toBe(false)
+    hook.unmount()
+    harness.dispose()
+  })
+
+  it.each([
+    { code: 'ShiftLeft', shiftKey: true },
+    { code: 'KeyQ', shiftKey: true },
+    { code: 'KeyW', ctrlKey: true }
+  ])('keeps an IME-consumed $code out of terminal shortcuts', (modifier) => {
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    const laterWindowHandler = vi.fn()
+    window.addEventListener('keydown', laterWindowHandler)
+    harness.startComposition()
+    const consumed = keyboardEvent('keydown', {
+      key: 'Process',
+      keyCode: 229,
+      timeStamp: 10,
+      isComposing: true,
+      ...modifier
+    })
+
+    harness.terminalInput.dispatchEvent(consumed)
+
+    expect(consumed.defaultPrevented).toBe(false)
+    expect(harness.sendInput).not.toHaveBeenCalled()
+    expect(harness.deps.onRequestClosePane).not.toHaveBeenCalled()
+    expect(laterWindowHandler).not.toHaveBeenCalled()
+    window.removeEventListener('keydown', laterWindowHandler)
+    hook.unmount()
+    harness.dispose()
+  })
+
+  it('keeps an IME-consumed Ctrl+Shift+F out of file search', () => {
+    const harness = createHarness()
+    const pane = harness.deps.managerRef.current?.getActivePane()
+    vi.mocked(pane!.terminal.getSelection).mockReturnValue('needle')
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    harness.startComposition()
+
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Process',
+        code: 'KeyF',
+        keyCode: 229,
+        timeStamp: 10,
+        isComposing: true,
+        ctrlKey: true,
+        shiftKey: true
+      })
+    )
+
+    expect(harness.deps.onSearchSelectedText).not.toHaveBeenCalled()
+    expect(harness.sendInput).not.toHaveBeenCalled()
+    hook.unmount()
+    harness.dispose()
+  })
+
+  // Rebuild dependency wrappers like TerminalPane; mid-composition rerenders must preserve chord ownership to avoid CJK newline leaks.
+  it('absorbs the bare Enter redispatch when re-renders land mid-composition', () => {
+    const harness = createHarness()
+    const factoryFields = {
+      expandedPaneIdRef: { current: null },
+      expandedStyleSnapshotRef: { current: new Map() },
+      containerRef: { current: null },
+      managerRef: { current: null },
+      setExpandedPaneId: vi.fn(),
+      setTabPaneExpanded: vi.fn(),
+      pendingPaneSizeRefreshFrameIdsRef: { current: [] },
+      persistLayoutSnapshot: vi.fn()
+    }
+    const hook = renderHook(() => {
+      const actions = useExpandCollapseActions({ ...factoryFields, tabId: 'tab-1' })
+      useTerminalKeyboardShortcuts({
+        ...harness.deps,
+        setExpandedPane: actions.setExpandedPane,
+        restoreExpandedLayout: actions.restoreExpandedLayout,
+        refreshPaneSizes: actions.refreshPaneSizes,
+        toggleExpandPane: actions.toggleExpandPane
+      })
+    })
+
+    harness.terminalInput.dispatchEvent(
+      keyboardEvent('keydown', {
+        key: 'Shift',
+        code: 'ShiftLeft',
+        keyCode: 16,
+        timeStamp: 1,
+        shiftKey: true
+      })
+    )
+    hook.rerender()
+    harness.startComposition()
+    hook.rerender()
+    for (let repeat = 0; repeat < 5; repeat++) {
+      harness.terminalInput.dispatchEvent(
+        keyboardEvent('keydown', {
+          key: 'Process',
+          code: 'Enter',
+          keyCode: 229,
+          timeStamp: 10 + repeat,
+          isComposing: true,
+          shiftKey: true,
+          repeat: repeat > 0
+        })
+      )
+      hook.rerender()
+    }
+
+    const redispatch = keyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      timeStamp: 40
+    })
+    harness.terminalInput.dispatchEvent(redispatch)
+
+    expect(redispatch.defaultPrevented).toBe(true)
+    const newlineSends = harness.sendInput.mock.calls.filter(
+      ([data]) => typeof data === 'string' && data.includes('\r')
+    )
+    expect(newlineSends).toHaveLength(0)
     hook.unmount()
     harness.dispose()
   })

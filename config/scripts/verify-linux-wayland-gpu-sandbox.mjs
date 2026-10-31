@@ -37,8 +37,7 @@ function hasBaseReproductionEvidence({ error, gpuCrashLines, phase, terminalExer
   return (
     terminalExerciseStarted ||
     gpuCrashLines.length > 0 ||
-    // Why: the unfixed Wayland GPU path can wedge before the terminal receives
-    // a PTY; reaching this boundary means the terminal pane itself is present.
+    // GPU stall may precede PTY creation; reaching boundary proves terminal pane exists.
     phase === 'setup.wait-pty'
   )
 }
@@ -129,8 +128,7 @@ async function closeElectronApp(app) {
       `[wayland-gpu] Electron close failed: ${closeError instanceof Error ? closeError.message : closeError}`
     )
   }
-  // Why: reproducing the Wayland GPU stall can wedge Chromium teardown after
-  // the evidence is collected, so CI needs a bounded close path.
+  // Bound teardown because reproduced GPU stall can wedge Chromium after evidence collection.
   if (electronProcess && electronProcess.exitCode === null && electronProcess.signalCode === null) {
     console.warn('[wayland-gpu] Electron did not close cleanly; killing the app process.')
     electronProcess.kill('SIGKILL')
@@ -148,8 +146,7 @@ async function runValidation(mode) {
 
   const repoPath = createGitRepo()
   const userDataPath = mkdtempSync(path.join(tmpdir(), 'orca-wayland-gpu-userdata-'))
-  // Why: this harness cannot use the E2E flag because that disables Linux GPU,
-  // but its Codex and Node home still must stay inside the disposable profile.
+  // E2E flag disables Linux GPU and invalidates repro; explicitly confine Codex/Node homes to disposable profile instead.
   const isolatedHome = path.join(userDataPath, 'home')
   mkdirSync(isolatedHome, { recursive: true })
   const runId = `${Date.now()}`
@@ -216,10 +213,10 @@ async function runValidation(mode) {
           env: {
             ...env,
             NODE_ENV: 'development',
+            ORCA_BACKGROUND_LAUNCH: '1',
             ORCA_DEV_USER_DATA_PATH: userDataPath,
             HOME: isolatedHome,
             USERPROFILE: isolatedHome,
-            ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
             ELECTRON_ENABLE_LOGGING: '1',
             ELECTRON_ENABLE_STACK_DUMPING: '1',
             ELECTRON_OZONE_PLATFORM_HINT: 'wayland',
@@ -375,8 +372,7 @@ async function runValidation(mode) {
 const { mode } = parseArgs()
 runValidation(mode).then(
   () => {
-    // Why: a reproduced GPU stall can leave Playwright/Electron handles alive
-    // after cleanup; CI should finish once validation has made its decision.
+    // Finish after verdict even if stalled renderer leaves Playwright/Electron handles alive.
     process.exit(0)
   },
   (error) => {

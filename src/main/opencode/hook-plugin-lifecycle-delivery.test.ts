@@ -1,7 +1,3 @@
-/**
- * Executes the generated OpenCode plugin source because this delivery state
- * lives inside OpenCode's process, not in Orca's TypeScript runtime.
- */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,6 +15,11 @@ vi.mock('electron', () => ({
 import { _internals } from './hook-service'
 
 type SessionFixture = { id: string; parentID?: string }
+
+/** Fixtures cover both current two-argument and legacy single-options SDK calls. */
+type SessionClientCall = (...args: never[]) => Promise<{ data: SessionFixture[] }>
+
+type SessionClientFixture = { list: SessionClientCall; get?: SessionClientCall }
 type PluginEvent = { type: string; properties?: Record<string, unknown> }
 type PluginEventHandler = (input: { event: PluginEvent }) => Promise<void>
 type PluginHooks = { event: PluginEventHandler; dispose?: () => Promise<void> }
@@ -83,7 +84,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     return loadHooksWithSession({ list })
   }
 
-  async function loadHooksWithSession(session: object): Promise<PluginHooks> {
+  async function loadHooksWithSession(session: SessionClientFixture): Promise<PluginHooks> {
     const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
     const module = (await import(pathToFileURL(pluginPath).href)) as {
@@ -131,6 +132,61 @@ describe('OpenCode plugin lifecycle delivery', () => {
     })
   }
 
+  it('maps only root session.created to SessionStart', async () => {
+    const handler = await loadHandler()
+
+    await handler({
+      event: { type: 'session.created', properties: { info: { id: 'root' } } }
+    })
+    await handler({
+      event: {
+        type: 'session.created',
+        properties: { info: { id: 'child', parentID: 'root' } }
+      }
+    })
+
+    expect(posts).toEqual([{ hook_event_name: 'SessionStart', sessionID: 'root' }])
+  })
+
+  it('falls back per coordinate when the endpoint file is partial or malformed', async () => {
+    const endpointPath = join(tempDir, 'endpoint.env')
+    writeFileSync(
+      endpointPath,
+      'not-an-assignment\nORCA_AGENT_HOOK_TOKEN=file-token\nBROKEN LINE\n'
+    )
+    process.env.ORCA_AGENT_HOOK_ENDPOINT = endpointPath
+
+    const fetchMock = vi.fn(
+      async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(null, { status: 204 })
+    )
+    globalThis.fetch = fetchMock as typeof globalThis.fetch
+    const handler = await loadHandler()
+
+    await handler({ event: status('busy') })
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(String(url)).toBe('http://127.0.0.1:45678/hook/opencode')
+    expect(new Headers(init?.headers).get('X-Orca-Agent-Hook-Token')).toBe('file-token')
+  })
+
+  it('warns once for an unreadable endpoint without exposing hook credentials', async () => {
+    process.env.ORCA_AGENT_HOOK_ENDPOINT = tempDir
+    process.env.ORCA_AGENT_HOOK_TOKEN = 'fallback-secret-token'
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const handler = await loadHandler()
+      await handler({ event: status('busy') })
+      await handler({ event: delta('still working') })
+
+      expect(warn).toHaveBeenCalledOnce()
+      expect(warn.mock.calls.flat().join(' ')).not.toContain('fallback-secret-token')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('preserves FIFO lifecycle order while the first session lookup is delayed', async () => {
     let releaseFirstLookup: (() => void) | undefined
     const firstLookup = new Promise<void>((resolve) => {
@@ -156,8 +212,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     const idle = handler({ event: status('idle') })
 
     try {
-      // Why: OpenCode does not await event hooks, so the plugin must prevent
-      // the later idle lookup from overtaking the blocked busy lookup.
+      // OpenCode does not await hooks; later idle lookup must not overtake blocked busy lookup.
       expect(list).toHaveBeenCalledTimes(1)
       expect(posts).toHaveLength(0)
     } finally {
@@ -245,7 +300,6 @@ describe('OpenCode plugin lifecycle delivery', () => {
     await handler({ event: status('idle') })
     expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
 
-    // Why: a stale retry must not resurrect Working after OpenCode is done.
     await vi.advanceTimersByTimeAsync(60_000)
     expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
   })
@@ -263,8 +317,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     await handler({ event: status('busy') })
     expect(names()).toEqual(['SessionBusy'])
 
-    // Why: current OpenCode streams deltas after an empty text-start part; the
-    // live delta proves work continued and should recover a lost Busy post.
+    // Deltas after empty text-start parts must recover a lost Busy post.
     await handler({ event: delta('hello') })
     expect(names()).toEqual(['SessionBusy', 'SessionBusy'])
 
@@ -382,8 +435,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     await vi.advanceTimersByTimeAsync(1)
     try {
       expect(list).toHaveBeenCalledTimes(2)
-      // Busy is safe to fail open: even a child means its root is working.
-      // Idle still requires a later confirmed-root lookup.
+      // Child activity safely marks its root busy; idle still requires confirmed root ownership.
       expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
     } finally {
       releaseLookup?.()

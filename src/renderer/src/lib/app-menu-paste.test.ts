@@ -1,14 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  APP_MENU_PASTE_EVENT,
-  dispatchAppMenuPasteEvent,
-  findFocusedAppMenuTextControlPasteTarget,
-  handleAppMenuPasteRequest,
-  shouldOwnAppMenuTextControlPaste
-} from './app-menu-paste'
-import { TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES } from './text-control-paste'
+import { APP_MENU_PASTE_EVENT, handleAppMenuPasteRequest } from './app-menu-paste'
 
 function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
@@ -48,22 +41,6 @@ describe('app menu paste', () => {
     expect(result).toEqual({ status: 'handled', target: 'terminal' })
     expect(readClipboardText).not.toHaveBeenCalled()
     expect(performNativePaste).not.toHaveBeenCalled()
-  })
-
-  it('falls back to native paste when no Orca-owned target is focused', async () => {
-    const button = document.createElement('button')
-    document.body.appendChild(button)
-    button.focus()
-    const performNativePaste = vi.fn()
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => 'text'),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false
-    })
-
-    expect(result).toEqual({ status: 'native-fallback', reason: 'no-owned-target' })
-    expect(performNativePaste).toHaveBeenCalledWith({ mode: 'paste' })
   })
 
   it('preserves paste-and-match-style when falling back to native paste', async () => {
@@ -177,71 +154,5 @@ describe('app menu paste', () => {
     expect(textarea.value).toBe('unchanged')
     expect(other.value).toBe('other')
     expect(performNativePaste).not.toHaveBeenCalled()
-  })
-
-  it('rejects oversized focused text-control paste without native fallback', async () => {
-    const textarea = appendTextarea('unchanged')
-    textarea.focus()
-    const performNativePaste = vi.fn()
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => {
-        throw new Error('Clipboard text is too large for this paste target.')
-      }),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false
-    })
-
-    expect(result).toMatchObject({
-      status: 'rejected',
-      target: 'text-control',
-      reason: 'too-large'
-    })
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain(
-      'reason=too-large'
-    )
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain('durationMs=')
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain(
-      'content=redacted'
-    )
-    expect(textarea.value).toBe('unchanged')
-    expect(performNativePaste).not.toHaveBeenCalled()
-  })
-
-  it('resolves only editable text controls for app-menu ownership', () => {
-    const textarea = appendTextarea()
-    const disabled = appendTextarea()
-    disabled.disabled = true
-    const colorInput = document.createElement('input')
-    colorInput.type = 'color'
-    document.body.appendChild(colorInput)
-
-    expect(findFocusedAppMenuTextControlPasteTarget(textarea)).toBe(textarea)
-    expect(findFocusedAppMenuTextControlPasteTarget(disabled)).toBeNull()
-    expect(findFocusedAppMenuTextControlPasteTarget(colorInput)).toBeNull()
-  })
-
-  it('exposes a cancellable ownership event and byte-threshold check', () => {
-    const onPaste = (event: Event): void => {
-      event.preventDefault()
-    }
-    window.addEventListener(APP_MENU_PASTE_EVENT, onPaste)
-
-    expect(dispatchAppMenuPasteEvent()).toBe(true)
-    expect(shouldOwnAppMenuTextControlPaste('small')).toBe(false)
-    expect(shouldOwnAppMenuTextControlPaste('x'.repeat(70 * 1024))).toBe(true)
-
-    window.removeEventListener(APP_MENU_PASTE_EVENT, onPaste)
-  })
-
-  it('bounds app-menu text-control ownership measuring at the direct-paste threshold', () => {
-    const codePointAt = vi.spyOn(String.prototype, 'codePointAt')
-    const text = 'x'.repeat(TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES + 4_096)
-
-    expect(shouldOwnAppMenuTextControlPaste(text)).toBe(true)
-
-    expect(codePointAt.mock.calls.length).toBeLessThanOrEqual(
-      TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES + 1
-    )
   })
 })

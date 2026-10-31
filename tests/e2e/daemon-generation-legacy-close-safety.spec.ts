@@ -69,7 +69,7 @@ function launchLegacyCloseClient(options: {
 }): {
   child: ChildProcess
   ready: Promise<LegacyCloseReport>
-  finish(): void
+  finish(): Promise<void>
   output(): string
 } {
   const { runtime, generations, capableCanaries, legacyCanaries } = options
@@ -139,27 +139,98 @@ function launchLegacyCloseClient(options: {
   return {
     child,
     ready,
-    finish: () => {
-      if (child.connected) {
-        child.send?.({ type: 'finish' }, () => {})
+    finish: async () => {
+      if (!child.connected) {
+        const disconnected: NodeJS.ErrnoException = new Error(
+          'Legacy close client IPC channel disconnected before finish handshake'
+        )
+        disconnected.code = 'ERR_IPC_CHANNEL_CLOSED'
+        throw disconnected
       }
+      await new Promise<void>((resolve, reject) => {
+        child.send({ type: 'finish' }, (error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve()
+        })
+      })
     },
     output: () => output
   }
 }
 
+async function terminateLegacyCloseClient(
+  client: ReturnType<typeof launchLegacyCloseClient>,
+  identity: Awaited<ReturnType<typeof recordProcessIdentity>> | null
+): Promise<'already-exited' | 'termination-attempted'> {
+  if (legacyCloseClientExited(client)) {
+    return 'already-exited'
+  }
+  if (identity) {
+    // Why: tree capture fails once the recorded root exits on its own, which is a normal exit.
+    const tree = await recordProcessTree(identity).catch(() => null)
+    if (!tree) {
+      return 'already-exited'
+    }
+    return (await terminateRecordedTree(tree)) ? 'termination-attempted' : 'already-exited'
+  }
+  // Why: identity capture can race with teardown; the direct child handle is the last cleanup path.
+  const signalled = client.child.kill('SIGKILL')
+  await waitForCondition(
+    'forced legacy close client exit',
+    () => legacyCloseClientExited(client),
+    5_000
+  )
+  return signalled ? 'termination-attempted' : 'already-exited'
+}
+
+function legacyCloseClientExited(client: ReturnType<typeof launchLegacyCloseClient>): boolean {
+  return client.child.exitCode !== null || client.child.signalCode !== null
+}
+
+function isIpcClosureError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null | undefined)?.code
+  return code === 'ERR_IPC_CHANNEL_CLOSED' || code === 'ERR_IPC_DISCONNECTED'
+}
+
 async function finishLegacyCloseClient(
   client: ReturnType<typeof launchLegacyCloseClient>
 ): Promise<void> {
-  if (!client.child.pid || client.child.exitCode !== null) {
+  if (!client.child.pid || legacyCloseClientExited(client)) {
     return
   }
-  const identity = await recordProcessIdentity(client.child.pid)
-  client.finish()
+  const identity = await recordProcessIdentity(client.child.pid).catch(() => null)
+  let finishError: unknown
+  let finishFailed = false
   try {
-    await waitForCondition('legacy close client exit', () => client.child.exitCode !== null, 2_000)
+    await client.finish()
+  } catch (error) {
+    finishError = error
+    finishFailed = true
+  }
+  let forcedCleanup = false
+  try {
+    await waitForCondition('legacy close client exit', () => legacyCloseClientExited(client), 2_000)
   } catch {
-    await terminateRecordedTree(await recordProcessTree(identity))
+    try {
+      // Why: the wait can time out while the client exits on its own; only a real termination counts.
+      forcedCleanup =
+        (await terminateLegacyCloseClient(client, identity)) === 'termination-attempted'
+    } catch (cleanupError) {
+      if (finishFailed) {
+        throw new AggregateError(
+          [finishError, cleanupError],
+          'Legacy close client finish handshake and forced cleanup both failed'
+        )
+      }
+      throw cleanupError
+    }
+  }
+  // Why: a normal client exit can close the IPC channel before the finish ack lands.
+  if (finishFailed && (forcedCleanup || !isIpcClosureError(finishError))) {
+    throw finishError
   }
 }
 

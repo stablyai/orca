@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'
 import { getPaneOwnedActiveHelperTextarea } from './regular-terminal-focus-ownership'
 
 type FontZoomDeps = {
@@ -57,6 +58,8 @@ export function useTerminalFontZoom({
       }
 
       pane.terminal.options.fontSize = nextSize
+      // Fold zoom into parked metrics before safeFit flushes them, or the captured font size overwrites it.
+      overridePendingPaneMetricOptions(pane, { fontSize: nextSize })
       safeFit(pane)
 
       const percent = Math.round((nextSize / globalSize) * 100)

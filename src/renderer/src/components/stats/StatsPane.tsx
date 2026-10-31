@@ -6,6 +6,7 @@ import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
 import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
+import { MuseUsagePane } from './MuseUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
 import { Button } from '../ui/button'
 import {
@@ -15,7 +16,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 export { getStatsPaneSearchEntries } from './stats-search'
 
 function formatDuration(ms: number): string {
@@ -44,7 +45,7 @@ function formatTrackingSince(timestamp: number | null): string {
   }
   const date = new Date(timestamp)
   return translate('auto.components.stats.StatsPane.trackingSince', 'Tracking since {{value0}}', {
-    value0: date.toLocaleDateString(undefined, {
+    value0: date.toLocaleDateString(getIntlLocale(), {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
@@ -52,7 +53,7 @@ function formatTrackingSince(timestamp: number | null): string {
   })
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'grok'
+type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'grok'
 
 const USAGE_ANALYTICS_OPTIONS = [
   {
@@ -77,6 +78,12 @@ const USAGE_ANALYTICS_OPTIONS = [
     id: 'opencode',
     get label() {
       return translate('auto.components.stats.StatsPane.1e696db2f6', 'OpenCode')
+    }
+  },
+  {
+    id: 'muse',
+    get label() {
+      return translate('auto.lib.agent.catalog.muse_label', 'Muse')
     }
   },
   {
@@ -124,7 +131,7 @@ export function StatsPane(): React.JSX.Element {
               <div className="grid grid-cols-3 gap-3">
                 <StatCard
                   label={translate('auto.components.stats.StatsPane.9dbec9e675', 'Agents spawned')}
-                  value={summary.totalAgentsSpawned.toLocaleString()}
+                  value={summary.totalAgentsSpawned.toLocaleString(getIntlLocale())}
                   icon={<Bot className="size-4" />}
                 />
                 <StatCard
@@ -137,7 +144,7 @@ export function StatsPane(): React.JSX.Element {
                 />
                 <StatCard
                   label={translate('auto.components.stats.StatsPane.a58aba506f', 'PRs created')}
-                  value={summary.totalPRsCreated.toLocaleString()}
+                  value={summary.totalPRsCreated.toLocaleString(getIntlLocale())}
                   icon={<GitPullRequest className="size-4" />}
                 />
               </div>
@@ -196,9 +203,7 @@ export function StatsPane(): React.JSX.Element {
           </DropdownMenu>
         </div>
 
-        {/* Why: the Stats section lives inside the scroll-tracked settings page. Keeping only the
-            active panel mounted avoids hidden tab-content layout/focus churn that produced a visible
-            vertical jitter below the usage card when switching disabled providers. */}
+        {/* Mount only the active panel to avoid hidden layout/focus churn jittering the scroll-tracked settings page. */}
         <div>
           {activeUsageTab === 'overview' ? (
             <UsageOverviewPane />
@@ -208,6 +213,8 @@ export function StatsPane(): React.JSX.Element {
             <CodexUsagePane />
           ) : activeUsageTab === 'opencode' ? (
             <OpenCodeUsagePane />
+          ) : activeUsageTab === 'muse' ? (
+            <MuseUsagePane />
           ) : (
             <GrokUsagePane />
           )}

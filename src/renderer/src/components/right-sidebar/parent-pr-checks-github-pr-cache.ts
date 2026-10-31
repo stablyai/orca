@@ -1,12 +1,18 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
 } from '../../../../shared/execution-host'
 import { isCachedMergedBranchPRCurrentForWorktree } from '@/components/sidebar/worktree-card-pr-display'
 import type { AppState } from '@/store/types'
-import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import {
+  getGitHubPRCacheKey,
+  getLegacyGitHubPRCacheKey
+} from '../../../../shared/github/github-cache-key'
 import type { ParentPrChecksCacheEntry } from './parent-pr-checks-row-types'
 
 export function canUseParentPrChecksGitHubPRCacheEntry(
@@ -18,6 +24,9 @@ export function canUseParentPrChecksGitHubPRCacheEntry(
 } {
   const pr = prEntry?.data
   if (!pr) {
+    return false
+  }
+  if (isGitHubPRSuppressed(worktree, pr.number)) {
     return false
   }
   const prFetchedAt = prEntry.fetchedAt
@@ -32,8 +41,7 @@ export function canUseParentPrChecksGitHubPRCacheEntry(
   if (pr.state === 'merged' && !mergedPrMatchesCurrentHead) {
     return false
   }
-  // Why: a newer hosted-review miss should suppress older branch PR cache unless
-  // a merged PR is proven to still describe the checked-out worktree head.
+  // Newer hosted-review misses suppress old PR cache entries unless a merged PR still matches the checked-out head.
   if (
     hostedReviewEntry?.data === null &&
     !mergedPrMatchesCurrentHead &&

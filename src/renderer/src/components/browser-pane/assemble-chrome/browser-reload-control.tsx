@@ -1,0 +1,91 @@
+import type { Dispatch, SetStateAction } from 'react'
+import { RefreshCw, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
+
+/** Share left-click reload/right-click hard reload gestures; the caller defines the hard variant. */
+export function BrowserReloadControl({
+  menuOpen,
+  onMenuOpenChange,
+  label,
+  showStop = false,
+  showShortcutHint,
+  reloadShortcut,
+  hardReloadShortcut,
+  onPrimary,
+  onReload,
+  onHardReload
+}: {
+  menuOpen: boolean
+  onMenuOpenChange: Dispatch<SetStateAction<boolean>>
+  label: string
+  /** Only when the primary click stops the load; a reload-only caller keeps the reload icon. */
+  showStop?: boolean
+  /** The chord maps to plain reload, which is not what Stop or Retry do — hint only when they match. */
+  showShortcutHint: boolean
+  reloadShortcut: string
+  hardReloadShortcut: string
+  onPrimary: () => void
+  onReload: () => void
+  onHardReload: () => void
+}): React.JSX.Element {
+  return (
+    <DropdownMenu modal={false} open={menuOpen} onOpenChange={onMenuOpenChange}>
+      {/* Why: suppress the tooltip while the menu is open — both anchor below the button and would overlap. */}
+      <Tooltip open={menuOpen ? false : undefined}>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              aria-label={label}
+              // Prevent Radix left-click opening so the primary action remains reload and only right-click opens the menu.
+              onPointerDown={(e) => {
+                if (e.button === 0) {
+                  e.preventDefault()
+                }
+              }}
+              // Keep Enter/Space synthesized clicks for the primary action; ArrowDown still opens the menu.
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onPrimary()
+                }
+              }}
+              onClick={onPrimary}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                onMenuOpenChange(true)
+              }}
+            >
+              {showStop ? <X className="size-4" /> : <RefreshCw className="size-4" />}
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={4}>
+          {label}
+          {reloadShortcut && showShortcutHint ? ` · ${reloadShortcut}` : ''}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" alignOffset={-4}>
+        <DropdownMenuItem onClick={onReload}>
+          {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+          <DropdownMenuShortcut>{reloadShortcut}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onHardReload}>
+          {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
+          <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}

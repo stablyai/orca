@@ -4,8 +4,7 @@ import type { RpcTransport } from './transport'
 import type { MobileSocketTransport, MobileSocketTransportMetadata } from './mobile-socket-wiring'
 
 const MAX_RELAY_MESSAGE_BYTES = 1024 * 1024
-// Why: terminate() normally emits 'close' within one tick; 5s covers slow
-// teardown without letting a dead socket hold stop() (and app quit) hostage.
+// Terminate normally closes next tick; cap slow teardown at 5s so dead sockets cannot block stop or quit.
 export const RELAY_SOCKET_CLOSE_TIMEOUT_MS = 5_000
 const RELAY_SOCKET_CLOSE_WAIT_CONCURRENCY = 32
 
@@ -104,6 +103,10 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.generation = generation
   }
 
+  hasConnection(connectionId: string): boolean {
+    return this.socketsByConnectionId.has(connectionId)
+  }
+
   terminateClientConnections(clientId: string): number {
     const sockets = Array.from(this.clientIds.entries())
       .filter(([, candidate]) => candidate === clientId)
@@ -151,7 +154,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       let finalized = false
       const deadline = setTimeout(() => {
         socket.terminate()
-        // Why: attach expiry makes the socket unusable; release it even if terminate never emits close.
+        // Expired attaches are unusable; release even if terminate never emits close.
         finalize()
         this.quarantineDetachedSocket(socket)
         if (!opened) {
@@ -231,8 +234,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       }
       return Promise.resolve()
     }
-    // Why: a half-open relay socket after system sleep can never emit 'close';
-    // an unbounded wait here wedges stop() and blocks app quit (#9447).
+    // Post-sleep half-open sockets may never close; bound the wait so app quit cannot hang (#9447).
     return new Promise((resolve) => {
       const onClose = (): void => {
         clearTimeout(deadline)
@@ -266,7 +268,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
         this.closeWaitsBySocket.delete(socket)
       }
     })
-    // Why: install the close waiter first because test doubles and native wrappers can close synchronously.
+    // Install waiter first: wrappers and test doubles may close synchronously.
     socket.terminate()
     return pending
   }
@@ -280,7 +282,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     if (socket.readyState === socket.CLOSED) {
       return
     }
-    // Why: forced cleanup can precede ws's terminal error/close event.
+    // Forced cleanup may precede native error/close.
     const swallowLateError = (): void => {}
     const clearQuarantine = (): void => {
       socket.off('error', swallowLateError)

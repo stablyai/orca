@@ -10,25 +10,45 @@ import { translate } from '@/i18n/i18n'
 
 function statusLabel(entry: PendingWorktreeCreation): string {
   if (entry.status === 'error') {
-    return entry.error ?? 'Creation failed'
+    return (
+      entry.error ??
+      translate('auto.components.sidebar.PendingWorktreeRow.creationFailed', 'Creation failed')
+    )
   }
   return getCreationProgressLabel(entry)
 }
 
-/**
- * Sidebar row for an in-progress (or failed) worktree create. Rendered inline in
- * the worktree list under its target repo, so the new workspace appears where it
- * will land. Self-contained: reads its own entry + active state by creationId.
- */
+/** Host-owned creation with no request in this window, such as a phone or CLI creation. */
+function HostCreationRow({ repoName }: { repoName: string | null }): React.JSX.Element {
+  return (
+    <div className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5">
+      <span className="flex size-4 shrink-0 items-center justify-center">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-sidebar-foreground">
+          {translate(
+            'auto.components.sidebar.PendingWorktreeRow.creatingWorkspace',
+            'Creating workspace…'
+          )}
+        </span>
+        <span className="block truncate text-[11px] text-muted-foreground">{repoName}</span>
+      </span>
+    </div>
+  )
+}
+
 export function PendingWorktreeRow({
-  creationId
+  creationId,
+  repoName
 }: {
   creationId: string
-}): React.JSX.Element | null {
+  repoName: string | null
+}): React.JSX.Element {
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const active = useAppStore((s) => s.activePendingCreationId === creationId)
   if (!entry) {
-    return null
+    return <HostCreationRow repoName={repoName} />
   }
 
   const isError = entry.status === 'error'
@@ -43,8 +63,7 @@ export function PendingWorktreeRow({
     >
       <button
         type="button"
-        // Why: never route this through setActiveWorktree — there is no real
-        // worktree yet. activePendingCreationId drives the content loader instead.
+        // No real worktree exists yet; pending-creation activation owns the content loader.
         onClick={() => {
           const store = useAppStore.getState()
           store.setActivePendingWorktreeCreation(creationId)
@@ -66,7 +85,7 @@ export function PendingWorktreeRow({
           </span>
           <span
             className={cn(
-              'block truncate text-[11px]',
+              'block truncate text-[11px] tabular-nums',
               isError ? 'text-destructive/90' : 'text-muted-foreground'
             )}
           >

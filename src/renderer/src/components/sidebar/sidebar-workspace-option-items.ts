@@ -1,291 +1,181 @@
-import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../../shared/types'
-import { TASK_WORKTREE_CARD_PROPERTIES } from '../../../../shared/constants'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import {
+  WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES,
+  WORKSPACE_CARD_LAYOUT_CHOICES,
+  WORKSPACE_CARD_PROPERTY_CHOICES,
+  WORKSPACE_GROUP_BY_CHOICES,
+  WORKSPACE_PROJECT_ORDER_CHOICES,
+  WORKSPACE_SORT_BY_CHOICES,
+  WORKSPACE_CARD_DISPLAY_CHOICES,
+  type WorkspaceViewChoice
+} from '../../../../shared/workspace-view/workspace-view-options'
 import { translate } from '@/i18n/i18n'
 
-export const GROUP_BY_OPTIONS = [
-  {
-    id: 'none',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.c2c7a45cda', 'None')
-    }
-  },
-  {
-    id: 'workspace-status',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.e029a2d775', 'Status')
-    }
-  },
-  {
-    id: 'pr-status',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.0f9b959b31', 'PR')
-    }
-  },
-  {
-    id: 'repo',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2170d553cf', 'Project')
-    }
-  }
-] as const
+// Key localized copy by shared choice IDs so new options require desktop labels at compile time.
 
-export const CARD_LAYOUT_OPTIONS = [
-  {
-    id: 'detailed',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b', 'Detailed')
-    }
-  },
-  {
-    id: 'compact',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb', 'Compact')
-    }
-  }
-] as const
-
-export const AGENT_ACTIVITY_DISPLAY_OPTIONS: {
-  id: AgentActivityDisplayMode
-  label: string
-}[] = [
-  {
-    id: 'compact',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb', 'Compact')
-    }
-  },
-  {
-    id: 'full',
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.2a81e07366',
-        'Full list'
-      )
-    }
-  }
-]
-
-export type WorktreeCardPropertyOption = {
-  id: string
-  properties: readonly WorktreeCardProperty[]
-  label: string
+type LocalizedChoice<Id extends string> = {
+  id: Id
+  readonly label: string
+  readonly description: string | null
 }
 
-const BASE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
-  {
-    id: 'status',
-    properties: ['status'],
+function localizeChoices<Id extends string>(
+  choices: readonly WorkspaceViewChoice<Id>[],
+  labels: Record<Id, () => string>,
+  descriptions: Partial<Record<Id, () => string>> = {}
+): LocalizedChoice<Id>[] {
+  return choices.map(({ id }) => ({
+    id,
     get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.1a0eec0d35', 'Status')
-    }
-  },
-  {
-    id: 'comment',
-    properties: ['comment'],
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.8d62c68b35', 'Notes')
-    }
-  },
-  {
-    id: 'automation',
-    properties: ['automation'],
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.automation',
-        'Automation'
-      )
-    }
-  },
-  {
-    id: 'cli',
-    properties: ['cli'],
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.cli', 'Orca CLI')
-    }
-  },
-  {
-    id: 'ports',
-    properties: ['ports'],
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2d74665a56', 'Ports')
-    }
-  },
-  {
-    id: 'inline-agents',
-    properties: ['inline-agents'],
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.65a9820bd1',
-        'Agent statuses'
-      )
-    }
-  },
-  {
-    id: 'branch',
-    properties: ['branch'],
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.219ebf1961',
-        'Branch name'
-      )
-    }
-  }
-]
-
-const TASK_WORKTREE_CARD_PROPERTY_OPTION: WorktreeCardPropertyOption = {
-  id: 'tasks',
-  properties: TASK_WORKTREE_CARD_PROPERTIES,
-  get label() {
-    return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b5536d5a88', 'Tasks')
-  }
-}
-
-const ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
-  {
-    id: 'issue',
-    properties: ['issue'],
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bdd23b4e07',
-        'GitHub issues'
-      )
-    }
-  },
-  {
-    id: 'linear-issue',
-    properties: ['linear-issue'],
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.44713a5d04',
-        'Linear issues'
-      )
-    }
-  },
-  {
-    id: 'jira-issue',
-    properties: ['jira-issue'],
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssues',
-        'Jira issues'
-      )
-    }
-  }
-]
-
-type WorktreeCardPropertyOptionsInput = {
-  newCardStyle?: boolean
-  hasProjectGroups?: boolean
-}
-
-export function getWorktreeCardPropertyOptions({
-  newCardStyle = false,
-  hasProjectGroups = false
-}: WorktreeCardPropertyOptionsInput = {}): WorktreeCardPropertyOption[] {
-  const issueOptions = newCardStyle
-    ? ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS
-    : [TASK_WORKTREE_CARD_PROPERTY_OPTION]
-  const branchOption: WorktreeCardPropertyOption = {
-    id: 'branch',
-    properties: ['branch'],
-    get label() {
-      // Why: new-card project groups can contain folder workspaces, so the
-      // branch setting copy must describe both repo and folder identity.
-      return newCardStyle && hasProjectGroups
-        ? translate(
-            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.folderPathIdentity',
-            'Branch / folder path'
-          )
-        : translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.219ebf1961', 'Branch name')
-    }
-  }
-  if (newCardStyle) {
-    return [...issueOptions, ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1), branchOption]
-  }
-  return [
-    BASE_WORKTREE_CARD_PROPERTY_OPTIONS[0],
-    ...issueOptions,
-    ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1),
-    branchOption
-  ]
-}
-
-export const WORKTREE_CARD_PROPERTY_OPTIONS = getWorktreeCardPropertyOptions()
-
-export const SORT_OPTIONS = [
-  {
-    id: 'name',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.3728165cdd', 'Name')
-    },
-    description: null
-  },
-  {
-    id: 'smart',
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.503462f2b4',
-        'Agent Activity'
-      )
+      return labels[id]()
     },
     get description() {
-      return translate(
+      return descriptions[id]?.() ?? null
+    }
+  }))
+}
+
+type ChoiceId<T extends readonly WorkspaceViewChoice<string>[]> = T[number]['id']
+
+const projectLabel = (): string =>
+  translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2170d553cf', 'Project')
+const manualLabel = (): string =>
+  translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7b316bdd51', 'Manual')
+const recentLabel = (): string =>
+  translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162', 'Recent')
+const compactLabel = (): string =>
+  translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb', 'Compact')
+
+export const GROUP_BY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_GROUP_BY_CHOICES>>(
+  WORKSPACE_GROUP_BY_CHOICES,
+  {
+    none: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.c2c7a45cda', 'None'),
+    'workspace-status': () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.e029a2d775', 'Status'),
+    'pr-status': () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.0f9b959b31', 'PR'),
+    repo: projectLabel
+  }
+)
+
+export const SORT_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_SORT_BY_CHOICES>>(
+  WORKSPACE_SORT_BY_CHOICES,
+  {
+    name: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.3728165cdd', 'Name'),
+    smart: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.503462f2b4', 'Agent Activity'),
+    recent: recentLabel,
+    repo: projectLabel,
+    manual: manualLabel
+  },
+  {
+    smart: () =>
+      translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.b759bb87ee',
         'Agents that need attention, then most recent activity.'
-      )
-    }
-  },
-  {
-    id: 'recent',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162', 'Recent')
-    },
-    description: null
-  },
-  {
-    id: 'repo',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2170d553cf', 'Project')
-    },
-    description: null
-  },
-  {
-    id: 'manual',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7b316bdd51', 'Manual')
-    },
-    get description() {
-      return translate(
+      ),
+    manual: () =>
+      translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.7153d07485',
         'Drag workspaces to arrange them within each group.'
       )
-    }
   }
-] as const
+)
 
-export const PROJECT_ORDER_OPTIONS = [
+export const PROJECT_ORDER_OPTIONS = localizeChoices<
+  ChoiceId<typeof WORKSPACE_PROJECT_ORDER_CHOICES>
+>(
+  WORKSPACE_PROJECT_ORDER_CHOICES,
+  { manual: manualLabel, recent: recentLabel },
   {
-    id: 'manual',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7b316bdd51', 'Manual')
-    },
-    get description() {
-      return translate(
+    manual: () =>
+      translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.6664282a7b',
         'Drag projects to arrange them'
-      )
-    }
-  },
-  {
-    id: 'recent',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162', 'Recent')
-    },
-    get description() {
-      return translate(
+      ),
+    recent: () =>
+      translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
         'Most recent workspace activity'
       )
-    }
   }
-] as const
+)
+
+export const CARD_LAYOUT_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_CARD_LAYOUT_CHOICES>>(
+  WORKSPACE_CARD_LAYOUT_CHOICES,
+  {
+    detailed: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b', 'Detailed'),
+    compact: compactLabel
+  }
+)
+
+export const AGENT_ACTIVITY_DISPLAY_OPTIONS = localizeChoices<
+  ChoiceId<typeof WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES>
+>(WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES, {
+  compact: compactLabel,
+  full: () =>
+    translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2a81e07366', 'Full list')
+})
+
+export const PROPERTY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_CARD_PROPERTY_CHOICES>>(
+  WORKSPACE_CARD_PROPERTY_CHOICES,
+  {
+    issue: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.91dfc653e8', 'GitHub ticket'),
+    'linear-issue': () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.ca4d3c522e', 'Linear issue'),
+    'jira-issue': () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssue', 'Jira issue'),
+    pr: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b8dcc6f321', 'PR/MR link'),
+    automation: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.automation', 'Automation'),
+    comment: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.26c71e536c', 'Notes'),
+    ports: () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b64d8bcca0', 'Ports'),
+    'inline-agents': () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.d7084e8bc8', 'Agent activity'),
+    host: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.host', 'Host')
+  }
+)
+
+const CARD_DISPLAY_LABELS: Record<
+  ChoiceId<typeof WORKSPACE_CARD_DISPLAY_CHOICES>,
+  (hasProjectGroups: boolean) => string
+> = {
+  issue: () =>
+    translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.bdd23b4e07', 'GitHub issues'),
+  'linear-issue': () =>
+    translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.44713a5d04', 'Linear issues'),
+  'jira-issue': () =>
+    translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssues', 'Jira issues'),
+  comment: () =>
+    translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.8d62c68b35', 'Notes'),
+  automation: () =>
+    translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.automation', 'Automation'),
+  cli: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.cli', 'Orca CLI'),
+  ports: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2d74665a56', 'Ports'),
+  'inline-agents': () =>
+    translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.65a9820bd1', 'Agent statuses'),
+  host: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.host', 'Host'),
+  branch: (hasProjectGroups) =>
+    hasProjectGroups
+      ? translate(
+          'auto.components.sidebar.SidebarWorkspaceOptionsMenu.folderPathIdentity',
+          'Branch / folder path'
+        )
+      : translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.219ebf1961', 'Branch name')
+}
+
+export function getWorktreeCardDisplayOptions(
+  hasProjectGroups: boolean
+): { id: WorktreeCardProperty; readonly label: string }[] {
+  return WORKSPACE_CARD_DISPLAY_CHOICES.map(({ id }) => ({
+    id,
+    get label() {
+      return CARD_DISPLAY_LABELS[id](hasProjectGroups)
+    }
+  }))
+}

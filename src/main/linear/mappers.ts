@@ -1,5 +1,5 @@
 import type { Issue, IssueSearchResult } from '@linear/sdk'
-import type { LinearIssue, LinearIssueChildSummary } from '../../shared/types'
+import type { LinearIssue, LinearIssueChildSummary } from '../../shared/linear/issue-types'
 
 type IssueWithChildren = Issue & {
   children: Issue['children']
@@ -27,11 +27,7 @@ function mapLinearIssueChild(issue: Issue): LinearIssueChildSummary {
   }
 }
 
-// Why: the @linear/sdk uses lazy-loading for related entities — state, team,
-// and assignee are fetched on property access and return promises. This mapper
-// awaits them all so callers receive a plain serializable object safe for IPC
-// transfer. Labels use the labels() method on Issue but IssueSearchResult only
-// has labelIds (string UUIDs), so we conditionally resolve label names.
+// Resolve lazy SDK relations before IPC; search results expose label IDs without the labels relation.
 export async function mapLinearIssue(
   issue: Issue | IssueSearchResult,
   options: MapLinearIssueOptions = {}
@@ -43,10 +39,6 @@ export async function mapLinearIssue(
     options.includeProject ? optionalRelation(issue.project) : Promise.resolve(undefined)
   ])
 
-  // Why: IssueSearchResult does not expose the labels() relation method — only
-  // the raw labelIds array. For Issue instances we resolve actual label names;
-  // for search results we fall back to empty (label names are a nice-to-have
-  // in the UI, not critical for identification).
   let labelNames: string[] = []
   let labelIds: string[] = []
   if ('labels' in issue && typeof issue.labels === 'function') {
@@ -55,7 +47,7 @@ export async function mapLinearIssue(
       labelNames = labelsConnection.nodes.map((l) => l.name)
       labelIds = labelsConnection.nodes.map((l) => l.id)
     } catch {
-      // Swallow — labels are non-critical display data.
+      // Missing labels must not hide the issue.
     }
   } else if ('labelIds' in issue && Array.isArray(issue.labelIds)) {
     labelIds = issue.labelIds as string[]
@@ -67,7 +59,7 @@ export async function mapLinearIssue(
       const childrenConnection = await (issue as IssueWithChildren).children({ first: 25 })
       subIssues = childrenConnection.nodes.map(mapLinearIssueChild)
     } catch {
-      // Swallow — child issues are secondary display data and creation still works without them.
+      // Missing child summaries must not block issue display or creation.
     }
   }
 

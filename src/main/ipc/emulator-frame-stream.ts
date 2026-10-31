@@ -1,11 +1,11 @@
-import { BrowserWindow, ipcMain, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { MjpegFrameStream } from '../emulator/mjpeg-frame-stream'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
 type FrameStreamSession = {
-  owner: WebContents
   stream: MjpegFrameStream
-  onOwnerDestroyed: () => void
+  disposeLifetime: () => void
 }
 
 const sessions = new Map<string, FrameStreamSession>()
@@ -15,11 +15,9 @@ function stopFrameStream(streamId: string): void {
   if (!session) {
     return
   }
-  session.stream.stop()
-  // Why: `.once('destroyed')` self-removes only when that event fires (window
-  // close), so an explicit stop must drop it or each show/hide cycle leaks one.
-  session.owner.removeListener('destroyed', session.onOwnerDestroyed)
   sessions.delete(streamId)
+  session.disposeLifetime()
+  session.stream.stop()
 }
 
 function frameToArrayBuffer(frame: Buffer<ArrayBufferLike>): ArrayBuffer {
@@ -39,18 +37,17 @@ export function registerEmulatorFrameStreamHandlers(): void {
       }
 
       const streamId = randomUUID()
-      // Why: Chromium's NetworkService can restart under long-lived MJPEG loads;
-      // the main process owns the socket so the renderer only receives JPEG bytes.
+      // Main owns MJPEG sockets so Chromium NetworkService restarts cannot interrupt long-lived streams.
       const stream = new MjpegFrameStream(
         args.streamUrl,
         {
           onError: (message) => {
-            if (!owner.isDestroyed()) {
+            if (sessions.has(streamId) && !owner.isDestroyed()) {
               owner.send('emulator:frameStreamError', { streamId, message })
             }
           },
           onFrame: (frame) => {
-            if (!owner.isDestroyed()) {
+            if (sessions.has(streamId) && !owner.isDestroyed()) {
               owner.send('emulator:frameStreamFrame', {
                 streamId,
                 bytes: frameToArrayBuffer(frame)
@@ -61,10 +58,22 @@ export function registerEmulatorFrameStreamHandlers(): void {
         args.streamKey
       )
 
-      const onOwnerDestroyed = (): void => stopFrameStream(streamId)
-      sessions.set(streamId, { owner, stream, onOwnerDestroyed })
-      owner.once('destroyed', onOwnerDestroyed)
-      stream.start()
+      const lifetime = abortWhenRendererGone(owner)
+      const onRendererGone = (): void => stopFrameStream(streamId)
+      sessions.set(streamId, {
+        stream,
+        disposeLifetime: () => {
+          lifetime.signal.removeEventListener('abort', onRendererGone)
+          lifetime.dispose()
+        }
+      })
+      lifetime.signal.addEventListener('abort', onRendererGone, { once: true })
+      try {
+        stream.start()
+      } catch (error) {
+        stopFrameStream(streamId)
+        throw error
+      }
       return { streamId }
     }
   )

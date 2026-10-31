@@ -4,7 +4,7 @@ import { act, createElement, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentsPane } from '@/components/settings/AgentsPane'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
 
@@ -16,8 +16,15 @@ const testState = vi.hoisted(() => ({
   runtimeEnvironments: [] as { id: string; createdAt: number; pairingRevision?: number }[]
 }))
 
+type MockedAppStoreState = {
+  settings: GlobalSettings | null
+  updateSettings: (settings: Partial<GlobalSettings>) => void
+  runtimeEnvironments: { id: string; createdAt: number; pairingRevision?: number }[]
+  runtimeStatusByEnvironmentId: Map<string, unknown>
+}
+
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: object) => unknown) =>
+  useAppStore: (selector: (state: MockedAppStoreState) => unknown) =>
     selector({
       settings: testState.settings,
       updateSettings: testState.updateSettings,

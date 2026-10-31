@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getConnectionIdFromState } from '@/lib/connection-context'
@@ -9,9 +9,10 @@ import { shouldDisableKittyKeyboardForTerminal } from '@/lib/pane-manager/termin
 import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
 import { resolveTerminalInputHostPlatform } from '@/components/terminal-pane/terminal-input-host-platform'
 import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/terminal-windows-shift-enter'
+import { hasCtrlEnterCsiUAuthorityForPane } from '@/components/terminal-pane/terminal-ctrl-enter'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/components/terminal-pane/terminal-agent-paste-bracketing'
 
-/** Store slices the pane's own input helpers read. */
 export type DashboardCardTerminalInputState = Pick<
   AppState,
   | 'repos'
@@ -28,13 +29,13 @@ export type DashboardCardTerminalInputState = Pick<
   | 'runtimeEnvironmentCatalogHydrated'
   | 'removedRuntimeEnvironmentIds'
   | 'paneForegroundAgentByPaneKey'
+  | 'agentStatusByPaneKey'
   | 'agentLaunchConfigByPaneKey'
 >
 
 const EMPTY_RECORD = {} as Record<string, never>
 
-/** Why: the snapshot builder must never throw on a partially hydrated store —
- *  a missing slice degrades one card to client-OS defaults, not a blank board. */
+/** Missing store slices fall back per card instead of throwing and blanking the whole board. */
 function withHydratedSlices(
   state: Partial<DashboardCardTerminalInputState>
 ): DashboardCardTerminalInputState {
@@ -54,16 +55,12 @@ function withHydratedSlices(
     runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated ?? false,
     removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds ?? new Set(),
     paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey ?? EMPTY_RECORD,
+    agentStatusByPaneKey: state.agentStatusByPaneKey ?? EMPTY_RECORD,
     agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey ?? EMPTY_RECORD
   }
 }
 
-/**
- * Resolve the host-dependent input facts a card's preview terminal needs to
- * encode keys like the agent's own pane. Store-derived only — the board holds no
- * live PtyTransport, so the shared pane helpers run their fallback path, the
- * same one a pane itself uses before its transport attaches.
- */
+/** Resolve host input facts through pane helpers’ pre-transport fallback; the board has no live PtyTransport. */
 export function resolveDashboardCardTerminalInput(
   partialState: Partial<DashboardCardTerminalInputState>,
   args: {
@@ -98,34 +95,45 @@ export function resolveDashboardCardTerminalInput(
     shellOverride: args.shellOverride,
     executionHostId
   }
+  const hostPlatform = resolveTerminalInputHostPlatform({
+    clientPlatform: args.clientPlatform,
+    state,
+    worktreeId: args.worktreeId,
+    transport: {
+      getConnectionId: () => connectionId,
+      getPtyId: () => args.ptyId,
+      getExecutionHostId: () => executionHostId,
+      // Match the pane metadata gate so WSL resolves Linux protocols instead of inheriting Windows CSI-u behavior.
+      getLocalSessionMetadata: () =>
+        connectionId
+          ? null
+          : {
+              ...(args.cwd ? { cwd: args.cwd } : {}),
+              ...(args.shellOverride ? { shellOverride: args.shellOverride } : {})
+            }
+    }
+  })
+  const protectedPaste = resolveProtectedMultilinePasteOptionsForAgentEvidence({
+    isWindowsClient: args.clientPlatform === 'win32',
+    hostPlatform,
+    foregroundAgent: state.paneForegroundAgentByPaneKey[args.paneKey]?.agent,
+    entry: state.agentStatusByPaneKey[args.paneKey]
+  })
   return {
-    hostPlatform: resolveTerminalInputHostPlatform({
-      clientPlatform: args.clientPlatform,
-      state,
-      worktreeId: args.worktreeId,
-      transport: {
-        getConnectionId: () => connectionId,
-        getPtyId: () => args.ptyId,
-        getExecutionHostId: () => executionHostId,
-        // Why: gated exactly like the pane transport's own accessor — without
-        // it a WSL pty on a Windows client resolves to win32 and Shift+Enter
-        // would encode CSI-u where the pane sends alt-enter.
-        getLocalSessionMetadata: () =>
-          connectionId
-            ? null
-            : {
-                ...(args.cwd ? { cwd: args.cwd } : {}),
-                ...(args.shellOverride ? { shellOverride: args.shellOverride } : {})
-              }
-      }
-    }),
+    hostPlatform,
     localWindowsConpty: isLocalNativeWindowsConpty(windowsPtyContext),
     ...(args.osRelease === undefined ? {} : { osRelease: args.osRelease }),
     windowsShiftEnterEncoding: resolveWindowsShiftEnterEncodingForPane(state, args.paneKey),
+    ...(protectedPaste?.forceBracketedPasteForMultiline
+      ? { forceBracketedMultilineTextPaste: true as const }
+      : {}),
+    ...(protectedPaste?.windowsInputRecordNewline
+      ? { windowsInputRecordPasteNewline: protectedPaste.windowsInputRecordNewline }
+      : {}),
+    ctrlEnterCsiU: hasCtrlEnterCsiUAuthorityForPane(state, args.paneKey),
     kittyKeyboardAdvertised: !shouldDisableKittyKeyboardForTerminal({
       ...windowsPtyContext,
-      // Why: launch identity is the only agent signal the board holds; it opts
-      // Grok out of the ConPTY kitty withhold exactly as its pane does.
+      // Use launch identity for Grok’s ConPTY kitty exception, matching its pane.
       tuiAgent: args.launchAgent ?? null
     })
   }

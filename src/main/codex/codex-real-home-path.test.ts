@@ -1,19 +1,23 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  getCustomCodexHomeOverrideForLaunch,
   hasCustomCodexHomeOverride,
-  hasCustomCodexHomeOverrideForLaunch,
-  shellStartupCodexHomeOverrideMatches
+  hasCustomCodexHomeOverrideForLaunch
 } from './codex-real-home-path'
 import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 
 const temporaryHomes: string[] = []
+const savedConfigHome = process.env.XDG_CONFIG_HOME
 
 afterEach(() => {
   __resetShellStartupEnvCache()
+  if (savedConfigHome === undefined) {
+    delete process.env.XDG_CONFIG_HOME
+  } else {
+    process.env.XDG_CONFIG_HOME = savedConfigHome
+  }
   for (const path of temporaryHomes.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
@@ -40,13 +44,10 @@ describe('hasCustomCodexHomeOverride', () => {
     ).toBe(true)
   })
 
-  it('captures explicit environment provenance for restart comparison', () => {
-    const codexHome = join(process.cwd(), 'custom-codex-home')
-
-    expect(getCustomCodexHomeOverrideForLaunch({ CODEX_HOME: codexHome })).toEqual({
-      source: 'environment',
-      context: { codexHome }
-    })
+  it('detects an explicit launch env CODEX_HOME', () => {
+    expect(
+      hasCustomCodexHomeOverrideForLaunch({ CODEX_HOME: join(process.cwd(), 'custom-codex-home') })
+    ).toBe(true)
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -57,22 +58,29 @@ describe('hasCustomCodexHomeOverride', () => {
       writeFileSync(join(paneHome, '.zshrc'), 'export CODEX_HOME="$HOME/custom-codex-home"\n')
 
       expect(hasCustomCodexHomeOverrideForLaunch({ HOME: paneHome, SHELL: '/bin/zsh' })).toBe(true)
-      const override = getCustomCodexHomeOverrideForLaunch({
+    }
+  )
+
+  // Dock launches may lack XDG_CONFIG_HOME exported by fish; use the pane launch environment.
+  it.skipIf(process.platform === 'win32')(
+    'resolves a fish override under the launch env XDG_CONFIG_HOME, not the process one',
+    () => {
+      const paneHome = mkdtempSync(join(tmpdir(), 'orca-codex-fish-home-'))
+      temporaryHomes.push(paneHome)
+      const configHome = join(paneHome, 'xdg')
+      mkdirSync(join(configHome, 'fish'), { recursive: true })
+      writeFileSync(
+        join(configHome, 'fish', 'config.fish'),
+        'set -gx CODEX_HOME "$HOME/custom-codex-home"\n'
+      )
+      delete process.env.XDG_CONFIG_HOME
+
+      const launchEnv = {
         HOME: paneHome,
-        SHELL: '/bin/zsh'
-      })
-      expect(override).toEqual({
-        source: 'shell-startup',
-        context: {
-          home: paneHome,
-          shell: '/bin/zsh',
-          codexHome: join(paneHome, 'custom-codex-home')
-        }
-      })
-      expect(
-        override?.source === 'shell-startup' &&
-          shellStartupCodexHomeOverrideMatches(override.context)
-      ).toBe(true)
+        SHELL: '/opt/homebrew/bin/fish',
+        XDG_CONFIG_HOME: configHome
+      }
+      expect(hasCustomCodexHomeOverrideForLaunch(launchEnv)).toBe(true)
     }
   )
 })

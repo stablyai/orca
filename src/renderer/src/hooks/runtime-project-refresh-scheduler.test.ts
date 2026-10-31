@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRuntimeProjectRefreshScheduler,
-  refreshRuntimeProjectWorktrees
+  refreshRuntimeProjectWorktrees,
+  refreshRuntimeProjectWorktreesAndLineage
 } from './runtime-project-refresh-scheduler'
 
 describe('refreshRuntimeProjectWorktrees', () => {
-  it('pins same-ID repo refreshes to the event runtime', async () => {
+  it('deduplicates same-host repo IDs and pins the refresh to the event runtime', async () => {
     const fetchWorktrees = vi.fn().mockResolvedValue(true)
 
     await refreshRuntimeProjectWorktrees(
@@ -14,13 +15,99 @@ describe('refreshRuntimeProjectWorktrees', () => {
       fetchWorktrees
     )
 
+    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
+    expect(fetchWorktrees).toHaveBeenCalledWith('same-repo', {
+      executionHostId: 'runtime:env-1',
+      suppressRemoteLineageRefresh: true
+    })
+  })
+
+  it('runs one final host lineage refresh after a repo failure', async () => {
+    const error = new Error('repo refresh failed')
+    const fetchWorktrees = vi.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(error)
+    const fetchWorktreeLineage = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      refreshRuntimeProjectWorktreesAndLineage(
+        'env-1',
+        [{ id: 'repo-1' }, { id: 'repo-2' }],
+        fetchWorktrees,
+        fetchWorktreeLineage
+      )
+    ).rejects.toThrow('Failed to refresh 1 runtime project worktree(s): repo-2')
+
     expect(fetchWorktrees).toHaveBeenCalledTimes(2)
-    expect(fetchWorktrees).toHaveBeenNthCalledWith(1, 'same-repo', {
+    expect(fetchWorktreeLineage).toHaveBeenCalledTimes(1)
+    expect(fetchWorktreeLineage).toHaveBeenCalledWith({
       executionHostId: 'runtime:env-1'
     })
-    expect(fetchWorktrees).toHaveBeenNthCalledWith(2, 'same-repo', {
-      executionHostId: 'runtime:env-1'
+  })
+
+  it('limits a large catalog to the bounded worktree refresh lane', async () => {
+    let active = 0
+    let peak = 0
+    const fetchWorktrees = vi.fn(
+      async (_repoId: string, _options: { executionHostId: string }): Promise<void> => {
+        active += 1
+        peak = Math.max(peak, active)
+        await new Promise<void>((resolve) => setTimeout(resolve, 5))
+        active -= 1
+      }
+    )
+
+    await refreshRuntimeProjectWorktrees(
+      'env-1',
+      Array.from({ length: 12 }, (_, index) => ({ id: `repo-${index}` })),
+      fetchWorktrees
+    )
+
+    expect(fetchWorktrees).toHaveBeenCalledTimes(12)
+    expect(peak).toBe(5)
+  })
+
+  it('gives interactive connect a wider lane than the coalesced event lane', async () => {
+    // Interactive connect is one-shot and user-awaited, unlike recurring coalesced event refresh.
+    let active = 0
+    let peak = 0
+    const fetchWorktrees = vi.fn(async (): Promise<void> => {
+      active += 1
+      peak = Math.max(peak, active)
+      await new Promise<void>((resolve) => setTimeout(resolve, 5))
+      active -= 1
     })
+
+    await refreshRuntimeProjectWorktreesAndLineage(
+      'env-1',
+      Array.from({ length: 40 }, (_, index) => ({ id: `repo-${index}` })),
+      fetchWorktrees,
+      vi.fn().mockResolvedValue(true)
+    )
+
+    expect(fetchWorktrees).toHaveBeenCalledTimes(40)
+    expect(peak).toBe(15)
+  })
+
+  it('retains both repo and final lineage failures', async () => {
+    const repoError = new Error('repo refresh failed')
+    const lineageError = new Error('lineage refresh failed')
+    const fetchWorktrees = vi.fn().mockRejectedValue(repoError)
+    const fetchWorktreeLineage = vi.fn().mockRejectedValue(lineageError)
+
+    const rejection = await refreshRuntimeProjectWorktreesAndLineage(
+      'env-1',
+      [{ id: 'repo-1' }],
+      fetchWorktrees,
+      fetchWorktreeLineage
+    ).catch((error: unknown) => error)
+
+    expect(rejection).toBeInstanceOf(AggregateError)
+    expect((rejection as AggregateError).errors).toEqual([
+      expect.objectContaining({
+        message: 'Failed to refresh 1 runtime project worktree(s): repo-1',
+        errors: [repoError]
+      }),
+      lineageError
+    ])
   })
 })
 

@@ -4,8 +4,11 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../shared/types'
-import { useSetupScriptPromptRevalidation } from './useSetupScriptPromptRevalidation'
+import type { Repo } from '../../../../shared/repo-types'
+import {
+  SETUP_PROMPT_REVISIT_REVALIDATION_INTERVAL_MS,
+  useSetupScriptPromptRevalidation
+} from './useSetupScriptPromptRevalidation'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 
@@ -25,6 +28,31 @@ function missingSetup(repoId: string, hostId = 'local'): OkSetupScriptPromptStat
 
 function effectiveSetup(repoId: string): OkSetupScriptPromptState {
   return { ...missingSetup(repoId), hasEffectiveSetup: true }
+}
+
+function inspectionError(repoId: string, hostId = 'local'): SetupScriptPromptState {
+  return {
+    status: 'error',
+    repoId,
+    repoHostIdentity: getRepoHostIdentityForParts(repoId, hostId)
+  }
+}
+
+const RUNTIME_ENVIRONMENT_ID = 'env-1'
+const RUNTIME_REPO = {
+  id: 'repo-1',
+  kind: 'git',
+  executionHostId: `runtime:${RUNTIME_ENVIRONMENT_ID}`
+} as unknown as Repo
+
+async function setRuntimeConnectionGeneration(connectionGeneration: number): Promise<void> {
+  await act(async () => {
+    useAppStore.setState({
+      runtimeStatusByEnvironmentId: new Map([
+        [RUNTIME_ENVIRONMENT_ID, { status: null, checkedAt: 0, connectionGeneration }]
+      ])
+    })
+  })
 }
 
 type HarnessProps = {
@@ -77,7 +105,7 @@ describe('useSetupScriptPromptRevalidation', () => {
   afterEach(() => {
     roots.splice(0).forEach((root) => act(() => root.unmount()))
     document.body.replaceChildren()
-    useAppStore.setState({ activeWorktreeId: null })
+    useAppStore.setState({ activeWorktreeId: null, runtimeStatusByEnvironmentId: new Map() })
     vi.clearAllMocks()
   })
 
@@ -144,8 +172,7 @@ describe('useSetupScriptPromptRevalidation', () => {
 
   it('re-inspects when a worktree activates while the prompt shows no effective setup', async () => {
     const requestRevalidation = vi.fn()
-    // Mirror the card's real lifecycle: promptState is null on mount, so the
-    // activation effect does not fire until a negative result has been cached.
+    // Activation revalidation waits until a negative inspection result is cached.
     const rerender = await render({
       activeRepo: GIT_REPO,
       isDismissed: false,
@@ -185,6 +212,132 @@ describe('useSetupScriptPromptRevalidation', () => {
     })
 
     await setActiveWorktree('worktree-2')
+
+    expect(requestRevalidation).not.toHaveBeenCalled()
+  })
+
+  it('re-inspects on window focus after a failed inspection', async () => {
+    const requestRevalidation = vi.fn()
+    await render({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: inspectionError('repo-1'),
+      requestRevalidation
+    })
+
+    await dispatchWindowFocus()
+
+    expect(requestRevalidation).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-inspects on window focus while the repo distro was stopped, so the card returns once it runs', async () => {
+    const requestRevalidation = vi.fn()
+    await render({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: {
+        status: 'distro-stopped',
+        repoId: 'repo-1',
+        repoHostIdentity: getRepoHostIdentityForParts('repo-1', 'local')
+      },
+      requestRevalidation
+    })
+
+    await dispatchWindowFocus()
+
+    expect(requestRevalidation).toHaveBeenCalledTimes(1)
+  })
+
+  it('replays a worktree activation that landed while the prompt state was unsettled', async () => {
+    const requestRevalidation = vi.fn()
+    const rerender = await render({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: missingSetup('repo-1'),
+      requestRevalidation
+    })
+    // Model activation during the card’s inspection round trip, when its prompt state is null.
+    await rerender({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: null,
+      requestRevalidation
+    })
+    await setActiveWorktree('worktree-2')
+    expect(requestRevalidation).not.toHaveBeenCalled()
+
+    await rerender({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: missingSetup('repo-1'),
+      requestRevalidation
+    })
+
+    expect(requestRevalidation).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-inspects each worktree once on first activation, not on every revisit', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    const requestRevalidation = vi.fn()
+    await render({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: missingSetup('repo-1'),
+      requestRevalidation
+    })
+
+    for (let round = 0; round < 10; round += 1) {
+      await setActiveWorktree('worktree-2')
+      await setActiveWorktree('worktree-1')
+    }
+    expect(requestRevalidation).toHaveBeenCalledTimes(1)
+
+    await setActiveWorktree('worktree-3')
+    expect(requestRevalidation).toHaveBeenCalledTimes(2)
+
+    now.mockReturnValue(1_000_000 + SETUP_PROMPT_REVISIT_REVALIDATION_INTERVAL_MS)
+    await setActiveWorktree('worktree-1')
+    expect(requestRevalidation).toHaveBeenCalledTimes(3)
+    await setActiveWorktree('worktree-2')
+    expect(requestRevalidation).toHaveBeenCalledTimes(3)
+    now.mockRestore()
+  })
+
+  it('re-inspects when the repo runtime reconnects', async () => {
+    const requestRevalidation = vi.fn()
+    await setRuntimeConnectionGeneration(1)
+    await render({
+      activeRepo: RUNTIME_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: missingSetup('repo-1', `runtime:${RUNTIME_ENVIRONMENT_ID}`),
+      requestRevalidation
+    })
+    expect(requestRevalidation).not.toHaveBeenCalled()
+
+    await setRuntimeConnectionGeneration(2)
+
+    expect(requestRevalidation).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a reconnect of a runtime that does not own the repo', async () => {
+    const requestRevalidation = vi.fn()
+    await setRuntimeConnectionGeneration(1)
+    await render({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: missingSetup('repo-1'),
+      requestRevalidation
+    })
+
+    await setRuntimeConnectionGeneration(2)
 
     expect(requestRevalidation).not.toHaveBeenCalled()
   })

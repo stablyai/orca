@@ -1,0 +1,87 @@
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type {
+  PendingPRCommentAiAckGithubResolveTarget,
+  PendingPRCommentAiAckGitlabTarget
+} from './pr-comments-ai-launch-ack'
+
+/** Host outcome shape; GitLab reports a message, GitHub only reports success. */
+export type SnapshottedThreadResolveOutcome = { ok: boolean; error?: string }
+
+export type SnapshottedThreadResolverDeps = {
+  provider: HostedReviewInfo['provider']
+  githubResolveTarget?: PendingPRCommentAiAckGithubResolveTarget
+  gitlabTarget?: PendingPRCommentAiAckGitlabTarget
+  resolveReviewThread: (
+    repoPath: string,
+    prNumber: number,
+    threadId: string,
+    resolve: boolean,
+    options: {
+      repoId: string
+      prRepo?: PendingPRCommentAiAckGithubResolveTarget['prRepo']
+    }
+  ) => Promise<boolean>
+  resolveGitLabDiscussion: (args: {
+    repoPath: string
+    repoId: string
+    iid: number
+    discussionId: string
+    resolved: boolean
+    repoOwnerExecutionHostId: string
+  }) => Promise<SnapshottedThreadResolveOutcome>
+  /** False once the panel moved to another review: host calls continue, UI writes stop. */
+  isPanelStillOnLaunchReview: () => boolean
+  onResolvedOptimistically: (threadId: string) => void
+  onResolveFailed: (args: { threadId: string; error?: string }) => void
+}
+
+/** Use the snapshotted launch review for host resolves even if the panel switches before prompt delivery. */
+export function buildSnapshottedThreadResolver(
+  deps: SnapshottedThreadResolverDeps
+): (threadId: string) => Promise<boolean> {
+  return async (threadId: string): Promise<boolean> => {
+    const outcome = await resolveOnHost(deps, threadId)
+    if (!outcome.ok) {
+      deps.onResolveFailed({ threadId, error: outcome.error })
+      return false
+    }
+    // Gate optimistic rows to the launch review; guarded refresh reconciles whichever panel is showing.
+    if (deps.isPanelStillOnLaunchReview()) {
+      deps.onResolvedOptimistically(threadId)
+    }
+    return true
+  }
+}
+
+async function resolveOnHost(
+  deps: SnapshottedThreadResolverDeps,
+  threadId: string
+): Promise<SnapshottedThreadResolveOutcome> {
+  try {
+    if (deps.provider === 'gitlab') {
+      if (!deps.gitlabTarget) {
+        return { ok: false }
+      }
+      return await deps.resolveGitLabDiscussion({
+        repoPath: deps.gitlabTarget.repoPath,
+        repoId: deps.gitlabTarget.repoId,
+        iid: deps.gitlabTarget.iid,
+        discussionId: threadId,
+        resolved: true,
+        repoOwnerExecutionHostId: deps.gitlabTarget.ownerHostId
+      })
+    }
+    if (deps.provider !== 'github' || !deps.githubResolveTarget) {
+      return { ok: false }
+    }
+    const target = deps.githubResolveTarget
+    const ok = await deps.resolveReviewThread(target.repoPath, target.prNumber, threadId, true, {
+      repoId: target.repoId,
+      prRepo: target.prRepo
+    })
+    return { ok }
+  } catch (err) {
+    // A rejected host call must not abort the bulk acknowledgement pool.
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}

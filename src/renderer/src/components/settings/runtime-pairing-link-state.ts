@@ -1,6 +1,13 @@
+import type { RuntimePairingReach } from '../../../../shared/runtime-pairing-reach'
+
 export const RUNTIME_PAIRING_LOOPBACK_ADDRESS = '127.0.0.1'
 
 export type RuntimePairingIntent = 'another' | 'local' | 'custom'
+
+// Only explicit local intent forbids network reach; custom loopback addresses may front SSH/reverse-proxy tunnels.
+export function runtimePairingReachForIntent(intent: RuntimePairingIntent): RuntimePairingReach {
+  return intent === 'local' ? 'this-computer' : 'network'
+}
 
 export type RuntimePairingUrlGeneratorProps = {
   framed?: boolean
@@ -8,8 +15,7 @@ export type RuntimePairingUrlGeneratorProps = {
   showGeneratorForm?: boolean
 }
 
-// Why: pairing tokens remain in the main-process registry, so the last link can
-// survive settings navigation without writing credential material to storage.
+// Main retains pairing tokens; cache navigation state without persisting credential material.
 export const runtimePairingLinkCache: {
   selectedAddress: string
   customAddress: string

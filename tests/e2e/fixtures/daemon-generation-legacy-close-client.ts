@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs'
 import process from 'node:process'
+import type { Store } from '../../../src/main/persistence'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
 import { createDesktopDiscoveredDaemonRouter } from './daemon-generation-desktop-discovery'
+import { createDaemonGenerationProfileStore } from './daemon-generation-profile-store'
 
 type FixtureSession = {
   protocolVersion: number
@@ -62,7 +64,7 @@ const OBSERVER = {
 
 function readConfig(): FixtureConfig {
   const configIndex = process.argv.indexOf('--config')
-  const configPath = configIndex >= 0 ? process.argv[configIndex + 1] : undefined
+  const configPath = configIndex !== -1 ? process.argv[configIndex + 1] : undefined
   if (!configPath) {
     throw new Error('Legacy close client requires --config <path>')
   }
@@ -126,6 +128,7 @@ async function waitForFinish(): Promise<void> {
 async function main(): Promise<void> {
   const config = readConfig()
   const { router } = await createDesktopDiscoveredDaemonRouter(config)
+  let store: Store | null = null
   try {
     const outputBySessionId = new Map<string, string>()
     router.onData((event) => {
@@ -149,7 +152,8 @@ async function main(): Promise<void> {
       }
     }
 
-    const runtime = new OrcaRuntimeService()
+    store = createDaemonGenerationProfileStore(config.cwd)
+    const runtime = new OrcaRuntimeService(store)
     const calls: Record<string, unknown>[] = []
     const sessionByTabId = new Map(config.sessions.map((session) => [session.tabId, session]))
     runtime.setPtyController({
@@ -158,7 +162,7 @@ async function main(): Promise<void> {
         return true
       },
       kill: () => false,
-      listProcesses: (options) => router.listProcesses(options),
+      listProcesses: (_hostId, options) => router.listProcesses(options),
       hasPty: (ptyId) => router.hasPty(ptyId),
       getForegroundProcess: (ptyId) => router.getForegroundProcess(ptyId)
     })
@@ -183,45 +187,45 @@ async function main(): Promise<void> {
     } as never)
     runtime.attachWindow(1)
 
-    const snapshots: RuntimeMobileSessionTabsSnapshot[] = config.sessions.map((session, index) => {
+    const viewers = config.sessions.map((session, index) => {
       const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
-      return {
+      const tab = {
+        type: 'terminal' as const,
+        id: `${session.tabId}::${leafId}`,
+        parentTabId: session.tabId,
+        leafId,
+        ptyId: session.sessionId,
+        title: session.tabId,
+        isActive: true
+      }
+      const snapshot: RuntimeMobileSessionTabsSnapshot = {
         worktree: session.worktreeId,
         publicationEpoch: `legacy-viewer-${index + 1}`,
         snapshotVersion: 1,
         activeGroupId: null,
-        activeTabId: `${session.tabId}::${leafId}`,
+        activeTabId: tab.id,
         activeTabType: 'terminal',
-        tabs: [
-          {
-            type: 'terminal',
-            id: `${session.tabId}::${leafId}`,
-            parentTabId: session.tabId,
-            leafId,
-            ptyId: session.sessionId,
-            title: session.tabId,
-            isActive: true
-          }
-        ]
+        tabs: [tab]
       }
+      return { session, tab, snapshot }
     })
     runtime.syncWindowGraph(1, {
-      tabs: snapshots.map((snapshot) => ({
-        tabId: snapshot.tabs[0]!.parentTabId,
-        worktreeId: snapshot.worktree,
-        title: snapshot.tabs[0]!.title,
-        activeLeafId: snapshot.tabs[0]!.leafId,
+      tabs: viewers.map(({ session, tab }) => ({
+        tabId: tab.parentTabId,
+        worktreeId: session.worktreeId,
+        title: tab.title,
+        activeLeafId: tab.leafId,
         layout: null
       })),
-      leaves: snapshots.map((snapshot, index) => ({
-        tabId: snapshot.tabs[0]!.parentTabId,
-        worktreeId: snapshot.worktree,
-        leafId: snapshot.tabs[0]!.leafId,
+      leaves: viewers.map(({ session, tab }, index) => ({
+        tabId: tab.parentTabId,
+        worktreeId: session.worktreeId,
+        leafId: tab.leafId,
         paneRuntimeId: index + 1,
-        ptyId: config.sessions[index]!.sessionId,
-        paneTitle: snapshot.tabs[0]!.title
+        ptyId: session.sessionId,
+        paneTitle: tab.title
       })),
-      mobileSessionTabs: snapshots
+      mobileSessionTabs: viewers.map(({ snapshot }) => snapshot)
     })
 
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -296,6 +300,7 @@ async function main(): Promise<void> {
   } finally {
     await router.disconnectOnly().catch(() => {})
     router.dispose()
+    await store?.freezeWritesAsync()
   }
 }
 

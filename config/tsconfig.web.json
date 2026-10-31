@@ -5,8 +5,10 @@
     "../src/renderer/src/**/*",
     "../src/renderer/src/**/*.tsx",
     "../src/preload/api-types.ts",
+    "../src/preload/api/**/*",
     "../src/shared/**/*"
   ],
+  "exclude": ["../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts"],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",

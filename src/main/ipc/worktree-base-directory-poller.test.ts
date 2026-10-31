@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +9,8 @@ import {
   type WorktreeBasePollEvent,
   type WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
+import { WORKTREE_BASE_BACKSTOP_TICKS } from './worktree-base-directory-marker-poller'
+import { startGitCommonPrimaryPolling } from './worktree-git-common-primary-polling'
 import type {
   WorktreeBaseRepoWatchConfig,
   WorktreeBaseWatchTarget
@@ -90,9 +93,7 @@ describe('worktree base directory poller', () => {
   async function makeRoot(): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'orca-base-poller-'))
     cleanups.push(() => rm(root, { recursive: true, force: true }))
-    // Why: macOS tmpdir lives behind the /var -> /private/var symlink and
-    // native watcher events report resolved paths; production targets are
-    // realpath'd the same way (canonicalizeExistingPath).
+    // Match production canonicalization because macOS /var-backed temp roots emit resolved event paths.
     return realpath(root)
   }
 
@@ -187,8 +188,7 @@ describe('worktree base directory poller', () => {
     )
     cleanups.push(() => poller.unsubscribe())
 
-    // ~8 idle ticks: under the backstop cadence, so the gate should skip
-    // every full scan (each tick is just gate-dir stats).
+    // Stay below the backstop cadence to measure only gated idle ticks.
     await new Promise((resolve) => setTimeout(resolve, POLL_MS * 8))
     expect(fullScans).toHaveLength(0)
     expect(received.flat()).toHaveLength(0)
@@ -202,6 +202,102 @@ describe('worktree base directory poller', () => {
       )
     )
     expect(fullScans.length).toBeGreaterThan(0)
+  })
+
+  it('retires stale marker probes while preserving backstop detection and path reuse', async () => {
+    const root = await makeRoot()
+    const ordinaryFolder = join(root, 'ordinary-folder')
+    const markerPath = join(ordinaryFolder, '.git')
+    await mkdir(ordinaryFolder)
+
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('base', root)
+    let fullScans = 0
+    let pendingMarkerProbes = 0
+    let writeMarkerOnNextProbe = false
+    const pendingMarkerMaxTicks = WORKTREE_BASE_BACKSTOP_TICKS * 2
+    const markerCreationTick = pendingMarkerMaxTicks * 2 + WORKTREE_BASE_BACKSTOP_TICKS * 4
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: 0,
+        pendingMarkerMaxTicks,
+        onFullScan: () => {
+          fullScans += 1
+          if (fullScans * WORKTREE_BASE_BACKSTOP_TICKS === markerCreationTick) {
+            writeFileSync(markerPath, 'gitdir: elsewhere')
+          }
+        },
+        onPendingMarkerProbe: (path) => {
+          pendingMarkerProbes += 1
+          if (writeMarkerOnNextProbe && path === markerPath) {
+            writeMarkerOnNextProbe = false
+            writeFileSync(markerPath, 'gitdir: elsewhere')
+          }
+        }
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === markerPath)
+    )
+
+    await rm(ordinaryFolder, { recursive: true })
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'delete' && event.path === ordinaryFolder)
+    )
+    writeMarkerOnNextProbe = true
+    await mkdir(ordinaryFolder)
+    const events = await waitForEvents(
+      received,
+      (flat) =>
+        flat.filter((event) => event.type === 'create' && event.path === markerPath).length === 2
+    )
+
+    expect(pendingMarkerProbes).toBeLessThanOrEqual(pendingMarkerMaxTicks)
+    expect(
+      events.filter((event) => event.type === 'create' && event.path === markerPath)
+    ).toHaveLength(2)
+  })
+
+  it('rescans on the next tick when a write races an in-flight full scan', async () => {
+    const root = await makeRoot()
+    const worktree = join(root, 'raced')
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('base', root)
+    const snapshotTicks: number[] = []
+    let raced = false
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: 0,
+        onSnapshotTaken: (tick) => {
+          snapshotTicks.push(tick)
+          if (raced) {
+            return
+          }
+          raced = true
+          mkdirSync(worktree)
+          writeFileSync(join(worktree, '.git'), 'gitdir: elsewhere')
+        }
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === join(worktree, '.git'))
+    )
+
+    // Writes after listing must invalidate the next tick, not wait for a backstop.
+    expect(snapshotTicks.slice(0, 2)).toEqual([
+      WORKTREE_BASE_BACKSTOP_TICKS,
+      WORKTREE_BASE_BACKSTOP_TICKS + 1
+    ])
   })
 
   it('parks base scans while hidden and losslessly detects changes on resume', async () => {
@@ -268,8 +364,7 @@ describe('worktree base directory poller', () => {
   })
 
   it('keeps polling a live window that has never been shown (E2E headless)', () => {
-    // ORCA_E2E_HEADLESS keeps a live BrowserWindow that is never shown; no show/restore
-    // signal is coming to resume a parked poller, so a never-shown window must keep polling.
+    // Never-shown headless windows receive no future reveal event; polling must stay active.
     const visibility = createWorktreePollerWindowVisibility(() => ({
       isDestroyed: () => false,
       isVisible: () => false,
@@ -286,9 +381,7 @@ describe('worktree base directory poller', () => {
       isVisible: () => visible,
       isMinimized: () => false
     }))
-    // Shown at least once: a later reveal will fire the visibility signal to resume.
     expect(visibility.isWindowVisible()).toBe(true)
-    // Now hidden — a previously-shown window parks (its show/restore will resume it).
     visible = false
     expect(visibility.isWindowVisible()).toBe(false)
   })
@@ -302,7 +395,7 @@ describe('worktree base directory poller', () => {
       () => target.repos,
       (events) => received.push(events),
       // Force the non-darwin poll path so this test is deterministic on all CI.
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -342,13 +435,11 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
-    // Why: rewriting an existing HEAD in place changes only the file's own metadata, never the
-    // parent entry directory's mtime/ctime/ino/size — so HEAD (like the other structural leaves)
-    // must be re-stat'd every tick, not gated behind the entry-dir signature.
+    // In-place HEAD rewrites leave parent signatures unchanged; probe structural leaves directly.
     await new Promise((resolve) => setTimeout(resolve, 10))
     await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/next')
 
@@ -369,12 +460,11 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
-    // commit --amend appends to the reflog inside logs/ — the entry dir mtime
-    // never moves, so the leaf must be stat'd directly.
+    // Amend appends logs/HEAD without changing the entry directory signature.
     await new Promise((resolve) => setTimeout(resolve, 10))
     await writeFile(join(entry, 'logs', 'HEAD'), 'baseline\namended\n')
     await waitForEvents(received, (flat) =>
@@ -394,7 +484,7 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -418,7 +508,7 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -439,8 +529,8 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      // Force the non-darwin poll path so this test is deterministic on all CI.
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      // Force the polling path independently of the test platform.
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -472,7 +562,7 @@ describe('worktree base directory poller', () => {
       (events) => received.push(events),
       {
         pollIntervalMs: POLL_MS,
-        platform: 'linux',
+        platform: 'freebsd',
         visibility: visibility.source,
         onFullScan: () => fullScans.push(Date.now())
       }
@@ -545,28 +635,25 @@ describe('worktree base directory poller', () => {
       )
     })
 
-    it('covers primary-checkout metadata alongside the narrow stream', async () => {
+    it('covers primary-checkout metadata through its bounded fallback poll', async () => {
       const commonDir = await makeRoot()
-      await mkdir(join(commonDir, 'worktrees'))
       const received: WorktreeBasePollEvent[][] = []
-      const target = makeTarget('git-common', commonDir)
-      const poller = await startWorktreeBaseDirectoryPoller(
-        target,
-        () => target.repos,
+      const visibility = createWorktreePollerWindowVisibility(() => null)
+      const poller = await startGitCommonPrimaryPolling(
+        commonDir,
+        () => [],
         (events) => received.push(events),
-        { pollIntervalMs: POLL_MS, platform: 'darwin' }
+        POLL_MS,
+        visibility
       )
       cleanups.push(() => poller.unsubscribe())
 
-      // The narrow stream is rooted at worktrees/, so top-level HEAD writes
-      // must arrive through the companion metadata poll.
       const headFile = join(commonDir, 'HEAD')
       await writeFile(headFile, 'ref: refs/heads/main')
       await waitForEvents(received, (flat) =>
         flat.some((event) => event.type === 'create' && event.path === headFile)
       )
 
-      await new Promise((resolve) => setTimeout(resolve, 10))
       await writeFile(headFile, 'ref: refs/heads/feature')
       await waitForEvents(received, (flat) =>
         flat.some((event) => event.type === 'update' && event.path === headFile)
@@ -611,9 +698,7 @@ describe('worktree base directory poller', () => {
       )
       cleanups.push(() => poller.unsubscribe())
 
-      // Simulate `git worktree prune` removing the empty dir, then a new add
-      // recreating it. The stream re-arms via the existence poll; the repo
-      // gets notified on recreate, and subsequent entries are seen live.
+      // Prune removes the native root; existence polling must rearm after recreation.
       const worktreesDir = join(commonDir, 'worktrees')
       await rm(worktreesDir, { recursive: true })
       await new Promise((resolve) => setTimeout(resolve, 100))

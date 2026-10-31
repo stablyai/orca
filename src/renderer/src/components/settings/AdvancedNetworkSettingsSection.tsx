@@ -1,20 +1,26 @@
 import type React from 'react'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { GlobalSettings } from '../../../../shared/types'
-import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../../../shared/network-proxy'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import {
+  normalizeProxyBypassRules,
+  normalizeProxyUrl,
+  PROXY_URL_FAILURE_COPY,
+  type ProxyUrlFailureCode
+} from '../../../../shared/network-proxy'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Textarea } from '../ui/textarea'
 import { getAdvancedNetworkSearchEntries } from './advanced-network-search'
+import { NodeDistMirrorSettingField } from './NodeDistMirrorSettingField'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { translate } from '@/i18n/i18n'
 
-/** Open the proxy fields automatically when a search matches this section. */
 export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
   return (
     normalizeSettingsSearchQuery(searchQuery) !== '' &&
@@ -22,15 +28,39 @@ export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
   )
 }
 
-/** A configured proxy should also reveal the fields, so users see the value. */
+/** Reveal configured proxies so saved values cannot remain hidden. */
 export function hasConfiguredNetworkProxy(settings: GlobalSettings): boolean {
-  return Boolean(settings.httpProxyUrl?.trim() || settings.httpProxyBypassRules?.trim())
+  return Boolean(
+    settings.httpProxyUrl?.trim() ||
+    settings.httpProxyBypassRules?.trim() ||
+    settings.nodeDistMirrorUrl?.trim()
+  )
 }
 
 export type HttpProxyUrlDraftState = {
   sourceValue: string
   draft: string
-  error: string | null
+  // A code, so the message follows the UI language.
+  error: ProxyUrlFailureCode | null
+}
+
+function proxyUrlErrorText(code: ProxyUrlFailureCode): string {
+  switch (code) {
+    case 'tooLong':
+      return translate('settings.network.proxyUrlErrors.tooLong', PROXY_URL_FAILURE_COPY.tooLong)
+    case 'invalid':
+      return translate('settings.network.proxyUrlErrors.invalid', PROXY_URL_FAILURE_COPY.invalid)
+    case 'unsupportedProtocol':
+      return translate(
+        'settings.network.proxyUrlErrors.unsupportedProtocol',
+        PROXY_URL_FAILURE_COPY.unsupportedProtocol
+      )
+    case 'missingHost':
+      return translate(
+        'settings.network.proxyUrlErrors.missingHost',
+        PROXY_URL_FAILURE_COPY.missingHost
+      )
+  }
 }
 
 export function createHttpProxyUrlDraftState(
@@ -58,8 +88,7 @@ export function updateHttpProxyUrlDraftState(
   draft: string
 ): HttpProxyUrlDraftState {
   return {
-    // Why: settings persistence is async, so edits after an external settings
-    // reload must build on the latest persisted proxy source.
+    // Persistence is async; edits after external reload must build on the latest proxy source.
     ...resolveHttpProxyUrlDraftState(state, httpProxyUrl),
     draft,
     error: null
@@ -69,7 +98,7 @@ export function updateHttpProxyUrlDraftState(
 export function setHttpProxyUrlDraftErrorState(
   state: HttpProxyUrlDraftState,
   httpProxyUrl: string | undefined,
-  error: string
+  error: ProxyUrlFailureCode
 ): HttpProxyUrlDraftState {
   return {
     ...resolveHttpProxyUrlDraftState(state, httpProxyUrl),
@@ -124,8 +153,6 @@ export function AdvancedNetworkSettingsSection({
 }: AdvancedNetworkSettingsSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const [proxyConfigOpen, setProxyConfigOpen] = useState(false)
-  // Reveal the fields when searching for proxy terms or when a proxy is set,
-  // so the value is never hidden behind a collapsed trigger.
   const proxyConfigForcedOpen =
     shouldOpenNetworkProxyConfig(searchQuery) || hasConfiguredNetworkProxy(settings)
   const proxyConfigExpanded = proxyConfigOpen || proxyConfigForcedOpen
@@ -142,8 +169,7 @@ export function AdvancedNetworkSettingsSection({
     settings.httpProxyUrl
   )
   if (resolvedHttpProxyUrlDraftState !== httpProxyUrlDraftState) {
-    // Why: Settings can change outside this pane; reconcile the proxy draft
-    // before paint so stale network values do not briefly appear.
+    // Reconcile external settings before paint so stale network values cannot flash.
     setHttpProxyUrlDraftState(resolvedHttpProxyUrlDraftState)
   }
   const httpProxyUrlDraft = resolvedHttpProxyUrlDraftState.draft
@@ -154,8 +180,7 @@ export function AdvancedNetworkSettingsSection({
     settings.httpProxyBypassRules
   )
   if (resolvedHttpProxyBypassRulesDraftState !== httpProxyBypassRulesDraftState) {
-    // Why: Proxy bypass rules are local input state, but settings reloads can
-    // replace their source while this pane is mounted.
+    // Reconcile local bypass drafts when external settings reload replaces their source.
     setHttpProxyBypassRulesDraftState(resolvedHttpProxyBypassRulesDraftState)
   }
   const httpProxyBypassRulesDraft = resolvedHttpProxyBypassRulesDraftState.draft
@@ -176,7 +201,7 @@ export function AdvancedNetworkSettingsSection({
     const normalized = normalizeProxyUrl(httpProxyUrlDraft)
     if (!normalized.ok) {
       setHttpProxyUrlDraftState((current) =>
-        setHttpProxyUrlDraftErrorState(current, settings.httpProxyUrl, normalized.message)
+        setHttpProxyUrlDraftErrorState(current, settings.httpProxyUrl, normalized.code)
       )
       return
     }
@@ -215,7 +240,9 @@ export function AdvancedNetworkSettingsSection({
         'no_proxy',
         'network',
         'bypass',
-        'localhost'
+        'localhost',
+        'mirror',
+        'nodejs'
       ]}
       className="space-y-3"
     >
@@ -286,7 +313,7 @@ export function AdvancedNetworkSettingsSection({
                 className="font-mono text-xs"
               />
               {httpProxyUrlError ? (
-                <p className="text-xs text-destructive">{httpProxyUrlError}</p>
+                <p className="text-xs text-destructive">{proxyUrlErrorText(httpProxyUrlError)}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
                   {translate(
@@ -304,16 +331,11 @@ export function AdvancedNetworkSettingsSection({
                   'Proxy Bypass Rules'
                 )}
               </Label>
-              <Input
+              <Textarea
                 id="settings-http-proxy-bypass-rules"
                 value={httpProxyBypassRulesDraft}
                 onChange={(e) => updateHttpProxyBypassRulesDraft(e.target.value)}
                 onBlur={commitHttpProxyBypassRules}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.currentTarget.blur()
-                  }
-                }}
                 placeholder={translate(
                   'auto.components.settings.AdvancedNetworkSettingsSection.3e431564b5',
                   'localhost, 127.0.0.1, *.internal'
@@ -322,6 +344,7 @@ export function AdvancedNetworkSettingsSection({
                 autoCorrect="off"
                 autoComplete="off"
                 spellCheck={false}
+                rows={3}
                 className="font-mono text-xs"
               />
               <p className="text-xs text-muted-foreground">
@@ -331,6 +354,11 @@ export function AdvancedNetworkSettingsSection({
                 )}
               </p>
             </div>
+
+            <NodeDistMirrorSettingField
+              value={settings.nodeDistMirrorUrl}
+              onCommit={(nodeDistMirrorUrl) => updateSettings({ nodeDistMirrorUrl })}
+            />
           </div>
         </CollapsibleContent>
       </Collapsible>

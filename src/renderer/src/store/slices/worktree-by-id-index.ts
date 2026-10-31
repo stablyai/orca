@@ -1,13 +1,6 @@
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
-/**
- * Flattens worktreesByRepo into an id lookup.
- *
- * Why: session hydration and terminal reconnect loop over pending worktree ids and
- * previously re-flattened + linear-searched the whole map per iteration, which is
- * O(worktrees x ids) for O(worktrees + ids) distinct work. First entry wins, matching
- * the `.find()` it replaces.
- */
+/** Index once to avoid per-ID flatten scans; first match agrees with find/getIndexedWorktreeMap (STA-4343). Bare IDs cannot distinguish host twins: use getIndexedWorktreesById or explicit hosts for destructive work. */
 export function buildWorktreeByIdIndex(
   worktreesByRepo: Record<string, Worktree[]>
 ): Map<string, Worktree> {

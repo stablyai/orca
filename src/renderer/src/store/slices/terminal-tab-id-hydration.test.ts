@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../../shared/types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { buildHydratedTabState } from './tabs-hydration'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/pty-transport', () => ({
+vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn()
 }))
@@ -89,45 +89,6 @@ describe('terminal tab id hydration', () => {
     })
   })
 
-  it('drops legacy terminal tabs whose IDs cannot form pane keys', () => {
-    const session: WorkspaceSessionState = {
-      ...makeBaseSession(),
-      activeTabId: BAD_TAB_ID,
-      tabsByWorktree: {
-        w1: [
-          {
-            id: BAD_TAB_ID,
-            ptyId: null,
-            worktreeId: 'w1',
-            title: 'bad',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 100
-          },
-          {
-            id: GOOD_TAB_ID,
-            ptyId: null,
-            worktreeId: 'w1',
-            title: 'good',
-            customTitle: null,
-            color: null,
-            sortOrder: 1,
-            createdAt: 101
-          }
-        ]
-      }
-    }
-
-    const result = buildHydratedTabState(session, new Set(['w1']))
-
-    expect(result.unifiedTabsByWorktree.w1.map((tab) => tab.id)).toEqual([GOOD_TAB_ID])
-    expect(result.groupsByWorktree.w1[0]).toMatchObject({
-      activeTabId: null,
-      tabOrder: [GOOD_TAB_ID]
-    })
-  })
-
   it('drops runtime terminal state whose IDs cannot form pane keys', () => {
     const store = createTestStore()
     seedStore(store, {
@@ -170,5 +131,23 @@ describe('terminal tab id hydration', () => {
     expect(store.getState().pendingReconnectPtyIdByTabId).toEqual({
       [GOOD_TAB_ID]: 'good-remote'
     })
+  })
+
+  it('does not turn a rejected terminal row into an explicit-empty tombstone', () => {
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      ...makeBaseSession(),
+      tabsByWorktree: {
+        [WORKTREE_ID]: [makeTab({ id: BAD_TAB_ID, worktreeId: WORKTREE_ID })]
+      }
+    })
+
+    expect(Object.hasOwn(store.getState().tabsByWorktree, WORKTREE_ID)).toBe(false)
   })
 })

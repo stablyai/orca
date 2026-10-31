@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  FolderWorkspace,
-  Worktree,
-  WorktreeLineage,
-  WorkspaceLineage
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
@@ -221,7 +218,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
     expect(result.lineageChildrenByParentId.size).toBe(0)
   })
 
-  it('rejects nested descendants across host or project boundaries', () => {
+  it('includes another project while rejecting another execution host', () => {
     const parent = makeWorktree({
       id: 'repo-1::/parent',
       instanceId: 'parent',
@@ -236,7 +233,8 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
     const projectChild = makeWorktree({
       id: 'repo-1::/project-child',
       instanceId: 'project-child',
-      projectId: 'project-2'
+      projectId: 'project-2',
+      hostId: LOCAL_EXECUTION_HOST_ID
     })
 
     const result = getAttachedWorktreesForFolderWorkspace({
@@ -251,7 +249,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       worktreesByRepo: { 'repo-1': [parent, hostChild, projectChild] }
     })
 
-    expect(result.lineageChildrenByParentId.size).toBe(0)
+    expect(result.lineageChildrenByParentId.get(parent.id)).toEqual([projectChild])
   })
 
   it('does not attach cyclic legacy descendants', () => {

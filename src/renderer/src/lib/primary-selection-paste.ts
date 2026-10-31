@@ -1,4 +1,5 @@
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../shared/utf8-byte-limits'
 import { isPrimarySelectionTextControl } from './primary-selection-capture'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
@@ -101,39 +102,6 @@ function isContentEditablePasteTargetAvailable(
   return target.isConnected && target.isContentEditable && (canContinue?.(target) ?? true)
 }
 
-function getCodePointUtf8ByteLength(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
-}
-
-function getNextChunkBoundary(text: string, startIndex: number, maxBytes: number): number {
-  let byteLength = 0
-  let index = startIndex
-
-  while (index < text.length) {
-    const codePoint = text.codePointAt(index) ?? 0
-    const codeUnitLength = codePoint > 0xffff ? 2 : 1
-    const nextByteLength = getCodePointUtf8ByteLength(codePoint)
-
-    if (byteLength > 0 && byteLength + nextByteLength > maxBytes) {
-      break
-    }
-
-    byteLength += nextByteLength
-    index += codeUnitLength
-  }
-
-  return index
-}
-
 function getContentEditableInsertionRange(target: HTMLElement): Range | null {
   const selection = target.ownerDocument.getSelection()
   if (!selection || selection.rangeCount === 0) {
@@ -171,8 +139,7 @@ async function pasteLargeTextIntoContentEditable(
   range.deleteContents()
   let textIndex = 0
 
-  // Why: contenteditable primary-selection paste cannot rely on browser
-  // execCommand for large payloads; chunked text nodes keep the renderer yielding.
+  // Chunk contenteditable text nodes to yield on large primary-selection pastes; execCommand cannot handle them reliably.
   while (textIndex < text.length) {
     if (!isContentEditablePasteTargetAvailable(target, options.canContinue)) {
       if (textIndex > 0) {
@@ -180,7 +147,7 @@ async function pasteLargeTextIntoContentEditable(
       }
       return false
     }
-    const nextIndex = getNextChunkBoundary(text, textIndex, chunkMaxBytes)
+    const nextIndex = getUtf8ChunkEndIndex(text, textIndex, chunkMaxBytes)
     range = insertContentEditableChunk(target, range, text.slice(textIndex, nextIndex))
     textIndex = nextIndex
     if (textIndex < text.length) {
@@ -281,8 +248,7 @@ export async function pastePrimarySelectionTextIntoTarget(
       maxBytes: options.maxBytes,
       measureYieldAfterCodeUnits: options.measureYieldAfterCodeUnits,
       yieldToEventLoop: options.yieldToEventLoop,
-      // Why: async middle-click paste can outlive focus ownership, especially
-      // during chunked textarea insertion.
+      // Async/chunked middle-click paste can outlive the original focus owner.
       canContinue: targetStillFocused
     })
     return result.status === 'pasted'

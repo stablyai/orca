@@ -3,14 +3,27 @@ import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
-import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import {
+  buildWrappedLogicalLine,
+  rangeForParsedFileLink
+} from '../../../../shared/wrapped-terminal-link-ranges'
 import {
   extractOrchestrationTaskLinks,
   focusRuntimeOrchestrationTask,
   ORCHESTRATION_TASK_PREFIX
 } from './terminal-orchestration-task-links'
+import {
+  isTerminalLinkActionActivation,
+  isTerminalLinkDirectActivation
+} from './terminal-link-activation'
+import {
+  requestTerminalLinkAction,
+  type TerminalLinkActionContext
+} from './terminal-link-action-request'
+import { translate } from '@/i18n/i18n'
 
 export { extractOrchestrationTaskLinks } from './terminal-orchestration-task-links'
 export type { ParsedOrchestrationTaskLink } from './terminal-orchestration-task-links'
@@ -36,6 +49,7 @@ type TerminalHandleLinkProviderDeps = {
   getTerminal: () => Terminal | null
   getRuntimeEnvironmentId: () => string | null
   linkTooltip: HTMLElement
+  getLinkActionContext?: () => TerminalLinkActionContext | null
 }
 
 const TERMINAL_HANDLE_PREFIX = 'term_'
@@ -131,11 +145,8 @@ export function focusRendererTerminalHandle(
     return false
   }
 
-  store.setActiveWorktree(target.worktreeId)
-  store.markWorktreeVisited(target.worktreeId)
-  store.setActiveView('terminal')
-  store.setActiveTabType('terminal')
-  store.revealWorktreeInSidebar(target.worktreeId)
+  revealWorkspaceSurface(store, target.worktreeId)
+  store.setActiveTabType('terminal', target.worktreeId)
   if (target.leafId) {
     activateTabAndFocusPane(target.tabId, target.leafId)
   } else {
@@ -188,15 +199,44 @@ export function createTerminalHandleLinkProvider(
             range,
             text: parsed.text,
             activate: (event) => {
-              if (!isTerminalHandleLinkActivation(event)) {
+              const directActivation = isTerminalLinkDirectActivation(event)
+              const actionActivation = isTerminalLinkActionActivation(event)
+              if (!directActivation && !actionActivation) {
                 return
               }
-              event?.preventDefault()
-              void activateParsedLink(parsed, deps.getRuntimeEnvironmentId())
-              terminal.clearSelection()
+              let handled = false
+              if (directActivation) {
+                event?.preventDefault()
+                void activateParsedLink(parsed, deps.getRuntimeEnvironmentId())
+                handled = true
+              } else {
+                handled = requestTerminalLinkAction(event, deps.getLinkActionContext?.(), {
+                  destination: parsed.text,
+                  kind: parsed.kind,
+                  primary: {
+                    label:
+                      parsed.kind === 'terminal'
+                        ? translate(
+                            'auto.components.terminal.pane.TerminalLinkActionPopover.switchTerminal',
+                            'Switch terminal'
+                          )
+                        : translate(
+                            'auto.components.terminal.pane.TerminalLinkActionPopover.openTaskTerminal',
+                            'Open task terminal'
+                          ),
+                    run: () => activateParsedLink(parsed, deps.getRuntimeEnvironmentId())
+                  }
+                })
+              }
+              if (handled) {
+                terminal.clearSelection()
+              }
             },
             hover: () => {
-              deps.linkTooltip.textContent = `${parsed.text} (${getTerminalHandleFocusHint()})`
+              const showActions = deps.getLinkActionContext
+                ? deps.getLinkActionContext() !== null
+                : true
+              deps.linkTooltip.textContent = `${parsed.text} (${getTerminalHandleFocusHint(showActions)})`
               deps.linkTooltip.style.display = ''
             },
             leave: () => {
@@ -222,8 +262,7 @@ async function activateParsedLink(
       }
       return
     }
-    // Why: a task can be retried onto a new dispatch; runtime DB is the
-    // authority for the latest terminal assigned to a stable task ID.
+    // Retries change dispatches; runtime DB owns the latest terminal for a stable task ID.
     await focusRuntimeOrchestrationTask(parsed.text, runtimeEnvironmentId, (handle) =>
       focusRendererTerminalHandle(handle, runtimeEnvironmentId)
     )
@@ -252,20 +291,14 @@ function ptyIdMatchesTerminalHandle(
   return ptyEnvironmentId === targetEnvironmentId
 }
 
-function getTerminalHandleFocusHint(): string {
+function getTerminalHandleFocusHint(showActions: boolean): string {
+  const prefix = showActions ? 'Click for actions or ' : ''
   return navigator.userAgent.includes('Mac')
-    ? '⌘+click to switch terminal'
-    : 'Ctrl+click to switch terminal'
+    ? `${prefix}⌘+click to switch terminal`
+    : `${prefix}Ctrl+click to switch terminal`
 }
 
-function isTerminalHandleLinkActivation(
-  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined
-): boolean {
-  const isMac = navigator.userAgent.includes('Mac')
-  return isMac ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
-}
-
-async function focusRuntimeTerminalHandle(
+export async function focusRuntimeTerminalHandle(
   handle: string,
   runtimeEnvironmentId: string | null
 ): Promise<void> {
@@ -273,7 +306,6 @@ async function focusRuntimeTerminalHandle(
   const target = environmentId
     ? ({ kind: 'environment', environmentId } as const)
     : ({ kind: 'local' } as const)
-  // Why: main owns the `term_*` mapping. Defer to terminal.focus on click
-  // instead of mirroring that state in renderer hover parsing.
+  // Main owns term_* mapping; resolve through terminal.focus on click instead of mirroring hover state.
   await callRuntimeRpc(target, 'terminal.focus', { terminal: handle, navigation: 'host' })
 }

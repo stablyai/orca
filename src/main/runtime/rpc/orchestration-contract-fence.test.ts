@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import './unused-default-rpc-methods.test-fixture'
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
@@ -27,6 +27,7 @@ describe('orchestration contract fence', () => {
       methods: [
         defineMethod({
           name: method,
+          permission: 'workspace',
           params: z.object({ subject: z.string() }),
           handler: effect
         })
@@ -73,7 +74,7 @@ describe('orchestration contract fence', () => {
         }
       })
       expect(effect).not.toHaveBeenCalled()
-      const callerFingerprint = createHash('sha256').update('caller-token').digest('hex')
+      const callerFingerprint = database.getOrCreateLocalMutationCallerFingerprint()
       expect(database.getMutationReceipt(callerFingerprint, 'mutation_1')).toBeUndefined()
     }
   )

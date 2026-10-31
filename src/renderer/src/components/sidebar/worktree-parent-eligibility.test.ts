@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
-import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
 import { getEligibleWorktreeParents, isEligibleWorktreeParent } from './worktree-parent-candidates'
 
@@ -159,7 +161,7 @@ describe('canAssignWorktreeParent', () => {
     ).toBe(false)
   })
 
-  it('stays repo-agnostic while the picker candidate filter is repo and host scoped', () => {
+  it('offers parents from another repository on the same host', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameRepo = makeWorktree('same-repo', 'repo-a')
     const otherRepo = makeWorktree('other-repo', 'repo-b')
@@ -184,7 +186,7 @@ describe('canAssignWorktreeParent', () => {
           { id: 'repo-b', connectionId: null, executionHostId: 'local' }
         ])
       }).map((worktree) => worktree.id)
-    ).toEqual([sameRepo.id])
+    ).toEqual([sameRepo.id, otherRepo.id])
   })
 
   it('excludes same-repo candidates owned by a different runtime host', () => {
@@ -209,7 +211,7 @@ describe('canAssignWorktreeParent', () => {
     ).toEqual([sameHost.id])
   })
 
-  it('excludes a candidate across a known project boundary for picker and direct drop checks', () => {
+  it('allows another project for picker and direct drop checks', () => {
     const child = { ...makeWorktree('child'), projectId: 'project-a' }
     const sameProject = { ...makeWorktree('same-project'), projectId: 'project-a' }
     const otherProject = { ...makeWorktree('other-project'), projectId: 'project-b' }
@@ -225,7 +227,7 @@ describe('canAssignWorktreeParent', () => {
         worktreeMap,
         repoMap
       }).map((worktree) => worktree.id)
-    ).toEqual([sameProject.id])
+    ).toEqual([sameProject.id, otherProject.id])
     expect(
       isEligibleWorktreeParent({
         child,
@@ -234,7 +236,7 @@ describe('canAssignWorktreeParent', () => {
         worktreeMap,
         repoMap
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('excludes archived worktrees from picker candidates', () => {

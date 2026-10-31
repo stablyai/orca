@@ -6,11 +6,10 @@ import { WebSocketServer } from 'ws'
 import {
   LOCAL_HTTPS_TEST_CERTIFICATE,
   LOCAL_HTTPS_TEST_PRIVATE_KEY
-} from './local-https-test-certificate'
+} from '../../../src/main/browser/browser-local-https-test-certificate'
 
 export type LocalHttpsServer = {
   secureUrl: string
-  schemeLessUrl: string
   documentRequestCount: () => number
   assetRequestCount: () => number
   webSocketConnectionCount: () => number
@@ -52,8 +51,7 @@ export async function startLocalHttpsServer(): Promise<LocalHttpsServer> {
         response.end('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>')
         return
       }
-      // Why: count only the root document. Favicon/probes would inflate the
-      // document counter and flake exact E2E request-count assertions.
+      // Count only root documents; favicon/probe requests would flake exact request assertions.
       if (requestUrl.pathname !== '/') {
         response.writeHead(404)
         response.end()
@@ -109,7 +107,6 @@ export async function startLocalHttpsServer(): Promise<LocalHttpsServer> {
 
   return {
     secureUrl: `${secureOrigin}/`,
-    schemeLessUrl: `127.0.0.1:${port}/`,
     documentRequestCount: () => documentRequestCount,
     assetRequestCount: () => assetRequestCount,
     webSocketConnectionCount: () => webSocketConnectionCount,

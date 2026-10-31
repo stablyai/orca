@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { createProjectHeaderDragSession } from './project-header-drag-start'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 function createRepo(id: string, projectGroupId: string | null = null): Repo {
   return {
@@ -17,75 +17,14 @@ function createRepo(id: string, projectGroupId: string | null = null): Repo {
 }
 
 describe('createProjectHeaderDragSession', () => {
-  it('does not capture the pointer when arming a drag session', () => {
-    const handleEl = document.createElement('div')
-    handleEl.setAttribute('data-repo-header-drag-handle', '')
-    handleEl.setPointerCapture = vi.fn()
-    const scrollContainer = document.createElement('div')
-    document.body.append(scrollContainer, handleEl)
-
-    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
-    const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
-
-    const session = createProjectHeaderDragSession({
-      event: {
-        button: 0,
-        pointerId: 1,
-        clientX: 10,
-        clientY: 20,
-        target: handleEl,
-        currentTarget: handleEl
-      } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
-      sidebarRepoHeaderIdsByBucket,
-      getScrollContainer: () => scrollContainer
-    })
-
-    expect(session).not.toBeNull()
-    expect(handleEl.setPointerCapture).not.toHaveBeenCalled()
-  })
-
-  it('arms a drag session from plain project header text when the row is the drag handle', () => {
-    const header = document.createElement('div')
-    header.setAttribute('data-repo-header-drag-handle', '')
-    const label = document.createElement('span')
-    header.append(label)
-    const scrollContainer = document.createElement('div')
-    document.body.append(scrollContainer, header)
-
-    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
-    const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
-
-    const session = createProjectHeaderDragSession({
-      event: {
-        button: 0,
-        pointerId: 1,
-        clientX: 10,
-        clientY: 20,
-        target: label,
-        currentTarget: header
-      } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
-      sidebarRepoHeaderIdsByBucket,
-      getScrollContainer: () => scrollContainer
-    })
-
-    expect(session?.repoId).toBe('repo-a')
-  })
-
   it('arms a drag session when pressing the project icon svg (SVGElement target)', () => {
     const header = document.createElement('div')
     header.setAttribute('data-repo-header-drag-handle', '')
-    // The project icon renders as an <svg>; pressing it makes the event target
-    // an SVGElement, which must still arm the drag.
     const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     header.append(iconSvg)
     const scrollContainer = document.createElement('div')
     document.body.append(scrollContainer, header)
 
-    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
     const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
 
     const session = createProjectHeaderDragSession({
@@ -97,18 +36,15 @@ describe('createProjectHeaderDragSession', () => {
         target: iconSvg,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo: createRepo('repo-a'),
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
 
-    expect(session?.repoId).toBe('repo-a')
+    expect(session?.repo.id).toBe('repo-a')
   })
 
   it('does not arm a drag session when pressing an svg icon inside an action button', () => {
-    // Why: the row is still the drag handle for hit-testing; action targets must
-    // be filtered even though closest(drag-handle) would match the row.
     const header = document.createElement('div')
     header.setAttribute('data-repo-header-drag-handle', '')
     const actionButton = document.createElement('button')
@@ -119,7 +55,6 @@ describe('createProjectHeaderDragSession', () => {
     const scrollContainer = document.createElement('div')
     document.body.append(scrollContainer, header)
 
-    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
     const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
 
     const session = createProjectHeaderDragSession({
@@ -131,8 +66,7 @@ describe('createProjectHeaderDragSession', () => {
         target: actionIcon,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo: createRepo('repo-a'),
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
@@ -141,8 +75,6 @@ describe('createProjectHeaderDragSession', () => {
   })
 
   it('does not arm a drag session when pressing the actions overlay even if the row is the drag handle', () => {
-    // Why: the row keeps data-repo-header-drag-handle so indent/padding can arm
-    // drag; actions must still be excluded via data-repo-header-actions.
     const header = document.createElement('div')
     header.setAttribute('data-repo-header-drag-handle', '')
     const dragSurface = document.createElement('div')
@@ -154,7 +86,6 @@ describe('createProjectHeaderDragSession', () => {
     const scrollContainer = document.createElement('div')
     document.body.append(scrollContainer, header)
 
-    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
     const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
 
     const sessionFromActions = createProjectHeaderDragSession({
@@ -166,8 +97,7 @@ describe('createProjectHeaderDragSession', () => {
         target: actions,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo: createRepo('repo-a'),
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
@@ -180,8 +110,7 @@ describe('createProjectHeaderDragSession', () => {
         target: label,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo: createRepo('repo-a'),
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
@@ -194,15 +123,14 @@ describe('createProjectHeaderDragSession', () => {
         target: header,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo: createRepo('repo-a'),
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
 
     expect(sessionFromActions).toBeNull()
-    expect(sessionFromLabel?.repoId).toBe('repo-a')
+    expect(sessionFromLabel?.repo.id).toBe('repo-a')
     // Why: target === currentTarget is treated as the empty row (not an action).
-    expect(sessionFromRowPadding?.repoId).toBe('repo-a')
+    expect(sessionFromRowPadding?.repo.id).toBe('repo-a')
   })
 })

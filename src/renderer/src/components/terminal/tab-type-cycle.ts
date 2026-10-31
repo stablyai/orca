@@ -1,4 +1,7 @@
-export type TabCycleType = 'terminal' | 'editor' | 'browser' | 'simulator'
+import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import { sanitizeRecentTabIds } from '../../store/slices/tab-group-state'
+
+export type TabCycleType = WorkspaceVisibleTabType
 
 export type TypeCyclableTab = {
   type: TabCycleType
@@ -16,17 +19,23 @@ type GetNextTabWithinActiveTypeParams = {
   direction: number
 }
 
+/** Use the matching entity-ID domain; single-type callers need activeAgentSessionEntityId to avoid selecting a background terminal under a structured tab. */
 export function getActiveEntityIdForTabType(
   activeTabType: TabCycleType,
   activeTabId: string | null,
   activeFileId: string | null,
-  activeBrowserTabId: string | null
+  activeBrowserTabId: string | null,
+  activeAgentSessionEntityId: string | null = null
 ): string | null {
   if (activeTabType === 'editor') {
     return activeFileId
   }
   if (activeTabType === 'browser') {
     return activeBrowserTabId
+  }
+  // activeTabId can still name a background terminal while a structured tab is active.
+  if (activeTabType === 'agent-session') {
+    return activeAgentSessionEntityId
   }
   if (activeTabType === 'simulator') {
     return activeTabId
@@ -44,10 +53,7 @@ type GetNextTabAcrossAllTypesParams = {
   direction: number
 }
 
-// Why: companion to getNextTabWithinActiveType for the "cycle across every tab"
-// chord (Cmd/Ctrl+Shift+]/[ on fresh installs). Keeps the same dual-id matching semantics
-// (prefer the active group's unified tabId to disambiguate split layouts, fall
-// back to the backing entity id) so behavior matches what the TabBar renders.
+// Match TabBar dual-ID semantics: prefer unified tab ID for split disambiguation, then backing entity ID.
 export function getNextTabAcrossAllTypes({
   tabs,
   activeTabType,
@@ -117,4 +123,22 @@ export function getNextTabWithinActiveType({
   return tabsOfActiveType[
     (currentIndex + direction + tabsOfActiveType.length) % tabsOfActiveType.length
   ]
+}
+
+/** Ctrl+Tab quick-toggle target: the visible tab used just before the active one. */
+export function getPreviousRecentTab(
+  tabs: readonly TypeCyclableTab[],
+  recentTabIds: string[] | undefined,
+  activeGroupTabId: string | null
+): TypeCyclableTab | null {
+  if (!activeGroupTabId) {
+    return null
+  }
+  const visibleTabIds = tabs.flatMap((entry) => (entry.tabId ? [entry.tabId] : []))
+  const recent = sanitizeRecentTabIds(recentTabIds, visibleTabIds)
+  const currentIndex = recent.lastIndexOf(activeGroupTabId)
+  if (currentIndex <= 0) {
+    return null
+  }
+  return tabs.find((entry) => entry.tabId === recent[currentIndex - 1]) ?? null
 }

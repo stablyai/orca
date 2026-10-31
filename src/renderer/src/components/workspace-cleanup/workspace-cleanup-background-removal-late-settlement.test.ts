@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
+import type { WorkspaceCleanupRemoveResult } from '@/store/slices/workspace-cleanup'
 import { startWorkspaceCleanupBackgroundRemoval } from './workspace-cleanup-background-removal'
 import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
 
@@ -46,23 +47,27 @@ describe('workspace cleanup late settlement reconciliation', () => {
       branch: 'other',
       path: '/repo/other'
     })
-    let resolveChild: (result: { removedIds: string[]; failures: [] }) => void = () => {}
-    let resolveUnrelated: (result: { removedIds: string[]; failures: [] }) => void = () => {}
+    let resolveChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+    let resolveUnrelated: (result: WorkspaceCleanupRemoveResult) => void = () => {}
     const removeCandidates = vi
       .fn()
       .mockImplementationOnce(
         () =>
-          new Promise<{ removedIds: string[]; failures: [] }>((resolve) => {
+          new Promise<WorkspaceCleanupRemoveResult>((resolve) => {
             resolveChild = resolve
           })
       )
       .mockImplementationOnce(
         () =>
-          new Promise<{ removedIds: string[]; failures: [] }>((resolve) => {
+          new Promise<WorkspaceCleanupRemoveResult>((resolve) => {
             resolveUnrelated = resolve
           })
       )
-      .mockResolvedValueOnce({ removedIds: [parent.worktreeId], failures: [] })
+      .mockResolvedValueOnce({
+        removedIds: [parent.worktreeId],
+        removedIdentities: [parent.worktreeId],
+        failures: []
+      })
     const onResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -76,9 +81,17 @@ describe('workspace cleanup late settlement reconciliation', () => {
 
     await vi.advanceTimersByTimeAsync(10)
     expect(removeCandidates).toHaveBeenCalledTimes(2)
-    resolveChild({ removedIds: [child.worktreeId], failures: [] })
+    resolveChild({
+      removedIds: [child.worktreeId],
+      removedIdentities: [child.worktreeId],
+      failures: []
+    })
     await settleBackgroundRemoval()
-    resolveUnrelated({ removedIds: [unrelated.worktreeId], failures: [] })
+    resolveUnrelated({
+      removedIds: [unrelated.worktreeId],
+      removedIdentities: [unrelated.worktreeId],
+      failures: []
+    })
     await settleBackgroundRemoval()
 
     expect(removeCandidates).toHaveBeenNthCalledWith(3, [parent.worktreeId], {
@@ -86,6 +99,7 @@ describe('workspace cleanup late settlement reconciliation', () => {
     })
     expect(onResult).toHaveBeenCalledWith({
       removedIds: [child.worktreeId, unrelated.worktreeId, parent.worktreeId],
+      removedIdentities: [child.worktreeId, unrelated.worktreeId, parent.worktreeId],
       failures: []
     })
     expect(toast.error).not.toHaveBeenCalled()
@@ -116,24 +130,28 @@ describe('workspace cleanup late settlement reconciliation', () => {
       branch: 'second-child',
       path: '/repo/bb/c'
     })
-    let resolveFirstChild: (result: { removedIds: string[]; failures: [] }) => void = () => {}
-    let resolveSecondChild: (result: { removedIds: string[]; failures: [] }) => void = () => {}
+    let resolveFirstChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+    let resolveSecondChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
     const removeCandidates = vi
       .fn()
       .mockImplementationOnce(
         () =>
-          new Promise<{ removedIds: string[]; failures: [] }>((resolve) => {
+          new Promise<WorkspaceCleanupRemoveResult>((resolve) => {
             resolveFirstChild = resolve
           })
       )
       .mockImplementationOnce(
         () =>
-          new Promise<{ removedIds: string[]; failures: [] }>((resolve) => {
+          new Promise<WorkspaceCleanupRemoveResult>((resolve) => {
             resolveSecondChild = resolve
           })
       )
       .mockImplementationOnce(() => new Promise(() => {}))
-      .mockResolvedValueOnce({ removedIds: [secondParent.worktreeId], failures: [] })
+      .mockResolvedValueOnce({
+        removedIds: [secondParent.worktreeId],
+        removedIdentities: [secondParent.worktreeId],
+        failures: []
+      })
     const onLateResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -148,7 +166,11 @@ describe('workspace cleanup late settlement reconciliation', () => {
 
     await vi.advanceTimersByTimeAsync(20)
     await settleBackgroundRemoval()
-    resolveFirstChild({ removedIds: [firstChild.worktreeId], failures: [] })
+    resolveFirstChild({
+      removedIds: [firstChild.worktreeId],
+      removedIdentities: [firstChild.worktreeId],
+      failures: []
+    })
     await settleBackgroundRemoval()
 
     expect(removeCandidates).toHaveBeenNthCalledWith(3, [firstParent.worktreeId], {
@@ -156,14 +178,20 @@ describe('workspace cleanup late settlement reconciliation', () => {
     })
     expect(onLateResult).toHaveBeenNthCalledWith(1, {
       removedIds: [firstChild.worktreeId],
+      removedIdentities: [firstChild.worktreeId],
       failures: []
     })
 
-    resolveSecondChild({ removedIds: [secondChild.worktreeId], failures: [] })
+    resolveSecondChild({
+      removedIds: [secondChild.worktreeId],
+      removedIdentities: [secondChild.worktreeId],
+      failures: []
+    })
     await settleBackgroundRemoval()
 
     expect(onLateResult).toHaveBeenNthCalledWith(2, {
       removedIds: [secondChild.worktreeId],
+      removedIdentities: [secondChild.worktreeId],
       failures: []
     })
     expect(removeCandidates).toHaveBeenCalledTimes(3)
@@ -176,6 +204,7 @@ describe('workspace cleanup late settlement reconciliation', () => {
     })
     expect(onLateResult).toHaveBeenCalledWith({
       removedIds: [secondParent.worktreeId],
+      removedIdentities: [secondParent.worktreeId],
       failures: []
     })
     expect(toast.info).toHaveBeenCalledWith('Still removing workspaces: 1')
@@ -194,16 +223,20 @@ describe('workspace cleanup late settlement reconciliation', () => {
       branch: 'child',
       path: '/repo/parent/child'
     })
-    let resolveChild: (result: { removedIds: string[]; failures: [] }) => void = () => {}
+    let resolveChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
     const removeCandidates = vi
       .fn()
       .mockImplementationOnce(
         () =>
-          new Promise<{ removedIds: string[]; failures: [] }>((resolve) => {
+          new Promise<WorkspaceCleanupRemoveResult>((resolve) => {
             resolveChild = resolve
           })
       )
-      .mockResolvedValueOnce({ removedIds: [parent.worktreeId], failures: [] })
+      .mockResolvedValueOnce({
+        removedIds: [parent.worktreeId],
+        removedIdentities: [parent.worktreeId],
+        failures: []
+      })
     vi.mocked(toast.success).mockImplementationOnce(() => {
       throw new Error('toast renderer failed')
     })
@@ -220,7 +253,11 @@ describe('workspace cleanup late settlement reconciliation', () => {
 
     await vi.advanceTimersByTimeAsync(10)
     await settleBackgroundRemoval()
-    resolveChild({ removedIds: [child.worktreeId], failures: [] })
+    resolveChild({
+      removedIds: [child.worktreeId],
+      removedIdentities: [child.worktreeId],
+      failures: []
+    })
     await settleBackgroundRemoval()
 
     expect(removeCandidates).toHaveBeenNthCalledWith(2, [parent.worktreeId], {

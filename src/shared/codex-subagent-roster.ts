@@ -1,11 +1,15 @@
 import {
   AGENT_MODEL_MAX_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   type AgentSubagentSnapshot
 } from './agent-status-types'
 import { normalizeOptionalField } from './agent-status-field-normalization'
+import { readCodexSubagentIdentity } from './codex-subagent-identity'
+import {
+  agentChildWorkLiveness,
+  type AgentChildWorkLiveness
+} from './agent-status-child-work-liveness'
 
 const CODEX_SUBAGENT_ID_MAX_LENGTH = 64
 
@@ -17,6 +21,9 @@ type TrackedCodexSubagent = {
   model?: string
   state: 'working' | 'waiting'
   startedAt: number
+  identityTranscriptPath?: string
+  /** Relay session whose own roster listed this child; only that session may retire it by omission. */
+  reportedBy?: string
 }
 
 export function upsertCodexSubagent(
@@ -45,9 +52,6 @@ export function upsertCodexSubagent(
     existing.state = fields.state
     return
   }
-  if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS) {
-    return
-  }
   roster.set(normalizedId, {
     agentType,
     description,
@@ -61,9 +65,46 @@ export function finishCodexSubagent(roster: CodexSubagentRoster, id: string): vo
   roster.delete(id.trim())
 }
 
+export function enrichCodexSubagentIdentity(
+  roster: CodexSubagentRoster,
+  id: string,
+  transcriptPath: string | undefined
+): void {
+  const child = roster.get(id.trim())
+  if (!child || !transcriptPath || child.identityTranscriptPath === transcriptPath) {
+    return
+  }
+  const identity = readCodexSubagentIdentity(transcriptPath, id.trim())
+  if (!identity) {
+    return
+  }
+  child.identityTranscriptPath = transcriptPath
+  child.description =
+    normalizeOptionalField(identity.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ??
+    child.description
+}
+
+/** Update only an existing child’s model, preserving lifecycle so late discovery cannot resurrect finished children. */
+export function setCodexSubagentModel(
+  roster: CodexSubagentRoster,
+  id: string,
+  model: string | undefined
+): void {
+  const normalizedModel = normalizeOptionalField(model, AGENT_MODEL_MAX_LENGTH)
+  if (!normalizedModel) {
+    return
+  }
+  const existing = roster.get(id.trim())
+  if (!existing) {
+    return
+  }
+  existing.model = normalizedModel
+}
+
 export function seedCodexSubagentRoster(
   roster: CodexSubagentRoster,
-  snapshots: readonly AgentSubagentSnapshot[]
+  snapshots: readonly AgentSubagentSnapshot[],
+  reportedBy?: string
 ): void {
   for (const snapshot of snapshots) {
     if (snapshot.state !== 'working' && snapshot.state !== 'waiting') {
@@ -80,6 +121,10 @@ export function seedCodexSubagentRoster(
       },
       snapshot.startedAt
     )
+    const tracked = reportedBy ? roster.get(snapshot.id.trim()) : undefined
+    if (tracked) {
+      tracked.reportedBy = reportedBy
+    }
   }
 }
 
@@ -97,21 +142,17 @@ export function codexRosterToSnapshots(
     state: tracked.state,
     startedAt: tracked.startedAt
   }))
-  snapshots.sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id))
+  snapshots.sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id, 'en'))
   return snapshots
 }
 
-export function codexRosterEffectiveState(
-  roster: CodexSubagentRoster | undefined,
-  leadState: 'working' | 'waiting' | 'done'
-): 'working' | 'waiting' | 'done' {
-  if (!roster || roster.size === 0) {
-    return leadState
-  }
-  for (const tracked of roster.values()) {
-    if (tracked.state === 'waiting') {
-      return 'waiting'
-    }
-  }
-  return leadState === 'done' ? 'working' : leadState
+/** Project spawned agent threads through the shared kind policy: waiting/working child evidence, never watch loops. */
+export function codexRosterChildWorkLiveness(
+  roster: CodexSubagentRoster | undefined
+): AgentChildWorkLiveness {
+  return agentChildWorkLiveness(
+    roster
+      ? Array.from(roster.values(), (tracked) => ({ kind: 'agent' as const, state: tracked.state }))
+      : undefined
+  )
 }

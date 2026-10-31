@@ -40,6 +40,21 @@ export function resolveAdvertisedPairingEndpoint(
   return valid(formatWebSocketUrl(endpoint))
 }
 
+// Classify the normalized advertised hostname, not raw input containing ports, brackets or a scheme.
+export function resolveAdvertisedPairingHostname(
+  advertisedAddress: string | null | undefined
+): string | null {
+  const override = advertisedAddress?.trim()
+  if (!override) {
+    return null
+  }
+  if (override.includes('://')) {
+    const normalized = normalizePairingUrl(override)
+    return normalized ? unbracketIpv6(new URL(normalized).hostname) : null
+  }
+  return parseHostOverride(override)?.hostname ?? null
+}
+
 function resolveFullUrl(value: string): PairingEndpointResolution {
   const endpoint = normalizePairingUrl(value)
   return endpoint ? valid(endpoint) : invalid()

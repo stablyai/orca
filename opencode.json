@@ -1,0 +1,26 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "*": {
+      "*": "allow"
+    },
+    "read": {
+      "*.env": "ask",
+      "*.env.*": "ask",
+      "*.env.example": "allow"
+    },
+    "external_directory": {
+      "*": "ask"
+    },
+    "doom_loop": "ask"
+  },
+  "lsp": {
+    "typescript": {
+      "disabled": true
+    },
+    "orca-typescript": {
+      "command": ["node", "config/scripts/agent-typescript-lsp.mjs"],
+      "extensions": [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]
+    }
+  }
+}

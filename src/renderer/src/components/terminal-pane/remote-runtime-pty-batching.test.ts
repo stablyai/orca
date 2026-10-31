@@ -15,13 +15,18 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
         maxPendingBytes: 8
       })
 
+      expect(batcher.hasPendingInput()).toBe(false)
       expect(batcher.push('a')).toBe(true)
       expect(batcher.push('b')).toBe(true)
       expect(flushes).toEqual([])
+      // Why: a remount during the debounce discards these, and the pane must know to say so.
+      await vi.advanceTimersByTimeAsync(0)
+      expect(batcher.hasPendingInput()).toBe(true)
 
       await vi.advanceTimersByTimeAsync(10)
 
       expect(flushes).toEqual(['ab'])
+      expect(batcher.hasPendingInput()).toBe(false)
     } finally {
       vi.useRealTimers()
     }
@@ -114,6 +119,36 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
 
       expect(batcher.takePending()).toBe(`${text}tail`)
       expect(flushes).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('runs a validation barrier before input queued after it', async () => {
+    vi.useFakeTimers()
+    try {
+      const events: string[] = []
+      const text = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+      const batcher = createRemoteRuntimePtyTextBatcher(1_000, (value) => events.push(value), {
+        maxPendingBytes: text.length + 10
+      })
+
+      expect(batcher.push(text)).toBe(true)
+      batcher.enqueueAfterValidation(() => {
+        const pending = batcher.takePending()
+        if (pending) {
+          events.push(pending)
+        }
+        events.push('reply')
+      })
+      expect(batcher.push('tail')).toBe(true)
+
+      const drained = batcher.drain()
+      await vi.advanceTimersByTimeAsync(0)
+      await drained
+      batcher.flush()
+
+      expect(events).toEqual([text, 'reply', 'tail'])
     } finally {
       vi.useRealTimers()
     }

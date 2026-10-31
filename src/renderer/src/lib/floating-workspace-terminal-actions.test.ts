@@ -1,22 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { Tab, TerminalTab } from '../../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
+import type { Tab } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
+  countVisibleFloatingWorkspaceItems,
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
-  isEmptyFloatingWorkspacePanelVisible,
   isFloatingWorkspacePanelFocused,
   isFloatingWorkspacePanelShortcut,
   isFloatingWorkspacePanelShortcutTarget,
   isFloatingWorkspaceTerminalInputTarget,
-  isFloatingWorkspacePanelVisible,
   matchFloatingWorkspacePanelChord,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut,
+  switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
 } from './floating-workspace-terminal-actions'
-import { matchFloatingWorkspacePanelOwnedAction } from './floating-workspace-shortcut-policy'
+import {
+  matchFloatingWorkspacePanelOwnedAction,
+  FLOATING_WORKSPACE_SHORTCUT_SURFACE_SELECTOR
+} from './floating-workspace-shortcut-policy'
 
 const activateWebRuntimeSessionTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
@@ -25,10 +29,16 @@ const createUntitledMarkdownFileWithTemplateSelectionMock = vi.hoisted(() => vi.
 const focusTerminalTabSurfaceMock = vi.hoisted(() => vi.fn())
 const isWebRuntimeSessionActiveMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/web-runtime-session', () => ({
-  activateWebRuntimeSessionTab: activateWebRuntimeSessionTabMock,
-  createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock,
-  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock,
+vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
+  activateWebRuntimeSessionTab: activateWebRuntimeSessionTabMock
+}))
+vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+  createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock
+}))
+vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
+}))
+vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
 
@@ -59,7 +69,7 @@ function shortcutEvent(overrides: Partial<KeyboardEvent>): KeyboardEvent {
 function shortcutSurfaceEvent(overrides: Partial<KeyboardEvent>): KeyboardEvent {
   return shortcutEvent({
     target: makeElement({
-      closestSelectors: ['[data-floating-terminal-shortcut-surface]']
+      closestSelectors: [FLOATING_WORKSPACE_SHORTCUT_SURFACE_SELECTOR]
     }),
     ...overrides
   })
@@ -121,42 +131,42 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('isFloatingWorkspacePanelVisible', () => {
-  it('detects the visible floating workspace panel', () => {
-    const doc = {
-      querySelector: vi.fn().mockReturnValue({})
-    }
+function floatingPanelState({
+  enabled = true,
+  open = true,
+  tabs = []
+}: { enabled?: boolean; open?: boolean; tabs?: Tab[] } = {}) {
+  return {
+    settings: { ...getDefaultSettings('/home/me'), floatingTerminalEnabled: enabled },
+    floatingWorkspacePanelOpen: open,
+    browserTabsByWorktree: {},
+    openFiles: [],
+    tabsByWorktree: {},
+    unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs }
+  }
+}
 
-    expect(isFloatingWorkspacePanelVisible(doc as never)).toBe(true)
-    expect(doc.querySelector).toHaveBeenCalledWith(
-      '[data-floating-terminal-panel][aria-hidden="false"]'
+const FLOATING_CHAT_TAB = {
+  id: 'floating-chat-1',
+  worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+  groupId: 'floating-group',
+  contentType: 'agent-session',
+  entityId: 'session-1',
+  label: 'Chat',
+  customLabel: null,
+  color: null,
+  sortOrder: 0,
+  createdAt: 0
+} satisfies Tab
+
+it('counts tabs in every floating split group when deciding whether a close emptied it', () => {
+  expect(
+    countVisibleFloatingWorkspaceItems(
+      floatingPanelState({
+        tabs: [FLOATING_CHAT_TAB, { ...FLOATING_CHAT_TAB, id: 'chat-2', groupId: 'other-group' }]
+      })
     )
-  })
-
-  it('returns false when the floating workspace panel is hidden or absent', () => {
-    expect(isFloatingWorkspacePanelVisible({ querySelector: vi.fn().mockReturnValue(null) })).toBe(
-      false
-    )
-  })
-})
-
-describe('isEmptyFloatingWorkspacePanelVisible', () => {
-  it('detects the visible empty floating workspace panel', () => {
-    const doc = {
-      querySelector: vi.fn().mockReturnValue({})
-    }
-
-    expect(isEmptyFloatingWorkspacePanelVisible(doc as never)).toBe(true)
-    expect(doc.querySelector).toHaveBeenCalledWith(
-      '[data-floating-terminal-panel][aria-hidden="false"] [data-floating-terminal-empty-state]'
-    )
-  })
-
-  it('returns false when the empty state is absent', () => {
-    expect(
-      isEmptyFloatingWorkspacePanelVisible({ querySelector: vi.fn().mockReturnValue(null) })
-    ).toBe(false)
-  })
+  ).toBe(2)
 })
 
 describe('isFloatingWorkspacePanelFocused', () => {
@@ -442,49 +452,47 @@ describe('createFloatingWorkspaceTerminalTab', () => {
   })
 
   it('creates and focuses a local floating workspace terminal in the active floating group', async () => {
-    const tab = makeTab('floating-tab-1')
     const store = {
       activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
       settings: { activeRuntimeEnvironmentId: null },
-      createTab: vi.fn().mockReturnValue(tab),
+      createTab: vi.fn(),
       activateTab: vi.fn()
     }
     createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
 
-    await expect(createFloatingWorkspaceTerminalTab(store as never)).resolves.toBe(tab)
+    await createFloatingWorkspaceTerminalTab(store)
 
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
     expect(store.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
       undefined,
-      { activate: false }
+      { id: expect.any(String) }
     )
-    expect(store.activateTab).toHaveBeenCalledWith('floating-tab-1')
-    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('floating-tab-1')
+    expect(store.activateTab).not.toHaveBeenCalled()
+    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith(store.createTab.mock.calls[0][3].id)
   })
 
   it('ignores the active runtime and keeps floating workspace terminals local', async () => {
-    const tab = makeTab('floating-tab-runtime')
     const store = {
       activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
       settings: { activeRuntimeEnvironmentId: 'env-1' },
-      createTab: vi.fn().mockReturnValue(tab),
+      createTab: vi.fn(),
       activateTab: vi.fn()
     }
     createWebRuntimeSessionTerminalMock.mockResolvedValue(true)
 
-    await expect(createFloatingWorkspaceTerminalTab(store as never, 'pwsh')).resolves.toBe(tab)
+    await createFloatingWorkspaceTerminalTab(store, 'pwsh')
 
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
     expect(store.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
       'pwsh',
-      { activate: false }
+      { id: expect.any(String) }
     )
-    expect(store.activateTab).toHaveBeenCalledWith('floating-tab-runtime')
-    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('floating-tab-runtime')
+    expect(store.activateTab).not.toHaveBeenCalled()
+    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith(store.createTab.mock.calls[0][3].id)
   })
 })
 
@@ -494,16 +502,15 @@ describe('createFloatingWorkspaceBrowserTab', () => {
   })
 
   it('creates floating browser tabs in the active floating group', async () => {
-    const browserTab = { id: 'browser-1' }
     const store = {
       activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
       browserDefaultUrl: 'about:blank',
       settings: { activeRuntimeEnvironmentId: null },
-      createBrowserTab: vi.fn().mockReturnValue(browserTab)
+      createBrowserTab: vi.fn()
     }
     createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
 
-    await expect(createFloatingWorkspaceBrowserTab(store as never)).resolves.toBe(browserTab)
+    await createFloatingWorkspaceBrowserTab(store)
 
     expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
     expect(store.createBrowserTab).toHaveBeenCalledWith(
@@ -545,7 +552,7 @@ describe('createFloatingWorkspaceMarkdownTab', () => {
       '/tmp/orca/floating-workspace',
       FLOATING_TERMINAL_WORKTREE_ID,
       undefined,
-      { activeRuntimeEnvironmentId: null }
+      { kind: 'local' }
     )
     expect(store.openFile).toHaveBeenCalledWith(fileInfo, {
       preview: false,
@@ -567,7 +574,7 @@ describe('createFloatingWorkspaceMarkdownTab', () => {
       '/tmp/orca/floating-workspace',
       FLOATING_TERMINAL_WORKTREE_ID,
       undefined,
-      { activeRuntimeEnvironmentId: null }
+      { kind: 'local' }
     )
     expect(store.openFile).not.toHaveBeenCalled()
   })
@@ -684,6 +691,44 @@ describe('switchFloatingWorkspaceTab', () => {
   })
 })
 
+describe('switchFloatingWorkspaceRecentTab', () => {
+  it('switches to the previous recent tab in the floating workspace', () => {
+    const activateTab = vi.fn()
+    const setActiveTab = vi.fn()
+    const store: Parameters<typeof switchFloatingWorkspaceRecentTab>[0] = {
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
+      activateTab,
+      browserTabsByWorktree: {},
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: 'tab-1',
+            tabOrder: ['tab-1', 'tab-2'],
+            recentTabIds: ['tab-2', 'tab-1']
+          }
+        ]
+      },
+      openFiles: [],
+      setActiveTab,
+      tabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [makeTab('tab-1'), makeTab('tab-2')]
+      },
+      unifiedTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          makeUnifiedTerminalTab('tab-1'),
+          makeUnifiedTerminalTab('tab-2')
+        ]
+      }
+    }
+
+    expect(switchFloatingWorkspaceRecentTab(store)).toBe(true)
+    expect(activateTab).toHaveBeenCalledWith('tab-2')
+    expect(setActiveTab).toHaveBeenCalledWith('tab-2')
+  })
+})
+
 describe('shouldMinimizeFloatingWorkspacePanelOnCloseShortcut', () => {
   const base = {
     floatingTerminalOpen: true,
@@ -715,9 +760,7 @@ describe('handleEmptyFloatingWorkspacePanelCloseShortcut', () => {
     installFakeHTMLElement()
     const dispatchEvent = vi.fn()
     vi.stubGlobal('window', { dispatchEvent })
-    vi.stubGlobal('document', {
-      querySelector: vi.fn().mockReturnValue({})
-    })
+    vi.stubGlobal('document', { querySelector: vi.fn().mockReturnValue({}) })
     const event = {
       altKey: false,
       code: 'KeyW',
@@ -731,7 +774,9 @@ describe('handleEmptyFloatingWorkspacePanelCloseShortcut', () => {
       stopPropagation: vi.fn()
     } as unknown as KeyboardEvent
 
-    expect(handleEmptyFloatingWorkspacePanelCloseShortcut(event, 'darwin')).toBe(true)
+    expect(
+      handleEmptyFloatingWorkspacePanelCloseShortcut(floatingPanelState(), event, 'darwin')
+    ).toBe(true)
 
     expect(event.preventDefault).toHaveBeenCalledWith()
     expect(event.stopPropagation).toHaveBeenCalledWith()
@@ -743,9 +788,7 @@ describe('handleEmptyFloatingWorkspacePanelCloseShortcut', () => {
 
   it('ignores non-close shortcuts and non-empty floating workspaces', () => {
     vi.stubGlobal('window', { dispatchEvent: vi.fn() })
-    vi.stubGlobal('document', {
-      querySelector: vi.fn().mockReturnValue({})
-    })
+    vi.stubGlobal('document', { querySelector: vi.fn().mockReturnValue({}) })
     const nonCloseEvent = {
       altKey: false,
       code: 'KeyT',
@@ -759,12 +802,11 @@ describe('handleEmptyFloatingWorkspacePanelCloseShortcut', () => {
       stopPropagation: vi.fn()
     } as unknown as KeyboardEvent
 
-    expect(handleEmptyFloatingWorkspacePanelCloseShortcut(nonCloseEvent, 'darwin')).toBe(false)
+    expect(
+      handleEmptyFloatingWorkspacePanelCloseShortcut(floatingPanelState(), nonCloseEvent, 'darwin')
+    ).toBe(false)
     expect(nonCloseEvent.preventDefault).not.toHaveBeenCalled()
 
-    vi.stubGlobal('document', {
-      querySelector: vi.fn().mockReturnValue(null)
-    })
     const event = {
       altKey: false,
       code: 'KeyW',
@@ -778,7 +820,13 @@ describe('handleEmptyFloatingWorkspacePanelCloseShortcut', () => {
       stopPropagation: vi.fn()
     } as unknown as KeyboardEvent
 
-    expect(handleEmptyFloatingWorkspacePanelCloseShortcut(event, 'darwin')).toBe(false)
+    for (const state of [
+      floatingPanelState({ tabs: [FLOATING_CHAT_TAB] }),
+      floatingPanelState({ open: false }),
+      floatingPanelState({ enabled: false })
+    ]) {
+      expect(handleEmptyFloatingWorkspacePanelCloseShortcut(state, event, 'darwin')).toBe(false)
+    }
     expect(event.preventDefault).not.toHaveBeenCalled()
   })
 })

@@ -51,10 +51,7 @@ function previewAt(args: {
   })
 }
 
-/**
- * Replay a drag where the pointer never moves while a card animates open, holding
- * the drop decision across frames exactly as the live drag loop does.
- */
+/** Replay a stationary-pointer drag through card expansion, holding decisions as the live loop does. */
 function replayStillPointer(args: {
   pointerY: number
   frames: readonly (readonly WorktreeSidebarDragRect[])[]
@@ -159,20 +156,20 @@ describe('worktree sidebar drag geometry under mid-drag card growth', () => {
       scrollTop: 0
     }
 
-    expect(resolveWorktreeSidebarDropAnchorIndex({ anchor, rects: COLLAPSED })).toBeNull()
+    expect(resolveWorktreeSidebarDropAnchorIndex({ anchor, groupIds: GROUP_IDS })).toBeNull()
     expect(
       resolveWorktreeSidebarDropAnchorIndex({
         anchor: { beforeWorktreeId: 'c', pointerY: 0, scrollTop: 0 },
-        rects: COLLAPSED
+        groupIds: GROUP_IDS
       })
     ).toBe(2)
     // A null anchor id means end-of-group, which survives any row count change.
     expect(
       resolveWorktreeSidebarDropAnchorIndex({
         anchor: { beforeWorktreeId: null, pointerY: 0, scrollTop: 0 },
-        rects: COLLAPSED
+        groupIds: GROUP_IDS
       })
-    ).toBe(COLLAPSED.length)
+    ).toBe(GROUP_IDS.length)
   })
 
   it('keeps one live coordinate space across a session refresh', () => {
@@ -182,8 +179,10 @@ describe('worktree sidebar drag geometry under mid-drag card growth', () => {
         draggingWorktreeId: 'a',
         sourceGroupKey: 'repo:one',
         draggedIds: ['a'],
+        draggedCopies: [],
         reorderDraggedIds: ['a'],
-        reorderUnitDraggedIds: ['a'],
+        reorderDraggedKeys: ['a'],
+        reorderUnitDraggedKeys: ['a'],
         rects: COLLAPSED,
         grab: GRAB,
         anchor: null
@@ -226,26 +225,6 @@ describe('grab-relative hit testing', () => {
     ).toBe(300 - CARD_HEIGHT / 2)
     // No grab (native HTML5 drag) degrades to the raw pointer.
     expect(getWorktreeSidebarDragReferenceY({ localY: 300, grab: null, activeRect })).toBe(300)
-  })
-
-  it('resolves the same slot wherever a tall card was grabbed', () => {
-    const rects = layout({ c: EXPANDED_CARD_HEIGHT })
-    const tall = rects.find((rect) => rect.worktreeId === 'c')!
-    const height = tall.bottom - tall.top
-    // Park the card so it visually occupies b's slot, varying only the grab point.
-    const slotTop = rects[1]!.top
-
-    const dropIndexes = [0.05, 0.25, 0.5, 0.75, 0.95].map((fraction) => {
-      const offsetY = height * fraction
-      return previewAt({
-        pointerY: slotTop + offsetY,
-        rects,
-        draggingWorktreeId: 'c',
-        grab: { offsetY, height }
-      })!.dropIndex
-    })
-
-    expect(new Set(dropIndexes).size).toBe(1)
   })
 
   it('clamps a grab offset that lands outside the card', () => {

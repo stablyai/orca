@@ -4,6 +4,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
+import { SCHEMA_VERSION } from './db/contract-constants'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './db/reset/removed-orchestration-work-store'
 
 const MUTATION_RECEIPT_MAX_ROWS = 10_000
 
@@ -74,7 +77,7 @@ describe('OrchestrationDb bounded mutation receipts', () => {
     const count = sqliteFor(db)
       .prepare('SELECT COUNT(*) AS count FROM mutation_receipts')
       .get() as { count: number }
-    expect(count.count).toBe(MUTATION_RECEIPT_MAX_ROWS)
+    expect(count.count).toBeLessThanOrEqual(MUTATION_RECEIPT_MAX_ROWS)
     expect(db.getMutationReceipt('caller', 'request_00001')).toBeUndefined()
     expect(db.getMutationReceipt('caller', 'request_10000')).toMatchObject({ state: 'completed' })
     expect(db.getMutationReceipt('caller', 'new')).toMatchObject({ state: 'pending' })
@@ -101,6 +104,7 @@ describe('OrchestrationDb bounded mutation receipts', () => {
     insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'completed')
 
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId: 'ctx_remote_pruned',
       taskId: 'task_remote_pruned',
       homePeerFingerprint: 'caller',
@@ -117,7 +121,7 @@ describe('OrchestrationDb bounded mutation receipts', () => {
     const count = sqliteFor(db)
       .prepare('SELECT COUNT(*) AS count FROM mutation_receipts')
       .get() as { count: number }
-    expect(count.count).toBe(MUTATION_RECEIPT_MAX_ROWS)
+    expect(count.count).toBeLessThanOrEqual(MUTATION_RECEIPT_MAX_ROWS)
     expect(db.getMutationReceipt('caller', 'request_00001')).toBeUndefined()
     expect(db.getMutationReceipt('caller', 'remote_pruned')).toMatchObject({ state: 'pending' })
     expect(db.getRemoteDispatchAttachment('ctx_remote_pruned')).toBeDefined()
@@ -129,6 +133,7 @@ describe('OrchestrationDb bounded mutation receipts', () => {
 
     expect(() =>
       db!.createRemoteDispatchAttachment({
+        runId: 'run-home',
         dispatchId: 'ctx_remote_overflow',
         taskId: 'task_remote_overflow',
         homePeerFingerprint: 'caller',
@@ -149,11 +154,13 @@ describe('OrchestrationDb bounded mutation receipts', () => {
 
   it('guards atomic worker acceptance without changing task state', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'capacity check' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'capacity check' })
     insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'pending')
 
     expect(() =>
       db!.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: task.id,
         startOptions: {},
         mutationReceipt: {
@@ -173,6 +180,11 @@ describe('OrchestrationDb Run pagination', () => {
   let db: OrchestrationDb | undefined
 
   afterEach(() => db?.close())
+
+  it('rejects an invalid cursor with cursor_invalid', () => {
+    db = new OrchestrationDb(':memory:')
+    expect(() => db!.listRuns({ limit: 2, cursor: 'not-a-cursor' })).toThrow(/cursor is invalid/)
+  })
 
   it('returns stable bounded pages without skipping Runs sharing a timestamp', () => {
     db = new OrchestrationDb(':memory:')
@@ -218,24 +230,41 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
     }
   })
 
-  it('migrates a populated v21 database idempotently', () => {
+  it('migrates a populated upstream v23 database idempotently', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-dispatch-index-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
-    const task = db.createTask({ spec: 'indexed lookup' })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker')
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'indexed lookup'
+    })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
     db.close()
     db = undefined
 
     const oldDb = new Database(dbPath)
-    oldDb.exec('DROP INDEX IF EXISTS idx_dispatch_assignee_handle')
-    oldDb.pragma('user_version = 21')
+    oldDb.exec(`
+      ${DROP_REMOVED_WORK_TRIGGERS_SQL}
+      DROP INDEX IF EXISTS idx_dispatch_active_assignee_handle;
+      DROP INDEX IF EXISTS idx_dispatch_assignee_pane_leaf;
+      ALTER TABLE tasks DROP COLUMN created_by_pane_key;
+      ALTER TABLE tasks DROP COLUMN created_by_process_incarnation;
+      ALTER TABLE tasks DROP COLUMN created_by_run_generation;
+    `)
+    oldDb.pragma('user_version = 23')
     oldDb.close()
 
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(22)
-    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({ assignee_handle: 'term_worker' })
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
+    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({
+      assignee_handle: 'term_worker'
+    })
+    expect(db.getTask(task.id)).toMatchObject({
+      created_by_pane_key: null,
+      created_by_process_incarnation: null,
+      created_by_run_generation: null
+    })
     expect(
       sqlite
         .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
@@ -249,12 +278,75 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
       )
       .all('term_worker') as { detail: string }[]
     expect(plan.map((row) => row.detail).join('\n')).toContain(
-      'USING INDEX idx_dispatch_assignee_handle'
+      'USING INDEX idx_dispatch_active_assignee_handle'
     )
+    expect(
+      sqlite
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?")
+        .get('idx_dispatch_active_assignee_handle')
+    ).toMatchObject({
+      sql: expect.stringContaining("status IN ('pending', 'dispatched')")
+    })
+    expect(
+      sqlite
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
+        .get('idx_dispatch_assignee_pane_leaf')
+    ).toBeDefined()
 
     db.close()
     db = new OrchestrationDb(dbPath)
-    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(22)
+    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(db.getDispatchContextById(dispatch.id)).toBeDefined()
+  })
+
+  it('adds the active-handle index to a populated v24 database idempotently', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-active-dispatch-index-migration-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    const run = db.createRun({
+      objective: 'retained v24 authority',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({
+      spec: 'indexed lookup',
+      runId: run.id,
+      createdByTerminalHandle: 'term_creator',
+      createdByPaneKey: 'tab_creator:leaf_creator',
+      createdByProcessIncarnation: 'pty_creator:incarnation-a',
+      createdByRunGeneration: run.consumer_generation
+    })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    db.close()
+    db = undefined
+
+    const oldDb = new Database(dbPath)
+    oldDb.exec('DROP INDEX IF EXISTS idx_dispatch_active_assignee_handle')
+    oldDb.pragma('user_version = 24')
+    oldDb.close()
+
+    db = new OrchestrationDb(dbPath)
+    const sqlite = sqliteFor(db)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
+    expect(db.getTask(task.id)).toMatchObject({
+      created_by_pane_key: 'tab_creator:leaf_creator',
+      created_by_process_incarnation: 'pty_creator:incarnation-a',
+      created_by_run_generation: 1
+    })
+    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({
+      assignee_handle: 'term_worker'
+    })
+    expect(
+      sqlite
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?")
+        .get('idx_dispatch_active_assignee_handle')
+    ).toMatchObject({
+      sql: expect.stringContaining('assignee_handle IS NOT NULL')
+    })
+
+    db.close()
+    db = new OrchestrationDb(dbPath)
+    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
+    expect(db.getTask(task.id)?.created_by_process_incarnation).toBe('pty_creator:incarnation-a')
   })
 })

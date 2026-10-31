@@ -1,14 +1,4 @@
-/**
- * Resolve whether the one-time "usage now shows percent used" notice is
- * already dismissed for this profile.
- *
- * - Explicit dismissal stays dismissed.
- * - Brand-new profiles never saw percent-remaining as the default, so they
- *   should not get a change notice.
- * - Users who already chose "remaining" have found the setting; no need to
- *   teach the flip.
- * - Upgraded profiles still on the new default ("used"/missing) get the notice.
- */
+/** Show the default-flip notice only to upgraded profiles still using used/missing; fresh profiles, explicit dismissals and users who chose remaining need no notice. */
 export function resolveUsagePercentageDisplayChangeNoticeDismissed(args: {
   rawDismissed: unknown
   rawUsagePercentageDisplay: unknown
@@ -20,8 +10,7 @@ export function resolveUsagePercentageDisplayChangeNoticeDismissed(args: {
   if (!args.isExistingProfile) {
     return true
   }
-  // Why: choosing remaining is the discovery path; re-teaching the default flip
-  // would only interrupt someone who already adapted.
+  // Choosing remaining already demonstrates discovery; do not interrupt with the flip notice.
   if (args.rawUsagePercentageDisplay === 'remaining') {
     return true
   }

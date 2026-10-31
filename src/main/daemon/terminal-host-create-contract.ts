@@ -1,5 +1,5 @@
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type {
@@ -8,6 +8,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -19,8 +20,10 @@ export type CreateOrAttachOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
-  /** Explicit shell the renderer asked for, forwarded to the subprocess. */
+  /** Missing ownership is not permission to create during stable-pane adoption. */
+  attachOnly?: boolean
   shellOverride?: string
+  terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
@@ -33,10 +36,11 @@ export type CreateOrAttachOptions = {
   }
   streamClient: {
     onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
-    onExit: (code: number, incarnationId: PtyIncarnationId) => void
+    onExit: (code: number, incarnationId: PtyIncarnationId, cause?: TerminalExitCause) => void
+    /** The child may still run, but its PTY master no longer takes input. */
+    onInputClosed?: (incarnationId: PtyIncarnationId) => void
   }
-  /** Lets the daemon route output under the adopted owner's canonical id before
-   *  attaching its stream callbacks. */
+  /** Resolve the adopted owner’s canonical ID before stream callbacks can emit output. */
   onSessionResolved?: (sessionId: string) => void
 }
 
@@ -51,4 +55,8 @@ export type CreateOrAttachResult = {
   attachToken: symbol
   incarnationId: PtyIncarnationId
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
+  /** Fresh non-WSL spawns with an explicit cwd only; false means a proven permission denial. */
+  cwdReadableByDaemon?: boolean
+  /** The live child can no longer take input through its PTY master. */
+  inputClosed?: true
 }

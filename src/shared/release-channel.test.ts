@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
-  formatAdhocVersion,
-  formatHourlyVersion,
+  findInstallerAssetName,
   getReleaseNotesUrlForVersion,
-  getReleaseRepoForChannel,
   getVersionChannel,
-  hasDedicatedReleaseRepo,
+  hasInstallableArtifactForPlatform,
   isAdhocVersion,
   isChannelSupportedOnPlatform,
+  isDailyVersion,
   isHourlyVersion,
-  isReleaseChannel,
   parseAdhocVersionStamp,
+  parseDailyVersionStamp,
   parseDevBuildStamp,
   parseHourlyVersionStamp,
+  requiresManualDevChannelInstall,
   sortReleaseBuildsNewestFirst,
-  type ReleaseBuild
+  type ReleaseBuild,
+  type ReleaseChannel
 } from './release-channel'
 import { compareAppVersions } from './app-version'
 
@@ -24,34 +25,18 @@ describe('release channel', () => {
     expect(getVersionChannel('v1.4.160')).toBe('stable')
     expect(getVersionChannel('1.4.160-rc.3')).toBe('rc')
     expect(getVersionChannel('1.4.160-hourly.202607281400')).toBe('hourly')
+    expect(getVersionChannel('1.4.160-daily.202607281300')).toBe('daily')
     expect(getVersionChannel('1.4.160-adhoc.20260728140533')).toBe('adhoc')
     expect(getVersionChannel('not-a-version')).toBeNull()
   })
 
-  // Why: hourly tags must never resolve to the main repo — the releases atom feed
-  // exposes only 10 entries, so 24 hourly tags a day would evict every stable/RC
-  // entry and leave real users with nothing to update to.
-  it('keeps dev builds out of the main release repo, and apart from each other', () => {
-    expect(getReleaseRepoForChannel('hourly')).toBe('stablyai/orca-hourly')
-    // Why adhoc gets a third repo rather than sharing hourly's: an unlanded
-    // branch build must never surface to someone who only meant to ride main.
-    expect(getReleaseRepoForChannel('adhoc')).toBe('stablyai/orca-adhoc')
-    expect(getReleaseRepoForChannel('stable')).toBe('stablyai/orca')
-    expect(getReleaseRepoForChannel('rc')).toBe('stablyai/orca')
-  })
-
-  it('marks exactly the dev channels as having their own repo', () => {
-    expect(hasDedicatedReleaseRepo('hourly')).toBe(true)
-    expect(hasDedicatedReleaseRepo('adhoc')).toBe(true)
-    expect(hasDedicatedReleaseRepo('stable')).toBe(false)
-    expect(hasDedicatedReleaseRepo('rc')).toBe(false)
-  })
-
-  // Why: an hourly tag linked against the main repo 404s — the tag only exists
-  // in the hourly repo.
+  // Dev tags exist only in their dedicated repos; main-repo links 404.
   it('builds release-notes links against the repo that published the version', () => {
     expect(getReleaseNotesUrlForVersion('1.4.160-hourly.202607281400')).toBe(
       'https://github.com/stablyai/orca-hourly/releases/tag/v1.4.160-hourly.202607281400'
+    )
+    expect(getReleaseNotesUrlForVersion('1.4.160-daily.202607281300')).toBe(
+      'https://github.com/stablyai/orca-daily/releases/tag/v1.4.160-daily.202607281300'
     )
     expect(getReleaseNotesUrlForVersion('1.4.160')).toBe(
       'https://github.com/stablyai/orca/releases/tag/v1.4.160'
@@ -66,9 +51,15 @@ describe('release channel', () => {
   })
 
   it('round-trips an hourly version stamp as UTC', () => {
-    const version = formatHourlyVersion('1.4.160', '202607281405')
+    const version = '1.4.160-hourly.202607281405'
     expect(isHourlyVersion(version)).toBe(true)
     expect(parseHourlyVersionStamp(version)?.toISOString()).toBe('2026-07-28T14:05:00.000Z')
+  })
+
+  it('round-trips a daily version stamp as UTC', () => {
+    const version = '1.4.160-daily.202607281300'
+    expect(isDailyVersion(version)).toBe(true)
+    expect(parseDailyVersionStamp(version)?.toISOString()).toBe('2026-07-28T13:00:00.000Z')
   })
 
   it('rejects malformed hourly identifiers', () => {
@@ -78,9 +69,7 @@ describe('release channel', () => {
     expect(parseHourlyVersionStamp('1.4.160-rc.3')).toBeNull()
   })
 
-  // Why: an unanchored tail match also accepted garbage prefixes, and Date.UTC
-  // rolls impossible dates forward, so `...hourly.202602300000` rendered as
-  // March 2 rather than being rejected.
+  // Reject garbage-prefix versions and Date.UTC’s normalization of impossible dates (February 30→March 2).
   it('rejects a bad base version and impossible calendar stamps', () => {
     expect(parseHourlyVersionStamp('not-a-version-hourly.202601010000')).toBeNull()
     expect(parseHourlyVersionStamp('1.4-hourly.202601010000')).toBeNull()
@@ -91,22 +80,24 @@ describe('release channel', () => {
     expect(parseHourlyVersionStamp('1.4.160-hourly.202802290000')?.toISOString()).toBe(
       '2028-02-29T00:00:00.000Z'
     )
+    expect(parseDailyVersionStamp('1.4.160-daily.202602300000')).toBeNull()
+    expect(parseDailyVersionStamp('not-a-version-daily.202601010000')).toBeNull()
   })
 
-  // Why seconds and not hourly's minutes: adhoc builds are dispatched on demand,
-  // so two people cutting from different branches inside the same minute is
-  // ordinary — at minute resolution the second would collide on the tag.
+  // Concurrent adhoc branches can build within a minute; second-resolution tags avoid collisions.
   it('round-trips an adhoc version stamp as UTC, to the second', () => {
-    const version = formatAdhocVersion('1.4.160', '20260728140533')
+    const version = '1.4.160-adhoc.20260728140533'
     expect(isAdhocVersion(version)).toBe(true)
     expect(parseAdhocVersionStamp(version)?.toISOString()).toBe('2026-07-28T14:05:33.000Z')
   })
 
-  it('keeps the two dev stamp formats from matching each other', () => {
+  it('keeps the dev stamp formats from matching each other', () => {
     expect(isAdhocVersion('1.4.160-hourly.202607281400')).toBe(false)
     expect(isHourlyVersion('1.4.160-adhoc.20260728140533')).toBe(false)
-    // A 12-digit adhoc tail is an hourly stamp wearing the wrong identifier, not
-    // a second-resolution one; rejecting it keeps the parse unambiguous.
+    expect(isDailyVersion('1.4.160-hourly.202607281400')).toBe(false)
+    expect(isHourlyVersion('1.4.160-daily.202607281300')).toBe(false)
+    expect(isDailyVersion('1.4.160-adhoc.20260728140533')).toBe(false)
+    // Minute-only tails are not valid second-resolution adhoc stamps.
     expect(isAdhocVersion('1.4.160-adhoc.202607281405')).toBe(false)
   })
 
@@ -118,12 +109,13 @@ describe('release channel', () => {
     expect(parseAdhocVersionStamp('not-a-version-adhoc.20260101000000')).toBeNull()
   })
 
-  // Why one entry point for both: the picker renders a row without knowing which
-  // dev channel produced it, so a channel added without a case here would fall
-  // back to showing its raw opaque timestamp tail.
-  it('reads the build timestamp of either dev channel', () => {
+  // Picker rows need timestamp parsing without knowing the dev channel; missing cases would show opaque tails.
+  it('reads the build timestamp of any dev channel', () => {
     expect(parseDevBuildStamp('1.4.160-hourly.202607281405')?.toISOString()).toBe(
       '2026-07-28T14:05:00.000Z'
+    )
+    expect(parseDevBuildStamp('1.4.160-daily.202607281300')?.toISOString()).toBe(
+      '2026-07-28T13:00:00.000Z'
     )
     expect(parseDevBuildStamp('1.4.160-adhoc.20260728140533')?.toISOString()).toBe(
       '2026-07-28T14:05:33.000Z'
@@ -132,15 +124,73 @@ describe('release channel', () => {
     expect(parseDevBuildStamp('1.4.160')).toBeNull()
   })
 
-  // Why: both dev workflows are macOS-only, so the channels have no artifact to
-  // offer elsewhere. Both the picker and the main-process check read this, so a
-  // regression here would silently re-expose an uninstallable channel.
-  it('offers the dev channels only on macOS', () => {
-    for (const channel of ['hourly', 'adhoc'] as const) {
+  // Dev workflows publish macOS/Windows only; picker and update checks must not offer uninstallable Linux channels.
+  it('offers the dev channels on macOS and Windows but not Linux', () => {
+    for (const channel of ['hourly', 'daily', 'adhoc'] as const) {
       expect(isChannelSupportedOnPlatform(channel, 'darwin')).toBe(true)
+      expect(isChannelSupportedOnPlatform(channel, 'win32')).toBe(true)
       expect(isChannelSupportedOnPlatform(channel, 'linux')).toBe(false)
-      expect(isChannelSupportedOnPlatform(channel, 'win32')).toBe(false)
     }
+  })
+
+  // Installed signed Windows apps reject unsigned dev installers via baked-in publisherName; future builds cannot fix them.
+  // Dev apps omit the name, allowing every outbound switch including stable.
+  it('requires a manual install only when entering a dev channel from a signed Windows build', () => {
+    const manual = (runningChannel: ReleaseChannel | null, targetChannel: ReleaseChannel) =>
+      requiresManualDevChannelInstall({ platform: 'win32', runningChannel, targetChannel })
+
+    expect(manual('stable', 'adhoc')).toBe(true)
+    expect(manual('rc', 'hourly')).toBe(true)
+    expect(manual('stable', 'daily')).toBe(true)
+    // Unknown running versions conservatively assume signed and offer a working manual download.
+    expect(manual(null, 'adhoc')).toBe(true)
+
+    // Already unsigned — the updater skips verification entirely from here.
+    expect(manual('adhoc', 'hourly')).toBe(false)
+    expect(manual('hourly', 'adhoc')).toBe(false)
+    expect(manual('hourly', 'stable')).toBe(false)
+    expect(manual('adhoc', 'rc')).toBe(false)
+
+    expect(manual('stable', 'rc')).toBe(false)
+    expect(manual('rc', 'stable')).toBe(false)
+  })
+
+  // macOS dev builds remain signed/notarized, so in-app entry works.
+  it('never requires a manual install off Windows', () => {
+    for (const platform of ['darwin', 'linux'] as const) {
+      expect(
+        requiresManualDevChannelInstall({
+          platform,
+          runningChannel: 'stable',
+          targetChannel: 'adhoc'
+        })
+      ).toBe(false)
+    }
+  })
+
+  it('detects an installable artifact from the platform update manifest', () => {
+    expect(hasInstallableArtifactForPlatform('win32', ['latest.yml'])).toBe(true)
+    expect(hasInstallableArtifactForPlatform('win32', ['latest-mac.yml'])).toBe(false)
+    expect(hasInstallableArtifactForPlatform('darwin', ['latest-mac.yml'])).toBe(true)
+    expect(hasInstallableArtifactForPlatform('darwin', ['latest.yml'])).toBe(false)
+    expect(hasInstallableArtifactForPlatform('linux', ['latest-linux-arm64.yml'])).toBe(true)
+    expect(hasInstallableArtifactForPlatform('linux', [])).toBe(false)
+    // Unknown platforms should get a download-time explanation rather than an unexplained empty picker.
+    expect(hasInstallableArtifactForPlatform('freebsd', [])).toBe(true)
+  })
+
+  it('finds the directly runnable installer for a platform', () => {
+    const assets = [
+      'latest.yml',
+      'orca-windows-setup.exe',
+      'orca-macos-arm64.dmg',
+      'orca-linux.AppImage'
+    ]
+    expect(findInstallerAssetName('win32', assets)).toBe('orca-windows-setup.exe')
+    expect(findInstallerAssetName('darwin', assets)).toBe('orca-macos-arm64.dmg')
+    expect(findInstallerAssetName('linux', assets)).toBe('orca-linux.AppImage')
+    expect(findInstallerAssetName('win32', ['latest.yml'])).toBeNull()
+    expect(findInstallerAssetName('freebsd', assets)).toBeNull()
   })
 
   it('offers stable and rc on every platform', () => {
@@ -150,17 +200,7 @@ describe('release channel', () => {
     }
   })
 
-  it('accepts only known channels', () => {
-    expect(isReleaseChannel('hourly')).toBe(true)
-    expect(isReleaseChannel('adhoc')).toBe(true)
-    expect(isReleaseChannel('stable')).toBe(true)
-    expect(isReleaseChannel('nightly')).toBe(false)
-    expect(isReleaseChannel(null)).toBe(false)
-    expect(isReleaseChannel(undefined)).toBe(false)
-  })
-
-  // Why: consecutive hourlies differ only in the timestamp tail, so semver
-  // ordering must follow the clock or the picker offers them out of order.
+  // Timestamp tails distinguish consecutive hourlies; keep picker ordering chronological.
   it('sorts consecutive hourly builds newest first', () => {
     const build = (version: string): ReleaseBuild => ({
       tag: `v${version}`,
@@ -168,7 +208,8 @@ describe('release channel', () => {
       channel: 'hourly',
       name: null,
       publishedAt: null,
-      releaseUrl: `https://github.com/stablyai/orca-hourly/releases/tag/v${version}`
+      releaseUrl: `https://github.com/stablyai/orca-hourly/releases/tag/v${version}`,
+      installerUrl: null
     })
     const sorted = sortReleaseBuildsNewestFirst([
       build('1.4.160-hourly.202607280900'),
@@ -182,20 +223,25 @@ describe('release channel', () => {
     ])
   })
 
-  // Why: an hourly is cut from main and must not read as newer than the stable it
-  // is based on, or stable users would be offered it by an ordinary check.
+  // Main-derived hourlies must rank below their stable base so routine checks cannot select them.
   it('orders an hourly below its own stable release', () => {
     expect(compareAppVersions('1.4.160-hourly.202607281400', '1.4.160')).toBeLessThan(0)
   })
 
-  // Why adhoc sits at the very bottom: it is an unlanded branch, the least
-  // trustworthy thing the updater can hand anyone. Every other channel of the
-  // same base version must outrank it so no routine check ever selects one.
+  it('orders a daily below its own stable release and below hourly of the same base', () => {
+    expect(compareAppVersions('1.4.160-daily.202607281300', '1.4.160')).toBeLessThan(0)
+    expect(
+      compareAppVersions('1.4.160-daily.202607281300', '1.4.160-hourly.202607281400')
+    ).toBeLessThan(0)
+  })
+
+  // Unlanded adhoc builds rank below all same-base channels; routine updates must never select them.
   it('orders an adhoc build below every other channel of its base version', () => {
     const adhoc = '1.4.160-adhoc.20260728140533'
     expect(compareAppVersions(adhoc, '1.4.160')).toBeLessThan(0)
     expect(compareAppVersions(adhoc, '1.4.160-rc.1')).toBeLessThan(0)
     expect(compareAppVersions(adhoc, '1.4.160-hourly.202607280000')).toBeLessThan(0)
+    expect(compareAppVersions(adhoc, '1.4.160-daily.202607281300')).toBeLessThan(0)
   })
 
   it('sorts consecutive adhoc builds newest first', () => {
@@ -205,7 +251,8 @@ describe('release channel', () => {
       channel: 'adhoc',
       name: null,
       publishedAt: null,
-      releaseUrl: `https://github.com/stablyai/orca-adhoc/releases/tag/v${version}`
+      releaseUrl: `https://github.com/stablyai/orca-adhoc/releases/tag/v${version}`,
+      installerUrl: null
     })
     const sorted = sortReleaseBuildsNewestFirst([
       build('1.4.160-adhoc.20260728140502'),
@@ -216,6 +263,26 @@ describe('release channel', () => {
       '1.4.160-adhoc.20260728140541',
       '1.4.160-adhoc.20260728140502',
       '1.4.160-adhoc.20260728090000'
+    ])
+  })
+
+  it('sorts dev builds by their cut time across different base versions', () => {
+    const build = (version: string): ReleaseBuild => ({
+      tag: `v${version}`,
+      version,
+      channel: 'adhoc',
+      name: null,
+      publishedAt: null,
+      releaseUrl: `https://github.com/stablyai/orca-adhoc/releases/tag/v${version}`,
+      installerUrl: null
+    })
+    const sorted = sortReleaseBuildsNewestFirst([
+      build('1.4.207-adhoc.20260919025813'),
+      build('1.4.206-adhoc.20260919173504')
+    ])
+    expect(sorted.map((entry) => entry.version)).toEqual([
+      '1.4.206-adhoc.20260919173504',
+      '1.4.207-adhoc.20260919025813'
     ])
   })
 })

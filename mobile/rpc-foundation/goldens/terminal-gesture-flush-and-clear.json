@@ -1,0 +1,310 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "session.terminal-gesture-input",
+  "family": "session.terminal-gesture-input",
+  "namedDeltas": [],
+  "values": {
+    "0cc3e25ebff5": {
+      "bucketTokens": 63,
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": false,
+      "queuedBytes": {
+        "$rpc": "null"
+      },
+      "queuedSequences": {
+        "$rpc": "null"
+      }
+    },
+    "204da356c8b7": {
+      "status": "fulfilled",
+      "startedAt": 16,
+      "settledAt": 16,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "3dc7f55dee2a": {
+      "name": "toast",
+      "ordinal": 7,
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Terminal cleared"
+      }
+    },
+    "47c387a75ffc": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "4b5c402c0aac": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.clearBuffer"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 16
+      }
+    },
+    "4d7959cb9208": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.clearBuffer"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 16,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "clear": {
+              "cleared": true,
+              "handle": "terminal-1"
+            }
+          }
+        }
+      }
+    },
+    "70f80fc43078": {
+      "name": "terminal-subscribe",
+      "ordinal": 6,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "8224ccdb2cd8": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[<64;10;5M\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "839dec95ae1c": {
+      "status": "pending",
+      "startedAt": 16
+    },
+    "9fa6cd0b7fa0": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "a8bcca91a365": {
+      "name": "terminal-unsubscribe",
+      "ordinal": 5,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "caa6ece1bdab": {
+      "bucketTokens": 63,
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": true,
+      "queuedBytes": {
+        "$rpc": "null"
+      },
+      "queuedSequences": {
+        "$rpc": "null"
+      }
+    },
+    "d9c52be2f839": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.clearBuffer\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "terminal-gesture-flush-and-clear",
+    "checkpoints": [
+      {
+        "id": "queued",
+        "observation": {
+          "sender": ["9fa6cd0b7fa0"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "caa6ece1bdab",
+          "effects": []
+        }
+      },
+      {
+        "id": "flushing",
+        "observation": {
+          "sender": ["9fa6cd0b7fa0"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "caa6ece1bdab",
+          "effects": []
+        }
+      },
+      {
+        "id": "sent",
+        "observation": {
+          "sender": ["47c387a75ffc"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "reported",
+        "observation": {
+          "sender": ["47c387a75ffc"],
+          "payloads": ["8224ccdb2cd8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "clearing",
+        "observation": {
+          "sender": ["47c387a75ffc", "4b5c402c0aac"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "839dec95ae1c"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": []
+        }
+      },
+      {
+        "id": "cleared",
+        "observation": {
+          "sender": ["47c387a75ffc", "4d7959cb9208"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "gesture": "eb79a9b3682a",
+            "clear": "204da356c8b7"
+          },
+          "state": "0cc3e25ebff5",
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
+        }
+      }
+    ]
+  }
+}

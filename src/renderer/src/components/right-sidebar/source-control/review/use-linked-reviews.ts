@@ -1,0 +1,135 @@
+import { useMemo } from 'react'
+import type {
+  HostedReviewCreationEligibility,
+  HostedReviewInfo
+} from '../../../../../../shared/hosted-review'
+import {
+  hasPositiveHostedReviewNumberLink,
+  hasResolvableHostedReviewPushTargetLink,
+  resolveHostedReviewPushTargetForActions
+} from '../../../../../../shared/hosted-review-push-target'
+import { buildSourceControlManualReviewUrlFromContext } from './manual-review-url'
+import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
+
+export function useSourceControlLinkedReviews({
+  activePrFromQueue,
+  activeRepo,
+  activeWorktree,
+  branchName,
+  compareBaseRef,
+  hostedReview,
+  hostedReviewCreation,
+  hostedReviewEntry,
+  remoteStatus
+}: {
+  activePrFromQueue: SourceControlWorktreeContext['activePrFromQueue']
+  activeRepo: SourceControlWorktreeContext['activeRepo']
+  activeWorktree: SourceControlWorktreeContext['activeWorktree']
+  branchName: string
+  compareBaseRef: string | null
+  hostedReview: HostedReviewInfo | null
+  hostedReviewCreation: HostedReviewCreationEligibility | null
+  hostedReviewEntry: SourceControlWorktreeContext['hostedReviewEntry']
+  remoteStatus: SourceControlWorktreeContext['remoteStatus']
+}) {
+  const linkedGitHubPR = activeWorktree?.linkedPR ?? null
+  const fallbackGitHubPRNumber = linkedGitHubPR == null ? (activePrFromQueue?.number ?? null) : null
+  const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
+  const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
+  const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
+  const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
+  const manualReviewUrl = useMemo(
+    () =>
+      buildSourceControlManualReviewUrlFromContext({
+        hostedReviewProvider: hostedReview?.provider ?? null,
+        hostedReviewCreationProvider: hostedReviewCreation?.provider ?? null,
+        linkedGitHubPR,
+        fallbackGitHubPRNumber,
+        linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR,
+        baseRef: compareBaseRef,
+        branchName,
+        repoRemoteName: activeRepo?.gitRemoteIdentity?.remoteName ?? null,
+        repoRemoteUrl: activeRepo?.gitRemoteIdentity?.remoteUrl ?? null,
+        pushTarget: activeWorktree?.pushTarget ?? null,
+        upstreamName: remoteStatus?.upstreamName ?? null
+      }),
+    [
+      activeRepo?.gitRemoteIdentity?.remoteName,
+      activeRepo?.gitRemoteIdentity?.remoteUrl,
+      activeWorktree?.pushTarget,
+      branchName,
+      compareBaseRef,
+      fallbackGitHubPRNumber,
+      hostedReview?.provider,
+      hostedReviewCreation?.provider,
+      linkedAzureDevOpsPR,
+      linkedBitbucketPR,
+      linkedGitHubPR,
+      linkedGitLabMR,
+      linkedGiteaPR,
+      remoteStatus?.upstreamName
+    ]
+  )
+  const hasHostedReviewLink = hasPositiveHostedReviewNumberLink({
+    linkedGitHubPR,
+    fallbackGitHubPR: fallbackGitHubPRNumber,
+    linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR
+  })
+  // SSH repos never fetch live reviews; treating them as loading would permanently block Publish Branch.
+  const isHostedReviewStateLoading =
+    !activeRepo?.connectionId && hasHostedReviewLink && hostedReviewEntry === undefined
+  const hasResolvableReviewPushTargetLink = hasResolvableHostedReviewPushTargetLink({
+    linkedGitHubPR,
+    fallbackGitHubPR: fallbackGitHubPRNumber,
+    linkedGitLabMR
+  })
+  const {
+    canUseHostedReviewPushTarget,
+    hostedReviewStateForActions,
+    upstreamStatusForActions: remoteStatusForActions
+  } = useMemo(
+    () =>
+      resolveHostedReviewPushTargetForActions({
+        hasHostedReviewLink,
+        hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink,
+        hostedReviewState: hostedReview?.state ?? null,
+        isHostedReviewStateLoading,
+        pushTarget: activeWorktree?.pushTarget,
+        upstreamStatus: remoteStatus,
+        branchName
+      }),
+    [
+      activeWorktree?.pushTarget,
+      branchName,
+      hasHostedReviewLink,
+      hasResolvableReviewPushTargetLink,
+      hostedReview?.state,
+      isHostedReviewStateLoading,
+      remoteStatus
+    ]
+  )
+
+  return {
+    canUseHostedReviewPushTarget,
+    fallbackGitHubPRNumber,
+    hasHostedReviewLink,
+    hasResolvableReviewPushTargetLink,
+    hostedReviewStateForActions,
+    isHostedReviewStateLoading,
+    linkedAzureDevOpsPR,
+    linkedBitbucketPR,
+    linkedGitHubPR,
+    linkedGitLabMR,
+    linkedGiteaPR,
+    manualReviewUrl,
+    remoteStatusForActions
+  }
+}
+
+export type SourceControlLinkedReviews = ReturnType<typeof useSourceControlLinkedReviews>

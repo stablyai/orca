@@ -12,12 +12,21 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
-import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
-import { resolveGitHubPRMergeMethods } from '../../../../shared/github-pr-merge-methods'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { resolveGitHubPRMergeMethods } from '../../../../shared/github/pull-request-merge-methods'
+import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
+import {
+  isGitHubPRStackMergeQueueRequired,
+  resolveGitHubPRStackMergeDecision
+} from '../../../../shared/github/pull-request-stack-merge'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
+import { getDeleteStateForWorktreeHost } from '../sidebar/worktree-delete-state-host-match'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
 import {
   ClosedReviewActions,
+  DraftReviewActions,
   HostedReviewActionError,
   MergedReviewActions
 } from './HostedReviewStateActions'
@@ -28,6 +37,9 @@ import {
   RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
 } from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
+import { getGitHubPRStackMergeBlocker, getGitHubPRStackMergeScope } from './github-pr-stack-merge'
 
 export default function HostedReviewActions({
   review,
@@ -42,17 +54,39 @@ export default function HostedReviewActions({
   worktree: Worktree
   onRefreshReview: () => Promise<void>
 }): React.JSX.Element | null {
+  const languageRevision = useUiLanguageRevision()
   const isDeletingWorktree = useAppStore(
-    (s) => s.deleteStateByWorktreeId[worktree.id]?.isDeleting ?? false
+    (s) => getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)?.isDeleting ?? false
   )
   const isGitLab = review.provider === 'gitlab'
-  const shortLabel = isGitLab ? 'MR' : 'PR'
-  const reviewLabel = isGitLab ? 'merge request' : 'pull request'
+  const { shortLabel, reviewLabel } = localizedHostedReviewCopy(isGitLab ? 'gitlab' : 'github')
+  const stackMergeScope = useMemo(
+    () => (githubPR?.stack ? getGitHubPRStackMergeScope(githubPR.stack, review.number) : null),
+    [githubPR?.stack, review.number]
+  )
+  const stackUsesMergeQueue = isGitHubPRStackMergeQueueRequired(
+    review.mergeQueueRequired,
+    githubPR?.mergeQueueRequired
+  )
+  const stackMergeLabel =
+    stackMergeScope && stackUsesMergeQueue
+      ? stackMergeScope.count === 1
+        ? translate(
+            'auto.components.right.sidebar.HostedReviewActions.9a41a687b7',
+            'Queue through #{{pr}} · {{count}} PR',
+            { pr: review.number, count: stackMergeScope.count }
+          )
+        : translate(
+            'auto.components.right.sidebar.HostedReviewActions.38a1bccb14',
+            'Queue through #{{pr}} · {{count}} PRs',
+            { pr: review.number, count: stackMergeScope.count }
+          )
+      : stackMergeScope?.label
   const mergePresentation = useMemo(() => {
     if (isGitLab) {
       return { ...presentGitLabMRMergeState(review), autoMergeAction: null }
     }
-    return presentGitHubPRMergeState({
+    const presentation = presentGitHubPRMergeState({
       ...githubPR,
       state: review.state,
       mergeable: review.mergeable,
@@ -63,17 +97,54 @@ export default function HostedReviewActions({
       autoMergeAllowed: review.autoMergeAllowed,
       mergeQueueRequired: review.mergeQueueRequired
     })
-  }, [githubPR, isGitLab, review])
+    if (!githubPR?.stack || !stackMergeScope) {
+      return presentation
+    }
+    const stackBlocker = getGitHubPRStackMergeBlocker(stackMergeScope)
+    return {
+      ...presentation,
+      label: stackMergeLabel ?? stackMergeScope.label,
+      tooltip:
+        stackBlocker ??
+        (stackUsesMergeQueue
+          ? translate(
+              'auto.components.right.sidebar.HostedReviewActions.3de88351c5',
+              'GitHub will add this pull request and every pull request below it to the merge queue.'
+            )
+          : translate(
+              'auto.components.right.sidebar.HostedReviewActions.a32fe6dba6',
+              'GitHub will merge this pull request and every pull request below it in the stack.'
+            )),
+      directMergeAvailable: resolveGitHubPRStackMergeDecision({
+        stack: githubPR.stack,
+        reviewMergeQueueRequired: review.mergeQueueRequired,
+        stackMergeQueueRequired: githubPR.mergeQueueRequired,
+        directMergeAvailable: presentation.directMergeAvailable
+      }).directMergeAvailable,
+      autoMergeAction: null
+    }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [
+    githubPR,
+    isGitLab,
+    review,
+    stackMergeLabel,
+    stackMergeScope,
+    stackUsesMergeQueue,
+    languageRevision
+  ])
   const mergeMethods = useMemo(
     () => resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
     [githubPR?.mergeMethodSettings, isGitLab]
   )
   const {
     merging,
+    readying,
     stateUpdating,
     actionError,
     handleMerge,
     handleAutoMerge,
+    handleMarkReadyForReview,
     handleCloseReview,
     handleReopenReview
   } = useHostedReviewActions({
@@ -97,10 +168,24 @@ export default function HostedReviewActions({
   const menuDisabled = merging || isUpdatingReviewState
 
   const handleDeleteWorktree = useCallback(() => {
-    // Why: route every UI delete entry point through the shared funnel so
-    // skip-confirm, main-worktree, and child-workspace safeguards cannot drift.
-    runWorktreeDelete(worktree.id)
-  }, [worktree.id])
+    // Share the delete funnel so skip-confirm, main-worktree, and child-workspace safeguards cannot drift.
+    runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
+  }, [worktree.hostId, worktree.id])
+
+  if (review.state === 'draft' && (review.provider === 'github' || review.provider === 'gitlab')) {
+    return (
+      <DraftReviewActions
+        shortLabel={shortLabel}
+        reviewLabel={reviewLabel}
+        isGitLab={isGitLab}
+        readying={readying}
+        stateUpdating={stateUpdating}
+        actionError={actionError}
+        onMarkReadyForReview={() => void handleMarkReadyForReview()}
+        onCloseReview={() => void handleCloseReview()}
+      />
+    )
+  }
 
   if (review.state === 'open') {
     return (
@@ -109,8 +194,7 @@ export default function HostedReviewActions({
           <div className={RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS}>
             <Tooltip>
               <TooltipTrigger asChild>
-                {/* Why: wrapping in a <span> so the tooltip trigger receives pointer
-                  events even when the merge button inside is disabled. */}
+                {/* The span receives tooltip pointer events when the merge button is disabled. */}
                 <span
                   className={cn(
                     'inline-flex min-w-0 max-w-full shrink',
@@ -140,12 +224,23 @@ export default function HostedReviewActions({
                     )}
                     <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
                       {merging
-                        ? translate(
-                            'auto.components.right.sidebar.HostedReviewActions.d2ca293f3d',
-                            'Working...'
-                          )
+                        ? stackMergeScope
+                          ? stackUsesMergeQueue
+                            ? translate(
+                                'auto.components.right.sidebar.HostedReviewActions.73e0e1819d',
+                                'Queueing stack...'
+                              )
+                            : translate(
+                                'auto.components.right.sidebar.HostedReviewActions.e555a41d32',
+                                'Merging stack...'
+                              )
+                          : translate(
+                              'auto.components.right.sidebar.HostedReviewActions.d2ca293f3d',
+                              'Working...'
+                            )
                         : mergePresentation.directMergeAvailable
-                          ? mergeMethods.defaultLabel
+                          ? (stackMergeLabel ??
+                            getPullRequestMergeMethodLabel(mergeMethods.defaultMethod))
                           : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
                     </span>
                   </Button>
@@ -198,16 +293,17 @@ export default function HostedReviewActions({
                     <DropdownMenuSeparator />
                   </>
                 )}
-                {mergeMethods.methods.map(({ method, label }) => (
-                  <DropdownMenuItem
-                    key={method}
-                    disabled={directMergeDisabled}
-                    onSelect={() => void handleMerge(method)}
-                  >
-                    <GitMerge className="size-3.5" />
-                    {label}
-                  </DropdownMenuItem>
-                ))}
+                {(!stackMergeScope || !stackUsesMergeQueue) &&
+                  mergeMethods.methods.map((method) => (
+                    <DropdownMenuItem
+                      key={method}
+                      disabled={directMergeDisabled}
+                      onSelect={() => void handleMerge(method)}
+                    >
+                      <GitMerge className="size-3.5" />
+                      {getPullRequestMergeMethodLabel(method)}
+                    </DropdownMenuItem>
+                  ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   variant="destructive"
@@ -216,10 +312,10 @@ export default function HostedReviewActions({
                 >
                   <GitPullRequestClosed className="size-3.5" />
                   {translate(
-                    'auto.components.right.sidebar.HostedReviewActions.4d5fb5a284',
-                    'Close'
-                  )}{' '}
-                  {shortLabel}
+                    'auto.components.right.sidebar.HostedReviewActions.closeReview',
+                    'Close {{review}}',
+                    { review: shortLabel }
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -243,6 +339,7 @@ export default function HostedReviewActions({
   if (review.state === 'merged') {
     return (
       <MergedReviewActions
+        isMainWorktree={worktree.isMainWorktree}
         isDeletingWorktree={isDeletingWorktree}
         onDeleteWorktree={handleDeleteWorktree}
       />

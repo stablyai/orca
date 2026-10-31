@@ -1,13 +1,9 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import path from 'node:path'
+import { buildPosixFallbackPathPrelude } from '../../shared/posix-version-manager-bin-dirs'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
-import {
-  buildWslLoginShellCommand,
-  escapeWslShCommandForWindows
-} from '../../shared/wsl-login-shell-command'
+import { runWslProcess } from '../wsl/wsl-runner'
 
-const execFileAsync = promisify(execFile)
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
 const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
 
@@ -24,13 +20,16 @@ export async function detectWslCommandsOnPath(
     return new Set()
   }
 
-  const commandList = uniqueCommands.map(shellQuote).join(' ')
-  const lookupScript = buildPosixCommandPathLookupScript({
-    kind: 'shell-variable',
-    name: 'cmd'
-  })
-  // Newlines keep the loop valid in zsh and every POSIX shell used here.
+  const commandList = uniqueCommands.map(quotePosixShell).join(' ')
+  const lookupScript = buildPosixCommandPathLookupScript(
+    { kind: 'shell-variable', name: 'cmd' },
+    // Skip Windows mounts while walking so an interop binary cannot hide a later guest install (#9725).
+    { skipWindowsMountDirs: true }
+  )
+  // Newlines keep the loop valid in every POSIX shell used here.
   const script = [
+    // Reuse the common version-manager fallback and executable lookup, including directory rejection.
+    buildPosixFallbackPathPrelude(),
     `for cmd in ${commandList}; do`,
     lookupScript,
     'if [ -n "$resolved" ]; then',
@@ -40,63 +39,22 @@ export async function detectWslCommandsOnPath(
   ].join('\n')
 
   try {
-    // Why: WSL cold-start plus many parallel wsl.exe probes can timeout and
-    // cache an empty result. One probe through the distro user's login shell
-    // matches zsh/bash PATH customizations from their normal terminals.
-    const { stdout } = await execWslAgentDetectionCommand(wslTarget, script)
-    return parseWslDetectedCommands(stdout)
+    // Use cached login PATH without shell startup banners.
+    const result = await runWslProcess({
+      distro: wslTarget.distro,
+      loginPath: 'preferred',
+      script,
+      // POSIX `command -v` loop; declared because the payload is opaque here.
+      shell: 'sh',
+      timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
+    })
+    // Timeout/nonzero results may contain partial stdout, not a complete inventory.
+    if (result.timedOut || result.code !== 0) {
+      return new Set()
+    }
+    return parseWslDetectedCommands(result.stdout)
   } catch {
     return new Set()
-  }
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
-}
-
-async function execWslAgentDetectionCommand(
-  target: WslPreflightTarget,
-  command: string
-): Promise<{ stdout: string; stderr: string }> {
-  const distroArgs = target.distro ? ['-d', target.distro] : []
-  const commandPromise = execFileAsync(
-    'wsl.exe',
-    [
-      ...distroArgs,
-      '--',
-      'sh',
-      '-c',
-      escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
-    ],
-    {
-      encoding: 'utf-8',
-      timeout: WSL_AGENT_DETECTION_TIMEOUT_MS
-    }
-  ) as Promise<{ stdout: string; stderr: string }>
-  return withWslAgentDetectionTimeout(commandPromise)
-}
-
-async function withWslAgentDetectionTimeout<T>(commandPromise: Promise<T>): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | null = null
-  try {
-    return await Promise.race([
-      commandPromise,
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => {
-          const error = Object.assign(new Error('Timed out running wsl.exe'), {
-            code: 'ETIMEDOUT'
-          })
-          reject(error)
-        }, WSL_AGENT_DETECTION_TIMEOUT_MS)
-        if (typeof timeout.unref === 'function') {
-          timeout.unref()
-        }
-      })
-    ])
-  } finally {
-    if (timeout) {
-      clearTimeout(timeout)
-    }
   }
 }
 
@@ -114,8 +72,7 @@ function parseWslDetectedCommands(stdout: string): Set<string> {
     }
     const command = payload.slice(0, separatorIndex)
     const resolvedPath = payload.slice(separatorIndex + 1)
-    // Why: a real guest executable always resolves to a POSIX-absolute path, so
-    // a Windows-style C:\ path here is spoofed/non-guest output, not an install.
+    // Guest executables resolve to POSIX-absolute paths; reject Windows-style output.
     if (path.posix.isAbsolute(resolvedPath)) {
       found.add(command)
     }

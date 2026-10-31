@@ -1,9 +1,8 @@
-import type { PRInfo, IssueInfo, CheckStatus, PRCheckDetail } from '../../shared/types'
+import type { PRCheckDetail } from '../../shared/github/check-types'
+import type { CheckStatus, IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
 import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
 
-// ── REST API check-runs mapping ───────────────────────────────────────
-// The REST check-runs endpoint returns separate status + conclusion fields
-// (unlike gh pr checks which merges them into a single "state" string).
+// REST check runs separate status/conclusion; gh pr checks combines them into one state.
 
 export function mapCheckRunRESTStatus(status: string): PRCheckDetail['status'] {
   const s = status?.toLowerCase()
@@ -41,8 +40,7 @@ export function mapCheckRunRESTConclusion(
   return conclusionMap[conclusion.toLowerCase()] ?? null
 }
 
-// ── REST API commit status mapping ──────────────────────────────────────
-// Legacy Jenkins/Prow integrations report commit statuses, not check runs.
+// Legacy integrations report commit statuses instead of check runs.
 
 export function mapCommitStatusRESTStatus(state: string): PRCheckDetail['status'] {
   const s = state?.toLowerCase()
@@ -62,8 +60,6 @@ export function mapCommitStatusRESTConclusion(state: string): PRCheckDetail['con
   }
   return null
 }
-
-// ── gh pr checks mapping (single "state" string) ─────────────────────
 
 export function mapCheckStatus(state: string): PRCheckDetail['status'] {
   const s = state?.toUpperCase()
@@ -122,9 +118,7 @@ export function mapPRState(state: string, isDraft?: boolean): PRInfo['state'] {
   return 'open'
 }
 
-// ── Issue mapping ────────────────────────────────────────────────────
-// REST API returns html_url + lowercase state; gh issue view returns url + mixed-case state.
-// This helper normalises both shapes into IssueInfo.
+// Accept REST html_url/lowercase state and gh url/mixed-case state.
 
 export function mapIssueInfo(data: {
   number: number
@@ -133,13 +127,15 @@ export function mapIssueInfo(data: {
   url?: string
   html_url?: string
   labels?: { name: string }[]
+  body?: string | null
 }): IssueInfo {
   return {
     number: data.number,
     title: data.title,
     state: data.state?.toLowerCase() === 'open' ? 'open' : 'closed',
     url: data.html_url ?? data.url ?? '',
-    labels: (data.labels || []).map((l) => l.name)
+    labels: (data.labels || []).map((l) => l.name),
+    ...(typeof data.body === 'string' ? { description: data.body } : {})
   }
 }
 

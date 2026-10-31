@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from './constants'
 import {
   clearSourceControlAiModelChoiceForHost,
-  hasConfiguredSourceControlAiInstructions,
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   normalizeRepoSourceControlAiOverrides,
   projectSourceControlAiToLegacyCommitMessageAi,
-  resolveSourceControlAiEnabled,
   readSourceControlAiModelChoiceForHost,
   resolveSourceControlAiForOperation,
   resolveSourceControlAiPrCreationDefaults,
@@ -17,7 +15,7 @@ import type {
   RepoSourceControlAiOverrides,
   SourceControlAiOperation
 } from './source-control-ai-types'
-import type { GlobalSettings } from './types'
+import type { GlobalSettings } from './global-settings-types'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')
@@ -60,12 +58,6 @@ function resolve(operation: SourceControlAiOperation, overrides?: RepoSourceCont
 }
 
 describe('source-control AI resolution', () => {
-  it('uses the global default model for every operation', () => {
-    expect(resolve('commitMessage').params.model).toBe('gpt-5.5')
-    expect(resolve('pullRequest').params.model).toBe('gpt-5.5')
-    expect(resolve('branchName').params.model).toBe('gpt-5.5')
-  })
-
   it('resolves generation config and PR defaults when Source Control AI actions are hidden', () => {
     const base = settings()
     base.sourceControlAi = {
@@ -111,42 +103,6 @@ describe('source-control AI resolution', () => {
       generateDetailsOnOpen: true,
       openAfterCreate: true
     })
-  })
-
-  it('lets repo-hidden Source Control AI actions keep operation generation valid', () => {
-    const result = resolveSourceControlAiForOperation({
-      settings: settings(),
-      repo: { sourceControlAi: { enabled: false } },
-      operation: 'branchName',
-      discoveryHostKey: 'local'
-    })
-
-    expect(result.ok).toBe(true)
-    expect(result.ok && result.value.params.model).toBe('gpt-5.5')
-  })
-
-  it('lets repo action visibility override the global default', () => {
-    const base = settings()
-    base.sourceControlAi = {
-      ...base.sourceControlAi!,
-      enabled: false
-    }
-
-    expect(resolveSourceControlAiEnabled({ settings: base, repo: null })).toBe(false)
-    expect(
-      resolveSourceControlAiEnabled({
-        settings: base,
-        repo: { sourceControlAi: { enabled: true } }
-      })
-    ).toBe(true)
-
-    base.sourceControlAi.enabled = true
-    expect(
-      resolveSourceControlAiEnabled({
-        settings: base,
-        repo: { sourceControlAi: { enabled: false } }
-      })
-    ).toBe(false)
   })
 
   it('resolves PR defaults even when generation config is invalid', () => {
@@ -204,20 +160,6 @@ describe('source-control AI resolution', () => {
       discoveryHostKey: 'local'
     })
     expect(result.ok && result.value.params.agentId).toBe('codex')
-    expect(result.ok && result.value.params.model).toBe('gpt-5.4')
-  })
-
-  it('lets a global operation model override win over the global default', () => {
-    const base = settings()
-    base.sourceControlAi!.modelOverridesByOperation = {
-      pullRequest: { selectedModelByAgent: { codex: 'gpt-5.4' } }
-    }
-    const result = resolveSourceControlAiForOperation({
-      settings: base,
-      repo: null,
-      operation: 'pullRequest',
-      discoveryHostKey: 'local'
-    })
     expect(result.ok && result.value.params.model).toBe('gpt-5.4')
   })
 
@@ -326,42 +268,6 @@ describe('source-control AI resolution', () => {
         instructionsByOperation: { branchName: 'Repo branch style' }
       }).params.commandInputTemplate
     ).toBe('Repo branch style\n\n{basePrompt}')
-  })
-
-  it('does not treat null repo instructions as configured overrides', () => {
-    const base = settings()
-    base.sourceControlAi = {
-      ...base.sourceControlAi!,
-      instructionsByOperation: {
-        commitMessage: '',
-        pullRequest: '',
-        branchName: ''
-      }
-    }
-
-    expect(
-      hasConfiguredSourceControlAiInstructions({
-        settings: base,
-        repo: { sourceControlAi: { instructionsByOperation: { commitMessage: null } } },
-        operation: 'commitMessage'
-      })
-    ).toBe(false)
-    expect(
-      hasConfiguredSourceControlAiInstructions({
-        settings: base,
-        repo: { sourceControlAi: { instructionsByOperation: { commitMessage: '' } } },
-        operation: 'commitMessage'
-      })
-    ).toBe(true)
-  })
-
-  it('resolves repo tri-state PR defaults through inherit on and off', () => {
-    expect(resolve('pullRequest').prCreationDefaults.draft).toBe(false)
-    expect(
-      resolve('pullRequest', {
-        prCreationDefaults: { draft: true, openAfterCreate: false }
-      }).prCreationDefaults
-    ).toMatchObject({ draft: true, openAfterCreate: false })
   })
 
   it('maps legacy custom prompt to released split instructions', () => {

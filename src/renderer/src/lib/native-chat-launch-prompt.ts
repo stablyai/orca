@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 export type NativeChatLaunchPrompt = {
   tabId: string
@@ -8,11 +8,7 @@ export type NativeChatLaunchPrompt = {
   failed?: boolean
 }
 
-/**
- * Launch-time context delivered as an UNSENT draft (e.g. a linked issue URL
- * prefilled into the agent TUI's input buffer). The chat composer adopts it as
- * its own draft so the context isn't invisible in the GUI view.
- */
+/** Keep unsent launch context as a composer draft so TUI-prefilled linked context remains visible in chat. */
 export type NativeChatLaunchDraft = {
   tabId: string
   agent: TuiAgent

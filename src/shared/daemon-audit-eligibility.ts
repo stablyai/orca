@@ -1,5 +1,7 @@
 export const DAEMON_AUDIT_STATE_VALUES = ['present', 'gone', 'unknown'] as const
 
+export const DAEMON_AUDIT_GENERATION_ROLE_VALUES = ['current', 'legacy'] as const
+
 export const DAEMON_AUDIT_TRIGGER_VALUES = [
   'inventory_answered',
   'inventory_failed',

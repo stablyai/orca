@@ -34,18 +34,13 @@ export function hasInteractiveActiveGitStatusConsumer(args: ActiveGitStatusPolli
   if (!args.activeWorktreeId || !args.worktreePath) {
     return false
   }
-  if (
-    args.rightSidebarOpen &&
-    (args.rightSidebarTab === 'source-control' ||
-      (args.rightSidebarTab === 'explorer' && args.rightSidebarExplorerView !== 'search') ||
-      args.rightSidebarTab === 'checks')
-  ) {
-    return true
-  }
-  if ((args.openFiles ?? []).some((file) => file.worktreeId === args.activeWorktreeId)) {
-    return true
-  }
-  return false
+  return (
+    (args.rightSidebarOpen &&
+      (args.rightSidebarTab === 'source-control' ||
+        (args.rightSidebarTab === 'explorer' && args.rightSidebarExplorerView !== 'search') ||
+        args.rightSidebarTab === 'checks')) ||
+    (args.openFiles ?? []).some((file) => file.worktreeId === args.activeWorktreeId)
+  )
 }
 
 export function shouldPollActiveGitStatus(args: ActiveGitStatusPollingArgs): boolean {
@@ -55,7 +50,6 @@ export function shouldPollActiveGitStatus(args: ActiveGitStatusPollingArgs): boo
   if (hasInteractiveActiveGitStatusConsumer(args)) {
     return true
   }
-  // Why: macOS app-container paths can trigger the "data from other apps"
-  // prompt. Keep terminal-only workspace switching from passively probing them.
+  // macOS app-container probes can request other-app data access; terminal-only switches must not trigger them passively.
   return !isMacAppDataPath(args.worktreePath, args.userAgent)
 }

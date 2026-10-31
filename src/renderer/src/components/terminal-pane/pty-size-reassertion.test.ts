@@ -119,8 +119,9 @@ describe('createPtySizeReassertion', () => {
     expect(forwardResize).toHaveBeenCalledWith(82, 30)
   })
 
-  it('skips remote and suppressed PTYs', async () => {
+  it('reasserts remote PTYs without pretending to have applied-size readback', async () => {
     const getAppliedSize = vi.fn(async () => ({ cols: 120, rows: 30 }))
+    const remoteForwardResize = vi.fn()
     const remote = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'remote:terminal-1',
@@ -129,8 +130,18 @@ describe('createPtySizeReassertion', () => {
       fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize,
-      forwardResize: vi.fn()
+      forwardResize: remoteForwardResize
     })
+    remote.request()
+    await flushAsyncTicks()
+
+    expect(remoteForwardResize).toHaveBeenCalledWith(82, 30)
+    expect(getAppliedSize).not.toHaveBeenCalled()
+  })
+
+  it('skips suppressed PTYs', async () => {
+    const getAppliedSize = vi.fn(async () => ({ cols: 120, rows: 30 }))
+    const suppressedForwardResize = vi.fn()
     const suppressed = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -139,13 +150,13 @@ describe('createPtySizeReassertion', () => {
       fitAndRun: (continuation) => continuation(),
       getTerminalDimensions: () => ({ cols: 82, rows: 30 }),
       getAppliedSize,
-      forwardResize: vi.fn()
+      forwardResize: suppressedForwardResize
     })
 
-    remote.request()
     suppressed.request()
     await flushAsyncTicks()
 
+    expect(suppressedForwardResize).not.toHaveBeenCalled()
     expect(getAppliedSize).not.toHaveBeenCalled()
   })
 
@@ -221,10 +232,7 @@ describe('createPtySizeReassertion', () => {
   })
 
   it('suppresses a stale forward when xterm was refit while the read was in flight', async () => {
-    // Regression: a reveal-time fit (or snapshot-restore xterm resize) changes
-    // the grid after the target was captured, with no second request() to
-    // guard it. The resolved callback must not resize the PTY back to the
-    // pre-reveal grid.
+    // Refits can change xterm mid-read without another request; never forward the captured pre-reveal grid over that newer layout.
     let dims = { cols: 80, rows: 24 }
     let resolveRead: (value: { cols: number; rows: number }) => void = () => {}
     const getAppliedSize = vi
@@ -292,9 +300,7 @@ describe('createPtySizeReassertion', () => {
   })
 
   it('keeps a single read in flight and converges when the grid oscillates across resolves', async () => {
-    // Why: a flapping layout (competing fitters) must not amplify into more
-    // than one concurrent readback, and the re-run chain must stop as soon as
-    // the grid holds still for one read.
+    // Layout flapping may queue rereads but must keep one in flight and stop once a read observes a stable grid.
     const grids = [
       { cols: 80, rows: 24 },
       { cols: 145, rows: 78 },
@@ -324,8 +330,7 @@ describe('createPtySizeReassertion', () => {
     reassertion.request({ fit: false })
     await flushAsyncTicks(20)
 
-    // One re-run per moved-grid flight, then convergence: applied 100x40
-    // matches the settled grid, so nothing is forwarded.
+    // Each moved-grid read triggers one rerun; matching applied size ends the chain without forwarding.
     expect(getAppliedSize).toHaveBeenCalledTimes(4)
     expect(forwardResize).not.toHaveBeenCalled()
   })

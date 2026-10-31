@@ -1,33 +1,35 @@
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
+import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
+import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
-  isSnapshotBackedTerminalPty,
   selectIdsBeyondHotRetain,
   type ColdParkRetainCandidate,
   type TerminalColdParkPolicyOverrides
 } from './terminal-hidden-view-parking'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 
-// Why these sizes: a retained hidden pane costs a measured ~2.5MB of V8 heap
-// at the 5k-row default scrollback and ~19MB at 50k (plus per-pane queues),
-// not the ~4-5MB per WORKTREE the warm cap assumed — so un-parkable worktrees
-// (pty classes parking can't restore) get a retention budget: at most 12 stay
-// mounted while hidden and none past 45 minutes, evicted least-recently-hidden
-// first via force-park. The TTL is absolute: the last-active exemption bounds
-// the cap, never the clock.
-// NOT covered by this bound: eviction-exempt TABS (isEvictionExemptTerminalPty
-// — live local ptys a remount would respawn, orphaning the shell). Their panes
-// stay mounted through a force-park at any age, so a fleet-wide daemon
-// fail-open can leave the budget freeing nothing; Terminal.tsx logs that
-// degenerate case rather than pretending the bound held.
-// Also NOT covered: per-pane scrollback size. Hidden-pane scrollback demotion
-// was intentionally removed — the bound is worktree count + TTL only, so a
-// spared worktree (last-active, exempt tabs) can hold full 50k-row scrollback
-// indefinitely. Accepted tradeoff: high-scrollback users rely on unmount
-// eviction, not demotion.
-export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 12
-export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 45 * 60_000
+// Budget hidden worktrees by count and absolute TTL: measured pane heap grows with scrollback. Last-active exempts only the cap; unrestorable live tabs must remain mounted, and scrollback depth is unbounded, so force-park may free nothing.
+export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 4
+export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 15 * 60_000
+
+export function createTerminalWorktreeTopologyProjection(
+  onInspectBucket?: (worktreeId: string) => void
+) {
+  return createWorktreeTabBucketProjection<TerminalTab, TerminalTab>({
+    projectTab: (tab) => tab,
+    isSameProjectedTab: (previousTab, nextTab) =>
+      previousTab.id === nextTab.id &&
+      previousTab.ptyId === nextTab.ptyId &&
+      previousTab.worktreeId === nextTab.worktreeId &&
+      previousTab.pendingActivationSpawn === nextTab.pendingActivationSpawn &&
+      previousTab.generation === nextTab.generation &&
+      previousTab.startupCwd === nextTab.startupCwd,
+    onInspectBucket
+  })
+}
 
 export function hasPendingRetentionSpawnWork(
   tab: Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>,
@@ -36,26 +38,77 @@ export function hasPendingRetentionSpawnWork(
   if (pendingStartupByTabId[tab.id] !== undefined) {
     return true
   }
-  // Why: paired mirrors never spawn locally; their host-backed PTY id proves
-  // activation's sort-suppression residue cannot represent unfinished work.
+  // Paired mirrors never spawn locally; their host PTY proves activation-suppression residue is finished.
   return Boolean(tab.pendingActivationSpawn && (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId)))
 }
 
-// Why: an eviction-exempt pty is a live local one a remount could not reattach
-// (daemon-fail-open separator-less ids, ptys minted under another worktree) — a
-// fresh spawn would orphan the live shell. Its TAB keeps its mounted pane when
-// the worktree force-parks (per-tab exclusion, mirroring Activity portals).
-// Per-PTY, not per-tab: the coverage veto that makes a worktree a retention
-// candidate walks every split pane, so the exemption must too (see
-// isEvictionExemptTerminalTab).
+// Unrestorable live local PTYs keep their tab mounted through force-park; check every split, matching watcher coverage.
 export function isEvictionExemptTerminalPty(
   ptyId: string | null | undefined,
   worktreeId: string
 ): boolean {
-  if (!ptyId || isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
-    return false
+  return classifyEvictionExemptTerminalPty(ptyId, worktreeId) !== null
+}
+
+export type EvictionExemptTerminalPtyRoute = 'fail-open' | 'foreign-worktree' | 'capability-unknown'
+
+// Route counts distinguish daemon fail-open from unknown snapshot capability when all-exempt force-park frees nothing.
+export function classifyEvictionExemptTerminalPty(
+  ptyId: string | null | undefined,
+  worktreeId: string
+): EvictionExemptTerminalPtyRoute | null {
+  if (!ptyId || isRemoteExecutionHostPtyId(ptyId)) {
+    return null
   }
-  return !isSnapshotBackedTerminalPty(ptyId, worktreeId)
+  const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+  if (separatorIdx === -1) {
+    return 'fail-open'
+  }
+  if (ptyId.slice(0, separatorIdx) !== worktreeId) {
+    return 'foreign-worktree'
+  }
+  return terminalProviderHasAuthoritativeSnapshot(ptyId) ? null : 'capability-unknown'
+}
+
+export type EvictionExemptRouteCounts = {
+  failOpen: number
+  foreignWorktree: number
+  capabilityUnknown: number
+  /** Tab-level pty classifies clean, so the exemption came from a split pane's pty. */
+  splitPane: number
+}
+
+export function countEvictionExemptTabRoutes(
+  tabs: readonly Pick<TerminalTab, 'ptyId'>[],
+  worktreeId: string
+): EvictionExemptRouteCounts {
+  const counts: EvictionExemptRouteCounts = {
+    failOpen: 0,
+    foreignWorktree: 0,
+    capabilityUnknown: 0,
+    splitPane: 0
+  }
+  for (const tab of tabs) {
+    switch (classifyEvictionExemptTerminalPty(tab.ptyId, worktreeId)) {
+      case 'fail-open':
+        counts.failOpen += 1
+        break
+      case 'foreign-worktree':
+        counts.foreignWorktree += 1
+        break
+      case 'capability-unknown':
+        counts.capabilityUnknown += 1
+        break
+      case null:
+        counts.splitPane += 1
+        break
+    }
+  }
+  return counts
+}
+
+export function formatEvictionExemptRouteCounts(counts: EvictionExemptRouteCounts): string {
+  return `routes=fail-open:${counts.failOpen},foreign:${counts.foreignWorktree},capability:${counts.capabilityUnknown},split-pane:${counts.splitPane}`
 }
 
 export type TerminalWorktreeRetentionCandidate = {
@@ -64,9 +117,7 @@ export type TerminalWorktreeRetentionCandidate = {
   isVisible: boolean
   shouldMeasureHiddenWorktree: boolean
   hasActivityTerminalPortal: boolean
-  /** Post-measure cool-down (see TerminalWorktreeColdParkCandidate): force-park
-   *  must not re-engage right after a measure window ends, but hiddenSince —
-   *  and with it the TTL/ranking clock — stays untouched. */
+  /** Measure preserves TTL/rank age; cool-down prevents force-park immediately after its lease ends. */
   parkCooldownUntilMs?: number | null
   /** Ordinary cold parking can evict this worktree (park-eligible AND watcher-coverable) — the warm cap bounds it already. */
   ordinaryParkingCovers: boolean
@@ -74,20 +125,7 @@ export type TerminalWorktreeRetentionCandidate = {
   hasPendingSpawnWork: boolean
 }
 
-/**
- * Retention budget over the worktrees ordinary parking can never evict: any
- * hidden un-parkable worktree beyond the retention limit or TTL force-parks —
- * panes unmount, watchers cover the tabs whose transport exists, and reveal
- * restores per pty class (the app-restart experience). Eviction-exempt tabs
- * do NOT veto the worktree: they keep their mounted panes via the per-tab
- * exclusion (Activity-portal pattern) while sibling tabs unmount, so one
- * exempt tab can no longer pin co-located remote-runtime tabs forever.
- * Ranking reuses the hot-retain machinery, so deterministic ties hold here too,
- * and the verdict changes only at deadlines or on real state transitions (no
- * new flip-loop inputs). The last-active exemption it carries spares one
- * worktree from the CAP only — the TTL below overrides it, else a lone hidden
- * un-parkable worktree would stay mounted for the whole session.
- */
+/** Force-park hidden worktrees ordinary parking cannot evict when over count/TTL. Exempt tabs stay mounted while siblings unmount. Reuse deterministic warm ranking, but override last-active’s clock exemption so TTL remains absolute. */
 export function selectRetentionForceParkedTerminalWorktrees(
   args: {
     worktrees: readonly TerminalWorktreeRetentionCandidate[]
@@ -122,9 +160,7 @@ export function selectRetentionForceParkedTerminalWorktrees(
     hotRetainMs: retentionTtlMs,
     hotRetainLimit: args.retentionLimit ?? TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT
   })
-  // Why re-applied here: selectIdsBeyondHotRetain spares the last-active id from
-  // its clock too, which is right for the warm cap (instant return after a
-  // meeting) but makes "none past 45 minutes" false for a lone hidden worktree.
+  // Warm ranking spares last-active from time too; reapply absolute retention TTL to avoid indefinite mounting.
   for (const candidate of candidates) {
     if (args.nowMs - candidate.hiddenSinceMs >= retentionTtlMs) {
       forceParkedIds.add(candidate.id)
@@ -133,8 +169,7 @@ export function selectRetentionForceParkedTerminalWorktrees(
   return forceParkedIds
 }
 
-// Why exported: an all-exempt force-park frees nothing, and that degenerate
-// case is only observable if the empty selection is a value the host can test.
+// Expose empty selections so all-exempt force-parks that free nothing remain observable/testable.
 export function selectForceParkEvictableTabIds<T extends { id: string }>(
   tabs: readonly T[],
   isExempt: (tab: T) => boolean

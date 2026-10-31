@@ -130,6 +130,32 @@ describe('mapGitLabIssueInfo', () => {
 })
 
 describe('mapMRInfo', () => {
+  it('settles mergeable manual pipelines without claiming they passed, while preserving blockers', () => {
+    for (const pipelineField of ['head_pipeline', 'pipeline']) {
+      for (const [status, detailed_merge_status, expected] of [
+        ['manual', 'mergeable', 'neutral'],
+        ['manual', 'ci_must_pass', 'pending'],
+        ['manual', 'merge_request_blocked', 'pending'],
+        ['manual', 'draft_status', 'pending'],
+        ['manual', undefined, 'pending'],
+        ['running', 'mergeable', 'pending'],
+        ['failed', 'mergeable', 'failure']
+      ] as const) {
+        const raw = {
+          iid: 1,
+          title: 'Manual release stage',
+          state: 'opened',
+          [pipelineField]: { status },
+          detailed_merge_status
+        }
+        const info = mapMRInfo(raw, derivePipelineStatus({ status }))
+        expect(info.pipelineStatus, `${pipelineField}: ${status} / ${detailed_merge_status}`).toBe(
+          expected
+        )
+      }
+    }
+  })
+
   it('builds an MRInfo from a typical glab payload', () => {
     expect(
       mapMRInfo(
@@ -154,6 +180,7 @@ describe('mapMRInfo', () => {
       pipelineStatus: 'success',
       updatedAt: '2026-05-05T10:00:00Z',
       mergeable: 'MERGEABLE',
+      mergeStateStatus: 'mergeable',
       headSha: 'deadbeef'
     })
   })
@@ -165,17 +192,60 @@ describe('mapMRInfo', () => {
         title: 't',
         state: 'opened',
         has_conflicts: true,
+        head_pipeline: { status: 'manual' },
         detailed_merge_status: 'mergeable'
       },
       'pending'
     )
     expect(info.mergeable).toBe('CONFLICTING')
+    expect(info.mergeStateStatus).toBe('conflict')
+    expect(info.pipelineStatus).toBe('pending')
   })
 
   it('marks UNKNOWN when detailed_merge_status is non-mergeable but not a conflict', () => {
     const info = mapMRInfo(
       { iid: 1, title: 't', state: 'opened', detailed_merge_status: 'checking' },
       'pending'
+    )
+    expect(info.mergeable).toBe('UNKNOWN')
+    expect(info.mergeStateStatus).toBe('checking')
+  })
+
+  // GitLab <15.6 lacks detailed_merge_status; legacy positive mergeability keeps actions usable.
+  it('falls back to legacy merge_status when detailed_merge_status is absent', () => {
+    const info = mapMRInfo(
+      {
+        iid: 1,
+        title: 't',
+        state: 'opened',
+        merge_status: 'can_be_merged',
+        head_pipeline: { status: 'manual' }
+      },
+      'pending'
+    )
+    expect(info.mergeable).toBe('MERGEABLE')
+    expect(info.pipelineStatus).toBe('pending')
+  })
+
+  it('does not let legacy merge_status override a present detailed_merge_status', () => {
+    const info = mapMRInfo(
+      {
+        iid: 1,
+        title: 't',
+        state: 'opened',
+        detailed_merge_status: 'not_approved',
+        merge_status: 'can_be_merged'
+      },
+      'success'
+    )
+    expect(info.mergeable).toBe('UNKNOWN')
+    expect(info.mergeStateStatus).toBe('not_approved')
+  })
+
+  it('keeps legacy cannot_be_merged as UNKNOWN rather than guessing a conflict', () => {
+    const info = mapMRInfo(
+      { iid: 1, title: 't', state: 'opened', merge_status: 'cannot_be_merged' },
+      'success'
     )
     expect(info.mergeable).toBe('UNKNOWN')
   })
@@ -202,20 +272,13 @@ describe('mapMRInfo', () => {
   })
 
   it('omits description / author when absent (distinguishes from list payloads)', () => {
-    // Why: detail vs list endpoints differ — a `description` of '' on the
-    // type would be ambiguous with "list payload that stripped the body".
-    // Prefer absent over default '' so callers can tell them apart.
+    // Missing description means unloaded list data; empty string means a known blank body.
     const info = mapMRInfo({ iid: 5, title: 't', state: 'opened' }, 'success')
     expect('description' in info).toBe(false)
     expect('author' in info).toBe(false)
     expect('authorAvatarUrl' in info).toBe(false)
   })
 })
-
-// Why: mapMRToWorkItem / mapIssueToWorkItem tests live in
-// mappers-workitem.test.ts so this file stays under the oxlint
-// max-lines budget. Same import surface, same describe-per-export
-// shape — split is mechanical, not behavioral.
 
 describe('derivePipelineStatus', () => {
   it('returns neutral for null/undefined/empty', () => {
@@ -228,17 +291,12 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus('success')).toBe('success')
     expect(derivePipelineStatus('failed')).toBe('failure')
     expect(derivePipelineStatus('running')).toBe('pending')
-    // Why: pipeline-level `manual` means GitLab blocked the pipeline on a human trigger — it is
-    // outstanding, not broken (red) and not resolved (which would paint the MR card green while
-    // "Pipelines must succeed" still refuses the merge).
+    // Pipeline manual means blocked on human action, not failed or complete.
     expect(derivePipelineStatus('manual')).toBe('pending')
     expect(derivePipelineStatus({ status: 'manual' })).toBe('pending')
   })
 
-  // Why: pins the two remaining string/array divergences. The job rollup calls skipped jobs
-  // passing and canceled jobs failing, but `head_pipeline.status` is the only production entry
-  // point and GitLab paints both pipeline states grey — flipping either card tone needs product
-  // sign-off, so these assertions exist so neither flip can land silently.
+  // Preserve pipeline-level neutral skipped/canceled states independently of job-level rollup tones.
   it('keeps skipped and canceled pipeline strings neutral (deferred tone changes)', () => {
     expect(derivePipelineStatus('skipped')).toBe('neutral')
     expect(derivePipelineStatus({ status: 'skipped' })).toBe('neutral')
@@ -282,8 +340,6 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus([{}])).toBe('neutral')
   })
 
-  // Why: matches the shared rollup rule — one unresolved job must not demote a pipeline that has
-  // a passing job, or the same MR reads green in the Checks tab and grey on the card.
   it('lets a passing job outweigh an unknown one', () => {
     expect(derivePipelineStatus([{ status: 'success' }, { status: 'future_status' }])).toBe(
       'success'

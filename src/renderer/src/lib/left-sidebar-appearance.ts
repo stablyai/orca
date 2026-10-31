@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { HEX_COLOR_RE } from '../../../shared/color-validation'
 import {
   normalizeLeftSidebarTintColor,
@@ -53,8 +53,7 @@ function buildSurfaceVariables(args: {
 }): LeftSidebarStyleVariables {
   const { background, foreground, overrideTextTokens = false } = args
   const accent = `color-mix(in srgb, ${foreground} 9%, ${background})`
-  // 7% keeps the sidebar divider at the same prominence as the global --border
-  // (7% in dark mode) so it reads like the rest of the UI; 14% rendered brighter (#5906).
+  // Match global dark --border at 7%; the old 14% sidebar divider was too bright (#5906).
   const border = `color-mix(in srgb, ${foreground} 7%, ${background})`
   const ring = `color-mix(in srgb, ${foreground} 44%, ${background})`
   const vars: LeftSidebarStyleVariables = {
@@ -64,9 +63,7 @@ function buildSurfaceVariables(args: {
     '--worktree-sidebar-accent-foreground': foreground,
     '--worktree-sidebar-border': border,
     '--worktree-sidebar-ring': ring,
-    // Why: older worktree-sidebar descendants still consume the shadcn sidebar
-    // token family; mirror it inside this scoped root so every left-sidebar
-    // surface follows the selected appearance.
+    // Mirror shadcn sidebar tokens inside this root for older descendants to follow the chosen appearance.
     '--sidebar': background,
     '--sidebar-foreground': foreground,
     '--sidebar-accent': accent,
@@ -77,6 +74,7 @@ function buildSurfaceVariables(args: {
   if (overrideTextTokens) {
     vars['--background'] = background
     vars['--foreground'] = foreground
+    vars.color = foreground
     vars['--card'] = `color-mix(in srgb, ${foreground} 4%, ${background})`
     vars['--card-foreground'] = foreground
     vars['--accent'] = `color-mix(in srgb, ${foreground} 9%, ${background})`

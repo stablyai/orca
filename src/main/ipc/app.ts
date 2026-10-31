@@ -1,39 +1,51 @@
-import { spawn } from 'node:child_process'
+import { getSystemLanguageDetection } from '../i18n/system-language'
+import { setMainUiLanguage } from '../i18n/main-i18n'
+import { rebuildAppMenu } from '../menu/register-app-menu'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/types'
-import { relaunchApp } from '../app-relaunch'
+import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
+import { relaunchApp, runBeforeRelaunchCleanup } from '../app-relaunch'
+import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
+import { quitProcess } from '../startup/process-quit-request'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
-import { isPwshAvailable } from '../pwsh'
-import { isWslAvailable, listWslDistros } from '../wsl'
+import { isPwshAvailableAsync } from '../pwsh'
+import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
-import { destroySystemTray } from '../tray/system-tray'
-import { authorizeExternalPath } from './filesystem-auth'
+import { destroySystemTray, rebuildSystemTrayMenu } from '../tray/system-tray'
 import {
   ensureDefaultFloatingWorkspacePath,
-  grantFloatingWorkspaceDirectory,
+  trustFloatingWorkspaceDirectory,
   resolveFloatingTerminalCwd
 } from './floating-workspace-directory'
-import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
-import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import {
+  isMarkdownDocumentName,
+  markdownDocumentFromFilePath
+} from '../../shared/markdown-document-paths'
+import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
+import {
+  registerRendererShutdownCheckpointHandler,
+  type QuitResumeRecordsFor
+} from './renderer-shutdown-checkpoint'
+import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
+import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
+import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
+import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
+import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
 
-const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
-const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
-// Why: defaults export reads live prefs (on-disk plist lags cfprefsd); xml1 dodges plutil's json abort on macOS 15 input-source arrays; absolute paths so a minimal PATH can't shadow the tools.
-const MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND = [
-  `/usr/bin/defaults export ${MAC_HITOOLBOX_DOMAIN} -`,
-  '/usr/bin/plutil -extract AppleSelectedInputSources xml1 -o - -',
-  '/usr/bin/plutil -convert json -o - -'
-].join(' | ')
+import type { ReconnectFactsFor } from '../persistence/window-save-view'
 
 type RegisterAppHandlersOptions = {
+  quitResumeRecordsFor?: QuitResumeRecordsFor
+  reconnectFactsFor?: ReconnectFactsFor
   onBeforeRelaunch?: () => void | Promise<void>
+  /** Only for app:relaunch, whose app.exit(0) is committed and skips will-quit. */
+  onBeforeRelaunchExit?: () => void | Promise<void>
 }
 
 async function pickFloatingMarkdownDocument(
@@ -56,7 +68,6 @@ async function pickFloatingMarkdownDocument(
   if (!isMarkdownDocumentName(filePath)) {
     throw new Error('Selected file is not a markdown document.')
   }
-  authorizeExternalPath(filePath)
   return markdownDocumentFromFilePath(cwd, filePath, { outsideRootRelativePath: 'basename' })
 }
 
@@ -66,7 +77,7 @@ async function pickFloatingWorkspaceDirectory(
 ): Promise<string | null> {
   const parentWindow = BrowserWindow.fromWebContents(event.sender)
   const options = {
-    // Why: this picker only grants access to an existing directory; creation belongs to explicit file actions.
+    // Creation belongs to explicit file actions; this picker selects existing directories.
     properties: ['openDirectory']
   } satisfies Electron.OpenDialogOptions
   const result = parentWindow
@@ -76,8 +87,8 @@ async function pickFloatingWorkspaceDirectory(
     return null
   }
   const selectedDir = result.filePaths[0]
-  // Why: a user-approved picker selection is a trust grant for later markdown creation, unlike typed settings text.
-  await grantFloatingWorkspaceDirectory(store, selectedDir)
+  // Only picker-approved paths may become the floating terminal cwd.
+  await trustFloatingWorkspaceDirectory(store, selectedDir)
   return selectedDir
 }
 
@@ -89,7 +100,7 @@ function getFeatureWallAssetBaseUrl(): string {
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     const vitePath = assetDir.split(path.sep).join('/')
     const absoluteVitePath = vitePath.startsWith('/') ? vitePath : `/${vitePath}`
-    // Why: Chromium blocks file:// image loads from the http dev origin; Vite's /@fs route serves the same local media.
+    // Dev HTTP origins cannot load file images; serve media through Vite /@fs.
     return new URL(`/@fs${absoluteVitePath}/`, process.env.ELECTRON_RENDERER_URL).toString()
   }
 
@@ -104,149 +115,41 @@ function resolveDevFeatureWallAssetDir(): string {
     path.join(process.cwd(), relativeDir)
   ]
 
-  // Why: E2E launches out/main, so app.getAppPath() can point there while dev resources live at the repo root.
+  // E2E app paths can be out/main while resources remain at the repository root.
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
-function readCommandStdout(
-  command: string,
-  args: string[],
-  timeoutMessage: string
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let settled = false
-    let child: ReturnType<typeof spawn> | undefined
-
-    // Why: killing only the shell orphans pipeline stages; detached spawn lets one negative-pid SIGKILL reap the whole group.
-    const killTree = (): void => {
-      if (!child?.pid) {
-        return
-      }
-      try {
-        process.kill(-child.pid, 'SIGKILL')
-      } catch {
-        child.kill()
-      }
-    }
-
-    // Why: short timeout so a wedged macOS probe never hangs; this timer owns the process-group kill.
-    const timer = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      killTree()
-      reject(new Error(timeoutMessage))
-    }, KEYBOARD_INPUT_SOURCE_TIMEOUT_MS)
-
-    const settle = (callback: () => void): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      callback()
-    }
-
-    try {
-      child = spawn(command, args, { detached: true, stdio: ['ignore', 'pipe', 'ignore'] })
-      let stdout = ''
-      child.stdout?.setEncoding('utf8')
-      child.stdout?.on('data', (chunk: string) => {
-        stdout += chunk
-      })
-      const failWith = (error: Error): void => {
-        killTree()
-        settle(() => reject(error))
-      }
-      // Why: an unhandled Readable 'error' would crash the main process; treat stdout errors like spawn errors.
-      child.stdout?.on('error', failWith)
-      child.on('error', failWith)
-      child.on('close', (code, signal) => {
-        settle(() =>
-          code === 0
-            ? resolve(stdout)
-            : reject(
-                new Error(
-                  `${command} exited with ${signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`}`
-                )
-              )
-        )
-      })
-    } catch (error) {
-      settle(() => reject(error))
-    }
-  })
-}
-
-function readSelectedInputSourceIdFromJson(stdout: string): string | null {
-  let records: unknown
-  try {
-    records = JSON.parse(stdout)
-  } catch {
-    return null
-  }
-  if (!Array.isArray(records)) {
-    return null
-  }
-
-  for (const record of records.slice().toReversed()) {
-    if (!record || typeof record !== 'object') {
-      continue
-    }
-    const fields = record as Record<string, unknown>
-    const kind = typeof fields.InputSourceKind === 'string' ? fields.InputSourceKind : ''
-    if (kind.toLowerCase().includes('non keyboard')) {
-      continue
-    }
-    const inputMode = fields['Input Mode']
-    if (typeof inputMode === 'string' && inputMode.trim()) {
-      return inputMode.trim()
-    }
-    const bundleId = fields['Bundle ID']
-    if (typeof bundleId === 'string' && bundleId.trim()) {
-      return bundleId.trim()
-    }
-  }
-  return null
-}
-
-async function readSelectedKeyboardInputSourceId(): Promise<string | null> {
-  try {
-    const stdout = await readCommandStdout(
-      '/bin/sh',
-      ['-c', MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND],
-      'Selected keyboard input source probe timed out'
-    )
-    return readSelectedInputSourceIdFromJson(stdout)
-  } catch {
-    return null
-  }
-}
-
-function readKeyboardLayoutInputSourceId(): Promise<string> {
-  return readCommandStdout(
-    '/usr/bin/defaults',
-    ['read', MAC_HITOOLBOX_DOMAIN, 'AppleCurrentKeyboardLayoutInputSourceID'],
-    'Keyboard layout input source probe timed out'
-  )
-}
-
-async function readKeyboardInputSourceId(): Promise<string | null> {
-  const selectedInputSourceId = await readSelectedKeyboardInputSourceId()
-  if (selectedInputSourceId) {
-    return selectedInputSourceId
-  }
-  return readKeyboardLayoutInputSourceId()
-}
-
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
-  registerRendererShutdownCheckpointHandler(store)
+  registerRendererShutdownCheckpointHandler(
+    store,
+    options.quitResumeRecordsFor,
+    options.reconnectFactsFor
+  )
+  registerMacKeyboardLayoutChangeNotifications()
+  ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
+  ipcMain.handle('app:getSystemLanguageDetection', (_event, preferences: unknown) => {
+    const previous = getSystemLanguageDetection()
+    const detection = getSystemLanguageDetection(
+      Array.isArray(preferences) && preferences.every((tag) => typeof tag === 'string')
+        ? preferences
+        : undefined
+    )
+    if (detection !== previous && store.getSettings().uiLanguage === 'system') {
+      void setMainUiLanguage('system')
+        .then(() => {
+          rebuildAppMenu()
+          rebuildSystemTrayMenu()
+        })
+        .catch((error) => console.warn('[app] failed to refresh system language menus:', error))
+    }
+    return detection
+  })
+  ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
   ipcMain.handle('app:getIdentity', (): AppIdentity => {
-    const identity = getDevInstanceIdentity(is.dev)
+    const identity = getDevInstanceIdentity(!app.isPackaged)
     return {
       name: identity.name,
       isDev: identity.isDev,
@@ -258,32 +161,36 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }
   })
 
-  ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
-  ipcMain.handle('wsl:listDistros', (): string[] => listWslDistros())
-  ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
+  // Async probes avoid blocking PTY traffic and IPC for up to 5s per capability read.
+  ipcMain.handle('wsl:isAvailable', (): Promise<boolean> => isWslAvailableAsync())
+  ipcMain.handle('wsl:listDistros', (): Promise<string[]> => listWslDistrosAsync())
+  ipcMain.handle('pwsh:isAvailable', (): Promise<boolean> => isPwshAvailableAsync())
   ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())
 
-  // Why: renderer layout fingerprint tags ABC/CJK-Roman as 'us', breaking Option+letter (#1205); HIToolbox prefs override it.
+  // The selected IME identity must win over its US-shaped backing keyboard layout.
   ipcMain.handle('app:getKeyboardInputSourceId', async (): Promise<string | null> => {
     if (process.platform !== 'darwin') {
       return null
     }
     try {
-      // Why: async so the focus-in probe (see option-as-alt-probe.ts) never blocks the main event loop.
+      // Focus-in probes must not block the main loop.
       const stdout = await readKeyboardInputSourceId()
       const trimmed = stdout?.trim() ?? ''
       return trimmed.length > 0 ? trimmed : null
     } catch {
-      // Why: probe can fail (missing keys on first boot, sandbox) — treat as "no signal" and fall back to the fingerprint.
+      // A failed probe must not promote an IME's backing layout into an Alt default.
       return null
     }
   })
 
+  ipcMain.handle('app:getKeyboardLayoutSnapshot', () => readMacKeyboardLayoutSnapshot())
+
   ipcMain.handle('app:relaunch', async () => {
-    // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
+    // Delay teardown so the renderer can paint Restarting after cleanup.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+    await runBeforeRelaunchCleanup(options.onBeforeRelaunchExit)
     setTimeout(() => {
-      // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
+      // app.exit skips before-quit; remove the Windows tray to avoid a stale icon.
       destroySystemTray()
       relaunchApp('renderer-request')
       app.exit(0)
@@ -291,13 +198,24 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   ipcMain.handle('app:restart', async () => {
-    // Why: use the normal quit pipeline so daemon checkpoints and telemetry flush before exit.
+    // Normal quit flushes daemon checkpoints and telemetry.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
       relaunchApp('admin-restart')
-      app.quit()
+      quitProcess()
     }, 150)
   })
+
+  ipcMain.handle('app:restartAsAdministrator', async () => {
+    const relaunchOptions = prepareWindowsAdministratorRestart()
+    await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+    setTimeout(() => {
+      relaunchApp('windows-administrator', undefined, relaunchOptions)
+      quitProcess()
+    }, 150)
+  })
+
+  registerMacSymbolicHotkeysProbeHandler(readCommandStdout)
 
   ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
     setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)
@@ -314,18 +232,4 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)
   )
-}
-
-async function runBeforeRelaunchCleanup(
-  onBeforeRelaunch?: () => void | Promise<void>
-): Promise<void> {
-  try {
-    await onBeforeRelaunch?.()
-  } catch (error) {
-    // Why: best-effort cleanup must never block relaunch; log only error.name to avoid leaking secrets.
-    console.warn(
-      '[app] Pre-relaunch cleanup failed; continuing relaunch:',
-      error instanceof Error ? error.name : typeof error
-    )
-  }
 }

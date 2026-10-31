@@ -1,6 +1,8 @@
+import { hostQualifiedRepoSelector } from '../runtime/runtime-repo-selector'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { buildAutomationWorkspaceProvenance } from '../../shared/automation-workspace-provenance'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 type HeadlessAutomationRunForWorkspace = Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
@@ -10,8 +12,7 @@ export function buildHeadlessAutomationWorkspaceName(
   runTitle: string,
   scheduledFor: number
 ): string {
-  // Why: generated workspace names must stay deterministic and short enough for
-  // cross-provider branch/path displays while still carrying the run timestamp.
+  // Bound names for branch/path displays while retaining a deterministic run timestamp.
   const slug = runTitle
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -33,7 +34,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
   createdAt?: number
 }): RuntimeCreateManagedWorktreeArgs {
   return {
-    repoSelector: repo.id,
+    repoSelector: hostQualifiedRepoSelector(`id:${repo.id}`, getRepoExecutionHostId(repo)),
     name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
     baseBranch: automation.baseBranch ?? undefined,
     setupDecision: automation.setupDecision ?? 'skip',
@@ -41,6 +42,8 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     createdWithAgent: automation.agentId,
     startupAgent: automation.agentId,
     startupPrompt: automation.prompt,
+    startupSuppressUpdatePrompt: true,
+    ...(automation.extraAgentArgs ? { startupExtraAgentArgs: automation.extraAgentArgs } : {}),
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)
   }

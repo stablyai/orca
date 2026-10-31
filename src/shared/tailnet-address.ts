@@ -15,7 +15,6 @@ export function isTailnetIPv4Address(address: string): boolean {
     return false
   }
 
-  // Why: Tailnet IPv4 addresses live in 100.64.0.0/10. Prefer them for
-  // phone pairing because LAN addresses stop working once devices split networks.
+  // Prefer Tailnet 100.64.0.0/10 for phone pairing because LAN routes fail across networks.
   return octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127
 }

@@ -37,8 +37,7 @@ export function createFileExplorerRowProjectionFromParts(
       return indexByPath
     }
 
-    // Why: normal refresh/render paths need path lookup, not path-to-index.
-    // Defer the index until reveal, inline create, or multi-selection asks for it.
+    // Defer path-to-index construction until reveal/create/selection; normal refresh needs only path lookup.
     const nextIndexByPath = new Map<string, number>()
     for (let index = 0; index < visibleFlatRows.length; index += 1) {
       nextIndexByPath.set(visibleFlatRows[index].path, index)

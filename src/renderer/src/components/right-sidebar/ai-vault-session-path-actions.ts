@@ -4,38 +4,35 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { aiVaultSessionLogFilePath } from '../../../../shared/ai-vault-session-log-resource'
+import { isAiVaultSyntheticSessionPath } from '../../../../shared/ai-vault-session-deletion'
+import { revealInFileManager } from '@/lib/reveal-in-file-manager'
+
+export { isAiVaultSyntheticSessionPath as isSyntheticAiVaultSessionPath }
 
 export function canUseLocalAiVaultSessionPathActions(
   executionHostId: ExecutionHostId | null | undefined
 ): boolean {
-  // Why: Electron shell open/reveal APIs only validate paths on this computer;
-  // SSH session history exposes paths that exist on the remote host instead.
+  // Electron shell APIs use this computer's paths; SSH history paths belong to the remote host.
   return normalizeExecutionHostId(executionHostId) === LOCAL_EXECUTION_HOST_ID
 }
 
-export function isSyntheticAiVaultSessionPath(filePath: string): boolean {
-  // Why: newer OpenCode sessions use a synthetic `<database>#<sessionId>`
-  // scanner identity backed by SQLite — not a real filesystem path. A '#'
-  // session marker never appears in a genuine local transcript path, so it is
-  // a reliable v1 signal that there is no single file to open in Orca.
-  return filePath.includes('#')
+/** File viewing needs a conversation resource on this computer, not a session storage locator. */
+export function canOpenAiVaultSessionLogInOrca(
+  session: Pick<AiVaultSession, 'agent' | 'filePath' | 'executionHostId'>
+): boolean {
+  return (
+    canUseLocalAiVaultSessionPathActions(session.executionHostId) &&
+    aiVaultSessionLogFilePath(session) !== null
+  )
 }
 
-/**
- * Whether AI Vault `View Log` / `Open Log` can open this session's log inside
- * Orca as a read-only tab: a non-blank, local, single-file (non-synthetic)
- * path. Remote/runtime and synthetic identities are withheld until AI Vault has
- * a provider-owned log-resource contract.
- */
-export function canOpenAiVaultSessionLogInOrca(
-  session: Pick<AiVaultSession, 'filePath' | 'executionHostId'>
-): boolean {
-  const filePath = session.filePath?.trim()
-  if (!filePath) {
-    return false
+/** Reveals a session's log or cwd in the OS file manager, judged by the session's own host. */
+export async function revealAiVaultSessionPath(
+  session: Pick<AiVaultSession, 'executionHostId'>,
+  path: string | null
+): Promise<void> {
+  if (path) {
+    await revealInFileManager(path, session.executionHostId)
   }
-  if (!canUseLocalAiVaultSessionPathActions(session.executionHostId)) {
-    return false
-  }
-  return !isSyntheticAiVaultSessionPath(filePath)
 }

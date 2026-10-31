@@ -96,7 +96,8 @@ test.describe('Automation hidden terminal first mount', () => {
         state.queueTabStartupCommand(tab.id, {
           command: `node -e "console.log('${marker}')"`,
           telemetry: {
-            launch_source: 'automation_hidden_first_mount_e2e',
+            agent_kind: 'other',
+            launch_source: 'unknown',
             request_kind: 'new'
           }
         })
@@ -135,7 +136,7 @@ test.describe('Automation hidden terminal first mount', () => {
       }
       const state = store.getState()
       state.setActiveTab(tabId)
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     }, hiddenTabId)
 
     await ensureTerminalVisible(orcaPage)

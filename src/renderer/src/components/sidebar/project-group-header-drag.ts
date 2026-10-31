@@ -15,9 +15,10 @@ import {
 } from './project-group-header-drag-contract'
 import { createProjectGroupHeaderDragSession } from './project-group-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
+import { hasPointerBeenReleased } from './header-drag-pointer-release'
+import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
 
-// Why pointer events instead of HTML5 DnD: Project Group rows are virtualized
-// and may unmount while scrolling; cached row-model indices keep drops stable.
+// Virtualized rows can unmount during drag; pointer events and cached model indices keep drops stable.
 
 export function useProjectGroupHeaderDrag({
   sidebarProjectGroupHeaderIdsByBucket,
@@ -111,23 +112,10 @@ export function useProjectGroupHeaderDrag({
       try {
         session.handleEl.releasePointerCapture(session.pointerId)
       } catch {
-        // capture may already be released (pointercancel, element unmounted)
+        // Pointer cancellation or unmount may already have released capture.
       }
       if (session.promoted) {
-        const handleEl = session.handleEl
-        const swallow = (event: MouseEvent): void => {
-          const target = event.target as Node | null
-          if (target && handleEl.contains(target)) {
-            event.stopPropagation()
-            event.preventDefault()
-          }
-          window.removeEventListener('click', swallow, true)
-        }
-        window.addEventListener('click', swallow, true)
-        clickSwallowTimeoutRef.current = setTimeout(() => {
-          window.removeEventListener('click', swallow, true)
-          clickSwallowTimeoutRef.current = null
-        }, 0)
+        clickSwallowTimeoutRef.current = swallowNextClickOnDragHandle(session.handleEl)
       }
       const sidebarDropIndex =
         commit && session.promoted && latestDropIndexRef.current !== null
@@ -199,6 +187,10 @@ export function useProjectGroupHeaderDrag({
       if (!session || event.pointerId !== session.pointerId) {
         return
       }
+      if (hasPointerBeenReleased(event)) {
+        endDrag(false)
+        return
+      }
       session.latestPointerY = event.clientY
       if (!session.promoted) {
         const dx = event.clientX - session.startX
@@ -210,14 +202,11 @@ export function useProjectGroupHeaderDrag({
           return
         }
         session.promoted = true
-        // Why: virtualized headers may detach during drag; global listeners
-        // still keep the operation alive if pointer capture is unavailable.
+        // Virtualization may detach headers; global listeners keep dragging alive without capture.
         if (session.handleEl.isConnected) {
           try {
             session.handleEl.setPointerCapture(session.pointerId)
-          } catch {
-            // Ignore capture failure; global listeners will handle the drag.
-          }
+          } catch {}
         }
         refreshHeaderRects()
         setState({ draggingGroupId: session.groupId, dropIndex: null, dropIndicatorY: null })

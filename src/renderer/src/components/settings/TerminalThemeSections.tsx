@@ -1,5 +1,7 @@
+import { usePluginTerminalThemes } from '@/store/plugin-themes'
+import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   ColorField,
   SettingsSegmentedControl,
@@ -57,8 +59,7 @@ function getInitialTerminalThemeTarget(
   if (customizedDark !== customizedLight) {
     return customizedDark ? 'dark' : 'light'
   }
-  // Why: the picker edits mode-specific slots. Defaulting to the active
-  // terminal mode makes the selected theme apply immediately in system-light.
+  // Default to the active terminal mode so selecting a theme applies immediately in system-light.
   return resolveEffectiveTerminalAppearance(settings, systemPrefersDark).mode
 }
 
@@ -96,7 +97,8 @@ export function TerminalThemeCatalogSection({
     rememberTerminalThemeTarget(nextTarget)
     setTargetState(nextTarget)
   }
-  const themeOptions = getAvailableTerminalThemeOptions(settings)
+  const pluginTerminalThemes = usePluginTerminalThemes()
+  const themeOptions = getAvailableTerminalThemeOptions(settings, pluginTerminalThemes)
   const isLightTarget = target === 'light'
   const matchDarkMode = !settings.terminalUseSeparateLightTheme
   const lightModeMatchesDark = isLightTarget && matchDarkMode
@@ -252,8 +254,18 @@ export function TerminalThemeCatalogSection({
                   onQueryChange={setThemeSearch}
                   onSelectTheme={(theme) => {
                     rememberTerminalThemeTarget(target)
+                    // A selected theme must replace overrides or they mask the picker.
+                    const hasColorOverrides =
+                      Object.keys(settings.terminalColorOverrides ?? {}).length > 0
                     updateSettings(
-                      isLightTarget ? { terminalThemeLight: theme } : { terminalThemeDark: theme }
+                      withTerminalPluginPalettes(
+                        settings,
+                        {
+                          [isLightTarget ? 'terminalThemeLight' : 'terminalThemeDark']: theme,
+                          ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {})
+                        },
+                        pluginTerminalThemes
+                      )
                     )
                   }}
                   importedHighlightSignal={importedHighlightSignal}

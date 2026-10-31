@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useEditorState, type Editor } from '@tiptap/react'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useLocalImagePick } from './useLocalImagePick'
@@ -9,18 +10,18 @@ import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
 import { useModifierHeldClass } from './useModifierHeldClass'
-import { registerPendingEditorFlush } from './editor-pending-flush'
 import { useRichMarkdownTableOfContents } from './use-rich-markdown-table-of-contents'
 import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
 import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
 import { useRichMarkdownMenuController } from './useRichMarkdownMenuController'
 import { useRichMarkdownProgrammaticSync } from './useRichMarkdownProgrammaticSync'
 import { useRichMarkdownReconcileRoundTrip } from './useRichMarkdownReconcileRoundTrip'
-import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
+import { useRichMarkdownPendingSerialization } from './useRichMarkdownPendingSerialization'
 import { useRichMarkdownReviewController } from './useRichMarkdownReviewController'
 import { useRichMarkdownReviewEditorEffects } from './useRichMarkdownReviewEditorEffects'
 import {
   isRichMarkdownContextCommandTarget,
+  isRichMarkdownTableContextCommand,
   runRichMarkdownContextCommand
 } from './rich-markdown-context-command-routing'
 import { useRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
@@ -55,8 +56,10 @@ export default function RichMarkdownEditor({
   headerSlot
 }: RichMarkdownEditorProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const settings = useAppStore((s) => s.settings)
-  const richMarkdownSpellcheckEnabled = settings?.richMarkdownSpellcheckEnabled ?? true
+  const richMarkdownSpellcheckEnabled = useAppStore(
+    (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
+  )
+  const runtimeTarget = useFileOwnerRuntimeTarget(worktreeId, runtimeEnvironmentId)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
@@ -75,9 +78,7 @@ export default function RichMarkdownEditor({
   const menu = useRichMarkdownMenuController({ markdownDocuments })
   const isMac = navigator.userAgent.includes('Mac')
   const lastCommittedMarkdownRef = useRef(content)
-  // Why: three-way source-preserving reconciliation baseline — the raw on-disk
-  // bytes and their canonical serialization — so edits patch onto the original
-  // style rather than re-canonicalizing untouched regions (#6080).
+  // Keep raw source and canonical baselines for three-way reconciliation that preserves untouched formatting.
   const originalSourceRef = useRef(content)
   const baseCanonicalRef = useRef('')
   const onContentChangeRef = useRef(onContentChange)
@@ -87,19 +88,12 @@ export default function RichMarkdownEditor({
   const handleLocalImagePickRef = useRef<() => void>(() => {})
   const openSearchRef = useRef<() => void>(() => {})
   const openAnnotationPopoverRef = useRef<(requireLiveSelection?: boolean) => boolean>(() => false)
-  // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
-  // stuck at the first-render null value unless we read the live instance here.
+  // Read the live instance because ProseMirror retains the first handleKeyDown closure, whose editor was null.
   const editorRef = useRef<Editor | null>(null)
   const cancelAutoFocusRef = useRef<(() => void) | null>(null)
-  const serializeTimerRef = useRef<number | null>(null)
-  // Why: empty-list repair dispatches a ProseMirror transaction inside onCreate
-  // which triggers onUpdate. Without this guard the editor immediately marks the
-  // file dirty before the user has typed anything.
+  // onCreate repairs emit onUpdate; suppress them so initialization cannot mark untouched files dirty.
   const isInitializingRef = useRef(true)
-  // Why: internal maintenance paths can dispatch transactions after mount
-  // (external reloads, empty-list repair, image-path refresh). Those
-  // are not user edits, so onUpdate must ignore them or split panes can flip a
-  // shared file dirty without any real content change.
+  // Ignore maintenance transactions from reloads, repairs and image refreshes so split panes cannot dirty shared content without user edits.
   const isApplyingProgrammaticUpdateRef = useRef(false)
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
@@ -126,9 +120,7 @@ export default function RichMarkdownEditor({
     scrollContainerRef
   )
 
-  // Why: assigning callback refs during render keeps them current before any
-  // ProseMirror handler reads them, avoiding the one-render stale window that
-  // useEffect would introduce. Refs are mutable and never trigger re-renders.
+  // Refresh callbacks during render so ProseMirror handlers cannot observe a passive-effect delay.
   onContentChangeRef.current = onContentChange
   onDirtyStateHintRef.current = onDirtyStateHint
   onSaveRef.current = onSave
@@ -144,40 +136,22 @@ export default function RichMarkdownEditor({
     worktreeRoot
   })
 
-  const flushPendingSerialization = useCallback(() => {
-    if (serializeTimerRef.current === null) {
-      return
-    }
-    window.clearTimeout(serializeTimerRef.current)
-    serializeTimerRef.current = null
-    try {
-      const { markdown, didSerialize } = commitRichMarkdownSerialization(
-        editorRef.current,
-        { originalSourceRef, baseCanonicalRef, lastCommittedMarkdownRef },
-        reconcileRoundTripRef.current
-      )
-      if (didSerialize) {
-        onContentChangeRef.current(markdown)
-      }
-    } catch (error) {
-      // Why: teardown and reconcile failures are handled above; other failures must stay observable.
-      console.error('[editor] rich markdown serialize (flush) failed', error)
-    }
-  }, [reconcileRoundTripRef])
-
-  useEffect(() => {
-    // Why: autosave/restart paths live outside the editor component tree, so a
-    // mounted rich editor must expose a synchronous "flush now" hook to avoid
-    // a dirty-without-draft window during the debounce period.
-    return registerPendingEditorFlush(fileId, flushPendingSerialization)
-  }, [fileId, flushPendingSerialization])
+  const { serializeTimerRef, pendingEditEpochRef, flushPendingSerialization, flushOnFocusLeave } =
+    useRichMarkdownPendingSerialization({
+      fileId,
+      editorRef,
+      lastCommittedMarkdownRef,
+      originalSourceRef,
+      baseCanonicalRef,
+      onContentChangeRef,
+      reconcileRoundTripRef
+    })
 
   const { clearTransientReviewState } = review
   const setRootElement = useCallback(
     (node: HTMLDivElement | null) => {
       if (node === null) {
-        // Why: these transient editor resources are owned by this root; clearing
-        // them at detach keeps unmount cleanup out of passive Effects.
+        // Release root-owned transient resources on detach instead of waiting for passive cleanup.
         clearTransientReviewState()
         cancelAutoFocusRef.current?.()
         cancelAutoFocusRef.current = null
@@ -199,7 +173,7 @@ export default function RichMarkdownEditor({
     runtimeEnvironmentId,
     isMac,
     richMarkdownSpellcheckEnabled,
-    settings,
+    runtimeTarget,
     activateMarkdownLink,
     rootRef,
     editorRef,
@@ -222,7 +196,9 @@ export default function RichMarkdownEditor({
     handleEmojiPickRef: menu.handleEmojiPickRef,
     typedEmptyOrderedListMarkerRef,
     cancelAutoFocusRef,
+    fileId,
     serializeTimerRef,
+    pendingEditEpochRef,
     isInitializingRef,
     isApplyingProgrammaticUpdateRef,
     markdownCommentsRef: review.markdownCommentsRef,
@@ -250,22 +226,13 @@ export default function RichMarkdownEditor({
     cancelAutoFocusRef
   })
 
-  // Why: useEditor defaults shouldRerenderOnTransaction to false, so selection-only
-  // citation NodeSelections would leave aria status stale without useEditorState.
+  // useEditor does not rerender per transaction; subscribe to citation selection so aria status follows NodeSelections.
   const selectedCitationStatus = useEditorState({
     editor,
     selector: (snapshot) =>
       getSelectedHtmlSuperscriptLinkStatus(snapshot.editor, htmlSuperscriptLinkContext)
   })
   useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
-
-  // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
-  // flush runs before useEditor's cleanup destroys the editor instance on tab
-  // switch or mode change. React runs layout-effect cleanups before effect
-  // cleanups, guaranteeing the editor is still alive when we serialize.
-  React.useLayoutEffect(() => {
-    return flushPendingSerialization
-  }, [flushPendingSerialization])
 
   useEditorScrollRestore(scrollContainerRef, scrollCacheKey, editor)
 
@@ -291,12 +258,14 @@ export default function RichMarkdownEditor({
     externalSshTargetId,
     isApplyingProgrammaticUpdateRef,
     lastCommittedMarkdownRef,
+    onContentChangeRef,
     originalSourceRef,
     baseCanonicalRef,
     markdownDocuments,
     rootRef,
-    runtimeEnvironmentId,
-    settings,
+    runtimeTarget,
+    serializeTimerRef,
+    pendingEditEpochRef,
     slashMenuSetter: menu.setSlashMenu,
     worktreeId,
     worktreeRoot
@@ -323,12 +292,16 @@ export default function RichMarkdownEditor({
   useEffect(() => {
     return window.api.ui.onRichMarkdownContextCommand((payload) => {
       const ed = editorRef.current
-      if (!ed || !isRichMarkdownContextCommandTarget(payload, rootRef.current)) {
+      if (
+        !ed ||
+        isRichMarkdownTableContextCommand(payload.command) ||
+        !isRichMarkdownContextCommandTarget(payload, rootRef.current)
+      ) {
         return
       }
 
       runRichMarkdownContextCommand({
-        command: payload.command,
+        payload,
         editor: ed,
         toggleLink: toggleLinkFromToolbar,
         pickImage: handleLocalImagePick
@@ -349,6 +322,7 @@ export default function RichMarkdownEditor({
       editorFontZoomLevel={editorFontZoomLevel}
       rootElement={rootRef.current}
       rootRef={setRootElement}
+      onFocusLeave={flushOnFocusLeave}
       scrollContainerRef={scrollContainerRef}
       headerSlot={headerSlot}
       reviewRailExpanded={review.reviewRailExpanded}
@@ -403,6 +377,8 @@ export default function RichMarkdownEditor({
       onImagePick={handleLocalImagePick}
       onEmojiPick={menu.openEmojiMenu}
       onCloseEmojiMenu={() => menu.setEmojiMenu(null)}
+      onCloseSlashMenu={() => menu.setSlashMenu(null)}
+      onCloseDocLinkMenu={() => menu.setDocLinkMenu(null)}
       onOpenAnnotationPopover={review.openAnnotationPopover}
       onCancelAnnotationPopover={() => {
         review.setAnnotationPopover(null)

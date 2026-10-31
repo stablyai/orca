@@ -4,47 +4,38 @@ import {
 } from './codex-session-restart'
 import { isForeignMachineCodexPtyId } from './codex-pane-selection-lane'
 
-// Why: the first delay coalesces the startup burst of binds and lets
-// updateTabPtyId (written just after the layout binding) land, since the scan
-// walks tabs. The rest cover a reattached daemon shell that answers
-// `inspectProcess` with terminal_gone for a beat. The tail is sized off live
-// Windows 11 runs, where the 5.8s rung is what raised the notice in all three
-// (macOS resolved on the first): the ladder used to end exactly where the
-// slowest measured box landed, so a colder reattach fell off it and the pane
-// stayed silently stale. Bounded on purpose — this is a hint, and a pane that
-// never resolves must not become a polling loop.
+// Coalesce startup binds, then retry reattach beyond the measured 5.8s Windows tail; keep retries bounded so unresolved panes cannot become polling loops.
 const SWEEP_ATTEMPT_DELAYS_MS = [300, 1500, 4000, 10_000, 20_000] as const
 
-// Why: each PTY owns its rung, so the queue has to carry a per-PTY due time. One
-// shared timer coalesces the startup burst, but it must always target the
-// EARLIEST due entry — a single timer that drained everything let one pane's
-// short delay consume another's later rung and cut its ladder short.
+// Keep per-PTY due times and target the earliest; a new pane’s shorter delay must not consume another’s later retry rung.
 const dueAtByPtyId = new Map<string, number>()
 const attemptsByPtyId = new Map<string, number>()
 const notifiedPtyIds = new Set<string>()
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 let flushTimerDueAt: number | null = null
 
-/**
- * Queues a stale-account check for a PTY that has just bound to a pane.
- *
- * Why a bind signal rather than a startup call: nothing is attached while the
- * session hydrates, so a one-shot sweep inspects zero PTYs and never retries.
- * Every real bind rewrites the pane→PTY layout binding, which is the earliest
- * point the daemon shell can be inspected at all.
- */
+/** Queue on real pane/PTY binding; startup hydration alone has no attached PTYs to inspect and would never retry. */
 export function notifyCodexPaneBoundForStaleSweep(ptyId: string): void {
   if (notifiedPtyIds.has(ptyId)) {
     return
   }
-  // Why: the pane-account registry only records daemon HOST spawns, so a relay
-  // or SSH pane can never come back stale — every rung it takes is a remote RPC
-  // (15s timeout) spent to learn nothing. Drop it before it reaches the queue.
+  // Foreign PTYs never have daemon host registry entries; reject before queueing pointless 15s RPC retries.
   if (isForeignMachineCodexPtyId(ptyId)) {
     return
   }
   queue(ptyId, SWEEP_ATTEMPT_DELAYS_MS[0])
   armForEarliestDue()
+}
+
+/** Check restored PTYs without pane mounts so never-revealed tabs can recover stale-account notices after app restart; notify guards reject foreign IDs. */
+export function sweepRestoredCodexPanesForStaleAccounts(state: {
+  ptyIdsByTabId: Record<string, string[]>
+}): void {
+  for (const ptyIds of Object.values(state.ptyIdsByTabId)) {
+    for (const ptyId of ptyIds) {
+      notifyCodexPaneBoundForStaleSweep(ptyId)
+    }
+  }
 }
 
 export function resetCodexStalePaneSweepForTests(): void {
@@ -96,9 +87,7 @@ function takeDuePtyIds(): string[] {
   const now = Date.now()
   const duePtyIds: string[] = []
   for (const [ptyId, dueAt] of dueAtByPtyId) {
-    // Why: folding a never-inspected PTY into an earlier sweep is what coalesces
-    // the startup burst, and costs it nothing. A PTY already waiting on a retry
-    // rung must wait for its own due time, or that rung is spent for free.
+    // Coalesce first inspections freely, but spend existing retry rungs only at their own due time.
     if (dueAt <= now || !attemptsByPtyId.has(ptyId)) {
       duePtyIds.push(ptyId)
     }
@@ -110,9 +99,7 @@ function takeDuePtyIds(): string[] {
 }
 
 function shouldRetry(scan: CodexPaneScanResult): boolean {
-  // Why: an eligible-but-unlisted pane got an authoritative "not stale" from the
-  // registry, so only an unusable read or a Codex tab still showing its shell
-  // (mid-reattach) can change answer on a later attempt.
+  // Only unusable reads or mid-reattach Codex shell sightings warrant retry; eligible-but-unlisted is authoritatively not stale.
   return !scan.eligible && (scan.inconclusive || scan.launchedCodex)
 }
 
@@ -140,10 +127,7 @@ async function flush(): Promise<void> {
     scans = await markRestoredStaleCodexSessionsForRestart({ ptyIds })
   } catch (err) {
     console.warn('Codex stale-pane restart sweep failed:', err)
-    // Why: a thrown sweep is no more conclusive than an unusable process read, so
-    // spend a rung rather than dropping these panes. Re-aiming is what keeps the
-    // panes this sweep never touched — parked on a later rung, and no longer
-    // holding the timer — from being stranded with nothing left to fire them.
+    // Treat throws as inconclusive retry attempts and re-arm untouched later panes so no queue entry is stranded.
     for (const ptyId of ptyIds) {
       queueNextRung(ptyId)
     }
@@ -159,8 +143,7 @@ async function flush(): Promise<void> {
       attemptsByPtyId.delete(ptyId)
       continue
     }
-    // Why: a PTY the scan never saw is not yet listed against its tab, which is
-    // the same "ask again shortly" case as an unusable process read.
+    // An unlisted PTY may not have reached its tab yet; retry like an unusable process read.
     if (scan !== undefined && !shouldRetry(scan)) {
       attemptsByPtyId.delete(ptyId)
       continue

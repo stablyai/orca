@@ -1,22 +1,11 @@
-// Why: reordering a remote tab updates the local group order immediately for
-// responsiveness, then asks the host to move the tab. But an in-flight host
-// snapshot (published before the host processed the move, or the move RPC's own
-// pre-move subscribe replay) can still carry the OLD order and arrive after the
-// local reorder — the reconcile then overwrites the optimistic order, snapping
-// the tab back to where it was. Close has the same hazard and guards it with a
-// close-intent; reorder had no equivalent, so it always lost the race.
-//
-// The client records its intended local tab order per group here. The reconcile
-// substitutes it for the host order until a snapshot confirms the move (host
-// order matches the intent) or the group membership changes (a newer truth), at
-// which point the intent clears. A TTL guards a never-confirmed move (e.g. a
-// rejected RPC) from pinning a stale order forever.
+// Keep optimistic per-group order against pre-move snapshots. Clear on host confirmation, membership change or TTL so rejected moves cannot pin stale order.
 
 const REORDER_INTENT_TTL_MS = 10_000
+export const MAX_REORDER_INTENT_PARTITIONS = 512
+export const MAX_REORDER_INTENTS_PER_PARTITION = 256
 
 type ReorderIntent = { order: string[]; recordedAt: number }
 
-// worktreeId -> (groupId -> intent)
 import { webSessionIntentOwnerKey, type WebSessionIntentOwner } from './web-session-intent-owner'
 
 const pendingReorderByOwnerAndWorktree = new Map<string, Map<string, ReorderIntent>>()
@@ -53,16 +42,27 @@ export function recordWebSessionReorderIntent(
     byGroup = new Map()
     pendingReorderByOwnerAndWorktree.set(partitionKey, byGroup)
   }
+  byGroup.delete(groupId)
   byGroup.set(groupId, { order: [...order], recordedAt: now })
+  while (byGroup.size > MAX_REORDER_INTENTS_PER_PARTITION) {
+    const oldest = byGroup.keys().next()
+    if (oldest.done || oldest.value === groupId) {
+      break
+    }
+    byGroup.delete(oldest.value)
+  }
+  pendingReorderByOwnerAndWorktree.delete(partitionKey)
+  pendingReorderByOwnerAndWorktree.set(partitionKey, byGroup)
+  while (pendingReorderByOwnerAndWorktree.size > MAX_REORDER_INTENT_PARTITIONS) {
+    const oldest = pendingReorderByOwnerAndWorktree.keys().next()
+    if (oldest.done || oldest.value === partitionKey) {
+      break
+    }
+    pendingReorderByOwnerAndWorktree.delete(oldest.value)
+  }
 }
 
-/**
- * Resolve the local tab order a reconcile should apply for a group. When the
- * client has a pending reorder for this group whose membership still matches the
- * host order, the intended order wins (suppressing a stale pre-move snapshot).
- * The intent clears once the host confirms it (orders match), the membership
- * diverges (add/close changed the truth), or the TTL lapses.
- */
+/** Pending order wins only while membership matches; confirmation, membership changes or expiry release the intent. */
 export function resolveWebSessionReorderedOrder(
   owner: WebSessionIntentOwner,
   worktreeId: string,
@@ -86,14 +86,12 @@ export function resolveWebSessionReorderedOrder(
     clear()
     return hostOrder
   }
-  // Why: a membership change (tab added/closed elsewhere) is a newer truth than
-  // a pending reorder — defer to the host and drop the now-ambiguous intent.
+  // Changed membership is newer truth; discard ambiguous pending order.
   if (!sameMembership(intent.order, hostOrder)) {
     clear()
     return hostOrder
   }
   if (sameOrder(intent.order, hostOrder)) {
-    // Host confirmed the move; nothing left to suppress.
     clear()
     return hostOrder
   }

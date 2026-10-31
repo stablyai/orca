@@ -97,6 +97,14 @@ function makeStore(enabled = true) {
   }
 }
 
+// These cases exercise foreground behavior against Electron mocks.
+beforeEach(() => {
+  vi.stubEnv('ORCA_BACKGROUND_LAUNCH', undefined)
+  vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
+  vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
+})
+afterEach(() => vi.unstubAllEnvs())
+
 describe('registerDashboardPopoutHandlers', () => {
   let store: ReturnType<typeof makeStore>
 
@@ -124,7 +132,7 @@ describe('registerDashboardPopoutHandlers', () => {
 
     store.getSettings.mockReturnValue({ experimentalAgentDashboardPopout: true })
     handlers.get('dashboardPopout:open')!({ sender: mainSender } as never)
-    expect(createPopoutMock).toHaveBeenCalledWith(store, undefined, {
+    expect(createPopoutMock).toHaveBeenCalledWith(store, {
       getKeybindings: expect.any(Function)
     })
   })
@@ -149,8 +157,7 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', SNAPSHOT)
   })
 
-  // Why: an over-long label used to drop the whole snapshot silently, leaving
-  // the board frozen on its last good paint with nothing logged.
+  // Invalid cards must not silently freeze the rest of the board.
   it('keeps publishing the board when one card is invalid, and says so', () => {
     const popout = makeWindow(popoutSender)
     getPopoutMock.mockReturnValue(popout)
@@ -203,8 +210,7 @@ describe('registerDashboardPopoutHandlers', () => {
     const publish = handlers.get('dashboard:publishSnapshot')!
 
     publish({ sender: mainSender } as never, { ...SNAPSHOT, repoIconsByRepoId })
-    // A throttled republish drops the unchanged map — the popout on the wire
-    // still holds it, but one mounting now would have nothing to hold.
+    // Cached replays need the previous icon map even when the live republish omits it.
     publish({ sender: mainSender } as never, { generatedAt: 2, cards: [] })
     expect(popoutSender.send).toHaveBeenLastCalledWith('dashboard:snapshot', {
       generatedAt: 2,
@@ -237,7 +243,14 @@ describe('registerDashboardPopoutHandlers', () => {
     handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, {
       paneKey: 'tab1:leaf1'
     })
-    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:ackDashboardAgent', 'tab1:leaf1')
+    handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, {
+      paneKey: 'tab1:leaf1',
+      intent: 'explicit'
+    })
+    expect(sendToTrustedMock.mock.calls).toEqual([
+      ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'view' }],
+      ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'explicit' }]
+    ])
   })
 
   it('reveals an agent in only the trusted main window', () => {

@@ -1,8 +1,6 @@
 import type {
   LinearAttachRequest,
   LinearAttachResult,
-  LinearCommentAddRequest,
-  LinearCommentAddResult,
   LinearCreateRequest,
   LinearCreateResult,
   LinearIssueListRequest,
@@ -19,8 +17,8 @@ import type {
   LinearTeamListResult,
   LinearTeamMembersResult,
   LinearTeamStatesResult
-} from '../../shared/linear-agent-access'
-import { clampLinearSearchLimit } from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
+import { clampLinearSearchLimit } from '../../shared/linear/agent-access'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
@@ -47,7 +45,6 @@ import {
 } from '../linear-request-builders'
 import {
   formatLinearAttach,
-  formatLinearCommentAdd,
   formatLinearCreate,
   formatLinearIssue,
   formatLinearIssueList,
@@ -64,6 +61,7 @@ import {
   printLinearProjectListWarnings,
   printLinearSearchWarnings
 } from '../linear-format'
+import { LINEAR_COMMENT_WRITE_HANDLERS } from './linear-comment-write'
 import { runLinearListIssues } from './linear-list-issues'
 import { linearRelationWriteHandler } from './linear-relation-write'
 import { runLinearSaveIssue } from './linear-save-issue'
@@ -76,6 +74,7 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
   'linear list-issues': runLinearListIssues,
   'linear relation add': linearRelationWriteHandler('add'),
   'linear relation remove': linearRelationWriteHandler('remove'),
+  ...LINEAR_COMMENT_WRITE_HANDLERS,
   'linear issue': async ({ flags, client, cwd, json }) => {
     const request = buildIssueRequest(flags, cwd, client.isRemote)
     const response = await client.call<LinearIssueContextResult>('linear.issueContext', request, {
@@ -213,19 +212,6 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
   'linear label add': async (ctx) => runLabelUpdate(ctx, 'add'),
   'linear label remove': async (ctx) => runLabelUpdate(ctx, 'remove'),
   'linear label set': async (ctx) => runLabelUpdate(ctx, 'set'),
-  'linear comment add': async ({ flags, client, cwd, json }) => {
-    const body = await readLinearBody(flags, cwd, { required: true })
-    const request: LinearCommentAddRequest = {
-      ...buildWriteTargetRequest(flags, cwd, client.isRemote),
-      body,
-      replyTo: getOptionalStringFlag(flags, 'reply-to'),
-      writeId: getOptionalWriteId(flags)
-    }
-    const response = await client.call<LinearCommentAddResult>('linear.issueAddComment', request, {
-      timeoutMs: LINEAR_WRITE_TIMEOUT_MS
-    })
-    printResult(response, json, formatLinearCommentAdd)
-  },
   'linear attach': async ({ flags, client, cwd, json }) => {
     const request: LinearAttachRequest = {
       ...buildWriteTargetRequest(flags, cwd, client.isRemote),

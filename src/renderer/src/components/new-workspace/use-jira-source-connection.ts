@@ -5,7 +5,7 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
-import type { JiraConnectionStatus } from '../../../../shared/types'
+import type { JiraConnectionStatus } from '../../../../shared/jira/jira-types'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 
 export type JiraSourceConnection = {
@@ -21,12 +21,7 @@ type JiraSourceConnectionState = {
 
 const UNLOADED_CONNECTION: JiraSourceConnection = { status: null, loaded: false }
 
-/**
- * Reuse an already-loaded status instead of re-reading it for every URL resolve.
- *
- * A forced retry, a failed read, or a connected status with no sites still needs a fresh read —
- * those are exactly the cases where the cached answer cannot resolve the pasted URL.
- */
+/** Reuse settled status except on forced retry, failed reads or connected status without sites; those cannot resolve pasted URLs from cache. */
 export function canReuseLoadedJiraStatus(
   connection: JiraSourceConnection | null | undefined,
   force: boolean
@@ -46,13 +41,7 @@ export function getJiraSourceConnectionRevisionKey(
     : null
 }
 
-/**
- * Read Jira connection status for a source context, lazily.
- *
- * `enabled` is an engagement signal, not a mount signal: callers pass `true` only once the user
- * actually reaches for Jira, so opening the composer costs no IPC/RPC round-trip. Status stays
- * readable after engagement drops, and re-reads only when the context or connection revision moves.
- */
+/** Engage only when the user reaches for Jira; retain status afterward and reread only for context/connection revisions. */
 export function useJiraSourceConnection(args: {
   enabled: boolean
   sourceContext: TaskSourceContext | null
@@ -71,8 +60,7 @@ export function useJiraSourceConnection(args: {
   )
   const loadKey = contextKey ? `${contextKey}::${connectionRevision}` : null
   const sourceContextRef = useRef(args.sourceContext)
-  // Layout effects run before the read effect below, so the ref is current without
-  // being mutated during a render React may replay or discard.
+  // Commit the context before passive reads; discarded/replayed renders must not leak ref values.
   useLayoutEffect(() => {
     sourceContextRef.current = args.sourceContext
   })

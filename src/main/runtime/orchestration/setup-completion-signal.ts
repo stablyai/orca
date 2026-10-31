@@ -1,6 +1,8 @@
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   resolveSetupRunnerCommand,
-  type SetupRunnerCommandPlatform
+  type SetupRunnerCommandPlatform,
+  type SetupRunnerShell
 } from '../../../shared/setup-runner-command'
 
 const SETUP_COMPLETION_PREFIX = '__ORCA_SETUP_COMPLETE__:'
@@ -10,9 +12,11 @@ const WINDOWS_SETUP_RUNNER_ENV = 'ORCA_SETUP_RUNNER_PATH'
 export function buildObservedSetupCommand(
   runnerScriptPath: string,
   platform: SetupRunnerCommandPlatform,
-  completionToken: string
+  completionToken: string,
+  // Preserve runner shell selection so WSL drive paths stay /mnt/c rather than Git Bash /c.
+  shell?: SetupRunnerShell
 ): { command: string; env?: Record<string, string> } {
-  const resolution = resolveSetupRunnerCommand(runnerScriptPath, platform)
+  const resolution = resolveSetupRunnerCommand(runnerScriptPath, platform, shell)
   if (resolution.shell === 'windows') {
     const script = [
       `$runner = $env:${WINDOWS_SETUP_RUNNER_ENV}`,
@@ -32,13 +36,14 @@ export function buildObservedSetupCommand(
     }
   }
 
+  // Why no `( … )`: this is typed into the user's line editor, where autopair widgets corrupt it (#18059).
   const script = [
-    `( ${resolution.command} )`,
+    resolution.command,
     'status=$?',
     `printf '\\n${completionPrefix(completionToken)}%s\\n' "$status"`,
     'exit "$status"'
   ].join('; ')
-  return { command: `bash -lc ${quotePosixArg(script)}` }
+  return { command: `bash -lc ${quotePosixShell(script)}` }
 }
 
 export function createSetupCompletionScanner(
@@ -57,7 +62,7 @@ export function createSetupCompletionScanner(
       }
       const combined = `${carry}${data}`
       const markerIndex = combined.lastIndexOf(expectedPrefix)
-      if (markerIndex >= 0) {
+      if (markerIndex !== -1) {
         const suffix = combined.slice(markerIndex + expectedPrefix.length)
         const match = suffix.match(/^(-?\d+)\r?\n/)
         if (match) {
@@ -73,8 +78,4 @@ export function createSetupCompletionScanner(
 
 function completionPrefix(completionToken: string): string {
   return `${SETUP_COMPLETION_PREFIX}${completionToken}:`
-}
-
-function quotePosixArg(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
 }

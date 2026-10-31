@@ -34,10 +34,12 @@ export function reconcileTransientPortScanFailures(
       return { key, result }
     }
     const failures = previousFailures + 1
+    // Other surfaces may publish last-good ports with failure; preserve this poller’s grace instead of dropping them on its next poll.
+    const publishedIsRetainable =
+      Boolean(publishedResult) &&
+      (!publishedResult.unavailableReason || publishedResult.ports.length > 0)
     const nextResult =
-      failures < failureThreshold && publishedResult && !publishedResult.unavailableReason
-        ? publishedResult
-        : result
+      failures < failureThreshold && publishedIsRetainable ? publishedResult : result
     state.set(key, { consecutiveFailures: failures, publishedResult: nextResult })
     return { key, result: nextResult }
   })

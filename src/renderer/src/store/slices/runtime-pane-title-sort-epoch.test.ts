@@ -4,7 +4,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/pty-transport', () => ({
+vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
@@ -20,9 +20,7 @@ import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-
 
 describe('runtimePaneTitle → sortEpoch', () => {
   it('bumps sortEpoch when the new title classifies differently than the previous title', () => {
-    // Why: smart sort's title-heuristic fallback (Edge case 9) reads
-    // runtimePaneTitlesByTabId. A hookless agent transitioning from
-    // 'working' to 'permission' must trigger a re-sort.
+    // Hookless working→permission titles must trigger smart sort’s title fallback (Edge case 9).
     const store = createTestStore()
     seedStore(store, {
       worktreesByRepo: {
@@ -226,6 +224,42 @@ describe('runtimePaneTitle → sortEpoch', () => {
     expect(publications).toBe(tabCount * 2)
   })
 
+  it('publishes a bulk tab-title update once across worktrees', () => {
+    const store = createTestStore()
+    const tabCount = 20
+    const worktrees = Array.from({ length: tabCount }, (_, index) =>
+      makeWorktree({ id: `wt-${index}`, repoId: 'repo1', path: `/path/wt-${index}` })
+    )
+    seedStore(store, {
+      worktreesByRepo: { repo1: worktrees },
+      tabsByWorktree: Object.fromEntries(
+        worktrees.map((worktree, index) => [
+          worktree.id,
+          [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
+        ])
+      )
+    })
+    let publications = 0
+    const unsubscribe = store.subscribe(() => {
+      publications += 1
+    })
+
+    store.getState().updateTabTitles(
+      worktrees.map((_, index) => ({
+        tabId: `tab-${index}`,
+        title: `Codex ready ${index}`
+      }))
+    )
+
+    unsubscribe()
+    expect(publications).toBe(1)
+    for (let index = 0; index < tabCount; index += 1) {
+      expect(store.getState().tabsByWorktree[`wt-${index}`]?.[0]?.title).toBe(
+        `Codex ready ${index}`
+      )
+    }
+  })
+
   it('does not enumerate terminal tabs when only the spinner frame changes', () => {
     const store = createTestStore()
     seedStore(store, {
@@ -295,9 +329,7 @@ describe('runtimePaneTitle → sortEpoch', () => {
   })
 
   it('does not bump sortEpoch when the changing pane belongs to the active worktree (set)', () => {
-    // Why: clicking a slept worktree wakes it; the PTY remount briefly
-    // reclassifies its title, which must NOT re-rank the active worktree.
-    // Stability beats freshness when the user is looking at it.
+    // Wake remounts reclassify titles; keep the active worktree’s sidebar position stable.
     const store = createTestStore()
     seedStore(store, {
       worktreesByRepo: {
@@ -318,9 +350,7 @@ describe('runtimePaneTitle → sortEpoch', () => {
   })
 
   it('does not bump sortEpoch when the changing pane belongs to the active worktree (clear)', () => {
-    // Why: same no-view-triggered-rerank invariant — when the active worktree's
-    // pane title clears (e.g. on PTY remount during wake), the sidebar must
-    // not reorder underneath the user's current selection.
+    // Clearing the active worktree’s title on wake must not reorder the current selection.
     const store = createTestStore()
     seedStore(store, {
       worktreesByRepo: {
@@ -335,8 +365,7 @@ describe('runtimePaneTitle → sortEpoch', () => {
       },
       activeWorktreeId: 'wt-b'
     })
-    // Seed the classified title while wt-a is INACTIVE so the gate doesn't
-    // suppress this preparatory write — we only want to test the gate on clear.
+    // Seed while inactive so only the later clear exercises the active-worktree gate.
     store.getState().setRuntimePaneTitle('tab-1', 1, '✋ Gemini CLI')
     store.setState({ activeWorktreeId: 'wt-a' })
     const baseline = store.getState().sortEpoch

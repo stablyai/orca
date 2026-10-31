@@ -1,15 +1,7 @@
 /* eslint-disable no-control-regex -- ANSI SGR sequences are raw PTY input. */
-/**
- * Chunk-boundary-safe GitHub PR URL scan over PTY output.
- *
- * Why shared: terminal-side-effect-authority.md (slice 3) makes main emit
- * `pr-link` facts from its per-PTY tracker for local/SSH PTYs, while the
- * renderer keeps byte-scanning for remote-runtime PTYs and the kill-switch-off
- * path. Both paths must share the carry/dedupe semantics or links split across
- * chunks would resolve differently per authority mode.
- */
-import type { RepoSlug } from './github-links'
-import { parseGitHubIssueOrPRLink } from './github-links'
+/** Share chunk carry and dedupe across main’s local/SSH fact scan and renderer remote-runtime/kill-switch byte scans. */
+import type { RepoSlug } from './github/links'
+import { parseGitHubIssueOrPRLink } from './github/links'
 
 const GITHUB_PR_PATH_MARKER = '/pull/'
 const TERMINAL_SGR_PATTERN = /\x1b\[[0-?]*[ -/]*m/g
@@ -66,8 +58,7 @@ function lastIndexOfHttpScheme(value: string, fromIndex?: number): number {
 }
 
 function getPotentialGitHubPRCarry(value: string): string {
-  // Why bounded: carry is always a suffix of at most MAX_CARRY_LENGTH, so a scheme
-  // further back can only ever be dropped — scanning to it is O(chunk) per PTY write.
+  // Only the capped suffix can survive; avoid a full-chunk scan on every PTY write.
   const windowStart = value.length > MAX_CARRY_LENGTH ? value.length - MAX_CARRY_LENGTH : 0
   const tailWindow = windowStart === 0 ? value : value.slice(windowStart)
   const schemeIndexInWindow = lastIndexOfHttpScheme(tailWindow)
@@ -82,8 +73,7 @@ function getPotentialGitHubPRCarry(value: string): string {
   if (fragment === '' || windowStart === 0) {
     return fragment
   }
-  // Why look behind: an older scheme means the URL already overran the cap, so the
-  // carry is abandoned rather than restarted from this fragment.
+  // An earlier scheme already exceeded the cap; do not resurrect that abandoned URL from a suffix fragment.
   return lastIndexOfHttpScheme(value, windowStart - 1) === -1 ? fragment : ''
 }
 
@@ -101,17 +91,6 @@ type TerminalUrlCandidate = {
   endIndex: number
 }
 
-function findNextHttpSchemeIndex(value: string, start: number): number {
-  let nextIndex = -1
-  for (const prefix of HTTP_SCHEME_PREFIXES) {
-    const candidate = value.indexOf(prefix, start)
-    if (candidate !== -1 && (nextIndex === -1 || candidate < nextIndex)) {
-      nextIndex = candidate
-    }
-  }
-  return nextIndex
-}
-
 function isTerminalUrlTerminator(char: string): boolean {
   return char === '"' || char === "'" || char === '<' || char === '>' || /\s/.test(char)
 }
@@ -127,10 +106,16 @@ function findTerminalUrlCandidateEnd(value: string, start: number): number {
 }
 
 function* iterateTerminalUrlCandidates(value: string): Generator<TerminalUrlCandidate> {
+  const nextSchemeIndexes = HTTP_SCHEME_PREFIXES.map((prefix) => value.indexOf(prefix))
   let searchStart = 0
 
   while (searchStart < value.length) {
-    const candidateStart = findNextHttpSchemeIndex(value, searchStart)
+    let candidateStart = -1
+    for (const index of nextSchemeIndexes) {
+      if (index !== -1 && (candidateStart === -1 || index < candidateStart)) {
+        candidateStart = index
+      }
+    }
     if (candidateStart === -1) {
       return
     }
@@ -138,6 +123,11 @@ function* iterateTerminalUrlCandidates(value: string): Generator<TerminalUrlCand
     const candidateEnd = findTerminalUrlCandidateEnd(value, candidateStart)
     const rawUrl = value.slice(candidateStart, candidateEnd)
     searchStart = Math.max(candidateEnd, candidateStart + 1)
+    for (let index = 0; index < HTTP_SCHEME_PREFIXES.length; index++) {
+      if (nextSchemeIndexes[index] !== -1 && nextSchemeIndexes[index]! < searchStart) {
+        nextSchemeIndexes[index] = value.indexOf(HTTP_SCHEME_PREFIXES[index]!, searchStart)
+      }
+    }
     if (
       rawUrl.length > MAX_TERMINAL_GITHUB_PR_URL_LENGTH ||
       !rawUrl.includes(GITHUB_PR_PATH_MARKER)
@@ -156,8 +146,7 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
   return (data: string): TerminalGitHubPRLink[] => {
     const rawCombined = carry ? carry + data : data
 
-    // Why: PTY output is a hot path; avoid multi-pass ANSI normalization for
-    // chunks that cannot contain a GitHub pull-request URL.
+    // Skip multi-pass normalization when the chunk cannot contain a PR URL.
     if (!rawCombined.includes(GITHUB_PR_PATH_MARKER)) {
       carry = getPotentialGitHubPRCarry(rawCombined)
       return []
@@ -169,12 +158,9 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
       .replace(TERMINAL_CURSOR_CONTROL_PATTERN, TERMINAL_CONTROL_GUARD)
 
     const links: TerminalGitHubPRLink[] = []
-    // Why: PTY data may echo a huge pasted line. Scan URL candidates directly
-    // instead of running a global regex across the whole chunk when it contains
-    // a /pull/ substring.
+    // Scan candidates directly so huge pasted lines containing /pull/ do not trigger a whole-chunk global regex.
     for (const { rawUrl, endIndex } of iterateTerminalUrlCandidates(combined)) {
-      // Why: PTY chunks can split the PR number; wait for a boundary before
-      // treating a URL at chunk-end as complete.
+      // Wait for a boundary: more PR-number digits may arrive in the next chunk.
       if (endIndex === combined.length) {
         continue
       }

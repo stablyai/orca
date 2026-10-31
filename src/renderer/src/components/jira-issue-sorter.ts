@@ -1,6 +1,8 @@
-import type { JiraIssue, JiraPriority } from '../../../shared/types'
+import type { JiraListColumnId } from './jira-list-columns'
+import type { JiraIssue, JiraPriority } from '../../../shared/jira/jira-types'
+import { compareNumericLocaleText } from '../../../shared/locale-text-collators'
 
-export type JiraIssueSortColumn = 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated'
+export type JiraIssueSortColumn = JiraListColumnId
 
 export type JiraIssueSortDirection = 'asc' | 'desc'
 export type JiraPrioritiesBySite = ReadonlyMap<string, readonly JiraPriority[]>
@@ -54,26 +56,47 @@ export function sortJiraIssues(
   orderDirection: JiraIssueSortDirection,
   jiraPrioritiesBySite: JiraPrioritiesBySite = new Map()
 ): JiraIssue[] {
+  const numericKeys = new Map<JiraIssue, number>()
+  if (issues.length > 1 && (orderBy === 'priority' || orderBy === 'updated')) {
+    for (const issue of issues) {
+      numericKeys.set(
+        issue,
+        orderBy === 'updated'
+          ? new Date(issue.updatedAt).getTime()
+          : getJiraPriorityWeight(
+              issue.priority?.name,
+              issue.priority?.id,
+              jiraPrioritiesBySite.get(issue.siteId ?? '')
+            )
+      )
+    }
+  }
   return [...issues].sort((a, b) => {
     let comparison = 0
     if (orderBy === 'key') {
-      comparison = a.key.localeCompare(b.key, undefined, { numeric: true })
+      comparison = compareNumericLocaleText(a.key, b.key)
     } else if (orderBy === 'title') {
       comparison = a.title.localeCompare(b.title)
     } else if (orderBy === 'status') {
       comparison = 0
     } else if (orderBy === 'priority') {
-      const prioritiesA = jiraPrioritiesBySite.get(a.siteId ?? '')
-      const prioritiesB = jiraPrioritiesBySite.get(b.siteId ?? '')
-      const weightA = getJiraPriorityWeight(a.priority?.name, a.priority?.id, prioritiesA)
-      const weightB = getJiraPriorityWeight(b.priority?.name, b.priority?.id, prioritiesB)
-      comparison = weightA - weightB
+      comparison = numericKeys.get(a)! - numericKeys.get(b)!
     } else if (orderBy === 'assignee') {
       const userA = a.assignee?.displayName ?? ''
       const userB = b.assignee?.displayName ?? ''
       comparison = userA.localeCompare(userB)
     } else if (orderBy === 'updated') {
-      comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+      comparison = numericKeys.get(a)! - numericKeys.get(b)!
+    } else if (orderBy === 'parent') {
+      comparison = compareNumericLocaleText(a.parent?.title ?? '', b.parent?.title ?? '')
+    } else if (orderBy === 'sprint') {
+      comparison = compareNumericLocaleText(a.sprint ?? '', b.sprint ?? '')
+    } else if (orderBy === 'storyPoints') {
+      comparison = (a.storyPoints ?? -1) - (b.storyPoints ?? -1)
+    } else if (orderBy === 'originalEstimate') {
+      comparison = (a.originalEstimateSeconds ?? -1) - (b.originalEstimateSeconds ?? -1)
+    } else if (orderBy === 'remainingEstimate') {
+      comparison = (a.remainingEstimateSeconds ?? -1) - (b.remainingEstimateSeconds ?? -1)
     }
     return orderDirection === 'asc' ? comparison : -comparison
   })

@@ -1,0 +1,292 @@
+import type { ClassifiedError } from '../../../../shared/classified-error'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type {
+  GitHubCommentResult,
+  GitHubReactionContent,
+  PRComment
+} from '../../../../shared/github/comment-types'
+import type {
+  GitHubPRRefreshEvent,
+  GitHubPRRefreshReason
+} from '../../../../shared/github/pull-request-refresh-types'
+import type {
+  GitHubOwnerRepo,
+  IssueInfo,
+  PRInfo
+} from '../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type {
+  GitHubProjectFieldMutationValue,
+  GitHubProjectTable
+} from '../../../../shared/github/project-types'
+import type {
+  GetProjectViewTableResult,
+  GitHubProjectMutationResult
+} from '../../../../shared/github/project-result-types'
+import type { GetProjectViewTableArgs } from '../../../../shared/github/project-request-types'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type {
+  CacheEntry,
+  FetchOptions,
+  GitHubPatchWorkItemOptions,
+  GitHubPRFallbackSource,
+  ProjectRowContentPatch,
+  ProjectRowContentUpdate,
+  ProjectViewCacheEntry,
+  RepoScopedFetchOptions,
+  WorkItemsCacheError,
+  WorkItemsCacheSources
+} from './cache-model'
+import type { PRRefreshState, PRRefreshStateClearToken } from './pr-refresh-state'
+
+export type GitHubSlice = {
+  prCache: Record<string, CacheEntry<PRInfo>>
+  issueCache: Record<string, CacheEntry<IssueInfo>>
+  checksCache: Record<string, CacheEntry<PRCheckDetail[]>>
+  commentsCache: Record<string, CacheEntry<PRComment[]>>
+  /** Resolve/unresolve requests in flight: comments cacheKey + threadId -> threadId. */
+  reviewThreadResolutionsInFlight: Record<string, string>
+  prRefreshSequences: Record<string, number>
+  prRefreshStates: Record<string, PRRefreshState>
+  prVisibleRefreshGeneration: number
+  visibleReviewWorktreeIds: readonly string[]
+  visibleReviewCardWorktreeIds: readonly string[]
+  setVisibleReviewCardWorktreeIds: (ids: readonly string[]) => void
+  // Why: keyed by repoId + limit + query so same-path repos on different SSH targets don't share results.
+  workItemsCache: Record<string, CacheEntry<readonly GitHubWorkItem[]>>
+  fetchPRForBranch: (
+    repoPath: string,
+    branch: string,
+    options?: RepoScopedFetchOptions & {
+      worktreeId?: string
+      linkedPRNumber?: number | null
+      fallbackPRNumber?: number | null
+      fallbackPRSource?: GitHubPRFallbackSource | null
+      reason?: GitHubPRRefreshReason
+      userRefresh?: boolean
+    }
+  ) => Promise<PRInfo | null>
+  fetchIssue: (
+    repoPath: string,
+    number: number,
+    options?: RepoScopedFetchOptions
+  ) => Promise<IssueInfo | null>
+  fetchPRChecks: (
+    repoPath: string,
+    prNumber: number,
+    branch?: string,
+    headSha?: string,
+    prRepo?: GitHubOwnerRepo | null,
+    options?: RepoScopedFetchOptions & {
+      throwOnError?: boolean
+      /** Refresh or a check action: a user act that may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
+      userRefresh?: boolean
+    }
+  ) => Promise<PRCheckDetail[]>
+  fetchPRCheckDetails: (
+    repoPath: string,
+    args: {
+      checkRunId?: number
+      workflowRunId?: number
+      checkName?: string
+      url?: string | null
+      prRepo?: GitHubOwnerRepo | null
+    },
+    options?: RepoScopedFetchOptions
+  ) => Promise<PRCheckRunDetails | null>
+  fetchPRComments: (
+    repoPath: string,
+    prNumber: number,
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null; userRefresh?: boolean }
+  ) => Promise<PRComment[]>
+  addPRConversationComment: (
+    repoPath: string,
+    prNumber: number,
+    body: string,
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+  ) => Promise<GitHubCommentResult>
+  addPRReviewCommentReply: (
+    repoPath: string,
+    prNumber: number,
+    commentId: number,
+    body: string,
+    options?: RepoScopedFetchOptions & {
+      prRepo?: GitHubOwnerRepo | null
+      threadId?: string
+      path?: string
+      line?: number
+    }
+  ) => Promise<GitHubCommentResult>
+  setPRCommentReaction: (
+    repoPath: string,
+    prNumber: number,
+    reactionSubjectId: string,
+    content: GitHubReactionContent,
+    reacted: boolean,
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+  ) => Promise<boolean>
+  resolveReviewThread: (
+    repoPath: string,
+    prNumber: number,
+    threadId: string,
+    resolve: boolean,
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+  ) => Promise<boolean>
+  initGitHubCache: () => Promise<void>
+  refreshAllGitHub: () => void
+  refreshGitHubForWorktree: (worktreeId: string) => void
+  refreshGitHubForWorktreeIfStale: (worktreeId: string) => void
+  enqueueGitHubPRRefresh: (
+    worktreeId: string,
+    reason: GitHubPRRefreshReason,
+    priority?: number
+  ) => void
+  reportVisibleGitHubPRRefreshCandidates: (
+    worktreeIds: string[],
+    generation: number
+  ) => Promise<void>
+  bumpGitHubPRVisibleRefreshGeneration: () => void
+  applyGitHubPRRefreshEvent: (event: GitHubPRRefreshEvent) => void
+  getEffectiveGitHubPRRefreshState: (cacheKey: string, now?: number) => PRRefreshState | undefined
+  expireGitHubPRRefreshState: (
+    cacheKey: string,
+    token: PRRefreshStateClearToken,
+    now?: number
+  ) => void
+  /** SWR: returns cached work items immediately (null if none) and fires a background refresh when stale. */
+  getCachedWorkItems: (
+    repoId: string,
+    limit: number,
+    query: string,
+    repoPath?: string,
+    sourceContext?: TaskSourceContext | null
+  ) => readonly GitHubWorkItem[] | null
+  /** Select only sources/error, avoiding item-array equality cost. */
+  getWorkItemsSourcesAndError: (
+    repoId: string,
+    limit: number,
+    query: string,
+    repoPath?: string
+  ) => { sources: WorkItemsCacheSources | null; error: WorkItemsCacheError | null }
+  /** Sources are query-independent: fall back to sibling repoPath cache entries until primary populates. Return one stable reference; replaced entries preserve equality across unchanged writes. */
+  getWorkItemsAnySourcesForRepo: (
+    repoId: string,
+    limit: number,
+    repoPath?: string
+  ) => WorkItemsCacheSources | null
+  fetchWorkItems: (
+    repoId: string,
+    repoPath: string,
+    limit: number,
+    query: string,
+    options?: FetchOptions
+  ) => Promise<readonly GitHubWorkItem[]>
+  /** Fan out across repos with stale-cache fallback; failedCount counts only failures without data. githubUnavailable means all eligible GitHub sources failed reachability, even if stale results remain. */
+  fetchWorkItemsAcrossRepos: (
+    repos: {
+      repoId: string
+      path: string
+      executionHostId?: string | null
+      sourceContext?: TaskSourceContext | null
+    }[],
+    perRepoLimit: number,
+    displayLimit: number,
+    query: string,
+    options?: FetchOptions
+  ) => Promise<{
+    items: GitHubWorkItem[]
+    failedCount: number
+    githubUnavailable: boolean
+    requestFailureCount?: number
+  }>
+  /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
+  fetchWorkItemsNextPage: (
+    repos: {
+      repoId: string
+      path: string
+      executionHostId?: string | null
+      sourceContext?: TaskSourceContext | null
+    }[],
+    perRepoLimit: number,
+    displayLimit: number,
+    query: string,
+    page: number,
+    options?: Pick<FetchOptions, 'noCache' | 'requireComplete' | 'wakeWslDistro'>
+  ) => Promise<{
+    items: GitHubWorkItem[]
+    failedCount: number
+    errorTypes: ClassifiedError['type'][]
+  }>
+  /** Count items and derive pages from the largest per-repo result set. */
+  countWorkItemsAcrossRepos: (
+    repos: {
+      repoId: string
+      path: string
+      executionHostId?: string | null
+      sourceContext?: TaskSourceContext | null
+    }[],
+    query: string,
+    perRepoLimit: number,
+    options?: Pick<FetchOptions, 'wakeWslDistro'>
+  ) => Promise<{ totalCount: number; totalPages: number }>
+  /** Fire-and-forget prefetch to warm the cache before the page mounts (hover/focus of the "new workspace" buttons). */
+  prefetchWorkItems: (
+    repoId: string,
+    repoPath: string,
+    limit?: number,
+    query?: string,
+    options?: { sourceContext?: TaskSourceContext | null }
+  ) => void
+  patchWorkItem: (
+    itemId: string,
+    patch: Partial<GitHubWorkItem>,
+    repoId?: string | null,
+    options?: GitHubPatchWorkItemOptions
+  ) => void
+  /** Source preference changes bump this nonce; cache eviction alone does not trigger fetch effects. */
+  workItemsInvalidationNonce: number
+  /** Persist preference, patch local repo and invalidate every repoId query key so alternate caches cannot retain the old source. */
+  setIssueSourcePreference: (
+    repoId: string,
+    repoPath: string,
+    preference: IssueSourcePreference,
+    /** Required: a twin's rows share the id, so only the caller's row host names which one changed. */
+    hostId: ExecutionHostId
+  ) => Promise<void>
+  /** Drops the row's entries on every host scope; `hostId` names the row so a same-id twin on another host keeps its own. */
+  evictGitHubRepoCaches: (repoId: string, repoPath?: string, hostId?: ExecutionHostId) => void
+  projectViewCache: Record<string, ProjectViewCacheEntry<GitHubProjectTable>>
+  /** `sourceTarget` names the board's row-less source host; the focused server is never read. */
+  fetchProjectViewTable: (
+    sourceTarget: RuntimeClientTarget,
+    args: GetProjectViewTableArgs,
+    options?: FetchOptions
+  ) => Promise<GetProjectViewTableResult>
+  updateProjectFieldValue: (
+    cacheKey: string,
+    rowId: string,
+    fieldId: string,
+    value: GitHubProjectFieldMutationValue
+  ) => Promise<GitHubProjectMutationResult>
+  clearProjectFieldValue: (
+    cacheKey: string,
+    rowId: string,
+    fieldId: string
+  ) => Promise<GitHubProjectMutationResult>
+  patchProjectIssueOrPr: (
+    cacheKey: string,
+    rowId: string,
+    updates: ProjectRowContentUpdate
+  ) => Promise<GitHubProjectMutationResult>
+  patchProjectRowIssueType: (
+    cacheKey: string,
+    rowId: string,
+    issueType: { id: string; name: string; color: string | null; description: string | null } | null
+  ) => Promise<GitHubProjectMutationResult>
+  /** Patch ProjectV2 content without IPC; patchWorkItem updates only workItemsCache and leaves boards stale. */
+  patchProjectRowContent: (cacheKey: string, rowId: string, patch: ProjectRowContentPatch) => void
+}

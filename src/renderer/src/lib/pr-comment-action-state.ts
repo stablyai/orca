@@ -1,5 +1,5 @@
-import type { PRCommentGroup } from './pr-comment-groups'
-import { getPRCommentGroupId, getPRCommentGroupRoot } from './pr-comment-groups'
+import { getPRCommentGroupRoot, type PRCommentGroup } from '../../../shared/pr-comment-groups'
+import type { PRComment } from '../../../shared/github/comment-types'
 
 /** How a comment group should read in the PR sidebar triage UI. */
 export type PRCommentGroupActionState = 'open' | 'conversation' | 'resolved'
@@ -42,17 +42,53 @@ export function partitionPRCommentGroupsForTriage(groups: readonly PRCommentGrou
   return { open, conversation, resolved }
 }
 
-function groupTimelineMs(group: PRCommentGroup): number {
-  const ts = Date.parse(getPRCommentGroupRoot(group).createdAt)
-  return Number.isNaN(ts) ? 0 : ts
+/** Null when the host sent an unparseable (often empty) `createdAt`. */
+function commentMs(comment: PRComment): number | null {
+  const ts = Date.parse(comment.createdAt)
+  return Number.isNaN(ts) ? null : ts
 }
 
-export function sortPRCommentGroupsForTimeline(
-  groups: readonly PRCommentGroup[]
+function groupStartMs(group: PRCommentGroup): number | null {
+  return commentMs(getPRCommentGroupRoot(group))
+}
+
+/** Newest comment anywhere in the group, so a fresh reply refreshes an old thread. */
+function groupLatestActivityMs(group: PRCommentGroup): number | null {
+  if (group.kind !== 'thread') {
+    return commentMs(group.comment)
+  }
+  return group.replies.reduce<number | null>((latest, reply) => {
+    const ts = commentMs(reply)
+    if (ts === null) {
+      return latest
+    }
+    return latest === null ? ts : Math.max(latest, ts)
+  }, commentMs(group.root))
+}
+
+/** Newest-first uses thread activity; oldest-first uses thread start. Unknown timestamps sort last in either order. */
+export function sortPRCommentGroupsByRecency(
+  groups: readonly PRCommentGroup[],
+  order: 'oldest-first' | 'newest-first' = 'oldest-first'
 ): PRCommentGroup[] {
-  return [...groups].sort(
-    (left, right) =>
-      groupTimelineMs(left) - groupTimelineMs(right) ||
-      getPRCommentGroupId(left).localeCompare(getPRCommentGroupId(right))
-  )
+  const newestFirst = order === 'newest-first'
+  const multiplier = newestFirst ? -1 : 1
+  const timestampOf = newestFirst ? groupLatestActivityMs : groupStartMs
+  // Decorate once to avoid reparsing timestamps in every comparison.
+  return groups
+    .map((group) => ({ group, ts: timestampOf(group), id: getPRCommentGroupRoot(group).id }))
+    .sort((left, right) => {
+      if (left.ts === null || right.ts === null) {
+        if (left.ts !== null) {
+          return -1
+        }
+        if (right.ts !== null) {
+          return 1
+        }
+        return multiplier * (left.id - right.id)
+      }
+      // IDs break ties from identical timestamps across GitHub review batches.
+      return multiplier * (left.ts - right.ts || left.id - right.id)
+    })
+    .map((entry) => entry.group)
 }

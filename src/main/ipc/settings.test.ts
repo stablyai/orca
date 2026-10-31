@@ -1,8 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 
 const {
   applyAppIconMock,
   applyAgentStatusHooksEnabledMock,
+  reconcileClaudeAgentViewMock,
   applyElectronProxySettingsMock,
   browserWindowGetAllWindowsMock,
   handleMock,
@@ -11,10 +13,15 @@ const {
   previewWarpThemeImportMock,
   prepareLocalWorktreeRootsForReposMock,
   resolveEnvironmentMock,
-  rebuildAppMenuMock
+  listEnvironmentsMock,
+  rebuildAppMenuMock,
+  applyBrowserSessionProxiesMock,
+  applySessionSearchSettingsChangeMock,
+  listProfilesMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyAgentStatusHooksEnabledMock: vi.fn(),
+  reconcileClaudeAgentViewMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
@@ -23,7 +30,11 @@ const {
   previewWarpThemeImportMock: vi.fn(),
   prepareLocalWorktreeRootsForReposMock: vi.fn(),
   resolveEnvironmentMock: vi.fn(),
-  rebuildAppMenuMock: vi.fn()
+  listEnvironmentsMock: vi.fn(),
+  rebuildAppMenuMock: vi.fn(),
+  applyBrowserSessionProxiesMock: vi.fn(),
+  applySessionSearchSettingsChangeMock: vi.fn(),
+  listProfilesMock: vi.fn(() => [])
 }))
 
 vi.mock('electron', () => ({
@@ -45,12 +56,30 @@ vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
 }))
 
+vi.mock('../browser/browser-session-proxy', () => ({
+  applyBrowserSessionProxies: applyBrowserSessionProxiesMock
+}))
+
+vi.mock('../browser/browser-session-registry', () => ({
+  browserSessionRegistry: { listProfiles: listProfilesMock }
+}))
+
 vi.mock('../app-icon', () => ({
   applyAppIcon: applyAppIconMock
 }))
 
+vi.mock('../ai-vault-search/session-search-enablement', () => ({
+  applySessionSearchSettingsChange: applySessionSearchSettingsChangeMock
+}))
+
+vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
+}))
+
+vi.mock('../claude/agent-view-service', () => ({
+  getClaudeAgentViewService: () => ({ reconcile: reconcileClaudeAgentViewMock })
 }))
 
 vi.mock('../worktree-root-preparation', () => ({
@@ -62,7 +91,8 @@ vi.mock('../menu/register-app-menu', () => ({
 }))
 
 vi.mock('../../shared/runtime-environment-store', () => ({
-  resolveEnvironment: resolveEnvironmentMock
+  resolveEnvironment: resolveEnvironmentMock,
+  listEnvironments: listEnvironmentsMock
 }))
 
 import { registerSettingsHandlers } from './settings'
@@ -77,6 +107,7 @@ type SettingsChangedListener = (
 const store = {
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
+  updateSettingsAndFlush: vi.fn(),
   getGitHubCache: vi.fn(),
   setGitHubCache: vi.fn(),
   onSettingsChanged: vi.fn(() => () => {})
@@ -85,9 +116,11 @@ const store = {
 describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     handleMock.mockClear()
+    store.updateSettingsAndFlush.mockReset()
     onMock.mockClear()
     applyAppIconMock.mockClear()
     applyAgentStatusHooksEnabledMock.mockReset().mockResolvedValue([])
+    reconcileClaudeAgentViewMock.mockReset().mockResolvedValue(undefined)
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
     previewGhosttyImportMock.mockClear()
@@ -100,10 +133,35 @@ describe('registerSettingsHandlers', () => {
       return { id: 'windows-2' }
     })
     rebuildAppMenuMock.mockClear()
+    applyBrowserSessionProxiesMock.mockReset().mockResolvedValue(undefined)
+    applySessionSearchSettingsChangeMock.mockClear()
+    listProfilesMock.mockReset().mockReturnValue([])
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
     store.onSettingsChanged.mockClear()
+    listEnvironmentsMock.mockReset().mockReturnValue([])
+  })
+
+  it('repairs removed Active Server preferences on asynchronous and synchronous reads', () => {
+    store.getSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'removed' })
+    store.updateSettings.mockImplementation((updates) => {
+      const next = { ...store.getSettings(), ...updates }
+      store.getSettings.mockReturnValue(next)
+      return next
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler only uses the settings methods supplied by the fixture.
+    registerSettingsHandlers(store as never)
+    const get = handleMock.mock.calls.find(([channel]) => channel === 'settings:get')?.[1]
+    const getSync = onMock.mock.calls.find(([channel]) => channel === 'settings:get-sync')?.[1]
+
+    expect(get()).toEqual({ activeRuntimeEnvironmentId: null })
+    store.getSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'removed-again' })
+    const event = { returnValue: undefined }
+    getSync(event)
+    expect(event.returnValue).toEqual({ activeRuntimeEnvironmentId: null })
+    expect(store.updateSettings).toHaveBeenCalledTimes(2)
+    expect(listEnvironmentsMock).toHaveBeenCalledWith('/test/user-data', { requireStoreFile: true })
   })
 
   it('registers settings:previewGhosttyImport handler', () => {
@@ -113,8 +171,7 @@ describe('registerSettingsHandlers', () => {
   })
 
   it('answers the synchronous settings read with the persisted settings', () => {
-    // Why: panes can bind PTYs before async hydration; the side-effect
-    // authority kill switch needs the persisted value synchronously.
+    // PTYs can bind before hydration; authority selection needs persisted settings synchronously.
     store.getSettings.mockReturnValue({ terminalMainSideEffectAuthority: false })
     registerSettingsHandlers(store as never)
 
@@ -128,23 +185,19 @@ describe('registerSettingsHandlers', () => {
     expect(event.returnValue).toEqual({ terminalMainSideEffectAuthority: false })
   })
 
-  it('does not reconcile hooks when the disabled-agent set is unchanged', async () => {
-    const before = {
-      agentStatusHooksEnabled: true,
-      disabledTuiAgents: ['codex', 'claude']
-    }
+  it.each([
+    { disabledTuiAgents: ['claude', 'codex'] },
+    { claudeSubagentNavigationEnabled: true },
+    { claudeSubagentNavigationEnabled: false }
+  ])('reconciles navigation without reinstalling unchanged status hooks: %j', async (updates) => {
+    const before = { agentStatusHooksEnabled: true, disabledTuiAgents: ['codex', 'claude'] }
     store.getSettings.mockReturnValue(before)
-    store.updateSettings.mockReturnValue({
-      ...before,
-      disabledTuiAgents: ['claude', 'codex']
-    })
+    store.updateSettings.mockReturnValue({ ...before, ...updates })
     registerSettingsHandlers(store as never)
-    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
-      event: typeof settingsInvokeEvent,
-      args: { disabledTuiAgents: string[] }
-    ) => Promise<unknown>
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
 
-    await handler(settingsInvokeEvent, { disabledTuiAgents: ['claude', 'codex'] })
+    await handler(settingsInvokeEvent, updates)
+    expect(reconcileClaudeAgentViewMock).toHaveBeenCalledWith({ ...before, ...updates })
 
     expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
   })
@@ -192,6 +245,40 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('propagates a failed durable force-delete preference write through settings:set', async () => {
+    store.getSettings.mockReturnValue({ alwaysForceDeleteWorktrees: false })
+    store.updateSettingsAndFlush.mockRejectedValue(new Error('Disk full'))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
+    if (typeof handler !== 'function') {
+      throw new Error('Missing settings:set handler')
+    }
+    await expect(
+      handler(settingsInvokeEvent, { alwaysForceDeleteWorktrees: true, editorWordWrap: false })
+    ).rejects.toThrow('Disk full')
+    expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
+      { alwaysForceDeleteWorktrees: true, editorWordWrap: false },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('flushes the preserved-branch deletion preference before returning', async () => {
+    store.getSettings.mockReturnValue({ alwaysForceDeletePreservedBranches: false })
+    store.updateSettingsAndFlush.mockRejectedValue(new Error('Disk full'))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
+    if (typeof handler !== 'function') {
+      throw new Error('Missing settings:set handler')
+    }
+    await expect(
+      handler(settingsInvokeEvent, { alwaysForceDeletePreservedBranches: true })
+    ).rejects.toThrow('Disk full')
+    expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
+      { alwaysForceDeletePreservedBranches: true },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('persists Active Server only through the dedicated preference channel', () => {
     store.updateSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'windows-2' })
     registerSettingsHandlers(store as never)
@@ -213,7 +300,7 @@ describe('registerSettingsHandlers', () => {
     )
 
     expect(() => handler(settingsInvokeEvent, { environmentId: 42 as never })).toThrow(
-      'Invalid Active Server preference'
+      'Invalid default host for new projects'
     )
     expect(() => handler(settingsInvokeEvent, { environmentId: 'does-not-exist' })).toThrow(
       'Runtime environment not found'
@@ -344,7 +431,7 @@ describe('registerSettingsHandlers', () => {
   })
 
   it('updates the agent awake service when the keep-awake setting changes', () => {
-    const agentAwakeService = { setEnabled: vi.fn() }
+    const agentAwakeService = { setMode: vi.fn() }
     store.getSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
     store.updateSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: true })
     registerSettingsHandlers(store as never, agentAwakeService as never)
@@ -356,11 +443,18 @@ describe('registerSettingsHandlers', () => {
 
     handler(settingsInvokeEvent, { keepComputerAwakeWhileAgentsRun: true })
 
-    expect(agentAwakeService.setEnabled).toHaveBeenCalledWith(true)
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        computerAwakeMode: 'auto',
+        keepComputerAwakeWhileAgentsRun: true
+      },
+      expect.any(Object)
+    )
+    expect(agentAwakeService.setMode).toHaveBeenCalledWith('auto')
   })
 
   it('does not notify the agent awake service for unrelated setting changes', () => {
-    const agentAwakeService = { setEnabled: vi.fn() }
+    const agentAwakeService = { setMode: vi.fn() }
     store.getSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
     store.updateSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
     registerSettingsHandlers(store as never, agentAwakeService as never)
@@ -372,7 +466,7 @@ describe('registerSettingsHandlers', () => {
 
     handler(settingsInvokeEvent, { defaultTuiAgent: 'codex' })
 
-    expect(agentAwakeService.setEnabled).not.toHaveBeenCalled()
+    expect(agentAwakeService.setMode).not.toHaveBeenCalled()
   })
 
   it('prepares local worktree roots when workspace directory changes', async () => {
@@ -449,8 +543,8 @@ describe('registerSettingsHandlers', () => {
     ) => Promise<unknown>
 
     await handler(settingsInvokeEvent, {
-      pluginConsents: { 'orca-samples.demo': 'sha256-forged' },
-      disabledPlugins: ['orca-samples.demo']
+      pluginConsents: { 'samples.demo': 'sha256-forged' },
+      disabledPlugins: ['samples.demo']
     })
 
     expect(store.updateSettings).toHaveBeenCalledWith(
@@ -622,6 +716,119 @@ describe('registerSettingsHandlers', () => {
     })
   })
 
+  it('does not sweep sessions for a no-op proxy save', async () => {
+    const settings = {
+      httpProxyUrl: 'http://proxy.example:8080',
+      httpProxyBypassRules: 'localhost'
+    }
+    store.getSettings.mockReturnValue(settings)
+    store.updateSettings.mockReturnValue(settings)
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { httpProxyUrl: string }
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { httpProxyUrl: 'http://proxy.example:8080' })
+
+    expect(applyElectronProxySettingsMock).not.toHaveBeenCalled()
+    expect(listProfilesMock).not.toHaveBeenCalled()
+    expect(applyBrowserSessionProxiesMock).not.toHaveBeenCalled()
+  })
+
+  it('queues every proxy snapshot on both authorities before either apply settles', async () => {
+    store.getSettings.mockReturnValue({ httpProxyUrl: '', httpProxyBypassRules: '' })
+    store.updateSettings.mockImplementation((args) =>
+      args.httpProxyUrl !== undefined
+        ? { httpProxyUrl: 'socks5://127.0.0.1:1080', httpProxyBypassRules: '' }
+        : { httpProxyUrl: 'socks5://127.0.0.1:1080', httpProxyBypassRules: 'late.example' }
+    )
+    let releaseFirstApply = (): void => {}
+    let markFirstApplyStarted = (): void => {}
+    const firstApplyStarted = new Promise<void>((resolve) => (markFirstApplyStarted = resolve))
+    applyElectronProxySettingsMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseFirstApply = () => resolve({ source: 'settings' })
+          markFirstApplyStarted()
+        })
+    )
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { httpProxyUrl?: string; httpProxyBypassRules?: string }
+    ) => Promise<unknown>
+
+    const first = handler(settingsInvokeEvent, { httpProxyUrl: 'socks5://127.0.0.1:1080' })
+    await firstApplyStarted
+    expect(applyBrowserSessionProxiesMock).toHaveBeenCalledWith([], {
+      httpProxyUrl: 'socks5://127.0.0.1:1080',
+      httpProxyBypassRules: ''
+    })
+    const second = handler(settingsInvokeEvent, { httpProxyBypassRules: 'late.example' })
+    await second
+    releaseFirstApply()
+    await first
+
+    expect(applyBrowserSessionProxiesMock.mock.calls.map((call) => call[1])).toEqual([
+      {
+        httpProxyUrl: 'socks5://127.0.0.1:1080',
+        httpProxyBypassRules: ''
+      },
+      {
+        httpProxyUrl: 'socks5://127.0.0.1:1080',
+        httpProxyBypassRules: 'late.example'
+      }
+    ])
+  })
+
+  it('orders proxy writes before unrelated settings reconciliation can suspend', async () => {
+    store.getSettings.mockReturnValue({
+      httpProxyUrl: '',
+      httpProxyBypassRules: '',
+      agentStatusHooksEnabled: false,
+      disabledTuiAgents: []
+    })
+    store.updateSettings.mockImplementation((args) => ({
+      httpProxyUrl: args.httpProxyUrl,
+      httpProxyBypassRules: '',
+      agentStatusHooksEnabled: args.agentStatusHooksEnabled ?? true,
+      disabledTuiAgents: []
+    }))
+    let releaseHookReconciliation = (): void => {}
+    let markHookReconciliationStarted = (): void => {}
+    const hookReconciliationStarted = new Promise<void>(
+      (resolve) => (markHookReconciliationStarted = resolve)
+    )
+    applyAgentStatusHooksEnabledMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseHookReconciliation = () => resolve([])
+          markHookReconciliationStarted()
+        })
+    )
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { httpProxyUrl: string; agentStatusHooksEnabled?: boolean }
+    ) => Promise<unknown>
+
+    const first = handler(settingsInvokeEvent, {
+      httpProxyUrl: 'http://old.example:8080',
+      agentStatusHooksEnabled: true
+    })
+    await hookReconciliationStarted
+    await handler(settingsInvokeEvent, { httpProxyUrl: 'http://new.example:8080' })
+    releaseHookReconciliation()
+    await first
+
+    expect(applyElectronProxySettingsMock.mock.calls.map((call) => call[0].httpProxyUrl)).toEqual([
+      'http://old.example:8080',
+      'http://new.example:8080'
+    ])
+  })
+
   it('drops invalid proxy URLs at the settings boundary', async () => {
     store.getSettings.mockReturnValue({ httpProxyUrl: 'http://proxy.example:8080' })
     store.updateSettings.mockReturnValue({ httpProxyUrl: '' })
@@ -692,5 +899,46 @@ describe('registerSettingsHandlers', () => {
     await handler(settingsInvokeEvent, { showAutomationsButton: false })
 
     expect(rebuildAppMenuMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('normalizes an agent-session-search write and hands the change to the index', async () => {
+    const before = { aiVaultSearch: { enabled: false, historyDays: null } }
+    store.getSettings.mockReturnValue(before)
+    store.updateSettings.mockImplementation((args: Partial<GlobalSettings>) => ({
+      ...before,
+      ...args
+    }))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      aiVaultSearch: { enabled: true, historyDays: 30.7, paused: true }
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ aiVaultSearch: { enabled: true, historyDays: 30 } }),
+      expect.anything()
+    )
+    expect(applySessionSearchSettingsChangeMock).toHaveBeenCalledWith(
+      before,
+      expect.objectContaining({ aiVaultSearch: { enabled: true, historyDays: 30 } })
+    )
+  })
+
+  it('leaves the index alone for a settings write that does not mention it', async () => {
+    store.getSettings.mockReturnValue({ appIcon: 'default' })
+    store.updateSettings.mockReturnValue({ appIcon: 'default' })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { appIcon: 'default' })
+
+    expect(applySessionSearchSettingsChangeMock).not.toHaveBeenCalled()
   })
 })

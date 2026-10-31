@@ -1,5 +1,6 @@
-import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/types'
+import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getGitHubRuntimeRepoId,
@@ -20,6 +21,8 @@ type GitHubWorkItemByOwnerRepoLookupArgs = GitHubWorkItemLookupArgs & {
   repo: string
   host?: string
   type: 'issue' | 'pr'
+  /** One light call for hover cards; older hosts ignore it. */
+  preview?: boolean
 }
 
 type GitHubWorkItemDetailsLookupArgs = {
@@ -28,6 +31,7 @@ type GitHubWorkItemDetailsLookupArgs = {
   sourceContext?: TaskSourceContext | null
   number: number
   type: 'issue' | 'pr'
+  ownerRepo?: GitHubOwnerRepo | null
 }
 
 function runtimeRepoId(args: Pick<GitHubWorkItemLookupArgs, 'repoId' | 'sourceContext'>): string {
@@ -74,18 +78,21 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
             ownerRepo: args.repo,
             ...(args.host ? { host: args.host } : {}),
             number: args.number,
-            type: args.type
+            type: args.type,
+            ...(args.preview ? { preview: true } : {})
           },
           { timeoutMs: 30_000 }
         )
       : await window.api.gh.workItemByOwnerRepo({
           repoPath: args.repoPath,
           repoId: args.repoId,
+          sourceContext: args.sourceContext,
           owner: args.owner,
           repo: args.repo,
           ...(args.host ? { host: args.host } : {}),
           number: args.number,
-          type: args.type
+          type: args.type,
+          ...(args.preview ? { preview: true } : {})
         })
   return item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
 }
@@ -112,6 +119,7 @@ export function lookupGitHubWorkItemDetailsForSource(
     repoId: args.repoId,
     sourceContext,
     number: args.number,
-    type: args.type
+    type: args.type,
+    ...(args.ownerRepo ? { ownerRepo: args.ownerRepo } : {})
   })
 }

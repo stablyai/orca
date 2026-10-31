@@ -5,17 +5,25 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
-import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
-import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
-import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import { formatUiAutomationSchedule } from './automation-schedule-label'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
+import {
+  AutomationRunErrorNotice,
+  formatAutomationDateTimeWithRelative
+} from './automation-page-parts'
+import { indexLatestAutomationRuns } from './automation-list-last-run'
 import {
   formatAutomationCost,
   formatAutomationTokens,
   summarizeAutomationRunUsage
 } from './automation-usage-model'
 import type { AutomationTargetAvailability } from './automation-target-availability'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import { getAutomationHostDetailDisplay } from './automation-host-detail-display'
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
+import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
+import { automationRunErrorText } from './automation-run-error-copy'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -23,6 +31,8 @@ type AutomationDetailProps = {
   projectName: string
   workspaceName: string
   projectDefaultBaseRef: string | null
+  /** The catalog entry the selected row was listed from; absent for legacy unscoped rows. */
+  hostEntry?: AutomationHostCatalogEntry | null
   hostLabelById?: ReadonlyMap<string, string>
   runNowAvailability: AutomationTargetAvailability | null
   now: number
@@ -53,13 +63,20 @@ function DetailMetric({
 
 function formatGrace(minutes: number): string {
   if (minutes <= 0) {
-    return 'No grace'
+    return translate('auto.components.automations.AutomationDetail.noGrace', 'No grace')
   }
   if (minutes < 60) {
-    return `${minutes} minutes`
+    return translate(
+      'auto.components.automations.AutomationDetail.graceMinutes',
+      '{{count}} minutes',
+      { count: minutes, defaultValue_one: '{{count}} minute' }
+    )
   }
   const hours = minutes / 60
-  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+  return translate('auto.components.automations.AutomationDetail.graceHours', '{{count}} hours', {
+    count: hours,
+    defaultValue_one: '{{count}} hour'
+  })
 }
 
 function ToolbarIconButton({
@@ -100,6 +117,7 @@ export function AutomationDetail({
   projectName,
   workspaceName,
   projectDefaultBaseRef,
+  hostEntry,
   hostLabelById,
   runNowAvailability,
   now,
@@ -121,18 +139,36 @@ export function AutomationDetail({
   const usageSummary = summarizeAutomationRunUsage(runs)
   const usageCoverage =
     usageSummary.knownRuns > 0
-      ? `${usageSummary.knownRuns}/${runs.length} runs`
+      ? translate(
+          'auto.components.automations.AutomationDetail.usageCoverageRuns',
+          '{{known}}/{{count}} runs',
+          {
+            known: usageSummary.knownRuns,
+            count: runs.length,
+            defaultValue_one: '{{known}}/{{count}} run'
+          }
+        )
       : usageSummary.unavailableRuns > 0
-        ? 'Unavailable'
-        : 'No runs'
+        ? translate('auto.components.automations.AutomationDetail.usageUnavailable', 'Unavailable')
+        : translate('auto.components.automations.AutomationDetail.noRuns', 'No runs')
   const agentLabel =
     getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
-      ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
+      ? (automation.baseBranch ??
+        projectDefaultBaseRef ??
+        translate('auto.components.automations.AutomationDetail.projectDefault', 'Project default'))
       : workspaceName
   const sourceDisplay = getAutomationSourceDisplay(automation.sourceContext, hostLabelById)
+  const hostDisplay = getAutomationHostDetailDisplay({
+    automation,
+    entry: hostEntry,
+    hostLabelById
+  })
   const runNowDisabled = runNowAvailability?.canRunNow === false
+  const latestRun = indexLatestAutomationRuns(runs).get(automation.id)
+  const latestRunError =
+    latestRun?.status === 'dispatch_failed' ? automationRunErrorText(latestRun) : null
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -143,7 +179,7 @@ export function AutomationDetail({
             <Badge variant={automation.enabled ? 'secondary' : 'outline'}>
               {automation.enabled
                 ? translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
-                : translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
+                : translate('auto.components.automations.enablement.paused', 'Paused')}
             </Badge>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">
@@ -224,18 +260,33 @@ export function AutomationDetail({
         </div>
       ) : null}
 
+      {latestRunError ? (
+        <AutomationRunErrorNotice
+          label={translate(
+            'auto.components.automations.AutomationDetail.lastRunFailed',
+            'Last run failed.'
+          )}
+          error={latestRunError}
+        />
+      ) : null}
+
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.18763ded26', 'Schedule')}
-          value={formatAutomationSchedule(automation.rrule)}
+          value={formatUiAutomationSchedule(automation.rrule)}
         />
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.578ff46987', 'Next run')}
           value={
             automation.enabled
               ? formatAutomationDateTimeWithRelative(automation.nextRunAt, now)
-              : 'Paused'
+              : translate('auto.components.automations.AutomationsPage.paused', 'Paused')
           }
+        />
+        <DetailMetric
+          label={translate('auto.components.automations.AutomationDetail.host', 'Host')}
+          value={hostDisplay.label}
+          title={hostDisplay.title}
         />
         <DetailMetric
           label={
@@ -247,7 +298,17 @@ export function AutomationDetail({
         />
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.15ea446b93', 'Session')}
-          value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
+          value={
+            automation.reuseSession
+              ? translate(
+                  'auto.components.automations.AutomationDetail.reuseLiveSession',
+                  'Reuse live session'
+                )
+              : translate(
+                  'auto.components.automations.AutomationDetail.freshEachRun',
+                  'Fresh each run'
+                )
+          }
         />
         {sourceDisplay ? (
           <DetailMetric
@@ -264,8 +325,12 @@ export function AutomationDetail({
           label={translate('auto.components.automations.AutomationDetail.e353ab9516', 'Precheck')}
           value={
             automation.precheck
-              ? `Enabled, ${formatAutomationPrecheckTimeout(automation.precheck.timeoutSeconds)}`
-              : 'None'
+              ? translate(
+                  'auto.components.automations.AutomationDetail.precheckEnabled',
+                  'Enabled, {{timeout}}',
+                  { timeout: formatUiNarrowDuration(automation.precheck.timeoutSeconds, 'second') }
+                )
+              : translate('auto.components.automations.AutomationDetail.precheckNone', 'None')
           }
         />
         <div className="min-w-0">
@@ -277,6 +342,16 @@ export function AutomationDetail({
             <span className="truncate">{agentLabel}</span>
           </div>
         </div>
+        {automation.extraAgentArgs ? (
+          <DetailMetric
+            label={translate(
+              'auto.components.automations.extraAgentArgs.detailLabel',
+              'Extra arguments'
+            )}
+            value={automation.extraAgentArgs}
+            title={automation.extraAgentArgs}
+          />
+        ) : null}
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">
@@ -301,21 +376,10 @@ export function AutomationDetail({
         />
       </div>
 
-      <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
-        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">
-          {translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')}
-        </div>
-        <div className="px-3 py-3">
-          <div className="min-w-0">
-            <div className="text-[11px] font-medium uppercase text-muted-foreground">
-              {translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')}
-            </div>
-            <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-foreground">
-              {automation.prompt}
-            </p>
-          </div>
-        </div>
-      </div>
+      <AutomationPromptDisclosure
+        key={`${automation.id}:${automation.prompt}`}
+        prompt={automation.prompt}
+      />
     </div>
   )
 }

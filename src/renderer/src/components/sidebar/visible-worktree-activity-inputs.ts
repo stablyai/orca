@@ -1,118 +1,86 @@
-import type { BrowserWorkspace, TerminalTab } from '../../../../shared/types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import type { Tab } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { getStructuredAgentSessionTabs } from '@/components/native-chat/structured-agent-session-tabs'
+import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
+import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/structured-chat-slept-at'
 
 export type TerminalActivityTab = Pick<TerminalTab, 'id'>
 export type BrowserActivityTab = Pick<BrowserWorkspace, 'id'>
-export type WorktreeSectionTerminalActivityTab = Pick<TerminalTab, 'id' | 'title'>
 
-function haveSameProjection<T, U>(
-  previous: readonly U[] | undefined,
-  next: readonly T[],
-  isSame: (previousTab: U, nextTab: T) => boolean
-): boolean {
-  if (!previous || previous.length !== next.length) {
-    return false
-  }
-  for (let index = 0; index < next.length; index++) {
-    const previousTab = previous[index]
-    if (!previousTab || !isSame(previousTab, next[index])) {
-      return false
-    }
-  }
-  return true
+export function createVisibleWorktreeTerminalActivityProjection(
+  onInspectBucket?: (worktreeId: string) => void
+) {
+  return createWorktreeTabBucketProjection<TerminalTab, TerminalActivityTab>({
+    projectTab: (tab) => ({ id: tab.id }),
+    isSameProjectedTab: (previousTab, nextTab) => previousTab.id === nextTab.id,
+    onInspectBucket
+  })
 }
 
-function projectTabs<T, U>(
-  tabsByWorktree: Record<string, readonly T[]>,
-  previousProjection: Record<string, U[]> | null,
-  projectTab: (tab: T) => U,
-  isSame: (previousTab: U, nextTab: T) => boolean
-): { projection: Record<string, U[]>; unchanged: boolean } {
-  const nextProjection: Record<string, U[]> = {}
-  let unchanged =
-    previousProjection !== null &&
-    Object.keys(previousProjection).length === Object.keys(tabsByWorktree).length
-
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const previousTabs = previousProjection?.[worktreeId]
-    if (haveSameProjection(previousTabs, tabs, isSame)) {
-      nextProjection[worktreeId] = previousTabs as U[]
-      continue
-    }
-    unchanged = false
-    nextProjection[worktreeId] = tabs.map(projectTab)
-  }
-
-  return { projection: nextProjection, unchanged }
-}
-
-function projectIdTabs<T extends { id: string }, U extends { id: string }>(
-  tabsByWorktree: Record<string, readonly T[]>,
-  previousProjection: Record<string, U[]> | null
-): { projection: Record<string, U[]>; unchanged: boolean } {
-  return projectTabs(
-    tabsByWorktree,
-    previousProjection,
-    (tab) => ({ id: tab.id }) as U,
-    (previousTab, nextTab) => previousTab.id === nextTab.id
-  )
-}
-
-let cachedTerminalSource: Record<string, TerminalTab[]> | null = null
-let cachedTerminalProjection: Record<string, TerminalActivityTab[]> | null = null
+const terminalProjection = createVisibleWorktreeTerminalActivityProjection()
 
 export function getVisibleWorktreeTerminalActivityTabs(
   tabsByWorktree: Record<string, TerminalTab[]>
 ): Record<string, TerminalActivityTab[]> {
-  if (cachedTerminalSource === tabsByWorktree && cachedTerminalProjection) {
-    return cachedTerminalProjection
-  }
-  const { projection, unchanged } = projectIdTabs(tabsByWorktree, cachedTerminalProjection)
-  cachedTerminalSource = tabsByWorktree
-  if (unchanged && cachedTerminalProjection) {
-    return cachedTerminalProjection
-  }
-  cachedTerminalProjection = projection
-  return projection
+  return terminalProjection.project(tabsByWorktree)
 }
 
-let cachedSectionTerminalSource: Record<string, TerminalTab[]> | null = null
-let cachedSectionTerminalProjection: Record<string, WorktreeSectionTerminalActivityTab[]> | null =
-  null
-
-export function getWorktreeSectionTerminalActivityTabs(
-  tabsByWorktree: Record<string, TerminalTab[]>
-): Record<string, WorktreeSectionTerminalActivityTab[]> {
-  if (cachedSectionTerminalSource === tabsByWorktree && cachedSectionTerminalProjection) {
-    return cachedSectionTerminalProjection
-  }
-  const { projection, unchanged } = projectTabs(
-    tabsByWorktree,
-    cachedSectionTerminalProjection,
-    (tab) => ({ id: tab.id, title: tab.title }),
-    (previousTab, nextTab) => previousTab.id === nextTab.id && previousTab.title === nextTab.title
-  )
-  cachedSectionTerminalSource = tabsByWorktree
-  if (unchanged && cachedSectionTerminalProjection) {
-    return cachedSectionTerminalProjection
-  }
-  cachedSectionTerminalProjection = projection
-  return projection
-}
-
-let cachedBrowserSource: Record<string, BrowserWorkspace[]> | null = null
-let cachedBrowserProjection: Record<string, BrowserActivityTab[]> | null = null
+const browserProjection = createWorktreeTabBucketProjection<BrowserWorkspace, BrowserActivityTab>({
+  projectTab: (tab) => ({ id: tab.id }),
+  isSameProjectedTab: (previousTab, nextTab) => previousTab.id === nextTab.id
+})
 
 export function getVisibleWorktreeBrowserActivityTabs(
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
 ): Record<string, BrowserActivityTab[]> {
-  if (cachedBrowserSource === browserTabsByWorktree && cachedBrowserProjection) {
-    return cachedBrowserProjection
+  return browserProjection.project(browserTabsByWorktree)
+}
+
+export const EMPTY_STRUCTURED_CHAT_WORKTREE_IDS: ReadonlySet<string> = new Set()
+const EMPTY_SLEPT_CHATS: StructuredChatSleptAtByPaneKey = {}
+const structuredChatWorktreeIds = new WeakMap<
+  Record<string, Tab[]>,
+  WeakMap<StructuredChatSleptAtByPaneKey, ReadonlySet<string>>
+>()
+
+/** Only explicit Sleep marks rest a structured chat; idle child teardown or restart must not hide its workspace. */
+export function getWorktreeIdsWithStructuredChat(
+  unifiedTabsByWorktree: Record<string, Tab[]> | null | undefined,
+  structuredChatSleptAtByPaneKey: StructuredChatSleptAtByPaneKey = EMPTY_SLEPT_CHATS
+): ReadonlySet<string> {
+  if (!unifiedTabsByWorktree) {
+    return EMPTY_STRUCTURED_CHAT_WORKTREE_IDS
   }
-  const { projection, unchanged } = projectIdTabs(browserTabsByWorktree, cachedBrowserProjection)
-  cachedBrowserSource = browserTabsByWorktree
-  if (unchanged && cachedBrowserProjection) {
-    return cachedBrowserProjection
+  // Cache whole-store scans by snapshot because every card selector runs on each store write.
+  const cached = structuredChatWorktreeIds
+    .get(unifiedTabsByWorktree)
+    ?.get(structuredChatSleptAtByPaneKey)
+  if (cached) {
+    return cached
   }
-  cachedBrowserProjection = projection
-  return projection
+  const worktreeIds = new Set(
+    getStructuredAgentSessionTabs(unifiedTabsByWorktree)
+      .filter(
+        (tab) =>
+          structuredChatSleptAtByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)] ===
+          null
+      )
+      .map((tab) => tab.worktreeId)
+  )
+  const bySleptAt = structuredChatWorktreeIds.get(unifiedTabsByWorktree) ?? new WeakMap()
+  bySleptAt.set(structuredChatSleptAtByPaneKey, worktreeIds)
+  structuredChatWorktreeIds.set(unifiedTabsByWorktree, bySleptAt)
+  return worktreeIds
+}
+
+export function getStructuredChatWorktreeIds(
+  showSleepingWorkspaces: boolean,
+  unifiedTabsByWorktree: Record<string, Tab[]> | null | undefined,
+  structuredChatSleptAtByPaneKey: StructuredChatSleptAtByPaneKey = EMPTY_SLEPT_CHATS
+): ReadonlySet<string> {
+  return showSleepingWorkspaces
+    ? EMPTY_STRUCTURED_CHAT_WORKTREE_IDS
+    : getWorktreeIdsWithStructuredChat(unifiedTabsByWorktree, structuredChatSleptAtByPaneKey)
 }

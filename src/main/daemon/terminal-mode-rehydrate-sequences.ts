@@ -1,16 +1,12 @@
 import type { TerminalModes } from './types'
+import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal-mode-reset-profiles'
 
-// Why no kitty flags here: rehydrateSequences feeds renderer xterms, and
-// POST_REPLAY_REATTACH_RESET's deliberate kitty reset (stale CSI-u Ctrl+C
-// hazard) must stay authoritative. modes.kittyKeyboardFlags exists for
-// emulator re-seed parity only; a re-seeded emulator answers ?0u and
-// protocol-conformant programs re-push.
+// Restore kitty flags separately after screen switches, which swap their state.
 export function buildRehydrateSequences(modes: TerminalModes): string {
   const seqs: string[] = []
   if (modes.alternateScreen) {
-    // Why: normal-buffer serialization can leave its pen active, while the
-    // separately serialized alt body assumes it starts from default SGR.
-    seqs.push('\x1b[0m\x1b[?1049h')
+    // The alternate buffer assumes default SGR; normal-buffer replay may leave a different pen active.
+    seqs.push(`${RESET_GRAPHIC_RENDITION}\x1b[?1049h`)
   }
   if (modes.bracketedPaste) {
     seqs.push('\x1b[?2004h')
@@ -18,9 +14,12 @@ export function buildRehydrateSequences(modes: TerminalModes): string {
   if (modes.applicationCursor) {
     seqs.push('\x1b[?1h')
   }
-  // Why: mobile alt-screen scroll gestures need xterm's mouse mode restored
-  // from cold snapshots; OpenCode/OpenTUI enables scrollable panes this way.
-  switch (modes.mouseTracking ? (modes.mouseTrackingMode ?? 'vt200') : 'none') {
+  // Input mirrors consume XTMODKEYS to preserve modified Enter; xterm ignores it.
+  if (modes.modifyOtherKeys !== undefined) {
+    seqs.push(`\x1b[>4;${modes.modifyOtherKeys}m`)
+  }
+  const trackingMode = modes.mouseTracking ? (modes.mouseTrackingMode ?? 'vt200') : 'none'
+  switch (trackingMode) {
     case 'x10':
       seqs.push('\x1b[?9h')
       break
@@ -36,12 +35,14 @@ export function buildRehydrateSequences(modes: TerminalModes): string {
     case 'none':
       break
   }
-  // Why: xterm tracks the mouse protocol and SGR encoding as independent
-  // modes, so snapshots must preserve the encoding even when reporting is off.
+  // Mouse encoding is independent of tracking and must survive even when reporting is off.
   if (modes.sgrMousePixelsMode) {
     seqs.push('\x1b[?1016h')
   } else if (modes.sgrMouseMode) {
     seqs.push('\x1b[?1006h')
+  } else if (trackingMode !== 'none') {
+    // Emit default encoding explicitly so replay readers need not infer it.
+    seqs.push('\x1b[?1006l')
   }
   return seqs.join('')
 }

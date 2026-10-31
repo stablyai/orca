@@ -1,32 +1,27 @@
-/**
- * Parked terminal watcher registry (store-free bookkeeping).
- *
- * Why a separate module: shutdownWorktreeTerminals (a store slice) must
- * synchronously dispose parked watchers, but the watcher lifecycle module
- * imports the store — a slice importing it would re-enter store creation
- * mid-evaluation. Keeping the maps and pure disposal here lets the slice
- * import cycle-free, mirroring how pty-dispatcher exports its handler maps.
- */
-import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
+/** Store-free registry/disposal lets shutdown slices stop watchers synchronously without re-entering store initialization through the watcher lifecycle import. */
+import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
+import { discardPreHandlerPtyState, hasPreHandlerPtyExit } from './pty-pre-handler-buffer'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { releaseTerminalScrollIntentKey } from '../../lib/pane-manager/terminal-scroll-intent-key-store'
 
 export type ParkedTerminalPaneCapture = {
+  workspaceOwner?: NotificationWorkspaceOwner
   ptyId: string | null
   /** PaneManager numeric pane id the live pane used for runtime titles. */
   paneId: number
   /** Stable terminal-layout leaf UUID (paneKey attribution). */
   leafId: string
   drivesTabTitle: boolean
+  /** Plain captured fresh/untouched facts preserve sole-newborn exit parity without retaining the session. */
+  untouchedFreshSpawn?: boolean
 }
 
 export type CapturedTabPanes = { worktreeId: string; panes: ParkedTerminalPaneCapture[] }
 
 export const capturedPanesByTabId = new Map<string, CapturedTabPanes>()
 
-// Why: PaneManager pane ids die with the unmounted pane, but the watcher must
-// keep writing the exact runtime-title slots the live pane used — a different
-// slot would strand a stale "working" title that pins worktree status.
-// TerminalPane unmount records the identities here for the park wiring.
+// Capture original runtime-title slots before numeric IDs disappear on unmount, or stale working titles can pin status.
 export function captureParkedTerminalPaneCandidates(
   tabId: string,
   worktreeId: string,
@@ -37,11 +32,9 @@ export function captureParkedTerminalPaneCandidates(
 
 export type ParkedTabWatcherEntry = {
   worktreeId: string
-  /** Tab-level ptyId at watcher start; a change means the PTY was re-minted
-   *  (e.g. wake respawn) and the watchers must restart against fresh ids. */
+  /** Restart watchers when tab PTY changes, including wake respawn. */
   tabPtyId: string | null
-  /** Runtime-title slot each watcher writes, so parked PTY-exit handling can
-   *  clear the dead leaf's slot (no live pane will ever overwrite it). */
+  /** Retain runtime-title slots so exits can clear dead leaves with no mounted pane. */
   paneIdByPtyId: Map<string, number>
   disposersByPtyId: Map<string, () => void>
 }
@@ -57,14 +50,27 @@ export function terminalWatcherLiveWorkspaceIds(workspaceIds: Iterable<string>):
   return new Set([...workspaceIds, FLOATING_TERMINAL_WORKTREE_ID])
 }
 
-/**
- * Whether this tab is parked right now — the reveal remount's own mount effect
- * runs before the host effect that disposes the watcher (child effects first),
- * so a pane reading this at connect time can tell a park-reveal from an
- * in-place reattach. Empty entries are pinned-close tombstones, not live parks.
- */
+/** Reveal renders before watcher disposal; nonempty watcher entries identify park-reveal, while empty pinned-close tombstones do not. */
 export function isTerminalTabParked(tabId: string): boolean {
   return (parkedWatchersByTabId.get(tabId)?.disposersByPtyId.size ?? 0) > 0
+}
+
+/** Collect live disposer-backed PTYs once per publication to avoid per-leaf quadratic scans. Ignore retained pane-ID tombstones, remote-runtime watchers without exit evidence, and buffered exits racing registration; these cannot prove a published leaf alive. */
+export function collectParkedTerminalWatcherPtyIds(): Set<string> {
+  const ptyIds = new Set<string>()
+  for (const entry of parkedWatchersByTabId.values()) {
+    for (const ptyId of entry.disposersByPtyId.keys()) {
+      if (parseRemoteRuntimePtyId(ptyId) === null && !hasPreHandlerPtyExit(ptyId)) {
+        ptyIds.add(ptyId)
+      }
+    }
+  }
+  return ptyIds
+}
+
+/** Read actual watcher slots, including layout-added leaves absent from unmount captures; fabricated ordinals can address retired panes and wrong title slots. */
+export function getParkedTerminalWatcherPaneIdsByPtyId(tabId: string): Map<string, number> {
+  return new Map(parkedWatchersByTabId.get(tabId)?.paneIdByPtyId ?? [])
 }
 
 export function disposeParkedTabWatchers(tabId: string): void {
@@ -80,19 +86,19 @@ export function disposeParkedTabWatchers(tabId: string): void {
 }
 
 export function retireParkedTerminalTab(tabId: string): void {
-  // Why: explicit tab retirement permanently invalidates both live parked
-  // observers and unmounted-pane candidates; neither may reattach later.
+  // Explicit retirement invalidates both live watchers and captured candidates permanently.
   disposeParkedTabWatchers(tabId)
-  capturedPanesByTabId.delete(tabId)
+  const capture = capturedPanesByTabId.get(tabId)
+  if (capture) {
+    // Parked panes skip manager teardown; release strong scroll-intent keys here to prevent per-leaf leaks.
+    for (const pane of capture.panes) {
+      releaseTerminalScrollIntentKey(pane.leafId)
+    }
+    capturedPanesByTabId.delete(tabId)
+  }
 }
 
-/**
- * Synchronously disposes any parked watcher subscribed to these PTYs.
- * Shutdown transactionally suspends dispatcher sidecars before teardown, then
- * disposes their watchers only after commit. The tab entries remain so a
- * sleeping parked tab cannot restart against stale PTY ids; wake re-mints the
- * ids and the sync path restarts watchers then.
- */
+/** Dispose sidecars only after shutdown commits; retain tab entries against stale-ID restarts until wake remints IDs. */
 export function disposeParkedTerminalWatchersForPtyIds(ptyIds: readonly string[]): void {
   for (const entry of parkedWatchersByTabId.values()) {
     for (const ptyId of ptyIds) {
@@ -140,9 +146,7 @@ function disposeRemovedWorktreeParkedTabWatchers(
   tabId: string,
   entry: ParkedTabWatcherEntry
 ): void {
-  // Why: removal unregisters sidecars before PTY kill finishes. Tombstone each
-  // old PTY now so its delayed final flush/exit cannot refill bounded buffers
-  // after this worktree loses every future pane consumer.
+  // Tombstone before delayed final flush/exit can refill buffers after the workspace loses all consumers.
   for (const ptyId of entry.paneIdByPtyId.keys()) {
     discardPreHandlerPtyState(ptyId)
   }
@@ -158,6 +162,10 @@ export function pruneParkedTerminalWatchers(liveWorktreeIds: ReadonlySet<string>
   }
   for (const [tabId, capture] of capturedPanesByTabId) {
     if (!liveWorktreeIds.has(capture.worktreeId)) {
+      for (const pane of capture.panes) {
+        // Workspace removal can bypass parked closeTab; release its strong scroll-intent keys too.
+        releaseTerminalScrollIntentKey(pane.leafId)
+      }
       capturedPanesByTabId.delete(tabId)
     }
   }

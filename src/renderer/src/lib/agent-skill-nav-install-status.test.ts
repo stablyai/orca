@@ -1,10 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type {
-  SkillFreshnessInstallation,
-  SkillFreshnessInventory,
-  SkillFreshnessStatus
-} from '../../../shared/skill-freshness'
+import type { BundledSkillOp, BundledSkillPlan } from '../../../shared/bundled-skill-plan'
+import { planOf, sharedEntry } from '../components/skills/bundled-skill-plan-fixtures.test-support'
 import type { DiscoveredSkill } from '../../../shared/skills'
 import {
   getAgentSkillNavInstallStatus,
@@ -24,50 +21,22 @@ function skill(name: string): DiscoveredSkill {
     directoryPath,
     skillFilePath: path.join(directoryPath, 'SKILL.md'),
     installed: true,
-    fileCount: 1,
     updatedAt: null
   }
 }
 
-function placement(name: string, status: SkillFreshnessStatus): SkillFreshnessInstallation {
-  const unresolvedPath = path.join('home', 'test', '.agents', 'skills', name)
-  return {
-    id: name,
-    name,
-    rootId: 'home-agents',
-    providers: ['agent-skills'],
-    sourceKind: 'home',
-    sourceLabel: 'Agent skills home',
-    unresolvedPath,
-    resolvedPath: unresolvedPath,
-    physicalIdentity: name,
-    topology: 'canonical-copy',
-    status,
-    installedReleaseRevision: 1,
-    installedAppVersion: '1.0.0',
-    currentReleaseRevision: 2,
-    currentPackageDigest: 'current',
-    currentAppVersion: '2.0.0',
-    observedPackageDigest: status === 'current' ? 'current' : 'other',
-    errorCategory: null
-  }
-}
-
-function inventory(
-  installations: SkillFreshnessInstallation[],
-  eligibleUpdateNames: string[] = []
-): SkillFreshnessInventory {
-  return { schemaVersion: 1, installations, eligibleUpdateNames, scanIssues: [], scannedAt: 1 }
+function plan(...skills: [string, BundledSkillOp['kind']][]): BundledSkillPlan {
+  return planOf(skills.map(([name, kind]) => sharedEntry(name, kind)))
 }
 
 describe('getAgentSkillNavInstallStatus', () => {
-  it('keeps loading and missing states ahead of freshness', () => {
+  it('keeps loading and missing states ahead of the plan', () => {
     expect(
       getAgentSkillNavInstallStatus({
         name: 'orca-linear',
         installed: true,
         loading: true,
-        inventory: inventory([placement('orca-linear', 'current')])
+        plan: plan(['orca-linear', 'keep'])
       })
     ).toBe('checking')
     expect(
@@ -75,7 +44,7 @@ describe('getAgentSkillNavInstallStatus', () => {
         name: 'orca-linear',
         installed: false,
         loading: false,
-        inventory: null
+        plan: null
       })
     ).toBe('install')
   })
@@ -90,7 +59,7 @@ describe('getLinearAgentSkillNavInstallStatus', () => {
         skills,
         installed: true,
         loading: false,
-        inventory: inventory([placement('orca-linear', 'current')])
+        plan: plan(['orca-linear', 'keep'])
       })
     ).toBe('up-to-date')
     expect(
@@ -98,7 +67,7 @@ describe('getLinearAgentSkillNavInstallStatus', () => {
         skills,
         installed: true,
         loading: false,
-        inventory: inventory([placement('orca-linear', 'outdated')], ['orca-linear'])
+        plan: plan(['orca-linear', 'update'])
       })
     ).toBe('update-available')
   })
@@ -109,32 +78,29 @@ describe('getLinearAgentSkillNavInstallStatus', () => {
         skills: [skill('linear-tickets')],
         installed: true,
         loading: false,
-        inventory: inventory([placement('linear-tickets', 'current')])
+        plan: plan(['linear-tickets', 'keep'])
       })
     ).toBe('up-to-date')
   })
 
-  it('prefers canonical freshness when both names are installed', () => {
+  it('prefers the plan for the canonical name when both names are installed', () => {
     expect(
       getLinearAgentSkillNavInstallStatus({
         skills: [skill('orca-linear'), skill('linear-tickets')],
         installed: true,
         loading: false,
-        inventory: inventory(
-          [placement('orca-linear', 'current'), placement('linear-tickets', 'outdated')],
-          ['linear-tickets']
-        )
+        plan: plan(['orca-linear', 'keep'], ['linear-tickets', 'update'])
       })
     ).toBe('up-to-date')
   })
 
-  it('falls back to presence-only status when freshness does not apply', () => {
+  it('falls back to presence-only status when no plan applies', () => {
     expect(
       getLinearAgentSkillNavInstallStatus({
         skills: [skill('orca-linear')],
         installed: true,
         loading: false,
-        inventory: null
+        plan: null
       })
     ).toBe('installed')
   })

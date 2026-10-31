@@ -21,8 +21,7 @@ type DiagnosticTabsSnapshot = {
 
 type DiagnosticDimensions = { readonly cols: number; readonly rows: number } | null | undefined
 
-// Why: full runtime identifiers make shared logs unnecessarily sensitive; the
-// suffix is enough to correlate lifecycle events within one reproduction.
+// Use suffixes to correlate lifecycle events without exposing full runtime identifiers in shared logs.
 export function shortenMobileTerminalDiagnosticId(value: string | null | undefined): string | null {
   if (!value) {
     return null
@@ -41,8 +40,7 @@ export function logMobileTerminalDiagnostic(
   event: string,
   details: MobileTerminalDiagnosticDetails = {}
 ): void {
-  // Why: lifecycle diagnostics are intentionally available for HMR repros,
-  // but high-frequency WebView events must not add production log overhead.
+  // High-frequency WebView diagnostics must add no production logging overhead.
   if (typeof __DEV__ !== 'undefined' && !__DEV__) {
     return
   }
@@ -141,12 +139,35 @@ export class MobileTerminalDiagnostics {
     })
   }
 
-  streamResubscribing(handle: string, seq: number, dims: { cols: number; rows: number }): void {
+  streamResubscribing(
+    handle: string,
+    seq: number,
+    dims: { cols: number; rows: number },
+    attempt: number,
+    delayMs: number
+  ): void {
     logMobileTerminalDiagnostic('stream-resubscribe-for-viewport', {
       handle: shortenMobileTerminalDiagnosticId(handle),
       seq,
       cols: dims.cols,
-      rows: dims.rows
+      rows: dims.rows,
+      attempt,
+      delayMs
+    })
+  }
+
+  streamResubscribeHeld(handle: string, seq: number): void {
+    logMobileTerminalDiagnostic('stream-resubscribe-held-absent-dims', {
+      handle: shortenMobileTerminalDiagnosticId(handle),
+      seq
+    })
+  }
+
+  streamResubscribeExhausted(handle: string, seq: number, attempts: number): void {
+    logMobileTerminalDiagnostic('stream-resubscribe-exhausted', {
+      handle: shortenMobileTerminalDiagnosticId(handle),
+      seq,
+      attempts
     })
   }
 

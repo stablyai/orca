@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
   notifyCodexPaneBoundForStaleSweep,
-  resetCodexStalePaneSweepForTests
+  resetCodexStalePaneSweepForTests,
+  sweepRestoredCodexPanesForStaleAccounts
 } from './codex-stale-pane-sweep'
 
 const ACCOUNT_A = 'account-a@example.com'
@@ -41,7 +42,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
         ]
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      pendingCodexPaneRestartIds: {},
+      pendingPaneAccountRestarts: {},
       codexRestartNoticeByPtyId: {}
     })
     ;(globalThis as { window: typeof window }).window = {
@@ -83,7 +84,6 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
     vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
 
     notifyCodexPaneBoundForStaleSweep('pty-1')
-    // Nothing inspected yet: the bind has not settled.
     expect(window.api.pty.inspectProcess).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(300)
@@ -111,8 +111,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   })
 
   it('still coalesces a burst whose binds land milliseconds apart', async () => {
-    // Real startup binds are staggered, so per-PTY due times must not turn one
-    // sweep into one registry round-trip per pane.
+    // Staggered startup binds must still batch registry reads rather than make one round trip per pane.
     useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
     vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
 
@@ -148,21 +147,15 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
     vi.mocked(window.api.pty.inspectProcess).mockRejectedValue(new Error('terminal_gone'))
 
     notifyCodexPaneBoundForStaleSweep('pty-1')
-    // Well past the last rung (35.8s), so this pins the ceiling, not the clock.
     await vi.advanceTimersByTimeAsync(120_000)
 
     expect(window.api.pty.inspectProcess).toHaveBeenCalledTimes(5)
-    // Why: the count alone only bounds the first two minutes — a rung past the
-    // window would still read as 5. An empty queue is what proves the ladder
-    // ended rather than merely moved out of view.
+    // An empty queue proves bounded retries ended; counts alone could hide another rung beyond this time window.
     expect(vi.getTimerCount()).toBe(0)
   })
 
   it('still sweeps a pane whose reattach outlives the first three rungs', async () => {
-    // Regression: live Windows 11 runs raised the notice on the third rung
-    // (5.8s) in all three samples, i.e. the ladder ended exactly where the
-    // slowest measured box landed. A colder reattach falls past it, and the
-    // failure is silent — no card, so the pane keeps running the old account.
+    // The old 5.8s tail matched the slowest measured Windows reattach; colder panes need later bounded retries.
     vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
     vi.mocked(window.api.pty.inspectProcess)
       .mockRejectedValueOnce(new Error('terminal_gone'))
@@ -170,12 +163,10 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
       .mockRejectedValueOnce(new Error('terminal_gone'))
 
     notifyCodexPaneBoundForStaleSweep('pty-1')
-    // t = 5800: rungs 1-3 are spent and nothing has been raised.
     await vi.advanceTimersByTimeAsync(5_800)
     expect(inspectCallCountFor('pty-1')).toBe(3)
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
 
-    // t = 15800: the fourth rung is the one that catches this pane.
     await vi.advanceTimersByTimeAsync(10_000)
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
@@ -188,10 +179,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   })
 
   it('spends a pane its full retry ladder even when another pane binds later', async () => {
-    // Regression: one shared timer used to drain every queued PTY, so a pane
-    // already waiting on its 1500ms rung had the next rung consumed by the newer
-    // pane's shorter delay — burning through its ladder early and dropping a
-    // Windows daemon reattach that had not settled yet.
+    // A new pane’s short delay must not consume another pane’s later retry before its reattach settles.
     useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
     vi.mocked(window.api.pty.inspectProcess).mockRejectedValue(new Error('terminal_gone'))
 
@@ -199,7 +187,6 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
     await vi.advanceTimersByTimeAsync(310)
     notifyCodexPaneBoundForStaleSweep('pty-2')
 
-    // t = 3310: past pty-1's second look (1800), well before its third (5800).
     await vi.advanceTimersByTimeAsync(3_000)
     expect(inspectCallCountFor('pty-1')).toBe(2)
 
@@ -216,14 +203,11 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
     notifyCodexPaneBoundForStaleSweep('pty-2')
     await vi.advanceTimersByTimeAsync(300)
 
-    // The pending timer was pty-1's 1500ms rung; pty-2 must not inherit that wait.
     expect(inspectCallCountFor('pty-2')).toBe(1)
   })
 
   it('retries a pane whose sweep threw instead of dropping it', async () => {
-    // Why: listStalePanes reads the on-disk pane-account registry and is the one
-    // call in the sweep with no catch of its own, so a transient rejection must
-    // spend a rung like any other unusable read.
+    // Registry rejection is inconclusive; spend a retry rung instead of dropping the pane.
     vi.mocked(window.api.codexAccounts.listStalePanes)
       .mockRejectedValueOnce(new Error('registry unreadable'))
       .mockResolvedValue([STALE_PANE])
@@ -243,13 +227,10 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   })
 
   it('still fires a pane waiting on a later rung when an earlier sweep throws', async () => {
-    // Regression: the failing sweep took its own PTYs out of the queue and
-    // returned without re-aiming the timer, so pty-1 — parked on its 1500ms rung
-    // and never touched by that sweep — was left with nothing to fire it, ever.
+    // A failed sweep must re-arm the timer for untouched panes waiting on later rungs.
     useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] } })
     vi.mocked(window.api.pty.inspectProcess).mockRejectedValueOnce(new Error('terminal_gone'))
-    // Why: keyed on the swept PTY rather than call order, so the rejection stays
-    // bound to pty-2's sweep even if the flush sequence changes.
+    // Bind the rejection to pty-2, independent of flush order.
     vi.mocked(window.api.codexAccounts.listStalePanes).mockImplementation(async ({ ptyIds }) => {
       if (ptyIds.includes('pty-2')) {
         throw new Error('registry unreadable')
@@ -258,14 +239,10 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
     })
 
     notifyCodexPaneBoundForStaleSweep('pty-1')
-    // t = 300: pty-1 reads inconclusive and parks on its 1500ms rung (due 1800).
     await vi.advanceTimersByTimeAsync(300)
     notifyCodexPaneBoundForStaleSweep('pty-2')
-    // t = 600: pty-2's sweep is the one that throws; pty-1 is not due and untouched.
     await vi.advanceTimersByTimeAsync(300)
-    // Why: assert the throw really landed on a sweep pty-1 was absent from, or a
-    // later change to the flush sequence could leave this passing while the
-    // stranding it exists to catch is no longer being set up at all.
+    // Prove pty-1 was absent from the throwing sweep so the stranded-later-retry scenario remains covered.
     expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledWith({ ptyIds: ['pty-2'] })
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
 
@@ -299,10 +276,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   })
 
   it('does not suppress a pane whose notice the store dropped', async () => {
-    // Why: suppression is permanent for the session, so claiming a pane was
-    // notified when no notice survived silently strands it on the old account.
-    // The pane already remembers account-b as its launch account, which
-    // collapses a fresh notice pointing back at account-b.
+    // A collapsed notice must not permanently suppress the pane: its remembered launch account already equals active account-b.
     useAppStore.setState({
       codexRestartNoticeByPtyId: {
         'pty-1': {
@@ -396,10 +370,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
     })
   })
 
-  // Why: recordCodexPaneAccountForSpawn bails on anything that is not a daemon
-  // HOST spawn, so no remote/SSH pane is ever in the registry and listStalePanes
-  // can never report one. Every rung one takes is a 15s-timeout RPC spent to
-  // learn nothing, five times over.
+  // Only daemon host spawns have registry records; remote/SSH retry ladders waste up to five 15s RPCs.
   it.each(['remote:env-1@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7'])(
     'never queues %s, so no rung spends an RPC on it',
     async (ptyId) => {
@@ -409,12 +380,9 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
       ])
 
       notifyCodexPaneBoundForStaleSweep(ptyId)
-      // Why assert the timer before advancing it: the scan would skip this pane
-      // anyway, so only an unarmed queue proves it was rejected at the door
-      // rather than costing a flush + scan on every rung.
+      // An unarmed timer proves rejection before queueing; scan-time filtering alone would still waste every rung.
       expect(vi.getTimerCount()).toBe(0)
 
-      // Well past the whole ladder, so this pins "never queued", not "not yet".
       await vi.advanceTimersByTimeAsync(120_000)
 
       expect(vi.getTimerCount()).toBe(0)
@@ -430,6 +398,27 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
 
     notifyCodexPaneBoundForStaleSweep('remote:env-1@@term-1')
     notifyCodexPaneBoundForStaleSweep('pty-1')
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledExactlyOnceWith({
+      ptyIds: ['pty-1']
+    })
+    expect(inspectCallCountFor('remote:env-1@@term-1')).toBe(0)
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B,
+      previousAccountId: 'account-a',
+      nextAccountId: 'account-b'
+    })
+  })
+
+  it('re-raises the prompt for a restored pane whose tab never mounts', async () => {
+    // Restored background tabs must get stale-account checks without ever mounting a pane.
+    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([STALE_PANE])
+
+    sweepRestoredCodexPanesForStaleAccounts({
+      ptyIdsByTabId: { 'tab-1': ['pty-1', 'remote:env-1@@term-1'] }
+    })
     await vi.advanceTimersByTimeAsync(300)
 
     expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledExactlyOnceWith({

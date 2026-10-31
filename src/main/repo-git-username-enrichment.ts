@@ -1,50 +1,62 @@
-import type { Repo } from '../shared/types'
+import { getRepoExecutionHostId } from '../shared/execution-host'
+import type { Repo } from '../shared/repo-types'
 import { resolveLocalGitUsernameDetailed } from './git/git-username'
+import { blockedWslDistroForPath, wslDistroForPath } from './wsl/wsl-unc-access-gate'
 
 type RepoUsernameStore = {
   getRepos(): Repo[]
-  setResolvedRepoGitUsername(id: string, username: string): boolean
+  // Repo ids can repeat across hosts.
+  setResolvedRepoGitUsername(
+    target: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
+    username: string
+  ): boolean
 }
 
 type EnrichmentOptions = {
   onChanged?: () => void
 }
 
-// Why: resolution spawns git (and possibly gh) subprocesses, so run it at most
-// once per repo location per app session — hydrateRepo serves the persisted
-// value in between, and a relaunch picks up config changes.
+// Probe once per location per session; serve the persisted value between launches.
 const attemptedLocations = new Set<string>()
 let enrichmentInFlight: Promise<void> | null = null
 let rerunRequested = false
 
-function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId'>): string {
-  return `${repo.connectionId ?? 'local'}\0${repo.path}`
+function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>): string {
+  return `${getRepoExecutionHostId(repo)}\0${repo.path}`
 }
 
 async function enrichRepoGitUsernamesInBackground(
   store: RepoUsernameStore,
   options: EnrichmentOptions
 ): Promise<void> {
-  const candidates = store.getRepos().filter(
+  const repos = store.getRepos()
+  const liveLocations = new Set(
+    repos.filter((repo) => repo.kind !== 'folder' && !repo.connectionId).map(getRepoLocationKey)
+  )
+  for (const location of attemptedLocations) {
+    if (!liveLocations.has(location)) {
+      attemptedLocations.delete(location)
+    }
+  }
+  const candidates = repos.filter(
     (repo) =>
       repo.kind !== 'folder' &&
-      // Why: SSH repo paths are remote; local git cannot inspect them. The
-      // SSH username path (getSshGitUsername) stays caller-driven.
       !repo.connectionId &&
       !attemptedLocations.has(getRepoLocationKey(repo))
   )
   let changed = false
   for (const repo of candidates) {
+    // E9: git on a stopped distro's repo boots it; leave it unattempted so a later pass retries.
+    if (wslDistroForPath(repo.path) && (await blockedWslDistroForPath(repo.path))) {
+      continue
+    }
     attemptedLocations.add(getRepoLocationKey(repo))
     const { username, authoritative } = await resolveLocalGitUsernameDetailed(repo.path)
-    // Why: a non-authoritative '' means a probe timed out and says nothing
-    // about the account — keep the persisted value. An authoritative result
-    // (including '') is the current truth: it must also CLEAR a stale
-    // persisted username after the user removes github.user or logs out.
+    // Preserve cached usernames on failure; authoritative empty results clear stale accounts.
     if (!authoritative && !username) {
       continue
     }
-    if (store.setResolvedRepoGitUsername(repo.id, username)) {
+    if (store.setResolvedRepoGitUsername(repo, username)) {
       changed = true
     }
   }
@@ -53,18 +65,13 @@ async function enrichRepoGitUsernamesInBackground(
   }
 }
 
-/**
- * Resolve git usernames for repos that haven't been probed this session, off
- * the caller's critical path. Fire-and-forget by design: repos:list must stay
- * subprocess-free (issue #7225 — a stuck sync probe froze startup for minutes).
- */
+// Keep repo-list calls subprocess-free to avoid blocking startup.
 export function enrichRepoGitUsernames(
   store: RepoUsernameStore,
   options: EnrichmentOptions = {}
 ): void {
   if (enrichmentInFlight) {
-    // Why: a repo added mid-pass would otherwise be dropped until some later
-    // repos:list happens to fire — queue one follow-up pass instead.
+    // Pick up repos added while the current pass was probing.
     rerunRequested = true
     return
   }

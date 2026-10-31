@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES,
-  buildNewWorkspaceFolderSourceOptions,
   buildNewWorkspaceProjectOptions,
-  getRepoIdFromNewWorkspaceFolderSourceOptionId,
-  isNewWorkspaceProjectOptionQueryTooLarge,
-  searchNewWorkspaceProjectOptions,
-  type NewWorkspaceProjectOption
+  findActionableFolderProjectGroup
 } from './new-workspace-project-options'
-import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../shared/types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
@@ -106,6 +103,35 @@ describe('buildNewWorkspaceProjectOptions', () => {
     })
 
     expect(options.map((option) => option.id)).toEqual(['github:stablyai/orca'])
+  })
+
+  it('excludes projects configured only on removed hosts', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [project()],
+      projectHostSetups: [
+        setup({ id: 'removed-setup', hostId: 'ssh:removed', repoId: 'ssh-repo' })
+      ],
+      eligibleRepos: [repo('ssh-repo', { connectionId: 'removed' })],
+      hosts: [{ id: 'local', label: 'Local Mac' }]
+    })
+
+    expect(options).toEqual([])
+  })
+
+  it('keeps projects with an actionable sibling setup', () => {
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [project()],
+      projectHostSetups: [
+        setup({ id: 'local-setup', hostId: 'local', repoId: 'local-repo' }),
+        setup({ id: 'removed-setup', hostId: 'ssh:removed', repoId: 'ssh-repo' })
+      ],
+      eligibleRepos: [repo('local-repo'), repo('ssh-repo', { connectionId: 'removed' })],
+      hosts: [{ id: 'local', label: 'Local Mac' }]
+    })
+
+    expect(options).toEqual([
+      expect.objectContaining({ id: 'github:stablyai/orca', detail: 'stablyai/orca' })
+    ])
   })
 
   it('shows configured directories when project names are duplicated', () => {
@@ -358,71 +384,6 @@ describe('buildNewWorkspaceProjectOptions', () => {
       'Builder (ssh:builder-b) · /workspace/merchant'
     ])
   })
-
-  it('filters project options by display name and detail', () => {
-    const options: NewWorkspaceProjectOption[] = [
-      {
-        kind: 'project',
-        id: 'orca',
-        projectId: 'orca',
-        displayName: 'Orca',
-        badgeColor: '#111111',
-        detail: 'stablyai/orca'
-      },
-      {
-        kind: 'project',
-        id: 'docs',
-        projectId: 'docs',
-        displayName: 'Docs',
-        badgeColor: '#222222',
-        detail: 'stablyai/docs'
-      }
-    ]
-
-    expect(searchNewWorkspaceProjectOptions(options, 'docs')).toEqual([options[1]])
-    expect(searchNewWorkspaceProjectOptions(options, 'stablyai/orca')).toEqual([options[0]])
-  })
-
-  it('rejects oversized pasted searches before reading project options', () => {
-    const oversizedQuery = 'secret-project-option'.repeat(
-      NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES
-    )
-    const throwingOptions = [
-      {
-        id: 'secret',
-        badgeColor: '#111111',
-        get displayName(): string {
-          throw new Error('oversized project option queries must not scan names')
-        },
-        get detail(): string {
-          throw new Error('oversized project option queries must not scan details')
-        }
-      }
-    ] as NewWorkspaceProjectOption[]
-
-    expect(isNewWorkspaceProjectOptionQueryTooLarge(oversizedQuery)).toBe(true)
-    expect(searchNewWorkspaceProjectOptions(throwingOptions, oversizedQuery)).toEqual([])
-  })
-})
-
-describe('buildNewWorkspaceFolderSourceOptions', () => {
-  it('keeps concrete source repos separate even when they are the same logical project', () => {
-    const options = buildNewWorkspaceFolderSourceOptions([
-      repo('local-repo', { displayName: 'orca', path: '/tmp/orca' }),
-      repo('ssh-repo', {
-        displayName: 'orca',
-        path: '/srv/orca',
-        connectionId: 'ssh:builder'
-      })
-    ])
-
-    expect(options.map((option) => option.id).sort()).toEqual([
-      'folder-source:local-repo',
-      'folder-source:ssh-repo'
-    ])
-    expect(options.map((option) => option.detail).sort()).toEqual(['/srv/orca', '/tmp/orca'])
-    expect(getRepoIdFromNewWorkspaceFolderSourceOptionId('folder-source:ssh-repo')).toBe('ssh-repo')
-  })
 })
 
 describe('buildNewWorkspaceCreateTargetOptions', () => {
@@ -432,9 +393,16 @@ describe('buildNewWorkspaceCreateTargetOptions', () => {
       projects: [project()],
       projectHostSetups: [setup({ id: 'local-setup', repoId: 'local-repo' })],
       eligibleRepos: [repo('local-repo')],
+      hosts: [{ id: 'local', label: 'Local Mac' }],
       projectGroups: [
         group({ id: 'folder-group', name: 'Platform', parentPath: '/tmp/platform' }),
-        group({ id: 'org-group', name: 'Org', parentPath: null })
+        group({ id: 'org-group', name: 'Org', parentPath: null }),
+        group({
+          id: 'removed-folder-group',
+          name: 'Removed Remote',
+          parentPath: '/srv/removed',
+          connectionId: 'removed'
+        })
       ]
     })
 
@@ -448,5 +416,51 @@ describe('buildNewWorkspaceCreateTargetOptions', () => {
       displayName: 'Platform',
       detail: '/tmp/platform'
     })
+  })
+})
+
+describe('findActionableFolderProjectGroup', () => {
+  const folderGroups = [
+    group({ id: 'local-group' }),
+    group({ id: 'ssh-group', connectionId: 'box' }),
+    group({ id: 'repo-group', parentPath: null })
+  ]
+
+  it('finds a folder group whose host is actionable', () => {
+    expect(
+      findActionableFolderProjectGroup({
+        projectGroups: folderGroups,
+        groupId: 'ssh-group',
+        actionableHostIds: new Set(['ssh:box'])
+      })
+    ).toBe(folderGroups[1])
+  })
+
+  // Draft restoration must also reject removed/unreachable folder hosts.
+  it('rejects a folder group whose host is unavailable', () => {
+    expect(
+      findActionableFolderProjectGroup({
+        projectGroups: folderGroups,
+        groupId: 'ssh-group',
+        actionableHostIds: new Set(['local'])
+      })
+    ).toBeNull()
+  })
+
+  it('rejects repo groups and missing ids', () => {
+    expect(
+      findActionableFolderProjectGroup({
+        projectGroups: folderGroups,
+        groupId: 'repo-group',
+        actionableHostIds: new Set(['local'])
+      })
+    ).toBeNull()
+    expect(
+      findActionableFolderProjectGroup({
+        projectGroups: folderGroups,
+        groupId: null,
+        actionableHostIds: new Set(['local'])
+      })
+    ).toBeNull()
   })
 })

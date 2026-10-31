@@ -1,13 +1,31 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, killMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
-  killMock: vi.fn()
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
+
+const { runProcessMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>()
 }))
 
-vi.mock('child_process', () => ({
-  execFile: execFileMock
+// Verify discovery's process options; spawning and console hiding belong to runProcess.
+vi.mock('@orca/process-host', () => ({
+  runProcess: runProcessMock
 }))
+
+const ok = (stdout: string): ProcessResult => ({
+  code: 0,
+  signal: null,
+  stdout,
+  stderr: '',
+  timedOut: false
+})
+
+const timedOut: ProcessResult = {
+  code: null,
+  signal: 'SIGTERM',
+  stdout: '',
+  stderr: '',
+  timedOut: true
+}
 
 function expectedFallbackFont(platform = process.platform): string {
   if (platform === 'darwin') {
@@ -25,74 +43,88 @@ async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>):
   try {
     return await fn()
   } finally {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: originalPlatform
-    })
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
   }
-}
-
-async function expectFontCommandTimeout(
-  platform: NodeJS.Platform,
-  timeoutMs: number
-): Promise<void> {
-  await withPlatform(platform, async () => {
-    vi.useFakeTimers()
-    execFileMock.mockReturnValue({ kill: killMock })
-
-    const { listSystemFontFamilies } = await import('./system-fonts')
-    const fontsPromise = listSystemFontFamilies()
-    let resolvedFonts: string[] | null = null
-    fontsPromise.then((fonts) => {
-      resolvedFonts = fonts
-    })
-
-    await vi.advanceTimersByTimeAsync(timeoutMs - 1)
-
-    expect(resolvedFonts).toBeNull()
-    expect(killMock).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1)
-
-    await expect(fontsPromise).resolves.toContain(expectedFallbackFont(platform))
-    expect(killMock).toHaveBeenCalledOnce()
-  })
 }
 
 describe('listSystemFontFamilies', () => {
   afterEach(() => {
-    vi.useRealTimers()
     vi.resetModules()
-    execFileMock.mockReset()
-    killMock.mockReset()
+    runProcessMock.mockReset()
+  })
+
+  it('sets UTF-8 stdout encoding as the first statement of the Windows font script', async () => {
+    await withPlatform('win32', async () => {
+      runProcessMock.mockResolvedValue(ok('Consolas\n'))
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      const args = runProcessMock.mock.calls[0]?.[0].args ?? []
+      const script = args[args.indexOf('-Command') + 1] ?? ''
+      // Output before this statement would still use the OEM encoding.
+      expect(script.trim().split(/\r?\n/)[0]).toBe(
+        '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
+      )
+    })
+  })
+
+  it('spawns the Windows font script without an -ExecutionPolicy switch', async () => {
+    await withPlatform('win32', async () => {
+      runProcessMock.mockResolvedValue(ok('Consolas\n'))
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      const args = runProcessMock.mock.calls[0]?.[0].args ?? []
+      expect(args).toContain('-Command')
+      expect(args).not.toContain('-ExecutionPolicy')
+      expect(args).not.toContain('Bypass')
+    })
+  })
+
+  it('runs PowerShell by absolute path on Windows', async () => {
+    await withPlatform('win32', async () => {
+      runProcessMock.mockResolvedValue(ok('Consolas\n'))
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      const program = runProcessMock.mock.calls[0]?.[0].program ?? ''
+      expect(program).toMatch(/^[A-Za-z]:[\\/]/)
+      expect(program.toLowerCase()).toContain('system32')
+      expect(program.toLowerCase()).toContain('powershell.exe')
+    })
   })
 
   it('falls back when the platform font command never exits', async () => {
-    vi.useFakeTimers()
-    execFileMock.mockReturnValue({ kill: killMock })
+    runProcessMock.mockResolvedValue(timedOut)
 
     const { listSystemFontFamilies } = await import('./system-fonts')
-    const fontsPromise = listSystemFontFamilies()
-    let resolvedFonts: string[] | null = null
-    fontsPromise.then((fonts) => {
-      resolvedFonts = fonts
-    })
-
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(resolvedFonts).not.toBeNull()
-    expect(resolvedFonts).toContain(expectedFallbackFont())
-    expect(killMock).toHaveBeenCalledOnce()
+    await expect(listSystemFontFamilies()).resolves.toContain(expectedFallbackFont())
   })
 
-  it('uses the longer timeout for macOS profiler scans', async () => {
-    await expectFontCommandTimeout('darwin', 45_000)
+  it('falls back when the platform font command reports failure', async () => {
+    runProcessMock.mockResolvedValue({
+      code: 1,
+      signal: null,
+      stdout: '',
+      stderr: 'nope',
+      timedOut: false
+    })
+
+    const { listSystemFontFamilies } = await import('./system-fonts')
+    await expect(listSystemFontFamilies()).resolves.toContain(expectedFallbackFont())
   })
 
   it.each([
+    ['darwin' as NodeJS.Platform, 45_000],
     ['linux' as NodeJS.Platform, 15_000],
     ['win32' as NodeJS.Platform, 15_000]
-  ])('keeps the %s font command timeout short', async (platform, timeoutMs) => {
-    await expectFontCommandTimeout(platform, timeoutMs)
+  ])('asks for the %s font command timeout of %dms', async (platform, timeoutMs) => {
+    await withPlatform(platform, async () => {
+      runProcessMock.mockResolvedValue(ok('Consolas\n'))
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      expect(runProcessMock.mock.calls[0]?.[0].timeoutMs).toBe(timeoutMs)
+    })
   })
 })

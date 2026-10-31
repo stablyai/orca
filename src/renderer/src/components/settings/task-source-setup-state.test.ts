@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { TaskProvider } from '../../../../shared/types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import {
+  TASK_PROVIDER_SETUP_STATUS_TONE,
   getAutoExpandedTaskProvider,
   getIncompleteVisibleTaskProviders,
   getStalledVisibleTaskProviders,
@@ -35,23 +36,6 @@ function buildReadiness(
 }
 
 describe('task-source-setup-state', () => {
-  it('counts Linear readiness as three steps', () => {
-    expect(
-      getTaskProviderCompletedSteps({
-        connected: true,
-        checking: false,
-        skillInstalled: false,
-        visible: true
-      })
-    ).toEqual({ completed: 2, total: 3 })
-  })
-
-  it('counts code-host readiness as two steps', () => {
-    expect(
-      getTaskProviderCompletedSteps({ connected: true, checking: false, visible: true })
-    ).toEqual({ completed: 2, total: 2 })
-  })
-
   it('marks Linear ready only when connected, skill installed, and visible', () => {
     expect(
       isTaskProviderReady({
@@ -82,6 +66,43 @@ describe('task-source-setup-state', () => {
       })
     ).toBe(false)
     expect(isTaskProviderReady({ connected: true, checking: true, visible: true })).toBe(false)
+  })
+
+  it('reports an unverifiable skill scan as unknown rather than as a missing step', () => {
+    const unverifiable = {
+      connected: true,
+      checking: false,
+      skillInstalled: false,
+      skillChecking: false,
+      skillUnverifiable: true,
+      visible: true
+    }
+
+    expect(getTaskProviderSetupStatus(unverifiable)).toBe('skill-unverified')
+    expect(TASK_PROVIDER_SETUP_STATUS_TONE['skill-unverified']).toBe('attention')
+    expect(isTaskProviderReady(unverifiable)).toBe(false)
+    expect(getTaskProviderCompletedSteps(unverifiable)).toEqual({ completed: 2, total: 3 })
+  })
+
+  it('keeps an in-flight check and an unconnected provider ahead of an unverifiable scan', () => {
+    expect(
+      getTaskProviderSetupStatus({
+        connected: true,
+        checking: true,
+        skillInstalled: false,
+        skillUnverifiable: true,
+        visible: true
+      })
+    ).toBe('checking')
+    expect(
+      getTaskProviderSetupStatus({
+        connected: false,
+        checking: false,
+        skillInstalled: false,
+        skillUnverifiable: true,
+        visible: true
+      })
+    ).toBe('connect-required')
   })
 
   it('reports the first unmet step as the status', () => {
@@ -160,8 +181,7 @@ describe('task-source-setup-state', () => {
   })
 
   it('does not warn about providers nobody has connected yet', () => {
-    // Settings ship with every provider visible, so an untouched provider is the
-    // default state rather than something to flag on a fresh install.
+    // Untouched providers are visible by default, so fresh installs need no warning.
     const untouched = buildReadiness({
       github: { connected: false },
       gitlab: { connected: false },
@@ -184,7 +204,6 @@ describe('task-source-setup-state', () => {
       linear: { skillInstalled: false }
     })
 
-    // GitHub was never connected; Linear has a key but no skill.
     expect(getStalledVisibleTaskProviders(ORDER, stalled)).toEqual(['linear'])
   })
 
@@ -210,79 +229,12 @@ describe('task-source-setup-state', () => {
       linear: { skillInstalled: false, skillChecking: true }
     })
 
-    // Fresh incomplete list excludes checking providers (banner path).
     expect(getAutoExpandedTaskProvider(ORDER, whileChecking)).toBeNull()
-    // Sticky path keeps Linear open so install UI is not unmounted mid-scan.
+    // Keep the install terminal mounted while its skill scan runs.
     expect(
       resolveStickyAutoExpandedTaskProvider({
         providers: ORDER,
         readinessByProvider: whileChecking,
-        previousAutoExpanded: 'linear'
-      })
-    ).toBe('linear')
-  })
-
-  it('does not switch to a later incomplete provider during the previous provider recheck', () => {
-    const whileChecking = buildReadiness({
-      linear: { skillInstalled: false, skillChecking: true },
-      jira: { connected: false }
-    })
-
-    expect(getAutoExpandedTaskProvider(ORDER, whileChecking)).toBe('jira')
-    expect(
-      resolveStickyAutoExpandedTaskProvider({
-        providers: ORDER,
-        readinessByProvider: whileChecking,
-        previousAutoExpanded: 'linear'
-      })
-    ).toBe('linear')
-  })
-
-  it('does not hand the expansion to a provider whose check landed later', () => {
-    // gh/glab preflight is slower than the Linear status + skill scan, so GitHub
-    // only becomes eligible after Linear already auto-expanded.
-    const afterPreflight = buildReadiness({
-      github: { connected: false },
-      gitlab: { connected: false },
-      linear: { skillInstalled: false }
-    })
-
-    expect(getAutoExpandedTaskProvider(ORDER, afterPreflight)).toBe('github')
-    expect(
-      resolveStickyAutoExpandedTaskProvider({
-        providers: ORDER,
-        readinessByProvider: afterPreflight,
-        previousAutoExpanded: 'linear'
-      })
-    ).toBe('linear')
-  })
-
-  it('keeps the auto-expand slot after the chosen provider finishes', () => {
-    // Releasing it would let the next render pop a still-incomplete card open.
-    const afterLinearCompletes = buildReadiness({ github: { connected: false } })
-
-    expect(getAutoExpandedTaskProvider(ORDER, afterLinearCompletes)).toBe('github')
-    expect(
-      resolveStickyAutoExpandedTaskProvider({
-        providers: ORDER,
-        readinessByProvider: afterLinearCompletes,
-        previousAutoExpanded: 'linear'
-      })
-    ).toBe('linear')
-  })
-
-  it('keeps the auto-expand slot when the chosen provider is hidden', () => {
-    // Hiding an unfinished provider is the banner's own advice, so it must not
-    // hand the expansion to another card.
-    const afterHidingLinear = buildReadiness({
-      github: { connected: false },
-      linear: { skillInstalled: false, visible: false }
-    })
-
-    expect(
-      resolveStickyAutoExpandedTaskProvider({
-        providers: ORDER,
-        readinessByProvider: afterHidingLinear,
         previousAutoExpanded: 'linear'
       })
     ).toBe('linear')

@@ -1,5 +1,6 @@
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
-import { getProjectedWorktreeLineageChildrenByParentId } from './worktree-lineage-projection'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getProjectedWorktreeLineageChildrenByParentId } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
 type WorkspaceDeleteLineage = {
   descendants: Worktree[]
@@ -11,9 +12,26 @@ export function getWorkspaceDeleteLineage(
   worktrees: readonly Worktree[],
   lineageById: Record<string, WorktreeLineage>
 ): WorkspaceDeleteLineage {
-  const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]))
+  // Lineage IDs omit hosts; prefer the parent’s host so descendant deletion cannot reach another machine.
+  const worktreeById = new Map<string, Worktree>()
+  for (const worktree of worktrees) {
+    const claimed = worktreeById.get(worktree.id)
+    if (claimed && claimed.hostId === parent.hostId && worktree.hostId !== parent.hostId) {
+      continue
+    }
+    worktreeById.set(worktree.id, worktree)
+  }
+  const lineageForSelectedRows: Record<string, WorktreeLineage> = {}
+  for (const worktree of worktreeById.values()) {
+    const projected = lineageById[worktree.id]
+    const inline = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
+    const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
+    if (lineage) {
+      lineageForSelectedRows[worktree.id] = lineage
+    }
+  }
   const childrenByParentId = getProjectedWorktreeLineageChildrenByParentId(
-    lineageById,
+    lineageForSelectedRows,
     worktreeById
   )
 
@@ -46,9 +64,7 @@ export function getWorkspaceDeleteLineage(
 
   return {
     descendants,
-    // Why: if a child workspace physically lives inside the parent directory,
-    // deleting descendants first prevents Git's force-delete path from removing
-    // the child as untracked content under the parent.
+    // Delete nested children first so Git cannot remove them as untracked content under the parent.
     deleteAllTargets: [...childFirstTargets, parent]
   }
 }

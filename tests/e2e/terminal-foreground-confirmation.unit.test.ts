@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setImmediate as nextNativeTurn } from 'node:timers/promises'
 
 const { spawnMock, resolveForegroundMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -25,21 +26,18 @@ vi.mock('../../src/main/providers/agent-foreground-process', () => ({
 }))
 
 import { createPtySubprocess } from '../../src/main/daemon/pty-subprocess'
+import { createPtyProcessEventEmitter } from '../../src/main/daemon/pty-subprocess-test-harness'
 import { createPaneForegroundAgentTracker } from '../../src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker'
+import type { PaneForegroundAgentEntry } from '../../src/renderer/src/store/slices/pane-foreground-agent'
 
 function mockWindowsPty() {
-  const exitListeners: ((event: { exitCode: number }) => void)[] = []
   return {
     pid: 12345,
     process: 'powershell.exe',
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(),
-    onData: vi.fn(() => ({ dispose: vi.fn() })),
-    onExit: vi.fn((callback: (event: { exitCode: number }) => void) => {
-      exitListeners.push(callback)
-      return { dispose: vi.fn() }
-    })
+    ...createPtyProcessEventEmitter()
   }
 }
 
@@ -61,8 +59,15 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
     }
   })
 
-  function createComposedTracker(publish: ReturnType<typeof vi.fn>) {
-    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+  async function createComposedTracker(publish: (entry: PaneForegroundAgentEntry) => void) {
+    const proc = mockWindowsPty()
+    spawnMock.mockReturnValue(proc)
+    const pending = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+    await nextNativeTurn()
+    proc._simulateData('\x1b[c')
+    const handle = await pending
+    expect(publish).not.toHaveBeenCalled()
     const tracker = createPaneForegroundAgentTracker({
       getPtyId: () => 'pty-1',
       isTrackablePtyId: () => true,
@@ -74,7 +79,6 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
   }
 
   it('keeps a restored Droid through a scan resolving after the old cache window', async () => {
-    spawnMock.mockReturnValue(mockWindowsPty())
     let resolveFresh!: (value: string) => void
     resolveForegroundMock.mockReturnValue(
       new Promise<string>((resolve) => {
@@ -82,7 +86,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
       })
     )
     const publish = vi.fn()
-    const { tracker } = createComposedTracker(publish)
+    const { tracker } = await createComposedTracker(publish)
 
     tracker.onVisiblePtyBound(true)
     await vi.advanceTimersByTimeAsync(350)
@@ -93,6 +97,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
 
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -100,10 +105,9 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
   })
 
   it('clears launch identity after one fresh scan confirms a real shell exit', async () => {
-    spawnMock.mockReturnValue(mockWindowsPty())
     resolveForegroundMock.mockResolvedValue('powershell.exe')
     const publish = vi.fn()
-    const { tracker } = createComposedTracker(publish)
+    const { tracker } = await createComposedTracker(publish)
 
     tracker.onCommandFinished()
     await vi.advanceTimersByTimeAsync(350)
@@ -113,13 +117,12 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
   })
 
   it('fails closed without claiming shell when every fresh scan is unavailable', async () => {
-    spawnMock.mockReturnValue(mockWindowsPty())
     resolveForegroundMock.mockResolvedValue({
       available: false,
       processName: 'powershell.exe'
     })
     const publish = vi.fn()
-    const { tracker } = createComposedTracker(publish)
+    const { tracker } = await createComposedTracker(publish)
 
     tracker.onCommandFinished()
     await vi.advanceTimersByTimeAsync(350 + 1_200 + 6_000)

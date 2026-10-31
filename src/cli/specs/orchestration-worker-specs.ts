@@ -5,10 +5,16 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-start'],
     summary: 'Start one supervised worker on the Run home or a connected Orca server',
     usage:
-      'orca orchestration worker-start --task <task_id> [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration worker-start (--task <task_id> | --spec <text> | --spec-file <path|->) [--keep-open] [--on <saved-environment>] [--worktree <current|selector|new-child|new-top-level>] (--agent <agent> | --terminal <handle>) [--task-title <text>] [--deps <json_array>] [--parent <task_id>] [--model <id>] [--effort <level>] [--name <name>] [--repo <selector>] [--base-branch <ref>] [--display-name <text>] [--comment <text>] [--setup <run|skip|inherit>] [--retry-of <dispatch_id>] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',
+      'spec',
+      'spec-file',
+      'keep-open',
+      'task-title',
+      'deps',
+      'parent',
       'on',
       'worktree',
       'name',
@@ -18,6 +24,8 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'comment',
       'setup',
       'agent',
+      'model',
+      'effort',
       'terminal',
       'retry-of',
       'timeout-ms',
@@ -25,21 +33,38 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'from',
       'retry-request'
     ],
+    identityFlagRoles: { from: 'caller', terminal: 'target' },
     notes: [
+      'With --spec and no bound Run, a coordinator gets a new Run bound to it, named after the Task title; the receipt names the Run it created or joined.',
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
+      'When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.',
+      "Reusing a settled worker's terminal with --terminal before its autoReleaseAt cancels that automatic release; after it, the start is refused while the release runs.",
+      'A terminal the user kept open takes --terminal work and stays kept open.',
+      '--agent takes an Orca agent id enabled on the worker server, such as claude, codex, cursor, antigravity, muse, zcode, opencode, or opencode2.',
+      '--model supports Claude, Codex, Cursor, Antigravity, Grok, and Muse opaque provider model ids; --effort requires --model. OMP accepts --model only; --effort is unsupported. Neither can combine with --terminal. OpenCode model selection requires an existing worktree, a verified execution-host CLI, and an available model; effort is unsupported. Other agents, including zcode, launch with the model from their own config.',
       'New worktrees use agent-first creation and default --setup to run. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
+      'New worktrees without --name get the name Orca gives an unnamed workspace; the receipt names it. Servers older than this change still require --name.',
       'Creation flags (--name, --repo, --base-branch, --display-name, --comment, --setup) are rejected for current/existing worktrees. Use exact --repo on the selected server; project/host convenience routing remains on worktree create.',
+      "How the worker runs follows the user's own setting for new agent tabs; there is no flag for it and no caller needs to ask. A dispatch the setting cannot apply to still starts, so the placement, agent, and launch options passed here are always the ones honoured.",
+      'Drive every worker the same way whichever way it was started: the same orchestration verbs, the same handle. Mail, dispatch, worker-show, worker-read and the whole lifecycle behave identically. The start receipt records which one ran, for operators and telemetry.',
+      'Not every worker has a terminal. Read output with worker-read --source auto or --source transcript, which always work; --source terminal is refused when there is none, and orca terminal verbs do not accept every worker handle. Nothing above needs you to know which kind you have — the orchestration verbs cover all of them.',
       '--on selects only the worker server; the Run and this command remain on the current Orca server.',
       'Remote current and new-child are invalid; discover an exact remote selector or use new-top-level.',
-      '--retry-of links the replacement attempt but does not inherit placement; repeat the intended --on/worktree and --agent/terminal choices.',
-      'The call exits 0 only for ready. Failed or outcome_unknown exits 1 and JSON includes stage/failedStage, setup, effects, residualResources, and recovery commands when needed.'
+      '--retry-of needs --task naming the failed Task (--spec creates a new one) and does not inherit placement; repeat the intended --on/worktree and --agent/terminal choices.',
+      '--spec-file reads the spec from a file (relative to the current directory) or stdin (-) on this machine, so quotes and backticks need no shell escaping.',
+      '--keep-open keeps the worker open after it finishes, as worker-keep-open does right after start.',
+      'The call exits 0 for ready, and in the concise view for a start whose turn was not yet observed (--full exits 1 for anything but ready). Failed or outcome_unknown exits 1 and JSON includes stage/failedStage, setup, effects, residualResources, and recovery commands when needed.'
     ]
   },
   {
     path: ['orchestration', 'worker-show'],
     summary: 'Inspect one supervised worker Dispatch',
     usage: 'orca orchestration worker-show --dispatch <dispatch_id> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'dispatch']
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch'],
+    notes: [
+      'A Dispatch created by orchestration dispatch is shown as unsupervised and reports the exact adopted terminal when its identity is still provable.',
+      'observation.agentWait names a worker parked on a prompt only a human can answer, with the evidence that proved it (hook, prompt-text, or title). Null means Orca looked and found no wait. An absent field means it never looked — an older host, an unverifiable worker identity, an unreadable pane, or an agent probe that did not answer in time — and never means the worker is not waiting. A waiting worker is healthy, not failed.'
+    ]
   },
   {
     path: ['orchestration', 'worker-read'],
@@ -49,16 +74,23 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'source', 'cursor', 'limit'],
     notes: [
       'The default auto source uses an exact hook-reported transcript when available and otherwise returns labeled terminal output.',
+      'A Dispatch created by orchestration dispatch reads from its adopted terminal with worker status unsupervised.',
+      'Output stays readable after the terminal is released, including an automatic release after worker_done.',
       'A returned cursor is pinned to the exact source; start a fresh read if Orca reports source_changed.'
     ]
   },
   {
     path: ['orchestration', 'worker-stop'],
-    summary: 'Fence and stop only one supervised agent terminal',
+    destructive: true,
+    summary: 'Fence one Dispatch and stop its supervised agent terminal',
     usage:
       'orca orchestration worker-stop --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
-    notes: ['Never deletes the worktree, setup terminal, configured tabs, or unrelated processes.']
+    notes: [
+      'A Dispatch created by orchestration dispatch is fenced without closing its unsupervised terminal process.',
+      'processAction closed_agent_terminal means Orca issued the close (do not also run terminal close); stop_unknown exits 1 and may still report it when the agent exit was not proven.',
+      'Never deletes the worktree, setup terminal, configured tabs, or unrelated processes.'
+    ]
   },
   {
     path: ['orchestration', 'worker-abandon'],
@@ -67,5 +99,58 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'orca orchestration worker-abandon --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: ['Retains all possibly-live resources and performs no process or filesystem action.']
+  },
+  {
+    path: ['orchestration', 'worker-release'],
+    destructive: true,
+    summary: 'Release the terminal of one settled supervised worker',
+    usage:
+      'orca orchestration worker-release --dispatch <dispatch_id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
+    notes: [
+      'Post-completion cleanup for a settled (succeeded or failed) worker; closes only the exact coordinator-owned agent terminal of that worker.',
+      'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
+      'An inspectable output archive is preserved before the terminal closes, so worker-read still returns output afterwards.',
+      'Never closes setup terminals, configured tabs, reused or pre-existing terminals, terminals the user kept open, or unproven identities.',
+      'Idempotent: repeating the call reports already_released. Only release_unknown exits 1; retained, release_pending, and already_released exit 0.',
+      'On a runtime that advertises orchestration.worker-auto-release.v1, an accepted worker_done already schedules this release about 2 minutes later (autoReleaseAt in worker-show and worker-list); call it only to release sooner or to clear a worker-keep-open. Chat workers follow autoReleaseAt too. autoReleaseAt is absent while its agent works again, and set afresh when it next goes idle.'
+    ]
+  },
+  {
+    path: ['orchestration', 'worker-keep-open'],
+    summary: 'Keep a worker open after it finishes',
+    usage:
+      'orca orchestration worker-keep-open --dispatch <dispatch_id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
+    notes: [
+      'Records a durable user-requested exception; a later explicit worker-release clears it and releases the terminal.',
+      'Cancels the automatic release an accepted worker_done schedules; it also works on an active worker, before it reports.',
+      'For a worker on a connected server, the retain is recorded on that server when it supports automatic release.',
+      'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
+      'Performs no process or filesystem action.'
+    ]
+  },
+  {
+    // Old name of worker-keep-open; hidden so it runs for existing scripts but is never suggested.
+    path: ['orchestration', 'worker-retain'],
+    hidden: true,
+    summary: 'Keep a worker open after it finishes (old name of worker-keep-open)',
+    usage:
+      'orca orchestration worker-retain --dispatch <dispatch_id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request']
+  },
+  {
+    path: ['orchestration', 'worker-list'],
+    summary: 'List supervised worker terminal resource accounting',
+    usage:
+      'orca orchestration worker-list [--run <run_id>] [--terminal-state <active|reclaimable|retained|release_pending|release_unknown|released>] [--include-remote] [--cursor <cursor>] [--limit <1-100>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'run', 'terminal-state', 'include-remote', 'cursor', 'limit'],
+    notes: [
+      'Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.',
+      'A reclaimable worker with resource.autoReleaseAt is released automatically at that time unless it is reused with worker-start --terminal or kept open (worker-keep-open, worker-start --keep-open, or the user).',
+      'Context-only Dispatches created by orchestration dispatch are included as unsupervised with terminal state retained.',
+      'Returns at most 100 local rows, newest first, by default; --include-remote adds connected-server observations when the host supports fleet listing. Continue with the opaque nextCursor value unchanged.',
+      'Without --run the list is scoped to the Run bound to the calling terminal, and to every Run when there is no binding; the receipt reports which in scope.source (flag, bound, or all).'
+    ]
   }
 ]

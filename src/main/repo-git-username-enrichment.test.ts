@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 import type { ResolvedGitUsername } from './git/git-username'
 
 const resolveLocalGitUsernameDetailedMock = vi.hoisted(() => vi.fn())
@@ -25,13 +25,19 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   } as Repo
 }
 
+type UsernameTarget = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+
 function makeStore(repos: Repo[]): {
   getRepos: () => Repo[]
-  setResolvedRepoGitUsername: ReturnType<typeof vi.fn<(id: string, username: string) => boolean>>
+  setResolvedRepoGitUsername: ReturnType<
+    typeof vi.fn<(target: UsernameTarget, username: string) => boolean>
+  >
 } {
   return {
     getRepos: () => repos,
-    setResolvedRepoGitUsername: vi.fn<(id: string, username: string) => boolean>(() => true)
+    setResolvedRepoGitUsername: vi.fn<(target: UsernameTarget, username: string) => boolean>(
+      () => true
+    )
   }
 }
 
@@ -46,31 +52,6 @@ describe('enrichRepoGitUsernames', () => {
     resolveLocalGitUsernameDetailedMock.mockResolvedValue(resolved('demo-user'))
   })
 
-  it('resolves and persists usernames, then notifies once', async () => {
-    const store = makeStore([makeRepo(), makeRepo({ id: 'r2', path: 'C:/repos/two' })])
-    const onChanged = vi.fn()
-
-    enrichRepoGitUsernames(store, { onChanged })
-    await flushRepoGitUsernameEnrichmentForTests()
-
-    expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(2)
-    expect(store.setResolvedRepoGitUsername).toHaveBeenCalledWith('r1', 'demo-user')
-    expect(store.setResolvedRepoGitUsername).toHaveBeenCalledWith('r2', 'demo-user')
-    expect(onChanged).toHaveBeenCalledTimes(1)
-  })
-
-  it('skips folder and SSH repos', async () => {
-    const store = makeStore([
-      makeRepo({ id: 'folder', kind: 'folder' }),
-      makeRepo({ id: 'ssh', path: '/remote/repo', connectionId: 'conn-1' })
-    ])
-
-    enrichRepoGitUsernames(store)
-    await flushRepoGitUsernameEnrichmentForTests()
-
-    expect(resolveLocalGitUsernameDetailedMock).not.toHaveBeenCalled()
-  })
-
   it('probes each repo location at most once per session', async () => {
     const store = makeStore([makeRepo()])
 
@@ -80,6 +61,38 @@ describe('enrichRepoGitUsernames', () => {
     await flushRepoGitUsernameEnrichmentForTests()
 
     expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases attempted locations after a repo is removed', async () => {
+    const repos = [makeRepo()]
+    const store = makeStore(repos)
+
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+    repos.length = 0
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+    repos.push(makeRepo({ id: 'replacement' }))
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+
+    expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('probes a local and a runtime repo that share a path separately', async () => {
+    const store = makeStore([
+      makeRepo(),
+      makeRepo({ id: 'r1-runtime', executionHostId: 'runtime:env-a' })
+    ])
+
+    enrichRepoGitUsernames(store)
+    await flushRepoGitUsernameEnrichmentForTests()
+
+    expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(2)
+    expect(store.setResolvedRepoGitUsername).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'r1-runtime' }),
+      'demo-user'
+    )
   })
 
   it('keeps persisted usernames on a non-authoritative empty resolution', async () => {
@@ -95,8 +108,6 @@ describe('enrichRepoGitUsernames', () => {
   })
 
   it('clears stale persisted usernames on an authoritative empty resolution', async () => {
-    // Why: the user removed github.user / logged out of gh — a completed
-    // probe returning '' must clear the stale prefix instead of pinning it.
     resolveLocalGitUsernameDetailedMock.mockResolvedValue(resolved('', true))
     const store = makeStore([makeRepo()])
     const onChanged = vi.fn()
@@ -104,19 +115,11 @@ describe('enrichRepoGitUsernames', () => {
     enrichRepoGitUsernames(store, { onChanged })
     await flushRepoGitUsernameEnrichmentForTests()
 
-    expect(store.setResolvedRepoGitUsername).toHaveBeenCalledWith('r1', '')
+    expect(store.setResolvedRepoGitUsername).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'r1' }),
+      ''
+    )
     expect(onChanged).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not notify when the store reports no change', async () => {
-    const store = makeStore([makeRepo()])
-    store.setResolvedRepoGitUsername.mockReturnValue(false)
-    const onChanged = vi.fn()
-
-    enrichRepoGitUsernames(store, { onChanged })
-    await flushRepoGitUsernameEnrichmentForTests()
-
-    expect(onChanged).not.toHaveBeenCalled()
   })
 
   it('re-runs after the in-flight pass for repos added mid-pass', async () => {
@@ -131,13 +134,15 @@ describe('enrichRepoGitUsernames', () => {
     )
 
     enrichRepoGitUsernames(store)
-    // A repo lands while the first pass is still probing r1.
     repos.push(makeRepo({ id: 'r2', path: 'C:/repos/two' }))
     enrichRepoGitUsernames(store)
     releaseFirstProbe()
     await flushRepoGitUsernameEnrichmentForTests()
 
     expect(resolveLocalGitUsernameDetailedMock).toHaveBeenCalledTimes(2)
-    expect(store.setResolvedRepoGitUsername).toHaveBeenCalledWith('r2', 'demo-user')
+    expect(store.setResolvedRepoGitUsername).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'r2' }),
+      'demo-user'
+    )
   })
 })

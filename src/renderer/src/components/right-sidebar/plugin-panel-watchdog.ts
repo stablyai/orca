@@ -1,15 +1,10 @@
 import {
   PANEL_WATCHDOG_PING_INTERVAL_MS,
   PANEL_WATCHDOG_PONG_TIMEOUT_MS
-} from '../../../../shared/plugins/plugin-panel-bridge'
+} from '../../../../shared/plugins/frames/plugin-frame-bridge'
+import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
 
-/**
- * Panel responsiveness watchdog: pings the sandboxed frame on an interval
- * and demotes the panel to an errored badge when a pong misses its deadline.
- * The busy-loop guarantee depends on Chromium assigning the sandboxed frame
- * a separate renderer, which the Electron containment test gates explicitly.
- * Pure timer logic keeps deadline behavior deterministic in unit tests.
- */
+/** Ping/pong deadlines mark unresponsive panels; busy-loop containment requires a separate Chromium renderer, gated by Electron tests. */
 
 export type PanelWatchdogOptions = {
   sendPing: (pingId: number) => void
@@ -33,6 +28,7 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
   let awaitedPingId: number | null = null
   let active = false
   let generation = 0
+  let unsubscribeVisibility: (() => void) | null = null
 
   const clearDeadline = (): void => {
     if (deadlineTimer) {
@@ -44,6 +40,10 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
   const ping = (): void => {
     if (!active || awaitedPingId !== null) {
       // A ping is already outstanding; its deadline will fire first.
+      return
+    }
+    // Pause hidden pings; use park visibility because macOS can wedge raw visibilityState at hidden indefinitely.
+    if (!getWindowParkVisible()) {
       return
     }
     awaitedPingId = nextPingId++
@@ -68,18 +68,26 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
       if (active) {
         return
       }
-      // React StrictMode intentionally runs effect setup → cleanup → setup.
-      // A stopped watchdog must be reusable by the second real setup.
+      // StrictMode restarts effects after cleanup; stopped watchdogs must support reuse.
       generation += 1
       active = true
       awaitedPingId = null
       clearDeadline()
       pingTimer = setInterval(ping, pingIntervalMs)
+      unsubscribeVisibility?.()
+      // Ping immediately on resume instead of waiting out the interval that kept ticking while hidden.
+      unsubscribeVisibility = subscribeWindowParkVisibility(() => {
+        if (getWindowParkVisible()) {
+          ping()
+        }
+      })
       ping()
     },
     stop() {
       active = false
       generation += 1
+      unsubscribeVisibility?.()
+      unsubscribeVisibility = null
       if (pingTimer) {
         clearInterval(pingTimer)
         pingTimer = null

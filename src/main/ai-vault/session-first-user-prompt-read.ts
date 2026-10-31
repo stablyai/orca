@@ -1,16 +1,21 @@
-import { stat } from 'node:fs/promises'
 import type {
   AiVaultAgent,
-  AiVaultFirstUserPromptArgs,
   AiVaultFirstUserPromptResult,
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
-import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import {
+  parseOpenCodeSqliteSessionViaWorker,
+  parseOpenCode2SqliteSessionViaWorker,
+  parseZcodeSqliteSessionViaWorker
+} from './session-scanner-opencode-sqlite-worker-spawn'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import type { FileWithMtime } from './session-scanner-types'
+import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
+import { configureOpenCodeWslReaders } from './session-scanner-opencode-wsl-client'
 
 export type ReadAiVaultFirstUserPromptArgs = {
   agent: AiVaultAgent
@@ -18,30 +23,12 @@ export type ReadAiVaultFirstUserPromptArgs = {
   sessionId?: string
   executionHostId?: ExecutionHostId
   codexHome?: string | null
+  wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
 }
 
 export type ReadAiVaultFirstUserPromptResult = AiVaultFirstUserPromptResult
 
-/** IPC-safe entry: validates untyped payload then reads the full first prompt. */
-export async function handleAiVaultGetFirstUserPrompt(
-  args?: AiVaultFirstUserPromptArgs
-): Promise<AiVaultFirstUserPromptResult> {
-  if (!args || typeof args.filePath !== 'string' || typeof args.agent !== 'string') {
-    return { prompt: null }
-  }
-  return readAiVaultFirstUserPrompt({
-    agent: args.agent,
-    filePath: args.filePath,
-    sessionId: typeof args.sessionId === 'string' ? args.sessionId : undefined,
-    executionHostId: args.executionHostId,
-    codexHome: args.codexHome
-  })
-}
-
-/**
- * Re-parse one session transcript under full first-prompt capture and return
- * the untruncated first real user ask for copy/reuse.
- */
+/** Reparse one transcript with full first-prompt capture instead of listing preview limits. */
 export async function readAiVaultFirstUserPrompt(
   args: ReadAiVaultFirstUserPromptArgs
 ): Promise<ReadAiVaultFirstUserPromptResult> {
@@ -50,15 +37,16 @@ export async function readAiVaultFirstUserPrompt(
     return { prompt: null }
   }
 
-  // Why: transcript bodies live on the session host. Remote rows are skipped
-  // (same posture as listSubagentSessions); UI falls back to preview text.
+  // Transcript bodies belong to their execution host; remote rows fall back to preview text.
   const executionHostId = args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
     return { prompt: null }
   }
+  if (args.wslOpenCodeReaders) {
+    configureOpenCodeWslReaders(args.wslOpenCodeReaders)
+  }
 
-  // Why: partial/corrupt transcripts make parsers throw. Resolve null like every
-  // other unavailable case instead of rejecting the IPC call.
+  // Treat corrupt or partial transcripts as unavailable instead of rejecting the IPC call.
   let session: AiVaultSession | null
   try {
     session = await withFullFirstUserPromptCapture(() =>
@@ -83,20 +71,26 @@ async function parseSessionForFullFirstUserPrompt(args: {
   sessionId?: string
   codexHome: string | null
 }): Promise<AiVaultSession | null> {
-  // Why: OpenCode SQLite sessions store filePath as the db path (not db#id).
-  // Re-parse in-process under full capture so ALS applies and we can read the
-  // earliest user row (worker list-scan path only joins newest messages).
-  if (args.agent === 'opencode') {
-    const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath)
+  // Full capture must run in the actual reader, including WSL guests.
+  if (args.agent === 'opencode' || args.agent === 'opencode2' || args.agent === 'zcode') {
+    const parse =
+      args.agent === 'opencode2'
+        ? parseOpenCode2SqliteSessionViaWorker
+        : args.agent === 'zcode'
+          ? parseZcodeSqliteSessionViaWorker
+          : parseOpenCodeSqliteSessionViaWorker
+    const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath, args.agent)
     if (fromSynthetic) {
-      return parseOpenCodeSqliteSession({
+      return parse({
+        fullFirstUserPrompt: true,
         dbPath: fromSynthetic.dbPath,
         sessionId: fromSynthetic.sessionId,
         platform: process.platform
       })
     }
     if (args.sessionId) {
-      return parseOpenCodeSqliteSession({
+      return parse({
+        fullFirstUserPrompt: true,
         dbPath: args.filePath,
         sessionId: args.sessionId,
         platform: process.platform
@@ -104,7 +98,7 @@ async function parseSessionForFullFirstUserPrompt(args: {
     }
   }
 
-  const file = await fileWithMtimeForPath(args.filePath)
+  const file = await fileWithMtimeForPath(args.filePath, args.agent)
   if (!file) {
     return null
   }
@@ -119,10 +113,12 @@ async function parseSessionForFullFirstUserPrompt(args: {
   )
 }
 
-async function fileWithMtimeForPath(filePath: string): Promise<FileWithMtime | null> {
-  // OpenCode SQLite candidates use a synthetic `dbPath#sessionId` path that is
-  // not a real filesystem object; parsers that need it accept the path as-is.
-  if (filePath.includes('#')) {
+async function fileWithMtimeForPath(
+  filePath: string,
+  agent: AiVaultAgent
+): Promise<FileWithMtime | null> {
+  // OpenCode dbPath#sessionId is synthetic; # in another agent's filename does not bypass stat.
+  if (agent === 'opencode' && splitOpenCodeSqliteCandidate(filePath)) {
     return {
       path: filePath,
       mtimeMs: 0,
@@ -131,7 +127,8 @@ async function fileWithMtimeForPath(filePath: string): Promise<FileWithMtime | n
   }
 
   try {
-    const info = await stat(filePath)
+    // Use the parser's scan lane so stat cannot jump the live-transcript queue.
+    const info = await wslGatedStat(filePath, 'scan')
     return {
       path: filePath,
       mtimeMs: info.mtimeMs,

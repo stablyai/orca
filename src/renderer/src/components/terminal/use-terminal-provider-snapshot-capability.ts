@@ -1,16 +1,20 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
+import { createTerminalProviderSnapshotBoundPtyIdsSelector } from './terminal-provider-snapshot-bound-pty-ids'
 import {
-  collectTerminalProviderSnapshotPtyIds,
+  getTerminalProviderSnapshotCapabilityRevision,
+  subscribeTerminalProviderSnapshotCapability,
   startTerminalProviderSnapshotCapabilitySynchronization
 } from './terminal-provider-snapshot-capability'
 
-export function useTerminalProviderSnapshotCapability(enabled: boolean): void {
-  const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
-  const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
-  const boundPtyIds = useMemo(
-    () => collectTerminalProviderSnapshotPtyIds({ tabsByWorktree, ptyIdsByTabId }),
-    [ptyIdsByTabId, tabsByWorktree]
+export function useTerminalProviderSnapshotCapability(enabled: boolean): number {
+  // Match startup’s full PTY set or synchronization prunes valid split/reconnect answers; the stable selector avoids scans/restarts on title or focus writes.
+  const selectBoundPtyIds = useMemo(() => createTerminalProviderSnapshotBoundPtyIdsSelector(), [])
+  const boundPtyIds = useAppStore(selectBoundPtyIds)
+  const capabilityRevision = useSyncExternalStore(
+    subscribeTerminalProviderSnapshotCapability,
+    getTerminalProviderSnapshotCapabilityRevision,
+    getTerminalProviderSnapshotCapabilityRevision
   )
 
   useEffect(() => {
@@ -20,4 +24,6 @@ export function useTerminalProviderSnapshotCapability(enabled: boolean): void {
     }
     return startTerminalProviderSnapshotCapabilitySynchronization(boundPtyIds)
   }, [boundPtyIds, enabled])
+
+  return capabilityRevision
 }

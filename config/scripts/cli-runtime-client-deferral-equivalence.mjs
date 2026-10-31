@@ -1,28 +1,18 @@
 #!/usr/bin/env node
-// Equivalence check for deferring the RuntimeClient module graph in the CLI.
-//
-// Builds the CLI twice with the REAL tsc emit — once from the working tree and
-// once with the seven touched files restored from git HEAD~ (the pre-deferral
-// implementation) — then compares stdout, stderr and exit code BYTE FOR BYTE
-// across a matrix of invocations.
-//
-// Why a script and not a vitest case: this compiles two full CLI trees. It is
-// the artifact that proves the refactor is behaviour-preserving; the fast
-// invariants (class identity, no eager barrel import) live in
-// src/cli/runtime-client-deferral.test.ts and run in the normal suite.
-//
+// Compare stdout/stderr/exit byte-for-byte across two real CLI emits: current tree and selected files restored from baseline (default HEAD~).
+// Full-tree compilation stays outside fast Vitest invariants (runtime-client-deferral.test.ts).
 // Usage: node config/scripts/cli-runtime-client-deferral-equivalence.mjs [--baseline <rev>]
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const REPO = fileURLToPath(new URL('../..', import.meta.url))
 
-// The files this change touches. Restoring exactly these from the baseline rev
-// reconstructs the old implementation without disturbing anything else.
+// Restore only these baseline files; remove baseline-absent files (e.g. cli-error.ts), then restore the working tree.
 const TOUCHED = [
   'src/cli/args.ts',
+  'src/cli/cli-error.ts',
   'src/cli/dispatch.ts',
   'src/cli/flags.ts',
   'src/cli/format.ts',
@@ -31,9 +21,7 @@ const TOUCHED = [
   'src/cli/selectors.ts'
 ]
 
-// Why: if the deferral is ever reverted or reshaped, the "old" arm would
-// silently become identical to the new one and every case would pass
-// vacuously. Re-read the real call form out of the source and fail loudly.
+// Fail if real deferral call shapes change or baseline/current could become identical and pass vacuously.
 function assertMarkersFresh() {
   const index = readFileSync(join(REPO, 'src/cli/index.ts'), 'utf8')
   const client = readFileSync(join(REPO, 'src/cli/runtime/client.ts'), 'utf8')
@@ -45,8 +33,7 @@ function assertMarkersFresh() {
     ['src/cli/runtime/client.ts', client, "await import('./websocket-transport.js')"]
   ]
   for (const [file, source, marker] of checks) {
-    // Match the call form, not a bare word: a comment naming the function must
-    // not satisfy the check.
+    // Match calls so prose mentions cannot satisfy the guard.
     if (!source.includes(marker)) {
       throw new Error(
         `${file} no longer contains \`${marker}\` — cli-runtime-client-deferral-equivalence.mjs is stale`
@@ -63,8 +50,7 @@ function assertMarkersFresh() {
 }
 
 function buildTree(label, baselineRev) {
-  // Why: builds under /tmp cannot resolve the repo's node_modules, so the
-  // output dir has to live inside the repo.
+  // Build inside repo so emitted modules resolve its node_modules.
   const outDir = join(REPO, `.equiv-out-${label}`)
   rmSync(outDir, { recursive: true, force: true })
   const restored = []
@@ -72,12 +58,16 @@ function buildTree(label, baselineRev) {
     if (baselineRev) {
       for (const file of TOUCHED) {
         const path = join(REPO, file)
-        restored.push([path, readFileSync(path)])
-        const old = execFileSync('git', ['show', `${baselineRev}:${file}`], {
+        restored.push([path, existsSync(path) ? readFileSync(path) : null])
+        const old = spawnSync('git', ['show', `${baselineRev}:${file}`], {
           cwd: REPO,
           maxBuffer: 64 * 1024 * 1024
         })
-        writeFileSync(path, old)
+        if (old.status === 0) {
+          writeFileSync(path, old.stdout)
+        } else {
+          rmSync(path, { force: true })
+        }
       }
     }
     execFileSync(
@@ -97,15 +87,17 @@ function buildTree(label, baselineRev) {
     )
   } finally {
     for (const [path, contents] of restored) {
-      writeFileSync(path, contents)
+      if (contents === null) {
+        rmSync(path, { force: true })
+      } else {
+        writeFileSync(path, contents)
+      }
     }
   }
   return join(outDir, 'cli/index.js')
 }
 
-// Why: every case is a one-shot CLI invocation that must exit on its own. An
-// unbounded spawnSync turns "this argv reached a blocking command" into an
-// indefinite stall — a guard that can hang instead of failing is not a guard.
+// Every case must exit itself; bound spawnSync so reaching a blocking command fails instead of stalling forever.
 const RUN_TIMEOUT_MS = 30_000
 
 function run(entry, argv, env) {
@@ -131,10 +123,7 @@ function run(entry, argv, env) {
   }
 }
 
-// Every case must produce identical bytes on both arms. The runtime-dependent
-// ones (status/worktree list) are pointed at an empty user-data dir so the
-// answer is deterministic "not running" rather than whatever the dev machine
-// happens to be doing.
+// Require identical bytes; empty user-data dirs make runtime-dependent cases deterministically report not running.
 function buildCases(isolatedUserData) {
   const isolated = { ORCA_USER_DATA_PATH: isolatedUserData }
   const cases = [
@@ -168,15 +157,8 @@ function buildCases(isolatedUserData) {
     [['status', '--json'], { ...isolated, ORCA_PAIRING_CODE: 'not-a-pairing-code' }],
     [['status', '--json'], { ...isolated, ORCA_REMOTE_PAIRING: 'not-a-pairing-code' }],
     [['status', '--json'], { ...isolated, ORCA_ENVIRONMENT: 'no-such-environment' }],
-    // ...and must stay suppressed for the local-only command groups.
-    //
-    // NOTE: the only commands that both live in a suppressed group AND touch
-    // ctx.client are `agent hooks on|off`, which rewrite the user's real agent
-    // hook configuration in ~/.claude and friends — far outside
-    // ORCA_USER_DATA_PATH. They are deliberately NOT invoked here. The
-    // null-vs-undefined suppression they would exercise is covered
-    // side-effect-free by the constructor-argument assertions in
-    // src/cli/runtime-client-deferral.test.ts instead.
+    // Keep suppression for local-only groups. Do not invoke agent hooks on/off: they modify real ~/.claude configuration outside ORCA_USER_DATA_PATH.
+    // Constructor-argument assertions in runtime-client-deferral.test.ts cover null/undefined suppression without those side effects.
     [['environment', 'list', '--json'], { ...isolated, ORCA_ENVIRONMENT: 'no-such-environment' }],
     [['environment', 'list', '--json'], { ...isolated, ORCA_PAIRING_CODE: 'not-a-pairing-code' }],
     [['agent-context', '--json'], { ...isolated, ORCA_PAIRING_CODE: 'not-a-pairing-code' }],
@@ -186,10 +168,7 @@ function buildCases(isolatedUserData) {
     [['worktree', 'list', '--json'], isolated],
     [['terminal', 'list', '--json'], isolated]
   ]
-  // Fuzz: random argv drawn from real command tokens, flags and hostile
-  // strings. Seeded so a failure is reproducible. Every token here must be
-  // safe to actually execute — see UNSAFE_TOKENS, which is cross-checked
-  // against this list before a single case runs.
+  // Seed fuzzing for reproducibility; all pool tokens must be safe to execute, checked against UNSAFE_TOKENS before running any case.
   const tokens = [
     'worktree',
     'list',
@@ -224,9 +203,7 @@ function buildCases(isolatedUserData) {
     seed ^= seed << 5
     return (seed >>> 0) / 0x100000000
   }
-  // Why: check the draw POOL, not just the 400 cases it happens to produce.
-  // `serve` sat in this array for the whole review because the per-case scan
-  // never named it, and the cases that drew it only survived by accident.
+  // Check entire pool, not just sampled cases: serve once survived review here and escaped the per-case scan by chance.
   assertTokensSafe(tokens, 'fuzz token pool')
   assertFuzzPoolDeclaredReadOnly(tokens)
   for (let index = 0; index < 400; index += 1) {
@@ -243,17 +220,8 @@ function buildCases(isolatedUserData) {
   return cases
 }
 
-// Why: this script shells out to the REAL CLI with the developer's own HOME and
-// PATH, so an argv that reaches the wrong verb does real damage. Two classes:
-//
-//   1. FOREGROUND — `orca serve` runs Orca until Ctrl+C and `orca open` /
-//      `claude-teams` spawn processes that outlive the case. A blocking case
-//      does not fail the run, it stalls it, which is worse than a mismatch.
-//   2. MUTATING — writes outside ORCA_USER_DATA_PATH (`agent hooks off` parks
-//      the real ~/.claude hooks) or drives real browser/desktop input.
-//
-// Group tokens whose subcommands split read/write (`capture`, `intercept`,
-// `label`, `relation`) are denied wholesale: the fuzzer cannot tell them apart.
+// Cases run real CLI with developer HOME/PATH: deny foreground commands, surviving children, config/registry writes and real UI input.
+// Deny mixed read/write groups (capture/intercept/label/relation) wholesale; fuzzing cannot distinguish their subcommands.
 const FOREGROUND_TOKENS = ['serve', 'open', 'claude-teams', 'exec', 'eval', 'launch', 'attach']
 const MUTATING_TOKENS = [
   // persistent config and registry state
@@ -368,10 +336,7 @@ const UNSAFE_TOKENS = new Map([
   ...MUTATING_TOKENS.map((token) => [token, 'can write outside ORCA_USER_DATA_PATH'])
 ])
 
-// Why: the deny list only catches verbs someone already thought of — `serve`
-// sat in the fuzz pool for the whole review because nobody added it. The pool
-// is therefore ALSO checked against this allowlist, so a token added to the
-// pool fails closed until it is consciously declared read-only here.
+// Deny lists miss new verbs (serve once escaped); require explicit read-only allowlisting for every pool token too.
 const READ_ONLY_FUZZ_TOKENS = new Set([
   // command tokens: every path they can form is a list/show or a parse error
   'agent',
@@ -411,8 +376,7 @@ function assertTokensSafe(tokens, context) {
   }
 }
 
-// Why: a token on neither list (or, worse, on both) means the two lists have
-// drifted apart. Fail before any case runs rather than sampling and hoping.
+// Reject neither/both-list membership before any case runs; sampling cannot prove pool safety.
 function assertFuzzPoolDeclaredReadOnly(tokens) {
   for (const token of tokens) {
     if (!READ_ONLY_FUZZ_TOKENS.has(token)) {
@@ -441,8 +405,7 @@ mkdirSync(join(isolatedUserData, 'empty'), { recursive: true })
 let oldEntry
 let newEntry
 try {
-  // Why: build the case list (and run its safety guards) BEFORE the two tsc
-  // compiles, so an unsafe token fails in a second instead of two minutes in.
+  // Build cases and check safety before expensive tsc compiles so unsafe tokens fail immediately.
   const cases = buildCases(isolatedUserData)
 
   console.log(`Building baseline (${baselineRev}) …`)

@@ -103,6 +103,27 @@ describe('monaco content sync', () => {
 
   it.each([
     [
+      'CRLF file content into a CRLF model',
+      'first\r\nsecond\r\nlast',
+      '\r\n',
+      'first\r\nsecond\r\nlast\r\nnext',
+      '\r\nnext'
+    ],
+    [
+      'mixed file content into a CRLF model',
+      'first\r\nsecond\r\nlast',
+      '\r\n',
+      'first\r\nsecond\rlast\nnext',
+      '\r\nnext'
+    ],
+    [
+      'adjacent bare and paired CRs into a CRLF model',
+      'first\r\nsecond\r\nlast',
+      '\r\n',
+      'first\r\nsecond\r\nlast\r\r\n\nnext\r',
+      '\r\n\r\n\r\nnext\r\n'
+    ],
+    [
       'CRLF file content into an LF model',
       'first\nsecond\nlast',
       '\n',

@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
@@ -14,6 +14,10 @@ export type DaemonCreateOrAttachResult = {
   wslDistro?: string | null
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   incarnationId?: PtyIncarnationId
+  /** Daemon-side cwd access only; app-side TCC access is independent. Older daemons omit this field. */
+  cwdReadableByDaemon?: boolean
+  /** The live child can no longer take input through its PTY; older daemons omit this field. */
+  inputClosed?: true
 }
 
 export function getDaemonSessionResultMetadata(session: {
@@ -28,8 +32,7 @@ export function getDaemonSessionResultMetadata(session: {
   return {
     ...(session.launchAgent ? { launchAgent: session.launchAgent } : {}),
     ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
-    // Why: null authoritatively identifies a native session; omission is
-    // reserved for older daemons that predate this wire field.
+    // Null identifies native sessions; only older daemons omit the field.
     wslDistro: session.wslDistro
   }
 }

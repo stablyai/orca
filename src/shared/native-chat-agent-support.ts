@@ -1,37 +1,68 @@
-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok'
+import type { TuiAgent } from './tui-agent'
+
+export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'opencode'
 
 /** Agents whose transcripts the native chat view can parse and render. */
-export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
+export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'claude',
   'openclaude',
   'codex',
-  'grok'
-])
+  'grok',
+  'omp',
+  'opencode',
+  'opencode2',
+  'zcode'
+]
+
+export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set(
+  NATIVE_CHAT_SUPPORTED_AGENT_LIST
+)
 
 export function isNativeChatSupportedAgent(agent: string | null | undefined): boolean {
   return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
 }
 
-/** True when the agent renders a digit-commit question selector that ignores
- *  typed label text (pasting "Blue" + Enter commits the highlighted FIRST
- *  option — STA-1860): Claude's AskUserQuestion and Codex 0.145's
- *  request_user_input card both behave this way, so answers must be delivered
- *  as per-option keystrokes. Other agents commit a pasted answer. */
+/** Agents whose Model-A SSH transcript reader is not supported. A hook path alone
+ *  does not establish owning-host reads, so OMP remains gated even with metadata. */
+export function nativeChatRequiresLocalTranscript(agent: string | null | undefined): boolean {
+  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+  return transcriptAgent === 'grok' || transcriptAgent === 'omp' || transcriptAgent === 'opencode'
+}
+
+/** Selector TUIs require key steps rather than pasted option labels. */
 export function shouldStepNativeChatAskAnswer(agent: string | null | undefined): boolean {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  return transcriptAgent === 'claude' || transcriptAgent === 'codex'
+  return (
+    transcriptAgent === 'claude' || transcriptAgent === 'codex' || transcriptAgent === 'opencode'
+  )
+}
+
+/** OMP's configurable keys and existing checkbox state cannot be replaced through PTY input. */
+export function nativeChatAskRequiresTerminal(agent: string | null | undefined): boolean {
+  return resolveNativeChatTranscriptAgent(agent) === 'omp'
+}
+
+/** OpenCode confirms an interrupt with a second Escape; Claude Code and Codex read Esc-Esc at an idle prompt as rewind. */
+export function nativeChatStopSendsSecondEscape(agent: string | null | undefined): boolean {
+  return resolveNativeChatTranscriptAgent(agent) === 'opencode'
 }
 
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {
-  // Why: OpenClaude writes the Claude transcript format and layout even though
-  // Orca preserves its distinct agent identity for launch and UI behavior.
+  // OpenClaude writes Claude transcripts but retains distinct launch/UI identity.
   if (agent === 'claude' || agent === 'openclaude') {
     return 'claude'
   }
-  if (agent === 'codex' || agent === 'grok') {
+  if (agent === 'opencode' || agent === 'opencode2' || agent === 'zcode') {
+    return 'opencode'
+  }
+  if (agent === 'codex' || agent === 'grok' || agent === 'omp') {
     return agent
   }
   return null
+}
+
+export function nativeChatApprovalAcceptKey(agent: string | null | undefined): string {
+  return resolveNativeChatTranscriptAgent(agent) === 'opencode' ? '\r' : '1'
 }

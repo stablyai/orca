@@ -1,10 +1,12 @@
 import { getTerminalLiveAccessoryRawSendTarget } from './terminal-live-accessory-raw-send-target'
 import { buildTerminalSendParams, TERMINAL_INPUT_SEND_OPTIONS } from './terminal-send-request'
-import type { RpcClient } from '../transport/rpc-client'
+import { terminalInputSend } from './mobile-terminal-operations'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { ConnectionState } from '../transport/types'
 
 type TerminalLiveAccessoryRawSendArgs = {
-  readonly client: Pick<RpcClient, 'sendRequest'> | null
+  readonly sendTerminalUserInput: typeof terminalInputSend.request
+  readonly client: RpcOperationSender | null
   readonly targetHandle: string
   readonly activeHandle: string | null
   readonly activeSessionTabType: string | null
@@ -15,19 +17,19 @@ type TerminalLiveAccessoryRawSendArgs = {
 
 export async function sendTerminalLiveAccessoryRawBytes(
   args: TerminalLiveAccessoryRawSendArgs
-): Promise<void> {
-  // Why: async IME flushing can outlive the original terminal selection.
+): Promise<boolean> {
+  // IME flush can outlive terminal selection; recheck the target afterward.
   const rawSendTarget = getTerminalLiveAccessoryRawSendTarget({
     targetHandle: args.targetHandle,
     activeHandle: args.activeHandle,
     activeSessionTabType: args.activeSessionTabType
   })
   if (!args.client || !rawSendTarget || args.connState !== 'connected') {
-    return
+    return false
   }
-  await args.client
-    .sendRequest(
-      'terminal.send',
+  return args
+    .sendTerminalUserInput(
+      args.client,
       buildTerminalSendParams({
         terminal: rawSendTarget,
         text: args.bytes,
@@ -37,7 +39,9 @@ export async function sendTerminalLiveAccessoryRawBytes(
       TERMINAL_INPUT_SEND_OPTIONS
     )
     .then(
-      () => undefined,
-      () => undefined
+      (reply) => {
+        return terminalInputSend.interpret(reply) === true
+      },
+      () => false
     )
 }

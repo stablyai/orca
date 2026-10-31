@@ -1,14 +1,6 @@
 const RELEASE_NAME_TIME_ZONE = 'America/Los_Angeles'
 
-/**
- * `07-31 13:54` — the timestamp segment of a dev build's release title, shown
- * verbatim in both the GitHub releases list and the in-app build picker.
- *
- * Why Pacific while the tag's own stamp stays UTC: that stamp is a sort key, and
- * a local one would repeat an hour at every DST fall-back, making two distinct
- * builds compare equal. A title is only ever read, so it uses the timezone the
- * people reading it are in. The two therefore disagree by the current offset.
- */
+// Show Pacific time in dev release titles; keep tag sort key UTC so DST fall-back cannot make distinct builds compare equal.
 export function formatReleaseTitleTimestamp(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     throw new Error('Release title timestamp is invalid.')
@@ -16,15 +8,15 @@ export function formatReleaseTitleTimestamp(date) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', {
       timeZone: RELEASE_NAME_TIME_ZONE,
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
       minute: '2-digit',
-      // Why h23 rather than hour12: false: some ICU builds render midnight as 24.
-      hourCycle: 'h23'
+      hour12: true
     })
       .formatToParts(date)
       .map((part) => [part.type, part.value])
   )
-  return `${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`
+  // Assemble parts: ICU can separate AM/PM with U+202F, which plain-space replacement misses.
+  return `${parts.month} ${parts.day}, ${parts.hour}:${parts.minute}${parts.dayPeriod.toUpperCase()}`
 }

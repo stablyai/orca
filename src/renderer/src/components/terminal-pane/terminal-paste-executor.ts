@@ -1,3 +1,4 @@
+import { yieldToEventLoop as yieldToEventLoopTask } from '../../../../shared/event-loop-yield'
 import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from './terminal-bracketed-paste'
 import { iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
@@ -16,7 +17,7 @@ import type {
 
 type ExecuteTerminalPastePlanArgs = {
   pasteText: (text: string, options?: TerminalPasteTextOptions) => void | Promise<void>
-  writePty?: (data: string) => boolean | Promise<boolean>
+  writePty?: (data: string, signal?: AbortSignal) => boolean | Promise<boolean>
   isTargetCurrent?: () => boolean
   canContinue?: () => boolean
   yieldToEventLoop?: () => Promise<void>
@@ -40,7 +41,7 @@ async function executeTerminalPastePlanNow(
     writePty,
     isTargetCurrent,
     canContinue,
-    yieldToEventLoop = defaultYieldToEventLoop,
+    yieldToEventLoop = yieldToEventLoopTask,
     operationTimeoutMs = getTerminalPasteOperationTimeoutMs(plan),
     now = defaultNow
   }: ExecuteTerminalPastePlanArgs
@@ -62,7 +63,10 @@ async function executeTerminalPastePlanNow(
   if (plan.mode !== 'chunked') {
     const pasteResult = await runTerminalPasteOperationWithTimeout(() => {
       return pasteText(plan.payload.plainText, {
-        forceBracketedPaste: plan.mode === 'bracketed-terminal'
+        forceBracketedPaste: plan.mode === 'bracketed-terminal',
+        ...(plan.windowsInputRecordNewline
+          ? { windowsInputRecordNewline: plan.windowsInputRecordNewline }
+          : {})
       })
     }, operationTimeoutMs)
     if (pasteResult.timedOut) {
@@ -87,7 +91,7 @@ async function executeTerminalPastePlanNow(
     }
     try {
       const closeResult = await runTerminalPasteOperationWithTimeout(
-        () => writePty(BRACKETED_PASTE_END),
+        (signal) => writePty(BRACKETED_PASTE_END, signal),
         operationTimeoutMs
       )
       if (closeResult.timedOut) {
@@ -111,7 +115,7 @@ async function executeTerminalPastePlanNow(
         return { status: 'cancelled', reason: 'target-disconnected' }
       }
       const writeResult = await runTerminalPasteOperationWithTimeout(
-        () => writePty(chunk),
+        (signal) => writePty(chunk, signal),
         operationTimeoutMs
       )
       // Why: a failed close chunk is already the close attempt; retrying would emit a stray end.
@@ -154,9 +158,8 @@ type ChunkedPasteOutcome = {
 }
 
 export function getTerminalPasteOperationTimeoutMs(plan: TerminalPastePlan): number {
-  // Why: SSH/remote-runtime acknowledged PTY writes can include network
-  // backpressure; keep local paste hangs tight without aborting slow remotes.
-  return plan.target.runtime.kind === 'ssh' || plan.target.runtime.kind === 'remote-runtime'
+  // Allow remote acknowledged-write backpressure without loosening local paste timeout budgets.
+  return plan.target.runtime.kind === 'remote-runtime'
     ? TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
     : TERMINAL_PASTE_OPERATION_TIMEOUT_MS
 }
@@ -186,8 +189,4 @@ function result(
 
 function defaultNow(): number {
   return globalThis.performance?.now?.() ?? Date.now()
-}
-
-function defaultYieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0))
 }

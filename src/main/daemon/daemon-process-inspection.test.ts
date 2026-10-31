@@ -1,10 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
+import type * as WindowsProcessTableModule from '../windows/windows-process-table'
 import {
+  mergeProcessLivenessVerdict,
   queryWindowsProcess,
   readLinuxProcessStartedAtMs,
   readMacosProcessStartedAtMs,
   readProcessCommandLine
 } from './daemon-process-inspection'
+
+const { readWindowsProcessCreationTime } = vi.hoisted(() => ({
+  readWindowsProcessCreationTime: vi.fn((_pid: number): number | null => null)
+}))
+vi.mock('../windows/windows-process-table', async (importOriginal) => ({
+  ...(await importOriginal<typeof WindowsProcessTableModule>()),
+  readWindowsProcessCreationTime
+}))
 
 // btime 1699000000 with 1000 start ticks: 10s after boot at 100Hz, 1s at 1000Hz.
 const readProcStat = async (path: string): Promise<string> =>
@@ -32,39 +42,52 @@ describe('daemon process inspection', () => {
     expect(runCommand).not.toHaveBeenCalled()
   })
 
-  it('asks PowerShell to report a failed CIM query instead of an absent process', async () => {
-    const runCommand = vi.fn(
-      async (_file: string, _args: string[], _timeoutMs: number) =>
-        '{"status":"present","cmd":"daemon","start":1}'
-    )
+  it('reads the Windows process from the process table, not a PowerShell spawn', async () => {
+    const runCommand = vi.fn()
+    const readProcessTable = vi.fn(async () => [
+      { pid: 42, ppid: 1, name: 'node.exe', command: 'daemon', creationTimeMs: 7 }
+    ])
 
-    await queryWindowsProcess(42, { runCommand })
-
-    const script = runCommand.mock.calls[0]?.[1].at(-1) ?? ''
-    expect(script).toContain("$ErrorActionPreference = 'Stop'")
-    expect(script).toMatch(/catch \{[^}]*query_failed/)
+    await expect(queryWindowsProcess(42, { runCommand, readProcessTable })).resolves.toEqual({
+      status: 'present',
+      commandLine: 'daemon',
+      startedAtMs: 7
+    })
+    expect(runCommand).not.toHaveBeenCalled()
   })
 
-  it('keeps a failed CIM query indeterminate instead of proving the process gone', async () => {
-    const runCommand = vi.fn(async () => '{"status":"query_failed"}')
+  it('falls back to the single-PID creation time when the snapshot row has none', async () => {
+    readWindowsProcessCreationTime.mockReturnValueOnce(9)
+    const readProcessTable = vi.fn(async () => [
+      { pid: 42, ppid: 1, name: 'node.exe', command: 'daemon' }
+    ])
 
-    await expect(queryWindowsProcess(42, { runCommand })).resolves.toEqual({
+    await expect(queryWindowsProcess(42, { readProcessTable })).resolves.toEqual({
+      status: 'present',
+      commandLine: 'daemon',
+      startedAtMs: 9
+    })
+    expect(readWindowsProcessCreationTime).toHaveBeenCalledWith(42)
+  })
+
+  it('keeps an unreadable process table indeterminate instead of proving the process gone', async () => {
+    const readProcessTable = vi.fn(async () => {
+      throw new Error('windows process table is unreadable')
+    })
+
+    await expect(queryWindowsProcess(42, { readProcessTable })).resolves.toEqual({
       status: 'unavailable'
     })
   })
 
-  it('never reads a probe result without a success marker as proof of absence', async () => {
-    const runCommand = vi.fn(async () => '{"exists":false}')
+  it('reports absence only from a table that was read and lacks the PID', async () => {
+    const readProcessTable = vi.fn(async () => [
+      { pid: 7, ppid: 1, name: 'other.exe', command: '' }
+    ])
 
-    await expect(queryWindowsProcess(42, { runCommand })).resolves.toEqual({
-      status: 'unavailable'
+    await expect(queryWindowsProcess(42, { readProcessTable })).resolves.toEqual({
+      status: 'missing'
     })
-  })
-
-  it('reports absence only from a CIM query that ran and found nothing', async () => {
-    const runCommand = vi.fn(async () => '{"status":"missing"}')
-
-    await expect(queryWindowsProcess(42, { runCommand })).resolves.toEqual({ status: 'missing' })
   })
 
   it('reads the macOS start time through an async spawn', async () => {
@@ -76,7 +99,7 @@ describe('daemon process inspection', () => {
     expect(runCommand).toHaveBeenCalledWith('ps', ['-p', '42', '-o', 'lstart='], 2_000)
   })
 
-  // CLK_TCK belongs to the host that runs getconf, so a second runner must not inherit the first's.
+  // Keep each host runner's CLK_TCK cache isolated.
   it('scopes the CLK_TCK cache to the runner that produced it', async () => {
     const hundredHz = vi.fn(async () => '100')
     const thousandHz = vi.fn(async () => '1000')
@@ -89,7 +112,6 @@ describe('daemon process inspection', () => {
     ).resolves.toBe(1_699_000_001_000)
     expect(thousandHz).toHaveBeenCalledWith('getconf', ['CLK_TCK'], 1_000)
 
-    // The first runner stays cached: one spawn per runner, not per call.
     await expect(
       readLinuxProcessStartedAtMs(42, { readTextFile: readProcStat, runCommand: hundredHz })
     ).resolves.toBe(1_699_000_010_000)
@@ -114,15 +136,55 @@ describe('daemon process inspection', () => {
     ).resolves.toBe(1_699_000_010_000)
   })
 
-  it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN])(
-    'rejects unsafe Windows pid %s before command interpolation',
-    async (pid) => {
-      const runCommand = vi.fn()
+  // Host pruning must prefer live over unverifiable over exited, regardless of protocol-record order.
+  describe('mergeProcessLivenessVerdict', () => {
+    const unverifiable = { status: 'unverifiable', reason: 'probe failed' } as const
 
-      await expect(queryWindowsProcess(pid, { runCommand })).resolves.toEqual({
+    it('keeps a live verdict when a later record for the same version reports exited', () => {
+      expect(mergeProcessLivenessVerdict({ status: 'live' }, { status: 'exited' })).toEqual({
+        status: 'live'
+      })
+    })
+
+    it('keeps a live verdict when a later record reports unverifiable', () => {
+      expect(mergeProcessLivenessVerdict({ status: 'live' }, unverifiable)).toEqual({
+        status: 'live'
+      })
+    })
+
+    it('never lets an exited record downgrade an unverifiable verdict', () => {
+      expect(mergeProcessLivenessVerdict(unverifiable, { status: 'exited' })).toEqual(unverifiable)
+    })
+
+    it('lets a live record supersede an earlier exited or unverifiable verdict', () => {
+      expect(mergeProcessLivenessVerdict({ status: 'exited' }, { status: 'live' })).toEqual({
+        status: 'live'
+      })
+      expect(mergeProcessLivenessVerdict(unverifiable, { status: 'live' })).toEqual({
+        status: 'live'
+      })
+    })
+
+    it('lets an unverifiable record upgrade an earlier exited verdict', () => {
+      expect(mergeProcessLivenessVerdict({ status: 'exited' }, unverifiable)).toEqual(unverifiable)
+    })
+
+    it('adopts the first verdict when there is no prior one', () => {
+      expect(mergeProcessLivenessVerdict(undefined, { status: 'exited' })).toEqual({
+        status: 'exited'
+      })
+    })
+  })
+
+  it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN])(
+    'rejects unsafe Windows pid %s before reading the process table',
+    async (pid) => {
+      const readProcessTable = vi.fn(async () => [])
+
+      await expect(queryWindowsProcess(pid, { readProcessTable })).resolves.toEqual({
         status: 'unavailable'
       })
-      expect(runCommand).not.toHaveBeenCalled()
+      expect(readProcessTable).not.toHaveBeenCalled()
     }
   )
 })

@@ -7,7 +7,7 @@ import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
 } from '../../src/shared/terminal-quick-commands'
-import type { TerminalQuickCommand } from '../../src/shared/types'
+import type { TerminalQuickCommand } from '../../src/shared/terminal-quick-command-types'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
 import { handleMockAccountRequest } from './mock-server-account-rpc'
@@ -23,8 +23,7 @@ const MOCK_RPC_DELAY_MS = readScenarioNumber('MOCK_RPC_DELAY_MS', 0)
 const FAKE_REPOS = createMockRepos(MOCK_REPO_COUNT)
 let fakeWorktrees = createMockWorktrees(FAKE_REPOS, MOCK_WORKTREE_COUNT)
 
-// Mutable quick-command list so the mobile Quick Commands sheet can add/edit/
-// delete against the mock the same way it does a paired desktop.
+// Mutable commands let mock-backed mobile sheet add/edit/delete like a paired desktop.
 let fakeQuickCommands: TerminalQuickCommand[] = [
   {
     id: 'qc-codex-review',

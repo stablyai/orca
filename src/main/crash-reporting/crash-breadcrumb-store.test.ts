@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearCrashBreadcrumbsForTest,
   getCrashBreadcrumbSnapshot,
+  RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB,
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
 } from './crash-breadcrumb-store'
@@ -22,6 +23,257 @@ describe('crash breadcrumb store', () => {
     expect(snapshot).toHaveLength(30)
     expect(snapshot[0].name).toBe('event_2')
     expect(snapshot[29].name).toBe('event_31')
+  })
+
+  describe('fair-share eviction', () => {
+    it('spends the overflow on the most repeated series, not the oldest event', () => {
+      recordCrashBreadcrumb('app_started', { packaged: true })
+      recordCrashBreadcrumb('main_window_created')
+      recordCrashBreadcrumb('main_window_loaded')
+      for (let sample = 0; sample < 200; sample += 1) {
+        recordCrashBreadcrumb('renderer_memory', { sample })
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot.map((entry) => entry.name).slice(0, 3)).toEqual([
+        'app_started',
+        'main_window_created',
+        'main_window_loaded'
+      ])
+      expect(snapshot.filter((entry) => entry.name === 'renderer_memory')).toHaveLength(27)
+    })
+
+    it('thins the crowded series from its oldest end, keeping the run before the crash', () => {
+      recordCrashBreadcrumb('app_started')
+      for (let sample = 0; sample < 200; sample += 1) {
+        recordCrashBreadcrumb('renderer_memory', { sample })
+      }
+
+      const samples = getCrashBreadcrumbSnapshot()
+        .filter((entry) => entry.name === 'renderer_memory')
+        .map((entry) => entry.data?.sample)
+
+      expect(samples.at(-1)).toBe(199)
+      expect(samples).toEqual(
+        Array.from({ length: samples.length }, (_, i) => 200 - samples.length + i)
+      )
+    })
+
+    it('splits the ring between two competing series', () => {
+      for (let round = 0; round < 100; round += 1) {
+        recordCrashBreadcrumb('renderer_memory', { round })
+        recordCrashBreadcrumb('pr_refresh_queue', { round })
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot.filter((entry) => entry.name === 'renderer_memory')).toHaveLength(15)
+      expect(snapshot.filter((entry) => entry.name === 'pr_refresh_queue')).toHaveLength(15)
+    })
+
+    it('does not evict a coalescing owner that still holds unfolded repeats', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
+      const hit = (key: string): void => {
+        recordCoalescedCrashBreadcrumb({
+          name: 'renderer_error',
+          data: { key },
+          coalesceKey: key,
+          minIntervalMs: 30_000
+        })
+      }
+
+      recordCrashBreadcrumb('app_started')
+      hit('hot')
+      vi.advanceTimersByTime(10)
+      for (let repeat = 0; repeat < 5; repeat += 1) {
+        hit('hot')
+      }
+      // Distinct keys crowd one name without coalescing away the eviction pressure.
+      for (let index = 0; index < 40; index += 1) {
+        vi.advanceTimersByTime(10)
+        hit(`cold_${index}`)
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+      const hotCrumb = snapshot.find((entry) => entry.data?.key === 'hot')
+
+      expect(snapshot.some((entry) => entry.name === 'app_started')).toBe(true)
+      expect(hotCrumb?.data?.suppressedSinceLast).toBe(5)
+    })
+
+    it('protects the trail when three series share the ring, none holding a majority', () => {
+      recordCrashBreadcrumb('app_started')
+      recordCrashBreadcrumb('main_window_created')
+      recordCrashBreadcrumb('main_window_loaded')
+      for (let round = 0; round < 100; round += 1) {
+        recordCrashBreadcrumb('renderer_memory', { round })
+        recordCrashBreadcrumb('agent_state_changed', { round })
+        recordCrashBreadcrumb('pr_refresh_queue', { round })
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot.slice(0, 3).map((entry) => entry.name)).toEqual([
+        'app_started',
+        'main_window_created',
+        'main_window_loaded'
+      ])
+    })
+
+    it('charges the overflow to a name holding only two slots', () => {
+      for (let index = 0; index < 15; index += 1) {
+        recordCrashBreadcrumb(`single_${index}`)
+      }
+      recordCrashBreadcrumb('duplicated', { first: true })
+      for (let index = 15; index < 29; index += 1) {
+        recordCrashBreadcrumb(`single_${index}`)
+      }
+      recordCrashBreadcrumb('duplicated', { first: false })
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot[0].name).toBe('single_0')
+      expect(snapshot.filter((entry) => entry.name === 'duplicated')).toHaveLength(1)
+    })
+
+    it('counts the entry that just arrived when two series are tied', () => {
+      recordCrashBreadcrumb('lifecycle_a')
+      recordCrashBreadcrumb('lifecycle_b')
+      for (let index = 0; index < 14; index += 1) {
+        recordCrashBreadcrumb('series_b', { index })
+      }
+      for (let index = 0; index < 14; index += 1) {
+        recordCrashBreadcrumb('series_a', { index })
+      }
+      recordCrashBreadcrumb('series_a', { index: 14 })
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot.filter((entry) => entry.name === 'series_a')).toHaveLength(14)
+      expect(snapshot.filter((entry) => entry.name === 'series_b')).toHaveLength(14)
+    })
+
+    it("does not let one renderer surface evict another surface's only sample", () => {
+      for (let index = 0; index < 15; index += 1) {
+        recordCrashBreadcrumb(`lifecycle_${index}`, undefined, 'main')
+      }
+      recordCrashBreadcrumb('renderer_memory', { surface: 'main' }, 'main')
+      for (let index = 15; index < 29; index += 1) {
+        recordCrashBreadcrumb(`lifecycle_${index}`, undefined, 'main')
+      }
+      recordCrashBreadcrumb('renderer_memory', { surface: 'popout' }, 'popout')
+
+      const mainSnapshot = getCrashBreadcrumbSnapshot('main')
+
+      expect(mainSnapshot.filter((entry) => entry.name === 'renderer_memory')).toHaveLength(1)
+    })
+
+    it('charges the crowded group even when all of its entries are live owners', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
+      recordCrashBreadcrumb('app_started')
+      for (let index = 0; index < 30; index += 1) {
+        const hit = (): void => {
+          recordCoalescedCrashBreadcrumb({
+            name: 'renderer_error',
+            data: { index },
+            coalesceKey: `key_${index}`,
+            minIntervalMs: 30_000
+          })
+        }
+        hit()
+        hit()
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot.some((entry) => entry.name === 'app_started')).toBe(true)
+      expect(snapshot.some((entry) => entry.data?.index === 29)).toBe(true)
+    })
+
+    it('keeps the lifecycle trail when the retained lane takes part of the budget', () => {
+      // Separate timestamps so snapshot sorting tests policy rather than tie-breaking.
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
+      const tick = (): void => {
+        vi.advanceTimersByTime(1_000)
+      }
+      recordCrashBreadcrumb('app_started')
+      tick()
+      recordCrashBreadcrumb('main_window_created')
+      tick()
+      recordCrashBreadcrumb('main_window_loaded')
+      for (let mark = 0; mark < 3; mark += 1) {
+        tick()
+        recordCrashBreadcrumb('renderer_memory_highwater', {
+          rendererSurface: 'main',
+          thresholdPrivateMB: 600 + mark
+        })
+      }
+      for (let sample = 0; sample < 200; sample += 1) {
+        tick()
+        recordCrashBreadcrumb('renderer_memory', { sample })
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+      const names = snapshot.map((entry) => entry.name)
+
+      expect(snapshot).toHaveLength(30)
+      expect(names.filter((name) => name === 'renderer_memory_highwater')).toHaveLength(3)
+      expect(names.slice(0, 3)).toEqual([
+        'app_started',
+        'main_window_created',
+        'main_window_loaded'
+      ])
+    })
+
+    // Owner visibility must use the same fair-eviction window as the final snapshot.
+    it('folds a burst into an owner the report keeps, even when the lane takes budget', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
+      for (let mark = 0; mark < 3; mark += 1) {
+        recordCrashBreadcrumb('renderer_memory_highwater', {
+          rendererSurface: 'main',
+          thresholdPrivateMB: 600 + mark
+        })
+      }
+      recordCrashBreadcrumb('app_started')
+      const hit = (): void => {
+        recordCoalescedCrashBreadcrumb({
+          name: 'renderer_error',
+          data: { message: 'boom' },
+          coalesceKey: 'boom',
+          minIntervalMs: 30_000
+        })
+      }
+      hit()
+      for (let repeat = 0; repeat < 5; repeat += 1) {
+        vi.advanceTimersByTime(10)
+        hit()
+      }
+      for (let sample = 0; sample < 200; sample += 1) {
+        vi.advanceTimersByTime(10)
+        recordCrashBreadcrumb('renderer_memory', { sample })
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+      const owner = snapshot.find((entry) => entry.name === 'renderer_error')
+
+      expect(owner?.data?.suppressedSinceLast).toBe(5)
+    })
+
+    it('degenerates to oldest-first when no name repeats', () => {
+      for (let index = 0; index < 40; index += 1) {
+        recordCrashBreadcrumb(`event_${index}`)
+      }
+
+      const snapshot = getCrashBreadcrumbSnapshot()
+
+      expect(snapshot[0].name).toBe('event_10')
+      expect(snapshot[29].name).toBe('event_39')
+    })
   })
 
   it('retains bounded renderer high-water profiles across later activity', () => {
@@ -50,7 +302,7 @@ describe('crash breadcrumb store', () => {
   })
 
   it('caps retained high-water profiles', () => {
-    for (let index = 0; index < 5; index += 1) {
+    for (let index = 0; index < 11; index += 1) {
       recordCrashBreadcrumb('renderer_memory_highwater', {
         rendererSurface: `surface-${index}`,
         thresholdPct: 80
@@ -59,7 +311,51 @@ describe('crash breadcrumb store', () => {
 
     expect(
       getCrashBreadcrumbSnapshot().map((breadcrumb) => breadcrumb.data?.rendererSurface)
-    ).toEqual(['surface-1', 'surface-2', 'surface-3', 'surface-4'])
+    ).toEqual([
+      'surface-1',
+      'surface-2',
+      'surface-3',
+      'surface-4',
+      'surface-5',
+      'surface-6',
+      'surface-7',
+      'surface-8',
+      'surface-9',
+      'surface-10'
+    ])
+  })
+
+  it('retains both threshold ladders and the allocation profile for both renderer surfaces', () => {
+    for (const rendererSurface of ['main', 'dashboard-popout']) {
+      for (const thresholdPct of [60, 80]) {
+        recordCrashBreadcrumb('renderer_memory_highwater', { rendererSurface, thresholdPct })
+      }
+      for (const thresholdPrivateMB of [600, 1000]) {
+        recordCrashBreadcrumb('renderer_memory_highwater', {
+          rendererSurface,
+          thresholdPrivateMB
+        })
+      }
+      recordCrashBreadcrumb(RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB, { rendererSurface })
+    }
+
+    expect(
+      getCrashBreadcrumbSnapshot().map((breadcrumb) => [
+        breadcrumb.data?.rendererSurface,
+        breadcrumb.data?.thresholdPct ?? breadcrumb.data?.thresholdPrivateMB ?? breadcrumb.name
+      ])
+    ).toEqual([
+      ['main', 60],
+      ['main', 80],
+      ['main', 600],
+      ['main', 1000],
+      ['main', RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB],
+      ['dashboard-popout', 60],
+      ['dashboard-popout', 80],
+      ['dashboard-popout', 600],
+      ['dashboard-popout', 1000],
+      ['dashboard-popout', RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB]
+    ])
   })
 
   it('redacts sensitive breadcrumb fields before they can be snapshotted', () => {
@@ -125,12 +421,63 @@ describe('crash breadcrumb store', () => {
     vi.useRealTimers()
   })
 
-  // Windows crash F0BKR84AHEH: two `terminal_safe_fit_retry_exhausted` bursts
-  // (34 crumbs in 76ms, 34 in 56ms) flushed the pre-crash trail out of a
-  // 30-entry ring. Every hidden pane is display:none, so it measures 0x0, fails
-  // the fit thresholds, and burns its whole retry budget — one reattach wave
-  // fires once per mounted pane, near-simultaneously. These two cases pin the
-  // before/after so the coalescing in crash-reporting.ts cannot silently regress.
+  it('expires the coalescing window after a backward wall-clock step', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
+    const hit = (): { suppressedSinceLast: number } | undefined =>
+      recordCoalescedCrashBreadcrumb({
+        name: 'agent_state_changed',
+        coalesceKey: 'agent:claude:working',
+        minIntervalMs: 30_000
+      })
+
+    hit()
+    vi.advanceTimersByTime(10_000)
+    expect(hit()).toBeUndefined()
+    vi.setSystemTime(new Date('2025-05-20T12:00:00.000Z'))
+    vi.advanceTimersByTime(20_000)
+
+    expect(hit()).toEqual({ suppressedSinceLast: 1 })
+    expect(getCrashBreadcrumbSnapshot()).toHaveLength(2)
+  })
+
+  it('does not collapse the coalescing window after a forward wall-clock step', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
+    const hit = (): { suppressedSinceLast: number } | undefined =>
+      recordCoalescedCrashBreadcrumb({
+        name: 'agent_state_changed',
+        coalesceKey: 'agent:claude:working',
+        minIntervalMs: 30_000
+      })
+
+    hit()
+    vi.advanceTimersByTime(10_000)
+    vi.setSystemTime(new Date('2027-05-20T12:00:00.000Z'))
+
+    expect(hit()).toBeUndefined()
+    vi.advanceTimersByTime(20_000)
+    expect(hit()).toEqual({ suppressedSinceLast: 1 })
+  })
+
+  it('folds data-less repeats into the emitted breadcrumb', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
+
+    recordCoalescedCrashBreadcrumb({
+      name: 'terminal_safe_fit_retry_exhausted',
+      coalesceKey: 'terminal_safe_fit_retry_exhausted',
+      minIntervalMs: 30_000
+    })
+    recordCoalescedCrashBreadcrumb({
+      name: 'terminal_safe_fit_retry_exhausted',
+      coalesceKey: 'terminal_safe_fit_retry_exhausted',
+      minIntervalMs: 30_000
+    })
+
+    expect(getCrashBreadcrumbSnapshot()[0]?.data).toEqual({ suppressedSinceLast: 1 })
+  })
+
   describe('a per-pane burst against the fixed-size ring', () => {
     const recordPreCrashTrail = (): void => {
       for (let index = 0; index < 10; index += 1) {
@@ -139,7 +486,7 @@ describe('crash breadcrumb store', () => {
     }
     const burstSize = 34
 
-    it('erases the entire pre-crash trail when uncoalesced', () => {
+    it('takes most of the ring when uncoalesced, but no longer erases the trail', () => {
       recordPreCrashTrail()
       for (let pane = 0; pane < burstSize; pane += 1) {
         recordCrashBreadcrumb('terminal_safe_fit_retry_exhausted', { paneId: 1 })
@@ -147,12 +494,14 @@ describe('crash breadcrumb store', () => {
 
       const snapshot = getCrashBreadcrumbSnapshot()
 
+      const bursts = snapshot.filter((entry) => entry.name === 'terminal_safe_fit_retry_exhausted')
+
       expect(snapshot.filter((entry) => entry.name.startsWith('pre_crash_evidence_'))).toHaveLength(
-        0
+        10
       )
-      expect(
-        snapshot.filter((entry) => entry.name === 'terminal_safe_fit_retry_exhausted')
-      ).toHaveLength(30)
+      expect(bursts).toHaveLength(20)
+      expect(bursts.some((entry) => entry.data?.livePanes !== undefined)).toBe(false)
+      expect(bursts.every((entry) => entry.data?.suppressedSinceLast === undefined)).toBe(true)
     })
 
     it('costs one slot when coalesced, and keeps the pane count on the payload', () => {
@@ -181,19 +530,11 @@ describe('crash breadcrumb store', () => {
         10
       )
       expect(bursts).toHaveLength(1)
-      // The population survives even though 33 crumbs did not — that count was
-      // the only signal the multiplicity ever carried.
       expect(bursts[0].data).toEqual(
         expect.objectContaining({ livePanes: burstSize, livePaneManagers: burstSize })
       )
     })
 
-    // The suppression path returns before the delete-then-set that re-anchors
-    // recency, so a continuously-suppressed key kept its original insertion slot
-    // and became the FIRST eviction candidate — the exact inverse of the LRU's
-    // intent. `renderer_error` keys carry message+stack identity, so one noisy
-    // loop mints unbounded distinct keys and evicts the burst key mid-storm,
-    // re-arming the ring flush this suppression exists to prevent.
     it('keeps suppressing a hot key while high-cardinality churn fills the LRU', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -220,15 +561,11 @@ describe('crash breadcrumb store', () => {
         }
       }
 
-      // Assert on suppression, not on ring occupancy: 200 genuinely-distinct
-      // errors legitimately flush the 30-entry ring, which masks an eviction as
-      // "one entry" either way.
+      // Check suppression: ring occupancy alone can hide an evicted key's re-emission.
       expect(reEmissions).toBe(0)
       expect(hitBurstKey()).toBeUndefined()
     })
 
-    // Re-anchoring must move position only. Renewing recordedAt on every hit
-    // would let a sustained emitter suppress itself forever and never re-emit.
     it('still expires the suppression window while a hot key is re-anchored', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -250,9 +587,6 @@ describe('crash breadcrumb store', () => {
       expect(hit()).toEqual({ suppressedSinceLast: 29 })
     })
 
-    // Panes mount progressively, so the first crumb of a burst sees a census of
-    // 1. Freezing it would report `livePanes: 1` for a 34-pane wave — the exact
-    // "one pane looping" misread that coalescing by name was built to prevent.
     it('reports the newest census of a growing burst, not the first', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -286,8 +620,6 @@ describe('crash breadcrumb store', () => {
       )
     })
 
-    // The re-emitted crumb already carries `suppressedSinceLast`, so folding the
-    // same events into the expiring slot too would report one burst twice.
     it('counts a burst once when the window expires and the key re-emits', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -315,9 +647,162 @@ describe('crash breadcrumb store', () => {
       expect(bursts[1].data).toEqual({ livePanes: 3, suppressedSinceLast: 1 })
     })
 
-    // A key that ages out loses its only handle on the ring entry it owns, so
-    // the newest suppressed payload must be folded in before the entry is
-    // dropped from the map.
+    it('does not re-claim repeats a snapshot already folded into the crumb', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+      const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
+        recordCoalescedCrashBreadcrumb({
+          name: 'terminal_safe_fit_retry_exhausted',
+          data: { livePanes },
+          coalesceKey: 'terminal_safe_fit_retry_exhausted',
+          minIntervalMs: 30_000
+        })
+
+      hit(1)
+      vi.advanceTimersByTime(10)
+      hit(2)
+      getCrashBreadcrumbSnapshot()
+      vi.advanceTimersByTime(31_000)
+      const resumed = hit(3)
+
+      expect(resumed).toEqual({ suppressedSinceLast: 0 })
+      const bursts = getCrashBreadcrumbSnapshot().filter(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(bursts[0].data).toEqual({ livePanes: 2, suppressedSinceLast: 1 })
+      expect(bursts[1].data).toEqual({ livePanes: 3 })
+
+      vi.advanceTimersByTime(10)
+      hit(4)
+      const resolved = getCrashBreadcrumbSnapshot().filter(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(resolved[1].data).toEqual({ livePanes: 4, suppressedSinceLast: 1 })
+    })
+
+    it('keeps the carried count when a fold resolves onto a re-emitted crumb', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+      const hit = (livePanes: number): void => {
+        recordCoalescedCrashBreadcrumb({
+          name: 'terminal_safe_fit_retry_exhausted',
+          data: { livePanes },
+          coalesceKey: 'terminal_safe_fit_retry_exhausted',
+          minIntervalMs: 30_000
+        })
+      }
+
+      hit(1)
+      vi.advanceTimersByTime(10)
+      hit(2)
+      vi.advanceTimersByTime(31_000)
+      hit(3)
+      vi.advanceTimersByTime(10)
+      hit(4)
+
+      const bursts = getCrashBreadcrumbSnapshot().filter(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(bursts[1].data).toEqual({ livePanes: 4, suppressedSinceLast: 2 })
+    })
+
+    it('re-claims repeats on the next emit when the burst crumb was evicted from the ring', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+      const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
+        recordCoalescedCrashBreadcrumb({
+          name: 'terminal_safe_fit_retry_exhausted',
+          data: { livePanes },
+          coalesceKey: 'terminal_safe_fit_retry_exhausted',
+          minIntervalMs: 30_000
+        })
+
+      hit(1)
+      vi.advanceTimersByTime(10)
+      hit(2)
+      hit(3)
+      for (let index = 0; index < 30; index += 1) {
+        recordCrashBreadcrumb(`renderer_error_${index}`, { index })
+      }
+      getCrashBreadcrumbSnapshot()
+      vi.advanceTimersByTime(31_000)
+      const resumed = hit(4)
+
+      expect(resumed).toEqual({ suppressedSinceLast: 2 })
+      const burst = getCrashBreadcrumbSnapshot().find(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(burst?.data).toEqual({ livePanes: 4, suppressedSinceLast: 2 })
+    })
+
+    it('re-claims repeats when retained profiles push the burst crumb past the snapshot budget', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+      const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
+        recordCoalescedCrashBreadcrumb({
+          name: 'terminal_safe_fit_retry_exhausted',
+          data: { livePanes },
+          coalesceKey: 'terminal_safe_fit_retry_exhausted',
+          minIntervalMs: 30_000
+        })
+
+      hit(1)
+      vi.advanceTimersByTime(10)
+      hit(2)
+      hit(3)
+      for (let index = 0; index < 4; index += 1) {
+        recordCrashBreadcrumb('renderer_memory_highwater', {
+          rendererSurface: `surface-${index}`,
+          thresholdPct: 80
+        })
+      }
+      // Four retained profiles reduce the report's ring budget to 26 entries.
+      for (let index = 0; index < 29; index += 1) {
+        recordCrashBreadcrumb(`renderer_error_${index}`, { index })
+      }
+      getCrashBreadcrumbSnapshot()
+      vi.advanceTimersByTime(31_000)
+      const resumed = hit(4)
+
+      expect(resumed).toEqual({ suppressedSinceLast: 2 })
+    })
+
+    it('keeps immutable snapshots cumulative without re-claiming resolved debt', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+      const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
+        recordCoalescedCrashBreadcrumb({
+          name: 'terminal_safe_fit_retry_exhausted',
+          data: { livePanes },
+          coalesceKey: 'terminal_safe_fit_retry_exhausted',
+          minIntervalMs: 30_000
+        })
+
+      hit(1)
+      vi.advanceTimersByTime(10)
+      hit(2)
+      hit(3)
+      const firstSnapshot = getCrashBreadcrumbSnapshot()
+      vi.advanceTimersByTime(10)
+      hit(4)
+      const secondFold = getCrashBreadcrumbSnapshot().find(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(firstSnapshot[0]?.data).toEqual({ livePanes: 3, suppressedSinceLast: 2 })
+      expect(secondFold?.data).toEqual({ livePanes: 4, suppressedSinceLast: 3 })
+
+      vi.advanceTimersByTime(31_000)
+      const resumed = hit(5)
+      expect(resumed).toEqual({ suppressedSinceLast: 0 })
+
+      vi.advanceTimersByTime(10)
+      hit(6)
+      const resolved = getCrashBreadcrumbSnapshot().filter(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(resolved[1].data).toEqual({ livePanes: 6, suppressedSinceLast: 1 })
+    })
+
     it('resolves a suppressed payload when an unrelated key ages the map', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))

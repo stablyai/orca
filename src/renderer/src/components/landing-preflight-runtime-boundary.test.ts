@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreflightStatus } from '../../../preload/api-types'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import { useAppStore } from '../store'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 
@@ -14,6 +14,11 @@ const status = (overrides: Partial<PreflightStatus> = {}): PreflightStatus => ({
   gh: { installed: false, authenticated: false },
   ...overrides
 })
+
+function setDocumentVisibility(state: 'visible' | 'hidden'): void {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+  document.dispatchEvent(new Event('visibilitychange'))
+}
 
 const githubRepo: Repo = {
   id: 'github',
@@ -27,6 +32,7 @@ const githubRepo: Repo = {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  setDocumentVisibility('visible')
   refresh.mockClear()
   invalidate.mockClear()
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -35,36 +41,12 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  setDocumentVisibility('visible')
   vi.useRealTimers()
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
 describe('landing preflight runtime boundary', () => {
-  it('refreshes after an active runtime A to B switch without manual action', () => {
-    const view = renderHook(() => useLandingPreflightRuntime())
-    expect(refresh).toHaveBeenCalledTimes(1)
-
-    act(() => {
-      useAppStore.setState({
-        settings: { activeRuntimeEnvironmentId: 'runtime-a' },
-        runtimeStatusByEnvironmentId: new Map([
-          ['runtime-a', { status: { runtimeId: 'a' }, connectionGeneration: 1 }]
-        ])
-      } as never)
-    })
-    act(() => {
-      useAppStore.setState({
-        settings: { activeRuntimeEnvironmentId: 'runtime-b' },
-        runtimeStatusByEnvironmentId: new Map([
-          ['runtime-b', { status: { runtimeId: 'b' }, connectionGeneration: 1 }]
-        ])
-      } as never)
-    })
-
-    expect(refresh).toHaveBeenCalledTimes(3)
-    view.unmount()
-  })
-
   it('invalidates on disconnect and refreshes exactly once on reconnect', () => {
     const view = renderHook(() => useLandingPreflightRuntime())
     act(() => {
@@ -98,13 +80,24 @@ describe('landing preflight runtime boundary', () => {
     view.unmount()
   })
 
-  it('keeps the banner empty while the active remote runtime is still unknown', () => {
-    useAppStore.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-a' } } as never)
-
+  it('stops the 30s preflight poll while hidden and lets the reveal refresh instead', () => {
+    useAppStore.setState({ repos: [githubRepo], preflightStatus: status() })
     const view = renderHook(() => useLandingPreflightRuntime())
+    refresh.mockClear()
 
-    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(1)
+    act(() => setDocumentVisibility('hidden'))
+    expect(vi.getTimerCount()).toBe(0)
+
+    act(() => vi.advanceTimersByTime(150_000))
     expect(refresh).not.toHaveBeenCalled()
+
+    // Reveal force-refreshes through the sibling visibility handler; polling only re-arms afterward.
+    act(() => setDocumentVisibility('visible'))
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(refresh).toHaveBeenCalledWith({ force: true, wakeWslDistro: true })
+    expect(vi.getTimerCount()).toBe(1)
+
     view.unmount()
   })
 

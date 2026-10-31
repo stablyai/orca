@@ -1,36 +1,72 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { isMacUserAgent } from '../terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
+import { getBrowserProfileScopeSearchEntry } from './browser-profile-scope-search'
+import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
 import {
+  getBrowserLinkRoutingDescription,
+  getLinkRoutingBackgroundSearchEntry,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
-} from './browser-link-routing-modifier-copy'
+} from './browser-link-routing-copy'
+import {
+  getBrowserClientHostedRemoteDescription,
+  getBrowserClientHostedRemoteTitle
+} from './browser-client-hosted-remote-copy'
+import {
+  getBrowserSshWorkspaceRoutingDescription,
+  getBrowserSshWorkspaceRoutingTitle
+} from './browser-ssh-workspace-routing-copy'
 
-type BrowserShortcutPlatform = {
+export type BrowserShortcutPlatform = {
   isMac: boolean
 }
 
-function getDefaultBrowserShortcutPlatform(): BrowserShortcutPlatform {
-  return {
-    isMac: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-  }
-}
-
-// Why: "always" stops being true once inverting is on, so only then does the nested
-// row take over the chord sentence — with it off this reads exactly as it always has.
-export function getBrowserLinkRoutingDescription(
-  platform: BrowserShortcutPlatform = getDefaultBrowserShortcutPlatform(),
-  modifierInverts = false
-): string {
-  const base =
-    "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
-  return modifierInverts
-    ? base
-    : `${base} ${platform.isMac ? '⇧⌘-click' : 'Shift+Ctrl+click'} always uses your system browser.`
+export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPlatform): string[] {
+  return [
+    ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+    ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links'),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.terminal',
+      'terminal'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.chat',
+      'chat'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.click',
+      'click'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.actions',
+      'actions'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.popover',
+      'popover'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.menu',
+      'menu'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.disable',
+      'disable'
+    ),
+    'link click behavior',
+    'open directly',
+    'modifier-click only',
+    'middle click',
+    'mouse 3',
+    platform.isMac ? 'cmd' : 'ctrl'
+  ]
 }
 
 export function getBrowserPaneSearchEntries(
-  platform: BrowserShortcutPlatform = getDefaultBrowserShortcutPlatform()
+  platform: BrowserShortcutPlatform = { isMac: isMacUserAgent() }
 ): SettingsSearchEntry[] {
   return [
     {
@@ -144,11 +180,21 @@ export function getBrowserPaneSearchEntries(
           'auto.components.settings.browser.search.linkRoutingModifier.opposite',
           'opposite'
         ),
-        // Why: the row renders live copy but this entry is built with openLinksInApp
-        // false, so index the other title too or the row is unfindable by its own text.
+        // Index the alternate live title because this entry is built with openLinksInApp false.
         getLinkRoutingModifierTitle(true),
         platform.isMac ? 'cmd' : 'ctrl'
       ]
+    },
+    {
+      title: translate(
+        'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
+        'Terminal URL clicks'
+      ),
+      description: translate(
+        'auto.components.settings.BrowserTerminalLinkActionsSetting.descriptionV2',
+        'Control clicks on detected URLs printed in terminal panes and chat transcripts.'
+      ),
+      keywords: getTerminalLinkActionSearchKeywords(platform)
     },
     {
       title: translate(
@@ -179,6 +225,8 @@ export function getBrowserPaneSearchEntries(
         'Import cookies from Chrome, Edge, or other browsers to use existing logins inside Orca.'
       ),
       keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.8a489aab8d', 'google'),
+        ...translateSearchKeyword('browser.googleCookieClear.signInKeyword', 'sign-in'),
         ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
         ...translateSearchKeyword('auto.components.settings.browser.search.29193a51d5', 'cookies'),
         ...translateSearchKeyword('auto.components.settings.browser.search.66dd641a47', 'session'),
@@ -190,6 +238,66 @@ export function getBrowserPaneSearchEntries(
         ...translateSearchKeyword('auto.components.settings.browser.search.1c1e097985', 'arc'),
         ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile')
       ]
-    }
+    },
+    // Append entries because BrowserPane indexes this catalog by position.
+    {
+      title: getBrowserClientHostedRemoteTitle(),
+      description: getBrowserClientHostedRemoteDescription(),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.clientHostedRemote.remote',
+          'remote'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.clientHostedRemote.client',
+          'client'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.clientHostedRemote.host',
+          'host'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.clientHostedRemote.desktop',
+          'desktop'
+        ),
+        ...translateSearchKeyword('auto.components.settings.browser.search.72c58f7792', 'webview'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.clientHostedRemote.placement',
+          'placement'
+        )
+      ]
+    },
+    {
+      title: getBrowserSshWorkspaceRoutingTitle(),
+      description: getBrowserSshWorkspaceRoutingDescription(),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.ssh',
+          'ssh'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.proxy',
+          'proxy'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.tunnel',
+          'tunnel'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.routing',
+          'routing'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.network',
+          'network'
+        )
+      ]
+    },
+    getBrowserUserAgentSearchEntry(),
+    getBrowserSitePermissionsSearchEntry(),
+    getBrowserProfileScopeSearchEntry(),
+    getLinkRoutingBackgroundSearchEntry()
   ]
 }

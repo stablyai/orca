@@ -14,7 +14,11 @@ import {
   resetTerminalLinkifierHoverState
 } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import { focusActivePane } from './pane-helpers'
-import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
+import { useAppStore } from '@/store'
+import { auditPaneWeightParity } from './terminal-render-desync-weight-probe'
+import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit'
+import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
+import { presentPaneViewport } from '@/lib/pane-manager/pane-webgl-renderer'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -24,6 +28,7 @@ export type TerminalHiddenReason = 'surface' | 'tab'
 type ResumeTerminalVisibilityArgs = {
   manager: PaneManager
   isActive: boolean
+  isChatViewMode: boolean
   wasVisible: boolean
   shouldUseLightTabResume: boolean
   captureViewportPositions: (useRememberedSnapshots: boolean) => Map<number, ScrollState>
@@ -47,56 +52,70 @@ type HideTerminalVisibilityResult = {
 type RecoverVisibleTerminalWindowWakeArgs = {
   manager: PaneManager
   isActive: boolean
+  isChatViewMode: boolean
   clearGlyphAtlases: boolean
 }
 
 export function resumeTerminalVisibility({
   manager,
   isActive,
+  isChatViewMode,
   wasVisible,
   shouldUseLightTabResume,
   captureViewportPositions,
   withSuppressedScrollTracking
 }: ResumeTerminalVisibilityArgs): void {
-  // Why: hiding the surface fired mouseleave, which cleared xterm's current
-  // link but left its hover cell cache; without this reset a link stays dead
-  // until a scroll when the pointer returns to the same cell on reveal.
+  // Hiding clears the active link but leaves hover-cell cache; reset or a stationary pointer’s link stays dead until scroll.
   for (const pane of manager.getPanes()) {
     resetTerminalLinkifierHoverState(pane.terminal)
   }
   syncTerminalViewportIntents(manager)
-  // Why: WebGL resume can disturb xterm's viewport bookkeeping before the
-  // post-resume fit runs. Capture numeric viewport positions first; the
-  // restore path avoids content matching so duplicate agent log lines do
-  // not jump to the wrong history entry.
+  // Capture numeric viewport position before WebGL resume; text matching can jump among duplicate agent log lines.
   captureViewportPositions(!wasVisible)
+  let repairedDpr = false
   withSuppressedScrollTracking(() => {
     if (shouldUseLightTabResume) {
-      // Why: intra-worktree tab switches only toggle the overlay. Keeping
-      // synchronous drain and atlas rebuilds off this path avoids racing the
-      // overlay's delayed geometry fit. Still request hidden-output recovery:
-      // agent TUIs can suppress hidden bytes until the pane is foregrounded.
+      let flushedDeferredMetrics = false
+      for (const pane of manager.getPanes()) {
+        if (flushDeferredPaneMetricOptionsIfMeasurable(pane)) {
+          flushedDeferredMetrics = true
+        }
+        // Light reveal otherwise has no renderer/fit repair for hidden-time DPR changes.
+        repairPaneWebglCanvasDprMismatch(pane)
+      }
+      auditPaneWeightParity(manager.getPanes(), useAppStore.getState().settings)
+      // Keep drain/atlas rebuild off overlay-only switches to avoid fit races, but still recover bytes suppressed by hidden TUIs.
       requestLightTabBacklogRecovery(manager)
-      // Why: reveal recovery must be immediate, not the terminal-output debounce
-      // — a background agent streaming in another pane must not defer this tab's
-      // atlas rebuild.
-      scheduleTabRevealWebglAtlasRecovery()
-      if (isActive) {
+      if (flushedDeferredMetrics) {
+        // Flushed metrics changed cell size; light reveal must refit despite normally skipping fit.
+        manager.fitAllRevealedPanes()
+      }
+      if (isActive && !isChatViewMode) {
         focusActivePane(manager)
       }
     } else {
-      resumeTerminalVisibilityHeavy(manager, isActive)
+      // Flush after WebGL attachment to avoid a redundant suspended-DOM refresh while preserving first paint.
+      repairedDpr = resumeTerminalVisibilityHeavy(manager, isActive && !isChatViewMode)
     }
     enforceTerminalViewportIntents(manager)
     if (!shouldUseLightTabResume) {
-      // Why: this clear wipes the glyph atlas shared with other same-config
-      // terminals; refresh after reset so rebuilt atlases repaint from xterm.
-      resetAndRefreshAllTerminalWebglAtlases()
+      auditPaneWeightParity(manager.getPanes(), useAppStore.getState().settings)
     }
-    // Why: the synchronous recovery above can fire before the revealed pane is
-    // attached and laid out, where the WebGL renderer drops redraw requests
-    // without retry. Follow up with a settled-frame, pane-scoped repaint.
-    manager.scheduleRevealRepaint()
+    if (shouldUseLightTabResume) {
+      // Preserve coherent DEC-2026 frames; settled refresh arms xterm’s watchdog without clearing shared GPU data.
+      manager.scheduleRevealPresent()
+    } else if (repairedDpr) {
+      // DPR-stale atlas glyphs cannot wait two frames; rebuild before paint.
+      resetAndRefreshAllTerminalWebglAtlases('visibility-resume-dpr')
+      manager.scheduleRevealRepaint()
+    } else {
+      // Hidden parsing changes the model without presenting; force present now or unchanged-cell diff retains pre-hide pixels until settled rebuild.
+      for (const pane of manager.getPanes()) {
+        presentPaneViewport(pane)
+      }
+      // Settled present covers attach/measure races; the shared atlas is still valid (renderers rebuild their model on page-layout changes), so re-rasterizing every glyph is waste.
+      manager.scheduleRevealPresent()
+    }
   })
 }
 
@@ -110,20 +129,16 @@ export function hideTerminalVisibility({
 }: HideTerminalVisibilityArgs): HideTerminalVisibilityResult {
   const surfaceBecameHidden = wasWorktreeActive && !isWorktreeActive
   if (wasVisible) {
-    // Why: hidden DOM/layout churn can mutate xterm's viewport before the
-    // pane becomes visible again. Preserve the last visible position.
+    // Hidden DOM/layout churn can move viewport; retain the last visible position.
     captureViewportPositions(false)
   }
   if (!isWorktreeActive && (wasVisible || surfaceBecameHidden)) {
-    // Suspend WebGL when going hidden. xterm.write() continues to land in the
-    // DOM-renderer fallback terminal; the suspend is purely a GPU resource decision.
+    // xterm.write() keeps updating the hidden buffer; suspension only changes renderer lifetime.
     manager.suspendRendering()
     return { hiddenReason: 'surface', renderingSuspended: true }
   }
   if (!hasCompletedVisibleResume && wasVisible && wasWorktreeActive && isWorktreeActive) {
-    // Why: the visibility hook starts wasVisible=true so terminal tabs that
-    // first mount hidden still release WebGL contexts instead of exhausting
-    // Chromium's small context budget.
+    // Initially hidden tabs must still suspend WebGL or exhaust Chromium’s limited context budget.
     manager.suspendRendering()
     return { hiddenReason: 'tab', renderingSuspended: true }
   }
@@ -139,19 +154,19 @@ export function hideTerminalVisibility({
 export function recoverVisibleTerminalWindowWake({
   manager,
   isActive,
+  isChatViewMode,
   clearGlyphAtlases
 }: RecoverVisibleTerminalWindowWakeArgs): void {
-  // Why: macOS screensaver/display wake can leave xterm visible but with a
-  // stale renderer/input surface; Orca's own hidden-state resume never runs.
-  // Why: backlog writes can expose transient viewport geometry while parsing.
+  // Display wake can leave visible xterm renderer/input stale without triggering hidden-state resume.
   syncTerminalViewportIntents(manager)
   for (const pane of manager.getPanes()) {
+    // Undock/monitor moves can change DPR without box changes the addon detects; repair on wake/refocus too.
+    if (repairPaneWebglCanvasDprMismatch(pane)) {
+      presentPaneViewport(pane)
+    }
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: WINDOW_WAKE_FLUSH_CHARS })
-    // Why: window blur fires mouseleave, clearing xterm's current link but not
-    // its hover cell cache; on refocus the stationary pointer sits on the same
-    // cell, so the link stays dead until a scroll. Skip while a link is hovered
-    // to avoid flickering its underline (same guard as the on-write reset).
+    // Blur leaves stale hover-cell cache; reset on refocus unless a hovered link would flicker.
     if (!isTerminalLinkifierHoverActive(pane.terminal)) {
       resetTerminalLinkifierHoverState(pane.terminal)
     }
@@ -159,21 +174,16 @@ export function recoverVisibleTerminalWindowWake({
   manager.resumeRendering()
   // Why: wake re-attaches WebGL — same transient cell-metric wobble guard as the heavy resume.
   manager.fitAllRevealedPanes()
-  if (isActive) {
+  if (isActive && !isChatViewMode) {
     focusActivePane(manager)
   }
   enforceTerminalViewportIntents(manager)
   if (clearGlyphAtlases) {
-    // Why: only a genuine wake may wipe the shared glyph atlas. The wipe makes
-    // every same-config pane re-rasterize at once, and xterm's atlas page-merge
-    // clear-model flag is consumed by one renderer (xterm.js #4480), so panes
-    // that lose that race paint garbled glyphs mid-stream.
-    resetAndRefreshAllTerminalWebglAtlases()
+    // Only real wake may clear the shared atlas: concurrent rasterization can lose xterm’s single-consumer clear-model flag and garble siblings (#4480).
+    resetAndRefreshAllTerminalWebglAtlases('system-resume')
     manager.scheduleRevealRepaint()
   } else {
-    // Why: the reveal repaint clears each pane's texture atlas (a shared,
-    // same-config wipe), so a plain refocus must use the atlas-preserving
-    // present instead — otherwise it re-arms the same mid-stream garble race.
+    // Plain refocus must present without shared-atlas reset or it reopens the streaming garble race.
     manager.scheduleRevealPresent()
   }
 }
@@ -184,28 +194,28 @@ function requestLightTabBacklogRecovery(manager: PaneManager): void {
   }
 }
 
-function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean): void {
-  // Why: hidden panes can accumulate large PTY bursts while Chromium is
-  // occluded. Drain a bounded slice before fitting; the scheduler keeps
-  // ordering and continues the rest asynchronously so return-to-app does
-  // not beachball behind an entire backlog.
+function resumeTerminalVisibilityHeavy(manager: PaneManager, shouldFocus: boolean): boolean {
+  // Drain only a bounded pre-fit backlog slice; keep ordering and continue asynchronously to avoid freezing app return.
   for (const pane of manager.getPanes()) {
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: VISIBLE_RESUME_FLUSH_CHARS })
   }
   // Intent was latched by the caller before queued writes can expose transient geometry.
-  // Resume WebGL immediately so the terminal shows its last-known state
-  // on the first painted frame. macOS context creation is ~5 ms; on
-  // Windows (ANGLE -> D3D11) it can be 100-500 ms but a deferred resume
-  // would paint a stretched DOM-fallback flash, which is worse UX.
+  // Resume WebGL before first paint to avoid stretched DOM fallback, despite slower Windows context creation.
   manager.resumeRendering()
-  // Why: resumeRendering just re-attached WebGL, whose cell metrics briefly differ
-  // from the DOM renderer's; a raw fit here reflows on a transient one-column-off
-  // grid and garbles diff-painting inline TUIs (grok minimize→restore).
+  // Unchanged grid can still have stale backing-store DPR; repair before final shared-atlas presentation.
+  let repairedDpr = false
+  for (const pane of manager.getPanes()) {
+    if (repairPaneWebglCanvasDprMismatch(pane)) {
+      repairedDpr = true
+    }
+  }
+  // Guard post-WebGL fit against transient DOM/WebGL one-column mismatch that reflows and garbles inline TUIs.
   manager.fitAllRevealedPanes()
-  if (isActive) {
+  if (shouldFocus) {
     focusActivePane(manager)
   }
+  return repairedDpr
 }
 
 function enforceTerminalViewportIntents(manager: PaneManager): void {
@@ -216,8 +226,7 @@ function enforceTerminalViewportIntents(manager: PaneManager): void {
 
 function syncTerminalViewportIntents(manager: PaneManager): void {
   for (const pane of manager.getPanes()) {
-    // Why: native scrollback trimming moves a pinned viewport content-stably.
-    // Capture that live position before resume/fit can disturb it.
+    // Capture content-stable pinned viewport after native trimming but before resume/fit can disturb it.
     syncTerminalScrollIntentFromViewport(pane.terminal)
   }
 }

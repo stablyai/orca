@@ -5,10 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getStatus } from './status'
 
-// Why: `node_modules/` is a directory-only ignore rule. It matches the primary
-// checkout's real directory but never the worktree's symlink, so Git reports the
-// link as untracked forever — a phantom row in the diff and a permanently dirty
-// worktree. Status has to drop it; nothing else can.
+// Directory-only ignore rules cannot hide shared symlinks; status must filter configured links.
 const git = (args: string[], cwd: string): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 
@@ -40,9 +37,6 @@ describe('getStatus shared symlink exclusion', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  // Why: guards the premise of the whole fix. If Git ever reported the symlink
-  // as `node_modules/` (as it does for a real untracked directory) the path
-  // comparison below would silently miss and the exclusion would do nothing.
   it('Git reports the shared symlink as untracked, without a trailing slash', async () => {
     const status = await getStatus(worktree)
 
@@ -57,7 +51,15 @@ describe('getStatus shared symlink exclusion', () => {
     expect(status.entries).toEqual([])
   })
 
-  // The negative control that matters: real work must never be hidden.
+  it.each(['./node_modules', 'node_modules/'])(
+    'drops the shared symlink when the setting spells it %s',
+    async (sharedPath) => {
+      const status = await getStatus(worktree, { sharedLinkPaths: [sharedPath] })
+
+      expect(status.entries).toEqual([])
+    }
+  )
+
   it('still reports a genuine untracked file alongside a shared symlink', async () => {
     writeFileSync(join(worktree, 'scratch.txt'), 'unsaved work\n')
 
@@ -78,9 +80,6 @@ describe('getStatus shared symlink exclusion', () => {
     ])
   })
 
-  // Why: the configured name alone must not hide anything — only a real symlink.
-  // `vendor` is not gitignored, so Git genuinely reports it and the filter is
-  // the only thing that could wrongly drop it.
   it('keeps a regular directory the user created at a configured shared name', async () => {
     mkdirSync(join(worktree, 'vendor'))
     writeFileSync(join(worktree, 'vendor', 'real.txt'), 'user work\n')
@@ -94,9 +93,6 @@ describe('getStatus shared symlink exclusion', () => {
     ])
   })
 
-  // Why: the exact discriminator for "configured AND really a symlink". The path
-  // matches a declared name exactly, so only the symlink check keeps the user's
-  // file visible.
   it('keeps a regular file the user created at a configured shared name', async () => {
     writeFileSync(join(worktree, 'notes'), 'user work\n')
 
@@ -107,9 +103,6 @@ describe('getStatus shared symlink exclusion', () => {
     expect(status.entries).toEqual([expect.objectContaining({ path: 'notes', area: 'untracked' })])
   })
 
-  // Why: only *untracked* entries are Orca's artifacts. A symlink Git tracks is
-  // versioned content, so an edit to it is the user's work even when the path is
-  // declared shared — dropping it would hide a committable change.
   it('keeps a modified tracked symlink at a declared shared path', async () => {
     unlinkSync(join(worktree, 'tracked-link'))
     symlinkSync('OTHER.md', join(worktree, 'tracked-link'))
@@ -123,9 +116,6 @@ describe('getStatus shared symlink exclusion', () => {
     ])
   })
 
-  // Why: these are the names a byte-for-byte path comparison is most likely to
-  // get wrong — a space breaks naive whitespace splitting, and non-ASCII is what
-  // Git C-quotes unless the reader opts out.
   it('drops shared symlinks whose names have a space or non-ASCII characters', async () => {
     const names = ['my shared dir', 'ライブラリ']
     for (const name of names) {

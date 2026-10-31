@@ -1,63 +1,67 @@
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalLaunchResult } from '../../shared/agent-session-resume'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
+import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 
-export type PtySpawnResult = {
+export type PtySpawnResult = TerminalLaunchResult & {
+  /** Execution-host probe; absent on older hosts and reattachments. */
+  openCodeCapabilities?: OpenCodeCliCapabilities
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
-  /** App-facing PTY id. Remote providers must return globally routable ids,
-   *  not relay-local handles, because renderer/runtime IPC routes by this key. */
+  /** App-routable id; remote relay-local handles cannot route renderer/runtime IPC. */
   id: string
   /** Opaque provider-owned identity for this process behind a reusable PTY id. */
   incarnationId?: PtyIncarnationId
-  /** Relay source identity installed before adjacent source frames are decoded. */
-  sourceActivation?: PtySourceReceivingActivation
-  /** The provider observed this exact spawn exit before its control reply settled. */
+  /** The provider observed this exact spawn exit before returning its spawn result. */
   exitedBeforeSpawnReply?: true
-  /** OS-level pid of the shell process, when available at spawn time.
-   *  Why: the memory collector needs this to walk each PTY's process
-   *  subtree. Daemon-backed providers return it from the RPC result;
-   *  local providers read it from node-pty. Null when the underlying
-   *  provider could not publish a pid (e.g., race during spawn). */
+  /** Observed cause for this exact early-dead process. */
+  exitCause?: TerminalExitCause
+  /** Host marker proof: false means inspected/unarmed; absent means legacy and retains the client guess. */
+  shellReadyArmed?: boolean
+  /** OS shell PID for subtree memory collection; null when the host cannot publish one during spawn. */
   pid?: number | null
   /** Minimal allowlisted launch ownership returned by daemon reattach. */
   launchAgent?: TuiAgent
   /** Local WSL context: null is native; undefined is unavailable/legacy. */
   wslDistro?: string | null
-  /** ANSI snapshot of the terminal screen, present when reattaching to an
-   *  existing daemon session. Write this to xterm.js to restore visual state. */
+  /** Daemon reattach ANSI screen restore for xterm. */
   snapshot?: string
-  /** Dimensions the snapshot was captured at. Resize xterm.js to these before
-   *  writing the snapshot so ANSI cursor positions land correctly. */
+  /** Restore xterm size before snapshot replay so cursor coordinates match. */
   snapshotCols?: number
   snapshotRows?: number
-  /** Provider sequence at the attach boundary. `reset` starts a new provider
-   *  generation; `continued` resumes the existing absolute domain. */
+  /** Normal-buffer history and mode preamble before an alternate-screen frame. */
+  snapshotPrefixAnsi?: string
+  /** Visual alternate-screen frame, separate so newer clients can omit it safely. */
+  snapshotFrameAnsi?: string
+  /** Live state to append when omitting `snapshotFrameAnsi`. */
+  snapshotFrameRestoreAnsi?: string
+  /** Attach sequence domain: reset begins a new provider generation; continued retains the absolute domain. */
   providerSequence?: {
     value: number
     generation: 'continued' | 'reset'
   }
-  /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
-   *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
-   *  (terminal-query-authority.md §kitty). Never replayed into a renderer
-   *  xterm — POST_REPLAY_REATTACH_RESET's kitty reset stays authoritative. */
+  /** Snapshot kitty flags seed hidden runtime query replies; renderers reassert after replay screen switches. */
   snapshotKittyKeyboardFlags?: number
-  /** True when the spawn reattached to an existing daemon session. */
+  /** Main-reconciled renderer sequence for the flags attach boundary; providers cannot set this. */
+  snapshotSeq?: number
+  /** Ordered ownership evidence proven by the provider snapshot. */
+  snapshotTerminalOwner?: TerminalOwner
+  /** Fresh-spawn cwd provenance only; in-process and never sent over the wire. */
+  startupCwdSource?: 'request' | 'recovered-history'
   isReattach?: boolean
-  /** True when the reattached session uses the alternate screen buffer
-   *  (e.g., Codex CLI, vim). Normal-screen TUIs like Claude Code are false. */
+  /** Measured post-attach grid only; daemon/relay leave size unchanged and must not echo requested dimensions. */
+  attachedGrid?: { cols: number; rows: number }
+  /** Daemon OSC title seeds main records after relaunch; never replay as terminal bytes. */
+  lastTitle?: string
   isAlternateScreen?: boolean
-  /** Buffered output returned by relay pty.attach. Unlike snapshot, this is
-   *  incremental scrollback and must not clear the terminal before replay. */
+  /** Incremental relay replay; unlike snapshot, must not clear the terminal before writing. */
   replay?: string
-  /** True when the caller requested reattach (sessionId was provided) but the
-   *  relay PTY was gone (grace window elapsed). The renderer uses this to show
-   *  a brief "Session expired — new shell started" message. */
+  /** Requested session expired before reattach; renderer reports that a new shell started. */
   sessionExpired?: boolean
-  /** Present when cold-restoring from disk history after a daemon crash.
-   *  Contains the saved scrollback and CWD. The new shell spawns in the
-   *  saved CWD; the scrollback is written to xterm.js as read-only history. */
+  /** Crash-history restore: spawn in saved cwd and replay scrollback as read-only history. */
   coldRestore?: {
     scrollback: string
     cwd: string

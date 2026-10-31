@@ -1,7 +1,8 @@
+import './mock-descendant-sweep'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import { HeadlessEmulator } from './headless-emulator'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createMockSubprocess(): SubprocessHandle & {
   simulateData: (data: string) => void
@@ -15,6 +16,7 @@ function createMockSubprocess(): SubprocessHandle & {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(),
     signal: vi.fn(),
     onData(cb) {
@@ -33,8 +35,7 @@ function createMockSubprocess(): SubprocessHandle & {
   }
 }
 
-// Why: simulates what daemon-pty-adapter.ts does when building the PtySpawnResult
-// for a reattach. Alt-screen sessions include the full ANSI snapshot because
+// This fixture assembles the payload locally; it does not exercise the adapter’s assembly.
 function buildReattachPayload(snapshot: ReturnType<HeadlessEmulator['getSnapshot']>) {
   const isAltScreen = snapshot.modes.alternateScreen
   const fullPayload = snapshot.scrollbackAnsi + snapshot.rehydrateSequences + snapshot.snapshotAnsi
@@ -48,9 +49,6 @@ function buildReattachPayload(snapshot: ReturnType<HeadlessEmulator['getSnapshot
   }
 }
 
-// Why: replays the reattach payload into a fresh headless emulator (simulating
-// what pty-connection.ts does when writing snapshot data to xterm.js) and then
-// feeds the SIGWINCH repaint output to verify the final state is clean.
 async function simulateReattachToFreshTerminal(
   reattachPayload: string,
   sigwinchRepaintData: string,
@@ -59,9 +57,7 @@ async function simulateReattachToFreshTerminal(
 ): Promise<{ content: string; cols: number; rows: number }> {
   const fresh = new HeadlessEmulator({ cols, rows })
   try {
-    // Step 1: write reattach payload (what pty-connection writes to xterm.js)
     await fresh.write(reattachPayload)
-    // Step 2: write SIGWINCH repaint data (what the TUI sends after receiving SIGWINCH)
     await fresh.write(sigwinchRepaintData)
     const result = fresh.getSnapshot()
     return { content: result.snapshotAnsi, cols: result.cols, rows: result.rows }
@@ -99,15 +95,13 @@ describe('reattach snapshot flow', () => {
         streamClient: { onData, onExit: vi.fn() }
       })
 
-      // Simulate Claude Code TUI: bracketed paste + normal screen content
-      lastSub.simulateData('\x1b[?2004h') // enable bracketed paste
+      lastSub.simulateData('\x1b[?2004h')
       lastSub.simulateData('Claude Code > hello world\r\n')
       lastSub.simulateData('Response text here\r\n')
 
-      // Wait for headless emulator to process
+      // Allow the asynchronous emulator parse to settle before attaching.
       await new Promise((r) => setTimeout(r, 50))
 
-      // Reattach — get snapshot
       const result = await h.createOrAttach({
         sessionId: 's1',
         cols: 80,
@@ -201,7 +195,6 @@ describe('reattach snapshot flow', () => {
       })
 
       const payload = buildReattachPayload(result.snapshot!)
-      // Simulate SIGWINCH repaint: clear screen + redraw
       const repaintData = '\x1b[2J\x1b[3J\x1b[Hrepainted content\r\n'
       const { content } = await simulateReattachToFreshTerminal(
         payload.fullPayload,
@@ -211,7 +204,6 @@ describe('reattach snapshot flow', () => {
       )
 
       expect(content).toContain('repainted content')
-      // Original content should be cleared by the repaint
       expect(content).not.toContain('original content')
     })
   })
@@ -226,7 +218,6 @@ describe('reattach snapshot flow', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      // Simulate Codex entering alternate screen
       lastSub.simulateData('\x1b[?1049h')
       lastSub.simulateData('\x1b[?2004h')
       lastSub.simulateData('\x1b[H\x1b[2JCodex TUI content\r\n> input prompt')
@@ -264,10 +255,7 @@ describe('reattach snapshot flow', () => {
       })
 
       const payload = buildReattachPayload(result.snapshot!)
-      // Why: alt-screen sessions include the full content snapshot because
-      // POSIX signal coalescing may prevent the SIGWINCH repaint from arriving.
-      // The snapshot keeps the TUI visible; any repaint overwrites it via
-      // absolute cursor positioning.
+      // Include alternate-screen content even when a SIGWINCH repaint never arrives.
       expect(payload.rehydrateSequences).toContain('\x1b[?1049h')
       expect(payload.rehydrateSequences).toContain('\x1b[?2004h')
       expect(payload.snapshotAnsi).toContain('Codex TUI content')
@@ -313,7 +301,6 @@ describe('reattach snapshot flow', () => {
       })
 
       const payload = buildReattachPayload(result.snapshot!)
-      // Simulate single SIGWINCH repaint (what Codex sends)
       const repaintData = '\x1b[H\x1b[2Jnew TUI content\r\n> new prompt'
       const { content } = await simulateReattachToFreshTerminal(
         payload.fullPayload,
@@ -324,23 +311,20 @@ describe('reattach snapshot flow', () => {
 
       expect(content).toContain('new TUI content')
       expect(content).toContain('new prompt')
-      // Old content should not appear
       expect(content).not.toContain('old TUI content')
       expect(content).not.toContain('old prompt')
     })
 
     it('double SIGWINCH repaint at same dims does not duplicate content', async () => {
       const repaint = '\x1b[H\x1b[2Jcodex content\r\n> prompt'
-      // Simulate receiving two identical repaints (e.g. from resize + explicit SIGWINCH)
       const fresh = new HeadlessEmulator({ cols: 80, rows: 10 })
-      await fresh.write('\x1b[?1049h') // enter alternate screen
+      await fresh.write('\x1b[?1049h')
       await fresh.write(repaint)
-      await fresh.write(repaint) // second identical repaint
+      await fresh.write(repaint)
 
       const snapshot = fresh.getSnapshot()
       fresh.dispose()
 
-      // Content should appear exactly once, not duplicated
       const matches = snapshot.snapshotAnsi.match(/codex content/g)
       expect(matches).toHaveLength(1)
     })
@@ -348,22 +332,13 @@ describe('reattach snapshot flow', () => {
 
   describe('Ink-style cursor-relative repaint (Codex)', () => {
     it('snapshot + Ink-style repaint overwrites correctly without clear', async () => {
-      // Simulates the reattach flow for an Ink-based TUI (Codex).
-      // Ink repaints by: cursor-up-N → erase-to-end → write new content.
-      // The snapshot positions xterm.js cursor where Ink expects it,
-      // so the repaint overwrites the snapshot correctly.
+      // Relative repaints depend on retaining the cursor position left by the previous render.
       const cols = 80
       const rows = 10
       const fresh = new HeadlessEmulator({ cols, rows })
 
-      // Step 1: write snapshot (simulating pty-connection)
-      // Ink rendered 3 lines, cursor ends at the end of line 3
       await fresh.write('old TUI header\r\n> old input\r\nstatus bar')
 
-      // Step 2: NO clear — cursor stays where snapshot left it (end of line 3)
-
-      // Step 3: Ink-style SIGWINCH repaint: move cursor up 3 lines,
-      // clear to end, write new content
       await fresh.write('\x1b[3A\x1b[J')
       await fresh.write('new TUI header\r\n> new input\r\nnew status')
 
@@ -377,49 +352,32 @@ describe('reattach snapshot flow', () => {
     })
 
     it('clear before Ink repaint breaks cursor positioning', async () => {
-      // Proves the problem: clearing resets cursor to (1,1), but Ink's
-      // cursor-up-N expects cursor at end of previous render. The mismatch
-      // causes content to render at wrong positions.
+      // This assertion checks content presence only; it does not prove cursor alignment.
       const cols = 80
       const rows = 10
       const fresh = new HeadlessEmulator({ cols, rows })
 
-      // Step 1: write snapshot (3 lines, cursor at end of line 3)
       await fresh.write('old TUI header\r\n> old input\r\nstatus bar')
 
-      // Step 2: clear — cursor moves to (1,1)
       await fresh.write('\x1b[2J\x1b[3J\x1b[H')
 
-      // Step 3: Ink-style repaint: cursor-up-3 from (1,1) → clamped to (1,1)
-      // Ink clears and writes from row 1 — happens to work in this case
-      // because cursor-up is clamped, but the cursor column is wrong
       await fresh.write('\x1b[3A\x1b[J')
       await fresh.write('new TUI header\r\n> new input\r\nnew status')
 
       const snapshot = fresh.getSnapshot()
       fresh.dispose()
 
-      // In this simple case it still works because cursor-up clamping
-      // happens to land at the right row. But for more complex TUI
-      // layouts (e.g., cursor not at column 1 of last line), the clear
-      // would cause column misalignment.
       expect(snapshot.snapshotAnsi).toContain('new TUI header')
     })
 
     it('Ink repaint with absolute row positioning breaks after clear', async () => {
-      // Some Ink versions use absolute cursor positioning.
-      // Without clear: cursor is where snapshot left it, absolute pos works.
-      // With clear: absolute pos still works (not affected by cursor).
-      // But: if Ink uses CSR (scroll regions) or relative moves based on
-      // stored line count, the clear creates a mismatch.
+      // This case uses absolute positioning without a clear; it does not test clear-induced corruption.
       const cols = 80
       const rows = 10
       const fresh = new HeadlessEmulator({ cols, rows })
 
-      // Snapshot places content starting at row 3 (2 blank rows above)
       await fresh.write('\x1b[3;1Hheader line\r\n> prompt\r\nfooter')
 
-      // No clear — Ink rewrites from row 3
       await fresh.write('\x1b[3;1H\x1b[Jnew header\r\n> new prompt\r\nnew footer')
 
       const snapshot = fresh.getSnapshot()
@@ -443,7 +401,6 @@ describe('reattach snapshot flow', () => {
       lastSub.simulateData('content\r\n')
       await new Promise((r) => setTimeout(r, 50))
 
-      // Reattach with different dims (simulating eager spawn at 80x24)
       const result = await h.createOrAttach({
         sessionId: 's1',
         cols: 80,
@@ -451,7 +408,6 @@ describe('reattach snapshot flow', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      // Snapshot should be at the SESSION's dimensions, not the request's
       expect(result.snapshot!.cols).toBe(120)
       expect(result.snapshot!.rows).toBe(30)
     })
@@ -465,7 +421,6 @@ describe('reattach snapshot flow', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      // Resize session (simulating a previous resize before app quit)
       h.resize('s1', 120, 30)
 
       lastSub.simulateData('content\r\n')
@@ -540,12 +495,9 @@ describe('reattach snapshot flow', () => {
 
       const payload = buildReattachPayload(result.snapshot!)
 
-      // Simulate what the renderer does: clear screen, write full
-      // snapshot, then the TUI repaints its viewport on SIGWINCH.
       const fresh = new HeadlessEmulator({ cols: 80, rows: 10 })
       await fresh.write('\x1b[2J\x1b[3J\x1b[H')
       await fresh.write(payload.fullPayload)
-      // SIGWINCH repaint — TUI redraws its viewport area
       await fresh.write('\x1b[4;1H\x1b[Jnew viewport content\r\n')
 
       const finalSnapshot = fresh.getSnapshot()

@@ -15,6 +15,11 @@ import {
   type ProcessTableCapture,
   type ProcessTableRow
 } from './pty-descendant-termination'
+import {
+  terminateDescendantSnapshotAndWait,
+  terminateDescendantSnapshotWithVerdict
+} from './pty-descendant-exit-verification'
+import { excludeShellBackgroundJobs } from './pty-shell-job-preservation'
 
 const CAPTURED_AT_MS = Date.parse('Tue Jul 14 12:00:00 2026')
 
@@ -52,30 +57,35 @@ function snapshot(
   rootPgid: number | null = 10,
   capturedAtMs = CAPTURED_AT_MS
 ) {
-  return { rootPgid, descendants, capturedAtMs }
+  return {
+    ...(rootPgid === null ? {} : { root: { pid: 10, startedAt: 'Mon Jul 13 12:54:47 2026' } }),
+    rootPgid,
+    descendants,
+    capturedAtMs,
+    ...(rootPgid === null ? {} : { reDerivedPids: new Set(descendants.map((row) => row.pid)) })
+  }
 }
 
 describe('parseProcessTable', () => {
   it('parses pid/ppid/pgid and keeps the space-containing lstart verbatim', () => {
     const rows = parseProcessTable(
       [
-        '  101   1  101 Mon Jul 13 12:54:47 2026',
-        '42017 101 42017 Tue Jul 14 01:02:03 2026  ',
+        '  101   1  101    -1 Mon Jul 13 12:54:47 2026',
+        '42017 101 42017 42017 Tue Jul 14 01:02:03 2026  ',
         '',
         'not a process line'
       ].join('\n')
     )
     expect(rows).toEqual([
-      { pid: 101, ppid: 1, pgid: 101, startedAt: 'Mon Jul 13 12:54:47 2026' },
-      { pid: 42017, ppid: 101, pgid: 42017, startedAt: 'Tue Jul 14 01:02:03 2026' }
+      { pid: 101, ppid: 1, pgid: 101, tpgid: -1, startedAt: 'Mon Jul 13 12:54:47 2026' },
+      { pid: 42017, ppid: 101, pgid: 42017, tpgid: 42017, startedAt: 'Tue Jul 14 01:02:03 2026' }
     ])
   })
 })
 
 describe('collectDescendantRows', () => {
   it('walks detached-pgid descendants once even when a non-atomic table looks cyclic', () => {
-    // shell(10) -> agent(20, own job pgid) -> detached tool shell(30, own
-    // session-style pgid) -> git(31). 99 is unrelated.
+    // Detached process groups still share ancestry: 10 → 20 → 30 → 31; 99 is unrelated.
     const table = [
       row(10, 1, 10),
       row(20, 10, 20),
@@ -90,22 +100,60 @@ describe('collectDescendantRows', () => {
     expect(snapshot.capturedAtMs).toBe(CAPTURED_AT_MS)
   })
 
+  it("excludes only the shell's own background jobs; agent-made process groups stay swept", () => {
+    const tty = (pid: number, ppid: number, pgid: number, tpgid: number) => ({
+      ...row(pid, ppid, pgid),
+      tpgid
+    })
+    // Shell 10: foreground agent 20 (tool 21, setsid'd MCP 22, setpgid'd MCP 23 keeping the tty)
+    // and nohup/disown job 30 (child 31).
+    const table = [
+      tty(10, 1, 10, 20),
+      tty(20, 10, 20, 20),
+      tty(21, 20, 20, 20),
+      tty(22, 20, 22, -1),
+      tty(23, 20, 23, 20),
+      tty(30, 10, 30, 20),
+      tty(31, 30, 30, 20)
+    ]
+    const snapshot = collectDescendantRows(10, table, CAPTURED_AT_MS)
+    expect(snapshot.descendants.map((r) => r.pid)).toEqual([20, 30, 21, 22, 23, 31])
+    expect(excludeShellBackgroundJobs(snapshot, false).descendants.map((r) => r.pid)).toEqual([
+      20, 21, 22, 23
+    ])
+  })
+
+  it('finds the job-control shell under the macOS login(1) wrapper', () => {
+    const tty = (pid: number, ppid: number, pgid: number, tpgid: number) => ({
+      ...row(pid, ppid, pgid),
+      tpgid
+    })
+    // login 5 -> shell 10 (own group) -> nohup job 30, foreground agent 20 -> NewGroup MCP 23.
+    const table = [
+      tty(5, 1, 5, 20),
+      tty(10, 5, 10, 20),
+      tty(20, 10, 20, 20),
+      tty(23, 20, 23, 20),
+      tty(30, 10, 30, 20)
+    ]
+    const snapshot = collectDescendantRows(5, table, CAPTURED_AT_MS)
+    expect(excludeShellBackgroundJobs(snapshot, true).descendants.map((r) => r.pid)).toEqual([
+      10, 20, 23
+    ])
+    // Treating login as the shell would spare the shell's own group and sweep the nohup job.
+    expect(excludeShellBackgroundJobs(snapshot, false).descendants.map((r) => r.pid)).toEqual([
+      20, 30, 23
+    ])
+  })
+
   it('sweeps nothing when the root row is already gone (a vacated PID has no findable tree)', () => {
-    // The root (10) is absent from the table: it has exited. Row 20 still points
-    // at ppid 10, but that is a PID-reuse coincidence, not a real descendant —
-    // never collect it.
     const snapshot = collectDescendantRows(10, [row(20, 10, 20)], CAPTURED_AT_MS)
     expect(snapshot.rootPgid).toBeNull()
     expect(snapshot.descendants).toEqual([])
   })
 
   it('does not sweep unrelated processes that merely reference a vacated root PID as ppid', () => {
-    // The PTY root (500) has exited, so its row is absent. Other live processes
-    // (501/502/503) still list ppid 500 — either not-yet-reparented orphans or, in
-    // the hazardous case, children of a process that recycled PID 500. The walk is
-    // seeded only by a stale number, so it cannot tell them apart and must sweep
-    // none. (A root PID recycled to a *live* process would appear in the table and
-    // is out of scope for this guard.)
+    // Without the root row, ps cannot distinguish reparenting delays from children of a recycled PID.
     const table = [row(501, 500, 500), row(502, 500, 500), row(503, 500, 500)]
     const snapshot = collectDescendantRows(500, table, CAPTURED_AT_MS)
     expect(snapshot.descendants).toEqual([])
@@ -131,9 +179,6 @@ describe('captureDescendantSnapshot', () => {
   })
 
   it('captures no descendants and signals nothing when the root PID was already recycled', async () => {
-    // End-to-end proof for the #9191-class hazard: the captured PTY root (500) is
-    // gone; only unrelated live processes reference its vacated PID. Neither the
-    // snapshot nor the terminator may touch them.
     const readTable = vi
       .fn()
       .mockResolvedValue(tableCapture([row(501, 500, 500), row(502, 500, 500), row(503, 500, 500)]))
@@ -182,7 +227,7 @@ describe('captureDescendantSnapshot', () => {
     expect(result).not.toBeNull()
     expect(execFileMock).toHaveBeenCalledWith(
       'ps',
-      ['-axo', 'pid=,ppid=,pgid=,lstart='],
+      ['-axo', 'pid=,ppid=,pgid=,tpgid=,lstart='],
       expect.objectContaining({
         timeout: 321,
         killSignal: 'SIGKILL',
@@ -199,14 +244,16 @@ describe('captureDescendantSnapshot', () => {
       vi.setSystemTime(CAPTURED_AT_MS + 1_100)
       callback(
         null,
-        ['10 1 10 Tue Jul 14 12:00:00 2026', '20 10 20 Tue Jul 14 12:00:00 2026'].join('\n')
+        ['10 1 10 0 Tue Jul 14 12:00:00 2026', '20 10 20 0 Tue Jul 14 12:00:00 2026'].join('\n')
       )
     })
 
     const result = await captureDescendantSnapshot(10, { platform: 'darwin' })
 
     expect(result?.capturedAtMs).toBe(CAPTURED_AT_MS + 900)
-    expect(result?.descendants).toEqual([row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')])
+    expect(result?.descendants).toEqual([
+      { ...row(20, 10, 20, 'Tue Jul 14 12:00:00 2026'), tpgid: 0 }
+    ])
   })
 })
 
@@ -236,8 +283,7 @@ describe('terminateDescendantSnapshot', () => {
     const recycled = row(40, 30, 40)
     const ambiguous = row(50, 30, 50)
     const sendSignal = vi.fn()
-    // At escalation time: 30 survives unchanged, 20 is gone, 40's pid now
-    // belongs to a different (recycled) process with a different start time.
+    // At escalation, 30 retains its identity, 20 is gone, and 40’s PID belongs to another process.
     const readTable = vi
       .fn()
       .mockResolvedValue(
@@ -297,6 +343,189 @@ describe('terminateDescendantSnapshot', () => {
     expect(sendSignal).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it("uses each row's capture boundary when escalating a merged snapshot", async () => {
+    const oldBoundary = CAPTURED_AT_MS + 900
+    const refreshBoundary = CAPTURED_AT_MS + 2_100
+    const retained = row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')
+    const fresh = row(30, 10, 30, 'Tue Jul 14 12:00:01 2026')
+    const sendSignal = vi.fn()
+    terminateDescendantSnapshot(
+      {
+        ...snapshot([retained, fresh], 10, refreshBoundary),
+        capturedAtMsByPid: { '20': oldBoundary, '30': refreshBoundary }
+      },
+      {
+        sendSignal,
+        readTable: vi.fn().mockResolvedValue(tableCapture([retained, fresh]))
+      }
+    )
+    sendSignal.mockClear()
+
+    await vi.advanceTimersByTimeAsync(DESCENDANT_KILL_GRACE_MS)
+
+    // Retained PID 20 still has capture-second ambiguity; refreshed PID 30 is old enough to escalate.
+    expect(sendSignal.mock.calls).toEqual([[30, 'SIGKILL']])
+  })
+})
+
+describe('terminateDescendantSnapshotAndWait', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('escalates an identity-matched survivor and verifies its exit', async () => {
+    const survivor = row(20, 10, 20)
+    const sendSignal = vi.fn()
+    const readTable = vi
+      .fn()
+      .mockResolvedValueOnce(tableCapture([survivor]))
+      .mockResolvedValueOnce(tableCapture([]))
+
+    const pending = terminateDescendantSnapshotAndWait(snapshot([survivor]), {
+      sendSignal,
+      readTable,
+      graceMs: 0,
+      verifyMs: 200
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(pending).resolves.toBe(true)
+    expect(sendSignal.mock.calls).toEqual([
+      [20, 'SIGTERM'],
+      [20, 'SIGKILL']
+    ])
+  })
+
+  it('does not claim exit when the verification table is unavailable', async () => {
+    const sendSignal = vi.fn()
+    const pending = terminateDescendantSnapshotAndWait(snapshot([row(20, 10, 20)]), {
+      sendSignal,
+      readTable: vi.fn().mockRejectedValue(new Error('ps exploded')),
+      verifyMs: 200
+    })
+    await vi.advanceTimersByTimeAsync(400)
+
+    await expect(pending).resolves.toBe(false)
+    expect(sendSignal).toHaveBeenCalledWith(20, 'SIGTERM')
+  })
+
+  it('keeps polling past a read that missed its deadline rather than surrendering', async () => {
+    const survivor = row(20, 10, 20)
+    const readTable = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('ps timed out'))
+      .mockResolvedValueOnce(tableCapture([survivor]))
+      .mockResolvedValueOnce(tableCapture([]))
+    const sendSignal = vi.fn()
+
+    const pending = terminateDescendantSnapshotWithVerdict(snapshot([survivor]), {
+      sendSignal,
+      readTable,
+      graceMs: 0,
+      verifyMs: 2_000
+    })
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(pending).resolves.toBe('exited')
+    expect(sendSignal.mock.calls).toEqual([
+      [20, 'SIGTERM'],
+      [20, 'SIGKILL']
+    ])
+  })
+
+  it('names a survivor seen at the deadline live, never unverifiable', async () => {
+    const survivor = row(20, 10, 20)
+    const pending = terminateDescendantSnapshotWithVerdict(snapshot([survivor]), {
+      sendSignal: vi.fn(),
+      readTable: vi.fn().mockResolvedValue(tableCapture([survivor])),
+      graceMs: 0,
+      verifyMs: 100
+    })
+    await vi.advanceTimersByTimeAsync(200)
+
+    await expect(pending).resolves.toBe('live')
+  })
+
+  it('names an unreadable verification table unverifiable', async () => {
+    const pending = terminateDescendantSnapshotWithVerdict(snapshot([row(20, 10, 20)]), {
+      sendSignal: vi.fn(),
+      readTable: vi.fn().mockRejectedValue(new Error('ps exploded')),
+      verifyMs: 200
+    })
+    await vi.advanceTimersByTimeAsync(400)
+
+    await expect(pending).resolves.toBe('unverifiable')
+  })
+
+  it('never escalates a duplicate PID observation during shutdown verification', async () => {
+    const survivor = row(20, 10, 20)
+    const sendSignal = vi.fn()
+    const pending = terminateDescendantSnapshotWithVerdict(snapshot([survivor]), {
+      sendSignal,
+      readTable: async () => tableCapture([survivor, survivor]),
+      graceMs: 0,
+      verifyMs: 100,
+      keepAlive: true,
+      requireIdentityBeforeSignal: true
+    })
+    await vi.advanceTimersByTimeAsync(200)
+
+    await expect(pending).resolves.toBe('unverifiable')
+    expect(sendSignal).not.toHaveBeenCalled()
+  })
+
+  it('does not signal a recycled descendant when identity validation is required', async () => {
+    const sendSignal = vi.fn()
+    const recycled = row(20, 10, 20, 'Tue Jul 14 13:00:00 2026')
+    const pending = terminateDescendantSnapshotWithVerdict(
+      snapshot([row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')]),
+      {
+        sendSignal,
+        readTable: vi.fn().mockResolvedValue(tableCapture([recycled], CAPTURED_AT_MS + 1_000)),
+        requireIdentityBeforeSignal: true,
+        verifyMs: 100
+      }
+    )
+
+    await vi.advanceTimersByTimeAsync(200)
+    await expect(pending).resolves.toBe('exited')
+    expect(sendSignal).not.toHaveBeenCalled()
+  })
+
+  it('uses row-scoped boundaries for forced cleanup in the exit verifier', async () => {
+    const oldBoundary = CAPTURED_AT_MS + 900
+    const refreshBoundary = CAPTURED_AT_MS + 2_100
+    const retained = row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')
+    const fresh = row(30, 10, 30, 'Tue Jul 14 12:00:01 2026')
+    const sendSignal = vi.fn()
+    const pending = terminateDescendantSnapshotWithVerdict(
+      {
+        ...snapshot([retained, fresh], 10, refreshBoundary),
+        capturedAtMsByPid: { '20': oldBoundary, '30': refreshBoundary },
+        // Refresh proves ancestry only for 30; 20 was retained from the earlier capture.
+        reDerivedPids: new Set([30])
+      },
+      {
+        sendSignal,
+        readTable: vi.fn().mockResolvedValue(tableCapture([retained, fresh])),
+        requireIdentityBeforeSignal: true,
+        graceMs: 0,
+        verifyMs: 100
+      }
+    )
+    await vi.advanceTimersByTimeAsync(200)
+
+    await expect(pending).resolves.toBe('live')
+    expect(sendSignal.mock.calls).toEqual([
+      [20, 'SIGTERM'],
+      [30, 'SIGTERM'],
+      [30, 'SIGKILL']
+    ])
+  })
 })
 
 describe('createProcessTableSnapshotReader', () => {
@@ -329,8 +558,7 @@ describe('createProcessTableSnapshotReader', () => {
     const laterA = readTable()
     const laterB = readTable()
     await Promise.resolve()
-    // A successor must begin inside its callers' deadline. Waiting for the
-    // prior scan can make both callers time out before their own scan starts.
+    // A successor scan must start within its callers’ deadline instead of waiting for the prior scan.
     expect(readFresh).toHaveBeenCalledTimes(2)
     firstGate.resolve(tableCapture([row(10, 1, 10)], CAPTURED_AT_MS))
     await first
@@ -358,6 +586,42 @@ describe('killWithDescendantSweep', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('retains a shutdown owner until descendant cleanup finishes after root signalling', async () => {
+    const events: string[] = []
+    let finishDescendants = (): void => {}
+    const completion = new Promise<void>((resolve) => {
+      finishDescendants = resolve
+    })
+    const pending = killWithDescendantSweep(10, () => events.push('root'), {
+      platform: 'linux',
+      readTable: async () => tableCapture([row(10, 1, 10), row(20, 10, 20)]),
+      terminateDescendants: () => {
+        events.push('descendants')
+        return completion
+      },
+      awaitEscalation: true
+    }).then(() => events.push('finished'))
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(events).toEqual(['descendants'])
+    finishDescendants()
+    await pending
+    expect(events).toEqual(['descendants', 'root', 'finished'])
+  })
+
+  it('does not run shutdown cleanup on a tree whose root exited during capture', async () => {
+    const terminateDescendants = vi.fn()
+    const killRoot = vi.fn()
+    await killWithDescendantSweep(10, killRoot, {
+      platform: 'linux',
+      readTable: async () => tableCapture([row(10, 1, 10), row(20, 10, 20)]),
+      ownsRoot: () => false,
+      terminateDescendants
+    })
+    expect(terminateDescendants).not.toHaveBeenCalled()
+    expect(killRoot).toHaveBeenCalledOnce()
   })
 
   it('signals descendants after snapshot resolution, then kills the root', async () => {
@@ -393,6 +657,47 @@ describe('killWithDescendantSweep', () => {
     expect(sendSignal).not.toHaveBeenCalled()
   })
 
+  it('on Windows terminates the owning job instead of probing and taskkilling', async () => {
+    const events: string[] = []
+    const terminateOwnedTree = vi.fn(() => {
+      events.push('job-kill')
+      return 'terminated' as const
+    })
+    const killWindowsTree = vi.fn(async () => {})
+    const verifyTreeKillTarget = vi.fn(async () => 'own' as const)
+    const killRoot = vi.fn(() => events.push('root-kill'))
+
+    await killWithDescendantSweep(4242, killRoot, {
+      platform: 'win32',
+      terminateOwnedTree,
+      killWindowsTree,
+      verifyTreeKillTarget
+    })
+
+    expect(terminateOwnedTree).toHaveBeenCalledOnce()
+    expect(verifyTreeKillTarget).not.toHaveBeenCalled()
+    expect(killWindowsTree).not.toHaveBeenCalled()
+    // Killing job processes still leaves the PTY handle to close.
+    expect(events).toEqual(['job-kill', 'root-kill'])
+  })
+
+  it('on Windows falls back to the probe when the pty has no job', async () => {
+    // Older or unassigned PTYs lack jobs; unavailable cannot prove their processes exited.
+    const terminateOwnedTree = vi.fn(() => 'unavailable' as const)
+    const killWindowsTree = vi.fn(async () => {})
+    const killRoot = vi.fn()
+
+    await killWithDescendantSweep(4242, killRoot, {
+      platform: 'win32',
+      terminateOwnedTree,
+      killWindowsTree,
+      verifyTreeKillTarget: async () => 'own'
+    })
+
+    expect(killWindowsTree).toHaveBeenCalledWith(4242)
+    expect(killRoot).toHaveBeenCalledOnce()
+  })
+
   it('on Windows taskkills the process tree before killRoot (#10004)', async () => {
     const events: string[] = []
     const killWindowsTree = vi.fn(async () => {
@@ -406,8 +711,7 @@ describe('killWithDescendantSweep', () => {
       killWindowsTree,
       sendSignal,
       readTable,
-      // Pin identity so the assertion holds wherever the suite runs, including a
-      // real Windows host where the default probe would query this fake pid.
+      // Avoid querying the host’s real process table for this synthetic PID.
       verifyTreeKillTarget: async () => 'own'
     })
     expect(killWindowsTree).toHaveBeenCalledWith(4242)

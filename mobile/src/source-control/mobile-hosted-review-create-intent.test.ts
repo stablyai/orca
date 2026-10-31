@@ -245,13 +245,15 @@ describe('prepareMobileHostedReviewCreateIntent', () => {
     ])
   })
 
-  it('returns the attempted commit message and staged snapshot when commit fails', async () => {
+  it('returns the attempted commit message and staged snapshot, and restages, when commit fails', async () => {
     const client = clientWith([
       ok(status([entry('unstaged')])),
       ok({ success: true }),
       ok(status([entry('staged')])),
       ok({ success: true, message: 'Generated mobile commit' }),
-      ok({ success: false, error: 'lint-staged failed' })
+      ok({ success: false, error: 'lint-staged failed' }),
+      ok(status([entry('staged'), entry('unstaged')])),
+      ok({ success: true })
     ])
 
     await expect(
@@ -275,6 +277,35 @@ describe('prepareMobileHostedReviewCreateIntent', () => {
       'git.bulkStage',
       'git.status',
       'git.generateCommitMessage',
+      'git.commit',
+      // Files a hook rewrote are restaged for the retry.
+      'git.status',
+      'git.bulkStage'
+    ])
+  })
+
+  it('fast-forwards a behind-only branch before committing on top of it', async () => {
+    const client = clientWith([
+      ok(status([entry('staged')], { hasUpstream: true, ahead: 0, behind: 2 })),
+      ok({ ok: true }),
+      ok(status([entry('staged')])),
+      ok({ success: true }),
+      ok(status([], { hasUpstream: true, ahead: 1, behind: 0 })),
+      ok(eligibility({ canCreate: true, blockedReason: null, nextAction: null }))
+    ])
+
+    const result = await prepareMobileHostedReviewCreateIntent(client, 'repo-1::/tmp/wt', {
+      branch: 'feature/x',
+      title: 'feature/x',
+      status: null,
+      commitMessage: 'Use my message'
+    })
+
+    expect(result.ok).toBe(true)
+    expect(client.calls.map((call) => call.method).slice(0, 4)).toEqual([
+      'git.status',
+      'git.fastForward',
+      'git.status',
       'git.commit'
     ])
   })

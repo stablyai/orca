@@ -1,8 +1,10 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
@@ -12,10 +14,13 @@ import {
 } from '../../../shared/terminal-stream-protocol'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
+  const registry = createSubscriptionRegistryDouble()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   return {
     getRuntimeId: () => 'test-runtime',
-    // Why: subscribe streams register as remote view subscribers for Phase-5
-    // query-authority suppression (terminal-query-authority.md).
+    registerOwnedSubscriptionCleanup: registry.registerOwnedSubscriptionCleanup,
+    subscribeToPtyExit: vi.fn(() => vi.fn()),
+    // View registration suppresses competing model query replies (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
     requestRendererTerminalTabMount: () => false,
     ...overrides
@@ -74,7 +79,8 @@ describe('terminal subscribe buffering', () => {
 
       expect(await outcomePromise).toBe('settled')
       expect(runtime.readTerminal).not.toHaveBeenCalled()
-      expect(messages).toEqual([])
+      // The pending stream was registered, so its release ends it like any other.
+      expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['end'])
     } finally {
       vi.useRealTimers()
     }
@@ -82,7 +88,7 @@ describe('terminal subscribe buffering', () => {
 
   it('captures live queries before awaiting mobile fit and delivers them after the snapshot', async () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let dataListener:
       | ((data: string, meta?: { seq?: number; rawLength?: number }) => void)
       | undefined
@@ -112,13 +118,9 @@ describe('terminal subscribe buffering', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -141,7 +143,7 @@ describe('terminal subscribe buffering', () => {
 
     await vi.waitFor(() => expect(runtime.handleMobileSubscribe).toHaveBeenCalled())
     expect(dataListener).toBeDefined()
-    expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledWith('pty-1')
+    expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledWith('pty-1', undefined, 'phone-1')
     dataListener?.('\x1b[6n', { seq: 4, rawLength: 4 })
     resolveMobileSubscribe()
 
@@ -199,7 +201,7 @@ describe('terminal subscribe buffering', () => {
 
   it('marks legacy scrollback previews truncated when the uncursored read is limited', async () => {
     const messages: string[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({
@@ -213,13 +215,9 @@ describe('terminal subscribe buffering', () => {
       getLayout: vi.fn().mockReturnValue({ seq: 1 }),
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
     const dispatcher = new RpcDispatcher({
@@ -256,6 +254,7 @@ describe('terminal subscribe buffering', () => {
     try {
       const messages: string[] = []
       const controller = new AbortController()
+      const registry = createSubscriptionRegistryDouble()
       let resolveSnapshot: (value: { data: string; cols: number; rows: number }) => void = () => {}
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -271,8 +270,9 @@ describe('terminal subscribe buffering', () => {
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
         subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        registerSubscriptionCleanup: vi.fn(),
-        cleanupSubscription: vi.fn(),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
       })
       const dispatcher = new RpcDispatcher({
@@ -301,16 +301,17 @@ describe('terminal subscribe buffering', () => {
       expect(await outcomePromise).toBe('settled')
       expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()
       expect(runtime.subscribeToFitOverrideChanges).not.toHaveBeenCalled()
-      // Cleanup must exist before snapshot work so an abort cannot orphan a
-      // desktop width floor, but the abort must consume it before listeners start.
-      expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
+      // Install cleanup before snapshot work to protect width floors; consume it on abort before adding listeners.
+      expect(runtime.registerOwnedSubscriptionCleanup).toHaveBeenCalledWith(
         'terminal-1:desktop-1',
         expect.any(Function),
-        'conn-legacy-json'
+        'conn-legacy-json',
+        'req-1'
       )
-      expect(runtime.cleanupSubscription).toHaveBeenCalledWith('terminal-1:desktop-1')
+      expect(registry.peekCleanup('terminal-1:desktop-1')).toBeUndefined()
       expect(runtime.waitForTerminal).not.toHaveBeenCalled()
-      expect(messages).toEqual([])
+      // After cleanup ends the stream, no snapshot or data may leak.
+      expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['end'])
     } finally {
       vi.useRealTimers()
     }
@@ -319,7 +320,7 @@ describe('terminal subscribe buffering', () => {
   it('keeps a limited retained-tail fallback usable for binary first paint', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({
@@ -334,13 +335,9 @@ describe('terminal subscribe buffering', () => {
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue(false)
@@ -390,7 +387,7 @@ describe('terminal subscribe buffering', () => {
   it('does not mark binary snapshot frames truncated from an overflowed read when serialized data is available', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({
@@ -409,13 +406,9 @@ describe('terminal subscribe buffering', () => {
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue(false)
@@ -462,7 +455,7 @@ describe('terminal subscribe buffering', () => {
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-      const cleanups = new Map<string, () => void>()
+      const registry = createSubscriptionRegistryDouble()
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
@@ -497,14 +490,9 @@ describe('terminal subscribe buffering', () => {
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
@@ -561,11 +549,7 @@ describe('terminal subscribe buffering', () => {
         (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
       )
       const decodedStarts = snapshotStarts.map((frame) => decodeTerminalStreamJson(frame.payload))
-      // Why one snapshot: overflow during the initial serialize is recovered
-      // INLINE (drop pending, re-read, re-serialize) before anything is sent,
-      // so the client's first scrollback snapshot is already current. The
-      // 'resized'/pending-output-overflow follow-up path remains only for
-      // overflow that begins after the initial snapshot went out.
+      // Initial overflow recovers inline before first publication; resized recovery handles overflow beginning after that snapshot.
       expect(decodedStarts).toEqual([expect.objectContaining({ kind: 'scrollback', seq })])
       const snapshotText = decodedFrames
         .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
@@ -591,7 +575,7 @@ describe('terminal subscribe buffering', () => {
   it('drops stale mobile resize re-stream completions for legacy binary streams', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let resizeListener:
       | ((event: {
           cols: number
@@ -611,6 +595,7 @@ describe('terminal subscribe buffering', () => {
         endCol: number
         uri: string
       }[]
+      terminalOwner?: 'shell'
     }) => void)[] = []
     const serializeTerminalBuffer = vi
       .fn()
@@ -627,6 +612,7 @@ describe('terminal subscribe buffering', () => {
               endCol: number
               uri: string
             }[]
+            terminalOwner?: 'shell'
           }>((resolve) => {
             restreamResolves.push(resolve)
           })
@@ -647,14 +633,9 @@ describe('terminal subscribe buffering', () => {
         return vi.fn()
       }),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        const cleanup = cleanups.get(id)
-        cleanups.delete(id)
-        cleanup?.()
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue({ updated: true, applied: true })
@@ -703,7 +684,8 @@ describe('terminal subscribe buffering', () => {
       data: 'newer',
       cols: 100,
       rows: 24,
-      oscLinks: newerOscLinks
+      oscLinks: newerOscLinks,
+      terminalOwner: 'shell'
     })
     await vi.waitFor(() =>
       expect(
@@ -732,6 +714,9 @@ describe('terminal subscribe buffering', () => {
       kind: 'resized',
       oscLinks: newerOscLinks
     })
+    expect(snapshotStart && decodeTerminalStreamJson(snapshotStart.payload)).not.toHaveProperty(
+      'terminalOwner'
+    )
 
     runtime.cleanupSubscription('terminal-1:phone-1')
     await dispatchPromise
@@ -742,7 +727,7 @@ describe('terminal subscribe buffering', () => {
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-      const cleanups = new Map<string, () => void>()
+      const registry = createSubscriptionRegistryDouble()
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
@@ -777,14 +762,9 @@ describe('terminal subscribe buffering', () => {
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
@@ -816,9 +796,7 @@ describe('terminal subscribe buffering', () => {
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
       snapshotResolvers[0]?.({ data: '', cols: 120, rows: 40, seq: 0, source: 'headless' })
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2))
-      // Why applying is safe without a seq here: inline recovery serialized
-      // AFTER dropping the overflowed pending queue, so the snapshot covers
-      // those chunks by construction — no seq-based trimming is needed.
+      // Inline recovery drops pending before serialization, so the snapshot covers those chunks even without seq.
       snapshotResolvers[1]?.({
         data: 'renderer fallback snapshot\r\n',
         cols: 120,
@@ -833,15 +811,13 @@ describe('terminal subscribe buffering', () => {
       const decodedFrames = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
-      const snapshotStarts = decodedFrames.filter(
+      const snapshotStart = decodedFrames.find(
         (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
       )
-      // Why seq 1 (layout seq): a no-output-seq snapshot falls back to the
-      // layout seq on the wire; the recovered data still ships as the first
-      // and only scrollback snapshot.
-      expect(snapshotStarts.map((frame) => decodeTerminalStreamJson(frame.payload))).toEqual([
-        expect.objectContaining({ kind: 'scrollback', seq: 1 })
-      ])
+      // Layout versions and output offsets use separate sequence domains.
+      const snapshotInfo = decodeTerminalStreamJson(snapshotStart!.payload)
+      expect(snapshotInfo).toMatchObject({ kind: 'scrollback' })
+      expect(snapshotInfo).not.toHaveProperty('seq')
       const snapshotText = decodedFrames
         .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame.payload))
@@ -851,8 +827,7 @@ describe('terminal subscribe buffering', () => {
         .filter((frame) => frame.opcode === TerminalStreamOpcode.Output)
         .map((frame) => decodeTerminalStreamText(frame.payload))
         .join('')
-      // Why empty: the overflowed pending queue was dropped before the
-      // covering snapshot was serialized; nothing needs replay.
+      // Pending overflow was dropped before the covering snapshot; replay must be empty.
       expect(output).toBe('')
 
       runtime.cleanupSubscription('terminal-1:desktop-1')

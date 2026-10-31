@@ -1,9 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { buildFromTemplateMock, setApplicationMenuMock, getFocusedWindowMock } = vi.hoisted(() => ({
+const {
+  buildFromTemplateMock,
+  setApplicationMenuMock,
+  getFocusedWindowMock,
+  getFocusedWebContentsMock,
+  sendActionToFirstResponderMock
+} = vi.hoisted(() => ({
   buildFromTemplateMock: vi.fn(),
   setApplicationMenuMock: vi.fn(),
-  getFocusedWindowMock: vi.fn()
+  getFocusedWindowMock: vi.fn(),
+  getFocusedWebContentsMock: vi.fn(),
+  sendActionToFirstResponderMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -12,14 +20,19 @@ vi.mock('electron', () => ({
   },
   Menu: {
     buildFromTemplate: buildFromTemplateMock,
-    setApplicationMenu: setApplicationMenuMock
+    setApplicationMenu: setApplicationMenuMock,
+    sendActionToFirstResponder: sendActionToFirstResponderMock
   },
   app: {
     name: 'Orca'
+  },
+  webContents: {
+    getFocusedWebContents: getFocusedWebContentsMock
   }
 }))
 
 import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
+import { markNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 
 const isMac = process.platform === 'darwin'
 
@@ -60,6 +73,37 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it.each(['linux', 'win32', 'darwin'] as const)(
+    'leaves Ctrl+M to the terminal while preserving macOS minimize on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      registerAppMenu(buildMenuOptions())
+
+      const windowSubmenu = getSubmenu(getTemplate(), 'Window')
+      const minimize = windowSubmenu.find((item) => item.role === 'minimize')
+      expect(minimize).toEqual(
+        platform === 'darwin'
+          ? { role: 'minimize' }
+          : { role: 'minimize', accelerator: '', registerAccelerator: false }
+      )
+      expect(windowSubmenu.find((item) => item.role === 'zoom')).toEqual({ role: 'zoom' })
+    }
+  )
+
+  it('shows the Settings hint when the user assigns a shortcut', () => {
+    registerAppMenu({
+      ...buildMenuOptions(),
+      getKeybindings: () => ({ 'app.settings': ['Mod+Comma'] })
+    })
+
+    const submenu = getSubmenu(getTemplate(), isMac ? 'Orca' : 'File')
+    expect(submenu).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}` })
+      ])
+    )
+  })
+
   it('toggles missing default-on appearance settings from visible to hidden', () => {
     expect(getNextDefaultOnAppearanceSettingValue(undefined)).toBe(false)
     expect(getNextDefaultOnAppearanceSettingValue(true)).toBe(false)
@@ -70,7 +114,13 @@ describe('registerAppMenu', () => {
     buildFromTemplateMock.mockReset()
     setApplicationMenuMock.mockReset()
     getFocusedWindowMock.mockReset()
+    getFocusedWebContentsMock.mockReset()
+    sendActionToFirstResponderMock.mockReset()
     buildFromTemplateMock.mockImplementation((template) => ({ template }))
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('shows reload shortcuts as policy-routed menu hints', () => {
@@ -78,7 +128,7 @@ describe('registerAppMenu', () => {
 
     expect(buildFromTemplateMock).toHaveBeenCalledTimes(1)
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
-    const expectedForceReloadLabel = `Force Reload\t${isMac ? '⌘⇧R' : 'Ctrl+Shift+R'}`
+    const expectedForceReloadLabel = `Force Reload\t${isMac ? '⌘⇧R' : 'Ctrl+⇧+R'}`
 
     expect(viewSubmenu).toEqual(
       expect.arrayContaining([expect.objectContaining({ label: 'Reload' })])
@@ -143,9 +193,6 @@ describe('registerAppMenu', () => {
     const options = buildMenuOptions()
     registerAppMenu(options)
 
-    // Why: Check for Updates lives under the app-name menu on macOS and
-    // under Help on Windows/Linux. The click behavior must be identical
-    // either way.
     const parentLabel = isMac ? 'Orca' : 'Help'
     const item = getSubmenu(getTemplate(), parentLabel).find(
       (entry) => entry.label === 'Check for Updates...'
@@ -207,45 +254,216 @@ describe('registerAppMenu', () => {
     registerAppMenu(buildMenuOptions())
 
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
-    const expectedLabel = `Open Worktree Palette\t${isMac ? '⌘J' : 'Ctrl+Shift+J'}`
+    const expectedLabel = `Open Worktree Palette\t${isMac ? '⌘J' : 'Ctrl+⇧+J'}`
     const paletteItem = viewSubmenu.find((item) => item.label === expectedLabel)
 
     expect(paletteItem).toBeDefined()
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
-  it('routes Edit > Paste through Orca coordinated paste ownership', () => {
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'routes Edit > Paste through Orca coordinated paste ownership on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const send = vi.fn()
+      const hostContents = { send }
+      getFocusedWindowMock.mockReturnValue({ webContents: hostContents })
+      getFocusedWebContentsMock.mockReturnValue(hostContents)
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      const pasteItem = editSubmenu.find((item) => item.label === 'Paste')
+
+      expect(pasteItem).toBeDefined()
+      expect(pasteItem?.role).toBeUndefined()
+      expect(pasteItem?.accelerator).toBe('CmdOrCtrl+V')
+
+      pasteItem?.click?.({} as never, {} as never, {} as never)
+
+      expect(send).toHaveBeenCalledOnce()
+      expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
+      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'preserves terminal undo and redo chords on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      const expectedRegistration = platform === 'darwin' ? undefined : false
+      const undoItem = editSubmenu.find((item) => item.role === 'undo')
+      const redoItem = editSubmenu.find((item) => item.role === 'redo')
+
+      expect(undoItem?.accelerator).toBeUndefined()
+      expect(redoItem?.accelerator).toBeUndefined()
+      expect(undoItem && 'registerAccelerator' in undoItem).toBe(platform !== 'darwin')
+      expect(redoItem && 'registerAccelerator' in redoItem).toBe(platform !== 'darwin')
+      expect(undoItem?.registerAccelerator).toBe(expectedRegistration)
+      expect(redoItem?.registerAccelerator).toBe(expectedRegistration)
+    }
+  )
+
+  it('keeps selection actions native in a focused guest webview', () => {
     const send = vi.fn()
+    const guestContents = { copy: vi.fn(), selectAll: vi.fn() }
     getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+    getFocusedWebContentsMock.mockReturnValue(guestContents)
     registerAppMenu(buildMenuOptions())
 
     const editSubmenu = getSubmenu(getTemplate(), 'Edit')
-    const pasteItem = editSubmenu.find((item) => item.label === 'Paste')
+    editSubmenu
+      .find((item) => item.label === 'Copy')
+      ?.click?.({} as never, {} as never, {} as never)
+    editSubmenu
+      .find((item) => item.label === 'Select All')
+      ?.click?.({} as never, {} as never, {} as never)
 
-    expect(pasteItem).toBeDefined()
-    expect(pasteItem?.role).toBeUndefined()
-    expect(pasteItem?.accelerator).toBe('CmdOrCtrl+V')
+    expect(guestContents.copy).toHaveBeenCalledOnce()
+    expect(guestContents.selectAll).toHaveBeenCalledOnce()
+    expect(send).not.toHaveBeenCalled()
+  })
 
+  it('pastes into DevTools instead of the Orca pane when DevTools holds focus (#16285)', () => {
+    const send = vi.fn()
+    const devToolsContents = { paste: vi.fn() }
+    getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+    getFocusedWebContentsMock.mockReturnValue(devToolsContents)
+    registerAppMenu(buildMenuOptions())
+
+    getSubmenu(getTemplate(), 'Edit')
+      .find((item) => item.label === 'Paste')
+      ?.click?.({} as never, {} as never, {} as never)
+
+    expect(devToolsContents.paste).toHaveBeenCalledOnce()
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'routes Edit selection actions through the focused Orca window on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const send = vi.fn()
+      getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      const copyItem = editSubmenu.find((item) => item.label === 'Copy')
+      const selectAllItem = editSubmenu.find((item) => item.label === 'Select All')
+
+      expect(copyItem?.role).toBeUndefined()
+      expect(selectAllItem?.role).toBeUndefined()
+      expect(copyItem?.accelerator).toBe(platform === 'darwin' ? 'Command+C' : undefined)
+      expect(selectAllItem?.accelerator).toBe(platform === 'darwin' ? 'Command+A' : undefined)
+
+      copyItem?.click?.({} as never, {} as never, {} as never)
+      selectAllItem?.click?.({} as never, {} as never, {} as never)
+
+      expect(send.mock.calls).toEqual([
+        ['ui:appMenuSelectionAction', 'copy'],
+        ['ui:appMenuSelectionAction', 'select-all']
+      ])
+    }
+  )
+
+  it('routes macOS selection actions to the native responder without a focused window', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    getFocusedWindowMock.mockReturnValue(null)
+    registerAppMenu(buildMenuOptions())
+
+    const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+    editSubmenu
+      .find((item) => item.label === 'Copy')
+      ?.click?.({} as never, {} as never, {} as never)
+    editSubmenu
+      .find((item) => item.label === 'Select All')
+      ?.click?.({} as never, {} as never, {} as never)
+
+    expect(sendActionToFirstResponderMock.mock.calls).toEqual([['copy:'], ['selectAll:']])
+  })
+
+  it('routes Edit > Paste to the native first responder once on macOS without a focused window', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    getFocusedWindowMock.mockReturnValue(null)
+    registerAppMenu(buildMenuOptions())
+
+    const pasteItem = getSubmenu(getTemplate(), 'Edit').find((item) => item.label === 'Paste')
     pasteItem?.click?.({} as never, {} as never, {} as never)
 
-    expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
+    expect(sendActionToFirstResponderMock).toHaveBeenCalledOnce()
+    expect(sendActionToFirstResponderMock).toHaveBeenCalledWith('paste:')
   })
+
+  it.each(
+    (['darwin', 'linux', 'win32'] as const).flatMap((platform) =>
+      ['popup', 'child', 'unavailable'].map((focus) => ({ platform, focus }))
+    )
+  )(
+    'routes native popup Edit actions to web contents on $platform with $focus focus',
+    ({ platform, focus }) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const popupContents = { paste: vi.fn(), copy: vi.fn(), selectAll: vi.fn(), send: vi.fn() }
+      const childContents = { paste: vi.fn(), copy: vi.fn(), selectAll: vi.fn(), send: vi.fn() }
+      const popupWindow = { webContents: popupContents }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The popup registry only stores window identity; Edit actions use the mocked webContents methods.
+      markNativeBrowserPopupWindow(popupWindow as unknown as Electron.BrowserWindow)
+      getFocusedWindowMock.mockReturnValue(popupWindow)
+      getFocusedWebContentsMock.mockReturnValue(
+        focus === 'child' ? childContents : focus === 'popup' ? popupContents : null
+      )
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      for (const label of ['Paste', 'Copy', 'Select All']) {
+        const click: unknown = editSubmenu.find((item) => item.label === label)?.click
+        expect(click).toBeTypeOf('function')
+        if (typeof click === 'function') {
+          click()
+        }
+      }
+
+      const target = focus === 'child' ? childContents : popupContents
+      const other = focus === 'child' ? popupContents : childContents
+      expect(target.paste).toHaveBeenCalledOnce()
+      expect(target.copy).toHaveBeenCalledOnce()
+      expect(target.selectAll).toHaveBeenCalledOnce()
+      expect(other.paste).not.toHaveBeenCalled()
+      expect(other.copy).not.toHaveBeenCalled()
+      expect(other.selectAll).not.toHaveBeenCalled()
+      expect(popupContents.send).not.toHaveBeenCalled()
+      expect(childContents.send).not.toHaveBeenCalled()
+      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['linux', 'win32'] as const)(
+    'does not invoke the native paste responder on %s without a focused window',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      getFocusedWindowMock.mockReturnValue(null)
+      registerAppMenu(buildMenuOptions())
+
+      const pasteItem = getSubmenu(getTemplate(), 'Edit').find((item) => item.label === 'Paste')
+      // Negative-only assertions must not pass when the item itself vanished.
+      expect(pasteItem).toBeDefined()
+      pasteItem?.click?.({} as never, {} as never, {} as never)
+
+      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+    }
+  )
 
   it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {
     registerAppMenu(buildMenuOptions())
 
     const template = getTemplate()
-    // Why: no redundant app-named "Orca" menu should exist on non-mac — the
-    // app-menu contents (Settings, Exit, Check for Updates, About) have been
-    // redistributed so users see them in File / Help instead.
     expect(template.find((item) => item.label === 'Orca')).toBeUndefined()
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
-    expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
-    expect(fileLabels[0]).toBe(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
-    expect(fileLabels).toEqual(
-      expect.arrayContaining([`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`, 'Exit'])
-    )
+    expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+⇧+E'}`)
+    expect(fileLabels[0]).toBe('Settings')
+    expect(fileLabels).toEqual(expect.arrayContaining(['Settings', 'Exit']))
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual(
@@ -264,11 +482,7 @@ describe('registerAppMenu', () => {
     const template = getTemplate()
     const appSubmenu = getSubmenu(template, 'Orca')
     const appLabels = appSubmenu.map((item) => item.label)
-    expect(appLabels).toEqual(
-      expect.arrayContaining(['Check for Updates...', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`])
-    )
-    // Why: on macOS File should NOT duplicate Settings/Exit — those live in
-    // the system app menu. Without global Export, there is no File item left.
+    expect(appLabels).toEqual(expect.arrayContaining(['Check for Updates...', 'Settings']))
     expect(template.find((item) => item.label === 'File')).toBeUndefined()
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual([
@@ -411,10 +625,66 @@ describe('registerAppMenu', () => {
 
     expect(options.onToggleLeftSidebar).toHaveBeenCalledTimes(1)
     expect(options.onToggleRightSidebar).toHaveBeenCalledTimes(1)
-    // Why: these entries must not bind Cmd/Ctrl+B as real accelerators
-    // because before-input-event carries a TipTap-bold carve-out that the
-    // menu accelerator would bypass.
+    // Native accelerators would bypass the markdown editor's bold shortcut carve-out.
     expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'keeps the native quit role unless the host supplies a quit handler (%s, #15537)',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const quitMenu = platform === 'darwin' ? 'Orca' : 'File'
+      const findQuit = (): Electron.MenuItemConstructorOptions | undefined =>
+        getSubmenu(getTemplate(), quitMenu).find(
+          (item) =>
+            item.role === 'quit' || item.accelerator === 'CmdOrCtrl+Q' || item.label === 'Exit'
+        )
+
+      registerAppMenu(buildMenuOptions())
+      expect(findQuit()?.role).toBe('quit')
+
+      buildFromTemplateMock.mockClear()
+      const onQuit = vi.fn()
+      registerAppMenu({ ...buildMenuOptions(), onQuit })
+      const quit = findQuit()
+      expect(quit?.role).toBeUndefined()
+      expect(quit?.label).toBe(platform === 'darwin' ? 'Quit Orca' : 'Exit')
+      expect(quit?.accelerator).toBe(platform === 'win32' ? undefined : 'CmdOrCtrl+Q')
+      const click: unknown = quit?.click
+      if (typeof click === 'function') {
+        click()
+      }
+      expect(onQuit).toHaveBeenCalledOnce()
+    }
+  )
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'offers Quit Completely directly above Quit only when a handler is supplied (%s)',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const quitMenu = platform === 'darwin' ? 'Orca' : 'File'
+      const label = 'Quit Completely...'
+
+      registerAppMenu(buildMenuOptions())
+      expect(getSubmenu(getTemplate(), quitMenu).some((item) => item.label === label)).toBe(false)
+
+      buildFromTemplateMock.mockClear()
+      const onQuitAndStopAllSessions = vi.fn()
+      registerAppMenu({ ...buildMenuOptions(), onQuitAndStopAllSessions })
+      const submenu = getSubmenu(getTemplate(), quitMenu)
+      const stopAll = submenu.at(-2)
+      expect(stopAll?.label).toBe(label)
+      expect(stopAll?.id).toBe('quit-and-stop-all-sessions')
+      expect(stopAll?.toolTip).toContain('running agents')
+      expect(stopAll?.accelerator).toBeUndefined()
+      expect(submenu.at(-1)?.role).toBe('quit')
+      // Why untyped: the handler ignores its Electron arguments.
+      const click: unknown = stopAll?.click
+      if (typeof click === 'function') {
+        click()
+      }
+      expect(onQuitAndStopAllSessions).toHaveBeenCalledOnce()
+    }
+  )
 })

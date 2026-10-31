@@ -8,15 +8,14 @@ const { commandExecFileAsyncMock, ghExecFileAsyncMock, gitExecFileAsyncMock, res
     resolveWithSshGMock: vi.fn()
   }))
 
-// Mock only the exec boundary so the real remote-identity parsing, runtime
-// option resolution, and `gh auth status` parsing run against controlled output.
+// Mock only execution so identity, runtime and auth-status parsing remain real.
 vi.mock('../git/runner', () => ({
   commandExecFileAsync: commandExecFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../ssh/ssh-g-config-resolution', () => ({
+vi.mock('../ssh/config/ssh-g-config-resolution', () => ({
   resolveWithSshG: resolveWithSshGMock
 }))
 
@@ -50,7 +49,6 @@ function sshConfig(hostname: string, port = 22) {
   }
 }
 
-// gh auth status inventory entries represent hosts with configured credentials.
 function mockHostAuthenticated(host = 'github.acme-corp.com'): void {
   mockAuthenticatedHosts([host])
 }
@@ -64,7 +62,6 @@ function mockAuthenticatedHosts(hosts: string[]): void {
   })
 }
 
-// gh exits non-zero and reports no matching host when not logged in.
 function mockHostNotAuthenticated(): void {
   ghExecFileAsyncMock.mockRejectedValue(
     Object.assign(new Error('exit 1'), {
@@ -94,8 +91,7 @@ describe('getEnterpriseGitHubRepoSlug', () => {
       repo: 'orca',
       host: 'github.acme-corp.com'
     })
-    // Why: inventory configured gh hosts without targeting the untrusted remote;
-    // passing it as --hostname could expose an ambient enterprise token.
+    // Inventory configured hosts without sending ambient credentials to an untrusted remote.
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], { cwd: '/repo' })
   })
 
@@ -329,6 +325,29 @@ describe('isGitHubHostAuthenticated', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
+  it('retains a known authenticated host for 15 minutes', async () => {
+    mockHostAuthenticated()
+    await isGitHubHostAuthenticated('github.acme-corp.com', '/repo')
+    await vi.advanceTimersByTimeAsync(14 * 60_000)
+    await isGitHubHostAuthenticated('github.acme-corp.com', '/repo')
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000)
+    await isGitHubHostAuthenticated('github.acme-corp.com', '/repo')
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('rechecks host authentication after the credential environment changes', async () => {
+    mockHostAuthenticated()
+    await isGitHubHostAuthenticated('github.acme-corp.com', '/repo')
+    vi.stubEnv('GH_ENTERPRISE_TOKEN', 'test-only-changed-token')
+    try {
+      await isGitHubHostAuthenticated('github.acme-corp.com', '/repo')
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('coalesces concurrent probes for the same runtime and host', async () => {
     let finishProbe: (() => void) | undefined
     ghExecFileAsyncMock.mockImplementation(
@@ -392,14 +411,51 @@ describe('isGitHubHostAuthenticated', () => {
     }
   })
 
-  it('shares the native gh auth probe across SSH connections', async () => {
-    mockHostAuthenticated()
+  it('does not share a cached answer between SSH connections at the same path', async () => {
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout:
+          'github.acme-corp.com\n  ✓ Logged in to github.acme-corp.com account kelora (keyring)',
+        stderr: ''
+      })
+      .mockResolvedValueOnce({
+        stdout: 'github.com\n  ✓ Logged in to github.com account kelora (keyring)',
+        stderr: ''
+      })
 
-    await isGitHubHostAuthenticated('github.acme-corp.com', '/remote/a', 'ssh-1')
-    await isGitHubHostAuthenticated('github.acme-corp.com', '/remote/b', 'ssh-2')
-
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    await expect(isGitHubHostAuthenticated('github.acme-corp.com', '/repo', 'ssh-1')).resolves.toBe(
+      true
+    )
+    await expect(isGitHubHostAuthenticated('github.acme-corp.com', '/repo', 'ssh-2')).resolves.toBe(
+      false
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
+
+  // Same-path repositories on separate runtimes must retain separate auth answers.
+  it.each([
+    ['local resolves first', [null, 'ssh-1'] as const, [true, false]],
+    ['connection resolves first', ['ssh-1', null] as const, [false, true]]
+  ])(
+    'does not cross-attribute auth between a local and a connection-backed repo at the same path (%s)',
+    async (_label, connectionIds, expected) => {
+      ghExecFileAsyncMock.mockImplementation(
+        async (_args: string[], options: { cwd?: string }) => ({
+          stdout: options.cwd
+            ? 'github.acme-corp.com\n  ✓ Logged in to github.acme-corp.com account kelora (keyring)'
+            : 'github.com\n  ✓ Logged in to github.com account kelora (keyring)',
+          stderr: ''
+        })
+      )
+
+      for (const [index, connectionId] of connectionIds.entries()) {
+        await expect(
+          isGitHubHostAuthenticated('github.acme-corp.com', '/repo', connectionId)
+        ).resolves.toBe(expected[index])
+      }
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    }
+  )
 
   it('does not target an unconfigured remote host with ambient credentials', async () => {
     mockHostAuthenticated('github.acme-corp.com')

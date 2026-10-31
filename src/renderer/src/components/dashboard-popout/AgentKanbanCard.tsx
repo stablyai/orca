@@ -5,20 +5,23 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
-  GitPullRequestDraft,
-  MessageCircleQuestion
+  GitPullRequestDraft
 } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
+import {
+  dashboardCardDisplayState,
+  type DashboardCard
+} from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
+import { DashboardHostBadge } from './DashboardHostBadge'
 
-/** Compact "started N ago" (the card is glanceable — coarse units are fine). */
 function formatStartedAgo(startedAt: number, now: number): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
   if (seconds < 60) {
@@ -37,16 +40,16 @@ function formatStartedAgo(startedAt: number, now: number): string {
   })
 }
 
-/** The timestamp the card's time column counts from: since it finished when the
- *  agent has completed, else since it started — parity with the worktree sidebar. */
+/** Count from completion when present, otherwise start, matching the worktree sidebar. */
 function displayTimestamp(card: DashboardCard): number {
   return card.finishedAt ?? card.startedAt
 }
 
 function formatSubagentCount(count: number): string {
-  return count === 1
-    ? translate('dashboardPopout.card.subagents_one', '{{count}} subagent', { count })
-    : translate('dashboardPopout.card.subagents_other', '{{count}} subagents', { count })
+  return translate('dashboardPopout.card.subagents', '{{count}} subagents', {
+    count,
+    defaultValue_one: '{{count}} subagent'
+  })
 }
 
 function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagents']): boolean {
@@ -83,6 +86,8 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.agentType === b.agentType &&
     a.bucket === b.bucket &&
     a.dotState === b.dotState &&
+    a.workingMode === b.workingMode &&
+    a.verdict === b.verdict &&
     a.task === b.task &&
     a.lastUserMessage === b.lastUserMessage &&
     a.lastAgentMessage === b.lastAgentMessage &&
@@ -92,6 +97,9 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.leafId === b.leafId &&
     a.repoName === b.repoName &&
     a.worktreeName === b.worktreeName &&
+    a.hostKind === b.hostKind &&
+    a.executionHostId === b.executionHostId &&
+    a.hostLabel === b.hostLabel &&
     a.hasReview === b.hasReview &&
     a.review?.number === b.review?.number &&
     a.review?.state === b.review?.state &&
@@ -156,8 +164,7 @@ function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null
   )
 }
 
-/** Structural — the icon arrives inside a fresh structured clone each publish,
- *  so identity alone would re-render every card several times a second. */
+/** Compare icon values; fresh structured clones would otherwise re-render every card on each publish. */
 function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undefined): boolean {
   if (a === b) {
     return true
@@ -180,13 +187,10 @@ type AgentKanbanCardProps = {
   /** The card repo's icon. null renders the default folder glyph. */
   repoIcon?: RepoIcon | null
   now: number
-  /** Opens the board-level terminal dialog. The dialog is NOT owned by the
-   *  card: bucket moves remount the card, and an embedded dialog would close
-   *  the chat mid-conversation. */
+  /** Host dialogs on the board because bucket moves remount cards and would close an embedded conversation. */
   onOpenTerminal: (card: DashboardCard) => void
 }
 
-/** One agent on the kanban board. Clicking opens the board's live terminal dialog. */
 export const AgentKanbanCard = memo(
   function AgentKanbanCard({
     card,
@@ -196,27 +200,22 @@ export const AgentKanbanCard = memo(
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
-    // Why: the two outcomes worth scanning for get a tinted card — amber for
-    // "answer me", green for "finished, look at it". Everything else stays
-    // neutral so the tint keeps meaning something.
+    // Tint only attention and done so scan-worthy outcomes retain distinct meaning.
     const needsYou = card.bucket === 'attention'
-    const isDone = card.dotState === 'done'
-    // Why: the session's own name heads the card. Without one the worktree is
-    // the best heading left — and then the footer drops it rather than say it
-    // twice.
+    const displayState = dashboardCardDisplayState(card)
+    const isDone = displayState === 'done'
+    // Prefer the conversation heading; otherwise use the worktree once and omit its duplicate footer.
     const heading = card.conversationName ?? card.worktreeName
     const worktreeInFooter = card.conversationName !== undefined
 
     return (
       <div
-        // Why: a stable per-agent view-transition-name lets the browser morph
-        // the card from its old column to its new one when its bucket changes.
-        // paneKey has ':'/'/' which aren't valid in a custom-ident, so slugify.
+        // Stable view-transition names animate bucket moves; escape paneKey characters forbidden in custom-ident.
         style={{ viewTransitionName: `agentcard-${card.paneKey.replace(/[^a-zA-Z0-9]/g, '-')}` }}
         className={cn(
           'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
           needsYou
-            ? 'border-amber-500/40 bg-amber-500/[0.06] hover:border-amber-500/60 hover:bg-amber-500/10'
+            ? 'border-agent-question/40 bg-agent-question/[0.06] hover:border-agent-question/60 hover:bg-agent-question/10'
             : isDone
               ? 'border-emerald-500/40 bg-emerald-500/[0.06] hover:border-emerald-500/60 hover:bg-emerald-500/10'
               : 'border-border/60 bg-card hover:border-border hover:bg-accent/40'
@@ -230,7 +229,7 @@ export const AgentKanbanCard = memo(
           <div className="flex w-full items-center gap-1.5">
             {/* Why: a bare <svg> flex item shrinks with the row. */}
             <span className="inline-flex shrink-0">
-              <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={14} />
+              <AgentTypeIcon agentType={card.agentType} size={14} />
             </span>
             <span
               className={cn(
@@ -240,7 +239,7 @@ export const AgentKanbanCard = memo(
             >
               {heading}
             </span>
-            {card.askSummary ? null : <AgentStateDot state={card.dotState} className="ml-auto" />}
+            {card.askSummary ? null : <AgentStateDot state={displayState} className="ml-auto" />}
           </div>
 
           {card.lastUserMessage || card.lastAgentMessage ? (
@@ -269,8 +268,8 @@ export const AgentKanbanCard = memo(
           ) : null}
 
           {card.askSummary ? (
-            <div className="flex w-full items-start gap-1 rounded-md bg-amber-500/15 px-1.5 py-1 text-[11px] text-amber-600 ring-1 ring-inset ring-amber-500/25 dark:text-amber-400">
-              <MessageCircleQuestion className="mt-px size-3 shrink-0" aria-hidden />
+            <div className="flex w-full items-start gap-1 rounded-md bg-agent-question/15 px-1.5 py-1 text-[11px] text-agent-question-text ring-1 ring-inset ring-agent-question/25">
+              <AgentQuestionIcon className="mt-px size-3 shrink-0" />
               <span className="line-clamp-2">{card.askSummary}</span>
             </div>
           ) : null}
@@ -323,6 +322,12 @@ export const AgentKanbanCard = memo(
               {card.repoName}
             </TooltipContent>
           </Tooltip>
+          <DashboardHostBadge
+            hostKind={card.hostKind}
+            executionHostId={card.executionHostId}
+            hostLabel={card.hostLabel}
+            className="size-[18px] rounded-[5px] bg-muted-foreground/10 transition-colors group-hover:text-foreground"
+          />
           {worktreeInFooter ? <span className="truncate">{card.worktreeName}</span> : null}
           <ReviewPill card={card} />
           {displayTimestamp(card) > 0 ? (

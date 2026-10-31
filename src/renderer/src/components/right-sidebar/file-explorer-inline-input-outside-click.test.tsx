@@ -2,8 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { InlineInputRow } from './FileExplorerRow'
-import type { InlineInput } from './FileExplorerRow'
+import { InlineInputRow } from './file-explorer-inline-input-row'
+import type { InlineInput } from './file-explorer-inline-input-row'
 
 const renameInput: InlineInput = {
   parentPath: '/repo/src',
@@ -15,8 +15,7 @@ const renameInput: InlineInput = {
 
 const BLUR_COMMIT_MS = 200
 
-// Why: the input focuses itself a frame after mount, then arms blur-commits once
-// the 200ms menu-close grace period has elapsed.
+// Mount focus needs one frame; blur commits arm after the 200ms menu-close grace period.
 async function advance(ms: number): Promise<void> {
   await act(async () => {
     vi.advanceTimersByTime(ms)
@@ -38,8 +37,7 @@ function renderRenameRow(): {
   const view = render(
     <div>
       <InlineInputRow depth={1} inlineInput={renameInput} onSubmit={onSubmit} onCancel={vi.fn()} />
-      {/* Rows are Radix context-menu triggers, so a genuine click on a neighbour
-          used to be indistinguishable from Radix restoring focus after a close. */}
+      {/* Radix row triggers made real neighbor clicks indistinguishable from menu-close focus restoration. */}
       <button type="button" data-slot="context-menu-trigger">
         another-file.ts
       </button>

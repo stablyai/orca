@@ -55,6 +55,17 @@ export function NetworkInterfacePicker({
       })),
     [customAddresses]
   )
+  // Bridge-only hosts have selectable options but no default address; do not label that list empty.
+  const placeholder =
+    options.length > 0 || customOptions.length > 0
+      ? translate(
+          'auto.components.mobile.NetworkInterfacePicker.no-address-selected',
+          'No address selected'
+        )
+      : translate(
+          'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
+          'No interfaces found'
+        )
 
   return (
     <AddressPicker
@@ -85,10 +96,7 @@ export function NetworkInterfacePicker({
         'auto.components.mobile.NetworkInterfacePicker.add-custom',
         'Add custom address…'
       )}
-      placeholder={translate(
-        'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
-        'No interfaces found'
-      )}
+      placeholder={placeholder}
       triggerAriaLabel={translate(
         'auto.components.mobile.NetworkInterfacePicker.trigger-label',
         'Network address to advertise'

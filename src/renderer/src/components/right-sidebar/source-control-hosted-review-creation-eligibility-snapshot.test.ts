@@ -3,8 +3,8 @@ import {
   buildCreatePrIntentUnavailableEligibility,
   buildLocalBlockerHostedReviewCreationEligibility,
   resolveHostedReviewCreationProviderForTarget
-} from './source-control-hosted-review-creation-eligibility-snapshot'
-import { resolveCreatePrIntentEligibility } from './source-control-create-pr-intent-state'
+} from './source-control/review/hosted-review-creation-eligibility-snapshot'
+import { resolveCreatePrIntentEligibility } from './source-control/review/create-pr-intent-state'
 
 const featureBranch = { branch: 'feature/create-pr', baseRef: 'main' }
 
@@ -109,8 +109,7 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
   })
 
   it('returns null on the default branch even when dirty, so it cannot enable a commit onto the base branch', () => {
-    // Guards the regression where a failed probe on the default branch
-    // synthesized dirty/commit and surfaced an enabled Create PR.
+    // A failed default-branch probe must not synthesize dirty eligibility that enables committing to the base.
     expect(
       buildLocalBlockerHostedReviewCreationEligibility('github', {
         branch: 'main',
@@ -174,8 +173,7 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
   })
 
   it('does not synthesize needs_sync when upstream is unknown but a stale behind count is set', () => {
-    // The needs_sync branch is gated on hasUpstream === true so an unknown
-    // upstream stays retryable, matching main's `hasUpstream !== true` → null.
+    // Require confirmed upstream before needs_sync; unknown upstream stays retryable, matching main.
     expect(
       buildLocalBlockerHostedReviewCreationEligibility('github', {
         ...featureBranch,
@@ -189,7 +187,7 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
 
   it('returns null for providers that do not support hosted review creation', () => {
     expect(
-      buildLocalBlockerHostedReviewCreationEligibility('bitbucket', {
+      buildLocalBlockerHostedReviewCreationEligibility('unsupported', {
         ...featureBranch,
         hasUncommittedChanges: true,
         hasUpstream: false,
@@ -258,7 +256,7 @@ describe('buildCreatePrIntentUnavailableEligibility', () => {
 
   it('never synthesizes intent eligibility for an unsupported remote provider', () => {
     expect(
-      buildCreatePrIntentUnavailableEligibility('bitbucket', {
+      buildCreatePrIntentUnavailableEligibility('unsupported', {
         ...featureBranch,
         hasUncommittedChanges: true,
         hasUpstream: true,

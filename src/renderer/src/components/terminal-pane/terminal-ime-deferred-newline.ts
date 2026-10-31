@@ -1,24 +1,30 @@
 import {
+  capturePendingTerminalImeCompositionSessions,
   hasPendingTerminalImeComposition,
   XTERM_COMPOSITION_SESSION_END_EVENT
 } from './terminal-ime-composition-route'
 
 export const TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS = 200
 
+/** Wait only for already-open compositions; later ones must not overtake this input. Newlines allow a fallback; indefinite cursor-chord waits need disposal because early send corrupts preedit and missing compositionend otherwise leaks a stale send. */
 export function sendTerminalInputAfterComposition(
   terminalElement: HTMLElement | null | undefined,
   send: () => void,
-  options?: { fallbackMs?: number }
-): void {
+  options?: { fallbackMs?: number | null }
+): () => void {
   if (!terminalElement) {
-    window.setTimeout(send, 0)
-    return
+    const immediateTimer = window.setTimeout(send, 0)
+    return () => window.clearTimeout(immediateTimer)
   }
 
-  const fallbackMs = options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS
+  const fallbackMs =
+    options?.fallbackMs === null
+      ? null
+      : (options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS)
   let done = false
+  const capturedSessions = capturePendingTerminalImeCompositionSessions(terminalElement)
 
-  const finish = (): void => {
+  const stopWaiting = (): void => {
     if (done) {
       return
     }
@@ -28,13 +34,22 @@ export function sendTerminalInputAfterComposition(
       XTERM_COMPOSITION_SESSION_END_EVENT,
       onCompositionSessionEnd
     )
-    window.clearTimeout(fallbackTimer)
+    if (fallbackTimer !== undefined) {
+      window.clearTimeout(fallbackTimer)
+    }
+  }
+
+  const finish = (): void => {
+    if (done) {
+      return
+    }
+    stopWaiting()
     // xterm flushes the committed glyph after compositionend.
     window.setTimeout(send, 0)
   }
 
   const finishAfterPendingComposition = (): void => {
-    if (!hasPendingTerminalImeComposition(terminalElement)) {
+    if (!hasPendingTerminalImeComposition(terminalElement, capturedSessions)) {
       finish()
     }
   }
@@ -42,54 +57,71 @@ export function sendTerminalInputAfterComposition(
   const onCompositionSessionEnd = (): void => finishAfterPendingComposition()
   terminalElement.addEventListener('compositionend', onCompositionEnd)
   terminalElement.addEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, onCompositionSessionEnd)
-  const fallbackTimer = window.setTimeout(finish, fallbackMs)
+  const fallbackTimer = fallbackMs === null ? undefined : window.setTimeout(finish, fallbackMs)
+
+  return stopWaiting
 }
 
 export type TerminalImeDeferredNewlineSender = {
   defer: (
-    enter: TerminalImeEnterIdentity,
+    enter: TerminalImeKeyIdentity,
     terminalElement: HTMLElement | null | undefined,
     send: () => void
   ) => void
-  absorbRedispatchedEnter: (enter: TerminalImeEnterIdentity) => boolean
-  releaseRedispatchedEnter: (enter: TerminalImeEnterIdentity) => void
+  absorbRedispatchedEnter: (enter: TerminalImeKeyIdentity) => boolean
+  releaseRedispatchedEnter: (
+    enter: TerminalImeKeyIdentity,
+    originatingEnter?: TerminalImeKeyIdentity
+  ) => void
   clearRedispatchedEnters: () => void
 }
 
-export type TerminalImeEnterIdentity = Pick<KeyboardEvent, 'code' | 'timeStamp'>
+export type TerminalImeKeyIdentity = Pick<KeyboardEvent, 'code' | 'timeStamp'>
 
 export type TerminalImeModifiedEnterKind = 'shift' | 'ctrl'
 
-export type TerminalImeModifiedEnterChord = TerminalImeEnterIdentity & {
+export type TerminalImeModifiedEnterChord = TerminalImeKeyIdentity & {
   kind: TerminalImeModifiedEnterKind
+  terminalModifierKeyDownObserved?: boolean
 }
 
 export type TerminalImeModifiedEnterChordOwner = {
   claim: (chord: TerminalImeModifiedEnterChord) => boolean
   absorb: (chord: TerminalImeModifiedEnterChord) => boolean
-  release: (chord: TerminalImeModifiedEnterChord) => void
+  ownsRedispatchedEnter: () => boolean
+  release: (chord: TerminalImeModifiedEnterChord) => TerminalImeModifiedEnterChord | null
+  releaseForEnterKeyUp: () => TerminalImeModifiedEnterChord | null
   clear: () => void
 }
 
 export function createTerminalImeModifiedEnterChordOwner(): TerminalImeModifiedEnterChordOwner {
-  let activeKind: TerminalImeModifiedEnterKind | null = null
+  let activeChord: TerminalImeModifiedEnterChord | null = null
 
   return {
-    claim: ({ kind }) => {
-      if (activeKind !== null) {
+    claim: (chord) => {
+      if (activeChord !== null) {
         return false
       }
-      activeKind = kind
+      activeChord = chord
       return true
     },
-    absorb: ({ kind }) => activeKind === kind,
+    absorb: ({ kind }) => activeChord?.kind === kind,
+    ownsRedispatchedEnter: () => activeChord?.terminalModifierKeyDownObserved === true,
     release: ({ kind }) => {
-      if (activeKind === kind) {
-        activeKind = null
+      if (activeChord?.kind === kind) {
+        const releasedChord = activeChord
+        activeChord = null
+        return releasedChord
       }
+      return null
+    },
+    releaseForEnterKeyUp: () => {
+      const releasedChord = activeChord
+      activeChord = null
+      return releasedChord
     },
     clear: () => {
-      activeKind = null
+      activeChord = null
     }
   }
 }
@@ -106,12 +138,20 @@ export function getTerminalImeModifiedEnterKind(
   return null
 }
 
+export function isTerminalImeConsumedKey(event: Pick<KeyboardEvent, 'key' | 'keyCode'>): boolean {
+  return event.key === 'Process' && event.keyCode === 229
+}
+
 export function isTerminalImeProcessEnter(
-  event: Pick<KeyboardEvent, 'key' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'code' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+  >
 ): boolean {
+  const { code } = event
   return (
-    event.key === 'Process' &&
-    event.keyCode === 229 &&
+    isTerminalImeConsumedKey(event) &&
+    (!code || code === 'Unidentified' || code === 'Enter' || code === 'NumpadEnter') &&
     getTerminalImeModifiedEnterKind(event) !== null
   )
 }
@@ -128,7 +168,7 @@ type DeferredNewlineState = {
 export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNewlineSender {
   const statesByEnterCode = new Map<string, Map<number, DeferredNewlineState>>()
 
-  const cleanUpIfSettled = (enter: TerminalImeEnterIdentity, state: DeferredNewlineState): void => {
+  const cleanUpIfSettled = (enter: TerminalImeKeyIdentity, state: DeferredNewlineState): void => {
     if (state.inFlightSends <= 0 && state.absorbCredits <= 0) {
       const statesByTimeStamp = statesByEnterCode.get(enter.code)
       statesByTimeStamp?.delete(enter.timeStamp)
@@ -176,7 +216,26 @@ export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNew
       cleanUpIfSettled(enter, state)
       return true
     },
-    releaseRedispatchedEnter: (enter) => {
+    releaseRedispatchedEnter: (enter, originatingEnter) => {
+      if (originatingEnter) {
+        const originatingState = statesByEnterCode
+          .get(originatingEnter.code)
+          ?.get(originatingEnter.timeStamp)
+        if (originatingState && originatingState.absorbCredits > 0) {
+          originatingState.absorbCredits -= 1
+          cleanUpIfSettled(originatingEnter, originatingState)
+
+          const statesByTimeStamp = statesByEnterCode.get(enter.code) ?? new Map()
+          const state = statesByTimeStamp.get(enter.timeStamp) ?? {
+            inFlightSends: 0,
+            absorbCredits: 0
+          }
+          state.absorbCredits += 1
+          statesByTimeStamp.set(enter.timeStamp, state)
+          statesByEnterCode.set(enter.code, statesByTimeStamp)
+          return
+        }
+      }
       if (statesByEnterCode.get(enter.code)?.has(enter.timeStamp)) {
         // Chromium's balancing Process-key keyup is copied from the same native event.
         return

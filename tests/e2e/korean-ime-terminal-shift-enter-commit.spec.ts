@@ -13,14 +13,8 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 
-// Repro for the Shift/Ctrl+Enter Hangul commit race: macOS delivers a
-// committing Enter chord TWICE — first as an IME keydown (keyCode 229, isComposing=true),
-// then ~2 ms after compositionend as a re-dispatched plain keydown
-// (keyCode 13, isComposing=false). The window-level shortcut handler must send
-// exactly one newline, and only after the committed syllable has flushed.
-// Deferring only the composing keydown is not enough: the re-dispatch would
-// still send its newline immediately (ahead of the glyph) and the deferred
-// send would then double it.
+// macOS Hangul commit sends IME Enter/229 then plain Enter/13 after compositionend.
+// Send one newline after the glyph flush; deferring only the composing keydown still doubles and reorders it.
 
 const PROMPT = '› '
 
@@ -183,8 +177,7 @@ async function dispatchHangulProcessKey(
   key: string,
   code: string
 ): Promise<void> {
-  // Why: macOS Hangul jamo keydowns arrive as IME Process keys (keyCode 229)
-  // with the jamo in `key`; the release carries the physical keyCode.
+  // Hangul jamo keydowns carry Process/229; releases carry the physical keyCode.
   await session.send('Input.dispatchKeyEvent', {
     type: 'rawKeyDown',
     key,
@@ -236,14 +229,8 @@ async function commitSyllableAndSpace(session: CDPSession, page: Page): Promise<
   await page.waitForTimeout(60)
 }
 
-/**
- * The committing Enter chord as recorded from the real macOS 2-set Korean IME:
- * IME keydown (229) -> commit -> re-dispatched plain keydown (13) -> keyup,
- * delivered in one un-awaited burst. The real IME delivers all of this within
- * the same native key-processing turn, ahead of xterm's setTimeout(0) glyph
- * flush; awaiting each CDP round-trip would let the flush win and hide the
- * race.
- */
+// Replay IME Enter/229 → commit → plain Enter/13 → keyup in one unawaited burst.
+// Per-event CDP waits let xterm’s setTimeout glyph flush win, hiding the native-turn race.
 async function dispatchCommittingEnterChord(
   session: CDPSession,
   page: Page,
@@ -339,7 +326,7 @@ async function dispatchPlainEnter(session: CDPSession): Promise<void> {
 async function readPromptLine(page: Page): Promise<string> {
   const content = stripTerminalControls(await getTerminalContent(page, 20_000))
   const promptIndex = content.lastIndexOf(PROMPT)
-  if (promptIndex < 0) {
+  if (promptIndex === -1) {
     return ''
   }
   return (content.slice(promptIndex + PROMPT.length).split(/\r?\n/)[0] ?? '').trimEnd()
@@ -380,23 +367,33 @@ async function assertShiftOutcome(page: Page): Promise<void> {
 }
 
 async function assertCtrlOutcome(page: Page): Promise<void> {
+  if (process.platform !== 'win32') {
+    await expect
+      .poll(() => readReceived(page), {
+        timeout: 10_000,
+        message: 'PTY bytes must contain committed Hangul before exactly one Ctrl+Enter chord'
+      })
+      .toBe('하 하 하\u001b[13;5u')
+    expect(await readSubmitted(page), 'CSI-u must not submit the line').toEqual([])
+    return
+  }
+
   await expect
     .poll(() => readReceived(page), {
       timeout: 10_000,
       message: 'PTY bytes must contain committed Hangul before exactly one Ctrl+Enter chord'
     })
-    .toBe('하 하 하\u001b[13;5u')
+    .toBe('하 하 하\r')
   await expect
     .poll(() => readPromptLine(page), {
       timeout: 10_000,
-      message: 'prompt must show the committed syllables followed by exactly one CSI-u chord'
+      message: 'prompt must be empty — no literal escape bytes may survive the chord'
     })
-    .toBe('하 하 하<ESC>[13;5u')
+    .toBe('')
   await page.waitForTimeout(500)
-  expect(await readPromptLine(page), 'Ctrl+Enter must produce exactly one CSI-u chord').toBe(
-    '하 하 하<ESC>[13;5u'
-  )
-  expect(await readSubmitted(page), 'CSI-u must not submit the line').toEqual([])
+  expect(await readSubmitted(page), 'Ctrl+Enter must produce exactly one newline').toEqual([
+    '하 하 하'
+  ])
 }
 
 const COMMITTING_ENTER_CHORDS: CommittingEnterChordCase[] = [
@@ -416,8 +413,8 @@ const COMMITTING_ENTER_CHORDS: CommittingEnterChordCase[] = [
     modifiers: 2,
     assertOutcome: assertCtrlOutcome,
     expectedAfterPlainEnter: {
-      received: '하 하 하\u001b[13;5u\r',
-      submitted: ['하 하 하\u001b[13;5u']
+      received: process.platform === 'win32' ? '하 하 하\r\r' : '하 하 하\u001b[13;5u\r',
+      submitted: process.platform === 'win32' ? ['하 하 하', ''] : ['하 하 하\u001b[13;5u']
     }
   },
   {
@@ -455,8 +452,8 @@ const COMMITTING_ENTER_CHORDS: CommittingEnterChordCase[] = [
     windowsOnly: true,
     assertOutcome: assertCtrlOutcome,
     expectedAfterPlainEnter: {
-      received: '하 하 하\u001b[13;5u\r',
-      submitted: ['하 하 하\u001b[13;5u']
+      received: '하 하 하\r\r',
+      submitted: ['하 하 하', '']
     }
   }
 ]
@@ -470,7 +467,10 @@ test.describe('Korean IME terminal committing Enter chords', () => {
         orcaPage,
         testRepoPath
       }, testInfo) => {
-        test.skip(chord.windowsOnly && process.platform !== 'win32', 'Windows IME ownership')
+        test.skip(
+          chord.windowsOnly === true && process.platform !== 'win32',
+          'Windows IME ownership'
+        )
         await waitForSessionReady(orcaPage)
         await waitForActiveWorktree(orcaPage)
         await ensureTerminalVisible(orcaPage)
@@ -488,8 +488,7 @@ test.describe('Korean IME terminal committing Enter chords', () => {
           await focusActiveTerminalInput(orcaPage)
           await installImeKeyEventLog(orcaPage)
 
-          // 하 하 하 with the first two syllables committed by Space and the last
-          // one left composing, so the Enter chord is the committing keystroke.
+          // Leave the last 하 composing so Enter, after two Space commits, must commit it.
           await composeHangulSyllable(session, orcaPage)
           await commitSyllableAndSpace(session, orcaPage)
           await composeHangulSyllable(session, orcaPage)

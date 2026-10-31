@@ -1,6 +1,6 @@
-// ─── Events (Daemon → Client, on stream socket) ────────────────────
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type DataEvent = {
   type: 'event'
@@ -20,7 +20,8 @@ export type ExitEvent = {
   type: 'event'
   event: 'exit'
   sessionId: string
-  payload: { code: number; incarnationId?: PtyIncarnationId }
+  /** Older daemons omit cause; treat it as unknown instead of inferring a cause from the exit code (STA-4536). */
+  payload: { code: number; incarnationId?: PtyIncarnationId; cause?: TerminalExitCause }
 }
 
 export type TerminalErrorEvent = {
@@ -30,19 +31,9 @@ export type TerminalErrorEvent = {
   payload: { message: string }
 }
 
-// Why these ride the stream socket (not control): each marks a POSITION in a
-// session's byte stream — scan-authority handoffs and dropped ranges are only
-// meaningful relative to the data events around them. Old mains ignore
-// unknown stream events, and only new mains send setSessionBackground. The
-// v20 bump is for sequence-safe recovery snapshots, not these tolerated events.
+// Handoffs and gaps must share byte-stream order; older mains tolerate unknown events.
 
-/** Scan-authority handoff marker: bytes before this event were (not) scanned
- *  by the daemon's transient-fact relay; main flips its own scanners at
- *  exactly this position so no fact double-fires or goes missing.
- *  scanSeedAnsi (un-background only) carries the emulator's dangling
- *  incomplete escape so main can prime its fresh scanner carry — a sequence
- *  split across the handoff must not mint a phantom bell or lose its fact.
- *  mode2031PendingSubscribe preserves a subscribe deferred behind that tail. */
+/** Transfer scan authority at this stream position, including incomplete escapes and deferred subscriptions. */
 export type SessionBackgroundMarkerEvent = {
   type: 'event'
   event: 'sessionBackgroundMarker'
@@ -54,9 +45,7 @@ export type SessionBackgroundMarkerEvent = {
   }
 }
 
-/** A backgrounded session's oldest undelivered output was dropped at the
- *  daemon (keep-tail thinning). The daemon emulator ingested every byte —
- *  only this monitoring stream is thinned. */
+/** Only the monitoring stream loses bytes; the daemon emulator retains the complete terminal model. */
 export type DataGapEvent = {
   type: 'event'
   event: 'dataGap'
@@ -64,11 +53,7 @@ export type DataGapEvent = {
   payload: { droppedChars: number; sequenceChars?: number }
 }
 
-/** Notification-bearing fact detected by the daemon while it holds scan
- *  authority for a backgrounded session. Title/agent-status facts stay
- *  main-side: they converge from the kept tail (stale-working-title timer,
- *  snapshot-restores-title-state) and fuse with main-fabricated synthetic
- *  frames the daemon never sees. */
+/** Daemon-authoritative notifications; main retains title/status scanning to include its synthetic frames. */
 export type DaemonTransientFact =
   | { kind: 'bell' }
   | { kind: 'command-finished'; exitCode: number | null }
@@ -83,6 +68,14 @@ export type TransientFactEvent = {
   payload: DaemonTransientFact
 }
 
+/** The child may still run, but its PTY master no longer takes input; older mains ignore this. */
+export type InputClosedEvent = {
+  type: 'event'
+  event: 'inputClosed'
+  sessionId: string
+  payload: { incarnationId: PtyIncarnationId }
+}
+
 export type DaemonEvent =
   | DataEvent
   | ExitEvent
@@ -90,3 +83,4 @@ export type DaemonEvent =
   | SessionBackgroundMarkerEvent
   | DataGapEvent
   | TransientFactEvent
+  | InputClosedEvent

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildAiVaultResumeCommand } from './ai-vault-types'
+import {
+  buildAiVaultResumeCommand,
+  buildAiVaultResumeShellCommand
+} from './ai-vault-resume-command'
 
 describe('buildAiVaultResumeCommand', () => {
   it('uses Antigravity conversation ids instead of Gemini resume flags', () => {
@@ -25,6 +28,17 @@ describe('buildAiVaultResumeCommand', () => {
     ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && codex resume ""session-1"""')
   })
 
+  it('resumes CodeBuddy sessions with the Claude-compatible --resume flag', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'codebuddy',
+        sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        cwd: '/repo/app',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/repo/app' && codebuddy --resume 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'")
+  })
+
   it('builds a direct queued command for a live cmd shell', () => {
     expect(
       buildAiVaultResumeCommand({
@@ -41,9 +55,7 @@ describe('buildAiVaultResumeCommand', () => {
   })
 
   it('emits no CODEX_HOME stamp for real-home canonical sessions', () => {
-    // Backfilled sessions dedupe to the real-home row (codexHome null); their
-    // resume must run against the user's own ~/.codex, never the frozen
-    // managed home whose auth.json stops refreshing after the flip.
+    // Backfills dedupe to real-home rows: resume from ~/.codex, never a frozen managed home whose auth stops refreshing.
     const command = buildAiVaultResumeCommand({
       agent: 'codex',
       sessionId: 'session-1',
@@ -121,5 +133,136 @@ describe('buildAiVaultResumeCommand', () => {
         platform: 'darwin'
       })
     ).toBe("cd '/Users/ada/repo' && omp --resume '019f27cd-4268-7000-96e7-62f42a55c144'")
+  })
+
+  it('resumes Prime Agent by absolute transcript path like OMP', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'prime-agent',
+        sessionId: 'dddddddd-eeee-4fff-8aaa-111111111111',
+        resumeFilePath:
+          '/Users/ada/.prime/agent/sessions/dddddddd-eeee-4fff-8aaa-111111111111.jsonl',
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe(
+      "cd '/Users/ada/repo' && prime-agent --resume '/Users/ada/.prime/agent/sessions/dddddddd-eeee-4fff-8aaa-111111111111.jsonl'"
+    )
+  })
+
+  it('falls back to the session id when no Prime Agent transcript path is known', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'prime-agent',
+        sessionId: 'dddddddd-eeee-4fff-8aaa-111111111111',
+        resumeFilePath: null,
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/Users/ada/repo' && prime-agent --resume 'dddddddd-eeee-4fff-8aaa-111111111111'")
+  })
+
+  it('resumes Rovo Dev through its acli launch command', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'rovo',
+        sessionId: 'rovo-session',
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/Users/ada/repo' && acli rovodev run --restore 'rovo-session'")
+  })
+
+  it('appends the Rovo Dev restore flag to a full-command settings override', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'rovo',
+        sessionId: 'rovo-session',
+        cwd: null,
+        platform: 'darwin',
+        commandOverride: '/opt/acli/acli rovodev run'
+      })
+    ).toBe("/opt/acli/acli rovodev run --restore 'rovo-session'")
+  })
+
+  it('resumes Muse by session id in the session cwd', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'muse',
+        sessionId: 'eeeeeeee-ffff-4000-baaa-222222222222',
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/Users/ada/repo' && muse resume 'eeeeeeee-ffff-4000-baaa-222222222222'")
+  })
+})
+
+describe('buildAiVaultResumeShellCommand env removal', () => {
+  const base = {
+    resumeCommand: "codex 'resume' 'sid'",
+    cwd: '/repo',
+    clearEnvNames: ['CODEX_HOME', 'ORCA_CODEX_HOME']
+  }
+
+  it('carries the removal on the agent under a POSIX shell', () => {
+    expect(buildAiVaultResumeShellCommand({ ...base, platform: 'darwin' })).toBe(
+      "cd '/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex 'resume' 'sid'"
+    )
+  })
+
+  // Filter assigned variables from env -u or the pinned home silently becomes real-home resume.
+  it('keeps a pinned CODEX_HOME authoritative instead of stripping it', () => {
+    const command = buildAiVaultResumeShellCommand({
+      ...base,
+      platform: 'darwin',
+      codexHome: '/home/a/.codex-work'
+    })
+
+    expect(command).toBe(
+      "cd '/repo' && CODEX_HOME='/home/a/.codex-work' env -u ORCA_CODEX_HOME codex 'resume' 'sid'"
+    )
+    expect(command).not.toContain('-u CODEX_HOME')
+  })
+
+  it('keeps a pinned CODEX_HOME authoritative under a git-bash shell too', () => {
+    expect(
+      buildAiVaultResumeShellCommand({
+        ...base,
+        platform: 'win32',
+        shell: 'posix',
+        codexHome: '/c/users/a/.codex-work'
+      })
+    ).toBe(
+      "cd '/repo' && CODEX_HOME='/c/users/a/.codex-work' env -u ORCA_CODEX_HOME codex 'resume' 'sid'"
+    )
+  })
+
+  // Shell grammar wins over host platform; platform routing emitted POSIX env -u into PowerShell.
+  it('uses PowerShell grammar for a PowerShell shell on a non-Windows host', () => {
+    const command = buildAiVaultResumeShellCommand({
+      ...base,
+      platform: 'linux',
+      shell: 'powershell'
+    })
+
+    expect(command).not.toContain('env -u')
+    expect(command).toBe(
+      'Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue; ' +
+        'Remove-Item Env:ORCA_CODEX_HOME -ErrorAction SilentlyContinue; ' +
+        "Set-Location -LiteralPath '/repo'; codex 'resume' 'sid'"
+    )
+  })
+
+  it('keeps the cmd clear ahead of the cd so a failed cd cannot launch the agent', () => {
+    expect(
+      buildAiVaultResumeShellCommand({
+        ...base,
+        cwd: 'C:\\repo',
+        platform: 'win32',
+        shell: 'cmd'
+      })
+    ).toBe(
+      'set "CODEX_HOME=" & set "ORCA_CODEX_HOME=" & cd /d "C:\\repo" && codex \'resume\' \'sid\''
+    )
   })
 })

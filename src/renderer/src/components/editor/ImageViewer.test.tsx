@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const reactHookRuntime = vi.hoisted(() => ({
@@ -6,7 +7,7 @@ const reactHookRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useMemo<T>(factory: () => T) {
@@ -17,6 +18,9 @@ vi.mock('react', async () => {
     },
     useEffect() {
       return undefined
+    },
+    useContext() {
+      return false
     },
     useRef<T>(initial: T) {
       return { current: initial }
@@ -154,6 +158,49 @@ function pngBase64(width: number): string {
   return bytes.toString('base64')
 }
 
+async function renderPdfViewerProps(
+  scrollCacheKey?: string | null
+): Promise<Record<string, unknown>> {
+  reactHookRuntime.index = 0
+  const module = await import('./ImageViewer')
+  const rendered = expandNode(
+    module.default({
+      content: 'JVBERi0xLjQK',
+      filePath: '/repo/report.pdf',
+      mimeType: 'application/pdf',
+      ...(scrollCacheKey === undefined ? {} : { scrollCacheKey })
+    })
+  )
+  const [pdf] = findElementsByType(rendered, 'PdfViewer')
+  if (!pdf) {
+    throw new Error('PdfViewer not rendered')
+  }
+  return pdf.props
+}
+
+describe('ImageViewer PDF scroll cache key', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  it('forwards the scroll cache key to PdfViewer', async () => {
+    expect(await renderPdfViewerProps('/repo/report.pdf::tab-2:pdf')).toMatchObject({
+      filePath: '/repo/report.pdf',
+      scrollCacheKey: '/repo/report.pdf::tab-2:pdf'
+    })
+  })
+
+  it('passes null when no key is supplied, so unkeyed callers stay opted out', async () => {
+    expect((await renderPdfViewerProps()).scrollCacheKey).toBeNull()
+  })
+
+  it('passes an explicit null through unchanged', async () => {
+    expect((await renderPdfViewerProps(null)).scrollCacheKey).toBeNull()
+  })
+})
+
 describe('ImageViewer preview source retry', () => {
   beforeEach(() => {
     reactHookRuntime.states = []
@@ -192,5 +239,66 @@ describe('ImageViewer preview source retry', () => {
 
     expect(findElementsByType(rendered, 'Image')).toHaveLength(1)
     expect(findElementsByType(rendered, 'img')).toHaveLength(0)
+  })
+})
+
+describe('ImageViewer pre-load layout box', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  // The w-max/h-max scroll box makes percentage maxima ineffective before image load; viewport units must bound natural dimensions.
+  it('bounds both scroll surfaces with viewport units before the image loads', async () => {
+    const images = findElementsByType(await renderExpandedImageViewer(pngBase64(1)), 'img')
+
+    expect(images).toHaveLength(2)
+    for (const image of images) {
+      const className = String(image.props.className)
+      expect(className).toContain('max-h-[100vh]')
+      expect(className).toContain('max-w-[100vw]')
+      expect(className).not.toContain('max-h-full')
+      expect(className).not.toContain('max-w-full')
+    }
+  })
+})
+
+describe('ImageViewer reading its bytes by URL', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  it('shows an image from its orca-media URL, sized from the grant', async () => {
+    reactHookRuntime.index = 0
+    const module = await import('./ImageViewer')
+    const rendered = expandNode(
+      module.default({
+        src: 'orca-media://file/token?revision=r1',
+        byteSize: 2048,
+        filePath: '/repo/preview.png',
+        mimeType: 'image/png'
+      })
+    )
+    expect(findPreviewImage(rendered).props.src).toBe('orca-media://file/token?revision=r1')
+    expect(JSON.stringify(rendered)).toContain('2.0 KB')
+  })
+
+  it("hands a PDF's URL to PdfViewer instead of base64", async () => {
+    reactHookRuntime.index = 0
+    const module = await import('./ImageViewer')
+    const [pdf] = findElementsByType(
+      expandNode(
+        module.default({
+          src: 'orca-media://file/doc?revision=r1',
+          filePath: '/repo/report.pdf',
+          mimeType: 'application/pdf'
+        })
+      ),
+      'PdfViewer'
+    )
+    expect(pdf?.props).toMatchObject({ src: 'orca-media://file/doc?revision=r1', content: '' })
   })
 })

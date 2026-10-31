@@ -2,7 +2,7 @@ import React from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import type { WorkspaceStatusDefinition } from '../../../../shared/types'
+import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import SidebarFilter from './SidebarFilter'
 import WorkspaceKanbanSearchField from './WorkspaceKanbanSearchField'
 import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
@@ -54,8 +54,7 @@ export default function WorkspaceKanbanDrawerHeader({
   return (
     <>
       <SheetHeader className="border-b border-worktree-sidebar-border px-4 py-3 pr-32">
-        {/* Why: SheetTitle is the sheet's aria-labelledby target and renders an
-            <h2>, so the field must be its sibling, not a descendant. */}
+        {/* SheetTitle renders the aria-labelledby h2; the input must be its sibling for valid markup. */}
         <div className="flex items-center gap-2">
           <SheetTitle className="flex shrink-0 items-center gap-2 text-sm">
             <span>
@@ -66,10 +65,10 @@ export default function WorkspaceKanbanDrawerHeader({
             </span>
             {selectedCount > 1 ? (
               <span className="rounded-full bg-worktree-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {selectedCount}{' '}
                 {translate(
-                  'auto.components.sidebar.WorkspaceKanbanDrawerHeader.81870af08f',
-                  'selected'
+                  'auto.components.sidebar.WorkspaceKanbanDrawerHeader.selectedCount',
+                  '{{count}} selected',
+                  { count: selectedCount, defaultValue_one: '{{count}} selected' }
                 )}
               </span>
             ) : null}

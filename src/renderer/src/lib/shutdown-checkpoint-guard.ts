@@ -1,11 +1,30 @@
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
+import {
+  clearShutdownCheckpointFailureReason,
+  formatShutdownCheckpointFailureReason,
+  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
+  ORCA_RENDERER_UNLOAD_PREVENTED_EVENT,
+  publishShutdownCheckpointFailureReason
+} from '../../../shared/renderer-shutdown-events'
+import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 
 export type ShutdownCheckpointGuard = {
   persistOnce: () => boolean
-  reset: () => void
+  abortAfterCheckpointFailure: () => void
+  abandonAttempt: () => void
 }
 
-export function createShutdownCheckpointGuard(persist: () => void): ShutdownCheckpointGuard {
+// Report checkpoint causes or reproducible failures strand users on old builds behind symptom-only errors (STA-5505).
+function reportShutdownCheckpointFailure(error: unknown): void {
+  console.error('[app] Shutdown checkpoint persist failed:', error)
+  const message = formatShutdownCheckpointFailureReason(error)
+  publishShutdownCheckpointFailureReason(message)
+  recordRendererCrashBreadcrumb('renderer_shutdown_checkpoint_failed', { message })
+}
+
+export function createShutdownCheckpointGuard(
+  persist: () => void,
+  abandonPersistAttempt?: () => void
+): ShutdownCheckpointGuard {
   let persisted = false
   return {
     persistOnce(): boolean {
@@ -14,26 +33,37 @@ export function createShutdownCheckpointGuard(persist: () => void): ShutdownChec
       }
       try {
         persist()
-      } catch {
-        // Why: browser event targets swallow listener exceptions. Returning a
-        // failure lets the caller cancel unload and keep this attempt retryable.
+      } catch (error) {
+        // Browser event targets swallow exceptions; return failure so callers can cancel unload and retry.
+        reportShutdownCheckpointFailure(error)
         return false
       }
       persisted = true
+      clearShutdownCheckpointFailureReason()
       return true
     },
-    reset(): void {
+    abortAfterCheckpointFailure(): void {
       persisted = false
+    },
+    abandonAttempt(): void {
+      persisted = false
+      abandonPersistAttempt?.()
     }
   }
 }
 
 export function createShutdownCheckpointBeforeUnloadHandler(
-  guard: ShutdownCheckpointGuard
+  guard: ShutdownCheckpointGuard,
+  onNativeUnloadVetoed?: () => void
 ): (event: Event) => void {
   return (event): void => {
     if (!guard.persistOnce()) {
+      event.currentTarget?.dispatchEvent(new Event(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT))
       event.preventDefault()
+      // Synthetic close/restart dispatchers report their own veto; browser reloads have no caller to tell the user.
+      if (event.isTrusted) {
+        onNativeUnloadVetoed?.()
+      }
     }
   }
 }
@@ -43,8 +73,7 @@ export function preventUnloadAndScheduleShutdownCheckpointReset(
   eventTarget: EventTarget
 ): void {
   event.preventDefault()
-  // Why: paired web has no Electron will-prevent-unload callback. Defer until
-  // all beforeunload listeners finish so their successful checkpoint is reset.
+  // Paired web lacks will-prevent-unload; reset successful checkpoints after all beforeunload listeners finish.
   queueMicrotask(() => {
     eventTarget.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))
   })

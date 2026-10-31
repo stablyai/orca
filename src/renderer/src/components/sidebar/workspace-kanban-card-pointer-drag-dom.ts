@@ -1,4 +1,4 @@
-import type { WorkspaceStatus } from '../../../../shared/types'
+import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import {
   resolveWorkspaceKanbanVirtualLaneDropIndex,
   resolveWorkspaceKanbanVirtualLaneDropIndicatorY
@@ -23,8 +23,7 @@ export type WorkspaceKanbanStatusDropRect = {
 export type WorkspaceKanbanCardDropRect = {
   top: number
   bottom: number
-  // Why: lanes virtualize, so a rendered card's DOM position is not its index
-  // in the lane. Carry the lane index when the card advertises one.
+  // Virtualized DOM positions differ from full lane indexes.
   index?: number
 }
 
@@ -102,8 +101,7 @@ export function resolveWorkspaceCardDropIndicatorY(
   if (rects.length === 0) {
     return laneTop + 14
   }
-  // Why: with a virtualized lane the drop index counts unrendered cards too,
-  // so place the line relative to the rendered card that owns that slot.
+  // Drop indexes include unmounted cards; anchor the line to the rendered owner of that slot.
   const slot = rects.findIndex(
     (rect, index) => getRenderedCardLanePosition(rect, index) >= dropIndex
   )
@@ -191,8 +189,7 @@ export function getDropTarget(
       ? (statusTarget.dataset.workspaceStatus ?? null)
       : null
   return {
-    // Why: dropping in the visual gap between lanes should still land in the
-    // nearest lane. Without this fallback, otherwise-valid drags appeared flaky.
+    // Drops in gaps between lanes still target the nearest lane.
     status:
       directStatus ??
       resolveWorkspaceStatusDropTargetFromRects(getStatusDropTargetRects(board), x, y),

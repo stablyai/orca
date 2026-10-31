@@ -1,60 +1,60 @@
-/* eslint-disable max-lines -- Why: the collector's host-process index,
-   history ring buffer, Electron bucketing, and worktree attribution live
-   together to keep one snapshot's orchestration in one place. */
-/**
- * Memory dashboard collector.
- *
- * One snapshot covers two sources:
- *   - Orca's own Electron processes, via `app.getAppMetrics()`, bucketed
- *     into main / renderer / other.
- *   - Each registered PTY's process subtree, enumerated once from a host-
- *     wide process sweep (PowerShell CIM with a Typeperf fallback on Windows).
- *
- * Memory samples are held in a per-key ring (one key per worktree, plus
- * a reserved app-total key) so the UI can draw a trend sparkline.
- *
- * Concurrent callers coalesce onto a single in-flight sweep so a burst of
- * renderer polls never produces overlapping child processes.
- */
-
-import { basename } from 'node:path'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import os from 'node:os'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
-import {
-  getProcessOutputFields,
-  iterateProcessOutputLines
-} from '../../shared/process-output-field-scanner'
-import { app } from 'electron'
-import type { AppMemory, MemorySnapshot, SessionMemory, WorktreeMemory } from '../../shared/types'
-import type { Store } from '../persistence'
+import { getAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
+import type {
+  AppMemory,
+  MemorySnapshot,
+  SessionMemory,
+  UsageValues,
+  WorktreeMemory
+} from '../../shared/process-stats-types'
 import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
 import { listRegisteredPtys } from './pty-registry'
 import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
-import { collectHostMemory, fallbackHostMemory } from './host-memory'
+import { collectHostMemory } from './host-memory'
 import { getProcessMemoryMetric } from './process-memory-metric'
+import { readDarwinProcessFootprints } from './darwin-process-footprint'
+import { getLocalDaemonPid } from './local-daemon-pid'
+import {
+  buildProcessIndex,
+  collectSubtree,
+  parsePsOutput,
+  type ProcIndex,
+  type ProcRow
+} from './process-index'
+import {
+  createEmptyWorktreeMemoryBucket,
+  pushAppMemoryHistory,
+  pushMemoryHistorySample,
+  readAppMemoryHistory,
+  readMemoryHistory,
+  resolveWorktreeMemoryNames,
+  sweepStaleMemoryHistory,
+  type MemorySnapshotStore,
+  type WorktreeMemoryBucket
+} from './memory-snapshot-buckets'
+import {
+  clampMemoryMetric,
+  emptyMemorySnapshot,
+  optionalCommitField,
+  snapshotCommitFields
+} from './memory-snapshot-values'
 
-export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
-
-// ─── Module state ───────────────────────────────────────────────────
+export type { MemorySnapshotStore } from './memory-snapshot-buckets'
+export { collectSubtree, parsePsOutput } from './process-index'
 
 let inflight: Promise<MemorySnapshot> | null = null
 
-// ─── Public API ─────────────────────────────────────────────────────
-
 export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
-  // Why: coalescing relies on the persistence store being a process-wide
-  // singleton at runtime. Concurrent callers all hand in the same instance,
-  // so it is safe to return the existing in-flight promise (which was
-  // kicked off with that same store) rather than starting a second sweep.
+  // Runtime callers share one process-wide store, so coalesced sweeps use the same data source.
   if (inflight) {
     return inflight
   }
   inflight = runSnapshot(store)
     .catch((err) => {
       console.warn('[memory] snapshot failed; returning empty', err)
-      return emptySnapshot()
+      return emptyMemorySnapshot()
     })
     .finally(() => {
       inflight = null
@@ -62,113 +62,21 @@ export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise
   return inflight
 }
 
-// ─── Internals ──────────────────────────────────────────────────────
-
 const execAsync = promisify(exec)
 const PS_EXEC_TIMEOUT_MS = 5_000
 const PS_MAX_BUFFER = 10 * 1024 * 1024
 
-/** One row from the host-wide process listing. */
-type ProcRow = {
-  pid: number
-  ppid: number
-  /** Percent of one core (may exceed 100 on multi-core). */
-  cpu: number
-  /** Resident memory in bytes. */
-  memory: number
-}
-
-/** Indexed view of a single host process sweep. */
-type ProcIndex = {
-  byPid: Map<number, ProcRow>
-  childrenOf: Map<number, number[]>
-}
-
-function clampNumber(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return 0
-  }
-  return Math.max(0, value)
-}
-
-function emptySnapshot(): MemorySnapshot {
-  const zero = { cpu: 0, memory: 0 }
-  return {
-    app: { ...zero, main: zero, renderer: zero, other: zero, history: [] },
-    worktrees: [],
-    host: fallbackHostMemory(),
-    processMemoryMetric: getProcessMemoryMetric(),
-    totalCpu: 0,
-    totalMemory: 0,
-    collectedAt: Date.now()
-  }
-}
-
-// ─── History ring buffers ───────────────────────────────────────────
-
-const APP_HISTORY_KEY = '__app__'
-const HISTORY_CAPACITY = 60
-const HISTORY_STALE_MS = 10 * 60 * 1000
-
-type HistoryRing = {
-  samples: number[]
-  touchedAt: number
-}
-
-const historyByKey = new Map<string, HistoryRing>()
-
-function pushHistorySample(key: string, memoryBytes: number, now: number): void {
-  let ring = historyByKey.get(key)
-  if (!ring) {
-    ring = { samples: [], touchedAt: now }
-    historyByKey.set(key, ring)
-  }
-  ring.samples.push(memoryBytes)
-  if (ring.samples.length > HISTORY_CAPACITY) {
-    ring.samples.shift()
-  }
-  ring.touchedAt = now
-}
-
-function readHistory(key: string): number[] {
-  const ring = historyByKey.get(key)
-  return ring ? [...ring.samples] : []
-}
-
-function sweepStaleHistory(now: number): void {
-  for (const [key, ring] of historyByKey) {
-    if (now - ring.touchedAt > HISTORY_STALE_MS) {
-      historyByKey.delete(key)
-    }
-  }
-}
-
-// ─── Host process enumeration ───────────────────────────────────────
-
 async function enumerateProcesses(): Promise<ProcIndex> {
-  const rows = os.platform() === 'win32' ? await enumerateWindows() : await enumerateUnix()
-
-  const byPid = new Map<number, ProcRow>()
-  const childrenOf = new Map<number, number[]>()
-
-  for (const row of rows) {
-    byPid.set(row.pid, row)
-    const siblings = childrenOf.get(row.ppid)
-    if (siblings) {
-      siblings.push(row.pid)
-    } else {
-      childrenOf.set(row.ppid, [row.pid])
-    }
-  }
-
-  return { byPid, childrenOf }
+  const platform = os.platform()
+  const [rows, footprints] = await Promise.all([
+    platform === 'win32' ? enumerateWindows() : enumerateUnix(),
+    platform === 'darwin' ? readDarwinProcessFootprints() : Promise.resolve(null)
+  ])
+  return buildProcessIndex(rows, footprints, getProcessMemoryMetric(platform))
 }
 
 async function enumerateUnix(): Promise<ProcRow[]> {
-  // Why: `-o pcpu` formats the percentage with the current locale's decimal
-  // separator (e.g. "12,5" on de_DE). parseFloat is locale-agnostic and
-  // silently drops the fractional part at a comma. Forcing C locale keeps
-  // decimals as dots.
+  // Force dot decimals: parseFloat silently truncates locale-formatted comma values.
   try {
     const { stdout } = await execAsync('ps -eo pid=,ppid=,pcpu=,rss=', {
       maxBuffer: PS_MAX_BUFFER,
@@ -182,90 +90,37 @@ async function enumerateUnix(): Promise<ProcRow[]> {
   }
 }
 
-/** Exported for tests: parses `ps -eo pid=,ppid=,pcpu=,rss=` output. */
-export function parsePsOutput(stdout: string): ProcRow[] {
-  const rows: ProcRow[] = []
-  for (const line of iterateProcessOutputLines(stdout)) {
-    const fields = getProcessOutputFields(line, 4)
-    if (fields.length < 4) {
-      continue
-    }
-    const pid = Number.parseInt(fields[0], 10)
-    const ppid = Number.parseInt(fields[1], 10)
-    const cpu = Number.parseFloat(fields[2])
-    const rssKb = Number.parseInt(fields[3], 10)
-    if (Number.isNaN(pid) || Number.isNaN(ppid)) {
-      continue
-    }
-    rows.push({
-      pid,
-      ppid,
-      cpu: Number.isFinite(cpu) && cpu > 0 ? cpu : 0,
-      memory: Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : 0
-    })
-  }
-  return rows
-}
-
 async function enumerateWindows(): Promise<ProcRow[]> {
   return enumerateWindowsProcessResources()
 }
-/** Walk every descendant PID of `root`, inclusive. Exported for tests. */
-export function collectSubtree(index: ProcIndex, root: number): number[] {
-  const result: number[] = []
-  const seen = new Set<number>()
-  const queue = [root]
-  while (queue.length > 0) {
-    const pid = queue.pop()
-    if (pid === undefined) {
-      break
-    }
-    if (seen.has(pid)) {
-      continue
-    }
-    seen.add(pid)
-    if (index.byPid.has(pid)) {
-      result.push(pid)
-    }
-    const kids = index.childrenOf.get(pid)
-    if (kids) {
-      for (const kid of kids) {
-        queue.push(kid)
-      }
-    }
-  }
-  return result
-}
-
-// ─── Electron app process bucketing ─────────────────────────────────
 
 type AppBucketsRaw = Omit<AppMemory, 'history'>
 
 function electronMetricMemoryBytes(
-  proc: ReturnType<typeof app.getAppMetrics>[number],
+  proc: ReturnType<AppEnvironment['getAppMetrics']>[number],
   processIndex: ProcIndex
 ): number {
   const hostMemory = processIndex.byPid.get(proc.pid)?.memory
   if (typeof hostMemory === 'number' && Number.isFinite(hostMemory) && hostMemory > 0) {
     return hostMemory
   }
-  // Why: on macOS, app.getAppMetrics().workingSetSize can include large shared
-  // Chromium/Electron mappings. Prefer the host RSS sweep used elsewhere, but
-  // keep workingSetSize as a fallback when the process disappears mid-snapshot.
-  return clampNumber(proc.memory?.workingSetSize) * 1024
+  // Prefer host RSS over shared macOS Electron mappings; retain Electron fallback for vanished processes.
+  return clampMemoryMetric(proc.memory?.workingSetSize) * 1024
 }
 
 function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
-  const main = { cpu: 0, memory: 0 }
-  const renderer = { cpu: 0, memory: 0 }
-  const other = { cpu: 0, memory: 0 }
+  const main = { cpu: 0, memory: 0, privateMemory: 0 }
+  const renderer = { cpu: 0, memory: 0, privateMemory: 0 }
+  const other = { cpu: 0, memory: 0, privateMemory: 0 }
 
-  for (const proc of app.getAppMetrics()) {
-    const cpu = clampNumber(proc.cpu?.percentCPUUsage)
+  const electronPids = new Set<number>()
+  for (const proc of getAppEnvironment().getAppMetrics()) {
+    electronPids.add(proc.pid)
+    const cpu = clampMemoryMetric(proc.cpu?.percentCPUUsage)
     const memoryBytes = electronMetricMemoryBytes(proc, processIndex)
+    // Electron does not report helper-process commit; reuse the host sweep.
+    const privateBytes = clampMemoryMetric(processIndex.byPid.get(proc.pid)?.privateMemory)
 
-    // Why: lowercase once so future Electron versions emitting different
-    // casing ('browser' vs 'Browser') still bucket correctly.
     const type = (typeof proc.type === 'string' ? proc.type : '').toLowerCase()
     let target = other
     if (type === 'browser') {
@@ -276,89 +131,59 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
 
     target.cpu += cpu
     target.memory += memoryBytes
+    target.privateMemory += privateBytes
   }
+
+  // The terminal daemon is detached from Electron, so getAppMetrics omits it; its PTY children stay with their worktrees.
+  const daemonPid = getLocalDaemonPid()
+  const daemon = daemonPid === null ? undefined : processIndex.byPid.get(daemonPid)
+  if (daemon && !electronPids.has(daemon.pid)) {
+    other.cpu += daemon.cpu
+    other.memory += daemon.memory
+    other.privateMemory += clampMemoryMetric(daemon.privateMemory)
+  }
+
+  const usage = (bucket: typeof main): UsageValues => ({
+    cpu: bucket.cpu,
+    memory: bucket.memory,
+    ...optionalCommitField(processIndex.hasPrivateMemory, bucket.privateMemory)
+  })
 
   return {
-    main,
-    renderer,
-    other,
-    cpu: main.cpu + renderer.cpu + other.cpu,
-    memory: main.memory + renderer.memory + other.memory
+    main: usage(main),
+    renderer: usage(renderer),
+    other: usage(other),
+    ...usage({
+      cpu: main.cpu + renderer.cpu + other.cpu,
+      memory: main.memory + renderer.memory + other.memory,
+      privateMemory: main.privateMemory + renderer.privateMemory + other.privateMemory
+    })
   }
 }
-
-// ─── Worktree attribution ───────────────────────────────────────────
-
-type WorktreeBucket = {
-  worktreeId: string
-  worktreeName: string
-  repoId: string
-  repoName: string
-  cpu: number
-  memory: number
-  sessions: SessionMemory[]
-}
-
-function resolveWorktreeNames(
-  worktreeId: string,
-  store: MemorySnapshotStore
-): {
-  worktreeName: string
-  repoId: string
-  repoName: string
-} {
-  // Orca worktree ids look like `${repoId}::${absolutePath}`.
-  const parsed = splitWorktreeIdForFilesystem(worktreeId)
-  const repoId = parsed?.repoId ?? worktreeId
-  const worktreePath = parsed?.worktreePath ?? ''
-  const fallbackName = worktreePath ? basename(worktreePath) : worktreeId
-
-  const meta = store.getWorktreeMeta(worktreeId)
-  const repo = store.getRepo(repoId)
-
-  return {
-    worktreeName: meta?.displayName?.trim() || fallbackName,
-    repoId,
-    repoName: repo?.displayName?.trim() || repoId || 'Unknown Repo'
-  }
-}
-
-function makeEmptyBucket(
-  worktreeId: string,
-  worktreeName: string,
-  repoId: string,
-  repoName: string
-): WorktreeBucket {
-  return { worktreeId, worktreeName, repoId, repoName, cpu: 0, memory: 0, sessions: [] }
-}
-
-// ─── Main collection path ───────────────────────────────────────────
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   const [processIndex, host] = await Promise.all([enumerateProcesses(), collectHostMemory()])
   const appBuckets = bucketElectronMetrics(processIndex)
   const ptys = listRegisteredPtys()
 
-  // Why: when two PTYs share an ancestor in the process tree (e.g. a
-  // supervisor, or a shell that re-execed), a naive walk would double-count
-  // that ancestor's memory. Track which pids have already been claimed and
-  // attribute to the first PTY (registration order) to see each pid.
+  // Attribute overlapping PTY trees once, in registration order.
   const claimed = new Set<number>()
 
-  const orphan = makeEmptyBucket(
+  const orphan = createEmptyWorktreeMemoryBucket(
     ORPHAN_WORKTREE_ID,
     'Unattributed terminals',
     ORPHAN_WORKTREE_ID,
     'Other'
   )
-  const worktreeBuckets = new Map<string, WorktreeBucket>()
+  const worktreeBuckets = new Map<string, WorktreeMemoryBucket>()
 
   for (const pty of ptys) {
     let sessionCpu = 0
     let sessionMemory = 0
+    let sessionPrivateMemory = 0
 
     if (pty.pid != null) {
-      for (const pid of collectSubtree(processIndex, pty.pid)) {
+      for (const pid of collectSubtree(processIndex, pty.pid, claimed)) {
         if (claimed.has(pid)) {
           continue
         }
@@ -369,6 +194,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
         claimed.add(pid)
         sessionCpu += row.cpu
         sessionMemory += row.memory
+        sessionPrivateMemory += clampMemoryMetric(row.privateMemory)
       }
     }
 
@@ -376,18 +202,24 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
       sessionId: pty.sessionId ?? pty.ptyId,
       paneKey: pty.paneKey,
       pid: pty.pid ?? 0,
-      cpu: clampNumber(sessionCpu),
-      memory: clampNumber(sessionMemory)
+      cpu: clampMemoryMetric(sessionCpu),
+      memory: clampMemoryMetric(sessionMemory),
+      ...optionalCommitField(processIndex.hasPrivateMemory, sessionPrivateMemory)
     }
 
-    let bucket: WorktreeBucket
+    let bucket: WorktreeMemoryBucket
     if (pty.worktreeId) {
       const existing = worktreeBuckets.get(pty.worktreeId)
       if (existing) {
         bucket = existing
       } else {
-        const names = resolveWorktreeNames(pty.worktreeId, store)
-        bucket = makeEmptyBucket(pty.worktreeId, names.worktreeName, names.repoId, names.repoName)
+        const names = resolveWorktreeMemoryNames(pty.worktreeId, store)
+        bucket = createEmptyWorktreeMemoryBucket(
+          pty.worktreeId,
+          names.worktreeName,
+          names.repoId,
+          names.repoName
+        )
         worktreeBuckets.set(pty.worktreeId, bucket)
       }
     } else {
@@ -396,41 +228,47 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
 
     bucket.cpu += session.cpu
     bucket.memory += session.memory
+    bucket.privateMemory += clampMemoryMetric(session.privateMemory)
     bucket.sessions.push(session)
   }
 
-  const bucketList: WorktreeBucket[] = [...worktreeBuckets.values()]
+  const bucketList: WorktreeMemoryBucket[] = [...worktreeBuckets.values()]
   if (orphan.sessions.length > 0) {
     bucketList.push(orphan)
   }
 
-  // Why: record this sweep's samples *before* reading back history, so the
-  // returned arrays end with the freshly-collected value. Each write also
-  // acts as a keep-alive so active worktrees survive the staleness sweep.
+  // Write before reading history to include this sample and refresh active-worktree retention.
   const now = Date.now()
-  pushHistorySample(APP_HISTORY_KEY, appBuckets.memory, now)
+  pushAppMemoryHistory(appBuckets.memory, now)
   for (const bucket of bucketList) {
-    pushHistorySample(bucket.worktreeId, bucket.memory, now)
+    pushMemoryHistorySample(bucket.worktreeId, bucket.memory, now)
   }
-  sweepStaleHistory(now)
+  sweepStaleMemoryHistory(now)
 
-  const worktrees: WorktreeMemory[] = bucketList.map((b) => ({
+  const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
     ...b,
-    history: readHistory(b.worktreeId)
+    ...optionalCommitField(processIndex.hasPrivateMemory, privateMemory),
+    history: readMemoryHistory(b.worktreeId)
   }))
 
   let sessionCpuTotal = 0
   let sessionMemoryTotal = 0
+  let sessionPrivateTotal = 0
   for (const wt of worktrees) {
     sessionCpuTotal += wt.cpu
     sessionMemoryTotal += wt.memory
+    sessionPrivateTotal += clampMemoryMetric(wt.privateMemory)
   }
 
   return {
-    app: { ...appBuckets, history: readHistory(APP_HISTORY_KEY) },
+    app: { ...appBuckets, history: readAppMemoryHistory() },
     worktrees,
     host,
-    processMemoryMetric: getProcessMemoryMetric(),
+    processMemoryMetric: processIndex.memoryMetric,
+    ...snapshotCommitFields(
+      processIndex.hasPrivateMemory,
+      clampMemoryMetric(appBuckets.privateMemory) + sessionPrivateTotal
+    ),
     totalCpu: appBuckets.cpu + sessionCpuTotal,
     totalMemory: appBuckets.memory + sessionMemoryTotal,
     collectedAt: now

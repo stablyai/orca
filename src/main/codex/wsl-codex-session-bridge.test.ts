@@ -1,42 +1,45 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ChildProcess } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-const { execFileMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn()
+const { runWslProcessMock } = vi.hoisted(() => ({
+  runWslProcessMock: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({
-  execFile: execFileMock
+// The E9 running check has its own cases; these cover the chain once the distro runs.
+vi.mock('../wsl/wsl-unc-access-gate', () => ({ assertWslUncPathRunning: async () => {} }))
+vi.mock('../wsl/wsl-runner', () => ({
+  runWslProcess: runWslProcessMock
 }))
 
 import {
+  _internals,
   buildWslCodexSessionBridgeShellCommand,
   resolveWslCodexSessionBridgeLinuxPaths,
   startWslCodexSessionBridgeInBackground,
   syncWslCodexSessionsIntoManagedHome
 } from './wsl-codex-session-bridge'
 
-function mockExecFileSuccess(stdout = '{"scannedFiles":2,"linkedFiles":1}\n'): void {
-  execFileMock.mockImplementation(
-    (
-      _command: string,
-      _args: string[],
-      _options: unknown,
-      callback: (error: Error | null, stdout: string, stderr: string) => void
-    ): ChildProcess => {
-      callback(null, stdout, '')
-      return {} as ChildProcess
-    }
-  )
+function mockRunWslProcessSuccess(stdout = '{"scannedFiles":2,"linkedFiles":1}\n'): void {
+  runWslProcessMock.mockResolvedValue({
+    environmentResolved: true,
+    code: 0,
+    stdout,
+    stderr: '',
+    timedOut: false
+  })
 }
 
 beforeEach(() => {
-  execFileMock.mockReset()
+  runWslProcessMock.mockReset()
+  _internals.reset()
 })
 
 describe('syncWslCodexSessionsIntoManagedHome', () => {
   it('runs a WSL hardlink bridge from the WSL system sessions into the managed home', async () => {
-    mockExecFileSuccess()
+    mockRunWslProcessSuccess()
 
     const summary = await syncWslCodexSessionsIntoManagedHome({
       distro: 'Ubuntu',
@@ -45,31 +48,39 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
         '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
     })
 
-    expect(summary).toEqual({ scannedFiles: 2, linkedFiles: 1 })
-    expect(execFileMock).toHaveBeenCalledTimes(1)
-    const firstCall = execFileMock.mock.calls[0]
-    expect(firstCall).toBeDefined()
-    const [command, args, options] = firstCall as [
-      string,
-      string[],
-      { timeout?: number; windowsHide?: boolean }
-    ]
-    expect(command).toBe('wsl.exe')
-    expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'bash', '-lc'])
-    expect(args).toHaveLength(6)
-    expect(options.timeout).toBe(30_000)
-    expect(options.windowsHide).toBe(true)
+    expect(summary).toEqual({
+      scannedFiles: 2,
+      linkedFiles: 1,
+      pendingRollouts: [],
+      bridgeFailed: false
+    })
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+    const spec = runWslProcessMock.mock.calls[0]?.[0] as {
+      distro: string
+      loginPath: string
+      shell?: string
+      script: string
+      timeoutMs: number
+    }
+    expect(spec.distro).toBe('Ubuntu')
+    expect(spec.loginPath).toBe('none')
+    expect(spec.shell).toBe('bash')
+    expect(spec.timeoutMs).toBe(30_000)
+    expect(runWslProcessMock.mock.calls[0]?.[0]).toHaveProperty('maxOutputBytes', 64 * 1024 * 1024)
+    expect(spec.script).toContain(
+      "index_pending_root='/home/alice/.local/share/orca/codex-runtime-home/home/.orca-index-pending'"
+    )
 
-    const shellCommand = args[5]
+    const shellCommand = spec.script
     expect(shellCommand).toContain("source_sessions_root='/home/alice/.codex/sessions'")
     expect(shellCommand).toContain(
       "managed_sessions_root='/home/alice/.local/share/orca/codex-runtime-home/home/sessions'"
     )
-    expect(shellCommand).toContain(`find "\\$source_sessions_root" -type f -name '*.jsonl' -print0`)
-    expect(shellCommand).toContain('ln -- "\\$source_file" "\\$target_file"')
-    expect(shellCommand).toContain('if [ -e "\\$target_file" ] || [ -L "\\$target_file" ]; then')
+    expect(shellCommand).toContain(`find "$source_sessions_root" -type f -name '*.jsonl' -print0`)
+    expect(shellCommand).toContain('ln -- "$link_source" "$target_file"')
+    expect(shellCommand).toContain('if [ -e "$target_file" ] || [ -L "$target_file" ]; then')
     expect(shellCommand).not.toContain('ln -s')
-    expect(shellCommand).not.toContain('cp ')
+    expect(shellCommand).toContain('cp --')
     expect(shellCommand).not.toContain('sqlite')
   })
 
@@ -80,12 +91,19 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
       managedCodexHomePath: 'C:\\Users\\alice\\AppData\\Roaming\\orca\\codex-runtime-home\\home'
     })
 
-    expect(summary).toEqual({ scannedFiles: 0, linkedFiles: 0 })
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(summary).toEqual({
+      scannedFiles: 0,
+      linkedFiles: 0,
+      pendingRollouts: [],
+      bridgeFailed: false
+    })
+    expect(runWslProcessMock).not.toHaveBeenCalled()
   })
 
-  it('parses the summary after WSL profile stdout', async () => {
-    mockExecFileSuccess('Welcome to Ubuntu\nprofile output\n{"scannedFiles":4,"linkedFiles":3}\n')
+  it('parses the summary after leading stdout noise', async () => {
+    mockRunWslProcessSuccess(
+      'Welcome to Ubuntu\nprofile output\n{"scannedFiles":4,"linkedFiles":3}\n'
+    )
 
     const summary = await syncWslCodexSessionsIntoManagedHome({
       distro: 'Ubuntu',
@@ -94,11 +112,35 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
         '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
     })
 
-    expect(summary).toEqual({ scannedFiles: 4, linkedFiles: 3 })
+    expect(summary).toEqual({
+      scannedFiles: 4,
+      linkedFiles: 3,
+      pendingRollouts: [],
+      bridgeFailed: false
+    })
+  })
+
+  it('throws on a non-zero exit so the background wrapper logs and swallows it', async () => {
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 1,
+      stdout: '',
+      stderr: 'boom',
+      timedOut: false
+    })
+
+    await expect(
+      syncWslCodexSessionsIntoManagedHome({
+        distro: 'Ubuntu',
+        systemCodexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex',
+        managedCodexHomePath:
+          '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
+      })
+    ).rejects.toThrow('WSL codex session bridge failed')
   })
 
   it('coalesces duplicate background bridges for the same WSL target', async () => {
-    mockExecFileSuccess()
+    mockRunWslProcessSuccess()
     const target = {
       distro: 'Ubuntu',
       systemCodexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex',
@@ -106,12 +148,16 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
         '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
     }
 
-    const firstTask = startWslCodexSessionBridgeInBackground(target)
-    const secondTask = startWslCodexSessionBridgeInBackground(target)
+    const dependencies = {
+      openStateDb: vi.fn(async () => true),
+      healPending: vi.fn()
+    }
+    const firstTask = startWslCodexSessionBridgeInBackground(target, dependencies)
+    const secondTask = startWslCodexSessionBridgeInBackground(target, dependencies)
 
     expect(firstTask).toBe(secondTask)
     await firstTask
-    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -136,7 +182,9 @@ describe('resolveWslCodexSessionBridgeLinuxPaths', () => {
       })
     ).toEqual({
       systemSessionsRoot: '/home/alice/.codex/sessions',
-      managedSessionsRoot: '/home/alice/.local/share/orca/codex-runtime-home/home/sessions'
+      managedSessionsRoot: '/home/alice/.local/share/orca/codex-runtime-home/home/sessions',
+      managedHomePath: '/home/alice/.local/share/orca/codex-runtime-home/home',
+      indexPendingRoot: '/home/alice/.local/share/orca/codex-runtime-home/home/.orca-index-pending'
     })
   })
 })
@@ -155,14 +203,117 @@ describe('buildWslCodexSessionBridgeShellCommand', () => {
     expect(shellCommand).not.toContain('.sqlite')
   })
 
-  it('escapes Linux-side shell variable expansion for wsl.exe argv', () => {
+  it('keeps Linux-side shell variable expansion intact for the guest shell', () => {
     const shellCommand = buildWslCodexSessionBridgeShellCommand({
       systemSessionsRoot: '/home/alice/.codex/sessions',
       managedSessionsRoot: '/home/alice/.local/share/orca/codex-runtime-home/home/sessions'
     })
 
-    expect(shellCommand).toContain('\\$source_sessions_root')
-    expect(shellCommand).toContain('\\$source_file')
-    expect(shellCommand).toContain('\\$((scanned_files + 1))')
+    expect(shellCommand).toContain('$source_sessions_root')
+    expect(shellCommand).toContain('$source_file')
+    expect(shellCommand).toContain('$((scanned_files + 1))')
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'publishes a verified guest-side copy across filesystems',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-wsl-session-bridge-cross-fs-'))
+      const sourceSessionsRoot = join(root, 'legacy', 'sessions')
+      const managedSessionsRoot = join(root, 'managed', 'sessions')
+      const binDir = join(root, 'bin')
+      const relativePath = join('2026', '08', '26', 'retired.jsonl')
+      const sourcePath = join(sourceSessionsRoot, relativePath)
+      const targetPath = join(managedSessionsRoot, relativePath)
+      mkdirSync(join(sourcePath, '..'), { recursive: true })
+      mkdirSync(binDir)
+      writeFileSync(sourcePath, '{"session":"retired"}\n', 'utf-8')
+      const lnShimPath = join(binDir, 'ln')
+      writeFileSync(
+        lnShimPath,
+        `#!/bin/sh
+if [ "$2" = "$BRIDGE_SOURCE" ] && [ "$3" = "$BRIDGE_TARGET" ]; then
+  exit 1
+fi
+exec /bin/ln "$@"
+`
+      )
+      chmodSync(lnShimPath, 0o755)
+      const shellCommand = buildWslCodexSessionBridgeShellCommand({
+        systemSessionsRoot: sourceSessionsRoot,
+        managedSessionsRoot
+      })
+
+      try {
+        execFileSync('/bin/bash', ['-c', shellCommand], {
+          env: {
+            ...process.env,
+            BRIDGE_SOURCE: sourcePath,
+            BRIDGE_TARGET: targetPath,
+            PATH: `${binDir}:${process.env.PATH ?? ''}`
+          }
+        })
+        expect(readFileSync(targetPath, 'utf-8')).toBe('{"session":"retired"}\n')
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'leaves an existing copied session to its current writer',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-wsl-session-bridge-existing-'))
+      const sourceSessionsRoot = join(root, 'legacy', 'sessions')
+      const managedSessionsRoot = join(root, 'managed', 'sessions')
+      const relativePath = join('2026', '08', '26', 'retired.jsonl')
+      const sourcePath = join(sourceSessionsRoot, relativePath)
+      const targetPath = join(managedSessionsRoot, relativePath)
+      mkdirSync(join(sourcePath, '..'), { recursive: true })
+      mkdirSync(join(targetPath, '..'), { recursive: true })
+      writeFileSync(sourcePath, '{"session":"retired"}\n{"event":"legacy"}\n', 'utf-8')
+      writeFileSync(targetPath, '{"session":"retired"}\n', 'utf-8')
+      const shellCommand = buildWslCodexSessionBridgeShellCommand({
+        systemSessionsRoot: sourceSessionsRoot,
+        managedSessionsRoot
+      })
+
+      try {
+        execFileSync('/bin/bash', ['-c', shellCommand])
+        expect(readFileSync(targetPath, 'utf-8')).toBe('{"session":"retired"}\n')
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'fails in the guest shell when a missing session cannot be linked, then retries cleanly',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-wsl-session-bridge-'))
+      const sourceSessionsRoot = join(root, 'legacy', 'sessions')
+      const managedSessionsRoot = join(root, 'managed', 'sessions')
+      const relativePath = join('2026', '08', '26', 'retired.jsonl')
+      const sourcePath = join(sourceSessionsRoot, relativePath)
+      const blockingPath = join(managedSessionsRoot, '2026')
+      mkdirSync(join(sourcePath, '..'), { recursive: true })
+      mkdirSync(managedSessionsRoot, { recursive: true })
+      writeFileSync(sourcePath, '{"session":"retired"}\n', 'utf-8')
+      writeFileSync(blockingPath, 'not-a-directory\n', 'utf-8')
+      const shellCommand = buildWslCodexSessionBridgeShellCommand({
+        systemSessionsRoot: sourceSessionsRoot,
+        managedSessionsRoot
+      })
+
+      try {
+        expect(() => execFileSync('/bin/bash', ['-c', shellCommand])).toThrow()
+        rmSync(blockingPath)
+        execFileSync('/bin/bash', ['-c', shellCommand])
+        expect(readFileSync(join(managedSessionsRoot, relativePath), 'utf-8')).toBe(
+          '{"session":"retired"}\n'
+        )
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
 })

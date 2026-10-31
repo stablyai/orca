@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHubWorkItem, GitLabWorkItem, LinearIssue } from '../../../src/shared/types'
 import {
   buildGitHubLinkedWorkItem,
   buildGitLabLinkedWorkItem,
@@ -233,11 +232,8 @@ describe('resolveComposerBranchPick', () => {
       lastAutoName: '',
       worktreeBranches: ['refs/heads/feature']
     })
-    expect(pick.reuseEligibleBranch).toBeNull()
-    expect(pick.reuseSelectedBranch).toBe(false)
+    expect(pick.reuseEligibleBranch).toBe('feature')
+    expect(pick.reuseSelectedBranch).toBe(true)
     expect(pick.base.branchNameOverride).toBeUndefined()
   })
 })
-
-// Keep the exported type aliases referenced so the module surface stays covered.
-export type _Ref = [GitHubWorkItem, GitLabWorkItem, LinearIssue]

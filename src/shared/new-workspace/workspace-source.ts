@@ -1,5 +1,7 @@
-import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear-links'
-import type { FolderWorkspaceLinkedTask, JiraIssue, LinearIssue } from '../types'
+import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear/links'
+import type { FolderWorkspaceLinkedTask } from '../folder-workspace-types'
+import type { JiraIssue } from '../jira/jira-types'
+import type { LinearIssue } from '../linear/issue-types'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
@@ -118,8 +120,7 @@ export function buildGitLabWorkspaceSource(item: {
 export function getUsableLinearBranchName(
   branchName: string | null | undefined
 ): string | undefined {
-  // Why: only a non-blank normalized value can safely enter the exact git-ref
-  // override path; missing values must keep Orca's generated-name fallback.
+  // Only nonblank values enter exact Git-ref overrides; missing names retain generated fallback.
   return branchName?.trim() || undefined
 }
 
@@ -158,11 +159,13 @@ export function buildJiraWorkspaceSource(
 export function shouldApplyWorkspaceSourceAutoName(args: {
   currentName: string
   lastAutoName: string
+  lookupTextIsQuery?: boolean
 }): boolean {
   return (
     !args.currentName.trim() ||
     args.currentName === args.lastAutoName ||
-    isWorkItemLookupText(args.currentName)
+    // A selected source exposes a name field; its manual edits are no longer lookup queries.
+    (args.lookupTextIsQuery !== false && isWorkItemLookupText(args.currentName))
   )
 }
 

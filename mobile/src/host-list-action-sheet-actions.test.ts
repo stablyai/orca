@@ -1,11 +1,25 @@
-import { describe, expect, it, vi } from 'vitest'
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ActionSheetModal } from './components/ActionSheetModal'
 import { getHostListActionSheetActions } from './host-list-action-sheet-actions'
 import type { ConnectionState, HostProfile } from './transport/types'
 
+vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  Pressable: 'Pressable',
+  StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+  Text: 'Text',
+  View: 'View'
+}))
+vi.mock('./components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+
 vi.mock('lucide-react-native', () => ({
+  Activity: vi.fn(),
   Edit3: vi.fn(),
   PowerOff: vi.fn(),
-  RefreshCw: vi.fn()
+  RefreshCw: vi.fn(),
+  Trash2: vi.fn()
 }))
 
 const HOST: HostProfile = {
@@ -22,6 +36,7 @@ function build(overrides: { state?: ConnectionState; hasEverConnected?: boolean 
     onDismiss: vi.fn(),
     onReconnect: vi.fn(),
     onDisconnect: vi.fn(),
+    onDiagnostics: vi.fn(),
     onEdit: vi.fn(),
     onRemove: vi.fn()
   }
@@ -34,14 +49,57 @@ function build(overrides: { state?: ConnectionState; hasEverConnected?: boolean 
   return { actions, spies }
 }
 
+let renderer: ReactTestRenderer | null = null
+
+afterEach(() => {
+  act(() => renderer?.unmount())
+  renderer = null
+})
+
 describe('getHostListActionSheetActions', () => {
-  // Why: both open a second drawer. Presenting one while this sheet's native
-  // Modal is still up freezes the whole screen on iOS — issue #8791.
-  it.each(['Edit host', 'Remove'])('defers %s until the action sheet has closed', (label) => {
-    const { actions } = build()
-    expect(actions.find((action) => action.label === label)).toMatchObject({
-      closeBeforePress: true
+  it.each([
+    ['Network diagnostics', 'onDiagnostics'],
+    ['Edit host', 'onEdit'],
+    ['Remove', 'onRemove']
+  ] as const)('delivers %s only after the action sheet closes', (label, callback) => {
+    const { actions, spies } = build()
+    const held: { tree: ReactTestRenderer | null } = { tree: null }
+    act(() => {
+      held.tree = create(
+        createElement(ActionSheetModal, {
+          visible: true,
+          actions,
+          onClose: spies.onDismiss
+        })
+      )
+      renderer = held.tree
     })
+    const rendered = held.tree
+    if (!rendered) {
+      throw new Error('Action sheet did not render')
+    }
+    const button = rendered.root
+      .findAll((node) => String(node.type) === 'Pressable')
+      .find((node) =>
+        node
+          .findAll((text) => String(text.type) === 'Text')
+          .some((text) => text.props.children === label)
+      )
+    if (!button) {
+      throw new Error(`Missing action ${label}`)
+    }
+    act(() => button.props.onPress())
+    expect(spies.onDismiss).toHaveBeenCalledOnce()
+    expect(spies.onDiagnostics).not.toHaveBeenCalled()
+    expect(spies.onEdit).not.toHaveBeenCalled()
+    expect(spies.onRemove).not.toHaveBeenCalled()
+
+    const closed = rendered.root.find((node) => String(node.type) === 'BottomDrawer').props
+      .onAfterClose
+    act(() => closed())
+    expect(spies[callback]).toHaveBeenCalledExactlyOnceWith(label === 'Remove' ? HOST : HOST.id)
+    act(() => closed())
+    expect(spies[callback]).toHaveBeenCalledOnce()
   })
 
   it('leaves the in-place actions undeferred so they fire on tap', () => {
@@ -53,27 +111,17 @@ describe('getHostListActionSheetActions', () => {
     expect(spies.onDismiss).toHaveBeenCalled()
   })
 
-  it('hands Remove the whole host so the confirm sheet can name it', () => {
-    const { actions, spies } = build()
-    actions.find((action) => action.label === 'Remove')?.onPress()
-    expect(spies.onRemove).toHaveBeenCalledWith(HOST)
-  })
-
-  it('routes Edit host to the edit screen', () => {
-    const { actions, spies } = build()
-    actions.find((action) => action.label === 'Edit host')?.onPress()
-    expect(spies.onEdit).toHaveBeenCalledWith(HOST.id)
-  })
-
   it('offers Disconnect only while the socket is live', () => {
     expect(build({ state: 'reconnecting' }).actions.map((action) => action.label)).toEqual([
       'Reconnect',
       'Disconnect',
+      'Network diagnostics',
       'Edit host',
       'Remove'
     ])
     expect(build({ state: 'disconnected' }).actions.map((action) => action.label)).toEqual([
       'Connect',
+      'Network diagnostics',
       'Edit host',
       'Remove'
     ])
@@ -93,6 +141,7 @@ describe('getHostListActionSheetActions', () => {
         onDismiss: vi.fn(),
         onReconnect: vi.fn(),
         onDisconnect: vi.fn(),
+        onDiagnostics: vi.fn(),
         onEdit: vi.fn(),
         onRemove: vi.fn()
       })

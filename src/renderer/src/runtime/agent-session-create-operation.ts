@@ -1,10 +1,6 @@
-import type {
-  AgentLaunchPreferences,
-  RuntimeCreateAgentSessionRequest
-} from '../../../shared/agent-session-host-authority'
-import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import type { RuntimeCreateAgentSessionRequest } from '../../../shared/agent-session-host-authority'
 import { createAgentSessionOperationId } from './agent-session-operation-id'
-import { RuntimeRpcCallError } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 
 const MAX_AMBIGUOUS_CREATE_ATTEMPTS = 2
 
@@ -14,8 +10,7 @@ export type AgentSessionCreateOperation = {
 }
 
 function isAmbiguousCreateFailure(error: unknown): boolean {
-  // Why: an RPC failure proves the host answered; only transport loss leaves
-  // creation unknown and is safe to replay under the same operation ID.
+  // RPC failure proves the host answered; only transport loss leaves creation unknown and replayable under the same operation ID.
   return (
     !(error instanceof RuntimeRpcCallError) &&
     !(error instanceof Error && error.name === 'AbortError')
@@ -41,27 +36,6 @@ export function createAgentSessionCreateOperation(): AgentSessionCreateOperation
       throw lastError
     }
   }
-}
-
-export function toAgentLaunchPreferences(
-  sessionOptions: Record<string, SessionOptionValue> | null | undefined
-): AgentLaunchPreferences | undefined {
-  if (!sessionOptions) {
-    return undefined
-  }
-  const readString = (key: keyof AgentLaunchPreferences): string | undefined => {
-    const value = sessionOptions[key]
-    return typeof value === 'string' && value.trim() ? value.trim() : undefined
-  }
-  const model = readString('model')
-  const effort = readString('effort')
-  const mode = readString('mode')
-  const preferences: AgentLaunchPreferences = {
-    ...(model ? { model } : {}),
-    ...(effort ? { effort } : {}),
-    ...(mode ? { mode } : {})
-  }
-  return Object.keys(preferences).length > 0 ? preferences : undefined
 }
 
 export function withAgentSessionCreateOperationId(

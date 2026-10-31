@@ -1,11 +1,14 @@
-// Why: the relay resume lease expires; the phone must proactively re-resume a
-// little before the deadline (and retry shortly if a forced rotation didn't land)
-// so the session never lapses. Owns the single lease/rotation timer slot.
+import type { ScheduleTimer } from './timer-scheduler'
+
+// Refresh resume credentials before expiry and retry missed rotations through one timer slot.
 const LEASE_ROTATION_MARGIN_MS = 30_000
+// Clamp both ends: the floor prevents rotation churn and the ceiling avoids setTimeout int32 overflow on long leases.
+const LEASE_ROTATION_MIN_DELAY_MS = 60_000
+const LEASE_ROTATION_MAX_DELAY_MS = 6 * 60 * 60 * 1000
 
 export type RelayLeaseRotationDependencies = {
   now: () => number
-  setTimer: typeof setTimeout
+  setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
 }
 
@@ -17,21 +20,22 @@ export class RelayLeaseRotationTimer {
     private readonly onRotate: () => void
   ) {}
 
-  // Arm rotation a margin before the lease deadline. No-op with no deadline.
   scheduleFromLease(leaseExpiresAt: number | null): void {
     this.clear()
     if (!leaseExpiresAt) {
       return
     }
-    const delay = Math.max(
-      1000,
-      leaseExpiresAt - this.dependencies.now() - LEASE_ROTATION_MARGIN_MS
+    const delay = Math.min(
+      LEASE_ROTATION_MAX_DELAY_MS,
+      Math.max(
+        LEASE_ROTATION_MIN_DELAY_MS,
+        leaseExpiresAt - this.dependencies.now() - LEASE_ROTATION_MARGIN_MS
+      )
     )
     this.arm(delay)
   }
 
-  // Re-arm a short retry when a forced rotation's recovery did not complete.
-  // Ignored while a timer is already pending so retries never stack.
+  // Keep one retry timer after missed rotation; ignore requests while one is pending.
   armRetry(delayMs: number | null): void {
     if (delayMs == null || this.timer) {
       return

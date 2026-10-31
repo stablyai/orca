@@ -1,6 +1,13 @@
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { TerminalPaneLayoutNode } from '../../../shared/types'
+import type { HarnessStoreState } from './ipc-events-harness-store-state'
+import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
+
+export {
+  createHarnessStoreState,
+  type HarnessStoreState,
+  type HarnessTab
+} from './ipc-events-harness-store-state'
 
 export type CreateTerminalRequest = {
   requestId?: string
@@ -26,87 +33,11 @@ export type RequestTerminalCreateRequest = {
   surfaceOwner?: boolean
 }
 
-export type HarnessTab = { id: string; ptyId?: string | null; title?: string }
-
-export type HarnessStoreState = {
-  tabsByWorktree: Record<string, HarnessTab[]>
-  ptyIdsByTabId: Record<string, string[]>
-  terminalLayoutsByTabId: Record<
-    string,
-    { root?: TerminalPaneLayoutNode; ptyIdsByLeafId?: Record<string, string> }
-  >
-  [key: string]: unknown
-}
-
-/** Store surface useIpcEvents touches at mount plus the terminal-reveal path. */
-export function createHarnessStoreState(
-  overrides: Partial<HarnessStoreState> & Pick<HarnessStoreState, 'tabsByWorktree'>
-): HarnessStoreState {
-  const state: HarnessStoreState = {
-    createTab: vi.fn(() => ({ id: 'tab-minted' })),
-    setActiveView: vi.fn(),
-    setActiveWorktree: vi.fn(),
-    markWorktreeVisited: vi.fn(),
-    recordWorktreeVisit: vi.fn(),
-    isNavigatingHistory: false,
-    setActiveTabType: vi.fn(),
-    setActiveTab: vi.fn(),
-    revealWorktreeInSidebar: vi.fn(),
-    setTabCustomTitle: vi.fn(),
-    queueTabStartupCommand: vi.fn(),
-    registerAgentLaunchConfig: vi.fn(),
-    clearAgentLaunchConfig: vi.fn(),
-    updateTabPtyId: vi.fn(),
-    setTabLayout: vi.fn(),
-    setTabBarOrder: vi.fn(),
-    clearTabPtyId: vi.fn(),
-    setUpdateStatus: vi.fn(),
-    fetchRepos: vi.fn(),
-    fetchWorktrees: vi.fn(),
-    closeModal: vi.fn(),
-    openModal: vi.fn(),
-    setActiveRepo: vi.fn(),
-    setIsFullScreen: vi.fn(),
-    updateBrowserPageState: vi.fn(),
-    setEditorFontZoomLevel: vi.fn(),
-    setRateLimitsFromPush: vi.fn(),
-    setSshConnectionState: vi.fn(),
-    setSshTargetLabels: vi.fn(),
-    setPortForwards: vi.fn(),
-    clearPortForwards: vi.fn(),
-    setDetectedPorts: vi.fn(),
-    enqueueSshCredentialRequest: vi.fn(),
-    removeSshCredentialRequest: vi.fn(),
-    ptyIdsByTabId: {},
-    terminalLayoutsByTabId: {},
-    folderWorkspaces: [],
-    projectGroups: [],
-    repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }],
-    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
-    openFiles: [],
-    browserTabsByWorktree: {},
-    tabBarOrderByWorktree: {},
-    activeModal: null,
-    activeWorktreeId: 'wt-1',
-    activeView: 'terminal',
-    activeTabType: 'terminal',
-    editorFontZoomLevel: 0,
-    settings: {
-      terminalFontSize: 13,
-      experimentalNativeChat: false,
-      openAgentTabsInChatByDefault: false,
-      activeRuntimeEnvironmentId: undefined
-    },
-    ...overrides
-  }
-  if (overrides.setTabLayout === undefined) {
-    state.setTabLayout = vi.fn(
-      (tabId: string, layout: HarnessStoreState['terminalLayoutsByTabId'][string]) => {
-        state.terminalLayoutsByTabId[tabId] = layout
-      }
-    )
-  }
-  return state
+/** A notification click sets userInitiated; a chat-completion courtesy reveal leaves it off. */
+export type FocusEditorTabRequest = {
+  tabId: string
+  worktreeId: string
+  userInitiated?: boolean
 }
 
 /** Subscription no-ops for every listener useIpcEvents attaches beyond the ones under test. */
@@ -121,19 +52,47 @@ export type IpcEventsHarness = {
   useIpcEvents: () => void
   createTerminal: (request: CreateTerminalRequest) => void
   requestTerminalCreate: (request: RequestTerminalCreateRequest) => void
+  focusEditorTab: (request: FocusEditorTabRequest) => void
   replyTerminalCreate: ReturnType<typeof vi.fn>
+  jumpToWorktreeIndex: (index: number) => void
+  jumpToTabIndex: (index: number) => void
+  navigationUpdate: (event: { browserPageId: string; url: string; title: string }) => void
+  certificateFailureChanged: (event: { browserPageId: string; failure: unknown }) => void
+  clientHostedBrowserRowsChanged: (event: ClientHostedBrowserRowsEvent) => void
+  settleClientHostedBrowserRowsSnapshot: () => Promise<void>
+  activateAndRevealWorkspace: ReturnType<typeof vi.fn>
 }
 
-/**
- * Loads useIpcEvents against a stubbed preload API and returns a driver for the
- * create-terminal IPC, so reveal/adoption behavior is asserted through the hook.
- */
+export type IpcEventsHarnessOptions = {
+  visibleWorktreeIds?: string[]
+  visibleWorktreeTargets?: { id: string; executionHostId?: 'local' | `ssh:${string}` }[]
+  clientHostedBrowserRowsSnapshot?: ClientHostedBrowserRowsEvent[]
+  clientHostedBrowserRowsSnapshotError?: Error
+  /** Extra `window.api.browser` members, e.g. a listener capture for a channel under test. */
+  browserApi?: Record<string, unknown>
+}
+
 export async function loadIpcEventsHarness(
-  storeState: HarnessStoreState
+  storeState: HarnessStoreState,
+  options: IpcEventsHarnessOptions = {}
 ): Promise<IpcEventsHarness> {
   const replyTerminalCreate = vi.fn()
+  const activateAndRevealWorkspace = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
+  let focusEditorTabListener: ((request: FocusEditorTabRequest) => void) | null = null
+  let navigationUpdateListener:
+    | ((event: { browserPageId: string; url: string; title: string }) => void)
+    | null = null
+  let certificateFailureListener:
+    | ((event: { browserPageId: string; failure: unknown }) => void)
+    | null = null
+  let clientHostedBrowserRowsListener: ((event: ClientHostedBrowserRowsEvent) => void) | null = null
+  let resolveClientHostedBrowserRowsSnapshot: (() => void) | null = null
+  const clientHostedBrowserRowsSnapshotGate = new Promise<void>((resolve) => {
+    resolveClientHostedBrowserRowsSnapshot = resolve
+  })
+  const indexJumpListeners = new Map<string, (index: number) => void>()
 
   vi.resetModules()
   vi.unstubAllGlobals()
@@ -148,34 +107,53 @@ export async function loadIpcEventsHarness(
   vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
   vi.doMock('@/lib/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
+    activateAndRevealWorkspace,
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
-  vi.doMock('@/components/sidebar/visible-worktrees', () => ({ getVisibleWorktreeIds: () => [] }))
+  vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    getVisibleWorktreeIds: () => options.visibleWorktreeIds ?? [],
+    getVisibleWorktreeShortcutTargets: () =>
+      options.visibleWorktreeTargets ?? (options.visibleWorktreeIds ?? []).map((id) => ({ id }))
+  }))
   vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
     createFloatingWorkspaceTerminalTab: vi.fn(),
-    isEmptyFloatingWorkspacePanelVisible: () => false,
     isFloatingWorkspacePanelFocused: () => false
   }))
-  vi.doMock('@/runtime/web-runtime-session', () => ({
+  vi.doMock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
     activateWebRuntimeSessionTab: vi.fn(),
-    closeWebRuntimeSessionTab: vi.fn(),
-    createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false),
-    createWebRuntimeSessionTerminal: vi.fn().mockResolvedValue({ status: 'failed', message: '' }),
+    closeWebRuntimeSessionTab: vi.fn()
+  }))
+  vi.doMock('@/runtime/web-runtime-browser-creation', () => ({
+    createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false)
+  }))
+  vi.doMock('@/runtime/web-runtime-terminal-creation', () => ({
+    createWebRuntimeSessionTerminal: vi.fn().mockResolvedValue({ status: 'failed', message: '' })
+  }))
+  vi.doMock('@/runtime/web-runtime-session-environment', () => ({
     isWebRuntimeSessionActive: vi.fn(() => false)
   }))
   vi.doMock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
-  vi.doMock('@/runtime/sync-runtime-graph', () => ({
+  vi.doMock('@/runtime/mounted-terminal-tab-registry', () => ({
     focusRuntimeTerminalSurface: vi.fn(() => false)
   }))
   vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
 
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
-    api: new Proxy(
+    api: new Proxy<Record<string, unknown>>(
       {
+        runtimeEnvironments: createApiNamespaceStub({
+          getStatusSnapshots: () => Promise.resolve([]),
+          subscribe: async () => ({ unsubscribe: () => {} })
+        }),
+        legacyRelayBridge: createApiNamespaceStub({
+          listPanes: () => Promise.resolve([])
+        }),
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,
           consumePendingOpenSettings: () => Promise.resolve(false),
+          consumePendingSkillShare: () => Promise.resolve(null),
+          consumePendingPluginInstallLink: () => Promise.resolve(null),
           set: vi.fn(),
           replyTabCreate: vi.fn(),
           replyTabClose: vi.fn(),
@@ -185,8 +163,23 @@ export async function loadIpcEventsHarness(
             createTerminalListener = listener
             return () => {}
           },
+          onLaunchRecipe: () => () => {},
           onRequestTerminalCreate: (listener: (request: RequestTerminalCreateRequest) => void) => {
             requestTerminalCreateListener = listener
+            return () => {}
+          },
+          onFocusEditorTab: (
+            listener: (request: { tabId: string; worktreeId: string }) => void
+          ) => {
+            focusEditorTabListener = listener
+            return () => {}
+          },
+          onJumpToWorktreeIndex: (listener: (index: number) => void) => {
+            indexJumpListeners.set('worktree', listener)
+            return () => {}
+          },
+          onJumpToTabIndex: (listener: (index: number) => void) => {
+            indexJumpListeners.set('tab', listener)
             return () => {}
           }
         }),
@@ -200,13 +193,27 @@ export async function loadIpcEventsHarness(
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: (
+            listener: (event: ClientHostedBrowserRowsEvent) => void
+          ) => {
+            clientHostedBrowserRowsListener = listener
+            return () => {}
+          },
+          getClientHostedBrowserRows: async () => {
+            await clientHostedBrowserRowsSnapshotGate
+            if (options.clientHostedBrowserRowsSnapshotError) {
+              throw options.clientHostedBrowserRowsSnapshotError
+            }
+            return options.clientHostedBrowserRowsSnapshot ?? []
+          }
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
-          listRemovedTargetLabels: () => Promise.resolve([]),
+          listRemovedTargetLabels: () => Promise.resolve({}),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
@@ -219,11 +226,25 @@ export async function loadIpcEventsHarness(
           onStatus: () => () => {},
           onClearDismissal: () => () => {}
         },
+        browser: createApiNamespaceStub({
+          ...options.browserApi,
+          onNavigationUpdate: (
+            listener: (event: { browserPageId: string; url: string; title: string }) => void
+          ) => {
+            navigationUpdateListener = listener
+            return () => {}
+          },
+          onCertificateFailureChanged: (
+            listener: (event: { browserPageId: string; failure: unknown }) => void
+          ) => {
+            certificateFailureListener = listener
+            return () => {}
+          }
+        }),
         mobile: createApiNamespaceStub({
           consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false)
-        }),
-        remoteWorkspace: createApiNamespaceStub({ clientId: () => Promise.resolve(null) })
-      } as Record<string, unknown>,
+        })
+      },
       { get: (target, prop: string) => target[prop] ?? createApiNamespaceStub() }
     )
   })
@@ -243,6 +264,51 @@ export async function loadIpcEventsHarness(
       }
       requestTerminalCreateListener(request)
     },
-    replyTerminalCreate
+    focusEditorTab: (request) => {
+      if (typeof focusEditorTabListener !== 'function') {
+        throw new Error('Expected the focus-editor-tab listener to be registered')
+      }
+      focusEditorTabListener(request)
+    },
+    replyTerminalCreate,
+    jumpToWorktreeIndex: (index) => fireIndexJump(indexJumpListeners, 'worktree', index),
+    jumpToTabIndex: (index) => fireIndexJump(indexJumpListeners, 'tab', index),
+    navigationUpdate: (event) => {
+      if (typeof navigationUpdateListener !== 'function') {
+        throw new Error('Expected the browser navigation listener to be registered')
+      }
+      navigationUpdateListener(event)
+    },
+    certificateFailureChanged: (event) => {
+      if (typeof certificateFailureListener !== 'function') {
+        throw new Error('Expected the browser certificate-failure listener to be registered')
+      }
+      certificateFailureListener(event)
+    },
+    clientHostedBrowserRowsChanged: (event) => {
+      if (typeof clientHostedBrowserRowsListener !== 'function') {
+        throw new Error('Expected the client-hosted browser rows listener to be registered')
+      }
+      clientHostedBrowserRowsListener(event)
+    },
+    settleClientHostedBrowserRowsSnapshot: async () => {
+      resolveClientHostedBrowserRowsSnapshot?.()
+      await clientHostedBrowserRowsSnapshotGate
+      await Promise.resolve()
+      await Promise.resolve()
+    },
+    activateAndRevealWorkspace
   }
+}
+
+function fireIndexJump(
+  listeners: Map<string, (index: number) => void>,
+  kind: string,
+  index: number
+): void {
+  const listener = listeners.get(kind)
+  if (!listener) {
+    throw new Error(`Expected the ${kind}-index jump listener to be registered`)
+  }
+  listener(index)
 }

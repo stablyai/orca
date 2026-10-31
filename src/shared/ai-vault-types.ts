@@ -1,58 +1,94 @@
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
-import {
-  commandSeparator,
-  quoteStartupArg,
-  type AgentStartupShell
-} from './tui-agent-startup-shell'
-import type { TuiAgent } from './types'
+import type { AiVaultScanIssueText } from './ai-vault-scan-issue-copy'
+import type { TuiAgent } from './tui-agent'
+import type { AgentSessionAccountHome } from './agent-session-account-home'
 import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 
 export const AI_VAULT_AGENTS = [
   'claude',
+  'codebuddy',
+  'qoder',
   'codex',
   'hermes',
   'pi',
   'omp',
+  'prime-agent',
   'cursor',
   'gemini',
   'antigravity',
   'rovo',
   'copilot',
   'opencode',
+  'opencode2',
+  'zcode',
   'grok',
   'openclaw',
   'devin',
   'droid',
-  'kimi'
+  'cline',
+  'kimi',
+  'muse',
+  'jcode',
+  'kiro'
 ] as const satisfies readonly TuiAgent[]
 
-// Why: the aiVault.listSessions RPC schema CLAMPS scopePaths to this bound
-// (safe: scope paths only widen discovery). Producer-side caps against the same
-// value are optional belt-and-braces, not required for the request to succeed.
+// RPC clamps scopePaths to this bound because paths only widen discovery; matching producer-side caps are optional.
 export const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
 
+// IPC drops Error.name; recognize cancelled scans by this shared message literal.
+export const AI_VAULT_SCAN_CANCELLED_MESSAGE = 'Agent Session History scan was cancelled'
+
+export function isAiVaultScanCancelledError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === 'AbortError' || error.message.includes(AI_VAULT_SCAN_CANCELLED_MESSAGE))
+  )
+}
+
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
+
+export function isAiVaultAgent(value: unknown): value is AiVaultAgent {
+  return AI_VAULT_AGENTS.some((agent) => agent === value)
+}
+
+/** The agents Session History may list `agent`'s sessions under. */
+export function aiVaultHistoryAgents(agent: AiVaultAgent): AiVaultAgent[] {
+  // One OpenCode store holds both versions' sessions, and the scanner labels current ones `opencode2`.
+  return agent === 'opencode' || agent === 'opencode2' ? ['opencode', 'opencode2'] : [agent]
+}
+
 export type AiVaultScope = 'workspace' | 'project' | 'all'
 export type AiVaultSort = 'updated' | 'created'
+export const AI_VAULT_SEARCH_SORTS = ['relevance', 'newest'] as const
+/** Order of full-text search results; the list above has its own `AiVaultSort`. */
+export type AiVaultSearchSort = (typeof AI_VAULT_SEARCH_SORTS)[number]
 export type AiVaultGroup = 'project' | 'folder' | 'agent'
 
 export const AI_VAULT_AGENT_LABELS = {
   claude: 'Claude',
+  codebuddy: 'CodeBuddy',
+  qoder: 'Qoder',
   codex: 'Codex',
   hermes: 'Hermes',
   pi: 'Pi',
   omp: 'OMP',
+  'prime-agent': 'Prime Agent',
   cursor: 'Cursor',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
   rovo: 'Rovo Dev',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
+  opencode2: 'OpenCode 2',
+  zcode: 'ZCode',
   grok: 'Grok',
   openclaw: 'OpenClaw',
   devin: 'Devin',
   droid: 'Droid',
-  kimi: 'Kimi'
+  cline: 'Cline',
+  kimi: 'Kimi',
+  muse: 'Muse',
+  jcode: 'Jcode',
+  kiro: 'Kiro'
 } as const satisfies Record<AiVaultAgent, string>
 
 export type AiVaultSessionPreviewMessage = {
@@ -61,12 +97,10 @@ export type AiVaultSessionPreviewMessage = {
   timestamp: string | null
 }
 
-// Terminal statuses come from <task-notification> records in the parent
-// transcript; 'running' is inferred from recent transcript activity.
+// Parent task-notification records report terminal status; recent transcript activity implies running.
 export type AiVaultSubagentRunStatus = 'running' | 'completed' | 'failed' | 'stopped'
 
-// Set only on Task subagent transcript rows (listed on demand under their
-// parent session); null for every top-level scanned session.
+// Only on on-demand Task child rows; null for top-level scans.
 export type AiVaultSessionSubagentInfo = {
   parentSessionId: string
   agentType: string | null
@@ -74,6 +108,9 @@ export type AiVaultSessionSubagentInfo = {
 }
 
 export type AiVaultSession = {
+  /** Recorded account home; null proves System default, absent means unknown. */
+  accountHome?: AgentSessionAccountHome | null
+  accountWslDistro?: string | null
   id: string
   executionHostId: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
@@ -81,6 +118,8 @@ export type AiVaultSession = {
   sessionId: string
   title: string
   cwd: string | null
+  /** Host-proven spellings of `cwd` for matching scopes and resume targets; launch paths remain separate. */
+  cwdAliases?: string[]
   branch: string | null
   model: string | null
   filePath: string
@@ -91,23 +130,27 @@ export type AiVaultSession = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
-  /**
-   * Full first non-injected user prompt. List scans omit this (payload/perf);
-   * populated only by on-demand `aiVault.getFirstUserPrompt` re-parses for copy.
-   */
+  /** The opening ask fell outside the newest-N window; first-prompt readers must not search the surviving preview. */
+  previewMessagesTruncated?: boolean
+  /** Bounded opening-prompt identity for Antigravity history joins; never a rolling preview. */
+  antigravityOpeningPrompt?: { hash: string; timestamp: string | null }
+  /** Full first non-injected prompt only on on-demand getFirstUserPrompt reparses; list scans omit it for payload/cost. */
   firstUserPrompt?: string | null
   /** Latest provider-authenticated user prompt; absent when the transcript has no trustworthy signal. */
   lastUserPrompt?: string | null
-  // Recoverable signal for sessions whose conversation transcript persisted zero
-  // user/assistant turns: queued (never-flushed) prompts survive even when the
-  // main conversation was lost.
+  // Queued unflushed prompts preserve recovery evidence even when conversation turns were lost.
   queuedMessageCount: number
-  // Number of Task subagent transcripts stored beside this session; always 0
-  // for agents that don't materialize subagent transcripts. Doubles as the
-  // recoverable signal for zero-turn sessions.
+  // Task transcript count doubles as zero-turn recovery evidence; zero for agents without child transcripts.
   subagentTranscriptCount: number
   resumeCommand: string
   subagent: AiVaultSessionSubagentInfo | null
+  /** Present only when the negotiated client can open the native structured owner. */
+  structuredSession?: {
+    sessionId: string
+    workspaceId: string
+  }
+  /** The client's pairing with the listing server when it listed this row; host mutations are fenced to it. */
+  hostPairingRevision?: number
 }
 
 export type AiVaultSubagentListArgs = {
@@ -138,10 +181,7 @@ export type AiVaultFirstUserPromptResult = {
   prompt: string | null
 }
 
-// A session is only offered for normal resume when its transcript actually holds
-// conversation turns; resuming a zero-turn transcript lands in an empty session.
-// Conversation previews count as evidence too: some parsers (e.g. Grok, OpenCode
-// fallback schemas) only learn the turn count from metadata that may be absent.
+// Offer normal resume only with real conversation evidence. Count previews too when parser metadata lacks turns; zero-turn files otherwise reopen empty.
 export function isAiVaultSessionResumableContent(
   session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>
 ): boolean {
@@ -159,8 +199,7 @@ export function aiVaultSessionRecoverableSignalCount(
   return Math.max(0, session.queuedMessageCount) + Math.max(0, session.subagentTranscriptCount)
 }
 
-// Zero-turn transcript that still carries recoverable content (queued prompts
-// and/or subagent transcripts). Surfaced distinctly instead of hidden as empty.
+// Show zero-turn queued/subagent recovery content distinctly instead of hiding it as empty.
 export function isAiVaultSessionRecoverableEmpty(
   session: Pick<
     AiVaultSession,
@@ -175,214 +214,39 @@ export function isAiVaultSessionRecoverableEmpty(
 export type AiVaultScanIssue = {
   executionHostId?: ExecutionHostId
   agent: AiVaultAgent
+  // 'notice' rows are scanner commentary (issue-list overflow), never a failure.
+  kind?: 'host' | 'scope' | 'notice'
   path: string
   message: string
-}
+} & Omit<AiVaultScanIssueText, 'message'>
 
 export type AiVaultListArgs = {
+  /** Opts a selected runtime-host refresh into content-conditional replies. */
+  afterFingerprint?: string | null
+  /** Opt-in promises this client starts IDE history in a new CLI conversation. */
+  includeAntigravityIdeSessions?: boolean
   limit?: number
+  unlimited?: boolean
   force?: boolean
-  // Active workspace/project paths. The global result is recency-capped, so these
-  // guarantee a scoped view still surfaces its own (possibly older) sessions.
+  // Scope paths preserve older relevant sessions outside the globally recency-capped result.
   scopePaths?: readonly string[]
   executionHostScope?: ExecutionHostScope
+  requestToken?: string
 }
 
 export type AiVaultListResult = {
+  /** Local scan entry that produced this result; absent for remote and merged results. */
+  scanId?: string
+  fingerprint?: string
+  /** Requires the caller to reuse the exact previously received body. */
+  unchanged?: true
   sessions: AiVaultSession[]
   issues: AiVaultScanIssue[]
   scannedAt: string
-}
-
-export function buildAiVaultResumeCommand(args: {
-  agent: AiVaultAgent
-  sessionId: string
-  cwd: string | null
-  platform: NodeJS.Platform
-  commandOverride?: string | null
-  codexHome?: string | null
-  resumeFilePath?: string | null
-  shell?: AgentStartupShell
-}): string {
-  const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath, shell } =
-    args
-  const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
-  // Why: OMP's `--resume` accepts an absolute transcript path, which resolves
-  // regardless of which session-dir root (custom OMP_CODING_AGENT_DIR / WSL
-  // home) the file was discovered under, where an id-prefix lookup scoped to
-  // the default store would miss it. Falls back to the id if no path is known.
-  const resumeTarget = agent === 'omp' && resumeFilePath?.trim() ? resumeFilePath.trim() : sessionId
-  const sessionArg =
-    shell === 'cmd'
-      ? quoteWindowsCmdArg(resumeTarget)
-      : shell
-        ? quoteStartupArg(resumeTarget, shell)
-        : quoteShellArg(resumeTarget, platform)
-  const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg)
-
-  return buildAiVaultResumeShellCommand({
-    resumeCommand,
-    cwd,
-    platform,
-    codexHome,
-    shell
-  })
-}
-
-export function buildAiVaultResumeShellCommand(args: {
-  resumeCommand: string
-  cwd: string | null
-  platform: NodeJS.Platform
-  codexHome?: string | null
-  // Why: the QUEUED resume command is typed into the live tab shell, so its
-  // cd/env prefix must match that shell. Shell-less persisted commands keep the
-  // legacy self-contained `cmd /d /s /c` wrapper.
-  shell?: AgentStartupShell
-}): string {
-  const { cwd, platform, codexHome, shell } = args
-
-  // Why: shell-aware commands are parsed by a known running shell, while
-  // shell-less persisted commands keep the legacy self-contained cmd wrapper.
-  if (platform === 'win32' && shell && shell !== 'cmd') {
-    return buildResumeShellCommandForShell({
-      resumeCommand: args.resumeCommand,
-      cwd,
-      codexHome: codexHome?.trim() || null,
-      shell
-    })
-  }
-
-  const resumeCommand = `${codexHomeEnvPrefix(codexHome?.trim() || null, platform)}${
-    args.resumeCommand
-  }`
-  if (platform === 'win32' && shell === 'cmd') {
-    // Why: an interactive cmd splits the doubled quotes required by a nested
-    // `cmd /s /c` wrapper, so queued commands must use direct cmd syntax.
-    return cwd ? `cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}` : resumeCommand
-  }
-  if (!cwd) {
-    return resumeCommand
-  }
-
-  if (platform === 'win32') {
-    const inner = `cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}`
-    return `cmd /d /s /c ${quoteWindowsCmdArg(inner)}`
-  }
-
-  return `cd ${quoteShellArg(cwd, platform)} && ${resumeCommand}`
-}
-
-function buildResumeShellCommandForShell(args: {
-  resumeCommand: string
-  cwd: string | null
-  codexHome: string | null
-  shell: Exclude<AgentStartupShell, 'cmd'>
-}): string {
-  const { cwd, codexHome, shell } = args
-  if (shell === 'posix') {
-    // Why: git-bash on a Windows host runs a POSIX shell, so reuse the same
-    // inline-env + `cd '<cwd>'` prefix as the non-Windows path.
-    const envPrefix = codexHome ? `CODEX_HOME=${quoteStartupArg(codexHome, shell)} ` : ''
-    const command = `${envPrefix}${args.resumeCommand}`
-    return cwd ? `cd ${quoteStartupArg(cwd, shell)} && ${command}` : command
-  }
-
-  const separator = commandSeparator(shell)
-  const segments: string[] = []
-  if (cwd) {
-    segments.push(`Set-Location -LiteralPath ${quoteStartupArg(cwd, shell)}`)
-  }
-  if (codexHome) {
-    segments.push(`$env:CODEX_HOME=${quoteStartupArg(codexHome, shell)}`)
-  }
-  segments.push(args.resumeCommand)
-  return segments.join(separator)
-}
-
-// Why: a bare real-home resume carries no CODEX_HOME prefix, so every surface
-// that spawns the pane must drop account-routed or daemon-inherited Codex
-// homes from its env, not only patch a sparse env on top.
-export function realHomeCodexResumeEnvDeletion(
-  session: Pick<AiVaultSession, 'agent' | 'codexHome'>
-): { envToDelete: string[] } | Record<string, never> {
-  if (session.agent !== 'codex' || session.codexHome !== null) {
-    return {}
-  }
-  return { envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] }
+  /** Set only by the desktop IPC boundary: this scan was superseded, so its empty body means "nothing to apply". */
+  cancelled?: true
 }
 
 export function aiVaultAgentLabel(agent: AiVaultAgent): string {
   return AI_VAULT_AGENT_LABELS[agent]
-}
-
-function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
-  if (agent === 'cursor') {
-    return 'cursor-agent'
-  }
-  if (agent === 'hermes') {
-    return 'hermes'
-  }
-  if (agent === 'rovo') {
-    return 'acli'
-  }
-  return TUI_AGENT_CONFIG[agent].detectCmd
-}
-
-function buildAgentResumeInvocation(
-  agent: AiVaultAgent,
-  baseCommand: string,
-  sessionArg: string
-): string {
-  switch (agent) {
-    case 'codex':
-      return `${baseCommand} resume ${sessionArg}`
-    case 'rovo':
-      return `${baseCommand} rovodev run --restore ${sessionArg}`
-    case 'opencode':
-    case 'pi':
-    // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
-    // are work-dir-scoped, so the cwd prefix from buildAiVaultResumeCommand is
-    // required — resuming from another directory is rejected by the CLI.
-    // falls through
-    case 'kimi':
-      return `${baseCommand} --session ${sessionArg}`
-    case 'copilot':
-      return `${baseCommand} --resume=${sessionArg}`
-    case 'claude':
-    case 'cursor':
-    case 'gemini':
-    case 'grok':
-    case 'hermes':
-    case 'devin':
-    case 'openclaw':
-    case 'droid':
-    // Why: OMP resumes by absolute transcript path (see buildAiVaultResumeCommand),
-    // but the `--resume <arg>` invocation form is identical to the others here.
-    // falls through
-    case 'omp':
-      return `${baseCommand} --resume ${sessionArg}`
-    case 'antigravity':
-      return `${baseCommand} --conversation ${sessionArg}`
-  }
-}
-
-function codexHomeEnvPrefix(codexHome: string | null, platform: NodeJS.Platform): string {
-  if (!codexHome) {
-    return ''
-  }
-  if (platform === 'win32') {
-    return `set ${quoteWindowsCmdArg(`CODEX_HOME=${codexHome}`)} && `
-  }
-  return `CODEX_HOME=${quoteShellArg(codexHome, platform)} `
-}
-
-function quoteShellArg(value: string, platform: NodeJS.Platform): string {
-  if (platform === 'win32') {
-    return quoteWindowsCmdArg(value)
-  }
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-function quoteWindowsCmdArg(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
 }

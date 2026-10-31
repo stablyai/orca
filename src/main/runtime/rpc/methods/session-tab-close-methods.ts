@@ -1,13 +1,38 @@
 import { withSpan } from '../../../observability/tracer'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { defineMethod, type RpcAnyMethod } from '../core'
-import { CloseLifecycleTab, CloseTab } from './session-tabs-schemas'
+import { defineMethod } from '../core'
+import {
+  CloseLifecycleTab,
+  CloseTab
+} from '../../../../shared/rpc-contract/session-tabs-schemas-params'
+import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
+import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
+import { projectSessionTabsForClient } from './session-tabs-inventory'
 
-export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
+export const SESSION_TAB_CLOSE_METHODS = [
   defineMethod({
     name: 'session.tabs.close',
+    permission: 'workspace',
     params: CloseTab,
     handler: async (params, context) => {
+      if (context.clientKind) {
+        const raw = await context.runtime.listMobileSessionTabs(
+          params.worktree,
+          context.pairedDeviceId
+        )
+        const visible = projectSessionTabsForClient(
+          raw,
+          context.clientKind,
+          context.clientCapabilities
+        )
+        assertProjectedSessionTabVisible(visible, params.tabId)
+        assertAgentSessionTabDestructiveMutationSupported(
+          raw,
+          params.tabId,
+          context.clientKind,
+          context.clientCapabilities
+        )
+      }
       const requiresIntent =
         context.clientKind === undefined ||
         (context.clientKind === 'runtime' &&
@@ -16,7 +41,7 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
       return withSpan(
         'runtime.session-tabs.close',
         async (span) => {
-          // Why: old runtime clicks and cleanup are wire-identical, so changing their behavior would regress mixed-version pairings.
+          // Preserve legacy runtime closes: user clicks and cleanup have identical wire shapes.
           if (!params.reason && requiresIntent) {
             const result = await context.runtime.refuseUnattributedMobileSessionTabClose(
               params.worktree,
@@ -30,6 +55,8 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
             params.tabId,
             {
               reason: 'user',
+              // Only explicit reasons prove confirmation; legacy reasonless closes do not.
+              ...(params.force && params.reason !== undefined ? { force: true } : {}),
               ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }
           )
@@ -43,7 +70,11 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           kind: 'client',
           attributes: {
             attribution: 'session-tab-close',
+            runtimeId: context.runtime.getRuntimeId(),
             origin: context.clientKind ?? 'in-process',
+            deviceId: context.pairedDeviceId ?? 'in-process',
+            worktree: params.worktree,
+            tabId: params.tabId,
             closeReason:
               params.reason ??
               (requiresIntent
@@ -60,9 +91,28 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'session.tabs.closeLifecycle',
+    permission: 'workspace',
     params: CloseLifecycleTab,
-    handler: async (params, context) =>
-      withSpan(
+    handler: async (params, context) => {
+      if (context.clientKind) {
+        const raw = await context.runtime.listMobileSessionTabs(
+          params.worktree,
+          context.pairedDeviceId
+        )
+        const visible = projectSessionTabsForClient(
+          raw,
+          context.clientKind,
+          context.clientCapabilities
+        )
+        assertProjectedSessionTabVisible(visible, params.tabId)
+        assertAgentSessionTabDestructiveMutationSupported(
+          raw,
+          params.tabId,
+          context.clientKind,
+          context.clientCapabilities
+        )
+      }
+      return withSpan(
         'runtime.session-tabs.close-lifecycle',
         async (span) => {
           const result = await context.runtime.closeMobileSessionTab(
@@ -85,7 +135,12 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           kind: 'client',
           attributes: {
             attribution: 'session-tab-lifecycle-close',
+            runtimeId: context.runtime.getRuntimeId(),
             origin: context.clientKind ?? 'in-process',
+            deviceId: context.pairedDeviceId ?? 'in-process',
+            worktree: params.worktree,
+            tabId: params.tabId,
+            terminal: params.terminal,
             closeReason: params.reason,
             connectionGeneration: context.connectionId ?? 'in-process',
             requestId: context.requestId ?? 'in-process',
@@ -93,5 +148,6 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           }
         }
       )
+    }
   })
 ]

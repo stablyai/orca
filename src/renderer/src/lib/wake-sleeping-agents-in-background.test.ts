@@ -7,7 +7,9 @@ import {
   type BackgroundMountTerminalWorktreeDetail,
   type WakeHibernatedAgentsWorktreeDetail
 } from '@/constants/terminal'
+import { listenForHibernatedAgentWake } from '@/components/terminal-pane/hibernated-agent-wake-listener'
 import type { ResumeSleepingAgentSessionsOptions } from './resume-sleeping-agent-session'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
 const resumeSpy = vi.fn<
   (worktreeId: string, options?: ResumeSleepingAgentSessionsOptions) => number
@@ -19,12 +21,12 @@ vi.mock('./resume-sleeping-agent-session', () => ({
   ) => resumeSpy(worktreeId, options)
 }))
 
-// Why: control passive-vs-non-passive classification directly so the test asserts
-// the gating, not the predicate internals.
+// Control passive classification directly so assertions cover wake gates, not classifier internals.
 const isPassiveSpy = vi.fn()
 vi.mock('./sleeping-agent-pane-ownership', () => ({
-  isPassiveCompletedHibernationEvidence: (record: unknown) => isPassiveSpy(record),
+  activationTreatsNoteAsFinished: (record: unknown) => isPassiveSpy(record),
   recordPaneIsOwnedByPreservedPane: () => false,
+  isStrandedWorkspaceSleepRecord: () => false,
   getProviderSessionClaimKey: (record: {
     worktreeId: string
     agent?: string
@@ -54,6 +56,7 @@ import {
   createBackgroundSleepingAgentWakeDispatcher,
   wakeSleepingAgentsForWorktreeInBackground
 } from './wake-sleeping-agents-in-background'
+import { takeSleepingAgentWakeRequest } from './sleeping-agent-wake-requests'
 
 type RecordedEvents = {
   events: string[]
@@ -143,17 +146,38 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    // (a) pane-level wake of mounted hidden panes fires before (b) background-mount
-    // of not-yet-mounted panes.
     expect(rec.events).toEqual(['wake:wt-1', 'mount:wt-1'])
-    // Why: the mount targets only the sleeping record's tab, so one slept agent
-    // does not permanently mount every saved tab in the worktree.
+    // Target only sleeping tabs; one sleeper must not mount every saved workspace tab permanently.
     expect(rec.mountDetails[0]?.tabIds).toEqual(['tab-a'])
-    // (c) non-passive records resume with navigation suppressed (INV-2).
     expect(resumeSpy).toHaveBeenCalledWith(
       'wt-1',
       expect.objectContaining({ suppressNavigation: true })
     )
+  })
+
+  it('asks only the mounted tabs to start their agents while hidden', () => {
+    const record = (tabId: string): SleepingAgentSessionRecord => ({
+      paneKey: `${tabId}:leaf-1`,
+      tabId,
+      worktreeId: 'wt-1',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: `session-${tabId}` },
+      prompt: '',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1
+    })
+    const passive = record('tab-a')
+    const slept = { ...record('tab-b'), restoreOnTabOpenOnly: true }
+    sleepingRecords = { k1: passive, k2: slept }
+    isPassiveSpy.mockReturnValue(true)
+
+    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+    // Why: the background-mounted pane lands hidden, where a sleeping resume otherwise waits for a reveal.
+    expect(takeSleepingAgentWakeRequest(passive)).toBe(true)
+    expect(takeSleepingAgentWakeRequest(passive)).toBe(false)
+    expect(takeSleepingAgentWakeRequest(slept)).toBe(false)
   })
 
   it('falls back to a whole-worktree mount when a passive record has no resolvable tab', () => {
@@ -250,6 +274,124 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     expect(Object.keys(sleepingRecords)).toEqual(['tab-0:leaf-1'])
   })
 
+  it('does not background-mount finished panes captured by an explicit workspace sleep', () => {
+    sleepingRecords = Object.fromEntries(
+      Array.from({ length: 12 }, (_, index) => {
+        const tabId = `tab-${index}`
+        return [
+          `${tabId}:leaf-1`,
+          {
+            worktreeId: 'wt-1',
+            paneKey: `${tabId}:leaf-1`,
+            tabId,
+            capturedAt: index,
+            updatedAt: index,
+            providerSession: { key: 'session_id', id: `session-${index}` },
+            restoreOnTabOpenOnly: true
+          } as never
+        ]
+      })
+    )
+    isPassiveSpy.mockReturnValue(true)
+    const rec = recordEvents()
+
+    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+    rec.stop()
+    // Phone workspace opens must not undo explicit agent sleep; cold-resume only when each tab opens.
+    expect(rec.events).toEqual(['wake:wt-1'])
+    expect(rec.mountDetails).toEqual([])
+    expect(Object.keys(sleepingRecords)).toHaveLength(12)
+  })
+
+  it("wakes a workspace sleep's mounted panes, leaving the resume itself to main", () => {
+    const slept: SleepingAgentSessionRecord = {
+      worktreeId: 'wt-1',
+      paneKey: 'tab-slept:leaf-1',
+      tabId: 'tab-slept',
+      agent: 'claude',
+      prompt: '',
+      state: 'done',
+      origin: 'worktree-sleep',
+      capturedAt: 1,
+      updatedAt: 1,
+      providerSession: { key: 'session_id', id: 'session-slept' },
+      restoreOnTabOpenOnly: true
+    }
+    sleepingRecords = { [slept.paneKey]: slept }
+    const rec = recordEvents()
+
+    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+    rec.stop()
+    // Why: a phone opening a slept workspace resumes its finished agents in their mounted panes.
+    expect(rec.events).toEqual(['wake:wt-1'])
+    expect(rec.mountDetails).toEqual([])
+    expect(resumeSpy).not.toHaveBeenCalled()
+  })
+
+  it('still background-mounts hibernated panes alongside lazily restored slept panes', () => {
+    sleepingRecords = {
+      'tab-slept:leaf-1': {
+        worktreeId: 'wt-1',
+        paneKey: 'tab-slept:leaf-1',
+        tabId: 'tab-slept',
+        capturedAt: 1,
+        updatedAt: 1,
+        providerSession: { key: 'session_id', id: 'session-slept' },
+        restoreOnTabOpenOnly: true
+      } as never,
+      'tab-hibernated:leaf-1': {
+        worktreeId: 'wt-1',
+        paneKey: 'tab-hibernated:leaf-1',
+        tabId: 'tab-hibernated',
+        capturedAt: 2,
+        updatedAt: 2,
+        providerSession: { key: 'session_id', id: 'session-hibernated' }
+      } as never
+    }
+    isPassiveSpy.mockReturnValue(true)
+    const rec = recordEvents()
+
+    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+    rec.stop()
+    expect(rec.mountDetails).toEqual([{ worktreeId: 'wt-1', tabIds: ['tab-hibernated'] }])
+  })
+
+  it('mounts the hibernated record when a lazily restored slept pane shares its claim', () => {
+    sleepingRecords = {
+      'tab-slept:leaf-1': {
+        worktreeId: 'wt-1',
+        paneKey: 'tab-slept:leaf-1',
+        tabId: 'tab-slept',
+        capturedAt: 1,
+        updatedAt: 1,
+        providerSession: { key: 'session_id', id: 'session-shared' },
+        restoreOnTabOpenOnly: true
+      } as never,
+      'tab-hibernated:leaf-1': {
+        worktreeId: 'wt-1',
+        paneKey: 'tab-hibernated:leaf-1',
+        tabId: 'tab-hibernated',
+        capturedAt: 2,
+        updatedAt: 2,
+        providerSession: { key: 'session_id', id: 'session-shared' }
+      } as never
+    }
+    isPassiveSpy.mockReturnValue(true)
+    const rec = recordEvents()
+
+    wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+    rec.stop()
+    // Filter lazy records before claim canonicalization or they can win/delete the hibernated record needing mount.
+    expect(rec.mountDetails).toEqual([{ worktreeId: 'wt-1', tabIds: ['tab-hibernated'] }])
+    expect(clearSleepingAgentSessionsByPaneKey).not.toHaveBeenCalledWith(['tab-hibernated:leaf-1'])
+    expect(sleepingRecords).toHaveProperty('tab-hibernated:leaf-1')
+    expect(sleepingRecords).toHaveProperty('tab-slept:leaf-1')
+  })
+
   it('background-mounts the tabs the suppressed resume launches for non-passive records', () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
     isPassiveSpy.mockReturnValue(false)
@@ -262,8 +404,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    // Why: the resume tab is created with activate:false, so nothing else
-    // mounts it — without this mount the queued --resume never gets a PTY.
+    // activate:false tabs never mount otherwise; explicit background mount must give queued --resume a PTY.
     expect(rec.events).toEqual(['wake:wt-1', 'mount:wt-1'])
     expect(rec.mountDetails[0]?.tabIds).toEqual(['tab-new'])
   })
@@ -276,8 +417,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    // Why: no passive record and no launched resume tab → nothing needs a
-    // mount (it would strand a plain shell / mount work).
+    // Without passive records or new resume tabs, mounting only strands a shell and creates unnecessary work.
     expect(rec.events).toEqual(['wake:wt-1'])
     expect(resumeSpy).toHaveBeenCalledWith(
       'wt-1',
@@ -285,21 +425,24 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     )
   })
 
-  it('passes claims consumed by mounted panes to the generic resume as skipClaimKeys', () => {
+  it('wakes mounted panes through the real pane listener and skips their claims', () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
     isPassiveSpy.mockReturnValue(false)
-    // A mounted pane consuming the in-place wake adds its claim key to the
-    // event detail — exactly what use-terminal-pane-lifecycle does.
-    const onWake = (event: Event): void => {
-      ;(event as CustomEvent<WakeHibernatedAgentsWorktreeDetail>).detail.wokenClaimKeys?.add(
-        'claim-1'
-      )
-    }
-    window.addEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWake)
+    const wakeHibernatedAgentIfArmed = vi.fn(() => 'claim-1')
+    const otherWorktreeWake = vi.fn(() => 'claim-other')
+    const stopListening = listenForHibernatedAgentWake('wt-1', () => [
+      { dispose: () => {}, wakeHibernatedAgentIfArmed }
+    ])
+    const stopOtherListening = listenForHibernatedAgentWake('wt-2', () => [
+      { dispose: () => {}, wakeHibernatedAgentIfArmed: otherWorktreeWake }
+    ])
 
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
-    window.removeEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWake)
+    stopListening()
+    stopOtherListening()
+    expect(wakeHibernatedAgentIfArmed).toHaveBeenCalledTimes(1)
+    expect(otherWorktreeWake).not.toHaveBeenCalled()
     const options = resumeSpy.mock.calls[0]?.[1]
     expect(options?.skipClaimKeys?.has('claim-1')).toBe(true)
   })
@@ -311,8 +454,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    // Why: mobile browsing a worktree with nothing slept must not mount it (and
-    // its PTYs) on the desktop host.
+    // Mobile browsing without sleepers must not mount desktop workspaces/PTYS.
     expect(rec.events).toEqual([])
     expect(resumeSpy).not.toHaveBeenCalled()
     expect(isPassiveSpy).not.toHaveBeenCalled()

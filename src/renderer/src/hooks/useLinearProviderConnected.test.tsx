@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { LinearConnectionStatus } from '../../../shared/types'
+import type { LinearConnectionStatus } from '../../../shared/linear/workspace-types'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { useLinearProviderConnected } from './useLinearProviderConnected'

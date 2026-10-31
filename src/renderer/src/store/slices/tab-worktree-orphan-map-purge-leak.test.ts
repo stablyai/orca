@@ -1,18 +1,4 @@
-/**
- * Memory-leak regression: three module-level maps keyed by tab/worktree id grew
- * monotonically over a session because no removal path evicted their entries.
- *
- *  - `detachedHeadAutoDerivedDisplayNames` (worktrees.ts) — worktree-keyed; only
- *    self-evicted when a branch reappeared, so a worktree removed while detached
- *    leaked its entry.
- *  - `foregroundTerminalTabLastSeenAtById` (lib/foreground-terminal-tabs) —
- *    tab-keyed; gained an entry per foregrounded tab, never dropped on close.
- *  - `consumedAgentStartupDeliveries` (lib/agent-startup-delivery-guards) —
- *    (worktreeId,tabId,launchToken)-keyed; one permanent guard per delivery,
- *    only released on the retry path, so removed tabs/worktrees leaked it.
- *
- * worktreeId and tabId are unbounded, ephemeral key spaces (fresh ids, never reused).
- */
+/** Removal must evict detached-name, foreground-last-seen and consumed-startup guards; fresh tab/worktree IDs cannot reclaim leaked module entries. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import {
@@ -41,7 +27,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     remove: vi.fn().mockResolvedValue(undefined),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     updateMeta: vi.fn().mockResolvedValue({})
@@ -81,9 +66,7 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
   })
   setDetachedHeadAutoDerivedDisplayNameForTests(WT1, 'wt1 (a1b2c3d)')
   setDetachedHeadAutoDerivedDisplayNameForTests(WT2, 'wt2 (e4f5g6h)')
-  // Records a last-seen timestamp for both tabs.
   setForegroundTerminalTabIds([TAB1, TAB2])
-  // Consumes a startup delivery guard for each tab.
   expect(
     beginAgentStartupDeliveryAttempt({ worktreeId: WT1, tabId: TAB1, launchToken: TOKEN1 })
   ).toBe(true)
@@ -92,8 +75,7 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
   ).toBe(true)
 }
 
-// A second begin returns false while the guard is still present, true once it is
-// cleared — so this observes the consumed-set without reaching into internals.
+// A second begin succeeds only after guard eviction, observing cleanup without reading module internals.
 function startupGuardCleared(worktreeId: string, tabId: string, launchToken: string): boolean {
   return beginAgentStartupDeliveryAttempt({ worktreeId, tabId, launchToken })
 }
@@ -117,11 +99,9 @@ describe('tab/worktree removal evicts the module maps it previously leaked', () 
 
     store.getState().purgeWorktreeTerminalState([WT1])
 
-    // Removed worktree/tab: all three maps evicted.
     expect(getDetachedHeadAutoDerivedDisplayNameForTests(WT1)).toBeUndefined()
     expect(getForegroundTerminalTabLastSeenAtById()[TAB1]).toBeUndefined()
     expect(startupGuardCleared(WT1, TAB1, TOKEN1)).toBe(true)
-    // Surviving worktree/tab: retained (guard over-eviction).
     expect(getDetachedHeadAutoDerivedDisplayNameForTests(WT2)).toBe('wt2 (e4f5g6h)')
     expect(getForegroundTerminalTabLastSeenAtById()[TAB2]).toBeGreaterThan(0)
     expect(startupGuardCleared(WT2, TAB2, TOKEN2)).toBe(false)
@@ -131,7 +111,7 @@ describe('tab/worktree removal evicts the module maps it previously leaked', () 
     const store = createTestStore()
     seedMaps(store)
 
-    const result = await store.getState().removeWorktree(WT1)
+    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
     expect(result).toEqual({ ok: true })
 
     expect(getDetachedHeadAutoDerivedDisplayNameForTests(WT1)).toBeUndefined()

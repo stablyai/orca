@@ -1,0 +1,78 @@
+import type { StateCreator } from 'zustand'
+import type { AppState } from '../types'
+import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspace-path-status'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import type { RepoSlice } from '../repos/repo-state'
+import {
+  getFolderWorkspaceStatusRequestSnapshot,
+  getFreshFolderWorkspacePathStatusFromCache
+} from './folder-path-status'
+import {
+  getFolderWorkspacePathStatusScopeKey,
+  getPathStatusOwnerCachePrefix
+} from './folder-workspace-routing'
+
+export function createFolderPathStatusActions(
+  set: Parameters<StateCreator<AppState>>[0],
+  get: Parameters<StateCreator<AppState>>[1]
+): Pick<
+  RepoSlice,
+  | 'getFolderWorkspacePathStatusCacheKey'
+  | 'getFreshFolderWorkspacePathStatus'
+  | 'fetchFolderWorkspacePathStatus'
+> {
+  return {
+    getFolderWorkspacePathStatusCacheKey: (request, options) =>
+      `${getPathStatusOwnerCachePrefix(options)}:${getFolderWorkspacePathStatusScopeKey(request)}`,
+
+    getFreshFolderWorkspacePathStatus: (request, options) => {
+      const state = get()
+      const cacheKey = get().getFolderWorkspacePathStatusCacheKey(request, options)
+      const cached = state.folderWorkspacePathStatuses[cacheKey]
+      const requestSnapshot = getFolderWorkspaceStatusRequestSnapshot(state, request, options)
+      return getFreshFolderWorkspacePathStatusFromCache({ entry: cached, requestSnapshot })
+    },
+
+    fetchFolderWorkspacePathStatus: async (request, options) => {
+      const cacheKey = get().getFolderWorkspacePathStatusCacheKey(request, options)
+      const requestSnapshot = getFolderWorkspaceStatusRequestSnapshot(get(), request, options)
+      const cached = get().folderWorkspacePathStatuses[cacheKey]
+      const freshCachedStatus = getFreshFolderWorkspacePathStatusFromCache({
+        entry: cached,
+        requestSnapshot
+      })
+      if (!options.force && freshCachedStatus) {
+        return freshCachedStatus
+      }
+      try {
+        const target = runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
+        const status =
+          target.kind === 'local'
+            ? await window.api.folderWorkspaces.getPathStatus(request)
+            : (
+                await callRuntimeRpc<{ status: FolderWorkspacePathStatus }>(
+                  target,
+                  'folderWorkspace.getPathStatus',
+                  request,
+                  { timeoutMs: 15_000 }
+                )
+              ).status
+        set((state) => ({
+          folderWorkspacePathStatuses:
+            requestSnapshot !== null &&
+            getFolderWorkspaceStatusRequestSnapshot(state, request, options) === requestSnapshot
+              ? {
+                  ...state.folderWorkspacePathStatuses,
+                  [cacheKey]: { status, checkedAt: Date.now(), requestSnapshot }
+                }
+              : state.folderWorkspacePathStatuses
+        }))
+        return status
+      } catch (err) {
+        console.error('Failed to fetch folder workspace path status:', err)
+        return null
+      }
+    }
+  }
+}

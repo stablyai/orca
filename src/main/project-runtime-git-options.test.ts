@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from './persistence'
-import type { Project, Repo } from '../shared/types'
+import type { Project } from '../shared/project-types'
+import type { Repo } from '../shared/repo-types'
 import {
   getLocalProjectGitExecOptions,
+  getWorktreeCreatePrefetchGitOptions,
+  getWorktreeMirrorDistro,
   resolveLocalProjectRuntimeForRepo
 } from './project-runtime-git-options'
 import { _resetWslCachesForTests, _setWslCachesForTests } from './wsl'
@@ -46,10 +49,14 @@ function makeProject(overrides: Partial<Project> = {}): Project {
   }
 }
 
-function makeStore(project: Project): Store {
+function makeStore(
+  project: Project,
+  localWindowsRuntimeDefault: unknown = { kind: 'windows-host' }
+): Store {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: runtime resolution reads only getProjects and getSettings.
   return {
     getProjects: () => [project],
-    getSettings: () => ({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
+    getSettings: () => ({ localWindowsRuntimeDefault })
   } as unknown as Store
 }
 
@@ -68,6 +75,26 @@ describe('project runtime git options', () => {
     )
 
     expect(options).toEqual({ cwd: String.raw`C:\repo`, wslDistro: 'Ubuntu' })
+  })
+
+  it('keeps WSL Git for a drive project that inherits WSL and never chose Windows Git', () => {
+    const store = makeStore(makeProject(), { kind: 'wsl', distro: 'Ubuntu' })
+
+    const options = withPlatform('win32', () => getLocalProjectGitExecOptions(store, makeRepo()))
+
+    expect(options).toEqual({ cwd: String.raw`C:\repo`, wslDistro: 'Ubuntu' })
+  })
+
+  it('runs Windows Git for a WSL project converted to Windows Git', () => {
+    const project = makeProject({
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu', git: 'windows-host' }
+    })
+
+    const options = withPlatform('win32', () =>
+      getLocalProjectGitExecOptions(makeStore(project), makeRepo())
+    )
+
+    expect(options).toEqual({ cwd: String.raw`C:\repo` })
   })
 
   it('returns repair state for missing cached WSL distro before local git execution', () => {
@@ -132,6 +159,104 @@ describe('project runtime git options', () => {
     )
 
     expect(runtime).toBeUndefined()
+  })
+
+  describe('getWorktreeMirrorDistro', () => {
+    it('names the distro a resolved WSL project runs in', () => {
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+
+      expect(
+        withPlatform('win32', () => getWorktreeMirrorDistro(makeStore(project), makeRepo()))
+      ).toBe('Ubuntu')
+    })
+
+    it('names no distro for a project converted to Windows Git', () => {
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu', git: 'windows-host' }
+      })
+
+      expect(
+        withPlatform('win32', () => getWorktreeMirrorDistro(makeStore(project), makeRepo()))
+      ).toBeUndefined()
+    })
+
+    it('names no distro for a host-runtime project', () => {
+      const project = makeProject({ localWindowsRuntimePreference: { kind: 'windows-host' } })
+
+      expect(
+        withPlatform('win32', () => getWorktreeMirrorDistro(makeStore(project), makeRepo()))
+      ).toBeUndefined()
+    })
+
+    // Worktree placement permits Windows fallback even when Git execution would require runtime repair.
+    it('names no distro instead of throwing when the runtime needs repair', () => {
+      _setWslCachesForTests({ available: true, distros: ['Debian'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+
+      expect(
+        withPlatform('win32', () => getWorktreeMirrorDistro(makeStore(project), makeRepo()))
+      ).toBeUndefined()
+    })
+
+    it('names no distro when the store cannot resolve projects', () => {
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+
+      expect(withPlatform('win32', () => getWorktreeMirrorDistro({}, makeRepo()))).toBeUndefined()
+    })
+  })
+
+  describe('getWorktreeCreatePrefetchGitOptions', () => {
+    it('routes the warm-up through the distro a resolved WSL project runs in', () => {
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+
+      expect(
+        withPlatform('win32', () =>
+          getWorktreeCreatePrefetchGitOptions(makeStore(project), makeRepo())
+        )
+      ).toEqual({ wslDistro: 'Ubuntu' })
+    })
+
+    // Speculative warmup must fall back to host Git instead of exposing a repair error.
+    it('falls back to host git instead of throwing when the runtime needs repair', () => {
+      _setWslCachesForTests({ available: true, distros: ['Debian'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+
+      expect(
+        withPlatform('win32', () =>
+          getWorktreeCreatePrefetchGitOptions(makeStore(project), makeRepo())
+        )
+      ).toEqual({})
+    })
+
+    it('does not resolve a project runtime for folder workspaces', () => {
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+      const store = makeStore(project)
+      const getProjects = vi.fn(store.getProjects)
+
+      expect(
+        withPlatform('win32', () =>
+          getWorktreeCreatePrefetchGitOptions(
+            { ...store, getProjects } as unknown as Store,
+            makeRepo({ kind: 'folder' })
+          )
+        )
+      ).toEqual({})
+      expect(getProjects).not.toHaveBeenCalled()
+    })
   })
 
   it('does not apply local Windows runtime routing to runtime-owned repos', () => {

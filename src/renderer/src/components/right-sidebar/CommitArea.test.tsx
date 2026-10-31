@@ -3,19 +3,20 @@ import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { fireEvent, render } from '@testing-library/react'
+import { CommitArea } from './source-control/commit/commit-area'
 import {
-  CommitArea,
   ConflictSummaryCard,
-  handleSourceControlCommitShortcut,
   OperationBanner
-} from './SourceControl'
+} from './source-control/listing/conflict-status-cards'
+import { handleSourceControlCommitShortcut } from './source-control/commit/commit-shortcut'
 import {
   resolveCommitAreaPrimaryAction,
   type PrimaryActionInputs
 } from './source-control-primary-action'
-import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type { DropdownActionKind } from '../../../../shared/source-control-dropdown-item-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { deriveSourceControlPushRecovery } from './source-control-push-recovery'
+import { deriveSourceControlPushRecovery } from './source-control/sync/push-recovery'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -194,6 +195,35 @@ describe('CommitArea', () => {
     expect(markupWin).toContain('Ctrl')
     expect(markupWin).toContain('+')
     expect(markupWin).toContain('Enter')
+  })
+
+  it('renders no tooltip on enabled Stage All — the label already states the action', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: {
+        kind: 'stage',
+        disabled: false,
+        label: 'Stage All',
+        title: 'Stage all changes'
+      }
+    })
+    expect(firstButton(markup)).not.toContain('title=')
+    expect(markup).not.toContain('Stage all changes')
+  })
+
+  it('renders the disabled reason in the primary button tooltip', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: {
+        kind: 'commit',
+        disabled: true,
+        label: 'Commit',
+        title: 'Enter a commit message to commit'
+      }
+    })
+    expect(markup).toContain('Enter a commit message to commit')
   })
 
   it('only handles Cmd+Enter when focus is within the Source Control sidebar', () => {
@@ -480,18 +510,6 @@ describe('CommitArea', () => {
     expect(firstButton(markup)).not.toContain('animate-spin')
   })
 
-  it('shows a spinner on a Commit primary while the commit itself is in flight', () => {
-    const props = baseProps({
-      stagedCount: 1,
-      hasMessage: true,
-      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-      isCommitting: true
-    })
-    expect(firstButton(renderCommitArea({ ...props, isCommitting: true }))).toContain(
-      'animate-spin'
-    )
-  })
-
   it('shows a spinner on a remote primary while the matching remote op is active', () => {
     const markup = renderCommitArea(
       baseProps({
@@ -582,8 +600,8 @@ describe('CommitArea', () => {
     expect(stageAllButton).not.toContain('disabled=""')
     expect(stageAllButton).toContain('lucide-plus')
     expect(stageAllButton).toContain('rounded-r-none')
+    expect(stageAllButton).not.toContain('title=')
     expect(markup).toContain('aria-label="More commit and remote actions"')
-    expect(markup).toContain('Stage all changes')
     expect(
       (markup.match(/<button\b[\s\S]*?<\/button>/g) ?? []).some((button) =>
         button.includes('Commit</button>')
@@ -661,7 +679,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="rebase"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
       />
@@ -676,7 +693,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="merge"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -687,7 +703,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="rebase"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -698,7 +713,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="cherry-pick"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -719,7 +733,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="merge"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -730,7 +743,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="rebase"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -749,7 +761,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="merge"
         unresolvedCount={2}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
       />
@@ -766,7 +777,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="merge"
         unresolvedCount={2}
         sourceControlAiActionsVisible={false}
-        isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
       />
@@ -805,5 +815,26 @@ describe('OperationBanner', () => {
 
     expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
     expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
+  })
+
+  it('offers Resolve with AI for every in-progress operation only when AI actions are visible', () => {
+    for (const operation of ['merge', 'rebase', 'cherry-pick'] as const) {
+      const visibleMarkup = renderToStaticMarkup(
+        <OperationBanner
+          conflictOperation={operation}
+          sourceControlAiActionsVisible
+          onResolveWithAI={vi.fn()}
+        />
+      )
+      const hiddenMarkup = renderToStaticMarkup(
+        <OperationBanner
+          conflictOperation={operation}
+          sourceControlAiActionsVisible={false}
+          onResolveWithAI={vi.fn()}
+        />
+      )
+      expect(visibleMarkup).toContain('Resolve with AI')
+      expect(hiddenMarkup).not.toContain('Resolve with AI')
+    }
   })
 })

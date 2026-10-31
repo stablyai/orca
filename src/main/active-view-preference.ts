@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { TopLevelView } from '../shared/types'
+import type { TopLevelView } from '../shared/ui-chrome-types'
 import { isTopLevelView } from '../shared/top-level-view'
 
 const ACTIVE_VIEW_FILE_NAME = 'active-view.json'
@@ -38,11 +38,11 @@ export class ActiveViewPreference {
   private flushSignals = new Set<AbortSignal>()
   private unabortableFlushConsumers = 0
   private writeGeneration = 0
-  /** Temp path of the write awaiting its rename; flushOrThrow removes it to veto that rename. */
+  /** Deleting this temp path vetoes an async rename during synchronous flush. */
   private inFlightTmpFile: string | null = null
-  /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
   private quitFlushStarted = false
   private quitFlushPromise: Promise<void> | null = null
+  private maintenancePaused = false
 
   constructor(dataFile: string, legacyActiveView: unknown) {
     this.file = getActiveViewPreferenceFile(dataFile)
@@ -73,11 +73,14 @@ export class ActiveViewPreference {
   }
 
   private scheduleSave(): void {
-    // Why: the quit flush is the final write; a later debounce would land unawaited mid-exit.
+    // A debounce after quit flush would write unawaited during exit.
     if (this.quitFlushStarted) {
       return
     }
     this.writeGeneration += 1
+    if (this.maintenancePaused) {
+      return
+    }
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
     }
@@ -109,9 +112,7 @@ export class ActiveViewPreference {
     try {
       await mkdir(dirname(this.file), { recursive: true })
       await writeFile(tmpFile, serializeActiveView(activeView), 'utf-8')
-      // Every async writer chains on pendingWrite, so a stale generation can only lose
-      // here. Sync flushOrThrow skips that chain, which is what the temp-path claim below
-      // covers — past this point the generation guard is spent.
+      // Async writes serialize; sync flush can still veto the rename after this generation check.
       if (generation !== this.writeGeneration) {
         return
       }
@@ -155,9 +156,7 @@ export class ActiveViewPreference {
     if (!asyncWriteWasInFlight && this.activeView === this.persistedActiveView) {
       return
     }
-    // Why remove it: an async writer parked on `await rename` has already cleared the
-    // generation guard, so deleting what it would rename is the only thing stopping a
-    // stale view from landing on top of the write below.
+    // Veto a stale rename that already passed its generation check before the sync flush.
     if (this.inFlightTmpFile) {
       try {
         unlinkSync(this.inFlightTmpFile)
@@ -176,7 +175,7 @@ export class ActiveViewPreference {
     this.persistedActiveView = this.activeView
   }
 
-  /** Async twin of flushOrThrow() for the quit path; never throws so it can join the teardown barrier. */
+  /** Quit persistence must settle without rejecting the teardown barrier. */
   flushAsync(): Promise<void> {
     if (this.quitFlushPromise) {
       return this.quitFlushPromise
@@ -244,6 +243,23 @@ export class ActiveViewPreference {
   async waitForPendingWrite(): Promise<void> {
     if (this.pendingWrite) {
       await this.pendingWrite
+    }
+  }
+
+  pauseForMaintenance(): () => void {
+    if (this.maintenancePaused || this.quitFlushStarted) {
+      throw new Error('Active-view persistence is already paused')
+    }
+    this.maintenancePaused = true
+    if (this.writeTimer) {
+      clearTimeout(this.writeTimer)
+      this.writeTimer = null
+    }
+    return () => {
+      this.maintenancePaused = false
+      if (this.activeView !== this.persistedActiveView) {
+        this.scheduleSave()
+      }
     }
   }
 }

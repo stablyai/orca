@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { derivePRCheckStatus, derivePRCheckStatusFromRollup } from './pr-check-status'
-import type { PRCheckDetail } from './types'
+import type { PRCheckDetail } from './github/check-types'
 
 const check = (
   status: PRCheckDetail['status'],

@@ -33,7 +33,7 @@ vi.mock('./internals', () => ({
   repositoryRateLimitGuard: repositoryRateLimitGuardMock,
   noteRepositoryRateLimitSpend: noteRepositoryRateLimitSpendMock,
   projectHostAuthenticationError: projectHostAuthenticationErrorMock,
-  projectGhExecOptions: (host?: string) => (host ? { host } : {}),
+  projectGhExecOptions: (host?: string) => ({ host: host ?? 'github.com' }),
   classifyProjectError: (stderr: string) => ({ type: 'unknown', message: stderr }),
   rateLimitedError: () => ({ type: 'rate_limited', message: 'rate limited' }),
   runGraphql: runGraphqlMock,
@@ -46,7 +46,8 @@ vi.mock('./internals', () => ({
       : { ok: false, error: { type: 'validation_error', message: `${name} invalid` } }
 }))
 
-import { getWorkItemDetailsBySlug, updateIssueBySlug } from './mutations'
+import { updateIssueBySlug } from './mutations'
+import { getWorkItemDetailsBySlug } from './work-item-details'
 
 describe('updateIssueBySlug', () => {
   beforeEach(() => {
@@ -110,7 +111,7 @@ describe('updateIssueBySlug', () => {
     expect(runRestMock).not.toHaveBeenCalled()
   })
 
-  it('guards and accounts state mutations in the selected host quota scope', async () => {
+  it('guards and accounts state mutations in the selected host GraphQL quota', async () => {
     const args = {
       owner: 'acme',
       repo: 'widgets',
@@ -121,8 +122,8 @@ describe('updateIssueBySlug', () => {
 
     await expect(updateIssueBySlug(args)).resolves.toEqual({ ok: true })
 
-    expect(repositoryRateLimitGuardMock).toHaveBeenCalledWith(args, 'core')
-    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledWith(args, 'core')
+    expect(repositoryRateLimitGuardMock).toHaveBeenCalledWith(args, 'graphql')
+    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledWith(args, 'graphql')
   })
 
   it('does not spawn a state mutation while that host quota is blocked', async () => {

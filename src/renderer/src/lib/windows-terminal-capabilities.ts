@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
 import {
   readWindowsTerminalCapabilities,
   type WindowsTerminalCapabilityLoadTarget
@@ -58,8 +59,7 @@ export function getWindowsTerminalCapabilityOwnerKey(
   activeRuntimeEnvironmentId?: string | null,
   sshConnectionId?: string | null
 ): string {
-  // Why: remote desktop and paired web clients can switch hosts; Git Bash/WSL availability is
-  // host-owned, so a previous runtime's answer must not bleed into the next.
+  // Shell availability belongs to hosts; runtime switches must not reuse previous-owner Git Bash/WSL answers.
   const connectionId = sshConnectionId?.trim()
   const environmentId = activeRuntimeEnvironmentId?.trim()
   if (connectionId && environmentId) {
@@ -147,8 +147,7 @@ export function loadWindowsTerminalCapabilities(
     return pendingCapabilities
   }
 
-  // Why: Settings, status bar, and paired web tab bars need one shared answer.
-  // Separate probes can leave one surface showing stale Windows shell choices.
+  // Share one probe across Settings/status/web bars or shell choices can disagree.
   const requestId = ++nextCapabilityRequestId
   latestCapabilityRequestIdByOwnerKey.set(ownerKey, requestId)
   const nextPendingCapabilities = readWindowsTerminalCapabilities(target, sshConnectionId)
@@ -171,14 +170,6 @@ export function loadWindowsTerminalCapabilities(
 
   pendingCapabilitiesByOwnerKey.set(ownerKey, nextPendingCapabilities)
   return nextPendingCapabilities
-}
-
-export function refreshWindowsTerminalCapabilities(
-  ownerKey?: string,
-  target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' },
-  sshConnectionId?: string | null
-): Promise<WindowsTerminalCapabilities> {
-  return loadWindowsTerminalCapabilities({ force: true, ownerKey, target, sshConnectionId })
 }
 
 export function selectWindowsTerminalCapabilitiesForOwner(
@@ -239,34 +230,35 @@ export function useWindowsTerminalCapabilities(
     const subscribers = subscribersByOwnerKey.get(resolvedOwnerKey) ?? new Set()
     subscribers.add(setCapabilities)
     subscribersByOwnerKey.set(resolvedOwnerKey, subscribers)
+    const reprobe: { stop: (() => void) | null } = { stop: null }
     void loadWindowsTerminalCapabilities({
       force: forceRefreshOnMount,
       ownerKey: resolvedOwnerKey,
       target: resolvedTarget,
       sshConnectionId: sshConnectionIdKey
     }).then((nextCapabilities) => {
-      if (!cancelled) {
-        setState({ ownerKey: resolvedOwnerKey, capabilities: nextCapabilities })
+      if (cancelled) {
+        return
+      }
+      setState({ ownerKey: resolvedOwnerKey, capabilities: nextCapabilities })
+      // Why: each re-probe spawns wsl.exe/pwsh.exe, so local consumers share a bounded backoff.
+      if (resolvedTarget.kind === 'local' && !sshConnectionIdKey) {
+        reprobe.stop = startWindowsTerminalCapabilityReprobe({
+          ownerKey: resolvedOwnerKey,
+          readCached: () => getCachedWindowsTerminalCapabilities(resolvedOwnerKey),
+          probe: () =>
+            loadWindowsTerminalCapabilities({
+              ownerKey: resolvedOwnerKey,
+              target: resolvedTarget,
+              sshConnectionId: sshConnectionIdKey
+            })
+        })
       }
     })
-    const refreshInterval = globalThis.setInterval(() => {
-      if (resolvedTarget.kind !== 'local' || sshConnectionIdKey) {
-        return
-      }
-      const cachedCapabilities = getCachedWindowsTerminalCapabilities(resolvedOwnerKey)
-      if (cachedCapabilities.wslAvailable && cachedCapabilities.wslDistros.length > 0) {
-        return
-      }
-      void loadWindowsTerminalCapabilities({
-        ownerKey: resolvedOwnerKey,
-        target: resolvedTarget,
-        sshConnectionId: sshConnectionIdKey
-      })
-    }, CAPABILITY_CACHE_TTL_MS)
 
     return () => {
       cancelled = true
-      globalThis.clearInterval(refreshInterval)
+      reprobe.stop?.()
       const currentSubscribers = subscribersByOwnerKey.get(resolvedOwnerKey)
       currentSubscribers?.delete(setCapabilities)
       if (currentSubscribers?.size === 0) {

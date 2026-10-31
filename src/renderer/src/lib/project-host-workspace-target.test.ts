@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { Project, ProjectHostSetup, Repo } from '../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 import {
   resolveWorkspaceCreationRepoId,
   resolveWorkspaceCreationTarget
@@ -91,6 +92,90 @@ describe('project-host workspace target resolution', () => {
     ).toBe('orca-ssh')
   })
 
+  it('matches duplicate repo ids to the setup execution host', () => {
+    const localRepo = makeRepo('orca', { path: '/local/orca' })
+    const sshRepo = makeRepo('orca', {
+      path: '/remote/orca',
+      connectionId: 'builder'
+    })
+    const projects = [makeProject('github:stablyai/orca', ['orca'])]
+    const projectHostSetups = [
+      makeSetup('local-setup', 'github:stablyai/orca', 'local', 'orca'),
+      makeSetup('ssh-setup', 'github:stablyai/orca', 'ssh:builder', 'orca')
+    ]
+
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: [localRepo, sshRepo],
+      projects,
+      projectHostSetups,
+      projectHostSetupId: 'ssh-setup'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ready',
+      target: {
+        hostId: 'ssh:builder',
+        repo: { path: '/remote/orca', connectionId: 'builder' }
+      }
+    })
+  })
+
+  it('keeps a focused duplicate repo id on its selected host', () => {
+    const localRepo = makeRepo('orca', { path: '/local/orca' })
+    const sshRepo = makeRepo('orca', { path: '/remote/orca', connectionId: 'builder' })
+    const projects = [makeProject('github:stablyai/orca', ['orca'])]
+    const projectHostSetups = [
+      makeSetup('local-setup', 'github:stablyai/orca', 'local', 'orca'),
+      makeSetup('ssh-setup', 'github:stablyai/orca', 'ssh:builder', 'orca')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [localRepo, sshRepo],
+        projects,
+        projectHostSetups,
+        draftRepoId: 'orca',
+        focusedHostScope: 'ssh:builder'
+      })
+    ).toMatchObject({
+      status: 'ready',
+      target: {
+        hostId: 'ssh:builder',
+        projectHostSetupId: 'ssh-setup',
+        repo: { path: '/remote/orca', connectionId: 'builder' }
+      }
+    })
+  })
+
+  it('resolves duplicate repo ids to a ready setup when no host is focused', () => {
+    const localRepo = makeRepo('orca', { path: '/local/orca' })
+    const sshRepo = makeRepo('orca', { path: '/remote/orca', connectionId: 'builder' })
+    const projects = [makeProject('github:stablyai/orca', ['orca'])]
+    const projectHostSetups = [
+      makeSetup('local-setup', 'github:stablyai/orca', 'local', 'orca'),
+      makeSetup('ssh-setup', 'github:stablyai/orca', 'ssh:builder', 'orca')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [localRepo, sshRepo],
+        projects,
+        projectHostSetups,
+        draftRepoId: 'orca',
+        focusedHostScope: 'all',
+        actionableHostIds: new Set(['local', 'ssh:builder'])
+      })
+    ).toMatchObject({
+      status: 'ready',
+      target: {
+        hostId: 'local',
+        projectHostSetupId: 'local-setup',
+        repoId: 'orca',
+        repo: { path: '/local/orca' }
+      }
+    })
+  })
+
   it('resolves an explicit project and host to the matching setup', () => {
     const repos = [
       makeRepo('orca-local'),
@@ -122,9 +207,7 @@ describe('project-host workspace target resolution', () => {
   })
 
   it('canonicalizes a stale same-host setup id to the setup the picker shows', () => {
-    // Why: the run-target picker renders one row per host. A draft persisted before that collapse
-    // can still name a duplicate local setup; creation must land in the displayed path, not a
-    // transient worktree path the user never sees.
+    // Legacy drafts can name hidden duplicate setups; creation must use the canonical picker row/path.
     const repos = [makeRepo('orca-main'), makeRepo('orca-worktree')]
     const projects = [makeProject('github:stablyai/orca', ['orca-main', 'orca-worktree'])]
     const projectHostSetups = [
@@ -200,6 +283,29 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
+  it('does not fall back to another host when only a host is selected', () => {
+    const localRepo = makeRepo('orca-local')
+    const remoteRepo = makeRepo('orca-ssh', { connectionId: 'builder' })
+    const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-ssh'])]
+    const projectHostSetups = [
+      makeSetup('orca-local', 'github:stablyai/orca', 'local', 'orca-local')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [localRepo, remoteRepo],
+        projects,
+        projectHostSetups,
+        draftRepoId: 'orca-local',
+        hostId: 'ssh:builder',
+        actionableHostIds: new Set(['local', 'ssh:builder'])
+      })
+    ).toEqual({
+      status: 'unavailable',
+      reason: 'project-not-set-up-on-host'
+    })
+  })
+
   it('reports setup-not-ready when the selected host has pending setup metadata', () => {
     const repo = makeRepo('orca')
     const projects = [makeProject('github:stablyai/orca', ['orca'])]
@@ -246,11 +352,47 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
-  // Regression: selecting a project in the new-workspace dropdown must not be
-  // pinned to the host of the currently-active workspace. Each project below is
-  // set up on exactly one (different) host; picking the other project while the
-  // current host is given only as a preference must resolve to that project's
-  // own host instead of returning '' (the silent no-op the dropdown showed).
+  it('does not resolve workspace creation through a removed host', () => {
+    const remoteRepo = makeRepo('remote-repo', { connectionId: 'removed' })
+    const projects = [makeProject('repo:remote', ['remote-repo'])]
+    const projectHostSetups = [
+      makeSetup('removed-setup', 'repo:remote', 'ssh:removed', 'remote-repo')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [remoteRepo],
+        projects,
+        projectHostSetups,
+        draftRepoId: remoteRepo.id,
+        projectHostSetupId: 'removed-setup',
+        actionableHostIds: new Set(['local'])
+      })
+    ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
+  })
+
+  it('does not silently switch an explicit setup id to an actionable sibling host', () => {
+    const remoteRepo = makeRepo('remote-repo', { connectionId: 'removed' })
+    const localRepo = makeRepo('local-repo')
+    const projects = [makeProject('repo:orca', ['remote-repo', 'local-repo'])]
+    const projectHostSetups = [
+      makeSetup('removed-setup', 'repo:orca', 'ssh:removed', 'remote-repo'),
+      makeSetup('local-setup', 'repo:orca', 'local', 'local-repo')
+    ]
+
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: [remoteRepo, localRepo],
+        projects,
+        projectHostSetups,
+        draftRepoId: remoteRepo.id,
+        projectHostSetupId: 'removed-setup',
+        actionableHostIds: new Set(['local'])
+      })
+    ).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
+  })
+
+  // Project selection treats the current host as preference; a project available only elsewhere must resolve there instead of silently returning empty.
   describe('cross-host project selection', () => {
     const repos = [makeRepo('local-repo'), makeRepo('remote-repo', { connectionId: 'remote-1' })]
     const projects = [
@@ -308,9 +450,7 @@ describe('project-host workspace target resolution', () => {
     })
 
     it('still reports unavailable for an explicit project+host with no ready setup', () => {
-      // The strict projectId+hostId path (used by the explicit "Run on" host
-      // picker) keeps its hard match — only the project-dropdown call site
-      // changed to pass the host as a preference.
+      // Explicit Run on host selection retains strict project+host matching; only project-dropdown calls use preference.
       expect(
         resolveWorkspaceCreationTarget({
           eligibleRepos: repos,

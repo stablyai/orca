@@ -6,6 +6,7 @@ import {
   readPairingKeychainItem,
   writePairingKeychainItem
 } from './pairing-keychain'
+import { markHostCredentialWrite } from './host-credential-write-revision'
 
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
@@ -60,6 +61,7 @@ export async function writeMobileRelayDirectUpgradeJournal(
 ): Promise<void> {
   requireNativeSecretStore()
   const parsed = MobileRelayDirectUpgradeJournalSchema.parse(journal)
+  markHostCredentialWrite(parsed.hostId)
   await writePairingKeychainItem(journalKey(parsed.hostId), JSON.stringify(parsed))
 }
 

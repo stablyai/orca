@@ -16,6 +16,19 @@ describe('AI Vault full first-user-prompt normalization', () => {
   it('keeps a prompt shorter than the safety limit intact', () => {
     expect(normalizeFullFirstUserPromptText('ship it 😀')).toBe('ship it 😀')
   })
+
+  // Envelope extraction must precede the size cap or a late user_query looks like a bootstrap dump.
+  it('unwraps a user_query that lands past the safety limit', () => {
+    const raw = `<user_info>\n${'context '.repeat(SAFETY_LIMIT / 4)}\n<user_query>ship it</user_query>`
+
+    expect(normalizeFullFirstUserPromptText(raw)).toBe('ship it')
+  })
+
+  it('still rejects a user_info dump with no user_query anywhere', () => {
+    const raw = `<user_info>\n${'context '.repeat(SAFETY_LIMIT / 4)}`
+
+    expect(normalizeFullFirstUserPromptText(raw)).toBeNull()
+  })
 })
 
 function hasUnpairedSurrogate(value: string): boolean {

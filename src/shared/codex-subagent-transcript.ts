@@ -1,114 +1,51 @@
-import { closeSync, openSync, readSync, readdirSync, statSync, type Stats } from 'node:fs'
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 
 import {
+  readJsonlCursor,
+  readTranscriptDirectory,
+  record,
+  type JsonlCursor,
+  type JsonRecord
+} from './codex-rollout-jsonl-cursor'
+
+import { reconcileCodexTranscriptTurn, type CodexTranscriptTurn } from './codex-turn-transcript'
+
+import { isCodexStatusTranscriptLine } from './codex-status-transcript-line'
+
+import { readApprovalsReviewer } from './codex-subagent-reviewer'
+import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
+
+import {
   finishCodexSubagent,
+  setCodexSubagentModel,
   upsertCodexSubagent,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
 
-const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
-const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
-const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
 // Why: retire a child whose rollout stays unreadable this long, else a deleted/never-written file pins a phantom row forever.
 const CHILD_UNREADABLE_GRACE_MS = 60_000
+const MAX_TRACKED_TURN_ENDS = 16
 const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
-
-type JsonlCursor = {
-  filePath?: string
-  offset: number
-  carry: string
-}
 
 type TrackedTranscriptSubagent = JsonlCursor & {
   description?: string
+  /** Retain the child’s own model across incremental reads; turn_context appears once per turn. */
+  model?: string
   startedAt: number
   unresolvedSince?: number
 }
 
 export type CodexSubagentTranscriptState = {
   parent: JsonlCursor
+  rootTurn: CodexTranscriptTurn
+  turnEnds: Map<string, 'completed' | 'failed'>
   subagents: Map<string, TrackedTranscriptSubagent>
-}
-
-type JsonRecord = Record<string, unknown>
-
-function record(value: unknown): JsonRecord | undefined {
-  return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
-}
-
-/** Returns undefined when the file is unreadable, distinguishing a vanished rollout from one with no new lines. */
-function readJsonlCursor(cursor: JsonlCursor): JsonRecord[] | undefined {
-  if (!cursor.filePath) {
-    return undefined
-  }
-  let stats: Stats
-  try {
-    stats = statSync(cursor.filePath)
-  } catch {
-    return undefined
-  }
-  if (!stats.isFile()) {
-    return undefined
-  }
-  if (stats.size < cursor.offset) {
-    cursor.offset = 0
-    cursor.carry = ''
-  }
-  if (stats.size === cursor.offset) {
-    return []
-  }
-  const bytesToRead = Math.min(stats.size - cursor.offset, TRANSCRIPT_READ_MAX_BYTES)
-  const start = stats.size - cursor.offset > bytesToRead ? stats.size - bytesToRead : cursor.offset
-  const buffer = Buffer.allocUnsafe(bytesToRead)
-  let bytesRead = 0
-  let fd: number | undefined
-  try {
-    fd = openSync(cursor.filePath, 'r')
-    bytesRead = readSync(fd, buffer, 0, bytesToRead, start)
-  } catch {
-    return undefined
-  } finally {
-    if (fd !== undefined) {
-      closeSync(fd)
-    }
-  }
-  const skippedPrefix = start !== cursor.offset
-  const content = `${skippedPrefix ? '' : cursor.carry}${buffer.toString('utf8', 0, bytesRead)}`
-  const lines = content.split('\n')
-  cursor.offset = start + bytesRead
-  cursor.carry = lines.pop() ?? ''
-  if (skippedPrefix) {
-    lines.shift()
-  }
-  const records: JsonRecord[] = []
-  for (const line of lines) {
-    if (Buffer.byteLength(line, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES) {
-      continue
-    }
-    try {
-      const parsed = record(JSON.parse(line) as unknown)
-      if (parsed) {
-        records.push(parsed)
-      }
-    } catch {
-      // A malformed rollout line must not block later lifecycle events.
-    }
-  }
-  return records
-}
-
-function readTranscriptDirectory(directory: string): string[] {
-  let entries: string[]
-  try {
-    entries = readdirSync(directory)
-  } catch {
-    return []
-  }
-  if (entries.length > TRANSCRIPT_DIRECTORY_MAX_ENTRIES) {
-    entries = entries.slice(-TRANSCRIPT_DIRECTORY_MAX_ENTRIES)
-  }
-  return entries
+  /** Incremental reviewer cursors for child rollouts, which must not replace the parent cursor. */
+  reviewerCursorsByPath: Map<string, JsonlCursor>
+  /** Reviewer ownership discovered from child rollouts, keyed by their bounded cursor paths. */
+  reviewersByPath: Map<string, CodexApprovalsReviewer>
+  /** Who resolves this turn's approvals in the parent rollout. */
+  approvalsReviewer?: CodexApprovalsReviewer
 }
 
 // Why: Codex files each rollout under its OWN local start date, so a session running past midnight spawns children into a sibling day directory.
@@ -199,6 +136,43 @@ function readActivity(recordValue: JsonRecord):
   }
 }
 
+/** Read model from child turn_context; it may differ from the parent’s. */
+function readChildModel(records: JsonRecord[]): string | undefined {
+  let model: string | undefined
+  for (const recordValue of records) {
+    if (recordValue.type !== 'turn_context') {
+      continue
+    }
+    const payload = record(recordValue.payload)
+    const value = typeof payload?.model === 'string' ? payload.model.trim() : ''
+    if (value) {
+      model = value
+    }
+  }
+  return model
+}
+
+function normalizedTranscriptPath(transcriptPath: string | undefined): string | undefined {
+  const normalizedPath = transcriptPath?.trim()
+  return normalizedPath && isAbsolute(normalizedPath) && extname(normalizedPath) === '.jsonl'
+    ? normalizedPath
+    : undefined
+}
+
+function readTurnEnd(
+  recordValue: JsonRecord
+): { turnId: string; end: 'completed' | 'failed' } | undefined {
+  if (recordValue.type !== 'event_msg') {
+    return undefined
+  }
+  const payload = record(recordValue.payload)
+  const turnId = typeof payload?.turn_id === 'string' ? payload.turn_id.trim() : ''
+  if ((payload?.type !== 'task_complete' && payload?.type !== 'turn_complete') || !turnId) {
+    return undefined
+  }
+  return { turnId, end: payload.error == null ? 'completed' : 'failed' }
+}
+
 function childIsComplete(records: JsonRecord[]): boolean {
   let complete = false
   for (const recordValue of records) {
@@ -218,8 +192,19 @@ function childIsComplete(records: JsonRecord[]): boolean {
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
   return {
     parent: { offset: 0, carry: '' },
-    subagents: new Map()
+    rootTurn: { interrupted: false },
+    turnEnds: new Map(),
+    subagents: new Map(),
+    reviewerCursorsByPath: new Map(),
+    reviewersByPath: new Map()
   }
+}
+
+export function codexTranscriptTurnEnd(
+  state: CodexSubagentTranscriptState | undefined,
+  turnId: string
+): 'completed' | 'failed' | undefined {
+  return state?.turnEnds.get(turnId)
 }
 
 export function hasTrackedCodexTranscriptSubagents(
@@ -232,19 +217,53 @@ export function reconcileCodexSubagentTranscript(
   state: CodexSubagentTranscriptState,
   roster: CodexSubagentRoster,
   transcriptPath: string | undefined
-): void {
-  const normalizedPath = transcriptPath?.trim()
-  if (!normalizedPath || !isAbsolute(normalizedPath) || extname(normalizedPath) !== '.jsonl') {
-    return
+): boolean {
+  const normalizedPath = normalizedTranscriptPath(transcriptPath)
+  if (!normalizedPath) {
+    return false
   }
+  let changed = false
   if (state.parent.filePath !== normalizedPath) {
     for (const id of state.subagents.keys()) {
       finishCodexSubagent(roster, id)
     }
+    changed = true
     state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
+    state.rootTurn = { interrupted: false }
+    state.turnEnds.clear()
     state.subagents.clear()
+    state.reviewerCursorsByPath.clear()
+    state.reviewersByPath.clear()
+    // Why: a different rollout is a different session, so its predecessor's reviewer is void.
+    state.approvalsReviewer = undefined
   }
-  for (const recordValue of readJsonlCursor(state.parent) ?? []) {
+  const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
+  changed ||=
+    Boolean(parentRecords?.length) ||
+    (parentRecords === undefined && state.approvalsReviewer !== undefined)
+  reconcileCodexTranscriptTurn(state.rootTurn, parentRecords ?? [])
+  // A stale reviewer must never turn an unreadable rollout into a hidden prompt.
+  state.approvalsReviewer =
+    parentRecords === undefined
+      ? undefined
+      : (readApprovalsReviewer(parentRecords) ?? state.approvalsReviewer)
+  // Hook-only and restored children may predate the bounded parent transcript read.
+  for (const [id, child] of roster) {
+    if (!state.subagents.has(id)) {
+      state.subagents.set(id, { offset: 0, carry: '', startedAt: child.startedAt })
+    }
+  }
+  for (const recordValue of parentRecords ?? []) {
+    const turnEnd = readTurnEnd(recordValue)
+    if (turnEnd) {
+      state.turnEnds.delete(turnEnd.turnId)
+      state.turnEnds.set(turnEnd.turnId, turnEnd.end)
+      const oldest = state.turnEnds.keys().next()
+      if (state.turnEnds.size > MAX_TRACKED_TURN_ENDS && !oldest.done) {
+        state.turnEnds.delete(oldest.value)
+      }
+      continue
+    }
     const activity = readActivity(recordValue)
     if (!activity) {
       continue
@@ -279,7 +298,8 @@ export function reconcileCodexSubagentTranscript(
         entriesByDirectory
       )
     }
-    const records = readJsonlCursor(tracked)
+    const records = readJsonlCursor(tracked, isCodexStatusTranscriptLine)
+    changed ||= Boolean(records?.length)
     if (!records) {
       // Why: a rollout that never appears (or is deleted) has no completion event, so time-box it instead of leaking a working row.
       tracked.filePath = undefined
@@ -289,11 +309,16 @@ export function reconcileCodexSubagentTranscript(
       }
     } else {
       tracked.unresolvedSince = undefined
+      tracked.model = readChildModel(records) ?? tracked.model
+      // Reapply each poll because parent activity can rebuild the child row and erase its discovered model.
+      setCodexSubagentModel(roster, id, tracked.model)
       if (!childIsComplete(records)) {
         continue
       }
     }
+    changed = true
     finishCodexSubagent(roster, id)
     state.subagents.delete(id)
   }
+  return changed
 }

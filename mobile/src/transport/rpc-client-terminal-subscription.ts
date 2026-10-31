@@ -1,4 +1,4 @@
-import { buildNativeChatUnsubscribe } from '../../../src/shared/native-chat-stream-unsubscribe'
+import { buildNativeChatUnsubscribe } from '../../../src/shared/native-chat/native-chat-stream-unsubscribe'
 
 type TerminalStreamParams = {
   terminal?: unknown
@@ -33,12 +33,11 @@ export function updateTerminalSubscriptionViewport(
   }
 }
 
-/** Build the unsubscribe RPC for a streaming method that needs the host told to
- *  tear down (session tabs, native chat), or null when none is required. Keeps
- *  the per-method echo logic out of the rpc-client teardown closure. */
+// Centralize method-specific unsubscribe echoes for explicit host teardown; return null when none is needed.
 export function buildStreamUnsubscribe(
   method: string | undefined,
-  params: unknown
+  params: unknown,
+  requestId?: string
 ): { method: string; params: Record<string, unknown> } | null {
   if (!params || typeof params !== 'object') {
     return null
@@ -46,7 +45,18 @@ export function buildStreamUnsubscribe(
   if (method === 'session.tabs.subscribe') {
     const worktree = (params as { worktree?: unknown }).worktree
     return typeof worktree === 'string'
-      ? { method: 'session.tabs.unsubscribe', params: { worktree } }
+      ? {
+          method: 'session.tabs.unsubscribe',
+          params: { worktree, ...(requestId ? { subscriptionId: requestId } : {}) }
+        }
+      : null
+  }
+  if (method === 'agentSession.subscribe') {
+    const sessionId = (params as { sessionId?: unknown }).sessionId
+    // The host keys each transcript stream by its frame id; without it every stream of the
+    // session on this socket would end.
+    return typeof sessionId === 'string' && requestId
+      ? { method: 'agentSession.unsubscribe', params: { sessionId, subscriptionId: requestId } }
       : null
   }
   if (method === 'nativeChat.subscribe') {
@@ -62,6 +72,22 @@ export function buildStreamUnsubscribe(
       : null
   }
   return null
+}
+
+/** Direct-connection unsubscribe for the stream opened by `requestId`, or null when none is required. */
+export function buildRequestStreamUnsubscribe(
+  method: string | undefined,
+  params: unknown,
+  requestId: string
+): { method: string; params: Record<string, unknown> } | null {
+  if (method !== 'terminal.subscribe') {
+    return buildStreamUnsubscribe(method, params, requestId)
+  }
+  const unsubscribeParams = buildTerminalUnsubscribeParams(params)
+  // Why: `requestId` names this exact request; hosts that predate it strip it and use the slot.
+  return unsubscribeParams
+    ? { method: 'terminal.unsubscribe', params: { ...unsubscribeParams, requestId } }
+    : null
 }
 
 export function buildTerminalUnsubscribeParams(

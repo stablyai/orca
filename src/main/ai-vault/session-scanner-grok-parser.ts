@@ -1,49 +1,45 @@
-import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { grokTranscriptPathForMetadata } from '../../shared/ai-vault-session-log-resource'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewMessage,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
-import {
-  normalizeFullFirstUserPromptText,
-  shouldCaptureFullFirstUserPrompt
-} from './session-scanner-first-user-prompt'
+import { addSessionContent, addSessionText } from './session-scanner-messages'
 import {
   extractGrokFirstUserPromptText,
   stripGrokUserQueryEnvelope
 } from './session-scanner-grok-user-text'
 import {
   asRecord,
-  extractPreviewContentText,
   extractString,
-  normalizePreviewText,
   normalizeTitleText,
   numberValue,
-  parseJsonObject,
-  sliceAtCodeUnitLimit
+  parseJsonObject
 } from './session-scanner-values'
 
-const GROK_USER_QUERY_PREVIEW_SCAN_LIMIT = 4096
+const GROK_PREVIEW_SCAN_LIMIT = 4096
 
 export async function parseGrokSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
   if (!record) {
     return null
   }
   const info = asRecord(record.info)
   const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
-  const accumulator = createAccumulator({ agent: 'grok', file, sessionId })
-  accumulator.cwd = extractString(info?.cwd)
+  const accumulator = createAccumulator({ agent: 'grok', file, sessionId, messages })
+  accumulator.cwd = grokSessionCwd(record)
   accumulator.title =
     normalizeTitleText(extractString(record.generated_title) ?? '') ??
     normalizeTitleText(extractString(record.session_summary) ?? '')
@@ -54,20 +50,22 @@ export async function parseGrokSessionFile(
   updateTimeline(accumulator, extractString(record.created_at))
   updateTimeline(accumulator, extractString(record.updated_at))
   updateTimeline(accumulator, extractString(record.last_active_at))
-  await consumeGrokChatHistory(accumulator, dirname(file.path))
+  await consumeGrokChatHistory(accumulator, grokTranscriptPathForMetadata(file.path))
   return finalizeSession(accumulator, platform)
+}
+
+/** Scope discovery reads cwd from the summary without opening history. */
+export function grokSessionCwd(summary: Record<string, unknown>): string | null {
+  return extractString(asRecord(summary.info)?.cwd)
 }
 
 async function consumeGrokChatHistory(
   accumulator: SessionAccumulator,
-  sessionDir: string
+  transcriptPath: string
 ): Promise<void> {
+  const input = openTranscriptReadStream(transcriptPath, { encoding: 'utf-8' }, 'scan')
+  const lines = createInterface({ input, crlfDelay: Infinity })
   try {
-    const lines = createInterface({
-      input: createReadStream(join(sessionDir, 'chat_history.jsonl'), { encoding: 'utf-8' }),
-      crlfDelay: Infinity
-    })
-
     for await (const line of lines) {
       const record = parseJsonObject(line)
       if (!record) {
@@ -79,55 +77,37 @@ async function consumeGrokChatHistory(
       }
 
       if (role === 'user') {
-        // Why: first-prompt copy must be the typed ask inside <user_query>, never
-        // the injected <user_info> bootstrap row.
-        const firstPromptBody = extractGrokFirstUserPromptText(record.content)
-        const text = firstPromptBody
-          ? normalizePreviewText(capGrokPreviewSource(firstPromptBody))
-          : null
-
-        if (firstPromptBody) {
-          accumulator.title ??= normalizeTitleText(firstPromptBody)
-          if (shouldCaptureFullFirstUserPrompt() && !accumulator.firstUserPrompt) {
-            accumulator.firstUserPrompt = normalizeFullFirstUserPromptText(firstPromptBody)
-          }
-        }
-
+        const text = extractGrokFirstUserPromptText(record.content)
         if (text) {
-          addPreviewMessage(accumulator, {
-            role: 'user',
+          accumulator.title ??= normalizeTitleText(text)
+          addSessionText(accumulator, {
+            role,
             text,
-            timestamp: extractString(record.timestamp),
-            seedFirstUserPrompt: false
+            timestamp: record.timestamp,
+            previewScanLimit: GROK_PREVIEW_SCAN_LIMIT
           })
         }
         continue
       }
 
-      addPreviewMessage(accumulator, {
-        role: 'assistant',
-        text: extractGrokContentText(record.content),
-        timestamp: extractString(record.timestamp),
-        seedFirstUserPrompt: false
-      })
+      addSessionContent(
+        accumulator,
+        role,
+        typeof record.content === 'string'
+          ? stripGrokUserQueryEnvelope(record.content)
+          : record.content,
+        record.timestamp,
+        { previewScanLimit: GROK_PREVIEW_SCAN_LIMIT }
+      )
     }
-  } catch {
-    // Summary-only sessions still provide enough metadata for the Vault list.
+  } catch (error) {
+    // Summary-only sessions can list; WSL refusal must propagate so incomplete history is not cached as current.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
+  } finally {
+    // readline.close() leaves its input open; destroy the gated stream after read failures too.
+    lines.close()
+    input.destroy()
   }
-}
-
-export function extractGrokContentText(value: unknown): string | null {
-  if (typeof value === 'string') {
-    return extractGrokStringContentText(value)
-  }
-  return extractPreviewContentText(value)
-}
-
-function capGrokPreviewSource(text: string): string {
-  return sliceAtCodeUnitLimit(text, GROK_USER_QUERY_PREVIEW_SCAN_LIMIT)
-}
-
-function extractGrokStringContentText(text: string): string | null {
-  const unwrapped = stripGrokUserQueryEnvelope(text)
-  return normalizePreviewText(capGrokPreviewSource(unwrapped))
 }

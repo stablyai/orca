@@ -1,32 +1,49 @@
 import { lstat } from 'node:fs/promises'
-import { isAbsolute, resolve } from 'node:path'
+import { resolve, sep } from 'node:path'
+import { resolveWorktreeHostPath } from '../../shared/git-metadata-path'
 
-// Why this is a leaf module rather than part of ipc/worktree-symlinks: status
-// and review-creation need only the read-only "is this a symlink" question, and
-// importing the materialization module would pull APFS cloning — and its
-// child_process dependency — into their graph.
+// Keep read-only symlink detection independent of APFS materialization and child-process imports.
 
 export type SafeRelativePathResult = { safe: true; rel: string } | { safe: false }
 
+// isAbsolute misses drive-relative C:foo, which still escapes the worktree on Windows.
+const WINDOWS_DRIVE_DESIGNATOR = /^[a-zA-Z]:/
+
 export function getSafeRelativePath(rawPath: string): SafeRelativePathResult {
-  // Why: strip leading separators (both `/` and `\`) before the guard so
-  // Windows-style input like `\foo` is normalized the same way POSIX `/foo`
-  // is, and the traversal check below sees the already-relative form.
+  // Strip either separator style before validating so host syntax cannot change the verdict.
   const rel = rawPath.trim().replace(/^[\\/]+/, '')
-  // Why: split on both separators so a Windows-authored `..\escape` is
-  // rejected the same way POSIX `../escape` is. `path.isAbsolute` catches
-  // drive-letter absolutes (`C:\...`); the split catches relative
-  // backslash traversal that `.split('/')` would otherwise miss.
-  if (!rel || isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) {
+  // Validate both separator styles and drive prefixes after ./ normalization on every host.
+  const segments = rel.split(/[\\/]/).filter((segment) => segment !== '' && segment !== '.')
+  if (
+    segments.length === 0 ||
+    WINDOWS_DRIVE_DESIGNATOR.test(segments[0]) ||
+    segments.includes('..')
+  ) {
     return { safe: false }
   }
-  return { safe: true, rel }
+  // Match Git's normalized spelling, using only separators the host filesystem resolves.
+  const gitRel =
+    sep === '\\'
+      ? segments.join('/')
+      : rel
+          .split('/')
+          .filter((segment) => segment !== '' && segment !== '.')
+          .join('/')
+  return gitRel ? { safe: true, rel: gitRel } : { safe: false }
+}
+
+export type WorktreeSymlinkDetectionOptions = {
+  /** Distro that spelled `worktreePath`, for a Windows host reopening a guest path. */
+  wslDistro?: string
 }
 
 export async function findExistingWorktreeSymlinkPaths(
   worktreePath: string,
-  paths: readonly string[]
+  paths: readonly string[],
+  options: WorktreeSymlinkDetectionOptions = {}
 ): Promise<string[]> {
+  // Node filesystem reads need host spelling even when WSL Git reported guest paths.
+  const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
   const symlinkPaths: string[] = []
   for (const rawPath of paths) {
     const safePath = getSafeRelativePath(rawPath)
@@ -34,7 +51,7 @@ export async function findExistingWorktreeSymlinkPaths(
       continue
     }
     try {
-      if ((await lstat(resolve(worktreePath, safePath.rel))).isSymbolicLink()) {
+      if ((await lstat(resolve(hostWorktreePath, safePath.rel))).isSymbolicLink()) {
         symlinkPaths.push(safePath.rel)
       }
     } catch {

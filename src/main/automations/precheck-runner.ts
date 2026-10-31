@@ -2,8 +2,10 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import type { ClientChannel } from 'ssh2'
 import type { AutomationPrecheck, AutomationPrecheckResult } from '../../shared/automations-types'
 import { MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS } from '../../shared/automation-precheck'
-import { getSshConnectionManager } from '../ipc/ssh'
-import { shellEscape } from '../ssh/ssh-connection-utils'
+import { getSshConnectionManager } from '../ssh/targets/ssh-target-registry'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
+import { errorMessage } from '../../shared/error-message'
 
 type AutomationPrecheckExecutionTarget =
   | {
@@ -57,7 +59,7 @@ function createPrecheckResult(args: {
   }
 }
 
-function failedPrecheckResult(
+export function failedPrecheckResult(
   precheck: AutomationPrecheck,
   startedAt: number,
   error: string
@@ -73,7 +75,9 @@ function failedPrecheckResult(
   })
 }
 
-function killLocalPrecheckProcessTree(child: ChildProcess): ReturnType<typeof setTimeout> | null {
+export function killLocalPrecheckProcessTree(
+  child: ChildProcess
+): ReturnType<typeof setTimeout> | null {
   const pid = child.pid
   if (!pid) {
     child.kill()
@@ -81,9 +85,19 @@ function killLocalPrecheckProcessTree(child: ChildProcess): ReturnType<typeof se
   }
 
   if (process.platform === 'win32') {
+    if (
+      !admitSelfInitiatedTreeKill({
+        pid,
+        site: 'automation-precheck-timeout',
+        scope: 'win-taskkill-tree'
+      })
+    ) {
+      // A refused tree walk still permits killing the root through its child handle.
+      child.kill()
+      return null
+    }
     try {
-      // Why: shell prechecks can launch child processes; taskkill walks the
-      // Windows process tree so timeout means the command is actually stopped.
+      // Shell prechecks can leave descendants running after the root exits.
       const killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
         stdio: 'ignore',
         windowsHide: true
@@ -106,7 +120,7 @@ function killLocalPrecheckProcessTree(child: ChildProcess): ReturnType<typeof se
     try {
       process.kill(-pid, 'SIGKILL')
     } catch {
-      /* process group already exited */
+      /* Ignore errors from the final best-effort group kill. */
     }
   }, 2000)
   forceKillTimer.unref?.()
@@ -246,15 +260,11 @@ async function runSshPrecheck(
     return failedPrecheckResult(precheck, startedAt, 'SSH target is not connected.')
   }
   try {
-    const remoteCommand = `cd ${shellEscape(target.cwd)} && ${precheck.command}`
+    const remoteCommand = `cd ${quotePosixShell(target.cwd)} && ${precheck.command}`
     const channel = await connection.exec(remoteCommand)
     return await runSshChannelPrecheck({ precheck, channel, startedAt })
   } catch (error) {
-    return failedPrecheckResult(
-      precheck,
-      startedAt,
-      error instanceof Error ? error.message : String(error)
-    )
+    return failedPrecheckResult(precheck, startedAt, errorMessage(error))
   }
 }
 

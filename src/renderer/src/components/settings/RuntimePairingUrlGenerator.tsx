@@ -11,6 +11,7 @@ import {
   cacheGeneratedRuntimePairingLink,
   clearGeneratedRuntimePairingLink,
   runtimePairingLinkCache,
+  runtimePairingReachForIntent,
   selectRuntimePairingIntent,
   type RuntimePairingIntent,
   type RuntimePairingUrlGeneratorProps
@@ -59,8 +60,7 @@ export function RuntimePairingUrlGenerator({
 
   const setContainerNode = useCallback(
     (node: HTMLDivElement | null): void => {
-      // Why: copy feedback timers are owned by this settings surface; clear
-      // them when Settings collapses or navigates away.
+      // Cancel surface-owned copy timers when Settings detaches.
       if (!node) {
         clearCopiedTargetResetTimer()
       }
@@ -187,16 +187,20 @@ export function RuntimePairingUrlGenerator({
     try {
       const result = await window.api.mobile.getRuntimePairingUrl({
         address,
-        rotate: true
+        rotate: true,
+        // Send declared reach with the address; loopback alone cannot distinguish local-only intent from a tunnel frontend.
+        reach: runtimePairingReachForIntent(intent)
       })
       if (!result.available) {
         clearGeneratedUrls()
         if (mountedRef.current) {
+          // Prefer specific exposure guidance after widening failure, with generic fallback for other unavailable cases (STA-2370).
           toast.error(
-            translate(
-              'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
-              'Runtime pairing is unavailable.'
-            )
+            result.guidance ??
+              translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
+                'Runtime pairing is unavailable.'
+              )
           )
         }
         return
@@ -408,7 +412,6 @@ export function RuntimePairingUrlGenerator({
         currentGrantId={runtimePairingDeviceId}
         isLoading={isLoadingAccessGrants}
         revokingGrantId={revokingGrantId}
-        onRefresh={() => void loadRuntimeAccessGrants({ showToastOnError: true })}
         onRevoke={(grant) => void revokeRuntimeAccess(grant)}
       />
     </div>

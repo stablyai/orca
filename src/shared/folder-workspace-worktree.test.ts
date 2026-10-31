@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from './types'
-import { folderWorkspaceToWorktree } from './folder-workspace-worktree'
+import type { FolderWorkspace } from './folder-workspace-types'
+import type { WorkspaceAttachment } from './worktree/types'
+import { getWorkspaceAttachments } from './workspace-attachments'
+import {
+  folderWorkspaceRepoId,
+  getFolderWorkspaceHostIdentity,
+  folderWorkspaceToWorktree,
+  projectGroupIdFromRepoId
+} from './folder-workspace-worktree'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
   return {
@@ -24,6 +31,41 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 }
 
 describe('folderWorkspaceToWorktree', () => {
+  it.each([
+    [{}, 'local|folder:folder-workspace-1'],
+    [{ connectionId: 'ssh host' }, 'ssh:ssh%20host|folder:folder-workspace-1'],
+    [
+      { executionHostId: 'runtime:host' as const, connectionId: 'ignored' },
+      'runtime:host|folder:folder-workspace-1'
+    ],
+    [
+      { executionHostId: 'local' as const, connectionId: 'ignored' },
+      'local|folder:folder-workspace-1'
+    ]
+  ])('keeps folder row identity on its explicit or legacy host %j', (fields, identity) => {
+    const workspace = makeFolderWorkspace(fields)
+    expect(getFolderWorkspaceHostIdentity(workspace)).toBe(identity)
+    expect(folderWorkspaceToWorktree(workspace).hostId).toBe(identity.split('|')[0])
+  })
+  it('preserves multiple attachments and projects a bare Linear task without enabling review checks', () => {
+    const linkedItems: WorkspaceAttachment[] = [
+      { provider: 'github', type: 'pr', number: 7 },
+      {
+        provider: 'linear',
+        type: 'issue',
+        number: 0,
+        identifier: 'APP-42',
+        linearOrganizationUrlKey: 'acme'
+      },
+      { provider: 'github', type: 'issue', number: 8 }
+    ]
+    const worktree = folderWorkspaceToWorktree(makeFolderWorkspace({ linkedItems }))
+    expect(worktree.linkedItems).toEqual(linkedItems)
+    expect(getWorkspaceAttachments(worktree)).toHaveLength(3)
+    expect(worktree.linkedLinearIssue).toBe('APP-42')
+    expect(worktree.linkedLinearIssueOrganizationUrlKey).toBe('acme')
+    expect(worktree.linkedPR).toBeNull()
+  })
   it('projects attached issue tasks without creating linked PR metadata', () => {
     const githubIssue = folderWorkspaceToWorktree(
       makeFolderWorkspace({
@@ -132,6 +174,17 @@ describe('folderWorkspaceToWorktree', () => {
     })
   })
 
+  it('projects runtime ownership from the folder execution host', () => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({ executionHostId: 'runtime:shared%20server' })
+    )
+
+    expect(worktree).toMatchObject({
+      hostId: 'runtime:shared%20server',
+      runtimeOwnerEnvironmentId: 'shared server'
+    })
+  })
+
   it('keeps review-style tasks attached only to the folder workspace record', () => {
     const githubPr = folderWorkspaceToWorktree(
       makeFolderWorkspace({
@@ -160,5 +213,35 @@ describe('folderWorkspaceToWorktree', () => {
     expect(githubPr.linkedIssue).toBeNull()
     expect(gitlabMr.linkedGitLabMR).toBeNull()
     expect(gitlabMr.linkedGitLabIssue).toBeNull()
+  })
+})
+
+describe('recognising a folder workspace repoId', () => {
+  // Synthetic repoId is always present; absence checks would render it as a real repo id.
+  it('never mints a null repoId, so absence cannot be the test for having no repo', () => {
+    const worktree = folderWorkspaceToWorktree(makeFolderWorkspace({ projectGroupId: 'group-9' }))
+
+    expect(worktree.repoId).not.toBeNull()
+    expect(projectGroupIdFromRepoId(worktree.repoId)).toBe('group-9')
+  })
+
+  it('round-trips the project group through the id it mints', () => {
+    expect(projectGroupIdFromRepoId(folderWorkspaceRepoId('4c3c3452-758b'))).toBe('4c3c3452-758b')
+  })
+
+  // Use a long real repo id: short ids slice to empty even without a prefix check, hiding misclassification.
+  it.each([
+    'repo-1',
+    'acme/app',
+    '',
+    'folder-workspace:',
+    'a-repo-id-comfortably-longer-than-the-prefix'
+  ])('reports no project group for %s', (repoId) => {
+    expect(projectGroupIdFromRepoId(repoId)).toBeNull()
+  })
+
+  it('reports no project group for an absent repoId', () => {
+    expect(projectGroupIdFromRepoId(null)).toBeNull()
+    expect(projectGroupIdFromRepoId(undefined)).toBeNull()
   })
 })

@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const reactHookRuntime = vi.hoisted(() => ({
@@ -6,7 +7,7 @@ const reactHookRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback<T>(callback: T) {
@@ -57,6 +58,28 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: function TooltipTrigger(props: { children?: unknown }) {
     return props.children
   }
+}))
+
+vi.mock('@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover', () => ({
+  WorkspaceEmojiSuggestionPopover: () => null
+}))
+
+vi.mock('@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput', () => ({
+  useWorkspaceEmojiShortcodeInput: ({
+    onValueChange
+  }: {
+    onValueChange: (value: string) => void
+  }) => ({
+    close: vi.fn(),
+    commandValue: '',
+    handleKeyDown: () => false,
+    handleValueChange: (value: string) => onValueChange(value),
+    onCommandValueChange: vi.fn(),
+    open: false,
+    selectSuggestion: vi.fn(),
+    suggestions: [],
+    syncCursor: vi.fn()
+  })
 }))
 
 type ReactElementLike = {

@@ -1,6 +1,6 @@
 import type { AppState } from '@/store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-client-target'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget,
@@ -14,19 +14,18 @@ import {
 } from '../../../shared/local-windows-terminal-runtime'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { resolveTerminalStartupCwd } from '../../../shared/terminal-startup-cwd'
-import type { GlobalSettings, TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
+import { wslHostDistroForTarget } from './wsl-host-account-owner'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-type RuntimeEnvironmentSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
-
-/** Everything the pane lane needs: the workspace path plus the project runtime inputs. */
 type CodexPaneLaneState = Pick<
   AppState,
   | 'activeRepoId'
@@ -34,65 +33,42 @@ type CodexPaneLaneState = Pick<
   | 'folderWorkspaces'
   | 'projects'
   | 'repos'
+  | 'runtimeEnvironments'
   | 'settings'
   | 'worktreesByRepo'
 >
 
-/**
- * Lane keys for panes whose Codex credentials come from another machine.
- *
- * Why they need keys at all: a managed Codex account is scoped to one machine
- * AND one runtime (`host` or `wsl:<distro>`). A relay environment keeps its own
- * account roster, and an SSH connection has no Orca-managed selection whatsoever
- * — the remote Codex reads that machine's own credentials. Neither can be
- * stranded by a local selection change, so they must not share the local keys.
- */
+/** Foreign machines have independent credentials; assign distinct lanes so local host/WSL account switches cannot mute their panes. */
 const RUNTIME_ENVIRONMENT_LANE_PREFIX = 'env:'
 const SSH_CONNECTION_LANE_KEY = 'ssh-connection'
 const UNATTRIBUTED_REMOTE_LANE_KEY = 'remote-runtime'
 const HOST_LANE_KEY = 'host'
 const WSL_LANE_PREFIX = 'wsl:'
 
-/** True for the lanes an on-disk pane-account record can name. */
 export function isLocalCodexSelectionLaneKey(laneKey: string): boolean {
   return laneKey === HOST_LANE_KEY || laneKey.startsWith(WSL_LANE_PREFIX)
 }
 
-/**
- * True when the pane's shell runs on a machine other than this one.
- *
- * Why it takes only the id: a `remote:`/`ssh:` prefix is assigned at spawn and
- * is decisive on its own, so callers with no store access (the bind-driven
- * sweep) can skip these panes before spending a 15s RPC on them.
- */
+/** Spawn-assigned remote:/ssh: IDs prove foreign ownership without store access; skip pointless 15s inspections early. */
 export function isForeignMachineCodexPtyId(ptyId: string): boolean {
   return parseRemoteRuntimePtyId(ptyId) !== null || parseAppSshPtyId(ptyId) !== null
 }
 
-/** Matches the panes a Codex account mutation could have re-pointed. */
 export function getCodexAccountSwitchLaneMatcher(args: {
-  settings: RuntimeEnvironmentSettings | null | undefined
+  /** Host whose roster the mutation wrote. */
+  owner: RuntimeClientTarget
   target?: CodexAccountSelectionTarget | null
-  /**
-   * True only when the mutation cleared every WSL distro slot at once, which
-   * setSelectedCodexAccountIdForTarget does for a null account on a distro-less
-   * WSL target. Any other write lands in a single slot, so defaulting this to
-   * false keeps the matcher from muting a sibling distro's healthy panes.
-   */
+  /** Match all WSL lanes only when null-account, distro-less selection clears every slot; other writes must not mute sibling distros. */
   clearsEveryWslDistro?: boolean
 }): (laneKey: string) => boolean {
-  const runtimeTarget = getActiveRuntimeTarget(args.settings)
-  // Why: with an environment active the mutation is RPC'd to that machine's
-  // roster and local GlobalSettings are never touched, so the local host/WSL
-  // panes are exactly the ones the switch cannot have affected.
+  const runtimeTarget = args.owner
+  // Server-owned mutations leave local settings untouched; local host/WSL panes cannot be affected.
   if (runtimeTarget.kind === 'environment') {
     const environmentLaneKey = `${RUNTIME_ENVIRONMENT_LANE_PREFIX}${runtimeTarget.environmentId}`
     return (laneKey) => laneKey === environmentLaneKey
   }
   const normalized = normalizeCodexAccountSelectionTarget(args.target)
-  // Why a family rather than the `wsl:__default__` key: clearing a distro-less
-  // WSL selection nulls every distro slot, so every WSL pane really is stranded.
-  // Keying that to `__default__` alone would leave them all without a notice.
+  // Distro-less clearing nulls all WSL slots, so match the whole family rather than only __default__.
   if (args.clearsEveryWslDistro && normalized.runtime === 'wsl' && normalized.wslDistro === null) {
     return (laneKey) => laneKey.startsWith(WSL_LANE_PREFIX)
   }
@@ -101,7 +77,6 @@ export function getCodexAccountSwitchLaneMatcher(args: {
 }
 
 export type CodexPaneSelectionLane = {
-  /** The lane the caller must filter on. */
   laneKey: string
   /** Which answer won: main's spawn-time record, or the renderer's re-derivation. */
   source: 'recorded' | 'derived'
@@ -109,18 +84,7 @@ export type CodexPaneSelectionLane = {
   derivedLaneKey: string | null
 }
 
-/**
- * The lane a pane launched from, preferring the one main recorded at spawn.
- *
- * Why recorded wins: main writes `selectionKey` from the shell, cwd and distro
- * the spawn actually resolved, so it cannot drift. The derivation below reads
- * CURRENT state, so flipping the global WSL distro or a project's runtime
- * preference after a pane opened makes it answer for a launch that never
- * happened — a missed notice one way, a muted working terminal the other.
- *
- * The derivation stays because it is the only answer for the panes main never
- * records: every pre-feature pane, and every LocalPtyProvider or remote spawn.
- */
+/** Prefer main’s immutable spawn lane; current runtime preferences can drift and cause missed notices or mute healthy panes. Derive only for older/unrecorded spawns. */
 export function resolveCodexPaneSelectionLane(args: {
   state: CodexPaneLaneState
   tab: Pick<TerminalTab, 'shellOverride' | 'startupCwd' | 'worktreeId'>
@@ -129,10 +93,7 @@ export function resolveCodexPaneSelectionLane(args: {
   recordedLaneKey?: string | null
 }): CodexPaneSelectionLane {
   const recorded = args.recordedLaneKey?.trim()
-  // Why the local-key check: the registry accepts any string it finds on disk,
-  // and a lane key that matches no switch silently drops that pane's notice.
-  // Why foreign ids still derive: their lane is settled by the id itself and no
-  // record can exist for one, so a hit here would mean a recycled id.
+  // Validate persisted local lanes; foreign IDs derive directly because registry hits there imply recycled IDs.
   const trustsRecord =
     Boolean(recorded) &&
     isLocalCodexSelectionLaneKey(recorded as string) &&
@@ -143,8 +104,7 @@ export function resolveCodexPaneSelectionLane(args: {
   }
   const derivedLaneKey = deriveLaneKeyForDiagnostics(args)
   if (derivedLaneKey !== null && derivedLaneKey !== recorded) {
-    // Why loud: every divergence found in review was this exact disagreement,
-    // and the recorded key now hides it instead of producing a visible bug.
+    // Report divergence: the authoritative record otherwise hides bugs in fallback derivation.
     console.warn('[codex-lane] recorded launch lane disagrees with the derived one:', {
       ptyId: args.ptyId,
       recorded,
@@ -167,7 +127,6 @@ function deriveLaneKeyForDiagnostics(args: {
   }
 }
 
-/** The lane a live pane resolves its Codex account from, re-derived from state. */
 export function resolveCodexPaneSelectionLaneKey(args: {
   state: CodexPaneLaneState
   tab: Pick<TerminalTab, 'shellOverride' | 'startupCwd' | 'worktreeId'>
@@ -175,15 +134,19 @@ export function resolveCodexPaneSelectionLaneKey(args: {
 }): string {
   const remoteParts = parseRemoteRuntimePtyId(args.ptyId)
   if (remoteParts !== null) {
-    const runtimeTarget = getActiveRuntimeTarget(args.state.settings)
-    // Why: mirror inspectRuntimeTerminalProcess — an owner-less remote id is
-    // routed to whichever environment is active, so that is its lane too.
-    const environmentId =
-      remoteParts.environmentId?.trim() ||
-      (runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null)
-    return environmentId
-      ? `${RUNTIME_ENVIRONMENT_LANE_PREFIX}${environmentId}`
-      : UNATTRIBUTED_REMOTE_LANE_KEY
+    // Why: mirror inspectRuntimeTerminalProcess — an owner-less remote id reaches no server.
+    const environmentId = remoteParts.environmentId?.trim()
+    if (!environmentId) {
+      return UNATTRIBUTED_REMOTE_LANE_KEY
+    }
+    // A WSL host's Codex home is this desktop's selection for its distro (the accounts shim).
+    const wslHostDistro = wslHostDistroForTarget(
+      { kind: 'environment', environmentId },
+      args.state.runtimeEnvironments ?? []
+    )
+    return wslHostDistro
+      ? getCodexSelectionLaneKey({ runtime: 'wsl', wslDistro: wslHostDistro })
+      : `${RUNTIME_ENVIRONMENT_LANE_PREFIX}${environmentId}`
   }
   if (parseAppSshPtyId(args.ptyId) !== null) {
     return SSH_CONNECTION_LANE_KEY
@@ -191,15 +154,7 @@ export function resolveCodexPaneSelectionLaneKey(args: {
   return getCodexSelectionLaneKey(resolveLocalPaneSelectionTarget(args))
 }
 
-/**
- * Mirrors the main-process getCodexSelectionTargetForPty, from renderer state.
- *
- * Why the pane cwd and not the workspace root: a terminal's startup cwd is
- * deliberately NOT constrained to the worktree (see resolveTerminalStartupCwd,
- * #7685), so a pane split after `cd \\wsl.localhost\...` runs on a different
- * filesystem than its workspace. Main keys the lane off that cwd, so reading the
- * root instead would call a live WSL pane `host` and mute it on a host switch.
- */
+/** Mirror main using actual pane startup cwd, which can leave the worktree (#7685); root-based inference can mislabel a live WSL pane host. */
 function resolveLocalPaneSelectionTarget(args: {
   state: CodexPaneLaneState
   tab: Pick<TerminalTab, 'shellOverride' | 'startupCwd' | 'worktreeId'>
@@ -216,17 +171,11 @@ function resolveLocalPaneSelectionTarget(args: {
   return { runtime: 'host' }
 }
 
-/** The absolute directory the pane's shell was spawned in, as main resolved it. */
 function resolvePaneCwd(args: {
   state: CodexPaneLaneState
   tab: Pick<TerminalTab, 'startupCwd' | 'worktreeId'>
 }): string | null {
-  // Why floating terminals get no cwd: theirs never reaches the tab. It is
-  // resolved over IPC from settings.floatingTerminalCwd and handed to the
-  // transport as a prop, so the store cannot see the path main keyed off. Such a
-  // pane falls through to its shell below, which is right unless the configured
-  // floating cwd is a WSL UNC path under a host shell — a known gap, not a guess
-  // worth making, since guessing wrong here mutes a working terminal.
+  // Floating cwd is IPC-only, so fall back to shell; a WSL UNC cwd under a host shell remains unknown rather than risking muting a healthy pane.
   if (args.tab.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return null
   }
@@ -234,26 +183,16 @@ function resolvePaneCwd(args: {
   if (!workspacePath) {
     return null
   }
-  // Why this exact call: it is the same one main spawns through, so a relative
-  // or inherited startup folder resolves to the identical absolute path.
+  // Use main’s resolver so relative/inherited startup folders produce the same absolute cwd.
   return resolveTerminalStartupCwd(workspacePath, args.tab.startupCwd) ?? workspacePath
 }
 
-/**
- * The shell and distro the launch resolved, not merely the ones the tab asked for.
- *
- * Why getLocalProjectExecutionRuntimeContext specifically: for a local pane the
- * RENDERER computes the project runtime and ships it with the spawn
- * (pty-connection.ts), so this is not an approximation of main — it is the same
- * call on the same state. Re-deriving it by hand drops the global WSL default,
- * which turns `inherit-global` into WSL and would key a live WSL pane `host`.
- */
+/** Use the same project-runtime resolver the renderer sends with spawn; manual derivation can miss inherited global WSL and mislabel it host. */
 function resolveLocalPaneTerminalRuntime(args: {
   state: CodexPaneLaneState
   tab: Pick<TerminalTab, 'shellOverride' | 'startupCwd' | 'worktreeId'>
 }): LocalWindowsTerminalRuntimeOptions {
-  // Why the platform gate: pty.ts only consults the Windows terminal runtime on
-  // win32, so elsewhere the tab's own override is the whole answer.
+  // Only win32 spawns consult Windows runtime settings; other platforms use the tab override alone.
   if (getRendererAppPlatform() !== 'win32') {
     return { shellOverride: args.tab.shellOverride, terminalWindowsWslDistro: null }
   }
@@ -270,9 +209,7 @@ function resolveLocalPaneTerminalRuntime(args: {
     }
   )
   if (projectRuntime?.status === 'repair-required') {
-    // Why not delegate: resolveLocalWindowsTerminalRuntimeOptions throws here,
-    // and this call sits outside the scan's per-pane failure guard, so a throw
-    // would lose the notice for every pane in the batch, not just this one.
+    // Handle repair-required before the throwing resolver; this call is outside per-pane guards and must not reject the batch.
     return {
       shellOverride: 'wsl.exe',
       terminalWindowsWslDistro: projectRuntime.repair.preferredRuntime.distro
@@ -292,12 +229,13 @@ function getWorkspacePath(
   const parsed = parseWorkspaceKey(worktreeId)
   if (parsed?.type === 'folder') {
     return (
-      (state.folderWorkspaces ?? []).find((workspace) => workspace.id === parsed.folderWorkspaceId)
-        ?.folderPath ?? null
+      (selectFolderWorkspaces(state) ?? []).find(
+        (workspace) => workspace.id === parsed.folderWorkspaceId
+      )?.folderPath ?? null
     )
   }
   return (
-    Object.values(state.worktreesByRepo ?? {})
+    Object.values(selectWorktreesByRepo(state) ?? {})
       .flat()
       .find((entry) => entry.id === worktreeId)?.path ?? null
   )

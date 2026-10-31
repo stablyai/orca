@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { join } from 'node:path'
+import type * as ProcessHost from '@orca/process-host'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
   CLIPBOARD_IMAGE_MAX_PIXELS,
@@ -9,11 +11,12 @@ import {
 const {
   removeHandlerMock,
   handleMock,
-  spawnMock,
-  childStdinEndMock,
+  runProcessMock,
   resolveAuthorizedPathMock,
+  fsAccessMock,
+  fsLstatMock,
   fsMkdirMock,
-  fsReaddirMock,
+  fsOpendirMock,
   fsRmMock,
   fsWriteFileMock,
   fsOpenMock,
@@ -22,31 +25,21 @@ const {
   clipboardReadBufferMock,
   clipboardWriteTextMock,
   clipboardReadImageMock,
+  clipboardAvailableFormatsMock,
   clipboardWriteImageMock,
   clipboardWriteBufferMock,
   nativeImageCreateFromBufferMock,
   randomUUIDMock,
-  getSshFilesystemProviderMock,
   callRuntimeEnvironmentMock
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
-  childStdinEndMock: vi.fn(),
-  spawnMock: vi.fn(() => {
-    const child = {
-      stdin: { end: childStdinEndMock },
-      on: vi.fn((event: string, callback: (code?: number) => void) => {
-        if (event === 'exit') {
-          queueMicrotask(() => callback(0))
-        }
-        return child
-      })
-    }
-    return child
-  }),
+  runProcessMock: vi.fn<typeof ProcessHost.runProcess>(),
   resolveAuthorizedPathMock: vi.fn(),
+  fsAccessMock: vi.fn(),
+  fsLstatMock: vi.fn(),
   fsMkdirMock: vi.fn(),
-  fsReaddirMock: vi.fn(),
+  fsOpendirMock: vi.fn(),
   fsRmMock: vi.fn(),
   fsWriteFileMock: vi.fn(),
   fsOpenMock: vi.fn(),
@@ -55,34 +48,35 @@ const {
   clipboardReadBufferMock: vi.fn(),
   clipboardWriteTextMock: vi.fn(),
   clipboardReadImageMock: vi.fn(),
+  clipboardAvailableFormatsMock: vi.fn(),
   clipboardWriteImageMock: vi.fn(),
   clipboardWriteBufferMock: vi.fn(),
   nativeImageCreateFromBufferMock: vi.fn(),
   randomUUIDMock: vi.fn(() => '00000000-0000-4000-8000-000000000000'),
-  getSshFilesystemProviderMock: vi.fn(),
   callRuntimeEnvironmentMock: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({
-  spawn: spawnMock
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProcessHost>()),
+  runProcess: runProcessMock
 }))
 
 vi.mock('node:fs/promises', () => ({
+  access: fsAccessMock,
+  lstat: fsLstatMock,
   mkdir: fsMkdirMock,
-  readdir: fsReaddirMock,
+  opendir: fsOpendirMock,
   rm: fsRmMock,
   open: fsOpenMock,
   stat: fsStatMock,
-  default: {
-    writeFile: fsWriteFileMock
-  }
+  realpath: vi.fn(), // unused here; only satisfies filesystem-path-containment's named import
+  writeFile: fsWriteFileMock,
+  default: { writeFile: fsWriteFileMock, mkdir: fsMkdirMock }
 }))
 
-vi.mock('../ipc/filesystem-auth', () => ({
+vi.mock('../ipc/filesystem/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE:
     'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.',
-  isENOENT: (error: unknown): boolean =>
-    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT',
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 
@@ -92,6 +86,7 @@ vi.mock('node:crypto', () => ({
 
 vi.mock('electron', () => ({
   app: {
+    commandLine: { getSwitchValue: vi.fn(() => 'x11') },
     getPath: vi.fn(() => '/tmp')
   },
   clipboard: {
@@ -99,6 +94,7 @@ vi.mock('electron', () => ({
     readBuffer: clipboardReadBufferMock,
     writeText: clipboardWriteTextMock,
     readImage: clipboardReadImageMock,
+    availableFormats: clipboardAvailableFormatsMock,
     writeImage: clipboardWriteImageMock,
     writeBuffer: clipboardWriteBufferMock
   },
@@ -111,20 +107,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock,
-  requireSshFilesystemProvider: (connectionId: string) => {
-    const provider = getSshFilesystemProviderMock(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
-    return provider
-  }
-}))
-
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
@@ -133,7 +116,6 @@ import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
 } from './clipboard-ipc-handlers'
-import { cleanupExpiredRemoteClipboardFiles } from './clipboard-remote-file-copy'
 
 function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -144,6 +126,12 @@ function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
     handlers.set(channel, handler)
   }
   return handlers
+}
+
+function registerMockClipboardHandlers(): Map<string, (...args: unknown[]) => unknown> {
+  // SAFETY: Path authorization is mocked; these clipboard handlers do not read Store state.
+  registerClipboardHandlers({} as never)
+  return getRegisteredHandlers()
 }
 
 function makeClipboardEvent(senderOverrides: Record<string, unknown> = {}): {
@@ -173,10 +161,6 @@ function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
   return () => settled
 }
 
-function dirent(name: string, directory = true): { name: string; isDirectory: () => boolean } {
-  return { name, isDirectory: () => directory }
-}
-
 function shellIdListArray(childCount: number): Buffer {
   const value = Buffer.alloc(4 + 4 * (childCount + 1))
   value.writeUInt32LE(childCount)
@@ -185,17 +169,35 @@ function shellIdListArray(childCount: number): Buffer {
 
 describe('registerClipboardHandlers', () => {
   beforeEach(() => {
+    installFakeAppEnvironment({ getPath: () => '/tmp' })
     vi.spyOn(Date, 'now').mockReturnValue(1760000000000)
     removeHandlerMock.mockReset()
     handleMock.mockReset()
-    spawnMock.mockClear()
-    childStdinEndMock.mockClear()
+    runProcessMock.mockReset()
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
     resolveAuthorizedPathMock.mockReset()
     resolveAuthorizedPathMock.mockImplementation(async (path: string) => path)
+    fsLstatMock.mockReset()
+    fsLstatMock.mockResolvedValue({
+      isDirectory: () => true,
+      isSymbolicLink: () => false,
+      mode: 0o700,
+      uid: typeof process.getuid === 'function' ? process.getuid() : 0
+    })
     fsMkdirMock.mockReset()
     fsMkdirMock.mockResolvedValue(undefined)
-    fsReaddirMock.mockReset()
-    fsReaddirMock.mockResolvedValue([])
+    fsOpendirMock.mockReset()
+    // Registration starts expired-staging cleanup; an empty temp root keeps it inert.
+    fsOpendirMock.mockImplementation(async () => ({
+      async *[Symbol.asyncIterator]() {},
+      close: vi.fn().mockResolvedValue(undefined)
+    }))
     fsRmMock.mockReset()
     fsRmMock.mockResolvedValue(undefined)
     fsWriteFileMock.mockReset()
@@ -206,15 +208,15 @@ describe('registerClipboardHandlers', () => {
     clipboardReadBufferMock.mockReset()
     clipboardReadBufferMock.mockReturnValue(Buffer.alloc(0))
     clipboardWriteTextMock.mockReset()
+    clipboardAvailableFormatsMock.mockReturnValue(['image/png'])
     clipboardReadImageMock.mockReset()
     clipboardWriteImageMock.mockReset()
     clipboardWriteBufferMock.mockReset()
     nativeImageCreateFromBufferMock.mockReset()
     randomUUIDMock.mockReset()
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
-    getSshFilesystemProviderMock.mockReset()
     callRuntimeEnvironmentMock.mockReset()
-    setTrustedClipboardRendererWebContentsId(null)
+    setTrustedClipboardRendererWebContentsId(17)
   })
 
   afterEach(() => {
@@ -254,6 +256,160 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('primary text', 'selection')
   })
 
+  it.each(['clipboard:writeText', 'clipboard:writeTerminalText'])(
+    'keeps a newer image after %s yields without blocking primary selection',
+    async (channel) => {
+      vi.useFakeTimers()
+      const publications: string[] = []
+      let textValue = ''
+      clipboardReadTextMock.mockImplementation(() => textValue)
+      clipboardWriteTextMock.mockImplementation((text: string, selection?: string) => {
+        if (selection === 'selection') {
+          publications.push('selection')
+        } else {
+          textValue = text
+          publications.push('text')
+        }
+      })
+      nativeImageCreateFromBufferMock.mockReturnValue({
+        getSize: () => ({ width: 2, height: 2 }),
+        isEmpty: () => false
+      })
+      clipboardWriteImageMock.mockImplementation(() => publications.push('image'))
+      const handlers = registerMockClipboardHandlers()
+      const large = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS * 2)
+      const text = handlers.get(channel)?.(makeClipboardEvent(), large)
+      const image = handlers.get('clipboard:writeImage')?.(
+        makeClipboardEvent(),
+        'data:image/png;base64,AAAA'
+      )
+      await handlers.get('clipboard:writeSelectionText')?.(makeClipboardEvent(), 'primary')
+      const whileTextPending = [...publications]
+      const decodedWhileTextPending = nativeImageCreateFromBufferMock.mock.calls.length
+      await vi.runAllTimersAsync()
+      await Promise.all([text, image])
+      expect(whileTextPending).toEqual(['selection'])
+      expect(decodedWhileTextPending).toBe(0)
+      expect(publications).toEqual(['selection', 'text', 'image'])
+    }
+  )
+
+  it.each(['path resolution', 'helper publication'])(
+    'keeps newer text after an older file stalls at %s',
+    async (stage) => {
+      vi.useFakeTimers()
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+      let release: () => void = () => undefined
+      let onEntered: () => void = () => undefined
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const entered = new Promise<void>((resolve) => {
+        onEntered = resolve
+      })
+      const publications: string[] = []
+      if (stage === 'path resolution') {
+        resolveAuthorizedPathMock.mockImplementationOnce(async (path: string) => {
+          onEntered()
+          await gate
+          return path
+        })
+      }
+      runProcessMock.mockImplementationOnce(async () => {
+        if (stage === 'helper publication') {
+          onEntered()
+          await gate
+        }
+        publications.push('file')
+        return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+      })
+      clipboardWriteTextMock.mockImplementation(() => publications.push('text'))
+      const handlers = registerMockClipboardHandlers()
+      const file = handlers.get('clipboard:writeFile')?.(
+        makeClipboardEvent(),
+        '/tmp/copied-file.txt'
+      )
+      await entered
+      const text = handlers.get('clipboard:writeText')?.(makeClipboardEvent(), 'newer')
+      await vi.advanceTimersByTimeAsync(1_000)
+      const whileFilePending = [...publications]
+      release()
+      await expect(file).resolves.toEqual({ ok: true })
+      await text
+      expect(whileFilePending).toEqual([])
+      expect(publications).toEqual(['file', 'text'])
+    }
+  )
+
+  it('keeps an older valid text copy when newer image and file requests are rejected', async () => {
+    vi.useFakeTimers()
+    nativeImageCreateFromBufferMock.mockReturnValue({ isEmpty: () => true })
+    resolveAuthorizedPathMock.mockRejectedValueOnce(
+      new Error(
+        'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
+      )
+    )
+    const handlers = registerMockClipboardHandlers()
+    const large = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS * 2)
+    const text = handlers.get('clipboard:writeText')?.(makeClipboardEvent(), large)
+    const image = handlers.get('clipboard:writeImage')?.(
+      makeClipboardEvent(),
+      'data:image/png;base64,AAAA'
+    )
+    const file = handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), '/tmp/denied.txt')
+    await vi.runAllTimersAsync()
+    await Promise.all([text, image])
+    await expect(file).resolves.toEqual({ ok: false, reason: 'access-denied' })
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith(large)
+    expect(clipboardWriteImageMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
+    await handlers.get('clipboard:writeText')?.(makeClipboardEvent(), 'after rejection')
+    expect(clipboardWriteTextMock).toHaveBeenLastCalledWith('after rejection')
+  })
+
+  it('rejects a full image/file queue before decoding or resolving another payload', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    let release: () => void = () => undefined
+    let onEntered: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const entered = new Promise<void>((resolve) => {
+      onEntered = resolve
+    })
+    resolveAuthorizedPathMock.mockImplementationOnce(async (path: string) => {
+      onEntered()
+      await gate
+      return path
+    })
+    nativeImageCreateFromBufferMock.mockReturnValue({
+      getSize: () => ({ width: 2, height: 2 }),
+      isEmpty: () => false
+    })
+    const handlers = registerMockClipboardHandlers()
+    const file = handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), '/tmp/copied-file.txt')
+    await entered
+    const images = Array.from({ length: 31 }, () =>
+      handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+    )
+    await expect(
+      handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+    ).rejects.toThrow('Too many pending clipboard writes')
+    await expect(
+      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), '/tmp/overflow.txt')
+    ).resolves.toEqual({ ok: false, reason: 'clipboard-busy' })
+    const decodedWhileBlocked = nativeImageCreateFromBufferMock.mock.calls.length
+    const resolvedWhileBlocked = resolveAuthorizedPathMock.mock.calls.length
+    release()
+    await expect(file).resolves.toEqual({ ok: true })
+    await Promise.all(images)
+    expect(decodedWhileBlocked).toBe(0)
+    expect(resolvedWhileBlocked).toBe(1)
+    expect(clipboardWriteImageMock).toHaveBeenCalledTimes(31)
+    await handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+    expect(clipboardWriteImageMock).toHaveBeenCalledTimes(32)
+  })
+
   it('rejects clipboard IPC from senders outside the current main renderer', async () => {
     setTrustedClipboardRendererWebContentsId(17)
     registerClipboardHandlers({} as never)
@@ -284,10 +440,11 @@ describe('registerClipboardHandlers', () => {
     expect(nativeImageCreateFromBufferMock).not.toHaveBeenCalled()
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
   })
 
-  it('writes local files through the trusted clipboard IPC handler', async () => {
+  it('writes local files through the trusted handler into process-host', async () => {
+    // Pinned so the process-host wiring runs on every CI host, macOS included.
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
@@ -296,120 +453,8 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toEqual({ ok: true })
 
     expect(fsStatMock).toHaveBeenCalledWith('/tmp/copied-file.txt')
-    expect(resolveAuthorizedPathMock).toHaveBeenCalledWith('/tmp/copied-file.txt', {})
-    if (process.platform === 'darwin') {
-      expect(clipboardWriteBufferMock).toHaveBeenCalledWith(
-        'public.file-url',
-        Buffer.from('file:///tmp/copied-file.txt', 'utf8')
-      )
-    } else {
-      expect(spawnMock).toHaveBeenCalled()
-    }
-  })
-
-  it('sweeps expired remote clipboard staging directories', async () => {
-    const nowMs = 1760000000000
-    fsReaddirMock.mockResolvedValue([
-      dirent('orca-clipboard-file-expired'),
-      dirent('orca-clipboard-file-fresh'),
-      dirent('orca-clipboard-file-plain-file', false),
-      dirent('unrelated-temp')
-    ])
-    fsStatMock.mockImplementation(async (targetPath: string) => {
-      if (targetPath.endsWith('expired')) {
-        return { mtimeMs: nowMs - 60 * 60 * 1000 - 1 }
-      }
-      if (targetPath.endsWith('fresh')) {
-        return { mtimeMs: nowMs - 1000 }
-      }
-      throw new Error(`unexpected stat: ${targetPath}`)
-    })
-
-    await cleanupExpiredRemoteClipboardFiles(nowMs)
-
-    expect(fsRmMock).toHaveBeenCalledTimes(1)
-    expect(fsRmMock).toHaveBeenCalledWith(join('/tmp', 'orca-clipboard-file-expired'), {
-      recursive: true,
-      force: true
-    })
-  })
-
-  it('materializes remote files before writing them to the OS clipboard', async () => {
-    const provider = {
-      stat: vi.fn().mockResolvedValue({ size: 12, type: 'file', mtime: 123 }),
-      downloadFile: vi.fn().mockResolvedValue(undefined)
-    }
-    getSshFilesystemProviderMock.mockReturnValue(provider)
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    const tempDir = join(
-      '/tmp',
-      'orca-clipboard-file-1760000000000-00000000-0000-4000-8000-000000000000'
-    )
-    const tempPath = join(tempDir, 'report.pdf')
-
-    await expect(
-      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
-        filePath: '/remote/report.pdf',
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toEqual({ ok: true })
-
-    expect(provider.stat).toHaveBeenCalledWith('/remote/report.pdf')
-    expect(fsMkdirMock).toHaveBeenCalledWith(tempDir, { mode: 0o700 })
-    expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
-    expect(fsStatMock).toHaveBeenCalledWith(tempPath)
-    expect(resolveAuthorizedPathMock).not.toHaveBeenCalled()
-    expect(fsRmMock).not.toHaveBeenCalled()
-  })
-
-  it('does not materialize remote directories for OS clipboard copy', async () => {
-    const provider = {
-      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
-      downloadFile: vi.fn()
-    }
-    getSshFilesystemProviderMock.mockReturnValue(provider)
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
-        filePath: '/remote/src',
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toEqual({ ok: false, reason: 'is-directory' })
-
-    expect(provider.downloadFile).not.toHaveBeenCalled()
-    expect(fsMkdirMock).not.toHaveBeenCalled()
-    expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
-  })
-
-  it('cleans up remote clipboard temp files when transfer fails', async () => {
-    const provider = {
-      stat: vi.fn().mockResolvedValue({ size: 12, type: 'file', mtime: 123 }),
-      downloadFile: vi.fn().mockRejectedValue(new Error('transfer failed'))
-    }
-    getSshFilesystemProviderMock.mockReturnValue(provider)
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    const tempDir = join(
-      '/tmp',
-      'orca-clipboard-file-1760000000000-00000000-0000-4000-8000-000000000000'
-    )
-    const tempPath = join(tempDir, 'report.pdf')
-
-    await expect(
-      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
-        filePath: '/remote/report.pdf',
-        connectionId: 'ssh-1'
-      })
-    ).rejects.toThrow('transfer failed')
-
-    expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
-    expect(fsRmMock).toHaveBeenCalledWith(tempDir, { recursive: true, force: true })
-    expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
+    expect(resolveAuthorizedPathMock.mock.calls[0]?.[0]).toBe('/tmp/copied-file.txt')
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects unauthorized local files before touching the OS clipboard', async () => {
@@ -427,10 +472,10 @@ describe('registerClipboardHandlers', () => {
 
     expect(fsStatMock).not.toHaveBeenCalled()
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
-    expect(spawnMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
   })
 
-  it('rejects clipboard IPC from destroyed, browser, and mismatched dev-origin senders', async () => {
+  it('rejects clipboard IPC from unpinned file://, destroyed, browser, and mismatched dev-origin senders', async () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
@@ -440,6 +485,12 @@ describe('registerClipboardHandlers', () => {
     await expect(
       handlers.get('clipboard:readText')?.(makeClipboardEvent({ getType: () => 'webview' }))
     ).rejects.toThrow('Unauthorized clipboard IPC sender')
+
+    setTrustedClipboardRendererWebContentsId(null)
+    vi.stubEnv('ELECTRON_RENDERER_URL', '')
+    await expect(handlers.get('clipboard:readText')?.(makeClipboardEvent())).rejects.toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
 
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
 
@@ -548,30 +599,9 @@ describe('registerClipboardHandlers', () => {
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeImage')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeFile')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:saveImageAsTempFile')
-  })
-
-  it('saves clipboard images to a local temp file when no connection is provided', async () => {
-    const png = Buffer.from([0, 1, 2, 3])
-    const expectedPath = join(
-      '/tmp',
-      'orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
-    )
-    clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => png
-    })
-
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), undefined)
-    ).resolves.toBe(expectedPath)
-    expect(fsWriteFileMock).toHaveBeenCalledWith(expectedPath, png)
-    expect(clipboardReadBufferMock).not.toHaveBeenCalled()
-    expect(fsOpenMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readImageThumbnail')
+    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:hasImage')
+    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readFilePaths')
   })
 
   it('does not inspect FileNameW when an empty image clipboard is read outside Windows', async () => {
@@ -591,62 +621,67 @@ describe('registerClipboardHandlers', () => {
     }
   })
 
-  it('routes a Windows Explorer FileNameW image through the target-aware attachment flow', async () => {
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    const sourcePath = 'C:\\Users\\alice\\图片\\copied-image.png'
-    const png = Buffer.from([4, 3, 2, 1])
-    clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
-    clipboardReadBufferMock.mockImplementation((format: string) =>
-      format === 'FileNameW' ? Buffer.from(`${sourcePath}\0`, 'utf16le') : shellIdListArray(1)
-    )
-    const source = Buffer.alloc(24)
-    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(source)
-    source.writeUInt32BE(13, 8)
-    source.write('IHDR', 12, 'ascii')
-    source.writeUInt32BE(1, 16)
-    source.writeUInt32BE(1, 20)
-    const close = vi.fn().mockResolvedValue(undefined)
-    fsOpenMock.mockResolvedValue({
-      close,
-      stat: vi.fn().mockResolvedValue({ isFile: () => true, size: source.byteLength }),
-      read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
-        const bytesRead = Math.min(Math.max(source.byteLength - position, 0), length)
-        source.copy(buffer, offset, position, position + bytesRead)
-        return { buffer, bytesRead }
+  it.each([false, true])(
+    'routes a Windows Explorer image with native format advertised: %s',
+    async (advertisesImage) => {
+      setTrustedClipboardRendererWebContentsId(17)
+      const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+      clipboardAvailableFormatsMock.mockReturnValue(
+        advertisesImage ? ['image/png', 'FileNameW'] : ['FileNameW']
+      )
+      const sourcePath = 'C:\\Users\\alice\\图片\\copied-image.png'
+      const png = Buffer.from([4, 3, 2, 1])
+      clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
+      clipboardReadBufferMock.mockImplementation((format: string) =>
+        format === 'FileNameW' ? Buffer.from(`${sourcePath}\0`, 'utf16le') : shellIdListArray(1)
+      )
+      const source = Buffer.alloc(24)
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(source)
+      source.writeUInt32BE(13, 8)
+      source.write('IHDR', 12, 'ascii')
+      source.writeUInt32BE(1, 16)
+      source.writeUInt32BE(1, 20)
+      const close = vi.fn().mockResolvedValue(undefined)
+      fsOpenMock.mockResolvedValue({
+        close,
+        stat: vi.fn().mockResolvedValue({ isFile: () => true, size: source.byteLength }),
+        read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
+          const bytesRead = Math.min(Math.max(source.byteLength - position, 0), length)
+          source.copy(buffer, offset, position, position + bytesRead)
+          return { buffer, bytesRead }
+        })
       })
-    })
-    nativeImageCreateFromBufferMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => png
-    })
-    const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
-    getSshFilesystemProviderMock.mockReturnValue({
-      getTempDir: vi.fn().mockResolvedValue('/var/tmp'),
-      writeFileBase64
-    })
+      nativeImageCreateFromBufferMock.mockReturnValue({
+        getSize: () => ({ height: 1, width: 1 }),
+        isEmpty: () => false,
+        toPNG: () => png
+      })
+      try {
+        registerClipboardHandlers({} as never)
 
-    try {
-      registerClipboardHandlers({} as never)
-
-      const handler = getRegisteredHandlers().get('clipboard:saveImageAsTempFile')
-      await expect(handler?.(makeClipboardEvent(), { connectionId: 'ssh-1' })).resolves.toBe(
-        '/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
-      )
-      expect(clipboardReadBufferMock).toHaveBeenCalledWith('FileNameW')
-      expect(clipboardReadBufferMock).toHaveBeenCalledWith('Shell IDList Array')
-      expect(fsOpenMock).toHaveBeenCalledWith(sourcePath, 'r')
-      expect(nativeImageCreateFromBufferMock).toHaveBeenCalledWith(source)
-      expect(close).toHaveBeenCalled()
-      expect(writeFileBase64).toHaveBeenCalledWith(
-        '/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
-        png.toString('base64')
-      )
-      expect(fsWriteFileMock).not.toHaveBeenCalled()
-    } finally {
-      platformSpy.mockRestore()
+        const probe = getRegisteredHandlers().get('clipboard:hasImage')
+        expect(probe?.(makeClipboardEvent())).toBe(true)
+        expect(() => probe?.(makeClipboardEvent({ id: 42 }))).toThrow()
+        const handler = getRegisteredHandlers().get('clipboard:saveImageAsTempFile')
+        await expect(handler?.(makeClipboardEvent())).resolves.toMatch(
+          /orca-paste-1760000000000-00000000-0000-4000-8000-000000000000\.png$/
+        )
+        expect(clipboardReadBufferMock).toHaveBeenCalledWith('FileNameW')
+        expect(clipboardReadBufferMock).toHaveBeenCalledWith('Shell IDList Array')
+        expect(fsOpenMock).toHaveBeenCalledWith(sourcePath, 'r')
+        expect(nativeImageCreateFromBufferMock).toHaveBeenCalledWith(source)
+        expect(close).toHaveBeenCalled()
+        expect(fsWriteFileMock).toHaveBeenCalledWith(
+          expect.stringMatching(
+            /orca-paste-1760000000000-00000000-0000-4000-8000-000000000000\.png$/
+          ),
+          png
+        )
+      } finally {
+        platformSpy.mockRestore()
+      }
     }
-  })
+  )
 
   it('saves clipboard images through the selected remote runtime host', async () => {
     const png = Buffer.alloc(512 * 1024)
@@ -726,7 +761,6 @@ describe('registerClipboardHandlers', () => {
       30_000
     )
     expect(fsWriteFileMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
   })
 
   it('aborts remote runtime clipboard image uploads when a chunk fails', async () => {
@@ -771,63 +805,6 @@ describe('registerClipboardHandlers', () => {
     expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
 
-  it('uploads clipboard images to the SSH host when a connection is provided', async () => {
-    const png = Buffer.from([0, 1, 2, 3])
-    const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
-    const getTempDir = vi.fn().mockResolvedValue('/var/tmp')
-    clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => png
-    })
-    getSshFilesystemProviderMock.mockReturnValue({ getTempDir, writeFileBase64 })
-
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toBe('/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png')
-    expect(getSshFilesystemProviderMock).toHaveBeenCalledWith('ssh-1')
-    expect(getTempDir).toHaveBeenCalled()
-    expect(writeFileBase64).toHaveBeenCalledWith(
-      '/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
-      png.toString('base64')
-    )
-    expect(fsWriteFileMock).not.toHaveBeenCalled()
-  })
-
-  it('uses Windows path joining for Windows SSH temp directories', async () => {
-    const png = Buffer.from([0, 1, 2, 3])
-    const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
-    clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => png
-    })
-    getSshFilesystemProviderMock.mockReturnValue({
-      getTempDir: vi.fn().mockResolvedValue('C:\\Users\\alice\\AppData\\Local\\Temp'),
-      writeFileBase64
-    })
-
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toBe(
-      'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
-    )
-    expect(writeFileBase64).toHaveBeenCalledWith(
-      'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
-      png.toString('base64')
-    )
-  })
-
   it('rejects oversized clipboard image dimensions before PNG conversion', async () => {
     const toPNG = vi.fn(() => Buffer.from([0, 1, 2, 3]))
     clipboardReadImageMock.mockReturnValue({
@@ -844,7 +821,6 @@ describe('registerClipboardHandlers', () => {
     ).rejects.toThrow('Clipboard image is too large')
     expect(toPNG).not.toHaveBeenCalled()
     expect(fsWriteFileMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
   })
 
   it('rejects oversized clipboard PNG bytes before SSH provider lookup', async () => {
@@ -862,7 +838,6 @@ describe('registerClipboardHandlers', () => {
         connectionId: 'ssh-secret'
       })
     ).rejects.toThrow('Clipboard image is too large')
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
     expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
 
@@ -880,7 +855,7 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()
   })
 
-  it('ignores clipboard write images with oversized decoded dimensions', () => {
+  it('ignores clipboard write images with oversized decoded dimensions', async () => {
     nativeImageCreateFromBufferMock.mockReturnValue({
       getSize: () => ({ height: 1, width: CLIPBOARD_IMAGE_MAX_PIXELS + 1 }),
       isEmpty: () => false
@@ -889,7 +864,7 @@ describe('registerClipboardHandlers', () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
-    handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+    await handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
 
     expect(nativeImageCreateFromBufferMock).toHaveBeenCalled()
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()

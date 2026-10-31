@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { getCommentBodyLayoutLineCount } from '@/lib/comment-body-line-count'
 
 export type RichMarkdownReviewNotePosition = {
@@ -13,9 +13,9 @@ export type RichMarkdownReviewRailState = {
 }
 
 const REVIEW_NOTE_GAP_PX = 8
-const REVIEW_NOTE_BASE_HEIGHT_PX = 58 // new Notion-style card base height (padding, border, gap, header)
-const REVIEW_NOTE_BODY_LINE_HEIGHT_PX = 20 // new body line-height
-const REVIEW_NOTE_QUOTE_HEIGHT_PX = 24 // single-line quote height (line-height plus margins)
+const REVIEW_NOTE_BASE_HEIGHT_PX = 58
+const REVIEW_NOTE_BODY_LINE_HEIGHT_PX = 20
+const REVIEW_NOTE_QUOTE_HEIGHT_PX = 24
 
 function getReviewNoteStartLine(comment: Pick<DiffComment, 'lineNumber' | 'startLine'>): number {
   return comment.startLine ?? comment.lineNumber

@@ -1,6 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type * as NodeOs from 'node:os'
 
-const { handleMock, networkInterfacesMock } = vi.hoisted(() => ({
+const { defaultRouteInterfaceNamesMock, handleMock, networkInterfacesMock } = vi.hoisted(() => ({
+  defaultRouteInterfaceNamesMock: vi.fn(),
   handleMock: vi.fn(),
   networkInterfacesMock: vi.fn()
 }))
@@ -13,15 +16,35 @@ vi.mock('electron', () => ({
 
 vi.mock('qrcode', () => ({
   default: {
+    create: vi.fn().mockReturnValue({ modules: { size: 21 } }),
     toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,qr')
   }
 }))
 
-vi.mock('os', () => ({
+// Mock interface enumeration only; integration fixtures still need real os.tmpdir.
+vi.mock('os', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeOs>()),
   networkInterfaces: networkInterfacesMock
 }))
 
+vi.mock('../runtime/windows-default-route-interfaces', () => ({
+  getWindowsDefaultRouteInterfaceNames: defaultRouteInterfaceNamesMock
+}))
+
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { registerMobileHandlers } from './mobile'
+import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
+import { createMobileRpcSurfaceRuntime } from '../runtime/runtime-rpc-mobile-method-allowlist-fixtures'
+import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import { WebSocketTransport } from '../runtime/rpc/ws-transport'
+
+// Match production's IPv4-only widened listener.
+function registerWithListener(stub: Record<string, unknown>, bindHost = '0.0.0.0'): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each stub implements every server member its test's handlers call.
+  registerMobileHandlers({ getNetworkExposureBindHost: () => bindHost, ...stub } as never)
+}
 
 describe('registerMobileHandlers', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -31,12 +54,13 @@ describe('registerMobileHandlers', () => {
     handleMock.mockReset()
     networkInterfacesMock.mockReset()
     networkInterfacesMock.mockReturnValue({})
+    defaultRouteInterfaceNamesMock.mockReset().mockResolvedValue(new Set())
     handleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     })
   })
 
-  it('re-reads system network interfaces on each request and prefers tailnet addresses', () => {
+  it('re-reads system network interfaces on each request and prefers tailnet addresses', async () => {
     networkInterfacesMock
       .mockReturnValueOnce({
         en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
@@ -46,17 +70,18 @@ describe('registerMobileHandlers', () => {
         tailscale0: [{ family: 'IPv4', internal: false, address: '100.64.1.20' }]
       })
 
-    registerMobileHandlers({} as never)
+    registerWithListener({})
 
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [{ name: 'en0', address: '192.168.1.24' }]
     })
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'tailscale0', address: '100.64.1.20' },
         { name: 'en0', address: '192.168.1.24' }
       ]
     })
+    expect(defaultRouteInterfaceNamesMock).not.toHaveBeenCalled()
   })
 
   it('excludes proxy fake-ip addresses so pairing defaults to LAN (#10404)', async () => {
@@ -79,9 +104,9 @@ describe('registerMobileHandlers', () => {
       connectionMode: 'automatic'
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'en0', address: '192.168.50.238' },
         { name: 'en0', address: '198.17.255.254' },
@@ -95,39 +120,175 @@ describe('registerMobileHandlers', () => {
     )
   })
 
-  it('includes IPv6 addresses (ranked after IPv4) and excludes link-local IPv6', () => {
+  it('ranks container and VM bridges below every reachable address', async () => {
+    // Container bridges should not become unreachable automatic direct candidates.
     networkInterfacesMock.mockReturnValue({
+      docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+      'vEthernet (Default Switch)': [{ family: 'IPv4', internal: false, address: '172.28.80.1' }],
+      bridge0: [{ family: 'IPv4', internal: false, address: '169.254.60.1' }],
       en0: [
-        { family: 'IPv4', internal: false, address: '192.168.1.24' },
-        { family: 'IPv6', internal: false, address: 'fe80::1' },
-        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
-      ],
-      lo0: [{ family: 'IPv6', internal: true, address: '::1' }]
+        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
+        { family: 'IPv4', internal: false, address: '192.168.1.24' }
+      ]
     })
 
-    registerMobileHandlers({} as never)
+    registerWithListener({}, '::')
 
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+    // Prefer a reachable external IPv6 candidate over container bridge IPv4.
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
       interfaces: [
         { name: 'en0', address: '192.168.1.24' },
-        { name: 'en0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }
+        { name: 'en0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
+        { name: 'docker0', address: '172.17.0.1' },
+        { name: 'vEthernet (Default Switch)', address: '172.28.80.1' },
+        { name: 'bridge0', address: '169.254.60.1' }
       ]
     })
   })
 
-  it('returns an IPv6 interface on an IPv6-only host (regression: was empty, breaking mobile pairing)', () => {
+  it('auto-advertises a route-backed Hyper-V external-switch management address', async () => {
     networkInterfacesMock.mockReturnValue({
-      eth0: [
-        { family: 'IPv6', internal: false, address: '2605:340:cd51:2a01:0:2b13:f279:c096' },
-        { family: 'IPv6', internal: false, address: 'fe80::42:acff:fe11:2' }
+      'vEthernet (Production LAN)': [{ family: 'IPv4', internal: false, address: '192.168.50.24' }],
+      'vEthernet (Default Switch)': [{ family: 'IPv4', internal: false, address: '172.28.80.1' }],
+      'vEthernet (WSL (Hyper-V firewall))': [
+        { family: 'IPv4', internal: false, address: '172.20.96.1' }
+      ],
+      Ethernet: [{ family: 'IPv4', internal: false, address: '192.168.50.25' }]
+    })
+    defaultRouteInterfaceNamesMock.mockResolvedValue(
+      new Set([
+        'vEthernet (Production LAN)',
+        'vEthernet (Default Switch)',
+        'vEthernet (WSL (Hyper-V firewall))'
+      ])
+    )
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#external-switch',
+      endpoint: 'ws://192.168.50.24:6768',
+      deviceId: 'mobile-external-switch',
+      connectionMode: 'automatic'
+    })
+
+    registerWithListener({ createMobilePairingOffer })
+
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
+      interfaces: [
+        {
+          name: 'vEthernet (Production LAN)',
+          address: '192.168.50.24',
+          hasDefaultRoute: true
+        },
+        { name: 'Ethernet', address: '192.168.50.25' },
+        {
+          name: 'vEthernet (Default Switch)',
+          address: '172.28.80.1',
+          hasDefaultRoute: true
+        },
+        {
+          name: 'vEthernet (WSL (Hyper-V firewall))',
+          address: '172.20.96.1',
+          hasDefaultRoute: true
+        }
       ]
     })
+    await handlers.get('mobile:getPairingQR')?.(null, {})
+    expect(createMobilePairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ address: '192.168.50.24' })
+    )
+  })
 
-    registerMobileHandlers({} as never)
-
-    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
-      interfaces: [{ name: 'eth0', address: '2605:340:cd51:2a01:0:2b13:f279:c096' }]
+  it('keeps a real LAN address that merely overlaps a container subnet', async () => {
+    // Container subnets overlap corporate LANs; identify bridges by interface name.
+    networkInterfacesMock.mockReturnValue({
+      eth0: [{ family: 'IPv4', internal: false, address: '172.17.4.9' }],
+      docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }]
     })
+
+    registerWithListener({})
+
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
+      interfaces: [
+        { name: 'eth0', address: '172.17.4.9' },
+        { name: 'docker0', address: '172.17.0.1' }
+      ]
+    })
+  })
+
+  it('never auto-advertises a bridge: a bridge-only host pairs over Relay with no address', async () => {
+    // Relay can pair without advertising an unreachable local interface.
+    networkInterfacesMock.mockReturnValue({
+      docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+      'vEthernet (WSL)': [{ family: 'IPv4', internal: false, address: '172.28.80.1' }]
+    })
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#relay',
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceId: 'mobile-bridge-only',
+      connectionMode: 'automatic'
+    })
+
+    registerWithListener({ createMobilePairingOffer })
+
+    await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toMatchObject({
+      available: true,
+      connectionMode: 'automatic',
+      // Loopback points at the scanning phone; omit the unusable direct endpoint.
+      endpoint: null
+    })
+    expect(createMobilePairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ address: null })
+    )
+    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
+      interfaces: [
+        { name: 'docker0', address: '172.17.0.1' },
+        { name: 'vEthernet (WSL)', address: '172.28.80.1' }
+      ]
+    })
+  })
+
+  it('refuses a LAN-only QR on a bridge-only host instead of advertising the bridge', async () => {
+    // LAN-only has no relay fallback; guide manual interface selection instead of minting a dead endpoint.
+    networkInterfacesMock.mockReturnValue({
+      docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }]
+    })
+    const createMobilePairingOffer = vi.fn()
+
+    registerWithListener({ createMobilePairingOffer })
+
+    await expect(
+      handlers.get('mobile:getPairingQR')?.(null, { connectionMode: 'local-only' })
+    ).resolves.toMatchObject({
+      available: false,
+      reason: 'invalid_advertised_endpoint'
+    })
+    expect(createMobilePairingOffer).not.toHaveBeenCalled()
+  })
+
+  it('honors an explicitly picked bridge address', async () => {
+    // Keep bridges manually selectable for users with deliberately routable VM networking.
+    networkInterfacesMock.mockReturnValue({
+      docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }],
+      en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
+    })
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#bridge',
+      endpoint: 'ws://172.17.0.1:6768',
+      deviceId: 'mobile-bridge-pick',
+      connectionMode: 'local-only'
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+    await handlers.get('mobile:getPairingQR')?.(null, {
+      address: '172.17.0.1',
+      connectionMode: 'local-only'
+    })
+
+    expect(createMobilePairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ address: '172.17.0.1' })
+    )
   })
 
   it('generates mobile pairing urls with the tailnet address by default', async () => {
@@ -144,10 +305,11 @@ describe('registerMobileHandlers', () => {
     })
     const rpcServer = { createMobilePairingOffer }
 
-    registerMobileHandlers(rpcServer as never)
+    registerWithListener(rpcServer)
 
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toMatchObject({
       available: true,
+      qrSize: 58,
       pairingUrl: 'orca://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
       deviceId: 'mobile-1',
@@ -178,7 +340,7 @@ describe('registerMobileHandlers', () => {
       relayFailure
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
 
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toEqual({
       available: false,
@@ -200,7 +362,7 @@ describe('registerMobileHandlers', () => {
       connectionMode: 'local-only'
     })
 
-    registerMobileHandlers({ createMobilePairingOffer } as never)
+    registerWithListener({ createMobilePairingOffer })
     await handlers.get('mobile:getPairingQR')?.(null, { connectionMode: 'local-only' })
 
     expect(createMobilePairingOffer).toHaveBeenCalledWith(
@@ -226,6 +388,7 @@ describe('registerMobileHandlers', () => {
     ).resolves.toEqual({
       available: true,
       qrDataUrl: null,
+      qrSize: null,
       qrError: 'encoding_failed',
       pairingUrl: 'orca://pair?code=copy-me',
       endpoint: 'wss://pair.example/oversized',
@@ -285,7 +448,8 @@ describe('registerMobileHandlers', () => {
       endpoint: 'ws://100.64.1.20:6768',
       deviceId: 'runtime-1'
     })
-    const rpcServer = { createPairingOffer }
+    const ensureNetworkExposure = vi.fn().mockResolvedValue(undefined)
+    const rpcServer = { createPairingOffer, ensureNetworkExposure }
 
     registerMobileHandlers(rpcServer as never)
 
@@ -306,8 +470,153 @@ describe('registerMobileHandlers', () => {
       address: '100.64.1.20',
       rotate: true,
       name: expect.stringMatching(/^Runtime /),
-      scope: 'runtime'
+      scope: 'runtime',
+      reach: 'network'
     })
+    // Widen before minting the offer so clients cannot race an unbound LAN endpoint (STA-2370).
+    expect(ensureNetworkExposure).toHaveBeenCalled()
+    expect(ensureNetworkExposure.mock.invocationCallOrder[0]).toBeLessThan(
+      createPairingOffer.mock.invocationCallOrder[0]
+    )
+  })
+
+  const stubRuntimePairingServer = (
+    address: string
+  ): {
+    getNetworkExposureBindHost: () => string
+    createPairingOffer: Mock
+    ensureNetworkExposure: Mock
+  } => ({
+    getNetworkExposureBindHost: () => '0.0.0.0',
+    createPairingOffer: vi.fn().mockReturnValue({
+      available: true,
+      pairingUrl: 'orca://pair#runtime',
+      webClientUrl: `http://${address}/web-index.html?pairing=runtime`,
+      endpoint: `ws://${address}`,
+      deviceId: 'runtime-local'
+    }),
+    ensureNetworkExposure: vi.fn().mockResolvedValue(undefined)
+  })
+
+  it('reports runtime pairing unavailable rather than advertising a bridge', async () => {
+    // Runtime clients lack relay fallback; do not widen or mint when no automatic address is usable.
+    networkInterfacesMock.mockReturnValue({
+      docker0: [{ family: 'IPv4', internal: false, address: '172.17.0.1' }]
+    })
+    const rpcServer = stubRuntimePairingServer('172.17.0.1:6768')
+
+    registerMobileHandlers(rpcServer as never)
+
+    await expect(handlers.get('mobile:getRuntimePairingUrl')?.(null, {})).resolves.toEqual({
+      available: false
+    })
+    expect(rpcServer.createPairingOffer).not.toHaveBeenCalled()
+    expect(rpcServer.ensureNetworkExposure).not.toHaveBeenCalled()
+  })
+
+  // All accepted loopback spellings must honor an explicit this-computer reach.
+  it.each([
+    '127.0.0.1',
+    'localhost',
+    '::1',
+    '127.0.0.1:8443',
+    'localhost:8443',
+    '[::1]:6768',
+    'ws://127.0.0.1:6768'
+  ])('mints a %s runtime link without widening the listener off-host', async (address) => {
+    const rpcServer = stubRuntimePairingServer(address)
+
+    registerMobileHandlers(rpcServer as never)
+
+    await expect(
+      handlers.get('mobile:getRuntimePairingUrl')?.(null, {
+        address,
+        rotate: true,
+        reach: 'this-computer'
+      })
+    ).resolves.toMatchObject({ available: true, deviceId: 'runtime-local' })
+
+    // Widening is one-way; local-only intent must leave the listener on loopback.
+    expect(rpcServer.ensureNetworkExposure).not.toHaveBeenCalled()
+    expect(rpcServer.createPairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ reach: 'this-computer' })
+    )
+  })
+
+  // Custom loopback frontends can tunnel to this host's LAN address; do not infer local-only intent from their shape.
+  it.each(['127.0.0.1:8443', 'localhost', 'ws://127.0.0.1:6768'])(
+    'widens the listener for a custom %s address that fronts a tunnel',
+    async (address) => {
+      const rpcServer = stubRuntimePairingServer(address)
+
+      registerMobileHandlers(rpcServer as never)
+
+      await expect(
+        handlers.get('mobile:getRuntimePairingUrl')?.(null, {
+          address,
+          rotate: true,
+          reach: 'network'
+        })
+      ).resolves.toMatchObject({ available: true })
+
+      expect(rpcServer.ensureNetworkExposure).toHaveBeenCalled()
+      expect(rpcServer.createPairingOffer).toHaveBeenCalledWith(
+        expect.objectContaining({ reach: 'network' })
+      )
+    }
+  )
+
+  it('widens for a loopback address when the caller declares no reach', async () => {
+    const rpcServer = stubRuntimePairingServer('127.0.0.1:6768')
+
+    registerMobileHandlers(rpcServer as never)
+
+    await expect(
+      handlers.get('mobile:getRuntimePairingUrl')?.(null, { address: '127.0.0.1', rotate: true })
+    ).resolves.toMatchObject({ available: true })
+
+    // Only explicit this-computer intent declines widening; undeclared callers keep legacy opt-in behavior.
+    expect(rpcServer.ensureNetworkExposure).toHaveBeenCalled()
+  })
+
+  it('widens when a this-computer reach carries an off-host address', async () => {
+    const rpcServer = stubRuntimePairingServer('192.168.1.5:6768')
+
+    registerMobileHandlers(rpcServer as never)
+
+    await expect(
+      handlers.get('mobile:getRuntimePairingUrl')?.(null, {
+        address: '192.168.1.5',
+        rotate: true,
+        reach: 'this-computer'
+      })
+    ).resolves.toMatchObject({ available: true })
+
+    // Published LAN addresses require a LAN bind even if declared reach disagrees.
+    expect(rpcServer.ensureNetworkExposure).toHaveBeenCalled()
+    expect(rpcServer.createPairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ reach: 'network' })
+    )
+  })
+
+  it('reports the runtime pairing url unavailable and mints no offer when the widen fails', async () => {
+    const createPairingOffer = vi.fn()
+    // Failed widening must stop offer creation rather than advertise a dead LAN endpoint (STA-2370).
+    const ensureNetworkExposure = vi.fn().mockRejectedValue(new Error('bind refused'))
+    const rpcServer = { createPairingOffer, ensureNetworkExposure }
+
+    registerMobileHandlers(rpcServer as never)
+
+    await expect(
+      handlers.get('mobile:getRuntimePairingUrl')?.(null, { address: '100.64.1.20' })
+    ).resolves.toEqual({
+      available: false,
+      reason: 'network_exposure_failed',
+      guidance: NETWORK_EXPOSURE_FAILED_GUIDANCE
+    })
+
+    expect(ensureNetworkExposure).toHaveBeenCalled()
+    expect(createPairingOffer).not.toHaveBeenCalled()
   })
 
   it('lists runtime access grants including unused generated links', () => {
@@ -390,9 +699,26 @@ describe('registerMobileHandlers', () => {
   })
 
   it('reports the current relay broker status without exposing a toggle', () => {
-    registerMobileHandlers({} as never, { getRelayStatus: () => 'registered' })
+    registerMobileHandlers({} as never, { getRelayStatus: () => ({ status: 'registered' }) })
 
     expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({ status: 'registered' })
+  })
+
+  it('reports the assigned relay cell alongside the status', () => {
+    registerMobileHandlers({} as never, {
+      getRelayStatus: () => ({ status: 'registered', cellUrl: 'https://c27.relay.example.com' })
+    })
+
+    expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({
+      status: 'registered',
+      cellUrl: 'https://c27.relay.example.com'
+    })
+  })
+
+  it('falls back to offline with no cell when no relay status provider is wired', () => {
+    registerMobileHandlers({} as never, {})
+
+    expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({ status: 'offline' })
   })
 
   it('consumes a pending auth-failure notification only from a window renderer', () => {
@@ -463,5 +789,126 @@ describe('registerMobileHandlers', () => {
       })
     ).toEqual({ ok: false, reason: 'unsupported' })
     expect(runPowerShell).not.toHaveBeenCalled()
+  })
+})
+
+describe('runtime pairing bind host', () => {
+  const handlers = new Map<string, (...args: unknown[]) => unknown>()
+
+  const wsTransportOf = (server: OrcaRuntimeRpcServer): WebSocketTransport | undefined =>
+    (server['activeTransports'] as unknown[]).find(
+      (transport): transport is WebSocketTransport => transport instanceof WebSocketTransport
+    )
+
+  beforeEach(() => {
+    handlers.clear()
+    handleMock.mockReset()
+    networkInterfacesMock.mockReset().mockReturnValue({})
+    handleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    })
+  })
+
+  const startServer = async (userDataPath: string): Promise<OrcaRuntimeRpcServer> => {
+    const server = new OrcaRuntimeRpcServer({
+      methods: [],
+      runtime: createMobileRpcSurfaceRuntime().runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    await server.start()
+    return server
+  }
+
+  it('keeps a real listener on loopback for a local link and widens it only for an off-host one', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-mobile-ipc-'))
+    const server = await startServer(userDataPath)
+
+    try {
+      registerMobileHandlers(server)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+
+      await expect(
+        handlers.get('mobile:getRuntimePairingUrl')?.(null, {
+          address: '127.0.0.1',
+          rotate: true,
+          reach: 'this-computer'
+        })
+      ).resolves.toMatchObject({ available: true })
+      // This-computer pairing must not permanently expose the runtime to the LAN.
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+
+      await expect(
+        handlers.get('mobile:getRuntimePairingUrl')?.(null, {
+          address: '100.64.1.20',
+          rotate: true,
+          reach: 'network'
+        })
+      ).resolves.toMatchObject({ available: true })
+      // Off-host reach still requires widening.
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  // Authenticated local links must not cause the next launch to bind every interface.
+  it('still binds loopback on the next launch after the local link has been used', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-mobile-ipc-'))
+    const server = await startServer(userDataPath)
+    let deviceId: string
+    try {
+      registerMobileHandlers(server)
+      const offer = (await handlers.get('mobile:getRuntimePairingUrl')?.(null, {
+        address: '127.0.0.1',
+        rotate: true,
+        reach: 'this-computer'
+      })) as { available: true; deviceId: string }
+      expect(offer.available).toBe(true)
+      deviceId = offer.deviceId
+      // Model authentication updating grant lastSeenAt, including local clients.
+      server.getDeviceRegistry()?.updateLastSeen(deviceId)
+    } finally {
+      await server.stop()
+    }
+
+    const relaunched = await startServer(userDataPath)
+    try {
+      expect(
+        relaunched
+          .getDeviceRegistry()
+          ?.listDevices()
+          .some((device) => device.deviceId === deviceId && device.lastSeenAt > 0)
+      ).toBe(true)
+      expect(wsTransportOf(relaunched)?.resolvedHost).toBe('127.0.0.1')
+    } finally {
+      await relaunched.stop()
+    }
+  })
+
+  it('binds all interfaces on the next launch after a network link has been used', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-mobile-ipc-'))
+    const server = await startServer(userDataPath)
+    try {
+      registerMobileHandlers(server)
+      const offer = (await handlers.get('mobile:getRuntimePairingUrl')?.(null, {
+        address: '100.64.1.20',
+        rotate: true,
+        reach: 'network'
+      })) as { available: true; deviceId: string }
+      expect(offer.available).toBe(true)
+      server.getDeviceRegistry()?.updateLastSeen(offer.deviceId)
+    } finally {
+      await server.stop()
+    }
+
+    const relaunched = await startServer(userDataPath)
+    try {
+      // Genuine off-host grants must preserve reconnect reach after restart.
+      expect(wsTransportOf(relaunched)?.resolvedHost).toBe('0.0.0.0')
+    } finally {
+      await relaunched.stop()
+    }
   })
 })

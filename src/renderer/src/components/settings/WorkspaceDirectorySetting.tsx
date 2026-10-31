@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { FolderOpen, RotateCcw } from 'lucide-react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   getEffectiveHostSetting,
   getHostSettingOverride,
@@ -11,7 +11,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { HostCombobox } from '../host-picker/HostCombobox'
 import { SearchableSetting } from './SearchableSetting'
 import { useSidebarHostScopeOptions } from '../sidebar/use-sidebar-host-scope-options'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
@@ -41,8 +41,7 @@ export function WorkspaceDirectorySetting({
     'Client default'
   )
   const choices = buildHostScopeChoices(hostOptions, clientDefaultLabel)
-  // Why: if the selected host disappears (removed/disconnected), fall back to the
-  // client default so the control never edits a stale host.
+  // If a selected host disappears, return to client default rather than edit a stale host.
   const activeScope = choices.some((c) => c.scope === scope) ? scope : CLIENT_DEFAULT_SCOPE
   const editingHost = isHostScope(activeScope)
 
@@ -51,8 +50,6 @@ export function WorkspaceDirectorySetting({
     : undefined
   const hasOverride = editingHost && hostOverride !== undefined
 
-  // For a host scope, show its override or — as a hint — the inherited client
-  // default. For the client default scope, edit `workspaceDir` directly.
   const value = editingHost
     ? getEffectiveHostSetting(
         settings,
@@ -61,8 +58,7 @@ export function WorkspaceDirectorySetting({
         settings.workspaceDir
       )
     : settings.workspaceDir
-  // Why: settings:set prepares the workspace root with mkdir; committing each
-  // keystroke would create every typed path prefix as a real directory.
+  // settings:set creates directories; per-keystroke commits would create every typed prefix.
   const [draftValue, setDraftValue] = useState(value)
   const draftValueRef = useRef(value)
   const skipNextBlurCommitRef = useRef(false)
@@ -139,8 +135,7 @@ export function WorkspaceDirectorySetting({
     }
   }
 
-  // Why: only show the scope picker when at least one non-local host exists,
-  // matching the multi-host gating used elsewhere in the sidebar.
+  // Match sidebar multi-host gating; local-only users need no scope picker.
   const showScopePicker = hostOptions.some((host) => host.id !== LOCAL_EXECUTION_HOST_ID)
 
   return (
@@ -171,21 +166,18 @@ export function WorkspaceDirectorySetting({
                 'Apply to'
               )}
             </span>
-            <Select
+            <HostCombobox
               value={activeScope}
-              onValueChange={(next) => setScope(next as HostSettingScope)}
-            >
-              <SelectTrigger size="sm" className="h-7 w-44 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {choices.map((choice) => (
-                  <SelectItem key={choice.scope} value={choice.scope} className="text-xs">
-                    {choice.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(next) => {
+                const choice = choices.find((candidate) => candidate.scope === next)
+                if (choice) {
+                  setScope(choice.scope)
+                }
+              }}
+              options={choices.map((choice) => ({ id: choice.scope, label: choice.label }))}
+              size="xs"
+              className="w-44"
+            />
           </div>
         )}
       </div>
@@ -198,8 +190,7 @@ export function WorkspaceDirectorySetting({
           }}
           onBlur={handleBlur}
           onKeyDown={(e) => {
-            // Why: an Enter that only confirms a CJK IME candidate must not
-            // commit the rename; wait for a non-composition Enter.
+            // IME candidate-confirming Enter must not commit; wait for a noncomposition Enter.
             if (isImeCompositionKeyDown(e)) {
               return
             }
@@ -260,8 +251,7 @@ export function WorkspaceDirectorySetting({
           )}
         </div>
       )}
-      {/* Why: this helper documents the client-default workspaceDir resolver;
-          avoid promising host-specific creation semantics here. */}
+      {/* Describe only the client-default resolver; host creation semantics differ. */}
       {!editingHost && (
         <p className="text-xs text-muted-foreground">
           {translate(

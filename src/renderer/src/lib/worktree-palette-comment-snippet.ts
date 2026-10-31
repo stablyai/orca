@@ -21,6 +21,14 @@ export function extractWorktreePaletteCommentSnippet(
     snippetEnd++
   }
 
+  // UTF-16 offsets/whitespace scans can split surrogate pairs, especially after 10 CJK steps. Snap outward; matchRange follows snippetStart and stays correct.
+  if (snippetStart > 0 && (comment.charCodeAt(snippetStart) & 0xfc00) === 0xdc00) {
+    snippetStart -= 1
+  }
+  if (snippetEnd < comment.length && (comment.charCodeAt(snippetEnd - 1) & 0xfc00) === 0xd800) {
+    snippetEnd += 1
+  }
+
   const prefix = snippetStart > 0 ? '\u2026' : ''
   const suffix = snippetEnd < comment.length ? '\u2026' : ''
   return {

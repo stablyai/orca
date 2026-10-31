@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   matchesSettingsSearch,
   normalizeSettingsSearchQuery,
@@ -34,7 +34,7 @@ import { GhosttyImportModal } from './GhosttyImportModal'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { WarpThemeImportModal } from './WarpThemeImportModal'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
-import { isWebClientLocation } from '@/hooks/useSettingsNavigationMetadata'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { translate } from '@/i18n/i18n'
 
@@ -52,7 +52,7 @@ type TerminalAppearanceSectionProps = {
 type TerminalThemeTarget = 'dark' | 'light'
 
 function scoreThemeTargetIntent(searchQuery: string, entries: SettingsSearchEntry[]): number {
-  // Why: descriptions mention dark/light incidentally; target intent should come from labels and aliases.
+  // Infer dark/light target from labels/aliases, not incidental description mentions.
   return scoreSettingsSearch(
     searchQuery,
     entries.map(({ title, keywords }) => ({ title, keywords }))
@@ -83,7 +83,7 @@ export function TerminalAppearanceSection({
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const [themeSearch, setThemeSearch] = useState('')
   const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
-  const showWarpThemeImport = !isWebClientLocation()
+  const showDesktopThemeImports = !isWebClientLocation()
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
   const lightThemeSearchEntries = getTerminalLightThemeSearchEntries()
   const terminalTypographyEntries = getTerminalTypographySearchEntries()
@@ -92,7 +92,7 @@ export function TerminalAppearanceSection({
     ...getTerminalThemeTargetSearchEntries(),
     ...darkThemeSearchEntries,
     ...lightThemeSearchEntries,
-    ...(showWarpThemeImport
+    ...(showDesktopThemeImports
       ? [...getTerminalWarpImportSearchEntries(), ...getTerminalYamlImportSearchEntries()]
       : [])
   ]
@@ -100,8 +100,7 @@ export function TerminalAppearanceSection({
   const lightThemeTargetScore = scoreThemeTargetIntent(searchQuery, lightThemeSearchEntries)
   const preferredThemeTarget = getPreferredThemeTarget(darkThemeTargetScore, lightThemeTargetScore)
 
-  // Why: low-frequency knobs are force-opened during search; render each group
-  // only when its own search matches so an active query never leaves a dangling header.
+  // Filter each advanced group independently so search cannot leave empty headers.
   const typographyMatches = matchesSettingsSearch(
     searchQuery,
     getTerminalAdvancedTypographySearchEntries()
@@ -116,14 +115,16 @@ export function TerminalAppearanceSection({
     searchQuery,
     terminalTypographyEntries.slice(0, 2)
   )
-  const ghosttyImportMatches = matchesSettingsSearch(searchQuery, ghosttyImportEntries)
+  const ghosttyImportMatches =
+    showDesktopThemeImports && matchesSettingsSearch(searchQuery, ghosttyImportEntries)
   const showPrimaryTypography =
     !isSearching ||
     forceVisiblePrimary ||
     primaryTypographyMatches ||
     typographyMatches ||
     ghosttyImportMatches
-  const showGhosttyImport = !isSearching || forceVisiblePrimary || ghosttyImportMatches
+  const showGhosttyImport =
+    showDesktopThemeImports && (!isSearching || forceVisiblePrimary || ghosttyImportMatches)
   const showTypographyAdvancedDisclosure = !isSearching || typographyMatches
 
   const advancedGroups = [
@@ -170,9 +171,7 @@ export function TerminalAppearanceSection({
 
   return (
     <div className="space-y-5">
-      {/* Primary: font + theme + previews. The expanded section column is far
-          narrower than the xl breakpoint, so the preview grids inside the
-          theme catalog already stack full-width below their controls. */}
+      {/* Preview grids stack full-width because this expanded column stays narrower than xl. */}
       {showPrimaryTypography ? (
         <section className="space-y-3 pt-2">
           <SettingsSubsectionHeader
@@ -259,36 +258,38 @@ export function TerminalAppearanceSection({
           previewFontFamily={previewFontFamily}
           importedHighlightSignal={warpThemes.importSignal}
           warpThemes={warpThemes}
-          showThemeImport={showWarpThemeImport}
+          showThemeImport={showDesktopThemeImports}
           preferredTarget={preferredThemeTarget}
           advancedContent={previewAdvancedContent}
         />
       ) : null}
 
-      <GhosttyImportModal
-        open={ghostty.open}
-        onOpenChange={ghostty.handleOpenChange}
-        preview={ghostty.preview}
-        loading={ghostty.loading}
-        onApply={ghostty.handleApply}
-        applied={ghostty.applied}
-        applyError={ghostty.applyError}
-      />
-      {showWarpThemeImport ? (
-        <WarpThemeImportModal
-          open={warpThemes.open}
-          mode={warpThemes.mode}
-          preview={warpThemes.preview}
-          loading={warpThemes.loading}
-          desktopOnly={warpThemes.desktopOnly}
-          applyError={warpThemes.applyError}
-          selectedThemeIds={warpThemes.selectedThemeIds}
-          handlePreviewSource={warpThemes.handlePreviewSource}
-          handleToggleTheme={warpThemes.handleToggleTheme}
-          handleToggleAll={warpThemes.handleToggleAll}
-          handleApply={warpThemes.handleApply}
-          handleOpenChange={warpThemes.handleOpenChange}
-        />
+      {showDesktopThemeImports ? (
+        <>
+          <GhosttyImportModal
+            open={ghostty.open}
+            onOpenChange={ghostty.handleOpenChange}
+            preview={ghostty.preview}
+            loading={ghostty.loading}
+            onApply={ghostty.handleApply}
+            applied={ghostty.applied}
+            applyError={ghostty.applyError}
+          />
+          <WarpThemeImportModal
+            open={warpThemes.open}
+            mode={warpThemes.mode}
+            preview={warpThemes.preview}
+            loading={warpThemes.loading}
+            desktopOnly={warpThemes.desktopOnly}
+            applyError={warpThemes.applyError}
+            selectedThemeIds={warpThemes.selectedThemeIds}
+            handlePreviewSource={warpThemes.handlePreviewSource}
+            handleToggleTheme={warpThemes.handleToggleTheme}
+            handleToggleAll={warpThemes.handleToggleAll}
+            handleApply={warpThemes.handleApply}
+            handleOpenChange={warpThemes.handleOpenChange}
+          />
+        </>
       ) : null}
     </div>
   )

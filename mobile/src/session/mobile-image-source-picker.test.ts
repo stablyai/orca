@@ -12,12 +12,27 @@ vi.mock('expo-file-system', () => ({
   File: vi.fn()
 }))
 
-import { ImageLibraryPermissionError, pickMobileImage } from './mobile-image-source-picker'
+import {
+  ImageLibraryPermissionError,
+  pickMobileImage,
+  pickMobileImages,
+  type PickedMobileImage
+} from './mobile-image-source-picker'
 
 const granted = { granted: true } as Awaited<
   ReturnType<typeof import('expo-image-picker').requestMediaLibraryPermissionsAsync>
 >
 const denied = { granted: false } as typeof granted
+
+async function collectImages(
+  images: AsyncIterable<PickedMobileImage>
+): Promise<PickedMobileImage[]> {
+  const collected: PickedMobileImage[] = []
+  for await (const image of images) {
+    collected.push(image)
+  }
+  return collected
+}
 
 function fileFactory(
   bytes: Uint8Array,
@@ -68,6 +83,57 @@ describe('pickMobileImage', () => {
     expect(file.close).toHaveBeenCalledTimes(1)
   })
 
+  it('returns every selected library photo in order', async () => {
+    const bytesByUri = new Map([
+      ['file:///a.jpg', new Uint8Array([1])],
+      ['file:///b.jpg', new Uint8Array([2])],
+      ['file:///c.jpg', new Uint8Array([3])]
+    ])
+    const createFile = vi.fn((uri: string) => {
+      const bytes = bytesByUri.get(uri)!
+      let read = false
+      return {
+        size: bytes.length,
+        open: () => ({
+          size: bytes.length,
+          readBytes: () => {
+            if (read) {
+              return new Uint8Array()
+            }
+            read = true
+            return bytes
+          },
+          close: vi.fn()
+        })
+      }
+    })
+    const launchLibrary = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [...bytesByUri].map(([uri, bytes]) => ({ uri, fileSize: bytes.length }))
+    })
+
+    const result = await collectImages(
+      pickMobileImages('library', {
+        requestLibraryPermission: vi.fn().mockResolvedValue(granted),
+        launchLibrary,
+        createFile
+      })
+    )
+
+    expect(result).toEqual([
+      { uri: 'file:///a.jpg', base64: 'AQ==' },
+      { uri: 'file:///b.jpg', base64: 'Ag==' },
+      { uri: 'file:///c.jpg', base64: 'Aw==' }
+    ])
+    expect(launchLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowsMultipleSelection: true,
+        orderedSelection: true,
+        selectionLimit: 0
+      })
+    )
+  })
+
   it('throws when photo library permission is denied', async () => {
     await expect(
       pickMobileImage('library', {
@@ -86,21 +152,31 @@ describe('pickMobileImage', () => {
     expect(result).toBeNull()
   })
 
-  it('reads a picked file URI into base64 for the files source', async () => {
+  it('reads any picked file into base64 and keeps its name for the files source', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4])
     const file = fileFactory(bytes)
+    const launchFiles = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///book.txt',
+          name: '柴静-看见.txt',
+          mimeType: 'text/plain',
+          size: bytes.length
+        }
+      ]
+    })
 
     const result = await pickMobileImage('files', {
-      launchFiles: vi.fn().mockResolvedValue({
-        canceled: false,
-        assets: [{ uri: 'file:///doc.png', size: bytes.length }]
-      }),
+      launchFiles,
       createFile: file.createFile
     })
 
+    expect(launchFiles).toHaveBeenCalledWith(expect.objectContaining({ type: '*/*' }))
     expect(result).toEqual({
       base64: Buffer.from(bytes).toString('base64'),
-      uri: 'file:///doc.png'
+      uri: 'file:///book.txt',
+      fileName: '柴静-看见.txt'
     })
     expect(file.close).toHaveBeenCalledTimes(1)
   })

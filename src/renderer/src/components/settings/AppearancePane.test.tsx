@@ -1,12 +1,15 @@
 // @vitest-environment happy-dom
 
+import type * as ShortcutLabelModule from '@/hooks/useShortcutLabel'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
+import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 
 const mocks = vi.hoisted(() => ({
   state: {
@@ -34,7 +37,8 @@ vi.mock('../../store', () => ({
   useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
 }))
 
-vi.mock('@/hooks/useShortcutLabel', () => ({
+vi.mock('@/hooks/useShortcutLabel', async (importOriginal) => ({
+  ...(await importOriginal<typeof ShortcutLabelModule>()),
   useShortcutKeyComboDetails: () => []
 }))
 
@@ -196,7 +200,7 @@ async function rerenderAppearancePane(
 
 function appearanceSectionToggle(
   container: HTMLElement,
-  sectionId: 'interface' | 'terminal' | 'window'
+  sectionId: 'interface' | 'terminal' | 'chat' | 'window'
 ): HTMLButtonElement | undefined {
   return Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')).find(
     (button) => button.getAttribute('aria-controls') === `appearance-section-${sectionId}`
@@ -215,14 +219,13 @@ describe('AppearancePane', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    resetRendererAppPlatformCacheForTests()
     mocks.state.availableStatusBarToggles = []
     mocks.state.appPlatform = 'linux'
     mocks.state.settingsSearchQuery = 'automations'
     mocks.state.appearanceAccordionDeepLink = null
     mocks.state.usagePercentageDisplay = 'used'
-    // UIZoomControl reads window.api.ui on mount; the inline-expansion pane can
-    // render the full Interface section, so provide a minimal renderer bridge
-    // without clobbering happy-dom's window.location.
+    // Provide the zoom bridge without replacing happy-dom location when the Interface section expands.
     ;(window as unknown as { api: unknown }).api = {
       platform: {
         get: () => ({ platform: mocks.state.appPlatform })
@@ -237,6 +240,15 @@ describe('AppearancePane', () => {
 
   afterEach(() => {
     delete (window as unknown as { api?: unknown }).api
+  })
+
+  it('keeps chat appearance controls out of the Appearance pane', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const container = await renderAppearancePane({
+      ...getDefaultSettings('/tmp')
+    })
+    expect(appearanceSectionToggle(container, 'chat')).toBeUndefined()
+    expect(container.textContent).not.toContain('Reset chat appearance')
   })
 
   it('shows language as a primary interface control without opening Advanced', async () => {
@@ -271,7 +283,7 @@ describe('AppearancePane', () => {
     ).toBeNull()
   })
 
-  it('renders the language dropdown with system, english, chinese, korean, japanese, and spanish options', async () => {
+  it('saves distinct language selections from the dropdown', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const updateSettings = vi.fn()
     const settings = {
@@ -286,22 +298,25 @@ describe('AppearancePane', () => {
     const chineseOption = container.querySelector<HTMLButtonElement>(
       '[data-slot="select-item"][data-value="zh"]'
     )
+    const portugueseOption = container.querySelector<HTMLButtonElement>(
+      '[data-slot="select-item"][data-value="pt"]'
+    )
 
     expect(languageTrigger).not.toBeNull()
     expect(chineseOption).not.toBeNull()
-    expect(container.textContent).not.toContain('Advanced')
-    expect(container.textContent).toContain('System')
-    expect(container.textContent).toContain('English')
-    expect(container.textContent).toContain('中文（简体）')
-    expect(container.textContent).toContain('한국어')
-    expect(container.textContent).toContain('日本語')
-    expect(container.textContent).toContain('Español')
-
+    expect(portugueseOption).not.toBeNull()
     await act(async () => {
       chineseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(updateSettings).toHaveBeenCalledWith({ uiLanguage: 'zh' })
+    expect(updateSettings).toHaveBeenNthCalledWith(1, { uiLanguage: 'zh' })
+
+    await act(async () => {
+      portugueseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenNthCalledWith(2, { uiLanguage: 'pt' })
+    expect(updateSettings).toHaveBeenCalledTimes(2)
   })
 
   it('includes the selected language in the collapsed Interface summary', async () => {
@@ -324,7 +339,6 @@ describe('AppearancePane', () => {
     })
 
     expect(interfaceToggle?.getAttribute('aria-expanded')).toBe('false')
-    // Summary is only rendered on the collapsed toggle (children stay mounted but hidden).
     expect(interfaceToggle?.textContent).toContain('Dark · 中文（简体） · Inter')
   })
 
@@ -399,8 +413,7 @@ describe('AppearancePane', () => {
     expect(container.textContent).toContain('Interface')
     expect(container.textContent).toContain('Terminal')
     expect(container.textContent).toContain('Window & Sidebar')
-    // Code & Markdown is intentionally omitted — Orca has no Appearance-level
-    // code/markdown settings, so the row would be empty.
+    // No Appearance-level code/Markdown settings exist; that section would be empty.
     expect(container.textContent).not.toContain('Code & Markdown')
   })
 
@@ -433,7 +446,6 @@ describe('AppearancePane', () => {
 
     expect(interfaceRow).toBeDefined()
     expect(appIconImage).not.toBeNull()
-    // The App Icon block sits after the Interface section row in document order.
     expect(
       interfaceRow &&
         appIconImage &&
@@ -442,9 +454,7 @@ describe('AppearancePane', () => {
   })
 
   it('reveals an advanced sidebar control when its search matches, even though it is hidden by default', async () => {
-    // The Show Tasks Button toggle lives behind the Window & Sidebar Advanced
-    // disclosure; with no search it stays collapsed, but a matching query must
-    // force the disclosure open so the control is reachable.
+    // Search must reveal matching controls hidden in the advanced disclosure.
     mocks.state.settingsSearchQuery = ''
     const collapsedContainer = await renderAppearancePane(getDefaultSettings('/tmp'))
     expect(
@@ -458,7 +468,7 @@ describe('AppearancePane', () => {
     ).not.toBeNull()
   })
 
-  it('shows and updates the menu bar icon preference only on desktop macOS', async () => {
+  it('shows and updates the menu bar icon preference on desktop macOS', async () => {
     mocks.state.appPlatform = 'darwin'
     mocks.state.settingsSearchQuery = 'menu bar'
     const updateSettings = vi.fn()

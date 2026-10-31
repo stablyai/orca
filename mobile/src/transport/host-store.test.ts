@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileRelayHostOverlay } from './mobile-relay-host-overlay'
+import {
+  toStoredMobileRelayHostOverlay,
+  type MobileRelayHostOverlay
+} from './mobile-relay-host-overlay'
 
 const asyncStorageMock = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -14,6 +17,8 @@ const secureStoreMock = vi.hoisted(() => ({
 }))
 
 const scheduleCleanupMock = vi.hoisted(() => vi.fn())
+const cancelCleanupMock = vi.hoisted(() => vi.fn())
+const recordCleanupIntentMock = vi.hoisted(() => vi.fn())
 const platformMock = vi.hoisted(() => ({ OS: 'ios' }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -30,22 +35,26 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('./host-credential-cleanup', () => ({
+  cancelPendingHostCredentialCleanup: (...args: unknown[]) => cancelCleanupMock(...args),
+  recordHostCredentialCleanupIntent: (...args: unknown[]) => recordCleanupIntentMock(...args),
   scheduleHostCredentialCleanup: (...args: unknown[]) => scheduleCleanupMock(...args),
   retryPendingHostCredentialCleanups: vi.fn()
 }))
 
 import {
+  loadHostCatalog,
   loadHosts,
-  MobileRelayUpgradeHostRemovedError,
+  RelayRoutingHostRemovedError,
   removeHost,
   resolvePairingHostIdentity,
   resetHostStoreForTests,
-  saveHost,
-  saveExistingHostRelayUpgrade,
+  savePairedHost,
+  setRelayRouting,
   updateHostNameAndEndpoint,
   updateLastConnected
 } from './host-store'
 import { resetMobileRelayHostOverlayStoreForTests } from './mobile-relay-host-overlay-store'
+import { writeMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 
 const HOSTS_STORAGE_KEY = 'orca:hosts'
 const OVERLAY_STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
@@ -63,6 +72,31 @@ const HOST_TWO = {
   publicKeyB64: 'key-2',
   lastConnected: 0
 }
+const HOST_ONE_RELAY = {
+  v: 1 as const,
+  directorUrl: 'https://relay.onorca.dev',
+  cellUrl: 'https://relay-c1.onorca.dev',
+  assignmentEpoch: 7,
+  relayHostId: 'AbCdEf0123_-xyZ9',
+  e2eeFraming: 2 as const
+}
+const HOST_ONE_RELAY_BUNDLE = {
+  v: 1 as const,
+  hostId: HOST_ONE.id,
+  deviceToken: 'replacement-token',
+  current: {
+    token: 'A'.repeat(43),
+    hash: 'B'.repeat(43),
+    version: 1,
+    expiresAt: 10_000
+  }
+}
+
+function scheduledCleanup(hostId: string): (id: string) => Promise<void> {
+  const cleanup = scheduleCleanupMock.mock.calls.find(([id]) => id === hostId)?.[1]
+  expect(cleanup).toBeTypeOf('function')
+  return cleanup as (id: string) => Promise<void>
+}
 
 describe('host-store list mutations', () => {
   let storedHostsRaw: string
@@ -75,6 +109,10 @@ describe('host-store list mutations', () => {
     resetMobileRelayHostOverlayStoreForTests()
     scheduleCleanupMock.mockReset()
     scheduleCleanupMock.mockResolvedValue(undefined)
+    cancelCleanupMock.mockReset()
+    cancelCleanupMock.mockResolvedValue(undefined)
+    recordCleanupIntentMock.mockReset()
+    recordCleanupIntentMock.mockResolvedValue(undefined)
     storedHostsRaw = JSON.stringify([HOST_ONE, HOST_TWO])
     storedOverlayRaw = null
     asyncStorageMock.getItem.mockImplementation(async (key: string) => {
@@ -93,6 +131,7 @@ describe('host-store list mutations', () => {
         storedOverlayRaw = raw
       }
     })
+    secureStoreMock.setItemAsync.mockResolvedValue(undefined)
     secureStoreMock.getItemAsync.mockImplementation(async (key: string) =>
       key.endsWith(HOST_ONE.id) || key.endsWith(HOST_TWO.id) ? `token-${key.at(-1)}` : null
     )
@@ -114,6 +153,55 @@ describe('host-store list mutations', () => {
     expect(asyncStorageMock.getItem).toHaveBeenCalledOnce()
   })
 
+  it('keeps a host visible when its credential read temporarily fails', async () => {
+    secureStoreMock.getItemAsync.mockImplementation(async (key: string) => {
+      if (key.endsWith(HOST_ONE.id)) {
+        throw new Error('keychain locked')
+      }
+      return key.endsWith(HOST_TWO.id) ? 'token-2' : null
+    })
+
+    const catalog = await loadHostCatalog()
+    const profiles = await loadHosts()
+
+    expect(catalog.map(({ id }) => id)).toEqual([HOST_ONE.id, HOST_TWO.id])
+    expect(catalog.find(({ id }) => id === HOST_ONE.id)).toMatchObject({
+      credentialStatus: 'temporarily-unavailable',
+      profile: null
+    })
+    expect(profiles.map(({ id }) => id)).toEqual([HOST_TWO.id])
+  })
+
+  it('keeps orphaned metadata visible when its credential is missing', async () => {
+    secureStoreMock.getItemAsync.mockImplementation(async (key: string) =>
+      key.endsWith(HOST_TWO.id) ? 'token-2' : null
+    )
+
+    const catalog = await loadHostCatalog()
+
+    expect(catalog.find(({ id }) => id === HOST_ONE.id)).toMatchObject({
+      credentialStatus: 'missing',
+      profile: null
+    })
+  })
+
+  it('keeps existing metadata when pairing a distinct host', async () => {
+    await savePairedHost({
+      id: 'host-new',
+      name: 'Host 3',
+      endpoint: 'ws://127.0.0.1:3',
+      publicKeyB64: 'key-new',
+      deviceToken: 'token-new',
+      lastConnected: 0
+    })
+
+    expect(JSON.parse(storedHostsRaw).map(({ id }: { id: string }) => id)).toEqual([
+      HOST_ONE.id,
+      HOST_TWO.id,
+      'host-new'
+    ])
+  })
+
   it('fails closed when durable host identity storage is unreadable', async () => {
     asyncStorageMock.getItem.mockRejectedValueOnce(new Error('storage unavailable'))
 
@@ -127,14 +215,186 @@ describe('host-store list mutations', () => {
       { ...HOST_TWO, id: 'host-duplicate', publicKeyB64: HOST_ONE.publicKeyB64 }
     ])
 
-    await saveHost({
+    await savePairedHost({
       ...HOST_ONE,
       endpoint: 'ws://127.0.0.1:3',
       deviceToken: 'replacement-token'
     })
 
     expect(JSON.parse(storedHostsRaw)).toEqual([{ ...HOST_ONE, endpoint: 'ws://127.0.0.1:3' }])
+    expect(recordCleanupIntentMock.mock.invocationCallOrder[0]).toBeLessThan(
+      asyncStorageMock.setItem.mock.invocationCallOrder[0]!
+    )
     expect(scheduleCleanupMock).toHaveBeenCalledWith('host-duplicate', expect.any(Function))
+  })
+
+  it('does not remove same-key metadata when the replacement credential write fails', async () => {
+    const duplicate = {
+      ...HOST_TWO,
+      id: 'host-duplicate',
+      publicKeyB64: HOST_ONE.publicKeyB64
+    }
+    storedHostsRaw = JSON.stringify([HOST_ONE, duplicate])
+    secureStoreMock.setItemAsync.mockRejectedValue(new Error('keychain write failed'))
+
+    await expect(
+      savePairedHost({
+        ...HOST_ONE,
+        endpoint: 'ws://127.0.0.1:3',
+        deviceToken: 'replacement-token'
+      })
+    ).rejects.toThrow('keychain write failed')
+
+    expect(JSON.parse(storedHostsRaw)).toEqual([HOST_ONE, duplicate])
+    expect(cancelCleanupMock).toHaveBeenCalledWith(duplicate.id)
+    expect(scheduleCleanupMock).not.toHaveBeenCalled()
+  })
+
+  it('serves a committed replacement token when same-key metadata persistence fails', async () => {
+    const duplicate = {
+      ...HOST_TWO,
+      id: 'host-duplicate',
+      publicKeyB64: HOST_ONE.publicKeyB64
+    }
+    storedHostsRaw = JSON.stringify([HOST_ONE, duplicate])
+    await loadHosts()
+    asyncStorageMock.setItem.mockRejectedValueOnce(new Error('metadata write failed'))
+
+    await expect(
+      savePairedHost({
+        ...HOST_ONE,
+        endpoint: 'ws://127.0.0.1:3',
+        deviceToken: 'replacement-token'
+      })
+    ).rejects.toThrow('metadata write failed')
+
+    expect(JSON.parse(storedHostsRaw)).toEqual([HOST_ONE, duplicate])
+    await expect(
+      loadHosts().then((hosts) => hosts.find(({ id }) => id === HOST_ONE.id)?.deviceToken)
+    ).resolves.toBe('replacement-token')
+  })
+
+  it('records cleanup when new same-key metadata fails after its credential commits', async () => {
+    const replacement = {
+      ...HOST_TWO,
+      id: 'host-replacement',
+      publicKeyB64: HOST_ONE.publicKeyB64,
+      deviceToken: 'replacement-token'
+    }
+    asyncStorageMock.setItem.mockRejectedValueOnce(new Error('metadata write failed'))
+
+    await expect(savePairedHost(replacement)).rejects.toThrow('metadata write failed')
+
+    expect(JSON.parse(storedHostsRaw)).toEqual([HOST_ONE, HOST_TWO])
+    expect(recordCleanupIntentMock).toHaveBeenCalledWith(replacement.id)
+    expect(recordCleanupIntentMock.mock.invocationCallOrder[0]).toBeLessThan(
+      secureStoreMock.setItemAsync.mock.invocationCallOrder[0]!
+    )
+    expect(scheduleCleanupMock).toHaveBeenCalledWith(replacement.id, expect.any(Function))
+  })
+
+  it('does not clean a duplicate id that a later same-key save made authoritative', async () => {
+    const duplicate = {
+      ...HOST_TWO,
+      id: 'host-duplicate',
+      publicKeyB64: HOST_ONE.publicKeyB64
+    }
+    storedHostsRaw = JSON.stringify([HOST_ONE, duplicate])
+    await savePairedHost({ ...HOST_ONE, deviceToken: 'token-a' })
+    const staleCleanup = scheduledCleanup(duplicate.id)
+
+    await savePairedHost({ ...duplicate, deviceToken: 'token-b' })
+    await staleCleanup(duplicate.id)
+
+    expect(JSON.parse(storedHostsRaw)).toEqual([duplicate])
+    expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not let stale removal cleanup delete a replacement relay bundle before publication', async () => {
+    await removeHost(HOST_ONE.id)
+    const staleCleanup = scheduledCleanup(HOST_ONE.id)
+    await writeMobileRelayCredentialBundle(HOST_ONE_RELAY_BUNDLE)
+
+    await expect(staleCleanup(HOST_ONE.id)).rejects.toThrow('credential write superseded cleanup')
+
+    expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
+  })
+
+  it('keeps stale cleanup pending when a replacement relay write fails', async () => {
+    await removeHost(HOST_ONE.id)
+    const staleCleanup = scheduledCleanup(HOST_ONE.id)
+    secureStoreMock.setItemAsync.mockRejectedValueOnce(new Error('keychain write failed'))
+
+    await expect(writeMobileRelayCredentialBundle(HOST_ONE_RELAY_BUNDLE)).rejects.toThrow(
+      'keychain write failed'
+    )
+    await expect(staleCleanup(HOST_ONE.id)).rejects.toThrow('credential write superseded cleanup')
+
+    expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
+  })
+
+  it('stops stale cleanup when a replacement relay write starts during token deletion', async () => {
+    await removeHost(HOST_ONE.id)
+    const staleCleanup = scheduledCleanup(HOST_ONE.id)
+    let releaseTokenDelete: () => void = () => {}
+    secureStoreMock.deleteItemAsync.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        releaseTokenDelete = resolve
+      })
+    )
+
+    const cleanup = staleCleanup(HOST_ONE.id)
+    await vi.waitFor(() => {
+      expect(secureStoreMock.deleteItemAsync).toHaveBeenCalledWith(
+        'orca.host-token.host-1',
+        expect.anything()
+      )
+    })
+    const bundleWrite = writeMobileRelayCredentialBundle(HOST_ONE_RELAY_BUNDLE)
+    releaseTokenDelete()
+    await bundleWrite
+    await expect(cleanup).rejects.toThrow('credential write superseded cleanup')
+
+    expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalledWith(
+      'orca.mobile-relay.credentials.host-1',
+      expect.anything()
+    )
+  })
+
+  it('rechecks the write generation immediately before starting credential deletion', async () => {
+    await removeHost(HOST_ONE.id)
+    const staleCleanup = scheduledCleanup(HOST_ONE.id)
+    let resolveCleanupRead: (raw: string) => void = () => {}
+    const cleanupRead = new Promise<string>((resolve) => {
+      resolveCleanupRead = resolve
+    })
+    let cleanupReadStarted = false
+    asyncStorageMock.getItem.mockImplementation(async (key: string) => {
+      if (key === HOSTS_STORAGE_KEY && !cleanupReadStarted) {
+        cleanupReadStarted = true
+        return cleanupRead
+      }
+      if (key === HOSTS_STORAGE_KEY) {
+        return storedHostsRaw
+      }
+      if (key === OVERLAY_STORAGE_KEY) {
+        return storedOverlayRaw
+      }
+      return null
+    })
+
+    const cleanup = staleCleanup(HOST_ONE.id)
+    await vi.waitFor(() => expect(cleanupReadStarted).toBe(true))
+    let bundleWrite: Promise<void> | null = null
+    resolveCleanupRead(storedHostsRaw)
+    queueMicrotask(() => {
+      bundleWrite = writeMobileRelayCredentialBundle(HOST_ONE_RELAY_BUNDLE)
+    })
+    await expect(cleanup).rejects.toThrow('credential write superseded cleanup')
+    await vi.waitFor(() => expect(bundleWrite).not.toBeNull())
+    await bundleWrite
+
+    expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
   })
 
   it('clears stale relay state when an existing host is re-paired direct-only', async () => {
@@ -149,26 +409,19 @@ describe('host-store list mutations', () => {
           url: 'wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9'
         }
       ],
-      relayHostId: 'AbCdEf0123_-xyZ9',
-      relay: {
-        v: 1,
-        directorUrl: 'https://relay.onorca.dev',
-        cellUrl: 'https://relay-c1.onorca.dev',
-        assignmentEpoch: 7,
-        relayHostId: 'AbCdEf0123_-xyZ9',
-        e2eeFraming: 2
-      }
+      relayHostId: HOST_ONE_RELAY.relayHostId,
+      relay: HOST_ONE_RELAY
     }
     storedOverlayRaw = JSON.stringify([overlay])
 
-    await saveHost({ ...HOST_ONE, deviceToken: 'replacement-token' })
+    await savePairedHost({ ...HOST_ONE, deviceToken: 'replacement-token' })
 
     expect(JSON.parse(storedOverlayRaw!)).toEqual([])
     expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
   })
 
   it('does not touch relay storage when saving a new direct-only host', async () => {
-    await saveHost({
+    await savePairedHost({
       id: 'host-new',
       name: 'New Host',
       endpoint: 'ws://127.0.0.1:3',
@@ -182,7 +435,7 @@ describe('host-store list mutations', () => {
   })
 
   it('keeps the normal iOS save on the existing default keychain service', async () => {
-    await saveHost({
+    await savePairedHost({
       id: 'host-new',
       name: 'New Host',
       endpoint: 'ws://127.0.0.1:3',
@@ -209,7 +462,63 @@ describe('host-store list mutations', () => {
     expect(scheduleCleanupMock).toHaveBeenCalledWith(HOST_ONE.id, expect.any(Function))
   })
 
-  it('merges v2 endpoints only onto an existing legacy base host', async () => {
+  it('cancels write-ahead cleanup when host metadata removal fails', async () => {
+    asyncStorageMock.setItem.mockRejectedValueOnce(new Error('metadata write failed'))
+
+    await expect(removeHost(HOST_ONE.id)).rejects.toThrow('metadata write failed')
+
+    expect(JSON.parse(storedHostsRaw)).toEqual([HOST_ONE, HOST_TWO])
+    expect(cancelCleanupMock).toHaveBeenCalledWith(HOST_ONE.id)
+  })
+
+  it('does not cancel cleanup from a removal committed during a stalled save', async () => {
+    let releaseTokenWrite: () => void = () => {}
+    secureStoreMock.setItemAsync.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        releaseTokenWrite = resolve
+      })
+    )
+
+    const save = savePairedHost({ ...HOST_ONE, deviceToken: 'replacement-token' })
+    await vi.waitFor(() => expect(secureStoreMock.setItemAsync).toHaveBeenCalledOnce())
+    await removeHost(HOST_ONE.id)
+    releaseTokenWrite()
+    await save
+    await loadHostCatalog()
+
+    expect(JSON.parse(storedHostsRaw)).toEqual([HOST_TWO])
+    expect(scheduleCleanupMock).toHaveBeenCalledWith(HOST_ONE.id, expect.any(Function))
+    expect(cancelCleanupMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses an early same-key token write without durable cleanup intent', async () => {
+    const replacement = {
+      ...HOST_TWO,
+      id: 'host-replacement',
+      publicKeyB64: HOST_ONE.publicKeyB64,
+      deviceToken: 'replacement-token'
+    }
+    recordCleanupIntentMock.mockRejectedValueOnce(new Error('intent storage unavailable'))
+
+    await expect(savePairedHost(replacement)).rejects.toThrow('intent storage unavailable')
+
+    expect(JSON.parse(storedHostsRaw)).toEqual([HOST_ONE, HOST_TWO])
+    expect(secureStoreMock.setItemAsync).not.toHaveBeenCalled()
+  })
+
+  it('deletes an unpaired credential when cleanup runs without a newer write', async () => {
+    await removeHost(HOST_ONE.id)
+    const cleanup = scheduledCleanup(HOST_ONE.id)
+
+    await cleanup(HOST_ONE.id)
+
+    expect(secureStoreMock.deleteItemAsync).toHaveBeenCalledWith(
+      'orca.host-token.host-1',
+      expect.anything()
+    )
+  })
+
+  it('keeps a concurrently re-published orphan overlay authoritative', async () => {
     const overlay: MobileRelayHostOverlay = {
       v: 2,
       hostId: HOST_ONE.id,
@@ -221,41 +530,50 @@ describe('host-store list mutations', () => {
           url: 'wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9'
         }
       ],
-      relayHostId: 'AbCdEf0123_-xyZ9',
-      relay: {
-        v: 1,
-        directorUrl: 'https://relay.onorca.dev',
-        cellUrl: 'https://relay-c1.onorca.dev',
-        assignmentEpoch: 7,
-        relayHostId: 'AbCdEf0123_-xyZ9',
-        e2eeFraming: 2
-      }
+      relayHostId: HOST_ONE_RELAY.relayHostId,
+      relay: HOST_ONE_RELAY
     }
     storedOverlayRaw = JSON.stringify([overlay, { ...overlay, hostId: 'removed-by-old-build' }])
+    let releaseCleanup: () => void = () => {}
+    scheduleCleanupMock.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        releaseCleanup = resolve
+      })
+    )
 
-    const hosts = await loadHosts()
-
-    expect(hosts.find(({ id }) => id === HOST_ONE.id)).toMatchObject({
-      endpoints: overlay.endpoints,
-      relayHostId: overlay.relayHostId,
+    const hostsLoad = loadHosts()
+    await vi.waitFor(() => expect(scheduleCleanupMock).toHaveBeenCalled())
+    await savePairedHost({
+      ...HOST_ONE,
+      id: 'removed-by-old-build',
+      publicKeyB64: 'restored-key',
+      deviceToken: 'restored-token',
       relay: overlay.relay
     })
+    releaseCleanup()
+    const hosts = await hostsLoad
+
+    expect(hosts.find(({ id }) => id === HOST_ONE.id)).toMatchObject({ relay: overlay.relay })
     expect(hosts.some(({ id }) => id === 'removed-by-old-build')).toBe(false)
+    expect(JSON.parse(storedOverlayRaw!)).toContainEqual(
+      toStoredMobileRelayHostOverlay('removed-by-old-build', HOST_ONE_RELAY)
+    )
   })
 
   it('refuses to resurrect a removed host during relay upgrade publication', async () => {
     storedHostsRaw = JSON.stringify([HOST_TWO])
 
-    await expect(
-      saveExistingHostRelayUpgrade({ ...HOST_ONE, deviceToken: 'token-1' })
-    ).rejects.toBeInstanceOf(MobileRelayUpgradeHostRemovedError)
+    await expect(setRelayRouting(HOST_ONE.id, HOST_ONE_RELAY)).rejects.toBeInstanceOf(
+      RelayRoutingHostRemovedError
+    )
 
     expect(JSON.parse(storedHostsRaw)).toEqual([HOST_TWO])
+    expect(storedOverlayRaw).toBeNull()
     expect(secureStoreMock.setItemAsync).not.toHaveBeenCalled()
   })
 
   it('awaits cleanup scheduling after metadata commit', async () => {
-    let resolveSchedule: (() => void) | null = null
+    let resolveSchedule: (() => void) | undefined
     scheduleCleanupMock.mockReturnValue(
       new Promise<void>((resolve) => {
         resolveSchedule = resolve
@@ -270,7 +588,9 @@ describe('host-store list mutations', () => {
       expect(JSON.parse(storedHostsRaw)).toEqual([HOST_TWO])
     })
     expect(settled).toBe(false)
-    expect(scheduleCleanupMock).toHaveBeenCalledOnce()
+    expect(recordCleanupIntentMock.mock.invocationCallOrder[0]).toBeLessThan(
+      asyncStorageMock.setItem.mock.invocationCallOrder[0]!
+    )
 
     resolveSchedule?.()
     await removal
@@ -278,7 +598,7 @@ describe('host-store list mutations', () => {
   })
 
   it('applies concurrent rename and remove without clobbering either', async () => {
-    let releaseReads: (() => void) | null = null
+    let releaseReads: (() => void) | undefined
     const readsReleased = new Promise<void>((resolve) => {
       releaseReads = resolve
     })
@@ -294,10 +614,9 @@ describe('host-store list mutations', () => {
       return storedHostsRaw
     })
 
-    const rename = updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Renamed Host' })
+    const rename = updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Renamed Host' })
     const remove = removeHost(HOST_TWO.id)
-    // Both writers have started their RMW and are blocked on the shared read
-    // gate; without a mutation queue the second would clobber the first.
+    // Overlap writers behind one read gate to expose lost updates without serialization.
     await vi.waitFor(() => {
       expect(pendingReads).toBeGreaterThanOrEqual(1)
     })
@@ -305,19 +624,16 @@ describe('host-store list mutations', () => {
     await Promise.all([rename, remove])
 
     expect(JSON.parse(storedHostsRaw)).toEqual([
-      {
-        ...HOST_ONE,
-        name: 'Renamed Host'
-      }
+      { ...HOST_ONE, name: 'Renamed Host', personalName: 'Renamed Host' }
     ])
   })
 
   it('preserves a rename when lastConnected updates race it', async () => {
     const before = Date.now()
     await Promise.all([
-      updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Alpha' }),
+      updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Alpha' }),
       updateLastConnected(HOST_ONE.id),
-      updateHostNameAndEndpoint(HOST_TWO.id, { name: 'Beta' })
+      updateHostNameAndEndpoint(HOST_TWO.id, { personalName: 'Beta' })
     ])
 
     const stored = JSON.parse(storedHostsRaw) as Array<typeof HOST_ONE>
@@ -333,15 +649,14 @@ describe('host-store list mutations', () => {
 
   it('does not wipe the host list when storage is unreadable during mutation', async () => {
     storedHostsRaw = '{'
-    await expect(updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Nope' })).rejects.toThrow(
+    await expect(updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Nope' })).rejects.toThrow(
       /unreadable/
     )
     expect(asyncStorageMock.setItem).not.toHaveBeenCalled()
     expect(storedHostsRaw).toBe('{')
   })
 
-  // Why: gates the (slow, real-device 50-200ms) Keychain pass so a load can be
-  // parked mid-flight while a write commits underneath it.
+  // Park the slow keychain pass while a durable write invalidates it.
   function gateKeychainReads(): () => void {
     let release: () => void = () => {}
     const gate = new Promise<void>((resolve) => {
@@ -378,7 +693,7 @@ describe('host-store list mutations', () => {
       expect(secureStoreMock.getItemAsync).toHaveBeenCalled()
     })
 
-    await updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Living Room Mac' })
+    await updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Living Room Mac' })
     const afterRename = loadHosts()
     releaseKeychain()
 
@@ -387,7 +702,7 @@ describe('host-store list mutations', () => {
     expect(hosts.find((host) => host.id === HOST_ONE.id)?.name).toBe('Living Room Mac')
   })
 
-  it('does not share a host-list pass started before saveHost commits its token', async () => {
+  it('does not share a host-list pass started before savePairedHost commits its token', async () => {
     const newHost = {
       id: 'host-new',
       name: 'New Host',
@@ -418,7 +733,7 @@ describe('host-store list mutations', () => {
       return key.endsWith(HOST_ONE.id) || key.endsWith(HOST_TWO.id) ? `token-${key.at(-1)}` : null
     })
 
-    const save = saveHost(newHost)
+    const save = savePairedHost(newHost)
     await vi.waitFor(() => {
       expect(secureStoreMock.setItemAsync).toHaveBeenCalled()
     })
@@ -466,7 +781,7 @@ describe('host-store list mutations', () => {
     await vi.waitFor(() => {
       expect(secureStoreMock.getItemAsync).toHaveBeenCalled()
     })
-    await saveHost(newHost)
+    await savePairedHost(newHost)
     resolvePrewriteTokenRead('token-old')
     await parkedLoad
 
@@ -489,8 +804,7 @@ describe('host-store list mutations', () => {
   })
 
   it('resolves instead of rejecting when updateLastConnected hits unreadable storage', async () => {
-    // Why: callers fire updateLastConnected with `void`; a rejection here would
-    // surface as an unhandled promise rejection rather than a caught error.
+    // Void callers cannot catch rejection; unreadable storage must leave this bookkeeping best-effort.
     storedHostsRaw = '{'
     await expect(updateLastConnected(HOST_ONE.id)).resolves.toBeUndefined()
     expect(asyncStorageMock.setItem).not.toHaveBeenCalled()
@@ -507,7 +821,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
     lastConnected: 0,
     deviceToken: 'device-token'
   }
-  // Why: the verbatim Android rejection from #6600 — expo maps a null-message GeneralSecurityException to this.
+  // Preserve the Android null-message GeneralSecurityException shape from #6600.
   const ENCRYPT_REJECTION = new Error(
     "Could not encrypt the value for key 'orca.host-token.host-1782629088232' under keychain 'key_v1'. Caused by: unknown"
   )
@@ -522,13 +836,17 @@ describe('host-store pairing save after an Android encryption rejection', () => 
     resetMobileRelayHostOverlayStoreForTests()
     scheduleCleanupMock.mockReset()
     scheduleCleanupMock.mockResolvedValue(undefined)
+    cancelCleanupMock.mockReset()
+    cancelCleanupMock.mockResolvedValue(undefined)
+    recordCleanupIntentMock.mockReset()
+    recordCleanupIntentMock.mockResolvedValue(undefined)
     storedHostsRaw = '[]'
     storedGenerationRaw = null
     asyncStorageMock.getItem.mockImplementation(async (key: string) => {
       if (key === HOSTS_STORAGE_KEY) {
         return storedHostsRaw
       }
-      // Why: the generation record is durable on device; a forgetful mock would fake a broken read path.
+      // Retain the durable generation in the mock so reads can follow alias rotation.
       return key === GENERATION_KEY ? storedGenerationRaw : null
     })
     asyncStorageMock.setItem.mockImplementation(async (key: string, raw: string) => {
@@ -544,7 +862,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
 
   it('saves the host when the reported Android failure is alias-local (#6600)', async () => {
     const written = new Map<string | undefined, string>()
-    // Why: simulate the unverified alias-local case; no affected physical device was available.
+    // Model the alias-local hypothesis; no affected physical device was available.
     secureStoreMock.setItemAsync.mockImplementation(
       async (_key: string, value: string, options?: { keychainService?: string }) => {
         if (options?.keychainService === undefined) {
@@ -554,7 +872,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
       }
     )
 
-    await expect(saveHost(NEW_HOST)).resolves.toBeUndefined()
+    await expect(savePairedHost(NEW_HOST)).resolves.toBeUndefined()
 
     expect(written.get('orca.pairing.v1')).toBe('device-token')
     expect(JSON.parse(storedHostsRaw)).toEqual([
@@ -571,7 +889,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
   it('still surfaces the failure when no keystore alias can accept the token', async () => {
     secureStoreMock.setItemAsync.mockRejectedValue(ENCRYPT_REJECTION)
 
-    await expect(saveHost(NEW_HOST)).rejects.toBe(ENCRYPT_REJECTION)
+    await expect(savePairedHost(NEW_HOST)).rejects.toBe(ENCRYPT_REJECTION)
   })
 
   it('serves the rotated token to loadHosts so the saved host survives a relaunch', async () => {
@@ -584,8 +902,8 @@ describe('host-store pairing save after an Android encryption rejection', () => 
         written.set(options.keychainService, value)
       }
     )
-    await saveHost(NEW_HOST)
-    // Why: a fresh process has no token cache, so the host list has to come back off the rotated alias.
+    await savePairedHost(NEW_HOST)
+    // Clear the process cache to verify durable reads follow the rotated alias.
     resetHostStoreForTests()
     secureStoreMock.getItemAsync.mockImplementation(
       async (_key: string, options?: { keychainService?: string }) =>

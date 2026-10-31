@@ -1,10 +1,22 @@
-import { readdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { resolveOpenCodeStorageDirectory } from '../opencode/opencode-data-directory'
-import { listOpenCodeDatabases } from '../opencode-usage/scanner'
+import {
+  listOpenCodeDatabases,
+  listOpenCodeDatabasesInDirectory
+} from '../opencode-usage/opencode-database-discovery'
+import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-discovery'
+import { listOpenCode2SqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
+import { isOpenCodeV2DatabaseName } from '../../shared/opencode-database-name'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
+import { scopeWalksAgentFiles } from './session-scope-cwd'
+
+type OpenCodeSource = {
+  storageDir: string
+  dbPaths: () => Promise<readonly string[]>
+}
 
 export function opencodeDiscoveries(
   options: AiVaultScanOptions,
@@ -12,57 +24,92 @@ export function opencodeDiscoveries(
   limit: number,
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
-  const storageDirs = opencodeStorageDirs(options, wslHomeDirs)
-  return storageDirs.map(async (storageDir, index) =>
-    discoverOpenCodeSessions({
-      storageDir,
-      dbPaths: await opencodeDbPathsForSource(options, wslHomeDirs, storageDir, index),
-      limitPerAgent: limit,
-      issues
-    })
-  )
+  return opencodeSources(options, wslHomeDirs, issues).flatMap((source) => {
+    const { storageDir } = source
+    const paths = source.dbPaths()
+    return [
+      paths.then((dbPaths) =>
+        discoverOpenCodeSessions({
+          storageDir,
+          dbPaths: dbPaths.filter((path) => !isOpenCodeV2DatabaseName(basename(path))),
+          limitPerAgent: limit,
+          issues,
+          scopePaths: options.scopePaths,
+          signal: options.signal
+        })
+      ),
+      // Current releases share opencode.db with v1; the worker checks for v2 tables.
+      paths.then((dbPaths) =>
+        discoverOpenCode2Sessions(storageDir, dbPaths, limit, issues, options)
+      )
+    ]
+  })
 }
 
-function opencodeStorageDirs(
+function opencodeSources(
   options: AiVaultScanOptions,
-  wslHomeDirs: readonly string[]
-): string[] {
+  wslHomeDirs: readonly string[],
+  issues: AiVaultScanIssue[]
+): OpenCodeSource[] {
+  const onRefusal = (path: string, error: WslTranscriptFsError): void => {
+    recordSessionScanIssue(issues, { agent: 'opencode', path, ...scanIssueTextFromError(error) })
+  }
+  const dataDirectorySource = (dataDirectory: string): OpenCodeSource => ({
+    storageDir: join(dataDirectory, 'storage'),
+    dbPaths: async () =>
+      options.opencodeDbPaths
+        ? []
+        : listOpenCodeDatabasesInDirectory(dataDirectory, onRefusal, options.signal)
+  })
+  const storageDir = options.opencodeStorageDir ?? resolveOpenCodeStorageDirectory()
+  const primary: OpenCodeSource = {
+    storageDir,
+    dbPaths: async () => {
+      if (options.opencodeDbPaths) {
+        return options.opencodeDbPaths
+      }
+      // Custom storage roots still place SQLite databases in the parent data directory.
+      return options.opencodeStorageDir
+        ? listOpenCodeDatabasesInDirectory(dirname(storageDir), onRefusal, options.signal)
+        : listOpenCodeDatabases(onRefusal, undefined, options.signal)
+    }
+  }
+  // Orca-managed accounts relocate XDG_DATA_HOME, so their stores are invisible to the default lookup.
+  const accountDataDirs = (options.opencodeAccountDataDirs ?? []).filter(
+    (dataDirectory) => dataDirectory !== dirname(storageDir)
+  )
   return [
-    options.opencodeStorageDir ?? resolveOpenCodeStorageDirectory(),
-    ...wslHomeDirs.map((homeDir) => join(homeDir, '.local', 'share', 'opencode', 'storage'))
+    primary,
+    ...[...new Set(accountDataDirs)].map(dataDirectorySource),
+    ...wslHomeDirs.map((homeDir) =>
+      dataDirectorySource(join(homeDir, '.local', 'share', 'opencode'))
+    )
   ]
 }
 
-async function opencodeDbPathsForSource(
-  options: AiVaultScanOptions,
-  wslHomeDirs: readonly string[],
+async function discoverOpenCode2Sessions(
   storageDir: string,
-  sourceIndex: number
-): Promise<readonly string[]> {
-  if (options.opencodeDbPaths) {
-    return sourceIndex === 0 ? options.opencodeDbPaths : []
-  }
-  // Why: custom OpenCode storage roots still keep SQLite DBs in the parent data dir.
-  if (sourceIndex === 0 && options.opencodeStorageDir) {
-    return listOpenCodeDatabasesInDirectory(dirname(storageDir))
-  }
-  if (sourceIndex === 0) {
-    return listOpenCodeDatabases()
-  }
-  const wslHomeDir = wslHomeDirs[sourceIndex - 1]
-  return wslHomeDir
-    ? listOpenCodeDatabasesInDirectory(join(wslHomeDir, '.local', 'share', 'opencode'))
-    : []
-}
-
-async function listOpenCodeDatabasesInDirectory(dataDir: string): Promise<string[]> {
-  try {
-    const entries = await readdir(dataDir, { withFileTypes: true })
-    return entries
-      .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
-      .map((entry) => join(dataDir, entry.name))
-      .sort()
-  } catch {
-    return []
+  dbPaths: readonly string[],
+  limit: number,
+  issues: AiVaultScanIssue[],
+  options: AiVaultScanOptions
+): Promise<SessionFileDiscovery> {
+  const list = (scopePaths?: readonly string[]) =>
+    listOpenCode2SqliteSessionsViaWorker({
+      dbPaths,
+      limit,
+      issues,
+      scopePaths,
+      signal: options.signal
+    }).then((candidates) => candidates.map((candidate) => candidate.file))
+  const [files, scopeFiles] = await Promise.all([
+    list(),
+    scopeWalksAgentFiles('opencode2', options.scopePaths) ? list(options.scopePaths) : undefined
+  ])
+  return {
+    agent: 'opencode2' as const,
+    rootDir: storageDir,
+    files,
+    ...(scopeFiles ? { scopeFiles } : {})
   }
 }

@@ -12,8 +12,7 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { i18n } from '@/i18n/i18n'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 
-// Stub the card and dialog so the board test stays free of xterm / Radix
-// machinery while still exercising the board-owned dialog wiring.
+// Stub card/dialog internals while retaining the board’s dialog wiring.
 vi.mock('./AgentKanbanCard', () => ({
   AgentKanbanCard: ({
     card,
@@ -96,7 +95,11 @@ const ackAgent = vi.fn(async () => {})
 describe('AgentKanbanBoard', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en')
-    // The board relays seen-acks through the dashboard preload API.
+    localStorage.clear()
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+    )
     ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent } }
   })
   afterEach(() => {
@@ -104,12 +107,68 @@ describe('AgentKanbanBoard', () => {
     vi.useRealTimers()
     vi.clearAllMocks()
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('renders the three default columns in order', () => {
     renderBoard([])
     const headers = screen.getAllByText(/Needs You|Working|Done/)
     expect(headers.map((h) => h.textContent)).toEqual(['Needs You', 'Working', 'Done'])
+  })
+
+  it('hides the agent map from dashboard chrome', () => {
+    renderBoard([])
+
+    expect(screen.queryByRole('button', { name: 'Agent Map' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Dashboard' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Dashboard view' })).not.toBeInTheDocument()
+    expect(screen.getByText('Needs You')).toBeInTheDocument()
+  })
+
+  it('names the visible column regions and keeps cards inside their region', () => {
+    renderBoard([card({ bucket: 'attention', worktreeName: 'needs-review' })])
+
+    expect(
+      screen.getAllByRole('region').map((region) => region.getAttribute('aria-label'))
+    ).toEqual(['Needs You', 'Working', 'Done'])
+    expect(
+      within(screen.getByRole('region', { name: 'Needs You' })).getByText('needs-review')
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Idle' })).not.toBeInTheDocument()
+  })
+
+  it('uses the visible translated names for all regions when idle agents are shown', async () => {
+    await i18n.changeLanguage('zh')
+    renderBoard([], { showIdle: true })
+
+    expect(screen.getAllByRole('region')).toHaveLength(4)
+    for (const name of ['需要你', '工作中', '已完成', '空闲']) {
+      const region = screen.getByRole('region', { name })
+      expect(within(region).getByText(name)).toBeInTheDocument()
+    }
+  })
+
+  it('offers project filters without agent-state map filters', async () => {
+    renderBoard([card({ paneKey: 'busy' })])
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Filter/ }))
+    expect(await screen.findByText('Project')).toBeInTheDocument()
+    expect(screen.queryByText('Agent states')).not.toBeInTheDocument()
+  })
+
+  it('focuses search with Ctrl+K without taking focus from response fields', () => {
+    renderBoard([])
+    const search = screen.getByLabelText('Search agents')
+
+    fireEvent.keyDown(document.body, { key: 'k', ctrlKey: true })
+    expect(search).toHaveFocus()
+
+    const response = document.createElement('textarea')
+    document.body.append(response)
+    response.focus()
+    fireEvent.keyDown(response, { key: 'k', ctrlKey: true })
+    expect(response).toHaveFocus()
+    response.remove()
   })
 
   it('places cards in their bucket column and counts them', () => {
@@ -151,7 +210,6 @@ describe('AgentKanbanBoard', () => {
 
   it('shows "None" for empty columns', () => {
     renderBoard([card({ bucket: 'working' })])
-    // attention and done are empty → two "None" placeholders.
     expect(screen.getAllByText('None')).toHaveLength(2)
   })
 
@@ -180,7 +238,7 @@ describe('AgentKanbanBoard', () => {
     renderBoard([card({ bucket: 'done' })])
 
     expect(screen.getByText('完了')).toBeInTheDocument()
-    expect(screen.getByLabelText('エージェントを検索')).toBeInTheDocument()
+    expect(screen.getByLabelText('Agent を検索')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^フィルター/ })).toBeInTheDocument()
   })
 
@@ -252,21 +310,21 @@ describe('AgentKanbanBoard', () => {
 
   it('keeps the terminal dialog open across bucket moves and card removal', () => {
     const agent = card({ paneKey: 'pk-1', bucket: 'done', worktreeName: 'wt1' })
-    const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
+    const { rerender } = render(
+      <AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent], showIdle: true }} />
+    )
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
 
     fireEvent.click(screen.getByTestId('card'))
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
 
-    // Sending a message flips the agent done → working; the dialog must
-    // follow the card to its new bucket instead of closing.
+    // Replying moves done agents to working; the dialog must survive the bucket change.
     const moved = { ...agent, bucket: 'working' as const, dotState: 'working' as const }
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 2, cards: [moved] }} />)
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
     expect(screen.getByTestId('terminal-dialog').dataset.bucket).toBe('working')
 
-    // Even a vanished card (pane closed) keeps the dialog up — the user
-    // dismisses it explicitly, but stale live routing is cleared.
+    // Keep vanished-card dialogs open until dismissed, but clear stale live routing.
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 3, cards: [] }} />)
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
     expect(screen.getByTestId('terminal-dialog').dataset.ptyId).toBeUndefined()
@@ -275,30 +333,37 @@ describe('AgentKanbanBoard', () => {
   it('relays a seen-ack when a dialog opens and when the open agent changes state', () => {
     const agent = card({ paneKey: 'pk-ack', bucket: 'done', unseen: true })
     const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
-    // unseen comes straight from the snapshot (the shared ack map).
     expect(screen.getByTestId('card').dataset.unseen).toBe('true')
 
     fireEvent.click(screen.getByTestId('card'))
-    expect(ackAgent).toHaveBeenCalledWith('pk-ack')
+    // Only the click is a user read; it may claim the edges the card already surfaced.
+    expect(ackAgent.mock.calls).toEqual([['pk-ack', 'explicit']])
     ackAgent.mockClear()
 
     // The ack round-trips through the main window; the next snapshot mutes it.
     rerender(
-      <AgentKanbanBoard snapshot={{ generatedAt: 2, cards: [{ ...agent, unseen: false }] }} />
+      <AgentKanbanBoard
+        snapshot={{
+          generatedAt: 2,
+          cards: [{ ...agent, bucket: 'idle', unseen: false }],
+          showIdle: true
+        }}
+      />
     )
     expect(screen.getByTestId('card').dataset.unseen).toBe('false')
+    expect(screen.getByTestId('card').dataset.bucket).toBe('idle')
     expect(ackAgent).not.toHaveBeenCalled()
 
-    // A state change while the dialog is open re-acks (watching counts as
-    // seeing), so the card never flips bold under an open dialog.
+    // Watching new state counts as seeing it; keep open-dialog cards acknowledged.
     rerender(
       <AgentKanbanBoard
         snapshot={{
           generatedAt: 3,
-          cards: [{ ...agent, bucket: 'working' as const, stateChangedAt: 2000, unseen: true }]
+          cards: [{ ...agent, bucket: 'working' as const, stateChangedAt: 2000, unseen: true }],
+          showIdle: true
         }}
       />
     )
-    expect(ackAgent).toHaveBeenCalledWith('pk-ack')
+    expect(ackAgent.mock.calls).toEqual([['pk-ack', 'view']])
   })
 })

@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
 import { RotateCw } from 'lucide-react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { ColorField, NumberField } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
@@ -21,11 +22,7 @@ export function TerminalWindowSection({
   updateSettings
 }: TerminalWindowSectionProps): React.JSX.Element {
   const [colorOverridesExpanded, setColorOverridesExpanded] = useState(false)
-  // Why: windowBackgroundBlur is only read by createMainWindow() at startup
-  // (macOS vibrancy / Windows acrylic both require window creation options),
-  // so the UI has to ask the user to restart for the change to take effect.
-  // Snapshot the value on first render and compare to the live setting to
-  // show a "Restart required" banner only when they differ.
+  // Blur is a startup window option on macOS/Windows; compare against mount state to request restart only after changes.
   const blurAtMountRef = useRef<boolean>(settings.windowBackgroundBlur ?? false)
   const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
   const [relaunchingBlur, setRelaunchingBlur] = useState(false)
@@ -119,24 +116,14 @@ export function TerminalWindowSection({
                 )}
               </p>
             </div>
-            <button
-              role="switch"
-              aria-checked={settings.windowBackgroundBlur ?? false}
-              onClick={() =>
-                updateSettings({ windowBackgroundBlur: !settings.windowBackgroundBlur })
-              }
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                (settings.windowBackgroundBlur ?? false)
-                  ? 'bg-foreground'
-                  : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span
-                className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                  (settings.windowBackgroundBlur ?? false) ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
+            <Switch
+              aria-label={translate(
+                'auto.components.settings.TerminalWindowSection.2b82242f43',
+                'Window Blur'
+              )}
+              checked={settings.windowBackgroundBlur ?? false}
+              onCheckedChange={(checked) => updateSettings({ windowBackgroundBlur: checked })}
+            />
           </div>
 
           {blurPendingRestart ? (
@@ -244,8 +231,6 @@ export function TerminalWindowSection({
           className="flex items-center justify-between gap-4 py-2"
         >
           <div className="space-y-0.5">
-            {/* Why: helper text dropped per copy audit — near-verbatim restatement
-              of the label; the search index keeps the longer phrasing. */}
             <Label>
               {translate(
                 'auto.components.settings.TerminalWindowSection.3530908ef9',
@@ -253,28 +238,18 @@ export function TerminalWindowSection({
               )}
             </Label>
           </div>
-          <button
-            role="switch"
-            aria-checked={settings.terminalMouseHideWhileTyping ?? false}
-            onClick={() =>
+          <Switch
+            aria-label={translate(
+              'auto.components.settings.TerminalWindowSection.3530908ef9',
+              'Hide Mouse While Typing'
+            )}
+            checked={settings.terminalMouseHideWhileTyping ?? false}
+            onCheckedChange={(checked) =>
               updateSettings({
-                terminalMouseHideWhileTyping: !settings.terminalMouseHideWhileTyping
+                terminalMouseHideWhileTyping: checked
               })
             }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              (settings.terminalMouseHideWhileTyping ?? false)
-                ? 'bg-foreground'
-                : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                (settings.terminalMouseHideWhileTyping ?? false)
-                  ? 'translate-x-4'
-                  : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          />
         </SearchableSetting>
 
         <SearchableSetting

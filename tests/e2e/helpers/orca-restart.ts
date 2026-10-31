@@ -1,12 +1,4 @@
-/**
- * Two-launch Electron helper for restart-persistence tests.
- *
- * Why: the default `orcaPage` fixture creates a fresh `userDataDir` per test
- * and deletes it on close, which is incompatible with a test that needs to
- * quit the app and relaunch against the *same* on-disk state. This helper
- * owns the shared userDataDir and gives each caller an `app`+`page` pair
- * wired to it.
- */
+// Retain one isolated user-data directory across launches; the ordinary per-test fixture deletes it on close.
 
 import {
   _electron as electron,
@@ -20,40 +12,34 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
+import { runProcess } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
+export { launchOwnedBrowserForE2E } from './browser-sidecar-launch'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
+import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation,
   type ElectronHomeIsolation
 } from './electron-home-isolation'
+import type { LaunchOptions } from './orca-restart-launch-options'
 
 type LaunchedOrca = {
   app: ElectronApplication
   page: Page
 }
 
-type LaunchOptions = {
-  /**
-   * Called for each chunk the relaunched main process writes to stderr. The
-   * listener is attached before `firstWindow()` resolves so main-process
-   * startup logs (e.g. the daemon health-check guard) can't be emitted before
-   * the test starts capturing.
-   */
-  onStderr?: (chunk: string) => void
-  /** Merged into this launch only (not baked into the session's shared env). */
-  extraEnv?: Record<string, string>
-}
-
 type RestartSession = {
   userDataDir: string
   seedCodexResumeRollout: (sessionId: string, cwd: string) => string
   launch: (options?: LaunchOptions) => Promise<LaunchedOrca>
+  launchUntilExit: (executablePath: string) => Promise<ProcessResult>
   /** Gracefully close a launch, letting beforeunload flush session state. */
   close: (app: ElectronApplication) => Promise<void>
-  /** Remove the shared userDataDir after the test is done. */
-  dispose: () => Promise<void>
+  /** Close the final launch and remove the shared userDataDir after the test is done. */
+  dispose: (app?: ElectronApplication) => Promise<void>
 }
 
 async function delay(ms: number): Promise<void> {
@@ -88,8 +74,7 @@ async function removeProfileDir(userDataDir: string): Promise<void> {
       if (attempt === 4) {
         throw error
       }
-      // Why: on Windows, taskkill can return before Electron/PTY handles are
-      // fully released, making immediate temp-profile deletion flaky.
+      // Windows taskkill may precede profile-handle release; retry deletion.
       await delay(250)
     }
   }
@@ -110,28 +95,15 @@ function createRestartLaunchIsolation(
     inheritedEnv: cleanEnv,
     launchEnv: {
       NODE_ENV: 'development',
-      ...((process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
-        process.env.ORCA_E2E_SSH_DOCKER === '1' ||
-        process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1') &&
-      !cleanEnv.ORCA_RELAY_PATH
-        ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
-        : {}),
       ...extraEnv,
       ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
     },
     extraEnv: {},
-    userDataDir,
-    codexRealHomeEnabled: false
+    userDataDir
   })
 }
 
-/**
- * Create a restart session tied to a persistent userDataDir.
- *
- * Why: keep the launch wiring identical to the shared fixture (mainPath,
- * env stripping, headful toggle) so behavior differences between fixtures
- * don't leak in as false positives for persistence bugs.
- */
+// Keep launch policy aligned with the ordinary app fixture to avoid false persistence differences.
 export function createRestartSession(
   testInfo: TestInfo,
   extraEnv: Record<string, string> = {}
@@ -142,9 +114,7 @@ export function createRestartSession(
   const homeIsolation = createRestartLaunchIsolation(userDataDir, headful, extraEnv)
   let runtimeWsPort: number | null = null
 
-  // Why: this helper bypasses the shared `electronApp` fixture, so it must
-  // seed the same completed onboarding profile or first-run overlays cover
-  // both launches and obscure restart failures.
+  // Seed completed onboarding on both launches so first-run overlays cannot obscure persistence failures.
   writeFileSync(
     path.join(userDataDir, 'orca-data.json'),
     `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
@@ -175,38 +145,64 @@ export function createRestartSession(
   const launch = async (options?: LaunchOptions): Promise<LaunchedOrca> => {
     runtimeWsPort ??= await reserveRestartRuntimeWsPort()
     const app = await electron.launch({
-      args: getOrcaElectronLaunchArgs(mainPath, headful),
+      args: [...getOrcaElectronLaunchArgs(mainPath, headful), ...(options?.extraArgs ?? [])],
       env: {
         ...homeIsolation.env,
         ...options?.extraEnv,
         ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
       }
     })
-    // Why: attach before firstWindow — the main-process daemon guard and the
-    // plugin-system startup metrics can both emit before the renderer is ready.
+    // Attach before firstWindow or daemon-guard/plugin startup logs may already be gone.
     if (options?.onStderr) {
       const onStderr = options.onStderr
       app.process().stderr?.on('data', (chunk: Buffer) => onStderr(chunk.toString()))
     }
     try {
-      const resolvedHome = await app.evaluate(({ app }) => app.getPath('home'))
+      const resolvedHome = await retryTransientMainEvaluate(() =>
+        app.evaluate(({ app }) => {
+          // This fixture owns every launch; native relaunch leaves an unattached Playwright child.
+          app.relaunch = () => {}
+          return app.getPath('home')
+        })
+      )
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+      await options?.beforeFirstWindow?.(app)
+      const page = await app.firstWindow({ timeout: 120_000 })
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+      return { app, page }
     } catch (error) {
       await closeElectronAppForE2E(app)
       throw error
     }
-    const page = await app.firstWindow({ timeout: 120_000 })
-    await page.waitForLoadState('domcontentloaded')
-    await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
-    return { app, page }
   }
 
   const close = async (app: ElectronApplication): Promise<void> => {
     await closeElectronAppForE2E(app)
   }
 
-  const dispose = async (): Promise<void> => {
-    await cleanupE2EDaemons(userDataDir)
+  // Startup refusals exit before a renderer exists; capture their output from process creation.
+  const launchUntilExit = async (executablePath: string): Promise<ProcessResult> => {
+    runtimeWsPort ??= await reserveRestartRuntimeWsPort()
+    return runProcess({
+      program: executablePath,
+      args: getOrcaElectronLaunchArgs(mainPath, false),
+      env: {
+        ...homeIsolation.env,
+        ORCA_BACKGROUND_LAUNCH: '1',
+        ORCA_E2E_HEADLESS: '1',
+        ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
+      },
+      timeoutMs: 30_000,
+      detached: process.platform !== 'win32',
+      terminationBarrier: true
+    })
+  }
+
+  const dispose = async (app?: ElectronApplication): Promise<void> => {
+    await (app
+      ? closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
+      : cleanupE2EDaemons(userDataDir))
     if (process.env.ORCA_E2E_PRESERVE_RESTART_PROFILE === '1') {
       console.log(`[e2e] Preserved restart profile at ${userDataDir}`)
       return
@@ -216,14 +212,10 @@ export function createRestartSession(
     }
   }
 
-  return { userDataDir, seedCodexResumeRollout, launch, close, dispose }
+  return { userDataDir, seedCodexResumeRollout, launch, launchUntilExit, close, dispose }
 }
 
-/**
- * Attach a repo to the running renderer and wait until a terminal tab is
- * active on its worktree. Matches the shared fixture's setup path so the
- * first-launch state lines up with what real users persist.
- */
+// Match ordinary repo setup so restart tests persist a realistic active terminal.
 export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): Promise<string> {
   if (!isValidGitRepo(repoPath)) {
     throw new Error(`attachRepoAndOpenTerminal: ${repoPath} is not a git repo`)
@@ -246,15 +238,13 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
             if (!store) {
               return false
             }
-            // Why: repos.add emits a concurrent refresh whose generation can
-            // supersede this fetch; poll until either refresh publishes the repo.
-            await store.getState().fetchRepos()
+            // Poll through the concurrent repos.add refresh that can supersede this fetch generation.
+            await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
             const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
             if (!repo) {
               return false
             }
-            // Why: this restart fixture uses the global e2e repo, whose seeded Git
-            // worktree is external to Orca's workspace root after the visibility rollout.
+            // Show the seeded Git worktree external to Orca’s managed workspace root.
             await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
             return true
           }, repoId)
@@ -272,10 +262,7 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     { timeout: 30_000 }
   )
 
-  // Why: fetchWorktrees() is async. Awaiting the outer page.evaluate returns
-  // before the Zustand worktree slice has observed the hydrated state, so a
-  // single evaluate() that reads worktreesByRepo can see an empty map. Poll
-  // the store until the seeded repo's worktree shows up.
+  // Poll until async worktree hydration reaches Zustand; page.evaluate settlement alone does not guarantee it.
   await expect
     .poll(
       async () =>
@@ -302,8 +289,7 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
       return null
     }
     const state = store.getState()
-    // Why: repo identity remains stable when Windows canonicalizes path casing
-    // or separators between the IPC and renderer layers.
+    // Use repo identity across Windows path casing/separator normalization.
     const repoWorktrees = state.worktreesByRepo[repoId] ?? []
     const primary = repoWorktrees.find((worktree) => worktree.isMainWorktree) ?? repoWorktrees[0]
     if (!primary) {
@@ -324,8 +310,7 @@ export async function readRestartRendererState<T>(read: () => Promise<T>): Promi
   try {
     return await read()
   } catch (error) {
-    // Why: initial hydration can replace the renderer document; the enclosing
-    // state poll must retry that transition without hiding other failures.
+    // Retry hydration’s document replacement without swallowing unrelated errors.
     if (error instanceof Error && error.message.includes('Execution context was destroyed')) {
       return null
     }

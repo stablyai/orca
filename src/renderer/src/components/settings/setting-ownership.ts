@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 export type SettingOwnership =
   | 'client-default'
   | 'host-override'
+  | 'host-collection'
   | 'project-host-setup'
   | 'provider-host'
 
@@ -34,22 +35,22 @@ function buildSummaries(): Record<string, SettingOwnershipSummary> {
       )
     },
     agentLaunchDefaults: {
-      ownership: 'client-default',
-      label: translate('auto.components.settings.settingOwnership.clientDefault', 'Client default'),
+      ownership: 'host-collection',
+      label: translate('auto.components.settings.settingOwnership.providerHost', 'Provider host'),
       description: translate(
         'auto.components.settings.settingOwnership.agentLaunchDefaults',
-        'Default agent, command overrides, CLI arguments, and launch environment are client preferences. SSH and remote server launches still validate host availability at run time.'
+        'Default agent, command overrides, CLI arguments, and launch environment are saved on the selected host.'
       )
     },
     terminalQuickCommands: {
-      ownership: 'client-default',
+      ownership: 'host-collection',
       label: translate(
-        'auto.components.settings.settingOwnership.clientDefaultProjectScopes',
-        'Client default + project scopes'
+        'auto.components.settings.settingOwnership.hostCollectionProjectScopes',
+        'Host collection + project scopes'
       ),
       description: translate(
-        'auto.components.settings.settingOwnership.terminalQuickCommands',
-        'Commands are saved on this client, then scoped globally or to a project setup so they run from the selected terminal context.'
+        'auto.components.settings.settingOwnership.terminalQuickCommandHostCollections',
+        'Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces.'
       )
     },
     workspaceDirectory: {

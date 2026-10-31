@@ -13,7 +13,7 @@ export function isRpcResponse(value: unknown): value is RpcResponse {
     return false
   }
   if (response.ok === true) {
-    return Object.prototype.hasOwnProperty.call(response, 'result')
+    return Object.hasOwn(response, 'result')
   }
   return (
     response.ok === false &&

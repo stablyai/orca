@@ -1,4 +1,6 @@
+import type * as NodeFs from 'node:fs'
 import { EventEmitter } from 'node:events'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
@@ -11,12 +13,29 @@ import {
   resetComputerSidecarForTest
 } from './sidecar-client'
 
-const { forkMock } = vi.hoisted(() => ({
-  forkMock: vi.fn()
-}))
+type TestAppEnvironment = { getAppPath(): string; isPackaged(): boolean }
+
+const { forkMock, existsSyncMock, appEnvironment } = vi.hoisted(() => {
+  const environment: { current: TestAppEnvironment | null } = { current: null }
+  return {
+    forkMock: vi.fn(),
+    existsSyncMock: vi.fn((_path: string) => true),
+    appEnvironment: environment
+  }
+})
 
 vi.mock('child_process', () => ({
   fork: forkMock
+}))
+
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeFs>()),
+  existsSync: existsSyncMock
+}))
+
+vi.mock('../../shared/app-environment', () => ({
+  hasAppEnvironment: () => appEnvironment.current !== null,
+  getAppEnvironment: () => appEnvironment.current
 }))
 
 type SentRequest = {
@@ -72,7 +91,35 @@ describe('computer sidecar client', () => {
   afterEach(() => {
     resetComputerSidecarForTest()
     forkMock.mockReset()
+    existsSyncMock.mockImplementation(() => true)
+    appEnvironment.current = null
     vi.useRealTimers()
+  })
+
+  it('forks the sidecar orcad ships beside orcad.js, not a desktop out/main path', async () => {
+    appEnvironment.current = { getAppPath: () => '/srv/orcad', isPackaged: () => true }
+    existsSyncMock.mockImplementation((path) => path === join('/srv/orcad', 'computer-sidecar.js'))
+
+    const call = callComputerSidecarCapabilities()
+    children[0]!.emit('message', { id: children[0]!.sent[0]!.id, ok: true, result: {} })
+
+    await expect(call).resolves.toEqual({})
+    expect(forkMock).toHaveBeenCalledWith(
+      join('/srv/orcad', 'computer-sidecar.js'),
+      [],
+      expect.anything()
+    )
+  })
+
+  it('says computer use is unavailable when an older server install has no sidecar', async () => {
+    appEnvironment.current = { getAppPath: () => '/srv/orcad', isPackaged: () => true }
+    existsSyncMock.mockImplementation(() => false)
+
+    await expect(callComputerSidecarCapabilities()).rejects.toMatchObject({
+      code: 'unsupported_capability',
+      message: expect.stringContaining("Computer use isn't available on this host")
+    })
+    expect(forkMock).not.toHaveBeenCalled()
   })
 
   it('ignores stale child exit and error after a replacement sidecar starts', async () => {
@@ -93,8 +140,6 @@ describe('computer sidecar client', () => {
     const secondChild = children[1]!
     const secondRequest = secondChild.sent[0]!
 
-    // Why: OS process events from a timed-out child can arrive after restart.
-    // They must not clear/reject the replacement child's active request.
     firstChild.emit('message', {
       id: secondRequest.id,
       ok: false,
@@ -237,6 +282,51 @@ describe('computer sidecar client', () => {
         path: 'clipboard',
         verification: { state: 'unverified', reason: 'clipboard_paste' }
       }
+    })
+  })
+
+  it('fails set-value when the provider read the write back as a different value', async () => {
+    const call = callComputerSidecarAction('setValue', {
+      app: 'Safari',
+      elementIndex: 15,
+      value: 'pf1300-awllch'
+    })
+    const child = children[0]!
+    const request = child.sent[0]!
+
+    child.emit('message', {
+      id: request.id,
+      ok: true,
+      result: {
+        snapshot: {
+          id: 'snap-1',
+          app: { name: 'Safari', bundleId: 'com.apple.Safari', pid: 100 },
+          window: { title: 'Form', id: 63, width: 800, height: 600 },
+          coordinateSpace: 'window',
+          treeText: 'tree',
+          elementCount: 16,
+          focusedElementId: null
+        },
+        screenshot: null,
+        screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' },
+        action: {
+          path: 'accessibility',
+          actionName: 'AXSetValue',
+          fallbackReason: null,
+          targetWindowId: 63,
+          verification: {
+            state: 'unverified',
+            reason: 'value_mismatch',
+            expected: 'pf1300-awllch',
+            actualPreview: 'orig-objective-1300'
+          }
+        }
+      }
+    })
+
+    await expect(call).rejects.toMatchObject({
+      code: 'verification_failed',
+      message: expect.stringContaining('"orig-objective-1300"')
     })
   })
 

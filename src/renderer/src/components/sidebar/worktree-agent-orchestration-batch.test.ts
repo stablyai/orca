@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   EMPTY_WORKTREE_AGENT_ORCHESTRATION,
   selectRuntimeAgentOrchestrationBatch
 } from './worktree-agent-orchestration-batch'
+import {
+  _getWorktreeAgentOrchestrationIndexBuildCountForTest,
+  releaseWorktreeAgentOrchestrationIndexCache
+} from './worktree-agent-orchestration-index'
 import { selectRuntimeAgentOrchestrationForWorktree } from './worktree-agent-row-selectors'
 
 type BatchState = Parameters<typeof selectRuntimeAgentOrchestrationBatch>[0]
@@ -285,7 +289,8 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     expect(getBatchRecord(replacedBatch, 'wt-2')).toBe(firstWt2)
   })
 
-  it('releases raw and derived caches for empty requests and empty runtime', () => {
+  // An empty dashboard must not evict the shared index still used by sidebar cards.
+  it('leaves the shared index intact for an empty request and rebuilds after an empty runtime', () => {
     let tabIdReads = 0
     const state = {
       tabsByWorktree: {
@@ -305,13 +310,13 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     const first = getBatchRecord(selectRuntimeAgentOrchestrationBatch(state, ['target']), 'target')
     expect(tabIdReads).toBe(1)
 
-    selectRuntimeAgentOrchestrationBatch(state, [])
+    expect(selectRuntimeAgentOrchestrationBatch(state, []).size).toBe(0)
     const afterEmptyRequest = getBatchRecord(
       selectRuntimeAgentOrchestrationBatch(state, ['target']),
       'target'
     )
-    expect(tabIdReads).toBe(2)
-    expect(afterEmptyRequest).not.toBe(first)
+    expect(tabIdReads).toBe(1)
+    expect(afterEmptyRequest).toBe(first)
 
     selectRuntimeAgentOrchestrationBatch({ ...state, runtimeAgentOrchestrationByPaneKey: {} }, [
       'target'
@@ -320,11 +325,11 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       selectRuntimeAgentOrchestrationBatch(state, ['target']),
       'target'
     )
-    expect(tabIdReads).toBe(3)
-    expect(afterEmptyRuntime).not.toBe(afterEmptyRequest)
+    expect(tabIdReads).toBe(2)
+    expect(afterEmptyRuntime).not.toBe(first)
   })
 
-  it('keeps singleton tab work target-local', () => {
+  it('matches the per-worktree selector for a single requested worktree', () => {
     const tabCount = 10
     const contextCount = 8
     const makeCountedState = () => {
@@ -357,6 +362,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
           if (typeof key === 'string' && Object.hasOwn(target, key)) {
             runtimeValueReads += 1
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(target, key, receiver)
         }
       })
@@ -403,22 +409,16 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     )
 
     expect(Object.keys(actual)).toEqual(Object.keys(expected))
-    // Why the batch stays tighter: it knows which worktrees are on screen. The
-    // shared index covers all of them, so it saves per *card*, not per worktree.
-    expect(batched.counts()).toEqual({
-      runtimeEnumerations: 1,
-      runtimeValueReads: contextCount,
-      contextVisits: contextCount,
-      targetTabIdReads: 1,
-      unrelatedTabIdReads: 0
-    })
-    expect(reference.counts()).toEqual({
+    // All tabs are indexed once per slice identity regardless of the requested worktree count.
+    const singleWorktreeCounts = {
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
       contextVisits: contextCount,
       targetTabIdReads: 1,
       unrelatedTabIdReads: tabCount - 1
-    })
+    }
+    expect(batched.counts()).toEqual(singleWorktreeCounts)
+    expect(reference.counts()).toEqual(singleWorktreeCounts)
   })
 
   it('collapses multi-worktree runtime scans and caches unchanged publications', () => {
@@ -454,6 +454,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
           if (typeof key === 'string' && Object.hasOwn(target, key)) {
             runtimeValueReads += 1
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
           return Reflect.get(target, key, receiver)
         }
       })
@@ -485,8 +486,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     }
     selectRuntimeAgentOrchestrationBatch(batched.state, requested)
 
-    // One enumeration for worktreeCount calls: the first builds the shared
-    // index, the rest are Map lookups. This used to scale with mounted cards.
+    // One build serves every card through Map lookups.
     expect(reference.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
@@ -521,15 +521,16 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         requested
       )
     }
+    // Unchanged per-pane worktree attribution must avoid revisiting orchestration contexts.
     expect(batched.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
-      contextVisits: contextCount * (publicationCount + 1),
+      contextVisits: contextCount,
       tabIdReads: worktreeCount
     })
 
-    // Publications that change nothing the index reads cost nothing, however
-    // many cards call in.
+    // Warm the shared cache after interleaved fixture stores before measuring unchanged publications.
+    selectRuntimeAgentOrchestrationForWorktree(reference.state, requested[0])
     const referenceBefore = reference.counts()
     for (let publication = 0; publication < publicationCount; publication += 1) {
       for (const worktreeId of requested) {
@@ -538,11 +539,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     }
     expect(reference.counts()).toEqual(referenceBefore)
 
-    // Why this is the honest claim: a real live-status ping replaces
-    // agentStatusByPaneKey, so the index does rebuild once per publication. What
-    // the shared index removes is the mounted-card multiplier, not the
-    // per-publication rebuild. Tab reads stay flat because tab membership is
-    // keyed on the tabs slice, which a live-status ping does not replace.
+    // Unrelated live-map churn must not rebuild the index or revisit contexts.
     const churn = makeCountedState()
     for (const worktreeId of requested) {
       selectRuntimeAgentOrchestrationForWorktree(churn.state, worktreeId)
@@ -561,8 +558,124 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     expect(churn.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
-      contextVisits: contextCount * (publicationCount + 1),
+      contextVisits: contextCount,
       tabIdReads: worktreeCount
     })
+  })
+})
+
+describe('selectRuntimeAgentOrchestrationBatch live-map churn', () => {
+  const ORCHESTRATED_CONTEXT = makeContext('orchestrated')
+  const SECOND_CONTEXT = makeContext('second')
+  const requested = ['wt-1', 'wt-2']
+  // Held by identity so only the live map churns, as it does under `agentStatus:set`.
+  const TABS_BY_WORKTREE = { 'wt-1': [makeTab('unrelated-tab')], 'wt-2': [] }
+  const RUNTIME_ONE = { [CHILD_KEY]: ORCHESTRATED_CONTEXT }
+  const RUNTIME_TWO = { [CHILD_KEY]: ORCHESTRATED_CONTEXT, [SECOND_CHILD_KEY]: SECOND_CONTEXT }
+  const RETAINED = {}
+
+  function makeChurnState(
+    agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+    runtimeAgentOrchestrationByPaneKey: Record<
+      string,
+      AgentStatusOrchestrationContext
+    > = RUNTIME_ONE
+  ): BatchState {
+    return {
+      tabsByWorktree: TABS_BY_WORKTREE,
+      runtimeAgentOrchestrationByPaneKey,
+      agentStatusByPaneKey,
+      retainedAgentsByPaneKey: RETAINED
+    } as BatchState
+  }
+
+  function builds(): number {
+    return _getWorktreeAgentOrchestrationIndexBuildCountForTest()
+  }
+
+  // Count reads to detect unkeyed live/retained access outside the cached attribution projection.
+  it('reads each orchestrated pane out of the live and retained maps once per build', () => {
+    releaseWorktreeAgentOrchestrationIndexCache()
+    const liveReads: string[] = []
+    const retainedReads: string[] = []
+    const countReads = <Value extends object>(target: Value, reads: string[]): Value =>
+      new Proxy(target, {
+        get(source, key, receiver) {
+          if (typeof key === 'string') {
+            reads.push(key)
+          }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
+          return Reflect.get(source, key, receiver)
+        }
+      })
+    const state = {
+      tabsByWorktree: TABS_BY_WORKTREE,
+      runtimeAgentOrchestrationByPaneKey: RUNTIME_TWO,
+      agentStatusByPaneKey: countReads(
+        {
+          [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-1'),
+          [SECOND_CHILD_KEY]: makeEntry(SECOND_CHILD_KEY, 'wt-2')
+        },
+        liveReads
+      ),
+      retainedAgentsByPaneKey: countReads(
+        { [CHILD_KEY]: makeRetained(CHILD_KEY, 'wt-1') },
+        retainedReads
+      )
+    } as BatchState
+
+    const buildsBefore = builds()
+    const batch = selectRuntimeAgentOrchestrationBatch(state, requested)
+
+    expect(builds()).toBe(buildsBefore + 1)
+    expect(liveReads).toEqual([CHILD_KEY, SECOND_CHILD_KEY])
+    expect(retainedReads).toEqual([CHILD_KEY, SECOND_CHILD_KEY])
+    expect(getBatchRecord(batch, 'wt-1')[CHILD_KEY]).toBe(ORCHESTRATED_CONTEXT)
+    expect(getBatchRecord(batch, 'wt-2')[SECOND_CHILD_KEY]).toBe(SECOND_CONTEXT)
+  })
+
+  it('rebuilds when an orchestrated pane changes worktree or the entry set changes', () => {
+    releaseWorktreeAgentOrchestrationIndexCache()
+    const first = selectRuntimeAgentOrchestrationBatch(
+      makeChurnState({ [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-1') }),
+      requested
+    )
+    expect(getBatchRecord(first, 'wt-1')[CHILD_KEY]).toBe(ORCHESTRATED_CONTEXT)
+    expect(first.has('wt-2')).toBe(false)
+
+    const movedBuilds = builds()
+    const moved = selectRuntimeAgentOrchestrationBatch(
+      makeChurnState({ [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-2') }),
+      requested
+    )
+    expect(builds()).toBe(movedBuilds + 1)
+    expect(moved).not.toBe(first)
+    expect(moved.has('wt-1')).toBe(false)
+    expect(getBatchRecord(moved, 'wt-2')[CHILD_KEY]).toBe(ORCHESTRATED_CONTEXT)
+
+    const addedBuilds = builds()
+    const added = selectRuntimeAgentOrchestrationBatch(
+      makeChurnState(
+        {
+          [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-2'),
+          [SECOND_CHILD_KEY]: makeEntry(SECOND_CHILD_KEY, 'wt-1')
+        },
+        RUNTIME_TWO
+      ),
+      requested
+    )
+    expect(builds()).toBe(addedBuilds + 1)
+    expect(Object.keys(getBatchRecord(added, 'wt-1'))).toEqual([SECOND_CHILD_KEY])
+
+    const removedBuilds = builds()
+    const removed = selectRuntimeAgentOrchestrationBatch(
+      makeChurnState({
+        [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-2'),
+        [SECOND_CHILD_KEY]: makeEntry(SECOND_CHILD_KEY, 'wt-1')
+      }),
+      requested
+    )
+    expect(builds()).toBe(removedBuilds + 1)
+    expect(removed.has('wt-1')).toBe(false)
   })
 })

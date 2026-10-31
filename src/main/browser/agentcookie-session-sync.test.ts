@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-vi.mock('./browser-cookie-import', () => ({
+vi.mock('./cookies/browser-cookie-import', () => ({
   importCookiesFromJson: vi.fn()
 }))
 
@@ -57,7 +57,11 @@ describe('AgentcookieSessionSync', () => {
       onStatus
     })
     sync.start()
-    expect(onStatus).toHaveBeenCalledWith({ detected: false, lastSyncAt: null, lastImported: null })
+    expect(onStatus).toHaveBeenCalledWith({
+      detected: false,
+      lastSyncAt: null,
+      lastImportedCount: null
+    })
     sync.stop()
   })
 
@@ -74,7 +78,11 @@ describe('AgentcookieSessionSync', () => {
       onStatus
     })
     sync.start()
-    expect(onStatus).toHaveBeenCalledWith({ detected: true, lastSyncAt: null, lastImported: null })
+    expect(onStatus).toHaveBeenCalledWith({
+      detected: true,
+      lastSyncAt: null,
+      lastImportedCount: null
+    })
     // Disabled: no second status from a sync cycle.
     expect(onStatus).toHaveBeenCalledTimes(1)
     sync.stop()
@@ -95,7 +103,7 @@ describe('AgentcookieSessionSync', () => {
       })
       const syncNow = vi
         .spyOn(sync, 'syncNow')
-        .mockResolvedValue({ detected: true, lastSyncAt: null, lastImported: null })
+        .mockResolvedValue({ detected: true, lastSyncAt: null, lastImportedCount: null })
 
       sync.start()
       sync.start()

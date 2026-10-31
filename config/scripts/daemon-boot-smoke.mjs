@@ -1,24 +1,9 @@
-/**
- * Boots the BUILT terminal daemon (out/main/daemon-entry.js) under plain Node —
- * the exact way production forks it (ELECTRON_RUN_AS_NODE = a plain-Node
- * process) — and asserts it starts, serves a real PTY, and stops.
- *
- * Why this exists: native-smoke CI (and packaging) went green while
- * v1.4.129-rc.1 shipped a daemon that exited code 1 at module load because an
- * electron `require` leaked into its bundle graph. Nothing executed the built
- * entry under plain Node, so the outage was invisible until an adopted old
- * daemon died in the field. This runs on every PR that touches the daemon.
- *
- * Hard assertions (fail the job):
- *   - the daemon signals `{ type: 'ready' }` over IPC within the timeout, and
- *   - it terminates when asked (no hang / zombie).
- * Best-effort (logged skip, never fails): an end-to-end `ptySpawnHealth` RPC,
- * because node-pty spawn can be flaky on constrained CI runners.
- */
+// Run built daemon under plain Node: an Electron import escaped CI and broke v1.4.129-rc.1 at module load.
+// Require IPC ready and clean shutdown; PTY health is best-effort because constrained CI spawning can be flaky.
 import { fork } from 'node:child_process'
 import { connect } from 'node:net'
 import { randomUUID } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -33,8 +18,7 @@ function log(message) {
   process.stdout.write(`[daemon-boot-smoke] ${message}\n`)
 }
 
-// Why: the daemon rejects a hello whose protocol version differs, so read the
-// current version from source rather than hardcoding a number that can drift.
+// Read protocol from source; daemon rejects mismatched hello versions.
 function readProtocolVersion() {
   const protocolSourcePath = 'src/main/daemon/daemon-protocol-version.ts'
   const source = readFileSync(join(projectDir, protocolSourcePath), 'utf8')
@@ -46,38 +30,47 @@ function readProtocolVersion() {
 }
 
 function makeSocketPath(userDataDir) {
-  // Why: Windows AF_UNIX-style IPC uses named pipes; POSIX uses a filesystem
-  // socket kept under the scratch userData dir so cleanup removes it.
+  // Windows uses named pipes; POSIX socket stays under scratch userData for cleanup.
   if (process.platform === 'win32') {
     return `\\\\.\\pipe\\orca-daemon-smoke-${process.pid}-${randomUUID()}`
   }
   return join(userDataDir, 'daemon.sock')
 }
 
-// Best-effort end-to-end PTY check over the daemon's own control-socket RPC.
-// Connects a single control socket, completes the hello handshake, and calls
-// `ptySpawnHealth` (the daemon spawns a throwaway PTY internally). Resolves
-// true on success, false on any failure — never throws.
-function runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion) {
-  return new Promise((resolveCheck) => {
+// 'connected' only when something actually answers; a dead entry left on the name is not it.
+function probeEndpoint(socketPath) {
+  return new Promise((resolveProbe) => {
+    const socket = connect(socketPath)
+    const settle = (result) => {
+      socket.destroy()
+      resolveProbe(result)
+    }
+    socket.on('connect', () => settle('connected'))
+    socket.on('error', () => settle('unreachable'))
+  })
+}
+
+function runDaemonRpc(socketPath, tokenPath, protocolVersion, request, timeoutMs) {
+  return new Promise((resolveRpc, rejectRpc) => {
     let settled = false
     let buffer = ''
     const socket = connect(socketPath)
-    const finish = (ok, reason) => {
+    const finish = (error, response) => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timer)
       socket.destroy()
-      if (!ok && reason) {
-        log(`PTY spawn health check skipped (best-effort): ${reason}`)
+      if (error) {
+        rejectRpc(error)
+      } else {
+        resolveRpc(response)
       }
-      resolveCheck(ok)
     }
-    const timer = setTimeout(() => finish(false, 'timed out'), PTY_HEALTH_TIMEOUT_MS)
+    const timer = setTimeout(() => finish(new Error(`${request.type} timed out`)), timeoutMs)
 
-    socket.on('error', (err) => finish(false, err.message))
+    socket.on('error', (error) => finish(error))
     socket.on('connect', () => {
       const token = readFileSync(tokenPath, 'utf8').trim()
       socket.write(
@@ -100,19 +93,19 @@ function runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion) {
         try {
           msg = JSON.parse(line)
         } catch {
-          finish(false, 'invalid response line')
+          finish(new Error('invalid response line'))
           return
         }
         if (msg.type === 'hello') {
           if (!msg.ok) {
-            finish(false, `hello rejected: ${msg.error ?? 'unknown'}`)
+            finish(new Error(`hello rejected: ${msg.error ?? 'unknown'}`))
             return
           }
-          socket.write(`${JSON.stringify({ id: 'health-1', type: 'ptySpawnHealth' })}\n`)
-        } else if (msg.id === 'health-1') {
+          socket.write(`${JSON.stringify(request)}\n`)
+        } else if (msg.id === request.id) {
           finish(
-            msg.ok === true,
-            msg.ok === true ? undefined : (msg.error ?? 'ptySpawnHealth failed')
+            msg.ok === true ? undefined : new Error(msg.error ?? `${request.type} failed`),
+            msg
           )
           return
         }
@@ -122,36 +115,65 @@ function runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion) {
   })
 }
 
+// Best-effort: constrained CI runners can make node-pty spawn flaky.
+async function runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion) {
+  try {
+    await runDaemonRpc(
+      socketPath,
+      tokenPath,
+      protocolVersion,
+      { id: 'health-1', type: 'ptySpawnHealth' },
+      PTY_HEALTH_TIMEOUT_MS
+    )
+    return true
+  } catch (error) {
+    log(`PTY spawn health check skipped (best-effort): ${error.message}`)
+    return false
+  }
+}
+
 async function main() {
   const userDataDir = mkdtempSync(join(tmpdir(), 'orca-daemon-boot-smoke-'))
   const socketPath = makeSocketPath(userDataDir)
   const tokenPath = join(userDataDir, 'daemon.token')
+  const pidPath = join(userDataDir, 'daemon.pid')
+  const launchNonce = randomUUID()
   const protocolVersion = readProtocolVersion()
 
   log(`forking ${entryPath} under plain Node (${process.execPath})`)
-  const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
-    // Plain Node: no ELECTRON_RUN_AS_NODE. process.execPath is already node in
-    // CI, and this is exactly the runtime where a leaked `require("electron")`
-    // throws MODULE_NOT_FOUND — the failure this smoke exists to catch.
-    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-    env: { ...process.env, ORCA_USER_DATA_PATH: userDataDir }
-  })
+  const child = fork(
+    entryPath,
+    [
+      '--socket',
+      socketPath,
+      '--token',
+      tokenPath,
+      '--pid-record',
+      pidPath,
+      '--launch-nonce',
+      launchNonce,
+      '--entry-path',
+      entryPath,
+      '--app-version',
+      'daemon-boot-smoke'
+    ],
+    {
+      // Use Node directly, without ELECTRON_RUN_AS_NODE, to expose leaked Electron dependencies at startup.
+      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+      env: { ...process.env, ORCA_USER_DATA_PATH: userDataDir }
+    }
+  )
 
   let stderr = ''
   child.stderr?.on('data', (chunk) => {
     stderr += chunk.toString('utf8')
-  })
-  child.stdout?.on('data', (chunk) => {
-    process.stdout.write(chunk)
   })
 
   const cleanup = () => {
     if (child.exitCode === null && child.signalCode === null && child.pid) {
       try {
         child.kill('SIGKILL')
-      } catch {
-        // already gone
-      }
+      } catch {}
     }
     rmSync(userDataDir, { recursive: true, force: true })
   }
@@ -185,6 +207,29 @@ async function main() {
       })
     })
     log('daemon signaled ready')
+    const pidRecord = JSON.parse(readFileSync(pidPath, 'utf8'))
+    if (
+      pidRecord.pid !== child.pid ||
+      pidRecord.launchNonce !== launchNonce ||
+      pidRecord.entryPath !== entryPath ||
+      pidRecord.appVersion !== 'daemon-boot-smoke'
+    ) {
+      throw new Error('daemon readiness did not publish the expected PID ownership record')
+    }
+    log('PID ownership record matches the ready daemon')
+    const endpointPublished =
+      process.platform === 'win32'
+        ? (await probeEndpoint(socketPath)) === 'connected'
+        : existsSync(socketPath)
+    if (!endpointPublished) {
+      throw new Error('daemon did not publish its endpoint at the canonical socket path')
+    }
+    log('endpoint published at the canonical socket path')
+    // Production releases startup-only handles after ready; they can pin the child on Windows.
+    // Diagnostics past this point therefore carry the tail captured up to readiness only.
+    child.stderr?.destroy()
+    stderr += '[boot-smoke] stderr released at readiness, mirroring production\n'
+    child.disconnect()
 
     const ptyHealthy = await runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion)
     if (ptyHealthy) {
@@ -193,18 +238,40 @@ async function main() {
 
     await new Promise((resolveExit, rejectExit) => {
       const timer = setTimeout(() => {
-        rejectExit(new Error(`daemon did not exit within ${SHUTDOWN_TIMEOUT_MS}ms of SIGTERM`))
+        rejectExit(new Error(`daemon did not exit within ${SHUTDOWN_TIMEOUT_MS}ms of shutdown RPC`))
       }, SHUTDOWN_TIMEOUT_MS)
       child.on('exit', (code, signal) => {
         clearTimeout(timer)
-        log(`daemon exited after signal (code=${code}, signal=${signal})`)
+        log(`daemon exited after shutdown RPC (code=${code}, signal=${signal})`)
         resolveExit()
       })
-      // Why: SIGTERM is the graceful stop on POSIX (the daemon handles it);
-      // Windows has no POSIX signal delivery, so Node maps this to process
-      // termination. Either way the hard assertion is "it stops, no hang".
-      child.kill('SIGTERM')
+      void runDaemonRpc(
+        socketPath,
+        tokenPath,
+        protocolVersion,
+        {
+          id: 'shutdown-1',
+          type: 'shutdown',
+          payload: { killSessions: false }
+        },
+        SHUTDOWN_TIMEOUT_MS
+      ).catch((error) => {
+        clearTimeout(timer)
+        rejectExit(error)
+      })
     })
+    if (existsSync(pidPath)) {
+      throw new Error('daemon left its PID ownership record behind after shutdown')
+    }
+    // Canonical entry survives shutdown for atomic replacement; assert no responder rather than path absence.
+    if (process.platform !== 'win32' && (await probeEndpoint(socketPath)) === 'connected') {
+      throw new Error('daemon still answers its endpoint after shutdown')
+    }
+    // Private bind paths are consumed at publish and never swept; derive their namespace from source or renames silently disable leak detection.
+    const leaked = readdirSync(userDataDir).filter((entry) => /^\.[a-z][0-9a-f]{10}$/.test(entry))
+    if (leaked.length > 0) {
+      throw new Error(`daemon leaked private bind names: ${leaked.join(', ')}`)
+    }
 
     log('PASS: daemon booted, served, and shut down under plain Node')
   } finally {

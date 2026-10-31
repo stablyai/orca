@@ -12,6 +12,7 @@ import {
 import { expect } from './orca-app'
 import { verifyHiddenPairedTerminalOutputSuppression } from './paired-terminal-hidden-output-oracle'
 import { createPairedTerminalParkingFixture } from './paired-terminal-parking-fixture'
+import { verifyPairedTerminalTitleFanout } from './paired-terminal-title-fanout-oracle'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
 
 const TARGET_WORKTREE_COUNT = 6
@@ -135,6 +136,7 @@ export async function runPairedTerminalParkingOracle(
     await expectHostTerminalsUnmounted(options.hostPage, seed.fallbackWorktreeId, remoteTabs)
 
     const hiddenFloodTokens = await verifyHiddenPairedTerminalOutputSuppression(page, remoteTabs)
+    await verifyPairedTerminalTitleFanout(page, remoteTabs)
     const baseline = await readPairedRetentionSample(
       page,
       remoteTabs.map((tab) => tab.tabId)
@@ -197,9 +199,7 @@ export async function runPairedTerminalParkingOracle(
     expect(after.bufferCells).toBeLessThanOrEqual(baseline.bufferCells * MAX_RETAINED_CELL_FRACTION)
     expect(after.mountedTargetManagers).toBe(1)
     expect(maxLagMs).toBeLessThan(MAX_EVICTION_LAG_MS)
-    if (baseline.heapBytes !== null && after.heapBytes !== null) {
-      expect(after.heapBytes).toBeLessThanOrEqual(baseline.heapBytes + MAX_HEAP_GROWTH_BYTES)
-    }
+    expect(after.heapBytes).toBeLessThanOrEqual(baseline.heapBytes + MAX_HEAP_GROWTH_BYTES)
 
     const evicted = await page.evaluate(
       (tabs) => tabs.find((tab) => !window.__paneManagers?.has(tab.tabId)) ?? null,

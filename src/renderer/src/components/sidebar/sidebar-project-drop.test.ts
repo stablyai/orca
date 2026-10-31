@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getFocusedDropRuntimeId,
   getSidebarProjectDropAffordance,
-  isRemoteRuntimeActive,
-  resolveSidebarProjectDropPath
+  isSidebarProjectDropRefusedByFocus,
+  resolveSidebarProjectDropPath,
+  routeSidebarProjectDrop
 } from './sidebar-project-drop'
+import { wslDistroWindowsPathAccess } from '../../../../shared/windows-path-access'
 
 describe('resolveSidebarProjectDropPath', () => {
   it('accepts exactly one dropped path', () => {
@@ -22,11 +25,96 @@ describe('resolveSidebarProjectDropPath', () => {
   })
 })
 
-describe('isRemoteRuntimeActive', () => {
+describe('getFocusedDropRuntimeId', () => {
   it('distinguishes local runtime from active server runtime', () => {
-    expect(isRemoteRuntimeActive(null)).toBe(false)
-    expect(isRemoteRuntimeActive({ activeRuntimeEnvironmentId: '   ' })).toBe(false)
-    expect(isRemoteRuntimeActive({ activeRuntimeEnvironmentId: 'server-1' })).toBe(true)
+    expect(getFocusedDropRuntimeId(null)).toBeNull()
+    expect(getFocusedDropRuntimeId({ activeRuntimeEnvironmentId: '   ' })).toBeNull()
+    expect(getFocusedDropRuntimeId({ activeRuntimeEnvironmentId: 'server-1' })).toBe('server-1')
+  })
+})
+
+describe('routeSidebarProjectDrop', () => {
+  const wslHosts = [
+    { environmentId: 'wsl:Ubuntu', access: wslDistroWindowsPathAccess('Ubuntu') },
+    { environmentId: 'wsl:Debian', access: wslDistroWindowsPathAccess('Debian') }
+  ]
+
+  it('gives a folder inside a WSL host distro to that host, whatever is focused', () => {
+    for (const focusedRuntimeId of [null, 'wsl:Debian', 'paired-server']) {
+      expect(
+        routeSidebarProjectDrop({
+          path: '\\\\wsl.localhost\\ubuntu\\home\\me\\my repo',
+          focusedRuntimeId,
+          wslHosts
+        })
+      ).toEqual({ kind: 'wsl-host', hostId: 'runtime:wsl%3AUbuntu', linuxPath: '/home/me/my repo' })
+    }
+    expect(
+      routeSidebarProjectDrop({
+        path: '\\\\wsl$\\Debian\\srv\\app',
+        focusedRuntimeId: null,
+        wslHosts
+      })
+    ).toEqual({ kind: 'wsl-host', hostId: 'runtime:wsl%3ADebian', linuxPath: '/srv/app' })
+  })
+
+  it('keeps a drive folder on this computer and never routes it to a WSL host', () => {
+    expect(
+      routeSidebarProjectDrop({ path: 'C:\\src\\app', focusedRuntimeId: null, wslHosts })
+    ).toEqual({ kind: 'local', path: 'C:\\src\\app' })
+    expect(
+      routeSidebarProjectDrop({ path: 'C:\\src\\app', focusedRuntimeId: 'wsl:Ubuntu', wslHosts })
+    ).toEqual({ kind: 'windows-drive-on-wsl-host', distro: 'Ubuntu', path: 'C:\\src\\app' })
+  })
+
+  it('with WSL hosts off, routes a drvfs UNC drop exactly as before', () => {
+    const path = '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\proj'
+    expect(routeSidebarProjectDrop({ path, focusedRuntimeId: null, wslHosts: [] })).toEqual({
+      kind: 'local',
+      path
+    })
+    expect(routeSidebarProjectDrop({ path, focusedRuntimeId: 'server', wslHosts: [] })).toEqual({
+      kind: 'runtime-focused'
+    })
+  })
+
+  it.each([
+    '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\src\\app',
+    // Any distro's drvfs mount, as the picker treats it.
+    '\\\\wsl$\\Arch\\mnt\\c\\src\\app',
+    '\\\\?\\UNC\\wsl.localhost\\Arch\\mnt\\c\\src\\app'
+  ])('treats a drvfs drop %j as the Windows drive folder it is', (path) => {
+    expect(routeSidebarProjectDrop({ path, focusedRuntimeId: null, wslHosts })).toEqual({
+      kind: 'local',
+      path: 'C:\\src\\app'
+    })
+    expect(routeSidebarProjectDrop({ path, focusedRuntimeId: 'wsl:Ubuntu', wslHosts })).toEqual({
+      kind: 'windows-drive-on-wsl-host',
+      distro: 'Ubuntu',
+      path: 'C:\\src\\app'
+    })
+  })
+
+  it('keeps refusing other drops while a server is focused', () => {
+    expect(
+      routeSidebarProjectDrop({ path: 'C:\\src', focusedRuntimeId: 'paired-server', wslHosts })
+    ).toEqual({ kind: 'runtime-focused' })
+    expect(
+      routeSidebarProjectDrop({
+        path: '\\\\wsl.localhost\\Arch\\home',
+        focusedRuntimeId: 'wsl:Ubuntu',
+        wslHosts
+      })
+    ).toEqual({ kind: 'runtime-focused' })
+    expect(
+      routeSidebarProjectDrop({ path: '/Users/me/app', focusedRuntimeId: 'server', wslHosts: [] })
+    ).toEqual({ kind: 'runtime-focused' })
+  })
+
+  it('accepts the drag over a focused server only when a WSL host could own the folder', () => {
+    expect(isSidebarProjectDropRefusedByFocus(null, [])).toBe(false)
+    expect(isSidebarProjectDropRefusedByFocus('server', [])).toBe(true)
+    expect(isSidebarProjectDropRefusedByFocus('server', wslHosts)).toBe(false)
   })
 })
 
@@ -65,5 +153,14 @@ describe('getSidebarProjectDropAffordance', () => {
         remoteRuntimeActive: true
       })
     ).toMatchObject({ visible: true, tone: 'blocked' })
+
+    expect(
+      getSidebarProjectDropAffordance({
+        isDragOver: true,
+        isHandlingDrop: false,
+        remoteRuntimeActive: false,
+        wslDropsOnly: true
+      })
+    ).toMatchObject({ visible: true, tone: 'ready', label: 'Drop a WSL folder to add project' })
   })
 })

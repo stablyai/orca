@@ -8,7 +8,7 @@ import {
   type Platform,
   type StepIndex
 } from './MobileHero'
-import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
+import { getInstallCopy } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
@@ -32,16 +32,16 @@ type MobilePageContentProps = {
   handleBack: () => void
   handleContinue: () => void
   installQrUrl: string | null
-  iosChannel: IosChannel
-  setIosChannel: (channel: IosChannel) => void
   loadNetworkInterfaces: () => void
   networkInterfaces: MobileNetworkInterface[]
+  openAndroidInstallGuide: () => void
   openInstallUrl: () => void
   pairAnotherDevice: () => void
   pairLoading: boolean
   connectionMode: MobilePairingConnectionMode
   handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   pairQrDataUrl: string | null
+  pairQrSize: number | null
   pairingUrl: string | null
   pairingQrError: boolean
   relayMintFailure: MobileRelayMintFailure | null
@@ -78,16 +78,16 @@ export function MobilePageContent({
   handleBack,
   handleContinue,
   installQrUrl,
-  iosChannel,
-  setIosChannel,
   loadNetworkInterfaces,
   networkInterfaces,
+  openAndroidInstallGuide,
   openInstallUrl,
   pairAnotherDevice,
   pairLoading,
   connectionMode,
   handleConnectionModeChange,
   pairQrDataUrl,
+  pairQrSize,
   pairingUrl,
   pairingQrError,
   relayMintFailure,
@@ -130,12 +130,12 @@ export function MobilePageContent({
               platform={platform}
               onPlatformChange={setPlatform}
               installQrUrl={installQrUrl}
-              installCopy={getInstallCopy(platform, iosChannel)}
-              iosChannel={iosChannel}
-              onIosChannelChange={setIosChannel}
+              installCopy={getInstallCopy(platform)}
+              onOpenAndroidInstallGuide={openAndroidInstallGuide}
               onOpenInstallUrl={openInstallUrl}
               onCopyInstallUrl={copyInstallUrl}
               pairQrDataUrl={pairQrDataUrl}
+              pairQrSize={pairQrSize}
               pairingUrl={pairingUrl}
               pairingQrError={pairingQrError}
               relayMintFailure={relayMintFailure}

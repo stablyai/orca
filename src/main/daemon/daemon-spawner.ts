@@ -1,7 +1,18 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { constants, copyFileSync, existsSync, readFileSync, renameSync, unlinkSync } from 'node:fs'
+import type { PtyProcessCeilingState } from '../../shared/pty-process-ceiling-state'
+import {
+  constants,
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { PROTOCOL_VERSION } from './types'
+import { resolveDaemonUnixSocketPath } from './daemon-socket-endpoint-path'
+import { DaemonCrashLoopError, DaemonRespawnThrottle } from './daemon-respawn-throttle'
 
 export type DaemonConnectionInfo = {
   socketPath: string
@@ -16,10 +27,18 @@ export type DaemonPidFile = {
   launchNonce?: string
   linuxStartTicks?: string
   bootId?: string
+  /** Forking app's binary — macOS pins the daemon's TCC responsible process to it (STA-3491). */
+  spawnerExecPath?: string
+  /** Detected systemd scope; null means none, absent means legacy or adoption metadata. */
+  cgroupUnit?: string | null
+  processCeiling?: PtyProcessCeilingState
 }
 
 export type DaemonProcessHandle = {
   mode?: 'degraded-new-pty-fallback'
+  /** Fresh terminals stay off this daemon until a new incarnation replaces it. */
+  quarantine?: 'host-image-severed'
+  adopted?: true
   releaseAdoptionLease?(): void
   shutdown(): Promise<void>
 }
@@ -34,6 +53,9 @@ export type DaemonLauncher = (
 export type DaemonSpawnerOptions = {
   runtimeDir: string
   launcher: DaemonLauncher
+  respawnThrottle?: DaemonRespawnThrottle
+  /** Retain the launch policy across restarts that reuse this spawner. */
+  staleDaemonRecycleVersion?: string | null
 }
 
 export class DaemonSpawner {
@@ -43,10 +65,14 @@ export class DaemonSpawner {
   private socketPath: string
   private tokenPath: string
   private pidPath: string
+  private respawnThrottle: DaemonRespawnThrottle
+  readonly staleDaemonRecycleVersion: string | null
 
   constructor(opts: DaemonSpawnerOptions) {
     this.runtimeDir = opts.runtimeDir
+    this.staleDaemonRecycleVersion = opts.staleDaemonRecycleVersion ?? null
     this.launcher = opts.launcher
+    this.respawnThrottle = opts.respawnThrottle ?? new DaemonRespawnThrottle()
     this.socketPath = getDaemonSocketPath(this.runtimeDir)
     this.tokenPath = getDaemonTokenPath(this.runtimeDir)
     this.pidPath = getDaemonPidPath(this.runtimeDir)
@@ -57,8 +83,13 @@ export class DaemonSpawner {
       return { socketPath: this.socketPath, tokenPath: this.tokenPath }
     }
 
-    // Why: a detached daemon may clean up after its parent exits. A unique
-    // launch identity keeps it from deleting a replacement daemon's PID file.
+    // Gate every launch path so initial starts and explicit restarts cannot bypass crash-loop throttling.
+    const admission = this.respawnThrottle.admit()
+    if (!admission.allowed) {
+      throw new DaemonCrashLoopError(admission)
+    }
+
+    // A launch nonce prevents detached cleanup from deleting a replacement's PID record.
     this.handle = await this.launcher(this.socketPath, this.tokenPath, this.pidPath, randomUUID())
 
     return { socketPath: this.socketPath, tokenPath: this.tokenPath }
@@ -68,11 +99,14 @@ export class DaemonSpawner {
     return this.handle
   }
 
-  // Why: after the daemon process dies unexpectedly, the cached handle is
-  // stale. Clearing it lets the next ensureRunning() fork a fresh daemon
-  // instead of returning the dead socket path.
+  // Forget a dead process so ensureRunning can launch its replacement.
   resetHandle(): void {
     this.handle = null
+  }
+
+  /** A successful fork can still crash immediately; only an explicit restart clears the throttle. */
+  resetRespawnWindow(): void {
+    this.respawnThrottle.reset()
   }
 
   async shutdown(): Promise<void> {
@@ -89,14 +123,12 @@ export function getDaemonSocketPath(
   runtimeDir: string,
   protocolVersion = PROTOCOL_VERSION
 ): string {
-  // Why: Windows IPC servers use named pipes rather than filesystem socket
-  // files. Include the protocol version in the endpoint name so a daemon from
-  // an older build is never reused after a breaking protocol change.
+  // Version the Windows pipe to exclude daemons with incompatible protocols.
   if (process.platform === 'win32') {
     const suffix = createHash('sha256').update(runtimeDir).digest('hex').slice(0, 12)
     return `\\\\?\\pipe\\orca-terminal-host-v${protocolVersion}-${suffix}`
   }
-  return join(runtimeDir, `daemon-v${protocolVersion}.sock`)
+  return resolveDaemonUnixSocketPath(runtimeDir, `daemon-v${protocolVersion}.sock`)
 }
 
 export function getDaemonTokenPath(runtimeDir: string, protocolVersion = PROTOCOL_VERSION): string {
@@ -111,19 +143,97 @@ export function serializeDaemonPidFile(pidFile: DaemonPidFile): string {
   return JSON.stringify(pidFile)
 }
 
+function isMissingFileError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+}
+
+export function publishDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): void {
+  writeFileSync(pidPath, serializeDaemonPidFile(pidFile), {
+    mode: 0o600,
+    flag: 'wx'
+  })
+}
+
+/** Avoid released age-only sweeper patterns: a claim may hold the sole copy of a live owner's record. */
+export function getDaemonPidSwapClaimPath(pidPath: string): string {
+  return `${pidPath}.swap-${process.pid}-${randomUUID()}`
+}
+
+export function getDaemonArtifactHoldClaimPath(filePath: string): string {
+  return `${filePath}.hold-${process.pid}-${randomUUID()}`
+}
+
+export function replaceDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): boolean {
+  const claimedPath = getDaemonPidSwapClaimPath(pidPath)
+  let claimedExisting = false
+  try {
+    renameSync(pidPath, claimedPath)
+    claimedExisting = true
+  } catch (error) {
+    // Windows file locks can deny rename; only ENOENT permits publishing without a claim.
+    if (!isMissingFileError(error)) {
+      return false
+    }
+  }
+
+  try {
+    publishDaemonPidFile(pidPath, pidFile)
+  } catch {
+    if (claimedExisting && restoreClaimedDaemonArtifact(claimedPath, pidPath)) {
+      try {
+        unlinkSync(claimedPath)
+      } catch {
+        // A uniquely named restored claim is inert.
+      }
+    }
+    return false
+  }
+
+  if (claimedExisting) {
+    try {
+      unlinkSync(claimedPath)
+    } catch {
+      // The canonical record is authoritative; the uniquely named claim is inert.
+    }
+  }
+  return true
+}
+
 export function unlinkOwnedDaemonPidFile(
   pidPath: string,
   expectedPid: number,
-  expectedLaunchNonce: string
+  // Legacy records lack nonces, so their cleanup can only match the PID.
+  expectedLaunchNonce: string | null
 ): boolean {
   return claimAndUnlinkOwnedFile(pidPath, (content) => {
     try {
-      const parsed = JSON.parse(content) as { pid?: unknown; launchNonce?: unknown }
-      return parsed.pid === expectedPid && parsed.launchNonce === expectedLaunchNonce
+      const parsed: unknown = JSON.parse(content.trim())
+      // Accept legacy integer records so stale ownership cannot block exclusive publication.
+      if (typeof parsed === 'number') {
+        return expectedLaunchNonce === null && parsed === expectedPid
+      }
+      if (!parsed || typeof parsed !== 'object') {
+        return false
+      }
+      const record = parsed as { pid?: unknown; launchNonce?: unknown }
+      if (record.pid !== expectedPid) {
+        return false
+      }
+      return expectedLaunchNonce === null
+        ? record.launchNonce === undefined || record.launchNonce === null
+        : record.launchNonce === expectedLaunchNonce
     } catch {
       return false
     }
   })
+}
+
+/** Claim before checking content so concurrent valid replacements survive cleanup. */
+export function unlinkDaemonPidFileWhen(
+  pidPath: string,
+  matches: (content: string) => boolean
+): boolean {
+  return claimAndUnlinkOwnedFile(pidPath, matches)
 }
 
 export function unlinkOwnedDaemonTokenFile(tokenPath: string, expectedToken: string): boolean {
@@ -134,10 +244,9 @@ function claimAndUnlinkOwnedFile(
   filePath: string,
   ownsContent: (content: string) => boolean
 ): boolean {
-  const claimedPath = `${filePath}.cleanup-${process.pid}-${randomUUID()}`
+  const claimedPath = getDaemonArtifactHoldClaimPath(filePath)
   try {
-    // Why: rename claims one exact directory entry before inspection, so a replacement
-    // installed afterward stays at the canonical path and cannot be unlinked by us.
+    // Claim this entry before inspection; later canonical replacements must survive cleanup.
     renameSync(filePath, claimedPath)
   } catch {
     return false
@@ -148,7 +257,7 @@ function claimAndUnlinkOwnedFile(
       return true
     }
   } catch {
-    // Restore below when the claimed file cannot be validated as ours.
+    // Preserve ownership evidence when validation fails.
   }
 
   const restoredOrReplaced = restoreClaimedDaemonArtifact(claimedPath, filePath)
@@ -175,12 +284,10 @@ export function restoreClaimedDaemonArtifact(
     ((source: string, target: string) => copyFileSync(source, target, constants.COPYFILE_EXCL))
   const canonicalExists = operations.canonicalExists ?? existsSync
   try {
-    // Why: exclusive restore never overwrites a newer canonical replacement.
     copyExclusive(claimedPath, canonicalPath)
     return true
   } catch (error) {
-    // Why: copy failures can leave a partial canonical file. Only EEXIST proves
-    // another owner had already installed a replacement before our copy.
+    // Failed copies may leave partial files; only EEXIST proves a prior canonical replacement.
     return (
       typeof error === 'object' &&
       error !== null &&

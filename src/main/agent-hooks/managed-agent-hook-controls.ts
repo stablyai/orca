@@ -4,36 +4,66 @@ import {
   isManagedAgentHookTarget
 } from '../../shared/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import {
+  isAgentStatusHooksEnabled,
+  isAgentStatusHooksEnabledForAgent
+} from '../../shared/agent-status-hooks-setting'
+import { probeClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
+  MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_REMOVERS,
+  MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
   MANAGED_AGENT_HOOK_STATUS_READERS,
-  type ManagedAgentHookInstaller
+  type ManagedAgentHookInstaller,
+  type ManagedAgentHookInstallOptions
 } from './managed-agent-hook-registry'
 
 export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
+export {
+  isAgentStatusHooksEnabled,
+  isAgentStatusHooksEnabledForAgent
+} from '../../shared/agent-status-hooks-setting'
 
 type ManagedHookSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
 > | null
 
 type InstallOptions = {
+  /** Set only for an explicit user action, never for startup reconciliation. */
+  userInitiated?: boolean
   shouldHydrateShellPath?: boolean
   onInstallError?: (agent: AgentHookTarget, error: unknown) => void
   shouldContinue?: (agent: AgentHookTarget) => boolean
   agents?: readonly AgentHookTarget[]
 }
 
+type ApplyOptions = InstallOptions & {
+  /** Off means skip, never remove: another Orca's panes run on these same user-global entries. */
+  keepSharedEntries?: boolean
+}
+
 type RemoveOptions = {
   agents?: readonly AgentHookTarget[]
 }
 
-export function isAgentStatusHooksEnabled(
-  settings: Pick<GlobalSettings, 'agentStatusHooksEnabled'> | null | undefined
+export type StartupManagedHookAction = 'install' | 'skip'
+
+// Settings are per profile but hooks are user-global; startup removal would break other instances.
+export function resolveStartupManagedHookAction(
+  settings: ManagedHookSettings
+): StartupManagedHookAction {
+  return isAgentStatusHooksEnabled(settings) ? 'install' : 'skip'
+}
+
+export function shouldContinueManagedHookStartup(
+  isQuitting: boolean,
+  settings: ManagedHookSettings,
+  agent: AgentHookTarget
 ): boolean {
-  return settings?.agentStatusHooksEnabled !== false
+  return !isQuitting && isAgentStatusHooksEnabledForAgent(settings, agent)
 }
 
 function errorStatus(agent: AgentHookTarget, error: unknown): AgentHookInstallStatus {
@@ -69,13 +99,14 @@ function selectedInstallers(options: InstallOptions): readonly ManagedAgentHookI
   return MANAGED_AGENT_HOOK_INSTALLERS.filter(([agent]) => allowed.has(agent))
 }
 
-function runInstaller(
+async function runInstaller(
   entry: ManagedAgentHookInstaller,
-  onInstallError: InstallOptions['onInstallError']
-): AgentHookInstallStatus {
+  onInstallError: InstallOptions['onInstallError'],
+  options: ManagedAgentHookInstallOptions
+): Promise<AgentHookInstallStatus> {
   const [agent, install] = entry
   try {
-    return install()
+    return await install(options)
   } catch (error) {
     console.error(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
     try {
@@ -87,10 +118,26 @@ function runInstaller(
   }
 }
 
+// Refresh owned scripts before CLI presence gating; user-wide configs may still invoke them.
+async function refreshExistingManagedScripts(options: InstallOptions): Promise<void> {
+  const allowed = options.agents ? new Set(options.agents) : null
+  for (const [agent, refresh] of MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS) {
+    if (allowed !== null && !allowed.has(agent)) {
+      continue
+    }
+    try {
+      await refresh()
+    } catch (error) {
+      console.error(`[agent-hooks] Failed to refresh ${agent} managed script:`, error)
+    }
+  }
+}
+
 export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  await refreshExistingManagedScripts(options)
   const installers = selectedInstallers(options)
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
   const enabledInstallers = installers.filter(([agent]) => !disabled.has(agent))
@@ -140,22 +187,53 @@ export async function installManagedAgentHooks(
       )
       continue
     }
-    results.push(runInstaller(entry, options.onInstallError))
+    const cliVersion =
+      agent === 'claude' && presence.executablePath
+        ? await probeClaudeCliVersion(presence.executablePath)
+        : null
+    results.push(
+      await runInstaller(entry, options.onInstallError, {
+        ...(options.userInitiated !== undefined ? { userInitiated: options.userInitiated } : {}),
+        ...(cliVersion ? { cliVersion } : {})
+      })
+    )
   }
   return results
 }
 
-export function removeManagedAgentHooks(options: RemoveOptions = {}): AgentHookInstallStatus[] {
+export async function removeManagedAgentHooks(
+  options: RemoveOptions = {}
+): Promise<AgentHookInstallStatus[]> {
   const allowed = options.agents ? new Set(options.agents) : null
-  return MANAGED_AGENT_HOOK_REMOVERS.filter(
-    ([agent]) => allowed === null || allowed.has(agent)
-  ).map(([agent, remove]) => {
-    try {
-      return remove()
-    } catch (error) {
-      return errorStatus(agent, error)
+  const results: AgentHookInstallStatus[] = []
+  for (const [agent, remove] of MANAGED_AGENT_HOOK_REMOVERS) {
+    if (allowed !== null && !allowed.has(agent)) {
+      continue
     }
-  })
+    try {
+      results.push(await remove())
+    } catch (error) {
+      results.push(errorStatus(agent, error))
+    }
+  }
+  return results
+}
+
+export async function removeManagedAgentHooksAsync(
+  options: RemoveOptions = {}
+): Promise<AgentHookInstallStatus[]> {
+  const allowed = options.agents ? new Set(options.agents) : null
+  return await Promise.all(
+    MANAGED_AGENT_HOOK_ASYNC_REMOVERS.filter(
+      ([agent]) => allowed === null || allowed.has(agent)
+    ).map(async ([agent, remove]) => {
+      try {
+        return await remove()
+      } catch (error) {
+        return errorStatus(agent, error)
+      }
+    })
+  )
 }
 
 export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {
@@ -171,10 +249,12 @@ export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {
 export async function applyAgentStatusHooksEnabled(
   enabled: boolean,
   settings: ManagedHookSettings = null,
-  options: InstallOptions = {}
+  options: ApplyOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
   if (!enabled) {
-    return removeManagedAgentHooks()
+    return options.keepSharedEntries
+      ? getManagedAgentHookStatuses()
+      : await removeManagedAgentHooks()
   }
   const disabled = normalizeDisabledTuiAgents(settings?.disabledTuiAgents).filter(
     isManagedAgentHookTarget
@@ -183,11 +263,14 @@ export async function applyAgentStatusHooksEnabled(
   const disabledToRemove = options.shouldContinue
     ? disabled.filter((agent) => !options.shouldContinue?.(agent))
     : disabled
-  if (disabledToRemove.length === 0) {
+  if (disabledToRemove.length === 0 || options.keepSharedEntries) {
     return installed
   }
   const removed = new Map(
-    removeManagedAgentHooks({ agents: disabledToRemove }).map((status) => [status.agent, status])
+    (await removeManagedAgentHooks({ agents: disabledToRemove })).map((status) => [
+      status.agent,
+      status
+    ])
   )
   return installed.map((status) => removed.get(status.agent) ?? status)
 }

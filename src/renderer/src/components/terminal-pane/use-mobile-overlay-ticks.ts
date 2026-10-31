@@ -1,0 +1,167 @@
+import { useCallback, useEffect, useState } from 'react'
+import { onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
+import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
+import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import {
+  applyDesktopFitFallbackAfterReplay,
+  fitAndRefreshDesktopPane
+} from './desktop-fit-fallback'
+import { getOverrideAffectedPanes, getPanesNeedingOverrideFit } from './override-affected-panes'
+import type { PtyTransport } from './pty-transport-types'
+
+export type MobileOverlayTickDeps = {
+  managerRef: { current: PaneManager | null }
+  // Affinity must use the same live PTY binding the overlay reads.
+  paneTransportsRef: { current: ReadonlyMap<number, Pick<PtyTransport, 'getPtyId'>> }
+}
+
+function isPtyMountedInTab(
+  transports: ReadonlyMap<number, Pick<PtyTransport, 'getPtyId'>>,
+  ptyId: string
+): boolean {
+  for (const transport of transports.values()) {
+    if (transport.getPtyId() === ptyId) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Gate global fit/driver emitter events by this tab’s PTY before ticking; reconnect handle rotation otherwise rerenders every retained tab per event. */
+export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileOverlayTickDeps): {
+  refreshMobileOverlays: () => void
+} {
+  // Why: override state lives in a Map for perf; this counter forces a re-render on override change so the mobile-fit banner toggles.
+  const [, setOverrideTick] = useState(0)
+  useEffect(() => {
+    let active = true
+    const latestOverrideByTerminal = new WeakMap<ManagedPane['terminal'], object>()
+    const pendingFitFrames = new Set<number>()
+    const pendingFallbackTimers = new Set<number>()
+
+    const scheduleFitFrame = (callback: () => void): void => {
+      const frameId = window.requestAnimationFrame(() => {
+        pendingFitFrames.delete(frameId)
+        callback()
+      })
+      pendingFitFrames.add(frameId)
+    }
+
+    const scheduleFallbackTimer = (callback: () => void): void => {
+      const timerId = window.setTimeout(() => {
+        pendingFallbackTimers.delete(timerId)
+        callback()
+      }, 100)
+      pendingFallbackTimers.add(timerId)
+    }
+
+    const unsubscribe = onOverrideChange((event) => {
+      if (!isPtyMountedInTab(paneTransportsRef.current, event.ptyId)) {
+        return
+      }
+      setOverrideTick((n) => n + 1)
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      // Why: pane IDs are per-tab, so resolve the affected PTY through this tab's live transport bindings, not global pane IDs.
+      const getAffectedPanes = (): ManagedPane[] =>
+        getOverrideAffectedPanes(
+          manager.getPanes(),
+          (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId(),
+          event.ptyId
+        )
+      const restoreVersion = {}
+      for (const pane of getAffectedPanes()) {
+        latestOverrideByTerminal.set(pane.terminal, restoreVersion)
+      }
+      if (event.mode === 'mobile-fit' || event.mode === 'remote-desktop-fit') {
+        // Why: when mobile drives, xterm must shrink to phone dims or the wide desktop grid garbles the phone-wrapped stream.
+        // Why: skip the rAF unless this tab actually has a mis-parked pane.
+        const panesNeedingFit = getPanesNeedingOverrideFit(
+          getAffectedPanes(),
+          event.cols,
+          event.rows
+        )
+        if (panesNeedingFit.length === 0) {
+          return
+        }
+        scheduleFitFrame(() => {
+          for (const pane of getPanesNeedingOverrideFit(
+            getAffectedPanes(),
+            event.cols,
+            event.rows
+          )) {
+            safeFit(pane)
+          }
+        })
+        return
+      }
+      if (event.mode === 'desktop-fit') {
+        const shouldRestorePane = (pane: ManagedPane): boolean =>
+          active &&
+          managerRef.current === manager &&
+          latestOverrideByTerminal.get(pane.terminal) === restoreVersion &&
+          !getFitOverrideForPty(event.ptyId) &&
+          getAffectedPanes().some(
+            (current) => current.terminal === pane.terminal && current.container === pane.container
+          )
+        // Why: fitAddon.fit() measures the DOM, so run under rAF after layout settles; the timeout is a safety net if fit silently threw.
+        const fitAffectedPanes = (): void => {
+          for (const pane of getAffectedPanes()) {
+            fitAndRefreshDesktopPane(pane, () => shouldRestorePane(pane))
+          }
+        }
+        scheduleFitFrame(fitAffectedPanes)
+        // Why: direct-resize fallback if safeFit no-op'd, only while xterm is still at the prior mobile-fit dims; else event.cols/rows is a stale baseline that clobbers the fit.
+        scheduleFallbackTimer(() => {
+          for (const pane of getAffectedPanes()) {
+            // Why: skip 0×0 hidden panes; forcing desktop dims with no DOM geometry leaves a mismatched grid (fallback is only for the visible pane that failed to refit).
+            const rect = pane.container.getBoundingClientRect()
+            if (rect.width === 0 || rect.height === 0) {
+              continue
+            }
+            applyDesktopFitFallbackAfterReplay(pane, {
+              ...event,
+              // Why: the timeout/replay queue can outlive this pane binding; never apply old server dims to a replacement PTY.
+              shouldApply: () => shouldRestorePane(pane)
+            })
+          }
+        })
+      }
+    })
+
+    return () => {
+      active = false
+      unsubscribe()
+      for (const frameId of pendingFitFrames) {
+        window.cancelAnimationFrame(frameId)
+      }
+      pendingFitFrames.clear()
+      for (const timerId of pendingFallbackTimers) {
+        window.clearTimeout(timerId)
+      }
+      pendingFallbackTimers.clear()
+    }
+  }, [managerRef, paneTransportsRef])
+
+  // Why: driver state lives in a Map for perf; this counter re-renders on driver flips so the lock banner toggles. See docs/mobile-presence-lock.md.
+  const [, setDriverTick] = useState(0)
+  useEffect(
+    () =>
+      onDriverChange((event) => {
+        if (!isPtyMountedInTab(paneTransportsRef.current, event.ptyId)) {
+          return
+        }
+        setDriverTick((n) => n + 1)
+      }),
+    [paneTransportsRef]
+  )
+
+  // Reclaim clears stale banners when transport swaps remove all affinity capable of ticking the live portal.
+  const refreshMobileOverlays = useCallback((): void => {
+    setOverrideTick((n) => n + 1)
+  }, [])
+  return { refreshMobileOverlays }
+}

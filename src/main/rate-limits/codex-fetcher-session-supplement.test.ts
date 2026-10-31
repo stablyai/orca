@@ -6,6 +6,12 @@ const { childSpawnMock, readFileMock } = vi.hoisted(() => ({
   readFileMock: vi.fn()
 }))
 
+// Keep child-process assertions in this suite; worker transport is covered separately.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
@@ -14,19 +20,35 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))
 
+// Mock recovery so its process-table import does not require real execFile.
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: vi.fn()
+}))
+
 import { fetchCodexRateLimits } from './codex-fetcher'
 
 function makeRpcChild(rateLimitResetCredits?: unknown) {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter
     stderr: EventEmitter
-    stdin: { write: ReturnType<typeof vi.fn> }
+    stdin: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> }
     kill: ReturnType<typeof vi.fn>
+    exitCode: number | null
   }
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
-  child.kill = vi.fn()
-  child.stdin = {
+  child.exitCode = null
+  // Graceful shutdown must wait for EOF/signal to produce exit, as real app-server does.
+  const exitNow = (): void => {
+    child.exitCode = 0
+    child.emit('exit', 0, null)
+  }
+  child.kill = vi.fn(() => {
+    exitNow()
+    return true
+  })
+  child.stdin = Object.assign(new EventEmitter(), {
+    end: vi.fn(exitNow),
     write: vi.fn((line: string) => {
       const message = JSON.parse(line) as { id?: number; method?: string }
       if (message.method === 'initialize') {
@@ -57,7 +79,7 @@ function makeRpcChild(rateLimitResetCredits?: unknown) {
         }, 0)
       }
     })
-  }
+  })
   return child
 }
 

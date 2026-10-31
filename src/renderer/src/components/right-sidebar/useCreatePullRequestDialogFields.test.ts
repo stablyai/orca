@@ -3,11 +3,11 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import {
-  normalizeCreateReviewBaseSearchResults,
-  useCreatePullRequestDialogFields
-} from './useCreatePullRequestDialogFields'
+import { getDefaultSourceControlAiSettings } from '../../../../shared/source-control-ai-settings'
+import { normalizeCreateReviewBaseSearchResults } from './create-pull-request-base-ref-normalization'
+import { useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 
 describe('normalizeCreateReviewBaseSearchResults', () => {
   it('uses detailed local branch names for base refs from arbitrary remotes', () => {
@@ -69,6 +69,7 @@ type DialogFieldsRenderInput = {
   generation?: DialogGeneration
   worktreeId?: string | null
   branch?: string
+  settings?: Parameters<typeof useCreatePullRequestDialogFields>[0]['settings']
 }
 
 function renderDialogFields(input: DialogFieldsRenderInput): {
@@ -92,7 +93,8 @@ function renderDialogFields(input: DialogFieldsRenderInput): {
       branch: currentInput.branch ?? 'feature/base-change',
       eligibility: currentInput.eligibility,
       currentBaseRef: currentInput.currentBaseRef,
-      settings: null,
+      settings: currentInput.settings ?? null,
+      target: { kind: 'local' },
       submitting: false,
       generation: currentInput.generation
     })
@@ -156,9 +158,7 @@ describe('useCreatePullRequestDialogFields', () => {
   })
 
   it('prefers the remote-validated eligibility default over a stacked local-only base', async () => {
-    // Why: for a stacked worktree the current base is the local-only parent
-    // branch, which the main process resolves to the repo default. The seeded
-    // field must follow the remote-validated eligibility default, not the parent.
+    // Main resolves local-only stack parents to a remote-valid default; seed that validated ref.
     const harness = renderDialogFields({
       eligibility: createEligibility({ defaultBaseRef: 'refs/remotes/origin/main' }),
       currentBaseRef: 'stacked-parent'
@@ -176,8 +176,6 @@ describe('useCreatePullRequestDialogFields', () => {
   })
 
   it('falls back to the current base ref when eligibility supplies no default', async () => {
-    // Why: when the main process cannot resolve a default (e.g. origin/HEAD
-    // unset and no probes match), keep the current base rather than blanking it.
     const harness = renderDialogFields({
       eligibility: createEligibility({ defaultBaseRef: null }),
       currentBaseRef: 'refs/remotes/origin/release'
@@ -255,6 +253,87 @@ describe('useCreatePullRequestDialogFields', () => {
       expect(harness.current().title).toBe('Generated title')
       expect(harness.current().body).toBe('Generated body')
       expect(harness.current().draft).toBe(true)
+    } finally {
+      harness.unmount()
+    }
+  })
+
+  it('reports seed placeholders until the title or body is edited', async () => {
+    const harness = renderDialogFields({ eligibility: createEligibility() })
+    try {
+      await harness.rerender({ eligibility: createEligibility() })
+      expect(harness.current().fieldsAreSeedPlaceholders).toBe(true)
+
+      act(() => {
+        harness.current().setBody('My notes')
+      })
+
+      expect(harness.current().fieldsAreSeedPlaceholders).toBe(false)
+    } finally {
+      harness.unmount()
+    }
+  })
+
+  it('keeps the base during a run when the compare base changes', async () => {
+    const generation: DialogGeneration = {
+      generating: true,
+      generateError: null,
+      seedRestoreKey: 'repo-1:wt-1:feature:1:running',
+      seed: { base: 'main', title: 'Review title', body: 'Review body', draft: false },
+      seedFieldRevisions: { base: 0, title: 0, body: 0, draft: 0 },
+      onSeedRestored: vi.fn(),
+      onGenerate: () => undefined,
+      onCancelGenerate: () => undefined
+    }
+    const harness = renderDialogFields({
+      eligibility: createEligibility(),
+      currentBaseRef: 'refs/remotes/origin/main',
+      generation
+    })
+    try {
+      await harness.rerender({
+        eligibility: createEligibility(),
+        currentBaseRef: 'refs/remotes/origin/main',
+        generation
+      })
+      await harness.rerender({
+        eligibility: createEligibility({ defaultBaseRef: 'refs/remotes/origin/release' }),
+        currentBaseRef: 'refs/remotes/origin/release',
+        generation
+      })
+
+      expect(harness.current().base).toBe('main')
+      expect(harness.current().fieldRevisions.base).toBe(0)
+    } finally {
+      harness.unmount()
+    }
+  })
+
+  it('passes run options to the external generation', async () => {
+    const generation: DialogGeneration = {
+      generating: false,
+      generateError: null,
+      onGenerate: vi.fn(),
+      onCancelGenerate: () => undefined
+    }
+    const settings = {
+      ...getDefaultSettings('/home/test'),
+      sourceControlAi: { ...getDefaultSourceControlAiSettings(), agentId: 'cursor' as const }
+    }
+    const harness = renderDialogFields({ eligibility: createEligibility(), generation, settings })
+    try {
+      await harness.rerender({ eligibility: createEligibility(), generation, settings })
+
+      await act(async () => {
+        await harness.current().handleGenerate(undefined, { autoSubmit: true })
+      })
+
+      expect(generation.onGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Review title' }),
+        expect.any(Object),
+        undefined,
+        { autoSubmit: true }
+      )
     } finally {
       harness.unmount()
     }

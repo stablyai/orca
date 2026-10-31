@@ -1,10 +1,3 @@
-// Fixture-based test suite for the redactor. Each provider-key shape is
-// exercised in three locations (attribute value, span event message,
-// exit-status `cause`) — that's the contract telemetry-error-tracking.md
-// §The redactor "Test strategy" calls for. We also cover the four other
-// rule families (labeled kv, URL userinfo, .env-line, attribute blocklist)
-// plus the server-side mode that drops install_id.
-
 import { describe, it, expect } from 'vitest'
 import {
   redactString,
@@ -25,7 +18,7 @@ const SECRETS = {
   pem: '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ\n-----END PRIVATE KEY-----'
 }
 
-const SHAPES: { label: string; raw: string; tag: string }[] = [
+const PROVIDER_KEY_CASES: { label: string; raw: string; tag: string }[] = [
   { label: 'anthropic', raw: SECRETS.anthropic, tag: 'anthropic-key' },
   { label: 'openai', raw: SECRETS.openai, tag: 'openai-key' },
   { label: 'github', raw: SECRETS.github, tag: 'github-token' },
@@ -37,13 +30,10 @@ const SHAPES: { label: string; raw: string; tag: string }[] = [
 ]
 
 describe('redactor — provider-key fingerprints', () => {
-  for (const { label, raw, tag } of SHAPES) {
+  for (const { label, raw, tag } of PROVIDER_KEY_CASES) {
     describe(`${label}`, () => {
       it('redacts when the secret appears as an attribute value', () => {
-        // Bare "<secret>" without a labeled-kv keyword nearby — exercises the
-        // provider-shape pass directly. (The labeled-kv pass is verified by
-        // its own test below; here we want to confirm provider-shape wins
-        // when there's no label to swallow it.)
+        // Omit labels to isolate provider-shape redaction.
         const out = redactAttributes({ msg: `failure ${raw}` })
         const serialized = JSON.stringify(out)
         expect(serialized).not.toContain(raw)
@@ -69,10 +59,6 @@ describe('redactor — provider-key fingerprints', () => {
         const span = makeSpan({
           exit: {
             _tag: 'Failure',
-            // Phrased without a labeled-kv keyword (no "token:", "key:") so
-            // the assertion can pin the provider-specific tag — the labeled-
-            // kv rule is checked separately. What matters most is that the
-            // raw secret is absent; the tag is for triage convenience.
             cause: `Error: provider rejected request ${raw}\n  at handler (file.ts:1:1)`
           }
         })
@@ -82,10 +68,6 @@ describe('redactor — provider-key fingerprints', () => {
       })
 
       it('redacts when nested under a labeled-kv keyword (defense in depth)', () => {
-        // This case mimics the real-world failure mode: the provider SDK
-        // echoes the key back as `Invalid token: sk-ant-…`. Either the
-        // labeled-kv or provider-shape rule is allowed to win; the contract
-        // is "the secret is gone."
         const span = makeSpan({
           exit: {
             _tag: 'Failure',
@@ -243,12 +225,10 @@ describe('redactor — server mode adds install_id keys', () => {
     const client = redactAttributes(before, 'client')
     const server = redactAttributes(before, 'server')
 
-    // Client mode keeps these (they are valid in product telemetry).
     expect(client).toHaveProperty('install_id')
     expect(client).toHaveProperty('installId')
     expect(client).toHaveProperty('distinct_id')
 
-    // Server mode strips them.
     expect(server).not.toHaveProperty('install_id')
     expect(server).not.toHaveProperty('installId')
     expect(server).not.toHaveProperty('distinct_id')
@@ -323,8 +303,6 @@ describe('redactor — span shape', () => {
   })
 })
 
-// ── helpers ──────────────────────────────────────────────────────────────
-
 function makeSpan(overrides: Partial<RedactableSpan>): RedactableSpan {
   return {
     name: 'test.span',
@@ -333,7 +311,7 @@ function makeSpan(overrides: Partial<RedactableSpan>): RedactableSpan {
     kind: 'internal',
     startTimeUnixNano: '1000',
     endTimeUnixNano: '2000',
-    durationMs: 1.0,
+    durationMs: 1,
     attributes: {},
     events: [],
     exit: { _tag: 'Success' },

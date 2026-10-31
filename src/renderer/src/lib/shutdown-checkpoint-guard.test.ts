@@ -1,14 +1,23 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createShutdownCheckpointBeforeUnloadHandler,
   createShutdownCheckpointGuard,
   preventUnloadAndScheduleShutdownCheckpointReset
 } from './shutdown-checkpoint-guard'
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
+import {
+  consumeShutdownCheckpointFailureReason,
+  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
+  ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
+} from '../../../shared/renderer-shutdown-events'
 
 describe('createShutdownCheckpointGuard', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    delete (window as unknown as { api?: unknown }).api
+    consumeShutdownCheckpointFailureReason()
+  })
+
   it('dedupes the synthetic and native unload events in one close attempt', () => {
     const persist = vi.fn()
     const guard = createShutdownCheckpointGuard(persist)
@@ -19,27 +28,92 @@ describe('createShutdownCheckpointGuard', () => {
     expect(persist).toHaveBeenCalledTimes(1)
   })
 
-  it('allows a new checkpoint after an aborted restart resets the attempt', () => {
-    const persist = vi.fn()
-    const guard = createShutdownCheckpointGuard(persist)
+  it('publishes the failure cause and records a crash breadcrumb (STA-5505)', () => {
+    const recordBreadcrumb = vi.fn()
+    ;(window as unknown as { api: unknown }).api = { crashReports: { recordBreadcrumb } }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const guard = createShutdownCheckpointGuard(() => {
+      throw new Error('sendSync payload rejected')
+    })
 
-    expect(guard.persistOnce()).toBe(true)
-    guard.reset()
-    expect(guard.persistOnce()).toBe(true)
+    expect(guard.persistOnce()).toBe(false)
 
-    expect(persist).toHaveBeenCalledTimes(2)
+    expect(consumeShutdownCheckpointFailureReason()).toBe('sendSync payload rejected')
+    expect(recordBreadcrumb).toHaveBeenCalledWith({
+      name: 'renderer_shutdown_checkpoint_failed',
+      data: { message: 'sendSync payload rejected' }
+    })
   })
 
-  it('retries when the blocking checkpoint throws', () => {
-    const persist = vi.fn().mockImplementationOnce(() => {
-      throw new Error('disk full')
-    })
-    const guard = createShutdownCheckpointGuard(persist)
+  it('clears a stale failure cause once a later checkpoint succeeds (STA-5505)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const guard = createShutdownCheckpointGuard(
+      vi.fn().mockImplementationOnce(() => {
+        throw new Error('disk full')
+      })
+    )
 
     expect(guard.persistOnce()).toBe(false)
     expect(guard.persistOnce()).toBe(true)
 
-    expect(persist).toHaveBeenCalledTimes(2)
+    expect(consumeShutdownCheckpointFailureReason()).toBeNull()
+  })
+
+  it('keeps failure reporting non-throwing for unstringifiable thrown values', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const guard = createShutdownCheckpointGuard(() => {
+      throw Object.create(null)
+    })
+
+    expect(guard.persistOnce()).toBe(false)
+    expect(consumeShutdownCheckpointFailureReason()).toBe('Unknown shutdown checkpoint failure')
+  })
+
+  it('uses a fallback reason when an Error has an empty message', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error = new Error('placeholder')
+    error.message = ''
+    const guard = createShutdownCheckpointGuard(() => {
+      throw error
+    })
+
+    expect(guard.persistOnce()).toBe(false)
+    expect(consumeShutdownCheckpointFailureReason()).toBe('Unknown shutdown checkpoint failure')
+  })
+
+  it('reports checkpoint failure separately from the unload verdict', () => {
+    const eventTarget = new EventTarget()
+    const failed = vi.fn()
+    const guard = createShutdownCheckpointGuard(() => {
+      throw new Error('invalid session')
+    })
+    eventTarget.addEventListener(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT, failed)
+    eventTarget.addEventListener('beforeunload', createShutdownCheckpointBeforeUnloadHandler(guard))
+
+    expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false)
+    expect(failed).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports only browser-initiated unloads vetoed by checkpoint failure (#21017)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const eventTarget = new EventTarget()
+    const onNativeUnloadVetoed = vi.fn()
+    const guard = createShutdownCheckpointGuard(() => {
+      throw new Error('stage rejected')
+    })
+    eventTarget.addEventListener(
+      'beforeunload',
+      createShutdownCheckpointBeforeUnloadHandler(guard, onNativeUnloadVetoed)
+    )
+
+    expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false)
+    expect(onNativeUnloadVetoed).not.toHaveBeenCalled()
+
+    const reload = new Event('beforeunload', { cancelable: true })
+    // Electron's reloadIgnoringCache dispatches a trusted beforeunload; synthetic close/restart dispatches are untrusted.
+    Object.defineProperty(reload, 'isTrusted', { value: true })
+    expect(eventTarget.dispatchEvent(reload)).toBe(false)
+    expect(onNativeUnloadVetoed).toHaveBeenCalledTimes(1)
   })
 
   it('retries after a prevented reload resets the completed checkpoint', () => {
@@ -52,7 +126,7 @@ describe('createShutdownCheckpointGuard', () => {
     eventTarget.addEventListener('beforeunload', preventReload)
 
     expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false)
-    guard.reset()
+    guard.abandonAttempt()
     eventTarget.removeEventListener('beforeunload', preventReload)
     expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true)
 
@@ -83,7 +157,7 @@ describe('createShutdownCheckpointGuard', () => {
     }
     eventTarget.addEventListener('beforeunload', preventReload)
     eventTarget.addEventListener('beforeunload', createShutdownCheckpointBeforeUnloadHandler(guard))
-    eventTarget.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, guard.reset)
+    eventTarget.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, guard.abandonAttempt)
 
     expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false)
     await Promise.resolve()
@@ -91,21 +165,5 @@ describe('createShutdownCheckpointGuard', () => {
     expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true)
 
     expect(persist).toHaveBeenCalledTimes(2)
-  })
-
-  it('wires dirty editor unload vetoes to the paired-web checkpoint reset', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/Terminal.tsx'),
-      'utf8'
-    )
-    const dirtyGuardStart = source.indexOf(
-      'const dirtyFiles = useAppStore.getState().openFiles.filter((f) => f.isDirty)'
-    )
-    const dirtyGuardEnd = source.indexOf("window.addEventListener('beforeunload', handler)")
-    expect(dirtyGuardStart).toBeGreaterThanOrEqual(0)
-    expect(dirtyGuardEnd).toBeGreaterThan(dirtyGuardStart)
-    expect(source.slice(dirtyGuardStart, dirtyGuardEnd)).toContain(
-      'preventUnloadAndScheduleShutdownCheckpointReset(e, window)'
-    )
   })
 })

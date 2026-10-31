@@ -3,8 +3,11 @@
 import React, { act } from 'react'
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue } from '../../../../shared/types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from './smart-workspace-name-field-model'
+import type * as ReactI18nextModule from 'react-i18next'
+import type * as I18nModule from '@/i18n/i18n'
 
 const jiraMock = vi.hoisted(() => ({
   retry: vi.fn(),
@@ -31,6 +34,7 @@ const jiraMock = vi.hoisted(() => ({
     errorKind: 'disconnected' | 'site-not-connected' | 'read-failed' | 'update-runtime' | null
   }
 }))
+const shellMock = vi.hoisted(() => ({ openUrl: vi.fn() }))
 const popoverMock = vi.hoisted(() => ({ contentMounted: true }))
 const jiraSearchMock = vi.hoisted(() => vi.fn(async (): Promise<JiraIssue[]> => []))
 const jiraConnectionMock = vi.hoisted(() => ({
@@ -40,6 +44,9 @@ const jiraConnectionMock = vi.hoisted(() => ({
     sites: []
   }
 }))
+const originalWindowApi = window.api
+
+vi.mock('../jira-project-picker', () => ({ JiraProjectPicker: () => null }))
 
 vi.mock('./use-jira-url-source', () => ({
   useJiraUrlSource: () => ({
@@ -85,11 +92,13 @@ vi.mock('@/lib/local-preflight-context', () => ({
   localPreflightContextKey: () => 'test-preflight-context'
 }))
 
-vi.mock('react-i18next', () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactI18nextModule>()),
   useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key })
 }))
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18nModule>()),
   translate: (_key: string, fallback: string) => fallback
 }))
 
@@ -161,7 +170,9 @@ function renderField(
     onPlainEnter?: () => void
     onOpenJiraSettings?: () => void
     onValueChange?: (value: string) => void
+    onClearSelectedSource?: () => void
     value?: string
+    selectedSource?: SmartWorkspaceNameSelection | null
   } = {}
 ) {
   return render(
@@ -174,8 +185,8 @@ function renderField(
       onGitHubItemSelect={vi.fn()}
       onBranchSelect={vi.fn()}
       onLinearIssueSelect={vi.fn()}
-      selectedSource={null}
-      onClearSelectedSource={vi.fn()}
+      selectedSource={overrides.selectedSource ?? null}
+      onClearSelectedSource={overrides.onClearSelectedSource ?? vi.fn()}
       jiraSourceContext={
         overrides.jiraSourceContext
           ? ({
@@ -199,6 +210,10 @@ function renderField(
 describe('SmartWorkspaceNameField Jira accessibility', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { shell: shellMock }
+    })
     jiraSearchMock.mockResolvedValue([])
     Object.assign(jiraMock.state, {
       intent: true,
@@ -218,6 +233,14 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
 
   afterEach(() => {
     cleanup()
+    if (originalWindowApi === undefined) {
+      Reflect.deleteProperty(window, 'api')
+    } else {
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: originalWindowApi
+      })
+    }
   })
 
   it('associates loading status with the busy input and blocks plain Enter', () => {
@@ -234,6 +257,33 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
     act(() => {
       fireEvent.keyDown(input, { key: 'Enter' })
     })
+    expect(onPlainEnter).not.toHaveBeenCalled()
+  })
+
+  it('keeps selected-source actions out of Tab order with keyboard fallbacks', () => {
+    const onClearSelectedSource = vi.fn()
+    const onPlainEnter = vi.fn()
+    renderField({
+      onClearSelectedSource,
+      onPlainEnter,
+      selectedSource: {
+        kind: 'github-issue',
+        label: 'Issue #123',
+        url: 'https://github.com/orca/ide/issues/123'
+      }
+    })
+
+    expect(screen.getByRole('button', { name: 'Open link in browser' }).tabIndex).toBe(-1)
+    expect(screen.getByRole('button', { name: 'Clear selected source' }).tabIndex).toBe(-1)
+
+    const pill = document.querySelector<HTMLElement>('[data-workspace-source-pill="true"]')
+    expect(pill?.getAttribute('aria-keyshortcuts')).toBe('Alt+Enter Backspace Delete')
+
+    fireEvent.keyDown(pill as HTMLElement, { key: 'Backspace' })
+    expect(onClearSelectedSource).toHaveBeenCalledOnce()
+
+    fireEvent.keyDown(pill as HTMLElement, { key: 'Enter', altKey: true })
+    expect(shellMock.openUrl).toHaveBeenCalledWith('https://github.com/orca/ide/issues/123')
     expect(onPlainEnter).not.toHaveBeenCalled()
   })
 
@@ -375,6 +425,33 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
         name: /ORCA-123.*Disambiguate Jira search.*Company Jira.*ada@example.com/
       })
     ).not.toBeNull()
+  })
+
+  it('searches issue text when a key-shaped query matches no issue key', async () => {
+    Object.assign(jiraMock.state, { intent: false, loading: false })
+    Object.assign(jiraConnectionMock.status, { connected: true, selectedSiteId: 'site-a' })
+    jiraSearchMock.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        id: 'jira-2',
+        key: 'ORCA-7',
+        title: 'Decode utf-8 names',
+        url: 'https://company.atlassian.net/browse/ORCA-7',
+        project: { id: 'project-1', key: 'ORCA', name: 'Orca' },
+        issueType: { id: 'type-1', name: 'Task' },
+        status: { id: 'status-1', name: 'Open', categoryKey: 'new', categoryName: 'To Do' },
+        labels: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ])
+    renderField({ jiraSourceContext: true, value: 'utf-8' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Jira' }))
+
+    expect(await screen.findByRole('button', { name: /ORCA-7.*Decode utf-8 names/ })).not.toBeNull()
+    expect(jiraSearchMock).toHaveBeenCalledTimes(2)
+    expect(jiraSearchMock).toHaveBeenNthCalledWith(1, 'key = "UTF-8"', 12, expect.anything())
+    expect(jiraSearchMock).toHaveBeenNthCalledWith(2, 'text ~ "utf 8*"', 12, expect.anything())
   })
 
   it('labels duplicate-account choices with site and account', () => {

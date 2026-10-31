@@ -1,9 +1,18 @@
 import { readFile, stat } from 'node:fs/promises'
-import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
-import { faviconUrlFromWebsite, githubAvatarIcon, type RepoIcon } from '../shared/repo-icon'
+import type { ExecutionHostId } from '../shared/execution-host'
+import type { GitHubRepositoryIdentity } from '../shared/github/pull-request-types'
+import type { RepoKind } from '../shared/repo-types'
+import {
+  faviconUrlFromWebsite,
+  githubAvatarIcon,
+  githubAvatarSlug,
+  type RepoIcon
+} from '../shared/repo-icon'
 import { getRepoSlug, getRepoUpstream } from './github/client'
-import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
-import type { IFilesystemProvider } from './providers/types'
+import {
+  resolveFilesystemRouteForHost,
+  resolveGitRouteForHost
+} from './providers/execution-host-provider-dispatch'
 import { detectGitRemoteIdentity } from './repo-git-remote-identity'
 import { detectRepoFileIcon } from './repo-icon-file-detection'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
@@ -51,34 +60,32 @@ async function detectLocalPackageHomepageIcon(repoPath: string): Promise<RepoIco
   }
 }
 
-async function detectRemotePackageHomepageIcon(
-  repoPath: string,
-  fsProvider: IFilesystemProvider
-): Promise<RepoIcon | null> {
-  try {
-    const packageJsonPath = joinWorktreeRelativePath(repoPath, 'package.json')
-    const info = await fsProvider.stat(packageJsonPath)
-    if (info.type !== 'file' || info.size > 128 * 1024) {
-      return null
-    }
-    const result = await fsProvider.readFile(packageJsonPath)
-    if (result.isBinary) {
-      return null
-    }
-    return packageHomepageIcon(JSON.parse(result.content))
-  } catch {
-    return null
+// Runtime hosts must be refused: a null connection would read this machine's paths.
+function repoRemoteReadConnection(
+  executionHostId: ExecutionHostId
+): { kind: 'refuse' } | { kind: 'dial'; connectionId: string | null } {
+  const route = resolveGitRouteForHost(executionHostId)
+  switch (route.kind) {
+    case 'local':
+      return { kind: 'dial', connectionId: null }
+    case 'ssh':
+      return { kind: 'dial', connectionId: route.connectionId }
+    case 'runtime':
+      return { kind: 'refuse' }
   }
 }
 
-async function detectGitHubAvatarIcon(
+export async function detectGitHubAvatarIcon(
   repoPath: string,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   upstream?: GitHubRepositoryIdentity | null
 ): Promise<RepoIcon | null> {
   try {
-    // Why: a fork's origin is the personal copy, so prefer the upstream owner.
-    const slug = upstream ?? (await getRepoSlug(repoPath, connectionId))
+    const target = repoRemoteReadConnection(executionHostId)
+    if (target.kind === 'refuse') {
+      return null
+    }
+    const slug = githubAvatarSlug(await getRepoSlug(repoPath, target.connectionId), upstream)
     return slug ? githubAvatarIcon(slug) : null
   } catch {
     return null
@@ -88,52 +95,59 @@ async function detectGitHubAvatarIcon(
 export async function detectRepoIcon({
   repoPath,
   kind,
-  connectionId,
+  executionHostId,
   upstream
 }: {
   repoPath: string
   kind: RepoKind
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
   upstream?: GitHubRepositoryIdentity | null
 }): Promise<RepoIcon | undefined> {
   try {
-    const fsProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-    const fileIcon = await detectRepoFileIcon(repoPath, fsProvider)
+    const route = resolveFilesystemRouteForHost(executionHostId)
+    const fileIcon = await detectRepoFileIcon(repoPath, route)
     if (fileIcon) {
       return fileIcon
     }
 
-    const homepageIcon = fsProvider
-      ? await detectRemotePackageHomepageIcon(repoPath, fsProvider)
-      : await detectLocalPackageHomepageIcon(repoPath)
+    const homepageIcon =
+      route.kind === 'local' ? await detectLocalPackageHomepageIcon(repoPath) : null
     if (homepageIcon) {
       return homepageIcon
     }
 
     if (kind === 'git') {
-      return (await detectGitHubAvatarIcon(repoPath, connectionId, upstream)) ?? undefined
+      return (await detectGitHubAvatarIcon(repoPath, executionHostId, upstream)) ?? undefined
     }
   } catch {
-    // Repo creation must not fail because a best-effort icon probe failed.
+    // Icon failures must not prevent repo creation.
   }
   return undefined
 }
 
-// Why: `upstream: null` is a resolved "not a fork" marker and prevents
-// repeated best-effort probes.
+// A null upstream marks a resolved non-fork and prevents repeated probes.
 export async function detectRepoIconAndUpstream({
   repoPath,
   kind,
-  connectionId
+  executionHostId
 }: {
   repoPath: string
   kind: RepoKind
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
 }) {
-  const upstream = kind === 'git' ? await getRepoUpstream(repoPath, connectionId) : null
+  const remoteRead = repoRemoteReadConnection(executionHostId)
+  const upstream =
+    kind === 'git' && remoteRead.kind === 'dial'
+      ? await getRepoUpstream(repoPath, remoteRead.connectionId)
+      : null
   const gitRemoteIdentity =
-    kind === 'git' ? await detectGitRemoteIdentity(repoPath, connectionId) : null
-  const repoIcon = await detectRepoIcon({ repoPath, kind, connectionId, upstream })
+    kind === 'git'
+      ? await detectGitRemoteIdentity(repoPath, executionHostId, {
+          // Host Git on purpose: this runs while the project is being added, before it exists.
+          hostGit: true
+        })
+      : null
+  const repoIcon = await detectRepoIcon({ repoPath, kind, executionHostId, upstream })
   return {
     ...(repoIcon ? { repoIcon } : {}),
     ...(gitRemoteIdentity ? { gitRemoteIdentity } : {}),

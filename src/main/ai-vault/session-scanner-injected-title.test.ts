@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
+import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
@@ -68,8 +69,6 @@ describe('scanAiVaultSessions harness-injected title seeding', () => {
           sessionId: 'custom-element-first',
           timestamp: '2026-06-11T10:00:00.000Z',
           cwd: '/repo/app',
-          // A real prompt starting with an unknown kebab tag is the user's turn;
-          // it must win the title over a later prompt, not be demoted as machinery.
           message: { role: 'user', content: '<my-custom-element> render the profile card' }
         },
         {
@@ -127,14 +126,16 @@ describe('scanAiVaultSessions harness-injected title seeding', () => {
       ])
     )
 
-    const result = await scanAiVaultSessions({
-      ...roots,
-      platform: 'darwin'
-    })
+    // Enable full capture so an undefined first prompt proves exclusion rather than disabled capture.
+    const result = await withFullFirstUserPromptCapture(() =>
+      scanAiVaultSessions({
+        ...roots,
+        platform: 'darwin'
+      })
+    )
 
     expect(result.issues).toEqual([])
     expect(result.sessions[0]?.lastUserPrompt).toBe('Fix the zoom behavior in a separate PR')
-    // Meta skill preamble must not become the copyable first prompt.
     expect(result.sessions[0]?.firstUserPrompt).toBeUndefined()
   })
 })

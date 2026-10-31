@@ -1,5 +1,6 @@
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import type { SkillDiscoveryResult } from '../../src/shared/skills'
+import type { Repo } from '../../src/shared/repo-types'
 import { test, expect } from './helpers/orca-app'
 import { getStoreState, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
@@ -56,8 +57,7 @@ test.describe('Setup guide sidebar entry', () => {
     const flashSamples = await stopSetupGuideFlashMonitor(orcaPage)
     expect(flashSamples, `setup guide sidebar flashed at ${flashSamples.join(', ')}`).toEqual([])
 
-    // Unblock pending skill discovery IPC calls before teardown. Completion
-    // after release is covered by the focused progress unit tests.
+    // Release pending discovery IPC before teardown; focused units cover its completion.
     await releaseBlockedSkillDiscovery(electronApp)
     await orcaPage.evaluate(() => {
       window.dispatchEvent(new CustomEvent('orca:installed-agent-skills-changed'))
@@ -70,8 +70,7 @@ async function setActiveViewForFlashProbe(
   view: 'tasks' | 'automations' | 'mobile'
 ): Promise<void> {
   await page.evaluate((nextView) => {
-    // Why: this spec monitors setup-guide visibility during view transitions;
-    // CI pointer stability over sidebar nav is covered by separate nav tests.
+    // Drive view transitions directly; separate navigation tests cover pointer stability.
     window.__store?.getState().setActiveView(nextView)
   }, view)
 }
@@ -111,7 +110,6 @@ async function installBlockedCompletedCapabilityFakes(
       directoryPath: `/tmp/orca-e2e-skills/${name}`,
       skillFilePath: `/tmp/orca-e2e-skills/${name}/SKILL.md`,
       installed: true,
-      fileCount: 1,
       updatedAt: 1
     })
 
@@ -192,7 +190,10 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
       throw new Error('window.__store is not available')
     }
     const state = store.getState()
-    const existingRepo = state.repos[0] ?? {
+    if (!state.settings) {
+      throw new Error('settings are not loaded')
+    }
+    const existingRepo: Repo = state.repos[0] ?? {
       id: 'setup-guide-repo-a',
       path: '/tmp/setup-guide-repo-a',
       displayName: 'setup-guide-repo-a',
@@ -200,7 +201,7 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
       addedAt: Date.now(),
       kind: 'git'
     }
-    const primaryRepo = {
+    const primaryRepo: Repo = {
       ...existingRepo,
       kind: 'git',
       hookSettings: {
@@ -261,7 +262,7 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
         activeRuntimeEnvironmentId: null,
         defaultTuiAgent: 'codex',
         notifications: {
-          ...state.settings?.notifications,
+          ...state.settings.notifications,
           enabled: true,
           agentTaskComplete: true
         }
@@ -305,7 +306,18 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
         ]
       },
       tabsByWorktree: {
-        [secondaryWorktree.id]: [{ id: 'setup-guide-terminal-tab', title: 'Terminal' }]
+        [secondaryWorktree.id]: [
+          {
+            id: 'setup-guide-terminal-tab',
+            ptyId: null,
+            worktreeId: secondaryWorktree.id,
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: Date.now()
+          }
+        ]
       },
       terminalLayoutsByTabId: {
         'setup-guide-terminal-tab': {
@@ -314,7 +326,9 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
             direction: 'horizontal',
             first: { type: 'leaf', leafId: 'setup-guide-left' },
             second: { type: 'leaf', leafId: 'setup-guide-right' }
-          }
+          },
+          activeLeafId: null,
+          expandedLeafId: null
         }
       },
       setupGuideSidebarDismissed: false,

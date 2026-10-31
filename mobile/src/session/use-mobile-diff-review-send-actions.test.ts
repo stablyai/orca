@@ -1,20 +1,39 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DiffComment } from '../../../src/shared/types'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
+import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 import {
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
-} from './mobile-native-chat-stale-input'
+} from './native-chat/mobile-native-chat-stale-input'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
 
+function requestPortRpcClient(sendRequest: RpcClient['sendRequest']): RpcClient {
+  return {
+    sendRequest,
+    subscribe: () => () => {},
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
+}
+
 type SendActions = ReturnType<typeof useMobileDiffReviewSendActions>
+type SendActionArgs = Parameters<typeof useMobileDiffReviewSendActions>[0]
 
 vi.mock('../platform/haptics', () => ({ triggerSuccess: vi.fn() }))
-vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn().mockResolvedValue(undefined) }))
+// Return the pasteboard’s real success boolean; undefined would exercise only refusal unnoticed.
+const clipboardMock = vi.hoisted(() => ({ setStringAsync: vi.fn() }))
+vi.mock('expo-clipboard', () => clipboardMock)
 
 function sendResponse(accepted: boolean) {
   return {
@@ -35,9 +54,57 @@ const COMMENT: DiffComment = {
   side: 'modified'
 }
 
-const READY: ReviewScreenState = {
+const LAUNCH_CAPABILITIES = [
+  'agent.launch.v2',
+  'agent.launch.replay.v1',
+  'agent.launch.replay-required.v1'
+]
+
+function rpcReply(result: unknown) {
+  return { id: 'rpc', ok: true as const, result, _meta: { runtimeId: 'r' } }
+}
+
+function launchedReply(promptOutcome: 'handed-to-terminal' | 'not-delivered', warning?: string) {
+  return rpcReply({
+    outcome: { kind: 'terminal', handle: 'term-1' },
+    worktreeId: 'wt-1',
+    receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'd' },
+    prompt: { delivery: 'submit', outcome: promptOutcome },
+    ...(warning ? { warning } : {})
+  })
+}
+
+function launchClient(
+  promptOutcome: 'handed-to-terminal' | 'not-delivered',
+  launchReply: () => Promise<RpcResponse> = async () => launchedReply(promptOutcome)
+) {
+  const sendRequest = vi.fn(async (method: string, _params?: unknown): Promise<RpcResponse> => {
+    if (method === 'repo.list') {
+      return rpcReply({ repos: [{ id: 'wt-1' }] })
+    }
+    if (method === 'settings.get') {
+      return rpcReply({ settings: { defaultTuiAgent: 'codex' } })
+    }
+    if (method === 'preflight.detectAgents') {
+      return rpcReply(['codex'])
+    }
+    if (method === 'agent.launchReplay') {
+      return launchReply()
+    }
+    throw new Error(`Unexpected request: ${method}`)
+  })
+  return { client: requestPortRpcClient(sendRequest), sendRequest }
+}
+
+const READY: Extract<ReviewScreenState, { kind: 'ready' }> = {
   kind: 'ready',
-  status: { entries: [], conflictOperation: 'none' },
+  status: {
+    entries: [],
+    conflictOperation: 'unknown',
+    branch: undefined,
+    head: undefined,
+    upstreamStatus: undefined
+  },
   branchCompare: null,
   comments: [COMMENT],
   reviewState: { version: 1, files: {} }
@@ -47,15 +114,21 @@ describe('useMobileDiffReviewSendActions', () => {
   let renderer: ReactTestRenderer | null = null
   let actions: SendActions | null = null
   let mountedClient: RpcClient | null = null
-  let setActionError: ReturnType<typeof vi.fn>
-  let setSendSheet: ReturnType<typeof vi.fn>
-  let saveCommentsAndReviewState: ReturnType<typeof vi.fn>
+  let setActionError: Mock<SendActionArgs['setActionError']>
+  let sheets: {
+    openSheet: Mock<ReviewSheetIntents['openSheet']>
+    closeSheet: Mock<ReviewSheetIntents['closeSheet']>
+    updateSendSheet: Mock<ReviewSheetIntents['updateSendSheet']>
+  }
+  let saveCommentsAndReviewState: Mock<SendActionArgs['saveCommentsAndReviewState']>
+  let screenState: ReviewScreenState = READY
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    screenState = READY
+    clipboardMock.setStringAsync.mockReset().mockResolvedValue(true)
     resetMobileNativeChatStaleInputForTests()
     setActionError = vi.fn()
-    setSendSheet = vi.fn()
+    sheets = { openSheet: vi.fn(), closeSheet: vi.fn(), updateSendSheet: vi.fn() }
     saveCommentsAndReviewState = vi.fn().mockResolvedValue(undefined)
   })
 
@@ -70,10 +143,11 @@ describe('useMobileDiffReviewSendActions', () => {
     actions = useMobileDiffReviewSendActions({
       client: mountedClient,
       connState: 'connected',
+      hostCapabilities: LAUNCH_CAPABILITIES,
       worktreeId: 'wt-1',
-      screenState: READY,
+      screenState,
       setActionError,
-      setSendSheet,
+      sheets,
       saveCommentsAndReviewState
     })
     return null
@@ -81,21 +155,38 @@ describe('useMobileDiffReviewSendActions', () => {
 
   async function mount(client: RpcClient): Promise<void> {
     mountedClient = client
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness))
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
   }
+
+  async function mountWithoutClient(): Promise<void> {
+    mountedClient = null
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+  }
+
+  it('copies the notes through the platform seam and says so', async () => {
+    await mountWithoutClient()
+    await act(async () => {
+      await actions?.copyNotes()
+    })
+    expect(clipboardMock.setStringAsync).toHaveBeenCalledExactlyOnceWith(
+      'File: src/a.ts\nLine: 3\nUser comment: "rename this"'
+    )
+    expect(setActionError).toHaveBeenLastCalledWith('Review notes copied')
+  })
+
+  it('reports a refused copy instead of claiming it copied', async () => {
+    // Web clipboard refusal rejects a fire-and-forget caller, so feedback must settle without an unhandled rejection.
+    clipboardMock.setStringAsync.mockResolvedValue(false)
+    await mountWithoutClient()
+    await act(async () => {
+      await actions?.copyNotes()
+    })
+    expect(setActionError).toHaveBeenLastCalledWith('the clipboard did not accept this text')
+  })
 
   it('heals a marked terminal BEFORE submitting the notes', async () => {
     const sendRequest = vi.fn().mockResolvedValue(sendResponse(true))
@@ -107,15 +198,13 @@ describe('useMobileDiffReviewSendActions', () => {
     })
 
     expect(sendRequest).toHaveBeenCalledTimes(2)
-    // Order matters: the Ctrl+U clear must land before the enter-carrying write,
-    // or the orphaned paste is submitted with the notes.
+    // Clear before the Enter-carrying notes write so an orphaned paste cannot join the prompt.
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({
       terminal: 'terminal-1',
       text: '\x15',
       enter: false
     })
     expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ terminal: 'terminal-1', enter: true })
-    // The second call is the notes themselves, not another clear.
     expect(String(sendRequest.mock.calls[1]?.[1]?.text)).toContain('rename this')
     expect(isMobileNativeChatInputStale('terminal-1')).toBe(false)
     expect(setActionError).toHaveBeenCalledWith('Review notes sent')
@@ -133,13 +222,11 @@ describe('useMobileDiffReviewSendActions', () => {
 
     expect(error).toBeInstanceOf(Error)
     expect((error as Error).message).toBe('Failed to send notes')
-    // Only the failed clear — never the notes.
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '\x15', enter: false })
     expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
     expect(setActionError).not.toHaveBeenCalled()
-    expect(setSendSheet).not.toHaveBeenCalled()
-    // Marker survives for the next attempt.
+    expect(sheets.closeSheet).not.toHaveBeenCalled()
     expect(isMobileNativeChatInputStale('terminal-1')).toBe(true)
   })
 
@@ -172,7 +259,7 @@ describe('useMobileDiffReviewSendActions', () => {
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ terminal: 'terminal-1', enter: true })
     expect(saveCommentsAndReviewState).toHaveBeenCalledTimes(1)
     expect(setActionError).toHaveBeenCalledWith('Review notes sent')
-    expect(setSendSheet).toHaveBeenCalledWith(null)
+    expect(sheets.closeSheet).toHaveBeenCalledWith('send')
   })
 
   it('only heals the terminal that was marked', async () => {
@@ -218,5 +305,146 @@ describe('useMobileDiffReviewSendActions', () => {
 
     expect((error as Error).message).toBe('pane gone')
     expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
+  })
+
+  it('starts a new agent with the notes through the host and marks them sent', async () => {
+    const { client, sendRequest } = launchClient('handed-to-terminal')
+    await mount(client)
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    const launch = sendRequest.mock.calls.find(([method]) => method === 'agent.launchReplay')
+    expect(launch?.[1]).toMatchObject({
+      agent: 'codex',
+      target: { kind: 'existing', worktree: 'id:wt-1' },
+      prompt: {
+        delivery: 'submit',
+        // Desktop sends the formatted notes alone.
+        text: ['File: src/a.ts', 'Line: 3', 'User comment: "rename this"'].join('\n')
+      },
+      launchSource: 'notes_send'
+    })
+    expect(sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(false)
+    expect(saveCommentsAndReviewState).toHaveBeenCalledOnce()
+    expect(setActionError).toHaveBeenLastCalledWith('Review notes sent')
+  })
+
+  it('keeps saying the notes were sent when the host adds a warning', async () => {
+    await mount(
+      launchClient('handed-to-terminal', async () =>
+        launchedReply('handed-to-terminal', 'the requested arguments were ignored.')
+      ).client
+    )
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(saveCommentsAndReviewState).toHaveBeenCalledOnce()
+    expect(setActionError).toHaveBeenLastCalledWith(
+      'Review notes sent. the requested arguments were ignored.'
+    )
+  })
+
+  it('says it is waiting for the desktop instead of rejecting when there is no connection', async () => {
+    await mountWithoutClient()
+    await act(async () => {
+      await expect(actions?.createTerminalAndSend([COMMENT])).resolves.toBeUndefined()
+    })
+    expect(sheets.closeSheet).toHaveBeenCalledWith('send')
+    expect(setActionError).toHaveBeenLastCalledWith('Waiting for desktop...')
+  })
+
+  it('keeps the notes unsent when the agent started without them', async () => {
+    await mount(launchClient('not-delivered').client)
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
+    expect(setActionError).toHaveBeenLastCalledWith(
+      "The agent started, but the notes weren't sent. Use Copy Notes to paste them."
+    )
+  })
+
+  it('shows a launch that did not start on the review screen instead of rejecting', async () => {
+    await mount(
+      launchClient('handed-to-terminal', async () => ({
+        id: 'rpc',
+        ok: false,
+        error: { code: 'selector_not_found', message: 'Workspace not found' },
+        _meta: { runtimeId: 'r' }
+      })).client
+    )
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(sheets.closeSheet).toHaveBeenCalledWith('send')
+    expect(setActionError).toHaveBeenLastCalledWith('Workspace not found')
+    expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
+  })
+
+  it('starts one agent for a double tap and keeps notes written while it starts', async () => {
+    let answerLaunch: (reply: RpcResponse) => void = () => {}
+    const { client, sendRequest } = launchClient(
+      'handed-to-terminal',
+      () =>
+        new Promise<RpcResponse>((resolve) => {
+          answerLaunch = resolve
+        })
+    )
+    await mount(client)
+    let first: Promise<void> | undefined
+    await act(async () => {
+      first = actions?.createTerminalAndSend([COMMENT])
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(setActionError).toHaveBeenLastCalledWith('Starting an agent...')
+    const written: DiffComment = { ...COMMENT, id: 'comment-2', body: 'written meanwhile' }
+    screenState = { ...READY, comments: [COMMENT, written] }
+    await act(async () => {
+      renderer?.update(createElement(Harness))
+    })
+    await act(async () => {
+      answerLaunch(launchedReply('handed-to-terminal'))
+      await first
+    })
+    expect(
+      sendRequest.mock.calls.filter(([method]) => method === 'agent.launchReplay')
+    ).toHaveLength(1)
+    expect(saveCommentsAndReviewState).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ id: 'comment-1', sentAt: expect.any(Number) }),
+        expect.not.objectContaining({ sentAt: expect.anything() })
+      ],
+      READY.reviewState
+    )
+    expect(saveCommentsAndReviewState.mock.calls[0]?.[0]?.[1]?.id).toBe('comment-2')
+    expect(setActionError).toHaveBeenLastCalledWith('Review notes sent')
+  })
+
+  // The save rolls back to the screen it was created with, so a stale one would drop newer notes.
+  it('marks the notes sent through the save of the latest render, not the one from the tap', async () => {
+    let answerLaunch: (reply: RpcResponse) => void = () => {}
+    const { client } = launchClient(
+      'handed-to-terminal',
+      () =>
+        new Promise<RpcResponse>((resolve) => {
+          answerLaunch = resolve
+        })
+    )
+    await mount(client)
+    let first: Promise<void> | undefined
+    await act(async () => {
+      first = actions?.createTerminalAndSend([COMMENT])
+    })
+    const tapTimeSave = saveCommentsAndReviewState
+    saveCommentsAndReviewState = vi.fn().mockResolvedValue(undefined)
+    await act(async () => {
+      renderer?.update(createElement(Harness))
+    })
+    await act(async () => {
+      answerLaunch(launchedReply('handed-to-terminal'))
+      await first
+    })
+    expect(tapTimeSave).not.toHaveBeenCalled()
+    expect(saveCommentsAndReviewState).toHaveBeenCalledOnce()
   })
 })

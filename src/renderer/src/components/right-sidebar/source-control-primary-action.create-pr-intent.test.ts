@@ -4,7 +4,7 @@ import {
   resolvePrimaryAction,
   type PrimaryActionInputs
 } from './source-control-primary-action'
-import { resolveCreatePrHeaderAction } from './source-control-primary-create-pr-intent-action'
+import { resolveCreatePrHeaderAction } from './source-control/review/primary-create-pr-intent-action'
 
 function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -528,6 +528,32 @@ describe('resolvePrimaryAction Create PR intent', () => {
       kind: 'create_pr',
       label: 'Create MR',
       title: 'Checking whether this branch can create a merge request…',
+      disabled: true
+    })
+  })
+
+  it('names a failed review lookup instead of calling a ready branch not ready', () => {
+    expect(
+      resolveCreatePrHeaderAction(
+        inputs({
+          upstreamStatus: upstreamInSync,
+          hostedReviewCreation: {
+            provider: 'gitlab',
+            review: null,
+            reviewLookupOutcome: 'unavailable',
+            defaultBaseRef: 'origin/main',
+            head: 'feature',
+            canCreate: false,
+            blockedReason: null,
+            nextAction: null
+          }
+        })
+      )
+    ).toEqual({
+      kind: 'create_pr',
+      label: 'Create MR',
+      title:
+        'Create MR failed: Orca could not confirm whether this branch already has a merge request. Retry once the GitLab lookup succeeds.',
       disabled: true
     })
   })

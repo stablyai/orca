@@ -1,15 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getRuntimeMobileSessionSyncKey,
-  hasRegisteredRuntimeTerminalTab,
-  registerRuntimeTerminalTab,
-  runtimeMobileSessionSyncKeysEqual,
+  runtimeMobileSessionSyncKeysEqual
+} from './sync-runtime-graph/sync-key'
+import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './sync-runtime-graph'
+import {
+  hasRegisteredRuntimeTerminalTab,
+  registerRuntimeTerminalTab
+} from './mounted-terminal-tab-registry'
 import type { AppState } from '../store/types'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
   return {
@@ -78,14 +82,16 @@ describe('runtime terminal registration ownership', () => {
       worktreeId: 'wt-1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
     const second = registerRuntimeTerminalTab({
       tabId: 'term-replaced',
       worktreeId: 'wt-1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
 
     first()
@@ -115,7 +121,8 @@ describe('scheduleRuntimeGraphSync', () => {
       worktreeId: 'wt-1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
     setRuntimeGraphStoreStateGetter(() =>
       makeState({
@@ -151,7 +158,8 @@ describe('scheduleRuntimeGraphSync', () => {
       worktreeId: 'wt-1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
     setRuntimeGraphStoreStateGetter(() =>
       makeState({

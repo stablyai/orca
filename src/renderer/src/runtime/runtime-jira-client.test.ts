@@ -2,21 +2,19 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  jiraGetIssue,
-  jiraIssueComments,
-  jiraListAssignableUsers,
-  jiraLookupIssueSummary,
-  jiraReadStatus,
-  jiraSearchIssues
+  jiraSearchIssuesForTarget,
+  jiraStatusForTarget,
+  jiraListAssignableUsersForProject
 } from './runtime-jira-client'
+import { clearJiraImageCache } from './runtime-jira-image-cache'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
-
-type RuntimeSubscribeArgs = Parameters<typeof window.api.runtimeEnvironments.subscribe>[0]
-type RuntimeSubscribeCallbacks = Parameters<typeof window.api.runtimeEnvironments.subscribe>[1]
-
 const jiraSearchIssuesLocal = vi.fn()
+const jiraStatusLocal = vi.fn()
 const jiraListAssignableUsersLocal = vi.fn()
+const jiraSearchUsersLocal = vi.fn()
+const jiraProjectUsersLocal = vi.fn()
+const jiraCreateIssueLocal = vi.fn()
 const jiraReadStatusLocal = vi.fn()
 const jiraLookupIssueSummaryLocal = vi.fn()
 const jiraCancelIssueSummaryLocal = vi.fn()
@@ -26,7 +24,11 @@ const runtimeSubscribe = vi.fn()
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   jiraSearchIssuesLocal.mockReset()
+  jiraStatusLocal.mockReset()
   jiraListAssignableUsersLocal.mockReset()
+  jiraSearchUsersLocal.mockReset()
+  jiraProjectUsersLocal.mockReset()
+  jiraCreateIssueLocal.mockReset()
   jiraReadStatusLocal.mockReset()
   jiraLookupIssueSummaryLocal.mockReset()
   jiraCancelIssueSummaryLocal.mockReset()
@@ -35,11 +37,15 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     api: {
       jira: {
+        status: jiraStatusLocal,
         readStatus: jiraReadStatusLocal,
         lookupIssueSummary: jiraLookupIssueSummaryLocal,
         cancelIssueSummary: jiraCancelIssueSummaryLocal,
         searchIssues: jiraSearchIssuesLocal,
-        listAssignableUsers: jiraListAssignableUsersLocal
+        listAssignableUsers: jiraListAssignableUsersLocal,
+        searchUsers: jiraSearchUsersLocal,
+        listAssignableUsersForProject: jiraProjectUsersLocal,
+        createIssue: jiraCreateIssueLocal
       },
       runtimeEnvironments: {
         call: runtimeCall,
@@ -50,176 +56,52 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  clearJiraImageCache()
   vi.unstubAllGlobals()
 })
-
 describe('runtime Jira client search bounds', () => {
-  it('routes isolated status and summary reads through local and paired-runtime owners', async () => {
-    const localContext = {
-      kind: 'task-source' as const,
-      provider: 'jira' as const,
-      projectId: 'project-1',
-      hostId: 'local' as const
-    }
-    const runtimeContext = {
-      ...localContext,
-      hostId: 'runtime:env-1' as const
-    }
-    jiraReadStatusLocal.mockResolvedValue({ connected: true, viewer: null })
-    jiraLookupIssueSummaryLocal.mockResolvedValue({ key: 'ORCA-1' })
+  it('keeps explicit Jira status and search on their owner with the selected site and query bounds', async () => {
     runtimeCall.mockImplementation(async (args: { method: string }) => {
       if (args.method === 'status.get') {
         return createCompatibleRuntimeStatusResponse()
       }
       return {
-        id: 'rpc-1',
+        id: 'rpc-result',
         ok: true,
         result:
-          args.method === 'jira.readStatus' ? { connected: true, viewer: null } : { key: 'ORCA-1' },
-        _meta: { runtimeId: 'remote-runtime' }
+          args.method === 'jira.status'
+            ? { connected: true, viewer: null, selectedSiteId: 'all' }
+            : [],
+        _meta: { runtimeId: 'source-owner-runtime' }
       }
     })
-
-    await expect(jiraReadStatus(localContext)).resolves.toMatchObject({ connected: true })
-    await expect(jiraLookupIssueSummary(localContext, 'ORCA-1', 'site-1')).resolves.toMatchObject({
-      key: 'ORCA-1'
+    const target = { kind: 'environment', environmentId: 'source-owner' } as const
+    await expect(jiraStatusForTarget(target)).resolves.toMatchObject({
+      connected: true,
+      selectedSiteId: 'all'
     })
-    await expect(jiraReadStatus(runtimeContext)).resolves.toMatchObject({ connected: true })
-    await expect(jiraLookupIssueSummary(runtimeContext, 'ORCA-1', 'site-1')).resolves.toMatchObject(
-      { key: 'ORCA-1' }
-    )
-
-    expect(jiraReadStatusLocal).toHaveBeenCalledTimes(1)
-    expect(jiraLookupIssueSummaryLocal).toHaveBeenCalledWith({
-      key: 'ORCA-1',
-      siteId: 'site-1',
-      requestId: expect.any(String)
+    await jiraSearchIssuesForTarget(target, 'text ~ "login*"', 12, 'all')
+    await jiraSearchIssuesForTarget(target, 'secret-token-value'.repeat(1024), 12)
+    expect(runtimeCall).toHaveBeenCalledTimes(3)
+    expect(runtimeCall).toHaveBeenLastCalledWith({
+      selector: 'source-owner',
+      method: 'jira.searchIssues',
+      params: { jql: 'text ~ "login*"', limit: 12, siteId: 'all' },
+      timeoutMs: 30_000
     })
-    expect(runtimeCall).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'jira.readStatus', selector: 'env-1' })
-    )
-    expect(runtimeCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'jira.lookupIssueSummary',
-        params: { key: 'ORCA-1', siteId: 'site-1' },
-        selector: 'env-1'
-      })
-    )
-  })
-
-  it('cancels a superseded local Jira summary read', async () => {
-    const context = {
-      kind: 'task-source' as const,
-      provider: 'jira' as const,
-      projectId: 'project-1',
-      hostId: 'local' as const
-    }
-    let rejectLookup: ((error: Error) => void) | undefined
-    jiraLookupIssueSummaryLocal.mockReturnValue(
-      new Promise((_resolve, reject) => {
-        rejectLookup = reject
-      })
-    )
-    jiraCancelIssueSummaryLocal.mockImplementation(async () => {
-      rejectLookup?.(new Error('Jira request aborted'))
-    })
-    const controller = new AbortController()
-
-    const lookup = jiraLookupIssueSummary(context, 'ORCA-1', 'site-1', controller.signal)
-    controller.abort()
-
-    await expect(lookup).rejects.toThrow('aborted')
-    expect(jiraCancelIssueSummaryLocal).toHaveBeenCalledWith({
-      requestId: expect.any(String)
-    })
-  })
-
-  it('keeps direct SSH Jira reads local', async () => {
-    const sshContext = {
-      kind: 'task-source' as const,
-      provider: 'jira' as const,
-      projectId: 'project-1',
-      hostId: 'ssh:server-1' as const
-    }
-    jiraReadStatusLocal.mockResolvedValue({ connected: false, viewer: null })
-
-    await expect(jiraReadStatus(sshContext)).resolves.toMatchObject({ connected: false })
-
-    expect(jiraReadStatusLocal).toHaveBeenCalled()
-    expect(runtimeCall).not.toHaveBeenCalled()
-  })
-
-  it('rejects oversized local Jira search before IPC', async () => {
-    await expect(jiraSearchIssues(null, 'secret-token-value'.repeat(1024), 30)).resolves.toEqual([])
-
+    expect(jiraStatusLocal).not.toHaveBeenCalled()
     expect(jiraSearchIssuesLocal).not.toHaveBeenCalled()
-    expect(runtimeCall).not.toHaveBeenCalled()
   })
 
-  it('rejects oversized runtime Jira assignee search before RPC', async () => {
-    await expect(
-      jiraListAssignableUsers(
-        { activeRuntimeEnvironmentId: 'env-1' },
-        'ORCA-1',
-        'x'.repeat(9 * 1024),
-        'site-1'
-      )
-    ).resolves.toEqual([])
-
-    expect(jiraListAssignableUsersLocal).not.toHaveBeenCalled()
-    expect(runtimeCall).not.toHaveBeenCalled()
-  })
-
-  it('streams image-bearing issue and comment payloads from remote runtimes', async () => {
-    runtimeSubscribe.mockImplementation(
-      async (args: RuntimeSubscribeArgs, callbacks: RuntimeSubscribeCallbacks) => {
-        const payload =
-          args.method === 'jira.getIssueStream'
-            ? { key: 'ORCA-1', description: '![shot](data:image/png;base64,abc)' }
-            : [{ id: 'comment-1', body: '![shot](data:image/png;base64,abc)' }]
-        callbacks.onResponse({
-          id: 'rpc-1',
-          ok: true,
-          result: { type: 'chunk', content: JSON.stringify(payload) },
-          _meta: { runtimeId: 'runtime-1' }
-        })
-        callbacks.onResponse({
-          id: 'rpc-1',
-          ok: true,
-          result: { type: 'end' },
-          _meta: { runtimeId: 'runtime-1' }
-        })
-        return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
-      }
-    )
-
-    await expect(
-      jiraGetIssue({ activeRuntimeEnvironmentId: 'env-1' }, 'ORCA-1', 'site-1')
-    ).resolves.toMatchObject({ key: 'ORCA-1' })
-    await expect(
-      jiraIssueComments({ activeRuntimeEnvironmentId: 'env-1' }, 'ORCA-1', 'site-1')
-    ).resolves.toMatchObject([{ id: 'comment-1' }])
-
-    expect(runtimeSubscribe).toHaveBeenNthCalledWith(
-      1,
-      {
-        selector: 'env-1',
-        method: 'jira.getIssueStream',
-        params: { key: 'ORCA-1', siteId: 'site-1' },
-        timeoutMs: 60_000
-      },
-      expect.anything()
-    )
-    expect(runtimeSubscribe).toHaveBeenNthCalledWith(
-      2,
-      {
-        selector: 'env-1',
-        method: 'jira.issueCommentsStream',
-        params: { key: 'ORCA-1', siteId: 'site-1' },
-        timeoutMs: 60_000
-      },
-      expect.anything()
-    )
-    expect(runtimeCall).not.toHaveBeenCalled()
+  it('uses project-scoped search locally and rejects oversized queries before IPC', async () => {
+    jiraProjectUsersLocal.mockResolvedValue([])
+    await jiraListAssignableUsersForProject({ kind: 'local' }, '100', 'Ada', 'site-1')
+    expect(jiraProjectUsersLocal).toHaveBeenCalledWith({
+      projectIdOrKey: '100',
+      query: 'Ada',
+      siteId: 'site-1'
+    })
+    await jiraListAssignableUsersForProject({ kind: 'local' }, '100', 'x'.repeat(20_000), 'site-1')
+    expect(jiraProjectUsersLocal).toHaveBeenCalledTimes(1)
   })
 })

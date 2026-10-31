@@ -1,7 +1,7 @@
 import { summarizeProviderChecks } from './provider-check-summary'
-import type { CheckStatus, PRCheckDetail } from './types'
+import type { PRCheckDetail } from './github/check-types'
+import type { CheckStatus } from './github/pull-request-types'
 
-/** Derives the review status from the normalized check contract. */
 export function derivePRCheckStatus(checks: readonly PRCheckDetail[]): CheckStatus {
   const { state } = summarizeProviderChecks(checks)
   // Why: CheckStatus has no 'none'; an empty rollup carries the same "nothing to report" meaning.
@@ -40,7 +40,6 @@ function normalizeRollupCheck(raw: RawCheckRollup, index: number): PRCheckDetail
   }
 }
 
-/** Derives status from provider rollups while retaining status/conclusion semantics. */
 export function derivePRCheckStatusFromRollup(rollup: unknown): CheckStatus {
   if (!Array.isArray(rollup) || rollup.length === 0) {
     return 'neutral'

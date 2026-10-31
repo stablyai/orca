@@ -9,33 +9,11 @@ export type OpenedMobileSessionTabActivationState = {
   activated: boolean
   activationSeq: number
   latestActivationSeq: number
-  sourceTerminalHandle: string
+  sourceTerminalHandle: string | null
   activeTerminalHandle: string | null
+  sourceSessionTabId?: string | null
+  activeSessionTabId?: string | null
   activeTabType: string | null
-}
-
-export type ActivateOpenedMobileSessionTabOptions<T extends OpenedMobileSessionTabCandidate> = {
-  relativePath: string
-  fetchSessionTabs: () => Promise<void>
-  getTabs: () => readonly T[]
-  getActiveTabId: () => string | null
-  getActivationState: () => OpenedMobileSessionTabActivationState
-  switchSessionTab: (tab: T) => boolean
-}
-
-export type RefreshOpenedMobileSessionTabsOptions = {
-  getCurrentRefresh: () => Promise<void> | null
-  refreshSessionTabs: () => Promise<void>
-}
-
-export async function refreshOpenedMobileSessionTabs(
-  options: RefreshOpenedMobileSessionTabsOptions
-): Promise<void> {
-  const currentRefresh = options.getCurrentRefresh()
-  if (currentRefresh) {
-    await currentRefresh
-  }
-  await options.refreshSessionTabs()
 }
 
 export function findOpenedMobileSessionTab<T extends OpenedMobileSessionTabCandidate>(
@@ -71,11 +49,7 @@ export type ActivateOpenedSourceControlDiffTabOptions<T extends OpenedMobileSess
   switchSessionTab: (tab: T) => void
 }
 
-// Activation for a diff tab opened by tapping a changed file in the docked
-// source-control panel. Unlike the terminal path there is no "source terminal"
-// to guard against; instead we cancel if the user moved to a different tab
-// after the tap (no focus steal) and treat the diff already being active as
-// success. Returns true once activation is settled so retries can stop.
+// Diff opens have no source terminal; settle already-active tabs and stop activation if the user changed tabs after the tap.
 export async function activateOpenedSourceControlDiffTab<T extends OpenedMobileSessionTabCandidate>(
   options: ActivateOpenedSourceControlDiffTabOptions<T>
 ): Promise<boolean> {
@@ -97,13 +71,11 @@ export async function activateOpenedSourceControlDiffTab<T extends OpenedMobileS
     return false
   }
   const activeTabId = options.getActiveTabId()
-  // The post-open snapshot may already show the opened diff as active; that is
-  // success, not a focus steal, so settle without re-activating.
+  // Already-active diff tabs settle without another activation.
   if (activeTabId === opened.id) {
     return true
   }
-  // No focus steal: if the user moved to a different tab after the tap, leave
-  // them there instead of yanking focus back to the diff.
+  // A newer user selection must win over this asynchronous open.
   if (activeTabId !== options.activeTabIdAtTap) {
     return false
   }
@@ -114,30 +86,13 @@ export async function activateOpenedSourceControlDiffTab<T extends OpenedMobileS
 export function shouldActivateOpenedMobileSessionTab(
   state: OpenedMobileSessionTabActivationState
 ): boolean {
-  return (
-    !state.activated &&
-    state.activationSeq === state.latestActivationSeq &&
-    state.activeTabType === 'terminal' &&
-    state.activeTerminalHandle === state.sourceTerminalHandle
-  )
-}
-
-export async function activateOpenedMobileSessionTab<T extends OpenedMobileSessionTabCandidate>(
-  options: ActivateOpenedMobileSessionTabOptions<T>
-): Promise<boolean> {
-  if (!shouldActivateOpenedMobileSessionTab(options.getActivationState())) {
-    return false
-  }
-  await options.fetchSessionTabs()
-  if (!shouldActivateOpenedMobileSessionTab(options.getActivationState())) {
-    return false
-  }
-  const opened = findOpenedMobileSessionTab(options.getTabs(), options.relativePath)
-  if (!opened) {
-    return false
-  }
-  if (options.getActiveTabId() === opened.id) {
-    return true
-  }
-  return options.switchSessionTab(opened)
+  const sourceStillActive =
+    state.activeTabType === 'agent-session'
+      ? state.sourceSessionTabId !== null &&
+        state.sourceSessionTabId !== undefined &&
+        state.activeSessionTabId === state.sourceSessionTabId
+      : state.activeTabType === 'terminal' &&
+        state.sourceTerminalHandle !== null &&
+        state.activeTerminalHandle === state.sourceTerminalHandle
+  return !state.activated && state.activationSeq === state.latestActivationSeq && sourceStillActive
 }

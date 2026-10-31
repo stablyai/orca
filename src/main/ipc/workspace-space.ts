@@ -1,13 +1,19 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type {
+  WorkspaceSpaceAnalysis,
   WorkspaceSpaceAnalyzeResult,
-  WorkspaceSpaceScanProgress
+  WorkspaceSpaceScanProgress,
+  WorkspaceSpaceWorktreeMeasurement
 } from '../../shared/workspace-space-types'
 import {
   analyzeWorkspaceSpace,
   WorkspaceSpaceScanCancelledError
 } from '../workspace-space-analysis'
+import {
+  persistWorkspaceSpaceAnalysisSnapshot,
+  readWorkspaceSpaceAnalysisSnapshot
+} from '../workspace-space-analysis-snapshot'
 
 const PROGRESS_EMIT_INTERVAL_MS = 100
 
@@ -19,9 +25,11 @@ type InFlightWorkspaceSpaceScan = {
 }
 
 export function registerWorkspaceSpaceHandlers(store: Store): void {
+  const snapshotDirectory = store.getProfileStorageDirectory()
   let inFlightScan: InFlightWorkspaceSpaceScan | null = null
   ipcMain.removeHandler('workspaceSpace:cancel')
   ipcMain.removeHandler('workspaceSpace:analyze')
+  ipcMain.removeHandler('workspaceSpace:getCachedAnalysis')
   ipcMain.handle('workspaceSpace:analyze', async (event): Promise<WorkspaceSpaceAnalyzeResult> => {
     if (!inFlightScan) {
       const controller = new AbortController()
@@ -39,9 +47,12 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
         currentWorktreeDisplayName: null
       }
       let lastProgressSentAt = 0
+      let pendingMeasurements: WorkspaceSpaceWorktreeMeasurement[] = []
       const sendProgress = (progress: WorkspaceSpaceScanProgress): void => {
-        // Why: large fleets can report one progress event per worktree; keep
-        // the UI responsive without repainting the full Space page for each row.
+        if (progress.completedMeasurements?.length) {
+          pendingMeasurements.push(...progress.completedMeasurements)
+        }
+        // Throttle per-worktree progress to avoid repainting the full Space page for every row.
         const now = Date.now()
         const isFirstProgress = lastProgressSentAt === 0
         const isTerminalProgress =
@@ -57,11 +68,15 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
         }
         lastProgressSentAt = now
         if (!event.sender.isDestroyed()) {
-          event.sender.send('workspaceSpace:progress', progress)
+          const completedMeasurements = pendingMeasurements
+          pendingMeasurements = []
+          event.sender.send('workspaceSpace:progress', {
+            ...progress,
+            ...(completedMeasurements.length > 0 ? { completedMeasurements } : {})
+          })
         }
       }
-      // Why: large worktree fleets require real disk traversal; duplicate
-      // requests should share that IO instead of starting competing scans.
+      // Concurrent fleet requests share expensive disk traversal.
       const scan: InFlightWorkspaceSpaceScan = {
         scanId,
         controller,
@@ -78,7 +93,11 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
           sendProgress(progress)
         }
       })
-        .then((analysis): WorkspaceSpaceAnalyzeResult => ({ ok: true, analysis }))
+        .then((analysis): WorkspaceSpaceAnalyzeResult => {
+          // Persist cold-analysis results without delaying or failing the reply.
+          void persistWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, analysis)
+          return { ok: true, analysis }
+        })
         .catch((error: unknown): WorkspaceSpaceAnalyzeResult => {
           if (error instanceof WorkspaceSpaceScanCancelledError) {
             return { ok: false, cancelled: true }
@@ -91,6 +110,10 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
     }
     return inFlightScan.promise
   })
+
+  ipcMain.handle('workspaceSpace:getCachedAnalysis', (): Promise<WorkspaceSpaceAnalysis | null> =>
+    readWorkspaceSpaceAnalysisSnapshot(snapshotDirectory)
+  )
 
   ipcMain.handle('workspaceSpace:cancel', async (): Promise<boolean> => {
     if (!inFlightScan || inFlightScan.controller.signal.aborted) {

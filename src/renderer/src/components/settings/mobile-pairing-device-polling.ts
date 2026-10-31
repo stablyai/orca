@@ -71,8 +71,7 @@ export function useMobilePairingDevicePolling({
           return
         }
         pollInFlight = true
-        // Why: wait for each IPC call to settle before scheduling the next
-        // poll, avoiding overlapping device-list requests on a slow host.
+        // Schedule after IPC settles to avoid overlapping polls on slow hosts.
         void loadDevices().finally(() => {
           pollInFlight = false
           scheduleNextPoll()

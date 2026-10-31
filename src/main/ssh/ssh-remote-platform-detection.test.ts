@@ -1,13 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from './ssh-connection'
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SshConnection } from './connection/ssh-connection'
+import { SSH_EXEC_TIMEOUT_CODE } from './remote-exec/remote-exec-command'
 
 const execCommandMock = vi.hoisted(() => vi.fn())
 
-vi.mock('./ssh-relay-deploy-helpers', () => ({
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: execCommandMock
 }))
 
-const { detectRemoteHostPlatform } = await import('./ssh-remote-platform-detection')
+const { detectRemoteHostPlatform, remoteHostPlatformFromUnameProbe } =
+  await import('./ssh-remote-platform-detection')
 
 const conn = {} as SshConnection
 
@@ -16,9 +20,19 @@ function decodePowerShellCommand(command: string): string {
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : ''
 }
 
+/** OpenSSH refuses session channels past MaxSessions with reason 2 + "open failed". */
+function maxSessionsError(): Error {
+  return Object.assign(new Error('(SSH) Channel open failure: open failed'), { reason: 2 })
+}
+
 describe('detectRemoteHostPlatform', () => {
   beforeEach(() => {
     execCommandMock.mockReset()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('detects POSIX hosts from uname output', async () => {
@@ -107,5 +121,159 @@ describe('detectRemoteHostPlatform', () => {
     )
     splitSpy.mockRestore()
     expect(usedWhitespaceFieldSplit).toBe(false)
+  })
+})
+
+describe('detectRemoteHostPlatform failure reporting', () => {
+  beforeEach(() => {
+    execCommandMock.mockReset()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('does not misreport a refused exec channel as an unsupported platform', async () => {
+    execCommandMock.mockRejectedValue(maxSessionsError())
+
+    // The host is linux-x64 and fully supported; the probe never ran.
+    await expect(detectRemoteHostPlatform(conn)).rejects.toThrow(/open failed/iu)
+    await expect(detectRemoteHostPlatform(conn)).rejects.toMatchObject({
+      cause: expect.objectContaining({ reason: 2 })
+    })
+    // Both probes run: the second gets a fresh session-channel retry budget.
+    expect(execCommandMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('still detects Windows when the uname probe hits the session limit', async () => {
+    execCommandMock
+      .mockRejectedValueOnce(maxSessionsError())
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows AMD64\r\n')
+
+    await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
+      relayPlatform: 'win32-x64'
+    })
+  })
+
+  it('skips the second probe when the first channel never confirmed close', async () => {
+    const error = Object.assign(new Error('boom'), { sshChannelCloseConfirmed: false })
+    execCommandMock.mockRejectedValueOnce(error)
+
+    await expect(detectRemoteHostPlatform(conn)).rejects.toBe(error)
+    expect(execCommandMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips the second probe when the first was cancelled', async () => {
+    const error = Object.assign(new Error('SSH operation was cancelled'), { name: 'AbortError' })
+    execCommandMock.mockRejectedValueOnce(error)
+
+    await expect(detectRemoteHostPlatform(conn)).rejects.toBe(error)
+    expect(execCommandMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('prefers a refused channel over the other probe non-zero exit', async () => {
+    execCommandMock
+      .mockRejectedValueOnce(new Error('Command "sh -c ..." failed (exit 127): sh: not found'))
+      .mockRejectedValueOnce(maxSessionsError())
+
+    await expect(detectRemoteHostPlatform(conn)).rejects.toThrow(/open failed/u)
+    await expect(detectRemoteHostPlatform(conn)).rejects.not.toThrow(/exit 127/u)
+  })
+
+  it('prefers unrecognized uname output over a failed PowerShell probe', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux')
+      .mockRejectedValueOnce(new Error('powershell.exe: not found'))
+
+    await expect(detectRemoteHostPlatform(conn)).rejects.toThrow(/__ORCA_REMOTE_PLATFORM__ Linux/u)
+  })
+
+  it('reports the raw probe output when a POSIX host yields no marker line', async () => {
+    // Restricted shell / ForceCommand: the probe command is swallowed, banner only.
+    execCommandMock.mockResolvedValue('Welcome to pc-server05\n')
+
+    await expect(detectRemoteHostPlatform(conn)).rejects.toThrow(/pc-server05/u)
+  })
+
+  it('truncates a long banner in the thrown message but logs a longer tail', async () => {
+    execCommandMock.mockResolvedValue(`${'banner line\n'.repeat(500)}goodbye\n`)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const error = await detectRemoteHostPlatform(conn).catch((err: Error) => err)
+
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).not.toContain('\n')
+    expect((error as Error).message.length).toBeLessThanOrEqual(300)
+    expect(String(warnSpy.mock.calls[0]?.[0]).length).toBeGreaterThan(600)
+  })
+
+  it('returns null when a parsed uname is genuinely unsupported', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ FreeBSD x86_64\n')
+      .mockRejectedValueOnce(new Error('powershell.exe: not found'))
+
+    await expect(detectRemoteHostPlatform(conn)).resolves.toBeNull()
+  })
+
+  it('does not call an unmappable uname unsupported when PowerShell was refused', async () => {
+    // Cygwin sh on a win32-x64 host: only PowerShell can settle it, and it never ran.
+    execCommandMock
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
+      .mockRejectedValueOnce(maxSessionsError())
+
+    const error = await detectRemoteHostPlatform(conn).catch((err: unknown) => err)
+
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toMatch(/open failed/iu)
+    expect((error as Error).message).not.toMatch(/unsupported/iu)
+    expect((error as Error).cause).toMatchObject({ reason: 2 })
+  })
+
+  it('does not call an unmappable uname unsupported when the PowerShell probe timed out', async () => {
+    // Prefer typed exec timeout evidence; matching wording could misclassify unrelated errors.
+    execCommandMock
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command "pwsh" timed out after 30s'), {
+          code: SSH_EXEC_TIMEOUT_CODE
+        })
+      )
+
+    const error = await detectRemoteHostPlatform(conn).catch((err: unknown) => err)
+
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).not.toMatch(/unsupported/iu)
+    expect((error as Error).cause).toMatchObject({ code: SSH_EXEC_TIMEOUT_CODE })
+  })
+
+  it('does not read a look-alike timeout message as a timed-out channel', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ FreeBSD x86_64\n')
+      .mockRejectedValueOnce(new Error('the agent it launched timed out after 30s'))
+
+    await expect(detectRemoteHostPlatform(conn)).resolves.toBeNull()
+  })
+
+  it('falls through to PowerShell for a Cygwin uname it cannot map', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows AMD64\r\n')
+
+    await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
+      relayPlatform: 'win32-x64'
+    })
+  })
+})
+
+describe('remoteHostPlatformFromUnameProbe', () => {
+  it('reads only marker-backed platform lines, past other output folded into the same exec', () => {
+    expect(
+      remoteHostPlatformFromUnameProbe(
+        '5.15.167.4-microsoft-standard-WSL2\n/home/u\n\n__ORCA_REMOTE_PLATFORM__ Linux aarch64\n'
+      )
+    ).toMatchObject({ os: 'linux', arch: 'arm64' })
+    expect(remoteHostPlatformFromUnameProbe('Linux x86_64\n')).toBeNull()
+    expect(remoteHostPlatformFromUnameProbe('\n__ORCA_REMOTE_PLATFORM__ Linux sparc\n')).toBeNull()
   })
 })

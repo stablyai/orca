@@ -1,17 +1,15 @@
-// Why: rename() is atomic for readers but not durable. Without fsync on the file and its directory,
-// a power loss after a successful rename can leave the old contents, or an empty inode — the same
-// empty-file symptom as issue #1158, from a different cause. The .bak ring recovers it at up to an
-// hour's loss; fsync stops it from happening.
+// Atomic rename is not durable; fsync the file and directory to survive power loss.
 
-import { closeSync, fsyncSync, openSync, renameSync, writeFileSync } from 'node:fs'
-import { open, readdir, rename, rm, stat } from 'node:fs/promises'
+import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
+import { open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
+import {
+  publishFileWithoutOverwrite,
+  renameFileWithWindowsRetry,
+  renameFileWithWindowsRetryAsync
+} from './codex-accounts/fs-utils'
 
-/**
- * fsync a directory so a rename within it is durable. Best-effort by design: Windows cannot open a
- * directory for fsync, and some filesystems reject it. The file fsync above it is the load-bearing
- * part; this closes the "rename recorded but not persisted" window where the platform allows it.
- */
+/** Persist directory changes where supported; Windows and some filesystems reject directory fsync. */
 async function syncDirectory(directory: string): Promise<void> {
   let handle: Awaited<ReturnType<typeof open>> | null = null
   try {
@@ -24,68 +22,85 @@ async function syncDirectory(directory: string): Promise<void> {
   }
 }
 
-function syncDirectorySync(directory: string): void {
+/** Best-effort directory fsync after synchronous publication. */
+export function syncDirectoryDurablySync(directory: string): void {
   let fd: number | null = null
   try {
     fd = openSync(directory, 'r')
     fsyncSync(fd)
   } catch {
-    // Same platform caveats as syncDirectory.
+    // Directory fsync may be unsupported.
   } finally {
     if (fd !== null) {
       try {
         closeSync(fd)
-      } catch {
-        // Nothing actionable; the fsync already happened or the open failed.
-      }
+      } catch {}
     }
   }
 }
 
-/**
- * Rename and then fsync the containing directory. For callers that already fsynced the temp file
- * themselves and need the rename made durable.
- */
+/** Rename an already-fsynced file and make the containing directory durable. */
+export function renameDurableSync(tmpPath: string, finalPath: string): void {
+  renameFileWithWindowsRetry(tmpPath, finalPath)
+  syncDirectoryDurablySync(dirname(finalPath))
+}
+
+/** Publish an already-fsynced file without replacing a concurrently created destination. */
+export function publishFileDurableSync(tmpPath: string, finalPath: string): boolean {
+  if (!publishFileWithoutOverwrite(tmpPath, finalPath)) {
+    return false
+  }
+  syncDirectoryDurablySync(dirname(finalPath))
+  rmSync(tmpPath)
+  return true
+}
+
+/** Callers must fsync the temp file before publishing it. */
 export async function renameDurable(tmpPath: string, finalPath: string): Promise<void> {
-  await rename(tmpPath, finalPath)
+  await renameFileWithWindowsRetryAsync(tmpPath, finalPath)
   await syncDirectory(dirname(finalPath))
 }
 
-/** Write `payload` to `tmpPath`, fsync it, then rename onto `finalPath` and fsync the directory. */
+/** Make content durable without publishing, allowing backup rotation before replacement. */
+export async function writeTempFileDurable(
+  tmpPath: string,
+  payload: string | Uint8Array,
+  mode?: number
+): Promise<void> {
+  const handle = await open(tmpPath, 'w', mode)
+  try {
+    await handle.writeFile(payload, 'utf-8')
+    await handle.sync()
+  } finally {
+    await handle.close()
+  }
+}
+
 export async function writeFileDurable(
   tmpPath: string,
   finalPath: string,
-  payload: string
+  payload: string | Uint8Array,
+  mode?: number
 ): Promise<void> {
-  await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true)
+  await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true, mode)
 }
 
-/**
- * `writeFileDurable` with a commit veto: `isCurrent` is consulted after the fsync and before the
- * rename so a writer that was superseded mid-write doesn't publish a stale snapshot. Returns whether
- * the rename happened; the temp file is removed on every path that doesn't commit, so a multi-MB
- * payload can't orphan itself.
- */
+/** Veto superseded writes before rename and remove their temp files on every uncommitted path. */
 export async function writeFileDurableIfCurrent(
   tmpPath: string,
   finalPath: string,
-  payload: string,
-  isCurrent: () => boolean
+  payload: string | Uint8Array,
+  isCurrent: () => boolean,
+  /** Creation mode for the new temp file, e.g. 0o600 for state other users must not read. */
+  mode?: number
 ): Promise<boolean> {
   let renamed = false
   try {
-    const handle = await open(tmpPath, 'w')
-    try {
-      await handle.writeFile(payload, 'utf-8')
-      // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
-      await handle.sync()
-    } finally {
-      await handle.close()
-    }
-    if (!isCurrent()) {
+    // Fsync before publication so power loss cannot expose an empty file.
+    await writeTempFileDurable(tmpPath, payload, mode)
+    if (!(await renameFileWithWindowsRetryAsync(tmpPath, finalPath, isCurrent))) {
       return false
     }
-    await rename(tmpPath, finalPath)
     renamed = true
     await syncDirectory(dirname(finalPath))
     return true
@@ -96,30 +111,35 @@ export async function writeFileDurableIfCurrent(
   }
 }
 
-/** Temp path for a durable write. Shared shape so `removeStaleDurableWriteTempFiles` can reclaim orphans. */
-export function durableWriteTempPath(finalPath: string): string {
-  return `${finalPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+/** Keep this naming scheme in sync with stale-temp cleanup. */
+export function durableWriteTempPath(finalPath: string, owner?: string): string {
+  const ownerSuffix = owner === undefined ? '' : `.owner-${owner}`
+  return `${finalPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}${ownerSuffix}.tmp`
 }
 
-/**
- * Sweep temp files orphaned by a death between write and rename — for multi-MB payloads they would
- * otherwise accumulate forever. Callers can require a minimum age to spare another live instance's
- * write. This process's own temps are always skipped because deleting one would fail its rename.
- */
+/** Reclaim crashed writers’ temps; age guards protect other instances, and same-PID files need owner exit. */
 export async function removeStaleDurableWriteTempFiles(
   finalPath: string,
-  options: { minimumAgeMs?: number } = {}
+  options: { minimumAgeMs?: number; retiredOwner?: string } = {}
 ): Promise<void> {
   const directory = dirname(finalPath)
   const prefix = `${basename(finalPath)}.`
   const ownPrefix = `${prefix}${process.pid}.`
+  const retiredOwnerSuffix =
+    options.retiredOwner === undefined ? null : `.owner-${options.retiredOwner}.tmp`
   try {
     const names = await readdir(directory)
     await Promise.all(
       names
-        .filter(
-          (name) => name.startsWith(prefix) && name.endsWith('.tmp') && !name.startsWith(ownPrefix)
-        )
+        .filter((name) => {
+          if (!name.startsWith(prefix) || !name.endsWith('.tmp')) {
+            return false
+          }
+          // The caller must await owner exit before reclaiming its current-process files.
+          return retiredOwnerSuffix === null
+            ? !name.startsWith(ownPrefix)
+            : name.startsWith(ownPrefix) && name.endsWith(retiredOwnerSuffix)
+        })
         .map(async (name) => {
           const path = join(directory, name)
           if (options.minimumAgeMs) {
@@ -131,20 +151,31 @@ export async function removeStaleDurableWriteTempFiles(
           await rm(path, { force: true }).catch(() => {})
         })
     )
-  } catch {
-    // Directory missing or unreadable — nothing to sweep.
-  }
+  } catch {}
 }
 
 /** Synchronous counterpart for quit and crash paths that cannot await. */
-export function writeFileDurableSync(tmpPath: string, finalPath: string, payload: string): void {
-  writeFileSync(tmpPath, payload, 'utf-8')
-  const fd = openSync(tmpPath, 'r+')
+export function writeFileDurableSync(
+  tmpPath: string,
+  finalPath: string,
+  payload: string | Uint8Array,
+  /** Creation mode for a new file, e.g. 0o600 for state other users must not read. */
+  mode?: number
+): void {
+  let renamed = false
   try {
-    fsyncSync(fd)
+    writeFileSync(tmpPath, payload, mode === undefined ? undefined : { mode })
+    const fd = openSync(tmpPath, 'r+')
+    try {
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    renameDurableSync(tmpPath, finalPath)
+    renamed = true
   } finally {
-    closeSync(fd)
+    if (!renamed) {
+      rmSync(tmpPath, { force: true })
+    }
   }
-  renameSync(tmpPath, finalPath)
-  syncDirectorySync(dirname(finalPath))
 }

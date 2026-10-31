@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { parsePairingCode } from './pairing'
 import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from './ssh-types'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { ephemeralVmFailure, type EphemeralVmFailure } from './ephemeral-vm-failure-copy'
 
 const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -103,16 +104,37 @@ export const EphemeralVmRecipeConnectionResultSchema = z
   })
   .strict()
 
+export const EphemeralVmRecipeProvisionedRootLegacyResultSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    checkoutMode: z.literal('provisioned-root'),
+    pairingCode: z.string().min(1),
+    projectRoot: z.string().min(1),
+    userData: z.record(z.string(), JsonValueSchema).optional()
+  })
+  .strict()
+
+export const EphemeralVmRecipeProvisionedRootConnectionResultSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    checkoutMode: z.literal('provisioned-root'),
+    connection: EphemeralVmRecipeConnectionSchema,
+    userData: z.record(z.string(), JsonValueSchema).optional()
+  })
+  .strict()
+
 export const EphemeralVmRecipeResultSchema = z.union([
   EphemeralVmRecipeLegacyResultSchema,
-  EphemeralVmRecipeConnectionResultSchema
+  EphemeralVmRecipeConnectionResultSchema,
+  EphemeralVmRecipeProvisionedRootLegacyResultSchema,
+  EphemeralVmRecipeProvisionedRootConnectionResultSchema
 ])
 
 export type EphemeralVmRecipeResult = z.infer<typeof EphemeralVmRecipeResultSchema>
 
 export type EphemeralVmRecipeResultParseResult =
   | { ok: true; result: EphemeralVmRecipeResult }
-  | { ok: false; error: string }
+  | ({ ok: false } & EphemeralVmFailure)
 
 export type EphemeralVmRecipeDoctorCheckStatus = 'pass' | 'warn' | 'fail'
 
@@ -133,14 +155,14 @@ export type EphemeralVmRecipeDoctorResult = {
 export function parseEphemeralVmRecipeResult(stdout: string): EphemeralVmRecipeResultParseResult {
   const trimmed = stdout.trim()
   if (!trimmed) {
-    return { ok: false, error: 'Recipe produced no JSON result.' }
+    return { ok: false, ...ephemeralVmFailure('recipeResultMissing') }
   }
   let parsed: unknown
   try {
     assertJsonTextStructureWithinLimits(trimmed, EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS)
     parsed = JSON.parse(trimmed)
   } catch {
-    return { ok: false, error: 'Recipe stdout must be one JSON object.' }
+    return { ok: false, ...ephemeralVmFailure('recipeResultNotJsonObject') }
   }
   const result = EphemeralVmRecipeResultSchema.safeParse(parsed)
   if (!result.success) {
@@ -148,10 +170,10 @@ export function parseEphemeralVmRecipeResult(stdout: string): EphemeralVmRecipeR
   }
   const connection = getEphemeralVmRecipeResultConnection(result.data)
   if (connection.type === 'orca-server' && !parsePairingCode(connection.pairingCode)) {
-    return { ok: false, error: 'Recipe result pairingCode is not a valid Orca pairing code.' }
+    return { ok: false, ...ephemeralVmFailure('recipeResultPairingCodeInvalid') }
   }
   if (!isAbsoluteRuntimePath(connection.projectRoot)) {
-    return { ok: false, error: 'Recipe result projectRoot must be an absolute runtime path.' }
+    return { ok: false, ...ephemeralVmFailure('recipeResultProjectRootNotAbsolute') }
   }
   return { ok: true, result: result.data }
 }
@@ -171,6 +193,12 @@ export function getEphemeralVmRecipeResultConnection(
 
 export function getEphemeralVmRecipeResultProjectRoot(result: EphemeralVmRecipeResult): string {
   return getEphemeralVmRecipeResultConnection(result).projectRoot
+}
+
+export function getEphemeralVmRecipeResultCheckoutMode(
+  result: EphemeralVmRecipeResult
+): 'orca-worktree' | 'provisioned-root' {
+  return result.schemaVersion === 2 ? 'provisioned-root' : 'orca-worktree'
 }
 
 export function getEphemeralVmRecipeResultPairingCode(

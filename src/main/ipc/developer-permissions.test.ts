@@ -7,6 +7,7 @@ const {
   getMediaAccessStatusMock,
   isTrustedAccessibilityClientMock,
   getMacosFullDiskAccessStatusMock,
+  terminalHostsStatusMock,
   execFileMock,
   createSocketMock,
   socketMock,
@@ -14,7 +15,8 @@ const {
 } = vi.hoisted(() => {
   const handleMock = vi.fn()
   const socketState = {
-    sendCallback: null as (() => void) | null
+    sendCallback: null as ((error?: Error | null) => void) | null,
+    errorListener: null as ((error: Error) => void) | null
   }
   const socketMock = {
     on: vi.fn(),
@@ -30,6 +32,7 @@ const {
     getMediaAccessStatusMock: vi.fn(),
     isTrustedAccessibilityClientMock: vi.fn(),
     getMacosFullDiskAccessStatusMock: vi.fn(),
+    terminalHostsStatusMock: vi.fn(async () => 'denied'),
     execFileMock: vi.fn(),
     createSocketMock: vi.fn(() => socketMock),
     socketMock,
@@ -64,7 +67,11 @@ vi.mock('node:child_process', () => ({
 vi.mock('../macos-full-disk-access-status', () => ({
   getMacosFullDiskAccessStatus: getMacosFullDiskAccessStatusMock
 }))
+vi.mock('../daemon/daemon-full-disk-access-status', () => ({
+  getTerminalHostsFullDiskAccessStatus: terminalHostsStatusMock
+}))
 
+import type { DeveloperPermissionState } from '../../shared/developer-permissions-types'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 
 describe('registerDeveloperPermissionHandlers', () => {
@@ -91,7 +98,13 @@ describe('registerDeveloperPermissionHandlers', () => {
     })
     createSocketMock.mockClear()
     socketState.sendCallback = null
-    socketMock.on.mockClear()
+    socketState.errorListener = null
+    socketMock.on.mockReset()
+    socketMock.on.mockImplementation((event: string, listener: (error: Error) => void) => {
+      if (event === 'error') {
+        socketState.errorListener = listener
+      }
+    })
     socketMock.removeListener.mockClear()
     socketMock.bind.mockReset()
     socketMock.bind.mockImplementation((callback: () => void) => callback())
@@ -103,7 +116,7 @@ describe('registerDeveloperPermissionHandlers', () => {
         _length: number,
         _port: number,
         _address: string,
-        callback: () => void
+        callback: (error?: Error | null) => void
       ) => {
         socketState.sendCallback = callback
       }
@@ -127,6 +140,26 @@ describe('registerDeveloperPermissionHandlers', () => {
     return call[1] as (_event: unknown, args: { id: string }) => Promise<unknown>
   }
 
+  function getStatusHandler(): () => Promise<DeveloperPermissionState[]> {
+    const call = handleMock.mock.calls.find(
+      (c: unknown[]) => c[0] === 'developerPermissions:getStatus'
+    )
+    if (!call) {
+      throw new Error('developerPermissions:getStatus handler not registered')
+    }
+    return call[1] as () => Promise<DeveloperPermissionState[]>
+  }
+
+  function getOpenSettingsHandler(): (_event: unknown, args: { id: string }) => Promise<void> {
+    const call = handleMock.mock.calls.find(
+      (c: unknown[]) => c[0] === 'developerPermissions:openSettings'
+    )
+    if (!call) {
+      throw new Error('developerPermissions:openSettings handler not registered')
+    }
+    return call[1] as (_event: unknown, args: { id: string }) => Promise<void>
+  }
+
   it('returns the Full Disk Access read-probe status', async () => {
     getMacosFullDiskAccessStatusMock.mockResolvedValue('granted')
     registerDeveloperPermissionHandlers()
@@ -138,11 +171,25 @@ describe('registerDeveloperPermissionHandlers', () => {
 
     await expect(handler?.()).resolves.toContainEqual({
       id: 'full-disk-access',
-      status: 'granted'
+      status: 'granted',
+      terminalHostStatus: 'denied'
     })
   })
 
-  it('clears the local-network prompt fallback timer when UDP send settles first', async () => {
+  it.each(['win32', 'linux'] as const)('does not probe terminal hosts on %s', async (platform) => {
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+    getMacosFullDiskAccessStatusMock.mockResolvedValue('unsupported')
+    terminalHostsStatusMock.mockClear()
+    registerDeveloperPermissionHandlers()
+
+    await expect(getStatusHandler()()).resolves.toContainEqual({
+      id: 'full-disk-access',
+      status: 'unsupported'
+    })
+    expect(terminalHostsStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the local-network status unknown when UDP send settles without an error', async () => {
     registerDeveloperPermissionHandlers()
 
     const result = getRequestHandler()({}, { id: 'local-network' })
@@ -159,6 +206,37 @@ describe('registerDeveloperPermissionHandlers', () => {
     expect(vi.getTimerCount()).toBe(0)
     expect(socketMock.removeListener).toHaveBeenCalledWith('error', expect.any(Function))
     expect(socketMock.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps local-network status unknown when the prompt trigger receives a socket error', async () => {
+    registerDeveloperPermissionHandlers()
+
+    const result = getRequestHandler()({}, { id: 'local-network' })
+    socketState.errorListener?.(
+      Object.assign(new Error('send EHOSTUNREACH 224.0.0.251:5353'), {
+        code: 'EHOSTUNREACH'
+      })
+    )
+
+    await expect(result).resolves.toEqual({
+      id: 'local-network',
+      status: 'unknown',
+      openedSystemSettings: false
+    })
+    await expect(getStatusHandler()()).resolves.toContainEqual({
+      id: 'local-network',
+      status: 'unknown'
+    })
+  })
+
+  it('opens the standard macOS Local Network settings pane', async () => {
+    registerDeveloperPermissionHandlers()
+
+    await getOpenSettingsHandler()({}, { id: 'local-network' })
+
+    expect(shellOpenExternalMock).toHaveBeenCalledWith(
+      'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_LocalNetwork'
+    )
   })
 
   it('settles the automation prompt when osascript hangs', async () => {

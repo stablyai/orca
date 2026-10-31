@@ -2,8 +2,8 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 import type {
   GitHubProjectSettings,
   GitHubProjectSummary
-} from '../../../../shared/github-project-types'
-import { githubProjectIdentityKey } from '../../../../shared/github-project-identity'
+} from '../../../../shared/github/project-types'
+import { githubProjectIdentityKey } from '../../../../shared/github/project-identity'
 
 export const GITHUB_PROJECT_PICKER_QUERY_MAX_BYTES = 2 * 1024
 

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Folder, Link2, Plus, X } from 'lucide-react'
-import type { Repo } from '../../../../shared/types'
+import { Link2, Plus, X } from 'lucide-react'
+import type { Repo } from '../../../../shared/repo-types'
 import { Button } from '../ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { cn } from '@/lib/utils'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import { SearchableSetting } from './SearchableSetting'
 import {
   getWorktreeSymlinkPathFilterState,
@@ -34,8 +34,7 @@ export function WorktreeSymlinksSection({
   const [query, setQuery] = useState('')
 
   const paths = repo.symlinkPaths ?? EMPTY_WORKTREE_SYMLINK_PATHS
-  // Why: the pane may show a non-focused runtime host; only inspect the local
-  // filesystem when the switcher-selected repo is actually local.
+  // Only local selected repos may inspect this filesystem; focused host is not ownership evidence.
   const useLocalDirectorySuggestions = getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
   const directorySuggestionKey = `${repo.path}\n${repo.connectionId ?? ''}`
   const [directorySuggestions, setDirectorySuggestions] = useState<DirectorySuggestionState>(
@@ -62,8 +61,7 @@ export function WorktreeSymlinksSection({
         })
       })
       .catch(() => {
-        // Non-fatal: without entries the combobox still works as a free-text
-        // input — the user can type any path and commit it.
+        // Suggestions are optional; free-text paths remain usable after read failure.
       })
     return () => {
       cancelled = true
@@ -181,7 +179,6 @@ export function WorktreeSymlinksSection({
                 ) : null}
                 {filtered.map((entry) => {
                   const alreadyAdded = paths.includes(entry.name)
-                  const FileIcon = getFileTypeIcon(entry.name)
                   return (
                     <CommandItem
                       key={entry.name}
@@ -191,9 +188,16 @@ export function WorktreeSymlinksSection({
                       className={cn('items-center gap-2 px-3 py-2', alreadyAdded && 'opacity-50')}
                     >
                       {entry.isDirectory ? (
-                        <Folder className="size-3.5 text-muted-foreground" />
+                        <FolderIcon
+                          folderPath={entry.name}
+                          open={false}
+                          className="size-3.5 text-muted-foreground"
+                        />
                       ) : (
-                        <FileIcon className="size-3.5 text-muted-foreground" />
+                        <FileTypeIcon
+                          filePath={entry.name}
+                          className="size-3.5 text-muted-foreground"
+                        />
                       )}
                       <span className="truncate text-xs">{entry.name}</span>
                       {alreadyAdded ? (

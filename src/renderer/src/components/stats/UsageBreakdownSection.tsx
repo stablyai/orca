@@ -19,6 +19,30 @@ type UsageBreakdownSectionProps = {
   eventsOrTurns: 'events' | 'turns'
 }
 
+function sessionCountLabel(count: number): string {
+  return translate('stats.usageBreakdown.sessions', '{{count}} sessions', {
+    count,
+    defaultValue_one: '{{count}} session'
+  })
+}
+
+function activityCountLabel(count: number, unit: 'events' | 'turns'): string {
+  if (unit === 'turns') {
+    return translate('stats.usageBreakdown.turns', '{{count}} turns', {
+      count,
+      defaultValue_one: '{{count}} turn'
+    })
+  }
+  return translate('stats.usageBreakdown.events', '{{count}} events', {
+    count,
+    defaultValue_one: '{{count}} event'
+  })
+}
+
+function usageRowCounts(row: UsageBreakdownRow, unit: 'events' | 'turns'): string {
+  return `${sessionCountLabel(row.sessions)} • ${activityCountLabel(row.eventsOrTurns, unit)}`
+}
+
 export function UsageBreakdownSection({
   title,
   topLabel,
@@ -26,11 +50,6 @@ export function UsageBreakdownSection({
   rows,
   eventsOrTurns
 }: UsageBreakdownSectionProps): React.JSX.Element {
-  const eventsOrTurnsLabel =
-    eventsOrTurns === 'turns'
-      ? translate('auto.components.stats.UsageBreakdownSection.32176e1d44', 'turns')
-      : translate('auto.components.stats.UsageBreakdownSection.79a69522a5', 'events')
-
   return (
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
       <div className="mb-3">
@@ -44,13 +63,11 @@ export function UsageBreakdownSection({
         {rows.slice(0, 5).map((row) => (
           <div key={row.key} className="space-y-1">
             <div className="flex items-center justify-between gap-3 text-sm">
-              <span className="truncate text-foreground">{row.label}</span>
+              <span className="min-w-0 break-words text-foreground">{row.label}</span>
               <span className="shrink-0 text-muted-foreground">{formatTokens(row.tokens)}</span>
             </div>
             <div className="text-xs text-muted-foreground">
-              {row.sessions}{' '}
-              {translate('auto.components.stats.UsageBreakdownSection.02a046792e', 'sessions •')}{' '}
-              {row.eventsOrTurns} {eventsOrTurnsLabel}
+              {usageRowCounts(row, eventsOrTurns)}
               {row.hasInferredPricing
                 ? ` ${translate('auto.components.stats.UsageBreakdownSection.247c93ca92', '• inferred pricing')}`
                 : ''}

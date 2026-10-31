@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { SshChannelMultiplexer, type MultiplexerTransport } from './ssh-channel-multiplexer'
-import { encodeFrame, MessageType, HEADER_LENGTH, encodeKeepAliveFrame } from './relay-protocol'
+import { encodeFrame, MessageType, encodeKeepAliveFrame } from './remote-exec/remote-frame-protocol'
+import { HEADER_LENGTH } from '../../shared/relay-frame-decoder'
 
 function createMockTransport(): MultiplexerTransport & {
   dataCallbacks: ((data: Buffer) => void)[]
@@ -71,7 +72,6 @@ type MuxInternals = {
   disposeHandlers: unknown[]
   lastReceivedAt: number
   unackedTimestamps: Map<number, number>
-  writerSaturated: boolean
 }
 
 function getMuxInternals(instance: SshChannelMultiplexer): MuxInternals {
@@ -97,7 +97,6 @@ describe('SshChannelMultiplexer', () => {
     it('sends a JSON-RPC request and resolves on response', async () => {
       const promise = mux.request('pty.spawn', { cols: 80, rows: 24 })
 
-      // Verify the request was written
       expect(transport.written.length).toBe(1)
       const frame = transport.written[0]
       expect(frame[0]).toBe(MessageType.Regular)
@@ -109,7 +108,6 @@ describe('SshChannelMultiplexer', () => {
       expect(payload.method).toBe('pty.spawn')
       expect(payload.id).toBe(1)
 
-      // Simulate response from relay
       const response = makeResponseFrame(1, { id: 'pty-1' }, 1)
       transport.dataCallbacks[0](response)
 
@@ -151,8 +149,7 @@ describe('SshChannelMultiplexer', () => {
     it('times out after 30s with no response', async () => {
       const promise = mux.request('pty.spawn')
 
-      // Feed keepalive frames periodically to prevent the connection-level
-      // timeout (20s no-data) from firing before the 30s request timeout.
+      // Keep connection liveness healthy while testing the longer request timeout.
       for (let i = 0; i < 6; i++) {
         vi.advanceTimersByTime(5_000)
         transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
@@ -160,11 +157,12 @@ describe('SshChannelMultiplexer', () => {
       vi.advanceTimersByTime(1_000)
 
       await expect(promise).rejects.toThrow('timed out')
+      const cancelFrame = transport.written.findLast((frame) => frame[0] === MessageType.Regular)
+      if (!cancelFrame) {
+        throw new Error('Missing RPC cancellation frame')
+      }
       const cancelPayload = JSON.parse(
-        transport.written
-          .at(-1)!
-          .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written.at(-1)!.readUInt32BE(9))
-          .toString()
+        cancelFrame.subarray(HEADER_LENGTH, HEADER_LENGTH + cancelFrame.readUInt32BE(9)).toString()
       )
       expect(cancelPayload).toMatchObject({
         method: 'rpc.cancel',
@@ -336,27 +334,25 @@ describe('SshChannelMultiplexer', () => {
     })
 
     it('drives keepalive sends AND dead-link detection from a single interval', () => {
-      // The keepalive send and the liveness/timeout check were merged from two
-      // 5s intervals into one; there must be exactly one recurring timer.
+      // Require one recurring timer for ordered keepalive send and liveness checks.
       expect(vi.getTimerCount()).toBe(1)
 
-      // Send half: a keepalive is written on the tick.
       const before = transport.written.length
       vi.advanceTimersByTime(5_000)
       expect(transport.written.length).toBeGreaterThan(before)
       expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
       expect(vi.getTimerCount()).toBe(1)
 
-      // Check half: with no inbound frames or acks, the same interval declares
-      // the link dead (no-data + oldest-unacked both exceed the 20s window).
+      // The same timer declares silence dead only after both receive/ack windows expire.
       expect(mux.isDisposed()).toBe(false)
       vi.advanceTimersByTime(25_000)
       expect(mux.isDisposed()).toBe(true)
     })
 
-    it('suppresses false death while locally saturated and rebases both clocks on drain', () => {
+    it('survives local saturation while the peer keeps talking, and rebases both clocks on drain', () => {
       mux.dispose()
       let drain = (): void => {}
+      let feed: (chunk: Buffer) => void = () => {}
       const written: Buffer[] = []
       const saturatedTransport: MultiplexerTransport = {
         write: (data) => {
@@ -367,21 +363,26 @@ describe('SshChannelMultiplexer', () => {
         onDrain: (callback) => {
           drain = callback
         },
-        onData: vi.fn(),
+        onData: (callback) => {
+          feed = callback
+        },
         onClose: vi.fn()
       }
       mux = new SshChannelMultiplexer(saturatedTransport)
 
       vi.advanceTimersByTime(5_000)
-      expect(getMuxInternals(mux).writerSaturated).toBe(true)
-      vi.advanceTimersByTime(25_000)
+      expect(written).toHaveLength(1)
+      // Only inbound peer traffic proves liveness; skipping health checks on saturation wedged half-open links forever.
+      for (let tick = 0; tick < 5; tick++) {
+        feed(encodeKeepAliveFrame(0, 0))
+        vi.advanceTimersByTime(5_000)
+      }
       expect(mux.isDisposed()).toBe(false)
       expect(written).toHaveLength(1)
 
       drain()
       const resumedAt = Date.now()
       const internals = getMuxInternals(mux)
-      expect(internals.writerSaturated).toBe(false)
       expect(internals.lastReceivedAt).toBe(resumedAt)
       expect(new Set(internals.unackedTimestamps.values())).toEqual(new Set([resumedAt]))
 
@@ -434,7 +435,7 @@ describe('SshChannelMultiplexer', () => {
     it('keeps the link alive after wake when frames resume', () => {
       vi.advanceTimersByTime(5_000)
       vi.setSystemTime(Date.now() + 60 * 60 * 1000)
-      vi.advanceTimersByTime(5_000) // guard tick
+      vi.advanceTimersByTime(5_000)
 
       // The relay answers the post-wake probe; the link must stay up.
       let seq = 1
@@ -448,7 +449,7 @@ describe('SshChannelMultiplexer', () => {
     it('still detects a genuinely dead link within the next window after wake', () => {
       vi.advanceTimersByTime(5_000)
       vi.setSystemTime(Date.now() + 60 * 60 * 1000)
-      vi.advanceTimersByTime(5_000) // guard tick: reset + probe, no kill
+      vi.advanceTimersByTime(5_000)
 
       expect(mux.isDisposed()).toBe(false)
       // No frames arrive after the guard reset; the honest window expires.
@@ -502,10 +503,49 @@ describe('SshChannelMultiplexer', () => {
       await expect(mux.request('pty.spawn')).rejects.toThrow('Multiplexer disposed')
     })
 
-    it('ignores notify after dispose', () => {
+    it('tags a request after a shutdown dispose with DISPOSED', async () => {
       mux.dispose()
-      mux.notify('pty.data', { id: 'pty-1', data: 'x' })
-      // No writes should happen after the initial keepalive writes
+
+      const error = (await mux.request('pty.spawn').catch((e: unknown) => e)) as Error & {
+        code?: string
+      }
+      expect(error.code).toBe('DISPOSED')
+    })
+
+    it('reports a request after a lost connection as transient', async () => {
+      transport.closeCallbacks[0]()
+
+      const error = (await mux
+        .request('fs.readDir', { path: '/home/me' })
+        .catch((e: unknown) => e)) as Error & { code?: string }
+      expect(error.message).toBe('SSH connection lost, reconnecting...')
+      expect(error.code).toBe('CONNECTION_LOST')
+    })
+
+    it('reports a settled notify after a lost connection as transient', () => {
+      transport.closeCallbacks[0]()
+
+      const settled = vi.fn()
+      mux.notifyWithSettlement('pty.data', { id: 'pty-1', data: 'x' }, settled)
+
+      expect(settled).toHaveBeenCalledWith({
+        outcome: 'refused',
+        reason: 'transport_disposed',
+        error: expect.objectContaining({
+          message: 'SSH connection lost, reconnecting...',
+          code: 'CONNECTION_LOST'
+        })
+      })
+    })
+
+    it('fires a dispose handler registered after dispose with the recorded reason', () => {
+      mux.dispose('connection_lost')
+
+      const disposeHandler = vi.fn()
+      mux.onDispose(disposeHandler)
+
+      expect(disposeHandler).toHaveBeenCalledWith('connection_lost')
+      expect(disposeHandler).toHaveBeenCalledTimes(1)
     })
 
     it('reports isDisposed correctly', () => {

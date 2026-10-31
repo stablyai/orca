@@ -1,0 +1,96 @@
+import type { StateCreator } from 'zustand'
+import type { AppState } from '../../../types'
+import type { WorktreeSlice } from '../../worktree-helpers'
+import type {
+  DetectedWorktreeListResult,
+  GitPushTarget,
+  Worktree
+} from '../../../../../../shared/worktree/types'
+import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { DirectSshAuthority } from '../../../../../../shared/ssh-types'
+import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
+import type { ProjectHostSetup } from '../../../../../../shared/project-types'
+import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+
+export type WorktreeSliceGet = Parameters<StateCreator<AppState>>[1]
+export type WorktreeSliceSet = Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0]
+
+export type BackgroundRuntimeRefreshOptions = {
+  reuseRecentCompatibilityFailure?: boolean
+}
+
+export type DetectedWorktreeRefreshOptions = BackgroundRuntimeRefreshOptions & {
+  executionHostId: ExecutionHostId
+  requireAuthoritative?: boolean
+  directSshAuthority?: DirectSshAuthority
+  // Each caller’s purge snapshot needs its own teardown; never share it with coalesced scan state (#10562).
+  connectionId?: string | null
+  knownWorktreeIds?: readonly string[]
+  // Why a callback: staleness is judged against the client's live applied version, which a
+  // create or remove reply can advance while the listing is in flight.
+  isStaleCatalogPublication?: (result: DetectedWorktreeListResult) => boolean
+}
+
+export type AdmittedDetectedWorktreeRefresh = {
+  status: 'admitted'
+  result: DetectedWorktreeListResult
+  providerResult?: HostQualifiedDetectedWorktreeResult
+  executionHostId: ExecutionHostId
+  directSshAuthority?: DirectSshAuthority
+  runtimeAuthority?: {
+    environmentId: string
+    connectionGeneration: number
+    runtimeConnectionGeneration: number
+  }
+}
+
+export type DetectedWorktreeRefreshOutcome =
+  | AdmittedDetectedWorktreeRefresh
+  | {
+      status: 'not-admitted'
+      providerResult: HostQualifiedDetectedWorktreeResult
+      executionHostId: ExecutionHostId
+      directSshAuthority?: DirectSshAuthority
+    }
+
+export type WorktreeWithLineage = Worktree & {
+  parentWorktreeId?: string | null
+  childWorktreeIds?: string[]
+  lineage?: WorktreeLineage | null
+}
+
+export type WorktreeHostMatchOptions = {
+  unhostedWorktreesMatchHost?: boolean
+}
+
+export type RepoHostSummary = {
+  count: number
+  onlyHostId?: ExecutionHostId
+}
+
+export type WorktreeLineageUpdateResult = {
+  target: RuntimeClientTarget
+  /** The written row's host as the store stamps it, so a same-id twin on another host stays put. */
+  hostId: ExecutionHostId
+  lineage: WorktreeLineage | null
+  updatedRemoteWorktree?: WorktreeWithLineage
+}
+
+export type { HostedReviewLinkKey } from '../../../../../../shared/worktree/hosted-review-links'
+
+export type RuntimeWorktreeMetaUpdates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
+  pushTarget?: GitPushTarget | null
+}
+
+export type FencedWorktreeMergeArgs = {
+  repoId: string
+  hostId: ExecutionHostId
+  ownerWasMissingAtStart: boolean
+  missingDirectSshOwnerReposSnapshot?: AppState['repos']
+  requestStartedWorktrees: readonly Worktree[] | undefined
+  setup?: ProjectHostSetup
+  refresh: AdmittedDetectedWorktreeRefresh
+  purgeRemovedWorktrees?: boolean
+}

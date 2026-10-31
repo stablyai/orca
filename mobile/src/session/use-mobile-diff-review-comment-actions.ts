@@ -1,9 +1,16 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/types'
+import { translate } from '../i18n/mobile-i18n'
+import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import { addMobileDiffComment, removeMobileDiffComments } from './mobile-diff-comments'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { sessionWorktreeNotesWrite } from './mobile-session-write-operations'
+import {
+  addMobileDiffComment,
+  normalizeMobileDiffComments,
+  removeMobileDiffComments
+} from './mobile-diff-comments'
 import { updateMobileDiffComment } from './mobile-diff-comment-edit'
 import {
   clearMobileDiffReviewFileReviewed,
@@ -19,6 +26,7 @@ import {
   nextReviewIndexAfterMarkReviewed,
   reviewDescriptorFromItem
 } from './mobile-diff-review-screen-model'
+import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 
 type CommentActionsInput = {
   client: RpcClient | null
@@ -34,10 +42,9 @@ type CommentActionsInput = {
   composerBody: string
   setScreenState: Dispatch<SetStateAction<ReviewScreenState>>
   setCurrentIndex: Dispatch<SetStateAction<number>>
-  setComposer: Dispatch<SetStateAction<ComposerState | null>>
   setComposerBody: Dispatch<SetStateAction<string>>
   setActionError: Dispatch<SetStateAction<string | null>>
-  setShowCompletion: Dispatch<SetStateAction<boolean>>
+  sheets: Pick<ReviewSheetIntents, 'openSheet' | 'openSheetWhenIdle' | 'closeSheet'>
 }
 
 export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
@@ -55,25 +62,39 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     composerBody,
     setScreenState,
     setCurrentIndex,
-    setComposer,
     setComposerBody,
     setActionError,
-    setShowCompletion
+    sheets
   } = input
+  const { openSheet, openSheetWhenIdle, closeSheet } = sheets
 
   const persistMetadata = useCallback(
-    async (comments: readonly DiffComment[], reviewState: MobileDiffReviewState) => {
+    async (
+      comments: readonly DiffComment[],
+      base: readonly DiffComment[],
+      reviewState: MobileDiffReviewState
+    ) => {
       if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
+        throw new Error(
+          translate(
+            'session.useDiffReviewCommentActions.waitingForDesktop',
+            'Waiting for desktop...'
+          )
+        )
       }
-      const response = await client.sendRequest('worktree.set', {
+      const response = await sessionWorktreeNotesWrite.request(client, {
         worktree: `id:${worktreeId}`,
-        diffComments: comments,
+        diffComments: [...comments],
+        diffCommentsBase: [...base],
         mobileDiffReview: reviewState
       })
-      if (!response.ok) {
-        throw new Error(response.error?.message || 'Failed to save review state')
-      }
+      return interpretOrThrowRefusalMessage(
+        () => sessionWorktreeNotesWrite.interpret(response),
+        translate(
+          'session.useDiffReviewCommentActions.saveStateFailed',
+          'Failed to save review state'
+        )
+      )?.diffComments
     },
     [client, connState, worktreeId]
   )
@@ -90,40 +111,56 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       const previous = screenState
       updateReadyState((state) => ({ ...state, comments, reviewState }))
       try {
-        await persistMetadata(comments, reviewState)
+        const saved = await persistMetadata(
+          comments,
+          previous.kind === 'ready' ? previous.comments : comments,
+          reviewState
+        )
+        if (saved !== undefined) {
+          // Why: the host kept notes other devices changed; show its list unless a later save moved on.
+          updateReadyState((state) =>
+            state.comments === comments
+              ? { ...state, comments: normalizeMobileDiffComments(saved, worktreeId) }
+              : state
+          )
+        }
         triggerSuccess()
       } catch (err) {
         if (previous.kind === 'ready') {
           setScreenState(previous)
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Failed to save review')
+        setActionError(
+          err instanceof Error
+            ? err.message
+            : translate('session.useDiffReviewCommentActions.saveFailed', 'Failed to save review')
+        )
         throw err
       }
     },
-    [persistMetadata, screenState, setActionError, setScreenState, updateReadyState]
+    [persistMetadata, screenState, setActionError, setScreenState, updateReadyState, worktreeId]
   )
 
   const openComposer = useCallback(
     (lineNumber: number) => {
-      setComposer({ mode: 'create', lineNumber })
+      openSheet({ kind: 'composer', composer: { mode: 'create', lineNumber } })
       setComposerBody('')
     },
-    [setComposer, setComposerBody]
+    [openSheet, setComposerBody]
   )
 
   const openEditComposer = useCallback(
     (comment: DiffComment) => {
-      setComposer({ mode: 'edit', comment })
+      openSheet({ kind: 'composer', composer: { mode: 'edit', comment } })
       setComposerBody(comment.body)
     },
-    [setComposer, setComposerBody]
+    [openSheet, setComposerBody]
   )
 
   const closeComposer = useCallback(() => {
-    setComposer(null)
+    closeSheet('composer')
     setComposerBody('')
-  }, [setComposer, setComposerBody])
+  }, [closeSheet, setComposerBody])
 
   const saveComposer = useCallback(async () => {
     if (!composer || !currentItem || screenState.kind !== 'ready') {
@@ -198,18 +235,19 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     if (nextIndex !== null) {
       setCurrentIndex(nextIndex)
     } else {
-      setShowCompletion(true)
+      // Why: the save can outlast a sheet the user opened meanwhile; never stack on or close it.
+      openSheetWhenIdle({ kind: 'completion' })
     }
   }, [
     currentIndex,
     currentItem,
     filter,
     filteredQueue,
+    openSheetWhenIdle,
     queue,
     saveCommentsAndReviewState,
     screenState,
-    setCurrentIndex,
-    setShowCompletion
+    setCurrentIndex
   ])
 
   const markUnreviewed = useCallback(async () => {

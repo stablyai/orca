@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { isNoiseMessage, stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { isNoiseMessage, stripNoiseMessages } from './mobile-native-chat-noise'
 
 function msg(
   role: NativeChatMessage['role'],
@@ -38,16 +38,24 @@ describe('isNoiseMessage', () => {
 
   it('keeps real user messages', () => {
     expect(isNoiseMessage(msg('user', 'make it work for codex'))).toBe(false)
-    // A genuine custom tag is not a known harness tag, so it stays a user turn.
     expect(isNoiseMessage(msg('user', '<bash-brothers> is my band'))).toBe(false)
   })
 
-  it('keeps assistant and tool turns', () => {
+  it('keeps assistant, tool, and ordinary system turns', () => {
     expect(isNoiseMessage(msg('assistant', '<system-reminder> in prose'))).toBe(false)
+    expect(isNoiseMessage(msg('tool', '<system-reminder> in prose'))).toBe(false)
+    expect(isNoiseMessage(msg('system', 'Conversation interrupted'))).toBe(false)
   })
 
-  it('keeps a user turn that carries tool results', () => {
-    expect(isNoiseMessage(msg('user', '', [{ type: 'tool-result', output: 'ok' }]))).toBe(false)
+  it('keeps tool-bearing user turns even when their text looks like harness noise', () => {
+    for (const block of [
+      { type: 'tool-result', output: 'ok' },
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls' } }
+    ] satisfies NativeChatMessage['blocks']) {
+      expect(
+        isNoiseMessage(msg('user', '', [{ type: 'text', text: '<task-notification>done' }, block]))
+      ).toBe(false)
+    }
   })
 
   it('stripNoiseMessages removes only the noise', () => {

@@ -1,0 +1,169 @@
+import type { MobileFileMedia } from '../files/mobile-file-media'
+import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
+import type { DiffComment } from '../../../src/shared/diff-comment-types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { RuntimeMobileSessionAgentTabStatus } from '../../../src/shared/runtime-types'
+import type { MirroredEvidenceReceipt } from '../../../src/shared/agent-status-observation'
+import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
+import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
+import type { MobileDiffLine } from './mobile-diff-lines'
+import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
+import type { TerminalRecord } from './mobile-terminal-records'
+import type { MobileNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
+
+export type Terminal = TerminalRecord
+
+export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session'
+
+export type MobileSessionTab =
+  | {
+      type: 'terminal'
+      id: string
+      title: string
+      parentTabId?: string
+      leafId?: string
+      status?: 'pending-handle' | 'ready'
+      terminal: string | null
+      agentStatus?: AgentStatusEntry | null
+      // Launch identity enables chat before live agent status arrives.
+      launchAgent?: TuiAgent
+      nativeChatIdentity?: MobileNativeChatIdentity
+      /** Host-provided launch context still parked as an unsent TUI-input draft. */
+      launchDraft?: string
+      launchDraftCreatedAt?: number
+      terminalTheme?: MobileTerminalTheme
+      isActive: boolean
+    }
+  | {
+      type: 'agent-session'
+      id: string
+      title: string
+      sessionId: string
+      agent: StructuredAgentId
+      chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
+      isActive: boolean
+    }
+  | {
+      type: 'markdown'
+      id: string
+      title: string
+      filePath: string
+      relativePath: string
+      isDirty: boolean
+      isActive: boolean
+      documentVersion: string
+    }
+  | {
+      type: 'file'
+      id: string
+      title: string
+      filePath: string
+      relativePath: string
+      language?: string
+      mode?: 'edit' | 'diff'
+      diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
+      oldPath?: string
+      isDirty: boolean
+      isActive: boolean
+    }
+  | MobileBrowserTab
+
+export type SessionTabsResult = {
+  worktree: string
+  clientHostedPagesUnreconciled?: true
+  agentSessionsUnverifiable?: true
+  publicationEpoch?: string
+  snapshotVersion: number
+  tabs: MobileSessionTab[]
+  activeTabId: string | null
+  activeTabType: MobileSessionTabType | null
+  /** Host explicitly navigated this device (desktop/CLI `navigation: clients|all`), not a plain republication. */
+  navigationIntent?: 'follow'
+}
+
+export type RuntimeStatusResult = {
+  capabilities?: string[]
+}
+
+export type MarkdownDocState =
+  | { status: 'loading' }
+  | {
+      status: 'ready'
+      content: string
+      localContent: string
+      baseVersion: string
+      isDirty: boolean
+      editable: boolean
+      stale?: boolean
+      saving?: boolean
+      saveError?: string
+      /** Changes only on phone edits and saves, not host metadata updates. */
+      localRevision?: number
+      readOnlyReason?: string
+      truncated?: true
+      byteLength?: number
+    }
+  | { status: 'error'; message: string }
+
+export type FileDocState =
+  | { status: 'ready'; kind: 'media'; media: MobileFileMedia }
+  | { status: 'loading' }
+  | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
+  | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
+  | { status: 'ready'; kind: 'image'; dataUri: string }
+  | { status: 'ready'; kind: 'html'; content: string }
+  | { status: 'error'; message: string }
+
+export type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
+
+export type DiffCommentActions = {
+  comments: DiffComment[]
+  sendingCommentIds: ReadonlySet<string>
+  busy: boolean
+  onAdd: (filePath: string, lineNumber: number, body: string) => Promise<boolean>
+  onDelete: (commentId: string) => Promise<void>
+  onCopyAll: () => Promise<void>
+  onSendAll: () => void
+}
+
+export type DiffNotesDelivery = {
+  prompt: string
+  comments: DiffComment[]
+}
+
+export type ReadyFileDocState = Extract<FileDocState, { status: 'ready' }>
+
+export type FileSyntaxState = {
+  doc: ReadyFileDocState
+  language: string
+  segments: MobileSyntaxSegment[]
+}
+
+export type DiffSyntaxState = {
+  doc: ReadyFileDocState
+  language: string
+  lines: RenderableDiffLine[]
+}
+
+export type DirtyMarkdownDraft = {
+  tabId: string
+  title: string
+  content: string
+}
+
+export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error' | 'other-runtime'
+
+export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
+
+export type TerminalGestureInputBucket = {
+  tokens: number
+  lastRefillMs: number
+}
+
+export type TerminalGestureInputQueue = {
+  bytes: string
+  sequenceCount: number
+  timer: ReturnType<typeof setTimeout> | null
+  lastUpdatedMs: number
+}

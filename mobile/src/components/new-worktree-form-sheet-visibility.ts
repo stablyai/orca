@@ -1,16 +1,15 @@
-// Why: pin the create form under the fill-height name picker (and during that
-// picker's close transition) so dismiss reveals the original content height.
+// Keep create form as modal floor under other drawers; empty transparent host swallows taps and dropped transition timer could strand user (#16165).
 
 export function resolveNewWorktreeFormSheetVisible(input: {
   modalVisible: boolean
   drawerView: string
-  formPinnedUnderSource: boolean
 }): boolean {
   if (!input.modalVisible) {
     return false
   }
-  if (input.drawerView === 'form' || input.drawerView === 'source') {
-    return true
-  }
-  return input.drawerView === 'transition' && input.formPinnedUnderSource
+  return (
+    input.drawerView === 'form' ||
+    input.drawerView === 'source' ||
+    input.drawerView === 'transition'
+  )
 }

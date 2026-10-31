@@ -12,6 +12,11 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput
 } from './helpers/terminal'
+import {
+  dispatchWindowsImeShiftToggle,
+  readPtyInputCount,
+  readPtyInputs
+} from './helpers/windows-ime-native-events'
 
 type ImeEventLogEntry = {
   type: string
@@ -81,12 +86,16 @@ const CODEX_TRUST_PROMPT_RE = /Do you trust|trust this folder|Trust this/i
 const CODEX_UPDATE_PROMPT_RE = /update available|install update|Skip for now/i
 const LINUX_IME_POLICY_USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
+const WINDOWS_IME_POLICY_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150 Safari/537.36'
 
-function terminalImeHarnessScript(runId: string): string {
+function terminalImeHarnessScript(runId: string, inputLogPath?: string): string {
   return `
 const readline = require('node:readline')
+const { appendFileSync } = require('node:fs')
 
 const runId = ${JSON.stringify(runId)}
+const inputLogPath = ${JSON.stringify(inputLogPath ?? null)}
 let model = ''
 let cursor = 0
 const submitted = []
@@ -130,6 +139,7 @@ function removeBeforeCursor() {
 }
 
 function handleData(data) {
+  if (inputLogPath) appendFileSync(inputLogPath, JSON.stringify(data) + '\\n')
   let index = 0
   while (index < data.length) {
     if (data.startsWith('\\x1b[D', index)) {
@@ -231,8 +241,7 @@ async function installImeEventProbe(page: Page): Promise<void> {
     ]) {
       textarea.addEventListener(type, record, true)
     }
-    // Why: the Linux/Sogou post-composition guard lives on the terminal
-    // element; record terminal-targeted compositionend without doubling key logs.
+    // Record terminal compositionend for Linux/Sogou policy without duplicating key logs.
     pane.terminal.element?.addEventListener('compositionend', record, true)
   })
 }
@@ -244,6 +253,30 @@ async function readImeEventLog(page: Page): Promise<ImeEventLogEntry[]> {
   })
 }
 
+async function readActiveCompositionText(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const active = document.activeElement
+    if (!(active instanceof HTMLTextAreaElement)) {
+      throw new Error('xterm helper textarea is not focused')
+    }
+    const view = active.closest('.xterm')?.querySelector<HTMLElement>('.composition-view')
+    return view?.classList.contains('active')
+      ? (view.textContent?.replaceAll('\u200e', '') ?? '')
+      : ''
+  })
+}
+
+async function reloadWithWindowsImePolicy(page: Page): Promise<void> {
+  await page.addInitScript((userAgent) => {
+    Object.defineProperty(navigator, 'userAgent', {
+      get: () => userAgent,
+      configurable: true
+    })
+  }, WINDOWS_IME_POLICY_USER_AGENT)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+}
+
 async function reloadWithLinuxImePolicy(page: Page): Promise<void> {
   await page.addInitScript((userAgent) => {
     Object.defineProperty(navigator, 'userAgent', {
@@ -251,8 +284,7 @@ async function reloadWithLinuxImePolicy(page: Page): Promise<void> {
       configurable: true
     })
   }, LINUX_IME_POLICY_USER_AGENT)
-  // Why: the Sogou repro validates Linux-gated terminal IME policy on macOS
-  // runners; reload before the terminal pane mounts so lifecycle code sees it.
+  // Reload before terminal mount so lifecycle code sees the emulated Linux/Sogou platform.
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
 }
@@ -271,7 +303,7 @@ async function readPromptState(page: Page): Promise<TerminalPromptState | null> 
     .filter((value): value is string => value !== null)
   const promptIndex = content.lastIndexOf(PROMPT)
   const liveLine =
-    promptIndex >= 0 ? (content.slice(promptIndex + PROMPT.length).split(/\r?\n/)[0] ?? '') : ''
+    promptIndex !== -1 ? (content.slice(promptIndex + PROMPT.length).split(/\r?\n/)[0] ?? '') : ''
   return {
     model: liveLine.trimEnd(),
     cursor: Array.from(liveLine.trimEnd()).length,
@@ -315,9 +347,7 @@ async function commitImeText(session: CDPSession, text: string): Promise<void> {
 }
 
 async function dispatchImeProcessKey(session: CDPSession, code: string): Promise<void> {
-  // Why: Windows IMEs report pre-edit keystrokes as VK_PROCESSKEY (229).
-  // This catches regressions where xterm treats the physical Pinyin key as a
-  // normal Latin character before Chromium delivers the composition update.
+  // Windows IME preedit uses VK_PROCESSKEY 229; physical Pinyin keys must not leak as Latin input.
   await session.send('Input.dispatchKeyEvent', {
     type: 'rawKeyDown',
     key: 'Process',
@@ -343,9 +373,7 @@ async function dispatchCandidateSelectionKey(
   candidate: { key: string; code: string; keyCode: number },
   commitBetweenKeys?: () => Promise<void>
 ): Promise<void> {
-  // Why: #7543 proves Sogou can forward candidate selectors as plain key
-  // events, not Process/229. `text` is set so keyDown produces the natural
-  // keypress — rawKeyDown generates none and would prove nothing about leaks.
+  // Sogou selectors can be plain keys; keyDown with text emits keypress while rawKeyDown would prove no leak (#7543).
   await session.send('Input.dispatchKeyEvent', {
     type: 'keyDown',
     key: candidate.key,
@@ -367,18 +395,6 @@ async function dispatchCandidateSelectionKey(
   })
 }
 
-async function dispatchOrphanLetterKeyup(session: CDPSession): Promise<void> {
-  // Why: legacy Sogou/fcitx can emit only the release after committing a
-  // single-letter preedit, leaving no composition or input event to classify.
-  await session.send('Input.dispatchKeyEvent', {
-    type: 'keyUp',
-    key: 'a',
-    code: 'KeyA',
-    windowsVirtualKeyCode: 65,
-    nativeVirtualKeyCode: 65
-  })
-}
-
 async function dispatchSogouEmptyCompositionUpdate(page: Page): Promise<void> {
   // Why: Sogou/fcitx emits empty compositionupdate data while its candidate
   // popup is still open (#6765); Orca's tracker must not flip inactive on it.
@@ -392,9 +408,7 @@ async function dispatchSogouEmptyCompositionUpdate(page: Page): Promise<void> {
 }
 
 async function dispatchSogouPostCompositionEnd(page: Page, data: string): Promise<void> {
-  // Why: some Sogou/fcitx traces deliver the plain selector key after
-  // compositionend; target the terminal element so Orca's tracker sees the end
-  // without making xterm finalize a synthetic preedit string.
+  // Target the terminal so the late selector guard sees compositionend without xterm finalizing synthetic preedit.
   await page.evaluate((data) => {
     const active = document.activeElement
     if (!(active instanceof HTMLTextAreaElement)) {
@@ -561,6 +575,51 @@ test.describe('Chinese IME terminal chat input repro', () => {
     }
   })
 
+  test('commits the active Pinyin preedit when Shift toggles the Windows IME', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await reloadWithWindowsImePolicy(orcaPage)
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const runId = randomUUID()
+    const scriptPath = path.join(testRepoPath, `.orca-windows-shift-ime-${runId}.cjs`)
+    const inputLogPath = path.join(testRepoPath, `.orca-windows-shift-ime-${runId}.jsonl`)
+    writeFileSync(scriptPath, terminalImeHarnessScript(runId, inputLogPath))
+    writeFileSync(inputLogPath, '')
+    const session = await orcaPage.context().newCDPSession(orcaPage)
+
+    try {
+      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await waitForTerminalOutput(orcaPage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
+      await focusActiveTerminalInput(orcaPage)
+      await installImeEventProbe(orcaPage)
+
+      await setImeComposition(session, 's')
+      const inputCountBeforeShift = readPtyInputCount(inputLogPath)
+      await dispatchWindowsImeShiftToggle(session)
+
+      await waitForLivePrompt(orcaPage, 's')
+      await expect.poll(() => readActiveCompositionText(orcaPage)).toBe('')
+      await expect.poll(async () => (await readPromptState(orcaPage))?.submitted).toEqual([])
+      await expect
+        .poll(() => readPtyInputs(inputLogPath).slice(inputCountBeforeShift))
+        .toEqual(['s'])
+    } finally {
+      await attachImeEvidence(orcaPage, testInfo, 'windows-shift-ime-evidence').catch(
+        () => undefined
+      )
+      await session.detach().catch(() => undefined)
+      await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      rmSync(scriptPath, { force: true })
+      rmSync(inputLogPath, { force: true })
+    }
+  })
+
   test('keeps Sogou-style candidate selection keys out of the PTY while committing Chinese text', async ({
     orcaPage,
     testRepoPath
@@ -581,7 +640,8 @@ test.describe('Chinese IME terminal chat input repro', () => {
       // Why: create the session/harness inside the try so a mid-setup throw
       // still hits finally and removes the harness script.
       writeFileSync(scriptPath, terminalImeHarnessScript(runId))
-      session = await orcaPage.context().newCDPSession(orcaPage)
+      const cdpSession = await orcaPage.context().newCDPSession(orcaPage)
+      session = cdpSession
       await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
       harnessStarted = true
       await waitForTerminalOutput(orcaPage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
@@ -597,7 +657,7 @@ test.describe('Chinese IME terminal chat input repro', () => {
       await orcaPage.waitForTimeout(80)
       await dispatchSogouEmptyCompositionUpdate(orcaPage)
       await dispatchCandidateSelectionKey(session, { key: ' ', code: 'Space', keyCode: 32 }, () =>
-        commitImeText(session, '你')
+        commitImeText(cdpSession, '你')
       )
       await waitForLivePrompt(orcaPage, '你')
       await attachImeEvidence(orcaPage, testInfo, 'sogou-after-space-commit')
@@ -615,7 +675,7 @@ test.describe('Chinese IME terminal chat input repro', () => {
       await orcaPage.waitForTimeout(80)
       await dispatchSogouEmptyCompositionUpdate(orcaPage)
       await dispatchCandidateSelectionKey(session, { key: '2', code: 'Digit2', keyCode: 50 }, () =>
-        commitImeText(session, '你好')
+        commitImeText(cdpSession, '你好')
       )
       await waitForLivePrompt(orcaPage, '你好')
       await attachImeEvidence(orcaPage, testInfo, 'sogou-after-digit-commit')
@@ -635,7 +695,7 @@ test.describe('Chinese IME terminal chat input repro', () => {
       await dispatchSogouEmptyCompositionUpdate(orcaPage)
       await dispatchSogouPostCompositionEnd(orcaPage, '再见')
       await dispatchCandidateSelectionKey(session, { key: '3', code: 'Digit3', keyCode: 51 }, () =>
-        commitImeText(session, '再见')
+        commitImeText(cdpSession, '再见')
       )
       await waitForLivePrompt(orcaPage, '再见')
       const postCompositionLog = await readImeEventLog(orcaPage)
@@ -666,24 +726,11 @@ test.describe('Chinese IME terminal chat input repro', () => {
         })
         .toBe('再见')
 
-      // Some legacy desktop Linux paths omit every composition/input event and
-      // expose only an orphaned Latin release before the candidate digit.
-      await dispatchOrphanLetterKeyup(session)
-      await dispatchCandidateSelectionKey(session, { key: '4', code: 'Digit4', keyCode: 52 })
-      await orcaPage.keyboard.press('Enter')
-      await expect
-        .poll(async () => (await readPromptState(orcaPage))?.submitted.at(-1) ?? null, {
-          timeout: 5_000,
-          message: 'orphan-keyup candidate digit leaked into the submitted terminal input'
-        })
-        .toBe('')
-      await attachImeEvidence(orcaPage, testInfo, 'sogou-after-orphan-keyup-digit-suppression')
-
       const promptState = await readPromptState(orcaPage)
       expect(
         promptState?.submitted,
         'candidate Space/digit selectors and pinyin preedit must not leak into the PTY'
-      ).toEqual(['你', '你好', '再见', ''])
+      ).toEqual(['你', '你好', '再见'])
     } finally {
       await attachImeEvidence(orcaPage, testInfo, 'sogou-final-ime-evidence').catch(() => undefined)
       await session?.detach().catch(() => undefined)

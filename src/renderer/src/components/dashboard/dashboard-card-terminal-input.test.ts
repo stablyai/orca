@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it } from 'vitest'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
   resolveDashboardCardTerminalInput,
   type DashboardCardTerminalInputState
@@ -36,12 +37,26 @@ function stateWith(
   } as Partial<DashboardCardTerminalInputState>
 }
 
+function codexEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
+  return {
+    state: 'waiting',
+    prompt: '',
+    updatedAt: 1,
+    stateStartedAt: 1,
+    stateHistory: [],
+    agentType: 'codex',
+    paneKey: MAC_ARGS.paneKey,
+    ...overrides
+  }
+}
+
 describe('resolveDashboardCardTerminalInput', () => {
   it('resolves a local macOS pane to client-host routing with kitty advertised', () => {
     expect(resolveDashboardCardTerminalInput(stateWith(), MAC_ARGS)).toEqual({
       hostPlatform: 'darwin',
       localWindowsConpty: false,
       windowsShiftEnterEncoding: 'alt-enter',
+      ctrlEnterCsiU: false,
       kittyKeyboardAdvertised: true
     })
   })
@@ -62,8 +77,38 @@ describe('resolveDashboardCardTerminalInput', () => {
     expect(profile.kittyKeyboardAdvertised).toBe(true)
   })
 
-  // Why: the pty runs Linux inside WSL, so byte protocols must follow it and
-  // not the Windows client — the pane resolves this from its own session cwd.
+  it('relays trusted Ctrl+Enter authority without coupling it to Shift+Enter', () => {
+    const droid = resolveDashboardCardTerminalInput(
+      stateWith({
+        paneForegroundAgentByPaneKey: {
+          [WINDOWS_ARGS.paneKey]: {
+            agent: 'droid',
+            routingTrusted: true,
+            shellForeground: false
+          }
+        }
+      }),
+      WINDOWS_ARGS
+    )
+    expect(droid.ctrlEnterCsiU).toBe(true)
+
+    const pi = resolveDashboardCardTerminalInput(
+      stateWith({
+        paneForegroundAgentByPaneKey: {
+          [WINDOWS_ARGS.paneKey]: {
+            agent: 'pi',
+            routingTrusted: true,
+            shellForeground: false
+          }
+        }
+      }),
+      WINDOWS_ARGS
+    )
+    expect(pi.windowsShiftEnterEncoding).toBe('csi-u')
+    expect(pi.ctrlEnterCsiU).toBe(false)
+  })
+
+  // WSL PTYs speak Linux byte protocols even on Windows clients; mirror pane cwd-based resolution.
   it('treats a WSL shell override as a non-ConPTY Linux-hosted pty', () => {
     const profile = resolveDashboardCardTerminalInput(stateWith(), {
       ...WINDOWS_ARGS,
@@ -93,6 +138,50 @@ describe('resolveDashboardCardTerminalInput', () => {
       sshConnectionStates: new Map([['conn-1', { remotePlatform: 'win32' }]])
     } as unknown as Partial<DashboardCardTerminalInputState>)
     expect(resolveDashboardCardTerminalInput(state, MAC_ARGS).hostPlatform).toBe('win32')
+  })
+
+  it('relays Windows input-record paste encoding for a confirmed remote Codex pane', () => {
+    const profile = resolveDashboardCardTerminalInput(
+      stateWith({
+        runtimeStatusByEnvironmentId: new Map([
+          ['windows-box', { status: { hostPlatform: 'win32' } }]
+        ]),
+        agentStatusByPaneKey: { [MAC_ARGS.paneKey]: codexEntry() }
+      } as unknown as Partial<DashboardCardTerminalInputState>),
+      { ...MAC_ARGS, ptyId: 'remote:windows-box@@pty-1' }
+    )
+
+    expect(profile.windowsInputRecordPasteNewline).toBe('alt-enter')
+    expect(profile.forceBracketedMultilineTextPaste).toBeUndefined()
+  })
+
+  it('relays bracketed multiline paste for a confirmed non-Windows Codex pane', () => {
+    const profile = resolveDashboardCardTerminalInput(
+      stateWith({
+        agentStatusByPaneKey: { [MAC_ARGS.paneKey]: codexEntry() }
+      }),
+      MAC_ARGS
+    )
+
+    expect(profile.forceBracketedMultilineTextPaste).toBe(true)
+    expect(profile.windowsInputRecordPasteNewline).toBeUndefined()
+  })
+
+  it('does not relay stale restored agent paste authority', () => {
+    const profile = resolveDashboardCardTerminalInput(
+      stateWith({
+        runtimeStatusByEnvironmentId: new Map([
+          ['windows-box', { status: { hostPlatform: 'win32' } }]
+        ]),
+        agentStatusByPaneKey: {
+          [MAC_ARGS.paneKey]: codexEntry({ restoredUnconfirmed: true })
+        }
+      } as unknown as Partial<DashboardCardTerminalInputState>),
+      { ...MAC_ARGS, ptyId: 'remote:windows-box@@pty-1' }
+    )
+
+    expect(profile.forceBracketedMultilineTextPaste).toBeUndefined()
+    expect(profile.windowsInputRecordPasteNewline).toBeUndefined()
   })
 
   it("keeps the live SSH PTY's host after the worktree owner changes", () => {
@@ -125,6 +214,7 @@ describe('resolveDashboardCardTerminalInput', () => {
       hostPlatform: 'darwin',
       localWindowsConpty: false,
       windowsShiftEnterEncoding: 'alt-enter',
+      ctrlEnterCsiU: false,
       kittyKeyboardAdvertised: true
     })
   })

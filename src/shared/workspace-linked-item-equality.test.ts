@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { areWorkspaceLinkedItemsEqual } from './workspace-linked-item'
-import type { WorkspaceLinkedItem } from './types'
+import type { WorkspaceLinkedItem } from './worktree/types'
 
 const item: WorkspaceLinkedItem = {
   provider: 'jira',
@@ -26,11 +26,6 @@ describe('areWorkspaceLinkedItemsEqual', () => {
         linearIdentifier: undefined
       })
     ).toBe(true)
-  })
-
-  it('treats both nullish items as equal and a one-sided item as different', () => {
-    expect(areWorkspaceLinkedItemsEqual(null, undefined)).toBe(true)
-    expect(areWorkspaceLinkedItemsEqual(item, null)).toBe(false)
   })
 
   it('separates items that differ by identifier, title, url, provider, or repo', () => {

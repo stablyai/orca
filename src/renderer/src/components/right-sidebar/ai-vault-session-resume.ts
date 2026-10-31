@@ -1,6 +1,8 @@
-import type { Repo, Worktree } from '../../../../shared/types'
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault-resume-target'
 import {
-  canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
@@ -13,14 +15,18 @@ import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
+  aiVaultResumeInSessionWorkspaceLabel,
   canJumpToAiVaultSessionWorktree,
+  resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type AiVaultSessionResumeTargetState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings'>>
 
 export type AiVaultSessionResumeState = {
   blocked: boolean
@@ -84,6 +90,32 @@ export function resolveAiVaultSessionResumeState(args: {
   }
 }
 
+export function resolveAiVaultHistorySessionResumeState(
+  args: Omit<
+    Parameters<typeof resolveAiVaultSessionResumeState>[0],
+    'sessionFilePath' | 'sessionExecutionHostId'
+  > & {
+    session: AiVaultSession
+  }
+): AiVaultSessionResumeState {
+  const child = Boolean(args.session.subagent)
+  return resolveAiVaultSessionResumeState({
+    ...args,
+    sessionFilePath: args.session.filePath,
+    sessionExecutionHostId: args.session.executionHostId,
+    worktreeInfo: child
+      ? resolveAiVaultSessionWorktreeInfo({
+          session: args.session,
+          worktrees: args.worktrees,
+          repos: args.repos,
+          activeWorktreeId: args.activeWorktreeId
+        })
+      : args.worktreeInfo,
+    // Lazy children are absent from the panel map; never resume them in an unrelated active workspace.
+    activeWorktreeId: child ? null : args.activeWorktreeId
+  })
+}
+
 export function resolveAiVaultSessionResumeActions(args: {
   sessionFilePath: string | null
   sessionExecutionHostId?: AiVaultSession['executionHostId'] | null
@@ -140,13 +172,13 @@ export function isKnownAiVaultResumeWorkspaceTarget(
 
   const workspaceKey = parseWorkspaceKey(workspaceId)
   if (workspaceKey?.type === 'folder') {
-    return state.folderWorkspaces.some(
+    return selectFolderWorkspaces(state).some(
       (workspace) => workspace.id === workspaceKey.folderWorkspaceId
     )
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  return getIndexedWorktreeMap(state.worktreesByRepo).has(worktreeId)
+  return getIndexedWorktreeMap(selectWorktreesByRepo(state)).has(worktreeId)
 }
 
 function resolveSupportedResumeWorktreeId(args: {
@@ -173,7 +205,8 @@ function resolveSupportedResumeWorktreeId(args: {
       sessionFilePath: args.sessionFilePath,
       sessionExecutionHostId: args.sessionExecutionHostId,
       targetStatus,
-      targetExecutionHostId
+      targetExecutionHostId,
+      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(args.targetState, args.worktreeId)
     })
   ) {
     return null
@@ -202,29 +235,24 @@ function resolveAiVaultResumeTargetState(args: {
   }
 }
 
-// Resume needs actual conversation content: a zero-turn transcript would resume
-// into an empty session. Workspace-target blocking only disables in-app resume;
-// copying the command stays available for blocked-but-real sessions, so the copy
-// affordance is gated on content alone.
+// Require real turns; blocked CLI sessions may still copy commands, but native-owned sessions must reopen natively.
 export function aiVaultSessionRowResumeGating(
-  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>,
+  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages' | 'structuredSession'>,
   state: Pick<AiVaultSessionResumeState, 'blocked'> | null
 ): { resumeDisabled: boolean; canCopyResumeCommand: boolean } {
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   return {
     resumeDisabled: (state?.blocked ?? true) || !hasResumableContent,
-    canCopyResumeCommand: hasResumableContent
+    canCopyResumeCommand: hasResumableContent && !session.structuredSession
   }
 }
 
 export function aiVaultSessionResumeLabel(
-  state: Pick<AiVaultSessionResumeState, 'usesSessionWorktree'>
+  state: Pick<AiVaultSessionResumeState, 'usesSessionWorktree'> &
+    Partial<Pick<AiVaultSessionResumeState, 'worktreeId'>>
 ): string {
   if (state.usesSessionWorktree) {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
-      'Resume in Worktree'
-    )
+    return aiVaultResumeInSessionWorkspaceLabel(state.worktreeId)
   }
   return translate(
     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',

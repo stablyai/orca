@@ -1,4 +1,6 @@
+import { mobileFileMediaMime } from './mobile-file-media'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { defaultScheduleTimer } from '../transport/timer-scheduler'
 import {
   createMobileFilePreviewHref,
   type MobileFilePreviewHref,
@@ -22,9 +24,8 @@ export function navigateToMobileFilePreview(
 ): void {
   router.push(createMobileFilePreviewHref(params))
   if (options.embedded && options.onRequestClose) {
-    // Why: closing the dock immediately can unmount the subtree before Expo
-    // commits the route transition.
-    const scheduleClose = options.scheduleClose ?? setTimeout
+    // Wait for Expo’s route commit before closing the dock and unmounting this subtree.
+    const scheduleClose = options.scheduleClose ?? defaultScheduleTimer
     scheduleClose(options.onRequestClose, 0)
   }
 }
@@ -33,5 +34,9 @@ export function canPreviewMobileFileRow(item: {
   kind: 'text' | 'binary'
   relativePath: string
 }): boolean {
-  return item.kind === 'text' || classifyMobileArtifact(item.relativePath) === 'image'
+  return (
+    item.kind === 'text' ||
+    classifyMobileArtifact(item.relativePath) === 'image' ||
+    mobileFileMediaMime(item.relativePath) !== null
+  )
 }

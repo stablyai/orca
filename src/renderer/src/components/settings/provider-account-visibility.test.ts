@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../shared/types'
+} from '../../../../shared/managed-account-types'
 import {
   getProviderAccountActiveIdForView,
   getProviderAccountRuntime,
@@ -109,8 +109,7 @@ describe('providerAccountMatchesView', () => {
   })
 
   it('hides WSL accounts while remote owner platform is still unknown', () => {
-    // Why: unknown platform is fail-closed so stale WSL rows do not flash on a
-    // non-Windows remote while capabilities load.
+    // Unknown remote platforms must hide stale WSL rows until Windows capabilities resolve.
     expect(
       providerAccountMatchesView(
         codexWslAccount,
@@ -152,8 +151,7 @@ describe('providerAccountIsActiveInView', () => {
     }
     const actionRuntime = getProviderAccountRuntime(codexWslAccount)
 
-    // Why: AccountsPane's remote view is forced to host, but restart prompts
-    // must compare the WSL slot changed by selecting or removing this row.
+    // Restart prompts compare the mutated WSL slot even though remote account views use host filtering.
     expect(getProviderAccountActiveIdForView(before, actionRuntime)).toBe('codex-wsl-old')
     expect(getProviderAccountActiveIdForView(after, actionRuntime)).toBe('codex-wsl')
     expect(getProviderAccountActiveIdForView(before, { runtime: 'host' })).toBe(
@@ -170,8 +168,7 @@ describe('providerAccountIsActiveInView', () => {
       }
     }
 
-    // Why: remote Windows forces the host view filter, but Active must still
-    // light for the WSL slot that actually selected this account.
+    // Remote Windows host filtering must still show Active for the selected WSL slot.
     expect(
       providerAccountIsActiveInView(
         codexWslAccount,

@@ -13,7 +13,7 @@ function clientWith(sendRequest: RpcClient['sendRequest']): Pick<RpcClient, 'sen
 }
 
 describe('mobile session tab activation', () => {
-  it('retries terminal focus once on the authenticated replacement after cutover', async () => {
+  it('retries terminal focus once after cutover', async () => {
     const sendRequest = vi
       .fn<RpcClient['sendRequest']>()
       .mockRejectedValueOnce(new LogicalClientCutoverError())
@@ -45,7 +45,8 @@ describe('mobile session tab activation', () => {
       tabId: 'tab-1',
       leafId: 'leaf-1',
       notifyClients: false as const,
-      navigation: 'caller' as const
+      navigation: 'caller' as const,
+      intent: 'user' as const
     }
 
     await expect(activateMobileSessionTab(clientWith(sendRequest), params)).resolves.toMatchObject({
@@ -75,7 +76,8 @@ describe('mobile session tab activation', () => {
         worktree: 'id:worktree-1',
         tabId: 'tab-1',
         notifyClients: false,
-        navigation: 'caller'
+        navigation: 'caller',
+        intent: 'user'
       })
     ).rejects.toBeInstanceOf(LogicalClientCutoverError)
     expect(sendRequest).toHaveBeenCalledTimes(2)

@@ -1,14 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PRODUCER_PAUSE_FAILSAFE_MS, SESSION_FORCE_KILL_RETRY_MS, Session } from './session'
+import { Session } from './session'
+import { TerminalSessionTeardown } from './terminal-session-teardown'
+import {
+  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
+  SESSION_FORCE_KILL_RETRY_MS
+} from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
+import {
+  _resetPtyOwnerHostColorsForTest,
+  setPtyOwnerHostColors
+} from '../../shared/pty-owner-color-query-colors'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
-// Stub the subprocess — Session talks to it via an interface, not child_process directly.
 function createMockSubprocess() {
   const written: string[] = []
   const signals: string[] = []
@@ -39,6 +47,7 @@ function createMockSubprocess() {
     getForegroundProcess(): string | null {
       return this.foregroundProcess
     },
+    confirmShellForeground: vi.fn(async () => true),
     write(data: string) {
       written.push(data)
     },
@@ -57,9 +66,9 @@ function createMockSubprocess() {
     },
     kill() {
       killed = true
-      // Simulate async exit
       setTimeout(() => onExit?.(0), 5)
     },
+    terminateOwnedTree: () => 'terminated' as const,
     forceKill() {
       killed = true
     },
@@ -73,7 +82,6 @@ function createMockSubprocess() {
       onExit = cb
     },
     dispose() {},
-    // Helpers for tests to simulate subprocess events
     simulateData(data: string) {
       onData?.(data)
     },
@@ -112,14 +120,18 @@ describe('Session', () => {
     }
     ownerBackend?: 'posix-pty' | 'windows-conpty' | 'windows-wsl'
     wslDistro?: string
+    reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
+    historySeedChunks?: readonly string[]
   }): Session {
     session = new Session({
       sessionId: 'test-session',
+      ...(opts?.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
       cols: opts?.cols ?? 80,
       rows: opts?.rows ?? 24,
       ...(opts?.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       wslDistro: opts?.wslDistro,
       subprocess,
+      historySeedChunks: opts?.historySeedChunks,
       ...(opts?.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       shellReadySupported: opts?.shellReadySupported ?? false,
       ...(opts?.startupIngress ? { startupIngress: opts.startupIngress } : {}),
@@ -158,6 +170,52 @@ describe('Session', () => {
   })
 
   describe('data flow', () => {
+    it('does not confirm shell ownership from historical replay bytes', () => {
+      createSession({
+        historySeedChunks: ['\x1b[?1049hOLD-TUI\x1b]133;D;137\x07old-shell-marker']
+      })
+
+      expect(subprocess.confirmShellForeground).not.toHaveBeenCalled()
+      expect(session.getSnapshot()?.terminalOwner).toBeUndefined()
+    })
+
+    it('answers concurrent runtime confirmations from one episode inspection', async () => {
+      let resolveConfirmation: ((confirmed: boolean) => void) | undefined
+      subprocess.confirmShellForeground.mockImplementation(
+        () => new Promise((resolve) => void (resolveConfirmation = resolve))
+      )
+      createSession()
+
+      // Reading a verdict must not create process proof without a byte-stream candidate.
+      await expect(session.confirmShellForeground()).resolves.toBe(false)
+      expect(subprocess.confirmShellForeground).not.toHaveBeenCalled()
+
+      subprocess.simulateData('\x1b[?1049hTUI\x1b]133;D;137\x07')
+      const first = session.confirmShellForeground()
+      const second = session.confirmShellForeground()
+      expect(subprocess.confirmShellForeground).toHaveBeenCalledTimes(1)
+      resolveConfirmation?.(true)
+
+      await expect(Promise.all([first, second])).resolves.toEqual([true, true])
+      expect(subprocess.confirmShellForeground).toHaveBeenCalledTimes(1)
+    })
+
+    it('reuses the parser confirmation for a concurrent runtime request', async () => {
+      let resolveConfirmation: ((confirmed: boolean) => void) | undefined
+      subprocess.confirmShellForeground.mockImplementation(
+        () => new Promise((resolve) => void (resolveConfirmation = resolve))
+      )
+      createSession()
+
+      subprocess.simulateData('\x1b[?1049hTUI\x1b]133;D;137\x07shell-marker')
+      const runtimeConfirmation = session.confirmShellForeground()
+      expect(subprocess.confirmShellForeground).toHaveBeenCalledTimes(1)
+      resolveConfirmation?.(true)
+
+      await expect(runtimeConfirmation).resolves.toBe(true)
+      await vi.waitFor(() => expect(session.getSnapshot()?.terminalOwner).toBe('shell'))
+    })
+
     it('forwards subprocess data to attached clients', () => {
       createSession()
       const received: string[] = []
@@ -245,51 +303,56 @@ describe('Session', () => {
       expect(snapshot?.outputSequence).toBe('\x1b]10;?\x07]10;rgb:2e2e/'.length)
     })
 
-    it('reproduces the legacy paired-runtime leak and removes its downstream producer', () => {
+    it('answers a late query itself on every backend, so no downstream view is asked', () => {
       const query = '\x1b]10;?\x07'
-      const reply = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
-      const projectedEcho = ']10;rgb:2e2e/3434/3434\\'
-      createSession({ ownerBackend: 'posix-pty' })
-      session.closeStartupQueryAuthority()
-      const legacyReplyProducers: string[] = []
-      const legacyOnData = vi.fn((data: string) => {
-        if (data === query) {
-          legacyReplyProducers.push('remote-visible-renderer')
-          session.write(reply)
-          if (subprocess.written.at(-1) === reply) {
-            subprocess.simulateData(projectedEcho)
+      const reply = '\x1b]10;rgb:ffff/ffff/ffff\x1b\\'
+      for (const ownerBackend of ['posix-pty', 'windows-conpty'] as const) {
+        subprocess = createMockSubprocess()
+        createSession({ ownerBackend })
+        session.closeStartupQueryAuthority()
+        const downstreamReplies: string[] = []
+        const onData = vi.fn((data: string) => {
+          if (data.includes(query)) {
+            downstreamReplies.push(data)
+            session.write(reply)
           }
+        })
+        session.attachClient({ onData, onExit: () => {} })
+
+        subprocess.simulateData(query)
+        subprocess.simulateData('prompt')
+
+        expect(downstreamReplies, ownerBackend).toEqual([])
+        expect(subprocess.written, ownerBackend).toEqual([reply])
+        expect(onData.mock.calls, ownerBackend).toEqual([
+          ['', query.length, true, query.length],
+          ['prompt']
+        ])
+        expect(session.getSnapshot()?.snapshotAnsi, ownerBackend).not.toContain(']10;rgb')
+        session.dispose()
+      }
+    })
+
+    it('answers from the daemon-wide colours pushed after the session started', () => {
+      createSession({
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
         }
       })
-      session.attachClient({ onData: legacyOnData, onExit: () => {} })
 
-      subprocess.simulateData(query)
+      subprocess.simulateData('\x1b]11;?\x07')
+      try {
+        setPtyOwnerHostColors({ foreground: '#000000', background: '#123456' })
+        subprocess.simulateData('\x1b]11;?\x07')
+      } finally {
+        _resetPtyOwnerHostColorsForTest()
+      }
 
-      expect(legacyReplyProducers).toEqual(['remote-visible-renderer'])
-      expect(subprocess.written).toEqual([reply])
-      expect(legacyOnData.mock.calls).toEqual([[query], [projectedEcho]])
-      expect(session.getSnapshot()?.snapshotAnsi).toContain(projectedEcho)
-      session.dispose()
-
-      subprocess = createMockSubprocess()
-      createSession({ ownerBackend: 'windows-conpty' })
-      session.closeStartupQueryAuthority()
-      const fixedReplyProducers: string[] = []
-      const fixedOnData = vi.fn((data: string) => {
-        if (data === query) {
-          fixedReplyProducers.push('remote-visible-renderer')
-          session.write(reply)
-        }
-      })
-      session.attachClient({ onData: fixedOnData, onExit: () => {} })
-
-      subprocess.simulateData(query)
-      subprocess.simulateData('prompt')
-
-      expect(fixedReplyProducers).toEqual([])
-      expect(subprocess.written).toEqual([])
-      expect(fixedOnData.mock.calls).toEqual([['', query.length, true, query.length], ['prompt']])
-      expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
+      expect(subprocess.written).toEqual([
+        '\x1b]11;rgb:ffff/ffff/ffff\x1b\\',
+        '\x1b]11;rgb:1212/3434/5656\x1b\\'
+      ])
     })
   })
 
@@ -302,17 +365,8 @@ describe('Session', () => {
   })
 
   describe('emulator does not reply to terminal queries', () => {
-    // Why: daemon emulator parses in-process synchronously — before
-    // handleSubprocessData forwards bytes onward — so any auto-reply it
-    // emits races ahead of the live answerer and clobbers it with
-    // default-xterm values (no theme, stale cursor). Query authority is
-    // structural (terminal-query-authority.md): a delivered chunk is
-    // answered by the consuming view's xterm, a hidden-dropped chunk by
-    // MAIN's runtime model responder. The daemon emulator is neither — it
-    // stays write-only forever, and these pins are permanent.
+    // The emulator must not race the authoritative responder; source ingress alone owns OSC 10/11.
     it.each([
-      ['OSC 10 foreground-color', '\x1b]10;?\x07'],
-      ['OSC 11 background-color', '\x1b]11;?\x07'],
       ['OSC 12 cursor-color', '\x1b]12;?\x1b\\'],
       ['DA1 device-attributes', '\x1b[c'],
       ['DA2 secondary device-attributes', '\x1b[>c'],
@@ -322,8 +376,7 @@ describe('Session', () => {
     ])('does not reply to %s query', async (_label, query) => {
       createSession({ shellReadySupported: false })
       subprocess.simulateData(query)
-      // xterm.js fires terminal.write's completion callback via a microtask;
-      // two resolved-promise awaits flush any nested scheduling.
+      // Let nested xterm completion microtasks settle.
       await Promise.resolve()
       await Promise.resolve()
       expect(subprocess.written).toEqual([])
@@ -331,30 +384,56 @@ describe('Session', () => {
   })
 
   describe('shell readiness gating', () => {
-    // Why: regression guard for "claude claude" double-echo. The marker fires
-    // from precmd before readline switches the PTY into raw mode; flushing
-    // then lets the kernel re-echo the command under the prompt. Detailed
-    // timing behavior is covered by post-ready-flush-gate.test.ts.
-    // Also checks writes that arrive during the gate window keep their order
-    // — the gate continues to queue even though shellState is already 'ready'.
-    it('defers flush past the shell-ready marker and preserves write order', () => {
+    // A queued renderer reply cannot unblock a shell that waits on DA1 before emitting readiness.
+    it('answers DA1 once without forwarding it to a renderer', () => {
+      createSession({ shellReadySupported: true })
+      const onData = vi.fn((d: string) => d === '\x1b[0c' && session.write('\x1b[?1;2c'))
+      session.attachClient({ onData, onExit: () => {} })
+
+      subprocess.simulateData('\x1b[0c')
+
+      expect(onData).toHaveBeenCalledWith('', '\x1b[0c'.length, true, '\x1b[0c'.length)
+      expect(session.takePendingOutput(false)?.records).toEqual([])
+      expect(session.getSnapshot()?.outputSequence).toBe('\x1b[0c'.length)
+      subprocess.simulateData('\x1b]777;orca-shell-ready\x07prompt')
+      vi.advanceTimersByTime(30)
+      expect(subprocess.written).toEqual(['\x1b[?1;2c'])
+    })
+
+    // Precmd can precede raw mode; only startup commands wait for the flush gate.
+    it('holds the startup command while user input reaches the current reader', () => {
       createSession({ shellReadySupported: true })
       expect(session.shellState).toBe('pending')
 
-      session.write('first\n')
+      session.writeStartupCommand('first\n')
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
       session.write('second\n')
-      expect(subprocess.written).toEqual([])
+      expect(subprocess.written).toEqual(['second\n'])
 
       subprocess.simulateData('\r\nuser@host $ ')
       vi.advanceTimersByTime(30)
-      expect(subprocess.written).toEqual(['first\n', 'second\n'])
+      expect(subprocess.written).toEqual(['second\n', 'first\n'])
+    })
+
+    it.each([
+      ['color', '\x1b[?997;1n'],
+      ['XTVERSION', '\x1bP>|xterm.js(6.1.0)\x1b\\']
+    ])('contains live %s replies without releasing queued startup input', async (_, reply) => {
+      createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
+      session.writeStartupCommand('codex\n')
+
+      session.write(reply)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(subprocess.written).toEqual([reply])
+
+      await vi.advanceTimersByTimeAsync(100)
+      expect(subprocess.written).toEqual([reply, 'codex\n'])
     })
 
     it('uses the short settle path when marker and prompt bytes arrive together', () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -367,7 +446,7 @@ describe('Session', () => {
 
     it('does not treat bytes before the marker as post-marker prompt output', () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('last login\r\n\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -415,7 +494,7 @@ describe('Session', () => {
       })
 
       subprocess.simulateData('\x1b]777;orca-shell-ready')
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
       vi.advanceTimersByTime(100)
 
       expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
@@ -443,9 +522,22 @@ describe('Session', () => {
       ])
     })
 
+    it('exposes drained output beside an includeSnapshot take without changing records', () => {
+      createSession()
+      subprocess.simulateData('kept-for-durable-history\r\n')
+
+      const taken = session.takePendingOutput(true)
+
+      expect(taken?.records).toEqual([])
+      expect(taken?.drainedRecords).toEqual([
+        { kind: 'output', data: 'kept-for-durable-history\r\n' }
+      ])
+      expect(taken?.snapshot).toBeTruthy()
+    })
+
     it('keeps held marker-prefix bytes during live take-with-snapshot', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready')
       const taken = session.takePendingOutput(true)
@@ -453,6 +545,7 @@ describe('Session', () => {
       vi.advanceTimersByTime(30)
 
       expect(taken?.records).toEqual([])
+      expect(taken?.drainedRecords).toEqual([])
       expect(taken?.snapshot).toBeTruthy()
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
       expect(subprocess.written).toEqual(['codex\n'])
@@ -470,7 +563,7 @@ describe('Session', () => {
 
     it('cancels the post-ready flush gate when force-disposing the subprocess', async () => {
       createSession({ shellReadySupported: true })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
@@ -484,7 +577,7 @@ describe('Session', () => {
 
     it('transitions to timed_out after 15 seconds', () => {
       createSession({ shellReadySupported: true })
-      session.write('waiting input')
+      session.writeStartupCommand('waiting input')
 
       vi.advanceTimersByTime(15_000)
 
@@ -492,9 +585,41 @@ describe('Session', () => {
       expect(subprocess.written).toEqual(['waiting input'])
     })
 
-    it('honors a shorter shell-ready timeout for Codex startup sessions', () => {
+    // Detached stdio is ignored, so readiness diagnostics must reach the daemon file log.
+    it('reports the timeout to the daemon log rather than the void', () => {
+      const events: { event: string; details: Record<string, unknown> }[] = []
+      createSession({
+        shellReadySupported: true,
+        reportReadinessEvent: (event, details) => events.push({ event, details })
+      })
+
+      vi.advanceTimersByTime(15_000)
+
+      expect(events).toHaveLength(1)
+      expect(events[0]?.event).toBe('shell-ready-timeout')
+      expect(events[0]?.details).toMatchObject({ sessionId: 'test-session', timeoutMs: 15_000 })
+      expect(String(events[0]?.details.shell)).not.toContain('/')
+    })
+
+    // Diagnostics run before the ready transition; a throwing sink must still release queued input.
+    it('still releases the barrier when the diagnostic sink throws', () => {
+      createSession({
+        shellReadySupported: true,
+        reportReadinessEvent: () => {
+          throw new Error('log sink unavailable')
+        }
+      })
+      session.writeStartupCommand('waiting input')
+
+      vi.advanceTimersByTime(15_000)
+
+      expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
+      expect(subprocess.written).toEqual(['waiting input'])
+    })
+
+    it('honors an injected shell-ready timeout', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 300 })
-      session.write('codex\n')
+      session.writeStartupCommand('codex\n')
 
       vi.advanceTimersByTime(299)
       expect(subprocess.written).toEqual([])
@@ -516,9 +641,23 @@ describe('Session', () => {
   })
 
   describe('kill', () => {
+    beforeEach(() => {
+      killWithDescendantSweepMock.mockImplementation((_pid: number, killRoot: () => void) => {
+        killRoot()
+      })
+    })
+
+    function gracefulClose(): void | Promise<void> {
+      return new TerminalSessionTeardown(new Map([['test-session', session]])).killSession(
+        'test-session',
+        session,
+        false
+      )
+    }
+
     it('kills the subprocess', () => {
       createSession()
-      session.kill()
+      void gracefulClose()
       expect(subprocess.killed).toBe(true)
       expect(session.isTerminating).toBe(true)
     })
@@ -533,43 +672,12 @@ describe('Session', () => {
       }
       createSession()
 
-      expect(() => session.kill()).toThrow('graceful kill rejected')
+      expect(() => gracefulClose()).toThrow('graceful kill rejected')
       expect(session.isTerminating).toBe(false)
-      expect(() => session.kill()).not.toThrow()
+      expect(() => gracefulClose()).not.toThrow()
 
       expect(attempts).toBe(2)
       expect(session.isTerminating).toBe(true)
-    })
-
-    it('non-agent kill stays synchronous and never routes through the descendant sweep', () => {
-      createSession()
-      session.kill()
-      expect(subprocess.killed).toBe(true)
-      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
-    })
-
-    it('agent kill routes through the descendant sweep with the subprocess as root', () => {
-      createSession({ launchAgent: 'claude' })
-      session.kill()
-      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
-        subprocess.pid,
-        expect.any(Function),
-        expect.objectContaining({ ownsRoot: expect.any(Function) })
-      )
-      // The root kill is deferred to the sweep's snapshot-first sequencing.
-      expect(subprocess.killed).toBe(false)
-      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
-      killRoot()
-      expect(subprocess.killed).toBe(true)
-    })
-
-    it('agent kill root callback is a no-op after the session already exited', () => {
-      createSession({ launchAgent: 'claude' })
-      session.kill()
-      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
-      subprocess.simulateExit(0)
-      killRoot()
-      expect(subprocess.killed).toBe(false)
     })
 
     it('notifies attached clients on exit after kill', async () => {
@@ -581,20 +689,18 @@ describe('Session', () => {
         onExit: (code) => exitCodes.push(code)
       })
 
-      session.kill()
+      void gracefulClose()
 
-      // Wait for the simulated async exit
       await new Promise((r) => setTimeout(r, 20))
       expect(exitCodes).toEqual([0])
     })
 
     it('force-kills after 5s but retains ownership until subprocess exit', () => {
       createSession()
-      // Override kill to NOT trigger exit
       subprocess.kill = () => {}
       const forceKillSpy = vi.spyOn(subprocess, 'forceKill')
 
-      session.kill()
+      void gracefulClose()
       expect(session.state).not.toBe('exited')
 
       vi.advanceTimersByTime(5_000)
@@ -626,6 +732,48 @@ describe('Session', () => {
       expect(session.state).toBe('exited')
     })
 
+    it('starts a joining caller’s exit budget only after the shared force kill is sent', async () => {
+      const signalsSent = Promise.withResolvers<void>()
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        return signalsSent.promise
+      }
+      createSession()
+
+      const first = session.forceKillAndWaitForExit()
+      const joined = session.forceKillAndWaitForExit()
+      let joinedSettled = false
+      void joined.then(
+        () => (joinedSettled = true),
+        () => (joinedSettled = true)
+      )
+      await vi.advanceTimersByTimeAsync(IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS)
+      expect(joinedSettled).toBe(false)
+
+      signalsSent.resolve()
+      subprocess.simulateExit(137)
+      await Promise.all([first, joined])
+      expect(forceKillAttempts).toBe(1)
+    })
+
+    it('lets dispose join an in-flight force kill instead of starting a second sweep', async () => {
+      const signalsSent = Promise.withResolvers<void>()
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        return signalsSent.promise
+      }
+      createSession()
+
+      // Dispose ends the session without a physical exit, so this waiter is not the subject here.
+      void session.forceKillAndWaitForExit().catch(() => {})
+      session.dispose()
+      signalsSent.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(forceKillAttempts).toBe(1)
+    })
+
     it('retries a rejected graceful-deadline force kill', async () => {
       subprocess.kill = () => {}
       let forceKillAttempts = 0
@@ -637,7 +785,7 @@ describe('Session', () => {
       }
       createSession()
 
-      session.kill()
+      void gracefulClose()
       await vi.advanceTimersByTimeAsync(5_000)
       expect(forceKillAttempts).toBe(1)
       expect(session.isTerminating).toBe(true)
@@ -649,14 +797,14 @@ describe('Session', () => {
       expect(vi.getTimerCount()).toBe(0)
     })
 
-    it('keeps late data and the real exit code until physical exit', () => {
+    it('keeps late data and the real exit code while attributing the requested stop', () => {
       createSession()
       subprocess.kill = () => {}
       const onData = vi.fn()
       const onExit = vi.fn()
       session.attachClient({ onData, onExit })
 
-      session.kill()
+      void gracefulClose()
       vi.advanceTimersByTime(5_000)
 
       subprocess.simulateData('late output')
@@ -664,7 +812,9 @@ describe('Session', () => {
 
       expect(onData).toHaveBeenCalledWith('late output')
       expect(onExit).toHaveBeenCalledTimes(1)
-      expect(onExit).toHaveBeenCalledWith(23, session.incarnationId)
+      expect(onExit).toHaveBeenCalledWith(23, session.incarnationId, {
+        kind: 'operator_close'
+      })
       expect(session.exitCode).toBe(23)
     })
   })
@@ -675,98 +825,6 @@ describe('Session', () => {
       session.signal('SIGINT')
       expect(subprocess.signals).toEqual(['SIGINT'])
       expect(session.isTerminating).toBe(false)
-    })
-  })
-
-  describe('clearScrollback', () => {
-    function withPlatform(platform: NodeJS.Platform, run: () => void): void {
-      const original = process.platform
-      Object.defineProperty(process, 'platform', { value: platform })
-      try {
-        run()
-      } finally {
-        Object.defineProperty(process, 'platform', { value: original })
-      }
-    }
-
-    it('resyncs the native PTY screen state alongside the emulator clear', () => {
-      createSession()
-      session.clearScrollback()
-      // Why: without the subprocess clear, ConPTY keeps a stale cursor row and
-      // the next prompt repaint lands below a blank gap on Windows.
-      expect(subprocess.clearCalls).toBe(1)
-      const take = session.takePendingOutput(false)
-      expect(take?.records).toContainEqual({ kind: 'clear' })
-    })
-
-    it('nudges a Windows PowerShell prompt to repaint with a form feed', async () => {
-      createSession()
-      subprocess.foregroundProcess = 'powershell.exe'
-      subprocess.simulateData('PS C:\\Users\\me> ')
-      await vi.advanceTimersByTimeAsync(10)
-      withPlatform('win32', () => session.clearScrollback())
-      // Why: the ConPTY clear cannot reach PSReadLine's cached cursor row;
-      // Ctrl+L makes PSReadLine repaint the prompt at the true origin.
-      expect(subprocess.written).toEqual(['\x0c'])
-    })
-
-    it('does not send a form feed while input is pending at the prompt', async () => {
-      createSession()
-      subprocess.foregroundProcess = 'powershell.exe'
-      subprocess.simulateData('PS C:\\Users\\me> fd')
-      await vi.advanceTimersByTimeAsync(10)
-      // Why: PSReadLine repaints pending input at a stale cached row that
-      // ConPTY's fixed viewport doesn't track, so the nudge must be skipped.
-      withPlatform('win32', () => session.clearScrollback())
-      expect(subprocess.written).toEqual([])
-    })
-
-    it('does not send or queue a form feed before shell-ready', async () => {
-      createSession({ shellReadySupported: true })
-      subprocess.foregroundProcess = 'powershell.exe'
-      subprocess.simulateData('PS C:\\Users\\me> ')
-      await vi.advanceTimersByTimeAsync(10)
-      // Why: a queued form feed would flush after the startup command at an
-      // arbitrary later moment, when the prompt gates no longer hold.
-      withPlatform('win32', () => session.clearScrollback())
-      expect(subprocess.written).toEqual([])
-      subprocess.simulateData('\x1b]777;orca-shell-ready\x07\r\nPS C:\\Users\\me> ')
-      await vi.advanceTimersByTimeAsync(10)
-      expect(subprocess.written).toEqual([])
-    })
-
-    it('does not send a form feed at a PowerShell continuation prompt', async () => {
-      createSession()
-      subprocess.foregroundProcess = 'powershell.exe'
-      subprocess.simulateData('PS C:\\Users\\me> {\r\n>> ')
-      await vi.advanceTimersByTimeAsync(10)
-      withPlatform('win32', () => session.clearScrollback())
-      expect(subprocess.written).toEqual([])
-    })
-
-    it('does not send a form feed while a command owns the foreground', async () => {
-      createSession()
-      subprocess.foregroundProcess = 'node'
-      subprocess.simulateData('PS C:\\Users\\me> ')
-      await vi.advanceTimersByTimeAsync(10)
-      withPlatform('win32', () => session.clearScrollback())
-      expect(subprocess.written).toEqual([])
-    })
-
-    it('does not send a form feed on POSIX platforms', async () => {
-      createSession()
-      subprocess.foregroundProcess = 'pwsh'
-      subprocess.simulateData('PS C:\\Users\\me> ')
-      await vi.advanceTimersByTimeAsync(10)
-      withPlatform('linux', () => session.clearScrollback())
-      expect(subprocess.written).toEqual([])
-    })
-
-    it('does not touch the subprocess after dispose', () => {
-      createSession()
-      session.dispose()
-      session.clearScrollback()
-      expect(subprocess.clearCalls).toBe(0)
     })
   })
 
@@ -781,7 +839,6 @@ describe('Session', () => {
     it('returns a terminal snapshot', async () => {
       createSession()
       subprocess.simulateData('$ hello\r\n')
-      // Give emulator time to process
       await vi.advanceTimersByTimeAsync(10)
 
       const snapshot = session.getSnapshot()
@@ -823,18 +880,15 @@ describe('Session', () => {
         onExit: () => {}
       })
 
-      // Attach a second client (same conceptual slot but new token)
       session.attachClient({
         onData: (d) => received.push(d),
         onExit: () => {}
       })
 
-      // Try detaching with the old token — should only remove token1's client
       session.detachClient(token1)
       received.length = 0
 
       subprocess.simulateData('after detach')
-      // token2's client should still receive data
       expect(received).toEqual(['after detach'])
     })
   })
@@ -849,105 +903,6 @@ describe('Session', () => {
       createSession()
       session.dispose()
       expect(session.state).toBe('exited')
-    })
-  })
-
-  describe('producer flow control', () => {
-    it('pauses the subprocess and auto-resumes via the lost-resume failsafe', () => {
-      createSession()
-      session.pauseProducer()
-      expect(subprocess.pauseCalls).toBe(1)
-      expect(subprocess.resumeCalls).toBe(0)
-
-      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1)
-      expect(subprocess.resumeCalls).toBe(0)
-      vi.advanceTimersByTime(1)
-      expect(subprocess.resumeCalls).toBe(1)
-    })
-
-    it('resumeProducer resumes once and cancels the failsafe timer', () => {
-      createSession()
-      session.pauseProducer()
-      session.resumeProducer()
-      expect(subprocess.resumeCalls).toBe(1)
-
-      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS * 2)
-      expect(subprocess.resumeCalls).toBe(1)
-    })
-
-    it('resumeProducer without a matching pause is a no-op', () => {
-      createSession()
-      session.resumeProducer()
-      expect(subprocess.resumeCalls).toBe(0)
-    })
-
-    it('re-pausing re-arms the failsafe window', () => {
-      createSession()
-      session.pauseProducer()
-      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1_000)
-      session.pauseProducer()
-
-      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1)
-      expect(subprocess.resumeCalls).toBe(0)
-      vi.advanceTimersByTime(1)
-      expect(subprocess.resumeCalls).toBe(1)
-    })
-
-    it('kill() resumes a paused producer before signalling the child', () => {
-      createSession()
-      session.pauseProducer()
-      session.kill()
-      expect(subprocess.resumeCalls).toBe(1)
-      expect(subprocess.killed).toBe(true)
-    })
-
-    it('dispose() resumes a paused producer and clears the failsafe', () => {
-      createSession()
-      session.pauseProducer()
-      session.dispose()
-      expect(subprocess.resumeCalls).toBe(1)
-      expect(vi.getTimerCount()).toBe(0)
-    })
-
-    it('subprocess exit clears the failsafe without resuming a reaped child', () => {
-      createSession()
-      session.pauseProducer()
-      subprocess.simulateExit(0)
-      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS * 2)
-      expect(subprocess.resumeCalls).toBe(0)
-    })
-
-    it('ignores pauseProducer on an exited session', () => {
-      createSession()
-      subprocess.simulateExit(0)
-      session.pauseProducer()
-      expect(subprocess.pauseCalls).toBe(0)
-      expect(vi.getTimerCount()).toBe(0)
-    })
-
-    it('detaching the last client resumes a paused producer', () => {
-      createSession()
-      const token = session.attachClient({ onData: () => {}, onExit: () => {} })
-      session.pauseProducer()
-      session.detachClient(token)
-      expect(subprocess.resumeCalls).toBe(1)
-    })
-
-    it('keeps the pause while another client is still attached', () => {
-      createSession()
-      const token = session.attachClient({ onData: () => {}, onExit: () => {} })
-      session.attachClient({ onData: () => {}, onExit: () => {} })
-      session.pauseProducer()
-      session.detachClient(token)
-      expect(subprocess.resumeCalls).toBe(0)
-    })
-
-    it('detachAllClients resumes a paused producer', () => {
-      createSession()
-      session.attachClient({ onData: () => {}, onExit: () => {} })
-      session.pauseProducer()
-      session.detachAllClients()
-      expect(subprocess.resumeCalls).toBe(1)
     })
   })
 })

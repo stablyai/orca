@@ -1,8 +1,10 @@
+import type { CliStatusCaller } from '../shared/orchestration-caller-status'
 import type { CliStatusResult } from '../shared/runtime-types'
-import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recovery'
+import { formatBrowserActionEffects } from './browser-format'
 import { prepareComputerCliJsonResult } from './computer-format'
-import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
-import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
+import type { RuntimeRpcSuccess } from './runtime-client'
+
+export { formatCliError, reportCliError, type CliErrorContext } from './cli-error'
 
 export {
   formatBrowserProfileList,
@@ -12,7 +14,8 @@ export {
   formatTabListWithProfiles,
   formatTabProfileClone,
   formatTabProfileShow,
-  formatTabShow
+  formatTabShow,
+  saveBrowserScreenshot
 } from './browser-format'
 
 export {
@@ -37,17 +40,23 @@ export {
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
+  formatTerminalSetPaneTitle,
   formatTerminalSend,
   formatTerminalShow,
   formatTerminalSplit,
-  formatTerminalWait
+  formatTerminalWait,
+  terminalSendWarnings
 } from './terminal-format'
 export {
   formatAutomationList,
   formatAutomationRemoved,
   formatAutomationRun,
   formatAutomationRuns,
-  formatAutomationShow,
+  formatAutomationRunsPage,
+  formatAutomationShow
+} from './automation-format'
+export type { AutomationListPayload, AutomationShowPayload } from './automation-format'
+export {
   formatEnvironment,
   formatEnvironmentList,
   formatMemorySnapshot,
@@ -59,10 +68,6 @@ export {
   formatWorktreeShow
 } from './workspace-format'
 
-type CliErrorContext = {
-  commandPath?: readonly string[]
-}
-
 export function printResult<TResult>(
   response: RuntimeRpcSuccess<TResult>,
   json: boolean,
@@ -72,108 +77,79 @@ export function printResult<TResult>(
     console.log(JSON.stringify(prepareComputerCliJsonResult(response), null, 2))
     return
   }
-  console.log(formatter(response.result))
+  console.log(formatter(response.result) + formatBrowserActionEffects(response.result))
 }
 
-export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
-  const message = error instanceof Error ? error.message : String(error)
-  if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
-    return `${message}\nOrca is not running. Run 'orca open' first.`
-  }
-  // Why: error-specific recovery must win over the generic computer fallback.
-  if (error instanceof RuntimeClientError) {
-    const nextSteps = nextStepsFromData(error.data)
-    if (nextSteps.length > 0) {
-      return formatMessageWithNextSteps(message, nextSteps)
-    }
-    if (error.code === 'invalid_argument' && context.commandPath?.[0] === 'computer') {
-      return formatMessageWithNextSteps(
-        message,
-        computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? []
-      )
-    }
-  }
-  if (
-    error instanceof RuntimeRpcFailureError &&
-    error.response.error.code === 'runtime_unavailable'
-  ) {
-    return `${message}\nOrca is not running. Run 'orca open' first.`
-  }
-  if (error instanceof RuntimeRpcFailureError) {
-    return formatMessageWithNextSteps(message, nextStepsFromData(error.response.error.data))
-  }
-  return message
+export type HostListEntry = {
+  kind: 'local' | 'ssh' | 'environment'
+  name: string
+  id: string
+  selector: string
+  platform?: string
+  machineName?: string
+  connected?: boolean
+  connectionStatus?: string
 }
 
-export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
-  if (json) {
-    if (error instanceof RuntimeRpcFailureError) {
-      console.log(JSON.stringify(error.response, null, 2))
-    } else {
-      const response: RuntimeRpcFailure = {
-        id: 'local',
-        ok: false,
-        error: {
-          code: error instanceof RuntimeClientError ? error.code : 'runtime_error',
-          message: error instanceof Error ? error.message : String(error),
-          data: localCliErrorData(error, context)
-        },
-        _meta: {
-          runtimeId: null
-        }
-      }
-      console.log(JSON.stringify(response, null, 2))
-    }
-  } else {
-    console.error(formatCliError(error, context))
+// Explicit host selectors prevent callers from using a display name on the wrong host scope.
+export function formatHostList(result: { hosts: HostListEntry[] }): string {
+  const kindLabel: Record<HostListEntry['kind'], string> = {
+    local: 'local',
+    ssh: 'ssh target',
+    environment: 'orca server'
   }
-}
-
-function formatMessageWithNextSteps(message: string, nextSteps: readonly string[]): string {
-  if (nextSteps.length === 0) {
-    return message
-  }
-  return `${message}\n${nextSteps.map((step) => `Next step: ${step}`).join('\n')}`
-}
-
-function nextStepsFromData(data: unknown): string[] {
-  if (
-    data &&
-    typeof data === 'object' &&
-    Array.isArray((data as { nextSteps?: unknown }).nextSteps)
-  ) {
-    return (data as { nextSteps: unknown[] }).nextSteps.filter(
-      (step): step is string => typeof step === 'string'
+  return result.hosts
+    .map(
+      (host) =>
+        `${kindLabel[host.kind].padEnd(11)} ${host.name}${host.machineName ? ` (${host.machineName})` : ''}  ${host.platform ?? 'platform unknown'}  ${formatHostConnection(host)}  ->  ${host.selector}`
     )
-  }
-  return []
+    .join('\n')
 }
 
-function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
-  // Why: error-specific recovery must win over the generic computer fallback.
-  if (error instanceof RuntimeClientError && error.data !== undefined) {
-    return error.data
+/** What one runtime calls itself; `machineName` is absent when the runtime predates the field. */
+export type HostNameResult = {
+  machineName?: string
+  platform?: string
+}
+
+export function formatHostName(result: HostNameResult): string {
+  return `${result.machineName ?? 'unknown'}${result.platform ? ` (${result.platform})` : ''}`
+}
+
+function formatHostConnection(host: HostListEntry): string {
+  if (host.kind !== 'ssh') {
+    return ''
   }
-  if (
-    error instanceof RuntimeClientError &&
-    error.code === 'invalid_argument' &&
-    context.commandPath?.[0] === 'computer'
-  ) {
-    return computerUseErrorRecoveryData('invalid_argument')
+  if (host.connected === undefined) {
+    return `connection unknown${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
   }
-  return undefined
+  return host.connected
+    ? `connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
+    : `not connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
 }
 
 export function formatCliStatus(status: CliStatusResult): string {
   return [
+    ...(status.target && status.target.kind === 'environment'
+      ? [`target: environment ${status.target.environment}`]
+      : []),
     `appRunning: ${status.app.running}`,
     `pid: ${status.app.pid ?? 'none'}`,
     `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
     `runtimeState: ${status.runtime.state}`,
     `runtimeReachable: ${status.runtime.reachable}`,
+    `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
-    `graphState: ${status.graph.state}`
+    `graphState: ${status.graph.state}`,
+    ...(status.caller === undefined ? [] : [`orcaSessionId: ${formatStatusCaller(status.caller)}`])
   ].join('\n')
+}
+
+function formatStatusCaller(caller: CliStatusCaller): string {
+  if ('refusal' in caller) {
+    return `none (refused: ${caller.refusal.code})`
+  }
+  return `${caller.orcaSessionId}${caller.live ? '' : ' (not live)'}`
 }
 
 export function formatStatus(status: CliStatusResult): string {

@@ -1,10 +1,9 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewCreationEligibility } from '../../../src/shared/hosted-review'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import {
   buildMobileHostedReviewEligibilityLoadKey,
-  eligibilityStateAfterMobileHostedReviewError,
   renderedMobileHostedReviewEligibilityState,
   shouldFetchMobileHostedReviewEligibility,
   useMobileHostedReviewEligibility,
@@ -14,14 +13,15 @@ import {
 import type { MobileCreatePrEligibilityState } from './mobile-create-pr-action'
 
 function eligibility(
-  overrides: Partial<HostedReviewCreationEligibility> = {}
-): HostedReviewCreationEligibility {
+  overrides: Partial<MobileHostedReviewEligibilityReply> = {}
+): MobileHostedReviewEligibilityReply {
   return {
     provider: 'github',
     review: null,
     canCreate: true,
     blockedReason: null,
     nextAction: null,
+    reviewLookupOutcome: 'not_found',
     defaultBaseRef: 'main',
     title: 'feature',
     body: '',
@@ -101,42 +101,9 @@ describe('mobile hosted review eligibility loader core', () => {
     expect(local.identity).not.toBe(ssh.identity)
     expect(local.fetch).not.toBe(ssh.fetch)
   })
-
-  it('renders a superseded same-identity snapshot as loading', () => {
-    const input = {
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      branch: 'feature',
-      hasUpstream: true,
-      ahead: 0,
-      behind: 0
-    }
-    const older = buildMobileHostedReviewEligibilityLoadKey({
-      ...input,
-      hasUncommittedChanges: false
-    })
-    const newest = buildMobileHostedReviewEligibilityLoadKey({
-      ...input,
-      hasUncommittedChanges: true
-    })
-
-    expect(older.identity).toBe(newest.identity)
-    expect(
-      renderedMobileHostedReviewEligibilityState({
-        snapshot: loadSnapshot(older, { kind: 'ready', eligibility: eligibility() }),
-        key: newest,
-        shouldFetch: true
-      })
-    ).toMatchObject({ kind: 'loading', eligibility: eligibility() })
-  })
-
-  it('fails closed after errors', () => {
-    expect(eligibilityStateAfterMobileHostedReviewError()).toEqual({ kind: 'error' })
-  })
 })
 
-// #8411: what the hook returns is what paints. A fetch-imminent frame must not
-// render as `idle` (hidden row) or the Create PR row pops in a frame later.
+// Fetch-imminent must render loading immediately; an idle frame would shift the list when Create PR appears.
 describe('rendered eligibility state', () => {
   it('renders fetch-imminent idle as an in-flight load', () => {
     const key = buildMobileHostedReviewEligibilityLoadKey({
@@ -206,17 +173,13 @@ describe('eligibility request ordering', () => {
   let renderer: ReactTestRenderer | null = null
   let renderedState: MobileCreatePrEligibilityState = { kind: 'idle' }
 
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
-
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
   })
 
   it('does not let an older response overwrite the newest state', async () => {
-    type Response = { ok: true; result: HostedReviewCreationEligibility }
+    type Response = { ok: true; result: MobileHostedReviewEligibilityReply }
     const requests: ReturnType<typeof deferred<Response>>[] = []
     const client = {
       sendRequest: vi.fn(() => {
@@ -266,7 +229,7 @@ describe('eligibility request ordering', () => {
   })
 
   it('disables a ready snapshot in the render that changes its fetch key', async () => {
-    type Response = { ok: true; result: HostedReviewCreationEligibility }
+    type Response = { ok: true; result: MobileHostedReviewEligibilityReply }
     const requests: ReturnType<typeof deferred<Response>>[] = []
     const client = {
       sendRequest: vi.fn(() => {
@@ -309,8 +272,8 @@ describe('eligibility request ordering', () => {
     expect(renderedState).toMatchObject({ kind: 'loading', eligibility: ready })
   })
 
-  it('invalidates a request when its hook instance unmounts', async () => {
-    type Response = { ok: true; result: HostedReviewCreationEligibility }
+  it('keeps remounted hook state separate from a prior instance’s pending request', async () => {
+    type Response = { ok: true; result: MobileHostedReviewEligibilityReply }
     const requests: ReturnType<typeof deferred<Response>>[] = []
     const client = {
       sendRequest: vi.fn(() => {

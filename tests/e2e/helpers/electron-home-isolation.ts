@@ -9,9 +9,13 @@ const RESTRICTED_ENV_KEYS = new Set([
   'HOMEPATH',
   'CODEX_HOME',
   'ORCA_CODEX_HOME',
-  'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
+  'ZCODE_DATA_BASE_DIR',
+  'ZCODE_PERSONAL_PROVIDER_CONFIG_FILE',
+  // Why: Orca's spawn hook writes Claude folder trust into the config this names.
+  'CLAUDE_CONFIG_DIR',
   'ORCA_E2E_USER_DATA_DIR',
   'ORCA_E2E_HOME_DIR',
+  'ORCA_DISABLE_MACOS_LOGIN_SHELL',
   'ZDOTDIR',
   'ORCA_ORIG_ZDOTDIR',
   'BASH_ENV',
@@ -23,12 +27,12 @@ type ElectronHomeIsolationOptions = {
   launchEnv: NodeJS.ProcessEnv
   extraEnv: Record<string, string>
   userDataDir: string
-  codexRealHomeEnabled: boolean
   realHome?: string
 }
 
 export type ElectronHomeIsolation = {
-  env: NodeJS.ProcessEnv
+  // Playwright's electron.launch rejects unset (undefined) env entries.
+  env: Record<string, string>
   isolatedHome: string
   realHome: string
 }
@@ -50,15 +54,17 @@ function assertOverlayDoesNotReplaceIsolation(
     RESTRICTED_ENV_KEYS.has(key.toUpperCase())
   )
   if (restrictedKey) {
-    throw new Error(
-      `${overlayName}.${restrictedKey} cannot override the E2E home boundary; use codexRealHomeEnabled for sandboxed real-home coverage`
-    )
+    throw new Error(`${overlayName}.${restrictedKey} cannot override the E2E home boundary`)
   }
 }
 
-function stripAmbientHomeAndCodexEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+function definedEnvEntries(env: NodeJS.ProcessEnv): [string, string][] {
+  return Object.entries(env).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]]))
+}
+
+function stripAmbientHomeAndCodexEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(env).filter(([key]) => !RESTRICTED_ENV_KEYS.has(key.toUpperCase()))
+    definedEnvEntries(env).filter(([key]) => !RESTRICTED_ENV_KEYS.has(key.toUpperCase()))
   )
 }
 
@@ -67,7 +73,6 @@ export function createElectronHomeIsolation({
   launchEnv,
   extraEnv,
   userDataDir,
-  codexRealHomeEnabled,
   realHome = os.homedir()
 }: ElectronHomeIsolationOptions): ElectronHomeIsolation {
   assertOverlayDoesNotReplaceIsolation(launchEnv, 'launchEnv')
@@ -75,12 +80,14 @@ export function createElectronHomeIsolation({
 
   const requestedIsolatedHome = path.join(userDataDir, 'home')
   mkdirSync(requestedIsolatedHome, { recursive: true, mode: 0o700 })
-  // Why: tmpdir-rooted paths are aliases (macOS /var symlink, Windows 8.3
-  // short names). Git canonicalizes worktree paths, so a non-canonical HOME
-  // makes freshly created worktrees invisible to Orca's listing comparisons.
+  // Canonicalize macOS symlinks/Windows 8.3 aliases like git or worktree path comparisons miss new rows.
   const isolatedHome = realpathSync.native(requestedIsolatedHome)
-  // Why: a bad fixture path must fail before Electron can resolve a real Codex
-  // home; userData isolation alone does not change app.getPath('home').
+  // Create roaming AppData before Electron 43’s Windows home lookup, which otherwise crashes with 0xFFFF7003.
+  if (process.platform === 'win32') {
+    mkdirSync(path.join(isolatedHome, 'AppData', 'Roaming'), { recursive: true })
+    mkdirSync(path.join(isolatedHome, 'AppData', 'Local'), { recursive: true })
+  }
+  // Refuse real HOME before launch; userData isolation alone does not change app.getPath(home).
   if (areSameHomePath(isolatedHome, realHome)) {
     throw new Error('Refusing to launch E2E with the developer home as its isolated HOME')
   }
@@ -90,13 +97,14 @@ export function createElectronHomeIsolation({
     realHome,
     env: {
       ...stripAmbientHomeAndCodexEnv(inheritedEnv),
-      ...launchEnv,
+      ...Object.fromEntries(definedEnvEntries(launchEnv)),
       ...extraEnv,
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
       ORCA_E2E_USER_DATA_DIR: userDataDir,
       ORCA_E2E_HOME_DIR: isolatedHome,
-      ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: codexRealHomeEnabled ? '1' : '0'
+      // macOS login resets HOME to the native account before the shell starts.
+      ...(process.platform === 'darwin' ? { ORCA_DISABLE_MACOS_LOGIN_SHELL: '1' } : {})
     }
   }
 }
@@ -109,8 +117,7 @@ export function assertElectronResolvedIsolatedHome(
     !areSameHomePath(actualHome, isolation.isolatedHome) ||
     areSameHomePath(actualHome, isolation.realHome)
   ) {
-    // Why: a failed safety assertion can land in shared CI artifacts; do not
-    // print a developer username or native home path while reporting it.
+    // Safety failures reach shared CI artifacts; omit native usernames/home paths.
     throw new Error('Electron E2E HOME escaped the disposable profile boundary')
   }
 }

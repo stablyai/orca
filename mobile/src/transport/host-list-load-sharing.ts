@@ -1,21 +1,26 @@
-import type { HostProfile } from './types'
+import type { HostCatalogEntry, HostProfile } from './types'
 
-// Why: concurrent callers share a slow Keychain pass; durable writes invalidate
-// it so later loads cannot receive stale snapshots (#8791).
-let inflight: Promise<HostProfile[]> | null = null
+export type HostListSnapshot = {
+  catalog: HostCatalogEntry[]
+  profiles: HostProfile[]
+}
+
+// Share slow keychain reads until durable writes invalidate them (#8791).
+let inflight: Promise<HostListSnapshot> | null = null
 let revision = 0
 
 export function getHostListLoadRevision(): number {
   return revision
 }
 
-export function shareHostListLoad(load: () => Promise<HostProfile[]>): Promise<HostProfile[]> {
+export function shareHostListLoad(
+  load: () => Promise<HostListSnapshot>
+): Promise<HostListSnapshot> {
   if (inflight) {
     return inflight
   }
   const started = load().finally(() => {
-    // Why: a dropped pass can settle after its replacement started; only retire
-    // the entry still on offer, or the replacement is silently discarded.
+    // Retire only this pass; an older completion must not discard its replacement.
     if (inflight === started) {
       inflight = null
     }

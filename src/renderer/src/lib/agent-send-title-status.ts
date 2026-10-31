@@ -1,4 +1,5 @@
 import type { AgentStatus } from './agent-status'
+import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 
 const EXPLICIT_IDLE_SEND_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
@@ -16,14 +17,15 @@ export function detectAgentSendTitleStatus(title: string | null | undefined): Ag
     return status
   }
 
-  // Why: selected-target sends are immediate. A bare agent name proves identity,
-  // but not that the CLI is ready for submitted input yet.
+  // Immediate selected-target sends need readiness; a bare agent name proves only identity.
   return isExplicitIdleSendTitle(title) ? status : null
 }
 
 function isExplicitIdleSendTitle(title: string): boolean {
   return (
     EXPLICIT_IDLE_SEND_TITLE_RE.test(title) ||
+    // Expose hookless OpenCode by title, but runtime still requires launch/process evidence before writing.
+    isOpenCodeNativeTitle(title) ||
     title.startsWith(CLAUDE_IDLE_PREFIX) ||
     title.startsWith('* ') ||
     title.includes(GEMINI_IDLE_PREFIX) ||

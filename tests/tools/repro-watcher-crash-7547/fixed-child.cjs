@@ -1,15 +1,5 @@
-// Fixed-architecture harness for issue #7547: runs the SAME scenarios that
-// crash the in-process watcher (see child.cjs), but through the real
-// parcel-watcher-process client (esbuild-bundled from src/main/ipc) which
-// forks the real out/main/parcel-watcher-process-entry.js.
-//
-// Success = this process exits 0 (the app-process stand-in survived), the
-// watcher stayed functional (final health check receives a live event), and
-// no in-process fallback was used. Contained watcher-child crashes are
-// EXPECTED and counted — they prove the native bug still fires but no longer
-// reaches the host.
-//
-// Must be run with cwd = repo root (entry path resolves against cwd).
+// Run #7547’s same native-crash scenarios through the bundled production parcel-watcher-process client/entry, from repo root.
+// Require app-surrogate survival, final live watcher event and no in-process fallback; count contained child crashes as expected evidence.
 'use strict'
 
 const fs = require('node:fs')
@@ -17,23 +7,29 @@ const os = require('node:os')
 const path = require('node:path')
 const { Worker, isMainThread, workerData } = require('node:worker_threads')
 
-const REPO_ROOT = path.resolve(__dirname, '..', '..')
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..')
 
 // The real host client, bundled on demand so the harness always exercises the
-// current src/main/ipc/parcel-watcher-process.ts.
+// current src/main/ipc/filesystem/watcher-process/parcel-watcher-process.ts.
 const bundlePath = path.join(__dirname, 'parcel-watcher-process.bundle.cjs')
 if (isMainThread) {
-  const clientSrc = path.join(REPO_ROOT, 'src', 'main', 'ipc', 'parcel-watcher-process.ts')
-  if (
-    !fs.existsSync(bundlePath) ||
-    fs.statSync(bundlePath).mtimeMs < fs.statSync(clientSrc).mtimeMs
-  ) {
-    require('node:child_process').execSync(
-      `npx esbuild ${JSON.stringify(clientSrc)} --bundle --platform=node --format=cjs ` +
-        `--external:electron --external:@parcel/watcher --outfile=${JSON.stringify(bundlePath)}`,
-      { cwd: REPO_ROOT, stdio: 'inherit' }
-    )
-  }
+  const clientSrc = path.join(
+    REPO_ROOT,
+    'src',
+    'main',
+    'ipc',
+    'filesystem',
+    'watcher-process',
+    'parcel-watcher-process.ts'
+  )
+  require('esbuild').buildSync({
+    entryPoints: [clientSrc],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    external: ['electron', '@parcel/watcher'],
+    outfile: bundlePath
+  })
   const entry = path.join(process.cwd(), 'out', 'main', 'parcel-watcher-process-entry.js')
   if (!fs.existsSync(entry)) {
     process.stderr.write(
@@ -70,8 +66,7 @@ const stats = {
   fallbackDetected: false
 }
 
-// The client reports child crashes / fallback via console.error|warn — hook
-// them to count contained crashes and detect a broken (in-process) setup.
+// Observe client error/warn to count contained crashes and reject in-process fallback.
 const realError = console.error.bind(console)
 console.error = (...args) => {
   const line = args.map(String).join(' ')
@@ -156,8 +151,10 @@ function subscribeLikeOrca(dir) {
         stats.events += events.length
       },
       OPTS,
-      () => {
-        stats.interruptions++
+      {
+        onInterruption: () => {
+          stats.interruptions++
+        }
       }
     )
     .then((sub) => {
@@ -183,8 +180,7 @@ async function deleteRootLane(baseDir, durationMs, lane) {
     const churn = new Worker(__filename, {
       workerData: { role: 'churn', dir, durationMs: 300 }
     })
-    // Attach at spawn: a listener added after the worker already exited never
-    // fires, which hangs the lane (or lets the process exit 0 mid-run).
+    // Attach exit listener at spawn; late attachment can hang a lane or falsely exit 0 mid-run.
     const churnDone = new Promise((r) => churn.once('exit', r))
     await sleep(50 + rand(100))
     rmrf(dir)
@@ -230,9 +226,7 @@ async function unsubChurnLane(baseDir, durationMs, lane) {
   rmrf(dir)
 }
 
-// Health check must outlast the client's 30s crash-loop cooldown: if the
-// breaker tripped during the scenarios, watching is expected to recover on a
-// later subscribe, and THAT is what we verify.
+// Allow health-check recovery beyond the 30s crash-loop cooldown.
 async function finalHealthCheck(baseDir) {
   const deadline = Date.now() + 45_000
   let attempt = 0
@@ -243,13 +237,19 @@ async function finalHealthCheck(baseDir) {
     let gotEvent = false
     let sub = null
     try {
-      sub = await client.subscribeViaWatcherProcess(dir, (err, events) => {
-        if (!err && events.length > 0) {
-          gotEvent = true
-        }
-      }, OPTS)
+      sub = await client.subscribeViaWatcherProcess(
+        dir,
+        (err, events) => {
+          if (!err && events.length > 0) {
+            gotEvent = true
+          }
+        },
+        OPTS
+      )
     } catch (err) {
-      process.stderr.write(`[fixed-harness] health subscribe attempt ${attempt} failed: ${err.message}\n`)
+      process.stderr.write(
+        `[fixed-harness] health subscribe attempt ${attempt} failed: ${err.message}\n`
+      )
       rmrf(dir)
       await sleep(5000)
       continue
@@ -277,12 +277,14 @@ async function main() {
   const baseDir = path.join(os.tmpdir(), 'orca-7547-harness-fixed', `run-${process.pid}`)
   fs.mkdirSync(baseDir, { recursive: true })
 
-  // Watchdog: a stuck lane must fail loudly, and a premature natural exit
-  // (empty event loop) must not read as success.
-  const watchdog = setTimeout(() => {
-    process.stderr.write('[fixed-harness] FAIL: watchdog — scenarios did not complete\n')
-    process.exit(7)
-  }, durationMs * 4 + 60_000)
+  // Watchdog rejects stuck lanes and premature empty-loop success.
+  const watchdog = setTimeout(
+    () => {
+      process.stderr.write('[fixed-harness] FAIL: watchdog — scenarios did not complete\n')
+      process.exit(7)
+    },
+    durationMs * 4 + 60_000
+  )
   process.on('exit', (code) => {
     if (!completed && code === 0) {
       process.exitCode = 8
@@ -305,15 +307,16 @@ async function main() {
   completed = true
   clearTimeout(watchdog)
 
-  // Summary via stderr + exitCode (not process.exit): stdout writes to a pipe
-  // are async on Windows and process.exit() drops them.
+  // Use stderr plus exitCode: process.exit can drop asynchronous Windows pipe writes.
   process.stderr.write(
     `[fixed-harness] subs=${stats.subscribes} unsubs=${stats.unsubscribes} events=${stats.events} ` +
       `watchErrors=${stats.watchErrors} containedCrashes=${stats.containedCrashes} ` +
       `interruptions=${stats.interruptions} healthy=${healthy} fallback=${stats.fallbackDetected}\n`
   )
   if (stats.fallbackDetected) {
-    process.stderr.write('[fixed-harness] FAIL: in-process fallback used — isolation not exercised\n')
+    process.stderr.write(
+      '[fixed-harness] FAIL: in-process fallback used — isolation not exercised\n'
+    )
     process.exitCode = 6
     return
   }

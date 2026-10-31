@@ -58,11 +58,11 @@ dir holding `conpty.dll` + `OpenConsole.exe`).
 
 Tiers differ only in which top-level `*.dll` files they carry:
 
-| Tier      | Top-level DLLs                                                    |
-| --------- | ---------------------------------------------------------------- |
-| `full`    | **all** top-level `*.dll`                                         |
+| Tier      | Top-level DLLs                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `full`    | **all** top-level `*.dll`                                                                                                      |
 | `no-gpu`  | all **except** GPU/render DLLs (`libEGL`, `libGLESv2`, `vk_swiftshader`, `vulkan-1`, `d3dcompiler_47`); **keeps** `ffmpeg.dll` |
-| `minimal` | **none** (exe + data blobs + daemon bundle + node-pty only)      |
+| `minimal` | **none** (exe + data blobs + daemon bundle + node-pty only)                                                                    |
 
 Trimming further is a config change (edit `TIER_DEFINITIONS` / `GPU_DLLS`), not
 a code change.
@@ -95,7 +95,7 @@ The reverted #7421 added a `node-pty` patch that reads
 `config/patches/node-pty@1.1.0.patch` does NOT contain that override** — it was
 reverted. The spike therefore relies on **layout preservation** (copying the
 node-pty tree at its default relative path) rather than the env override. The
-spike still *sets* `ORCA_NODE_PTY_NATIVE_DIR` to the relocated native dir so it
+spike still _sets_ `ORCA_NODE_PTY_NATIVE_DIR` to the relocated native dir so it
 keeps working if pointed at a build that carries the patch, but on this branch
 the var is inert.
 

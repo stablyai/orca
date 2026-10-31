@@ -6,17 +6,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
-import type { TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
   resolveLaunchedAgentExitEvidence,
-  resolveTabAgentFromSignals,
-  useTabAgent
-} from './use-tab-agent'
+  resolveTabAgentFromSignals
+} from '../../../shared/tab-agent-from-signals'
+import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
-let latestHookAgent: TuiAgent | null | undefined
+let latestHookAgent: TerminalAgent | null | undefined
 const hookRoots: Root[] = []
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
@@ -69,8 +70,7 @@ describe('resolveTabAgentFromSignals process identity', () => {
   })
 
   it('suppresses launch identity on shell-foreground evidence despite a stale agent title', () => {
-    // Why: OSC 133;D is process-grade exit proof — a TUI that died without
-    // restoring its title must not keep painting the tab.
+    // Local OSC 133;D proves exit even if a dead TUI leaves its title unchanged.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -85,8 +85,7 @@ describe('resolveTabAgentFromSignals process identity', () => {
   })
 
   it('suppresses stuck-title identity once shell foreground is proven on a manual pane', () => {
-    // Why: pre-probe-removal, the foreground read cleared icons for TUIs that
-    // died with a stuck title; shell-foreground evidence restores that.
+    // Shell-foreground evidence replaces the old foreground probe for dead TUIs with stuck titles.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -204,8 +203,7 @@ describe('useTabAgent process signals', () => {
     expect(latestHookAgent).toBe('aider')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
 
-    // Why: OSC 133;D marks the launched command exiting; the stale spinner
-    // title must not keep the launch identity alive.
+    // OSC 133;D proves launched-command exit; stale spinner titles cannot retain identity.
     await setPaneForeground({ agent: null, shellForeground: true })
     await act(async () => {
       root.render(createElement(HookProbe, { tab: launchedTab }))
@@ -218,8 +216,7 @@ describe('useTabAgent process signals', () => {
     const launchedTab = { ...baseTab, launchAgent: 'aider' as const }
     await renderHookProbe(launchedTab)
 
-    // Pre-start window: the shell prompt (or a quick setup command) finishing
-    // is not evidence the launched agent ever ran.
+    // Pre-start shell/setup completion cannot prove the launched agent ever ran.
     await setPaneForeground({ agent: null, shellForeground: true })
 
     expect(latestHookAgent).toBe('aider')

@@ -4,29 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { decodeBrowserScreencastFrame } from '../../shared/browser-screencast-protocol'
 import { startBrowserScreencast } from './browser-screencast-stream'
-
-function createMockWebContents() {
-  let attached = false
-  const dbg = new EventEmitter() as EventEmitter & {
-    isAttached: ReturnType<typeof vi.fn>
-    attach: ReturnType<typeof vi.fn>
-    detach: ReturnType<typeof vi.fn>
-    sendCommand: ReturnType<typeof vi.fn>
-  }
-  dbg.isAttached = vi.fn(() => attached)
-  dbg.attach = vi.fn(() => {
-    attached = true
-  })
-  dbg.detach = vi.fn(() => {
-    attached = false
-  })
-  dbg.sendCommand = vi.fn(async () => ({}))
-
-  return {
-    isDestroyed: vi.fn(() => false),
-    debugger: dbg
-  }
-}
+import { installBrowserJavaScriptDialogs } from './browser-javascript-dialogs'
+import { createMockScreencastWebContents as createMockWebContents } from './browser-screencast-web-contents-test-double'
 
 function jpegWithSize(width: number, height: number): Buffer {
   return Buffer.from([
@@ -769,6 +748,45 @@ describe('startBrowserScreencast', () => {
 
     session.stop()
     await session.done
+  })
+
+  it('keeps the phone card on the dialog Orca holds, and dismisses it when the last viewer leaves', async () => {
+    const webContents = Object.assign(new EventEmitter(), createMockWebContents(), {
+      id: 501,
+      getURL: () => 'https://example.com'
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dialog owner reads only id, URL and the emitter; the double carries all three.
+    installBrowserJavaScriptDialogs(webContents as never, () => null)
+    const onEvent = vi.fn()
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame: vi.fn(),
+      onEvent
+    })
+    const answer = vi.fn()
+    webContents.emit(
+      '-run-dialog',
+      { dialogType: 'confirm', messageText: 'Continue?', defaultPromptText: '' },
+      answer
+    )
+
+    // The turned-away dialog's close names no dialog.
+    webContents.debugger.emit('message', {}, 'Page.javascriptDialogClosed', {})
+
+    expect(onEvent).toHaveBeenLastCalledWith({
+      type: 'dialog',
+      dialogType: 'confirm',
+      message: 'Continue?'
+    })
+    // The last viewer leaving dismisses it, so a later session isn't blocked behind it.
+    session.stop()
+    await session.done
+    expect(answer).toHaveBeenCalledExactlyOnceWith(false, '')
   })
 
   it('applies the client viewport before the screencast starts', async () => {

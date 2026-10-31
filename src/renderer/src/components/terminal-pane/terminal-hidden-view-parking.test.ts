@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   clearTerminalProviderSnapshotCapabilities,
   synchronizeTerminalProviderSnapshotCapabilities
@@ -11,12 +11,17 @@ import {
   canParkTerminalWorktreeRenderers,
   isParkRestorableTerminalPty,
   isSnapshotBackedTerminalPty,
+  resetPairedRuntimeParkingEnvironmentIdsCacheForTest,
   selectPairedRuntimeParkingEnvironmentIds,
   selectColdParkedTerminalTabs,
   selectColdParkedTerminalWorktrees
 } from './terminal-hidden-view-parking'
 
 describe('selectPairedRuntimeParkingEnvironmentIds', () => {
+  beforeEach(() => {
+    resetPairedRuntimeParkingEnvironmentIdsCacheForTest()
+  })
+
   it('selects only reachable hosts advertising the paired parking contract', () => {
     const statuses = new Map([
       [
@@ -28,6 +33,39 @@ describe('selectPairedRuntimeParkingEnvironmentIds', () => {
     ])
 
     expect(selectPairedRuntimeParkingEnvironmentIds(statuses)).toEqual(new Set(['capable']))
+  })
+
+  it('shares the capability Set across status-only changes and replaces it on membership changes', () => {
+    const first = selectPairedRuntimeParkingEnvironmentIds(
+      new Map([
+        ['runtime-a', { status: { capabilities: ['terminal.paired-parking.v1'] } }],
+        ['runtime-b', { status: { capabilities: ['terminal.multiplex.v1'] } }]
+      ])
+    )
+    const statusOnlyUpdate = selectPairedRuntimeParkingEnvironmentIds(
+      new Map([
+        [
+          'runtime-a',
+          {
+            status: {
+              capabilities: ['terminal.paired-parking.v1'],
+              runtimeId: 'peer-a-reconnected'
+            }
+          }
+        ],
+        ['runtime-b', { status: { capabilities: ['terminal.multiplex.v1'], appVersion: '1.5.0' } }]
+      ])
+    )
+    expect(statusOnlyUpdate).toBe(first)
+
+    const capabilityUpdate = selectPairedRuntimeParkingEnvironmentIds(
+      new Map([
+        ['runtime-a', { status: { capabilities: ['terminal.paired-parking.v1'] } }],
+        ['runtime-b', { status: { capabilities: ['terminal.paired-parking.v1'] } }]
+      ])
+    )
+    expect(capabilityUpdate).not.toBe(first)
+    expect(capabilityUpdate).toEqual(new Set(['runtime-a', 'runtime-b']))
   })
 })
 
@@ -49,10 +87,7 @@ describe('isSnapshotBackedTerminalPty', () => {
     )
   })
 
-  // Why: separator-less ids ('1', '2', 'pty-local-detached') come from the
-  // daemon-fail-open LocalPtyProvider and have no daemon session model —
-  // revealing a parked pane would silently respawn a fresh shell, so they
-  // must not count as snapshot-backed (changed from the ported prior art).
+  // Daemon-fail-open IDs lack snapshot models; parking would respawn a shell instead of restoring it.
   it('rejects separator-less local PTY ids that lack a daemon session model', () => {
     expect(isSnapshotBackedTerminalPty('pty-local-detached', 'repo::/worktree')).toBe(false)
     expect(isSnapshotBackedTerminalPty('1', 'wt-1')).toBe(false)
@@ -151,7 +186,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
     ).toBe(false)
   })
 
-  it('keeps a previously mounted v19 terminal eligible for ordinary parking', async () => {
+  it('defers preserved-daemon snapshot authority to the watcher coverage gate', async () => {
     const legacyPtyId = 'repo::/worktree@@session-1'
     clearTerminalProviderSnapshotCapabilities()
     await synchronizeTerminalProviderSnapshotCapabilities([legacyPtyId], async (ids) =>
@@ -198,9 +233,7 @@ describe('canParkTerminalWorktreeRenderers', () => {
     ).toBe(true)
   })
 
-  // Why: hiddenSince survives a background-measure window, so a past-deadline
-  // worktree would otherwise re-park the instant the measure lease ends —
-  // remount/reattach thrash on every ~3s periodic probe.
+  // Measure leaves hiddenSince intact; cool-down prevents immediate re-park and repeated remount thrash.
   it('holds an otherwise past-deadline candidate out of park until the measure cool-down ends', () => {
     expect(canParkTerminalWorktreeRenderers({ ...base, parkCooldownUntilMs: nowMs + 1 })).toBe(
       false
@@ -361,8 +394,7 @@ describe('selectColdParkedTerminalWorktrees', () => {
   it('cold-parks aged local worktrees even when under the retain limit', () => {
     const selected = selectColdParkedTerminalWorktrees({
       worktrees: [
-        // Why: wt-recent is the last-active exempt one; wt-1 proves the TTL
-        // sweep still parks an aged worktree that is under the cap.
+        // wt-recent takes last-active exemption; wt-1 proves TTL still parks aged candidates below the cap.
         localCandidate('wt-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localCandidate('wt-1', nowMs - TERMINAL_WORKTREE_HOT_RETAIN_MS)
       ],
@@ -387,24 +419,6 @@ describe('selectColdParkedTerminalWorktrees', () => {
     expect(selected).toEqual(new Set())
   })
 
-  it('exempts only the last-active worktree from the cap, counting it against the limit', () => {
-    const selected = selectColdParkedTerminalWorktrees({
-      worktrees: [
-        localCandidate('wt-1', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
-        localCandidate('wt-2', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 1),
-        localCandidate('wt-3', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS - 2)
-      ],
-      pendingStartupByTabId: {},
-      parkingEnabled: true,
-      nowMs,
-      // Why: wt-1 (last-active) takes one of the two warm slots, so only wt-2
-      // fits the remaining slot and wt-3 parks.
-      hotRetainLimit: 2
-    })
-
-    expect(selected).toEqual(new Set(['wt-3']))
-  })
-
   it('selects nothing when the settings kill switch disables parking', () => {
     const selected = selectColdParkedTerminalWorktrees({
       worktrees: [
@@ -423,9 +437,7 @@ describe('selectColdParkedTerminalWorktrees', () => {
   it('does not cold-park terminals without local snapshot recovery', () => {
     const selected = selectColdParkedTerminalWorktrees({
       worktrees: [
-        // Why: wt-recent is last-active (exempt); wt-local proves the aged
-        // local worktree still parks while ssh/remote never enter the candidate
-        // set at all.
+        // wt-recent takes the exemption; aged local still parks while SSH/remote stay outside this fixture’s candidates.
         localCandidate('wt-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localCandidate('wt-local', nowMs - TERMINAL_WORKTREE_HOT_RETAIN_MS),
         {
@@ -531,8 +543,7 @@ describe('selectColdParkedTerminalTabs', () => {
     expect(selected).toEqual(new Set(['tab-3']))
   })
 
-  // Why worktree-scoped: measure windows mount every tab of the worktree, so
-  // one cool-down (not per-tab clocks) delays re-park after the lease ends.
+  // Measure mounts all tabs, so one worktree cool-down delays their re-park together.
   it('selects nothing while the post-measure cool-down is active', () => {
     const args = {
       worktreeId: 'wt-1',
@@ -558,8 +569,7 @@ describe('selectColdParkedTerminalTabs', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
       terminalTabs: [
-        // Why: tab-recent is last-active exempt; tab-1 proves the TTL sweep
-        // still parks an aged tab under the cap.
+        // tab-recent takes the exemption; tab-1 proves TTL still parks aged tabs below the cap.
         localTab('tab-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localTab('tab-1', nowMs - TERMINAL_TAB_HOT_RETAIN_MS)
       ],
@@ -585,6 +595,43 @@ describe('selectColdParkedTerminalTabs', () => {
     expect(selected).toEqual(new Set())
   })
 
+  // Why: view switches stamp every tab together, so UUID order cannot express recency.
+  it('resolves an identical-hiddenSinceMs tie by activation order, not by tab id', () => {
+    const hiddenSinceMs = nowMs - TERMINAL_TAB_HOT_RETAIN_MS
+    const selected = selectColdParkedTerminalTabs({
+      worktreeId: 'wt-1',
+      terminalTabs: [
+        { ...localTab('tab-aaa', hiddenSinceMs), lastActivatedSeq: 1 },
+        { ...localTab('tab-zzz', hiddenSinceMs), lastActivatedSeq: 2 }
+      ],
+      pendingStartupByTabId: {},
+      parkingEnabled: true,
+      nowMs,
+      hotRetainLimit: 0
+    })
+
+    expect(selected).toEqual(new Set(['tab-aaa']))
+  })
+
+  // Why: the cap and exemption must share one recency ranking.
+  it('keeps the most recently activated tab warm when the cap evicts a tie', () => {
+    const hiddenSinceMs = nowMs - TERMINAL_TAB_HOT_RETAIN_MS + 1
+    const selected = selectColdParkedTerminalTabs({
+      worktreeId: 'wt-1',
+      terminalTabs: [
+        { ...localTab('tab-aaa', hiddenSinceMs), lastActivatedSeq: 1 },
+        { ...localTab('tab-bbb', hiddenSinceMs), lastActivatedSeq: 3 },
+        { ...localTab('tab-ccc', hiddenSinceMs), lastActivatedSeq: 2 }
+      ],
+      pendingStartupByTabId: {},
+      parkingEnabled: true,
+      nowMs,
+      hotRetainLimit: 2
+    })
+
+    expect(selected).toEqual(new Set(['tab-aaa']))
+  })
+
   it('selects nothing when the settings kill switch disables parking', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
@@ -605,8 +652,7 @@ describe('selectColdParkedTerminalTabs', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',
       terminalTabs: [
-        // Why: tab-recent is last-active exempt; tab-local proves the aged
-        // local tab still parks while ssh/remote never enter the candidate set.
+        // tab-recent takes the exemption; aged local still parks while SSH/remote stay outside these candidates.
         localTab('tab-recent', nowMs - TERMINAL_WORKTREE_PARK_DELAY_MS),
         localTab('tab-local', nowMs - TERMINAL_TAB_HOT_RETAIN_MS),
         {

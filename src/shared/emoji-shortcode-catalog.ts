@@ -1,35 +1,68 @@
-import emojiShortcodes from 'emojibase-data/en/shortcodes/emojibase.json'
-
 export type StandardEmojiShortcodeEntry = {
   emoji: string
   shortcode: string
 }
 
+/** Shape of `emojibase-data/en/shortcodes/emojibase.json`: hexcode -> shortcode or aliases. */
+export type EmojiShortcodeDataset = Readonly<Record<string, string | readonly string[]>>
+
+let loadDataset: (() => EmojiShortcodeDataset) | null = null
+
+/** Renderer needs eager synchronous data or it persists literal :wink: during load. Inject main’s lazy require to avoid bundling/parsing 166KB at launch. */
+export function setEmojiShortcodeDatasetLoader(load: () => EmojiShortcodeDataset): void {
+  loadDataset = load
+}
+
 // Skin-tone aliases (`wave_tone3`) are ~40% of the dataset and would drown the suggestion list.
 const SKIN_TONE_SHORTCODE = /_tone\d(?:-\d)?$/
 
-const CATALOG = Object.entries(emojiShortcodes).flatMap(([hexcode, value]) => {
-  const shortcodes = (typeof value === 'string' ? [value] : value).filter(
-    (shortcode) => !SKIN_TONE_SHORTCODE.test(shortcode)
-  )
-  return shortcodes.length > 0 ? [{ emoji: hexcodeToEmoji(hexcode), shortcodes }] : []
-})
+type EmojiShortcodeCatalog = {
+  entries: readonly StandardEmojiShortcodeEntry[]
+  primaryShortcodeByEmoji: ReadonlyMap<string, string>
+  segmenter: Intl.Segmenter
+}
 
-export const STANDARD_EMOJI_SHORTCODE_ENTRIES: readonly StandardEmojiShortcodeEntry[] =
-  CATALOG.flatMap(({ emoji, shortcodes }) => shortcodes.map((shortcode) => ({ emoji, shortcode })))
+let catalog: EmojiShortcodeCatalog | null = null
 
-const PRIMARY_SHORTCODE_BY_EMOJI = new Map(
-  CATALOG.map(({ emoji, shortcodes }) => [
-    normalizeEmojiLookup(emoji),
-    primaryShortcode(shortcodes)
-  ])
-)
+// Defer ~3,900-shortcode traversal until first colon/name sanitization, memoizing once instead of charging every launch.
+function loadCatalog(): EmojiShortcodeCatalog {
+  if (catalog) {
+    return catalog
+  }
+  if (!loadDataset) {
+    throw new Error('Emoji shortcode dataset loader was never registered')
+  }
+  const grouped = Object.entries(loadDataset()).flatMap(([hexcode, value]) => {
+    const shortcodes = (typeof value === 'string' ? [value] : value).filter(
+      (shortcode) => !SKIN_TONE_SHORTCODE.test(shortcode)
+    )
+    return shortcodes.length > 0 ? [{ emoji: hexcodeToEmoji(hexcode), shortcodes }] : []
+  })
+  catalog = {
+    entries: grouped.flatMap(({ emoji, shortcodes }) =>
+      shortcodes.map((shortcode) => ({ emoji, shortcode }))
+    ),
+    primaryShortcodeByEmoji: new Map(
+      grouped.map(({ emoji, shortcodes }) => [
+        normalizeEmojiLookup(emoji),
+        primaryShortcode(shortcodes)
+      ])
+    ),
+    segmenter: new Intl.Segmenter('en', { granularity: 'grapheme' })
+  }
+  return catalog
+}
 
-/**
- * Pick the alias that reads best as a branch or directory name: skip `+1`/`-1` so the name
- * starts with a letter, then cryptic stubs (👎 `no`, ✌ `v`) and the `flag_xx` namespacing
- * prefix, both of which have a spelled-out alias (`thumbsdown`, `victory`, `germany`).
- */
+export function getStandardEmojiShortcodeEntries(): readonly StandardEmojiShortcodeEntry[] {
+  return loadCatalog().entries
+}
+
+/** Test-only probe for the lazy-boundary guard; never branch on this in product code. */
+export function isEmojiShortcodeCatalogBuiltForTest(): boolean {
+  return catalog !== null
+}
+
+/** Prefer spelled-out names over symbolic +1/-1, cryptic no/v and flag_xx namespaces for branch/directory labels. */
 function primaryShortcode(shortcodes: readonly string[]): string {
   const named = shortcodes.filter((candidate) => /^[a-z]/i.test(candidate))
   return (
@@ -40,11 +73,10 @@ function primaryShortcode(shortcodes: readonly string[]): string {
   )
 }
 
-const EMOJI_SEGMENTER = new Intl.Segmenter('en', { granularity: 'grapheme' })
-
 export function replaceKnownEmojiWithShortcodes(input: string): string {
-  return Array.from(EMOJI_SEGMENTER.segment(input), ({ segment }) => {
-    const shortcode = PRIMARY_SHORTCODE_BY_EMOJI.get(normalizeEmojiLookup(segment))
+  const { primaryShortcodeByEmoji, segmenter } = loadCatalog()
+  return Array.from(segmenter.segment(input), ({ segment }) => {
+    const shortcode = primaryShortcodeByEmoji.get(normalizeEmojiLookup(segment))
     return shortcode ? ` ${shortcode.replaceAll('_', '-')} ` : segment
   }).join('')
 }

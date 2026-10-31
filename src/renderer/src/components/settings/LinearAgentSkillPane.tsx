@@ -5,7 +5,7 @@ import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import { ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import { ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { getLinearUsageExamples } from '@/lib/linear-usage-examples'
 import type { SkillUsageExample } from '@/lib/skill-usage-example'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
@@ -33,7 +33,6 @@ function resolveLinearExampleIcon(example: SkillUsageExample): LucideIcon {
   return LINEAR_EXAMPLE_ICONS[example.id] ?? LinearIcon
 }
 
-// Checklist owns connect + skill + visibility; examples and notes sit below.
 export function LinearAgentSkillPane(): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
@@ -71,25 +70,12 @@ export function LinearAgentSkillPane(): React.JSX.Element {
       hideHeader
       title={translate('auto.components.settings.LinearAgentSkillPane.skillTitle', 'Linear skill')}
       description={null}
-      command={skillSetup.installCommand}
-      installedCommand={skillSetup.updateCommand}
-      terminalTitle={translate(
-        'auto.components.settings.LinearAgentSkillPane.terminalTitle',
-        'Linear skill setup'
-      )}
-      terminalAriaLabel={translate(
-        'auto.components.settings.LinearAgentSkillPane.terminalAriaLabel',
-        'Linear skill install terminal'
-      )}
-      terminalWorktreeId="settings-linear-skill-terminal"
-      terminalShellOverride={skillSetup.terminalShellOverride}
+      skillNames={[ORCA_LINEAR_SKILL_NAME]}
+      installedSkillNames={[skillSetup.updateSkillName]}
       installed={skillSetup.skillInstalled}
       loading={skillSetup.skillLoading}
       error={skillSetup.error}
       installDisabled={skillSetup.installDisabled}
-      preInstallNotice={skillSetup.preInstallNotice}
-      getPrerequisiteStatus={skillSetup.getPrerequisiteStatus}
-      onBeforeOpenTerminal={skillSetup.onBeforeOpenTerminal}
       onRecheck={skillSetup.refreshSkill}
       freshnessSkillName={skillSetup.freshnessSkillName}
     />
@@ -106,12 +92,13 @@ export function LinearAgentSkillPane(): React.JSX.Element {
       className="space-y-6 py-2"
     >
       <LinearAgentSkillGuide
-        status={{
+        readiness={{
           connected: linearConnected,
-          connectionChecking,
+          checking: connectionChecking,
           skillInstalled: skillSetup.skillInstalled,
           skillChecking: skillSetup.skillChecking,
-          visibleInTasks
+          skillUnverifiable: skillSetup.skillUnverifiable,
+          visible: visibleInTasks
         }}
         onOpenTaskSources={openTaskSources}
         onManageLinearAccess={

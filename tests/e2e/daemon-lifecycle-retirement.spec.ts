@@ -1,6 +1,7 @@
 import { fork, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { build } from 'esbuild'
@@ -13,6 +14,19 @@ import {
   getDaemonTokenPath
 } from '../../src/main/daemon/daemon-spawner'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+
+// Connect to prove liveness: retired daemons deliberately leave endpoint entries on disk.
+function connectsTo(socketPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ path: socketPath })
+    const settle = (reachable: boolean): void => {
+      socket.destroy()
+      resolve(reachable)
+    }
+    socket.once('connect', () => settle(true))
+    socket.once('error', () => settle(false))
+  })
+}
 
 type FixtureDaemon = {
   child: ChildProcess
@@ -200,8 +214,7 @@ test('v22 stays reattachable while v24 retires after its last empty client disco
     })
     await secondCurrentClient.ensureConnected()
 
-    // Why: failed adoption may overlap another authenticated app client, so
-    // only daemon-owned idle retirement can safely decide whether to exit.
+    // Only daemon-owned idle retirement can safely exit while other authenticated clients may remain.
     await currentAdapter.disconnectOnly()
     expect(current.child.exitCode).toBeNull()
     await expect(secondCurrentClient.request('listSessions', undefined)).resolves.toEqual({
@@ -213,7 +226,8 @@ test('v22 stays reattachable while v24 retires after its last empty client disco
     expect(existsSync(current.tokenPath)).toBe(false)
     expect(existsSync(current.pidPath)).toBe(false)
     if (process.platform !== 'win32') {
-      expect(existsSync(current.socketPath)).toBe(false)
+      // Retirement leaves the entry for atomic replacement; prove no listener answers rather than expecting unlink.
+      await expect(connectsTo(current.socketPath)).resolves.toBe(false)
     }
     expect(legacy.child.exitCode).toBeNull()
   } catch (error) {

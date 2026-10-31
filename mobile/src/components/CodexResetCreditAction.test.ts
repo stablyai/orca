@@ -1,7 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CodexResetCreditAction } from './CodexResetCreditAction'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -19,35 +20,19 @@ const summary = {
   expiryLabel: 'Expires in 5d'
 }
 
-function suppressRendererWarning(): () => void {
-  const original = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    original(...args)
-  })
-  return () => spy.mockRestore()
-}
-
 function renderAction(busy: boolean, disabled: boolean): ReactTestRenderer {
   let renderer: ReactTestRenderer | null = null
-  const restore = suppressRendererWarning()
-  try {
-    act(() => {
-      renderer = create(
-        createElement(CodexResetCreditAction, {
-          summary,
-          scopeLabel: 'dev@example.com on the host',
-          busy,
-          disabled,
-          onPress: vi.fn()
-        })
-      )
-    })
-  } finally {
-    restore()
-  }
+  act(() => {
+    renderer = create(
+      createElement(CodexResetCreditAction, {
+        summary,
+        scopeLabel: 'dev@example.com on the host',
+        busy,
+        disabled,
+        onPress: vi.fn()
+      })
+    )
+  })
   if (!renderer) {
     throw new Error('Reset action did not render')
   }
@@ -55,13 +40,9 @@ function renderAction(busy: boolean, disabled: boolean): ReactTestRenderer {
 }
 
 describe('CodexResetCreditAction', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
   it('exposes a 44pt touch target and enabled accessibility state', () => {
     const renderer = renderAction(false, false)
-    const button = renderer.root.findByType('Pressable')
+    const button = findByHostType(renderer.root, 'Pressable')
 
     expect(button.props.accessibilityLabel).toBe('Use Codex rate-limit reset')
     expect(button.props.accessibilityState).toEqual({ busy: false, disabled: false })
@@ -73,10 +54,10 @@ describe('CodexResetCreditAction', () => {
 
   it('announces progress and visually dims a busy disabled action', () => {
     const renderer = renderAction(true, true)
-    const button = renderer.root.findByType('Pressable')
-    const text = renderer.root
-      .findAllByType('Text')
-      .map((node) => node.children.filter((child) => typeof child === 'string').join(''))
+    const button = findByHostType(renderer.root, 'Pressable')
+    const text = findAllByHostType(renderer.root, 'Text').map((node) =>
+      node.children.filter((child) => typeof child === 'string').join('')
+    )
 
     expect(button.props.accessibilityLabel).toBe('Resetting Codex rate limits')
     expect(button.props.accessibilityState).toEqual({ busy: true, disabled: true })

@@ -3,9 +3,11 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock(import('@/i18n/i18n'), async (importOriginal) => ({
+  ...(await importOriginal()),
   translate: (_key: string, fallback: string) => fallback
 }))
 
@@ -24,6 +26,12 @@ vi.mock('../settings/MobilePairingConnectionOptions', () => ({
 
 vi.mock('./WindowsFirewallNotice', () => ({
   WindowsFirewallNotice: () => null
+}))
+
+vi.mock('../settings/MachineNameField', () => ({
+  MachineNameField: ({ id, className }: { id?: string; className?: string }) => (
+    <div data-testid="machine-name-field" data-id={id} className={className} />
+  )
 }))
 
 import { HeroFlow, type StepIndex } from './MobileHero'
@@ -69,8 +77,7 @@ describe('HeroFlow height', () => {
         onPlatformChange={vi.fn()}
         installQrUrl={null}
         installCopy={{ ctaLabel: 'Open TestFlight', url: 'https://example.com' }}
-        iosChannel="preview"
-        onIosChannelChange={vi.fn()}
+        onOpenAndroidInstallGuide={vi.fn()}
         onOpenInstallUrl={vi.fn()}
         onCopyInstallUrl={vi.fn()}
         pairQrDataUrl={null}
@@ -116,8 +123,7 @@ describe('HeroFlow height', () => {
         onPlatformChange={vi.fn()}
         installQrUrl={null}
         installCopy={{ ctaLabel: 'Open TestFlight', url: 'https://example.com' }}
-        iosChannel="preview"
-        onIosChannelChange={vi.fn()}
+        onOpenAndroidInstallGuide={vi.fn()}
         onOpenInstallUrl={vi.fn()}
         onCopyInstallUrl={vi.fn()}
         pairQrDataUrl={null}
@@ -152,6 +158,20 @@ describe('HeroFlow height', () => {
     expect(screen.getByText('Step 1 of 2').closest('.mp-flow-screen')).toHaveAttribute('inert')
   })
 
+  it('opens the APK install guide without duplicating its troubleshooting steps', async () => {
+    const user = userEvent.setup()
+    const onOpenAndroidInstallGuide = vi.fn()
+    renderFlow(0, {
+      platform: 'android',
+      installCopy: { ctaLabel: 'Download APK', url: 'https://example.com/app-release.apk' },
+      onOpenAndroidInstallGuide
+    })
+
+    expect(screen.queryByText(/full browser, not an in-app browser/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Install guide' }))
+    expect(onOpenAndroidInstallGuide).toHaveBeenCalledOnce()
+  })
+
   it('shows Relay mint failure with no QR and the beta note', () => {
     renderFlow(1, {
       pairQrDataUrl: null,
@@ -183,7 +203,7 @@ describe('HeroFlow height', () => {
     expect(screen.getByText('Sign in to create a Relay pairing code')).toBeInTheDocument()
   })
 
-  it('disables Relay recovery immediately and delays visible retry feedback', async () => {
+  it('disables Relay recovery while busy and eventually shows retry feedback', async () => {
     renderFlow(1, {
       pairLoading: true,
       relayMintFailure: {
@@ -197,7 +217,7 @@ describe('HeroFlow height', () => {
     await waitFor(() => expect(screen.getByText(/Creating a new pairing code/)).toBeVisible())
   })
 
-  it('does not offer a futile retry when Relay is unavailable on the desktop', () => {
+  it('offers Retry Relay when the desktop provider is missing', () => {
     renderFlow(1, {
       relayMintFailure: {
         code: 'relay_provider_unavailable',
@@ -208,13 +228,44 @@ describe('HeroFlow height', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Orca Relay isn’t available on this desktop'
     )
-    expect(screen.queryByRole('button', { name: 'Retry Relay' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Retry Relay' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Use LAN' })).toBeEnabled()
   })
 
-  it('hides the mint-failure notice when a Relay QR is shown', () => {
+  it('names a signed-out or unentitled desktop instead of offering a futile retry', () => {
+    renderFlow(1, {
+      relayMintFailure: {
+        code: 'relay_signed_out',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('Sign in again to use Orca Relay')
+    expect(screen.queryByRole('button', { name: 'Retry Relay' })).toBeNull()
+    cleanup()
+    renderFlow(1, {
+      relayMintFailure: {
+        code: 'relay_not_entitled',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('isn’t included with this Orca account')
+    expect(screen.queryByRole('button', { name: 'Retry Relay' })).toBeNull()
+  })
+
+  it('shows a Relay QR without a failure notice when no failure is supplied', () => {
     renderFlow(1, { pairQrDataUrl: 'data:image/png;base64,qr' })
     expect(screen.queryByTestId('relay-mint-failure-notice')).not.toBeInTheDocument()
+  })
+
+  it('uses the supplied QR bitmap size and adds frame padding', () => {
+    renderFlow(1, { pairQrDataUrl: 'data:image/png;base64,qr', pairQrSize: 218 })
+
+    const image = screen.getByRole('img', { name: 'Pairing QR' })
+    const layout = image.closest('.mp-pairing-layout') as HTMLElement
+    expect(layout.style.getPropertyValue('--mp-pairing-qr-image-size')).toBe('218px')
+    expect(layout.style.getPropertyValue('--mp-pairing-qr-frame-size')).toBe('238px')
   })
 
   it('shows an encoder error while keeping the copy fallback enabled', () => {
@@ -312,5 +363,116 @@ describe('HeroFlow height', () => {
     )
 
     expect(refresh).toHaveFocus()
+  })
+
+  it('places the machine-name field slot ahead of the pairing code', () => {
+    const props: React.ComponentProps<typeof MobileHeroPairingStep> = {
+      pairQrDataUrl: 'data:image/png;base64,AAAA',
+      pairingUrl: 'orca://pair?code=abc',
+      pairingQrError: false,
+      relayMintFailure: null,
+      onUseLan: vi.fn(),
+      onRetryRelay: vi.fn(),
+      onCopyRelayDiagnostics: vi.fn(),
+      pairLoading: false,
+      connectionMode: 'automatic',
+      onConnectionModeChange: vi.fn(),
+      onRegeneratePairing: vi.fn(),
+      canGeneratePairing: true,
+      onCopyPairingCode: vi.fn(),
+      networkInterfaces: [],
+      customAddresses: [],
+      selectedAddress: undefined,
+      selectedAddressIsCustom: false,
+      onSelectedAddressChange: vi.fn(),
+      onCustomAddressSelect: vi.fn(),
+      onCustomAddressRemove: vi.fn(),
+      beforeCustomAddressChange: vi.fn().mockResolvedValue(true),
+      onRefreshNetworkInterfaces: vi.fn(),
+      refreshingNetworkInterfaces: false
+    }
+    render(<MobileHeroPairingStep {...props} />)
+
+    const field = screen.getByTestId('machine-name-field')
+    expect(field).toHaveAttribute('data-id', 'mobile-hero-machine-name')
+    const qr = screen.getByRole('img', { name: 'Pairing QR' })
+    expect(field.compareDocumentPosition(qr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(field.parentElement).toHaveClass('mp-pairing-copy')
+    expect(field).toHaveClass('mp-pairing-machine')
+  })
+
+  it('demotes the network address picker to a disclosure on Orca Relay', async () => {
+    const props: React.ComponentProps<typeof MobileHeroPairingStep> = {
+      pairQrDataUrl: null,
+      pairingUrl: null,
+      pairingQrError: false,
+      relayMintFailure: null,
+      onUseLan: vi.fn(),
+      onRetryRelay: vi.fn(),
+      onCopyRelayDiagnostics: vi.fn(),
+      pairLoading: false,
+      connectionMode: 'automatic',
+      onConnectionModeChange: vi.fn(),
+      onRegeneratePairing: vi.fn(),
+      canGeneratePairing: true,
+      onCopyPairingCode: vi.fn(),
+      networkInterfaces: [],
+      customAddresses: [],
+      selectedAddress: undefined,
+      selectedAddressIsCustom: false,
+      onSelectedAddressChange: vi.fn(),
+      onCustomAddressSelect: vi.fn(),
+      onCustomAddressRemove: vi.fn(),
+      beforeCustomAddressChange: vi.fn().mockResolvedValue(true),
+      onRefreshNetworkInterfaces: vi.fn(),
+      refreshingNetworkInterfaces: false
+    }
+    const user = userEvent.setup()
+    const { rerender } = render(<MobileHeroPairingStep {...props} />)
+    expect(screen.queryByText('Network')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Refresh network interfaces' })).toBeNull()
+
+    // Relay still advertises a LAN endpoint, so the picker must stay reachable.
+    await user.click(screen.getByRole('button', { name: /Also use a faster local path/i }))
+    expect(screen.getByText('Network')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Refresh network interfaces' })).toBeVisible()
+    expect(screen.getByText(/Optional\. Pick the Wi‑Fi or Tailscale address/i)).toBeVisible()
+
+    rerender(<MobileHeroPairingStep {...props} connectionMode="local-only" />)
+    expect(screen.getByText('Network')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Also use a faster local path/i })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Refresh network interfaces' })).toBeVisible()
+  })
+
+  it('keeps a custom address visible on Orca Relay', () => {
+    const address = 'host.example:6768'
+    const props: React.ComponentProps<typeof MobileHeroPairingStep> = {
+      pairQrDataUrl: null,
+      pairingUrl: null,
+      pairingQrError: false,
+      relayMintFailure: null,
+      onUseLan: vi.fn(),
+      onRetryRelay: vi.fn(),
+      onCopyRelayDiagnostics: vi.fn(),
+      pairLoading: false,
+      connectionMode: 'automatic',
+      onConnectionModeChange: vi.fn(),
+      onRegeneratePairing: vi.fn(),
+      canGeneratePairing: true,
+      onCopyPairingCode: vi.fn(),
+      networkInterfaces: [],
+      customAddresses: [address],
+      selectedAddress: address,
+      selectedAddressIsCustom: true,
+      onSelectedAddressChange: vi.fn(),
+      onCustomAddressSelect: vi.fn(),
+      onCustomAddressRemove: vi.fn(),
+      beforeCustomAddressChange: vi.fn().mockResolvedValue(true),
+      onRefreshNetworkInterfaces: vi.fn(),
+      refreshingNetworkInterfaces: false
+    }
+    render(<MobileHeroPairingStep {...props} />)
+    expect(screen.getByText('Network')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Also use a faster local path/i })).toBeNull()
   })
 })

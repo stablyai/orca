@@ -1,4 +1,5 @@
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type DaemonPtyRouterDataEvent = {
   id: string
@@ -12,4 +13,10 @@ export type DaemonPtyRouterExitEvent = {
   id: string
   code: number
   incarnationId?: PtyIncarnationId
+  /** Absent from a daemon predating exit causes; readers fall back to `unknown`. */
+  cause?: TerminalExitCause
+  /** Main ended the session to restart the daemon; the pane stays for its next process. */
+  replacedByRestart?: true
+  /** The session's host went away (a WSL bridge pane's distro stopped); its pane and history stay to cold-restore. */
+  hostLost?: true
 }

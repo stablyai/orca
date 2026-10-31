@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createWsOutboundBackpressureQueue } from './ws-outbound-backpressure-queue'
 
-// Deterministic harness: bufferedAmount and the drain timer are both injected,
-// so no wall-clock races. `runTimers` fires the single parked drain callback.
+// Inject bufferedAmount and drain scheduling to avoid wall-clock races.
 
 function createHarness(overrides?: {
   softCapBytes?: number
   maxQueuedBytes?: number
   maxQueuedFrames?: number
+  maxDrainFramesPerTurn?: number
   writable?: boolean
   parkAfterSend?: boolean
   throwOnSend?: boolean
@@ -17,6 +17,7 @@ function createHarness(overrides?: {
   let writable = overrides?.writable ?? true
   const overflow = vi.fn()
   let pendingTimer: (() => void) | null = null
+  let pendingTimerDelay: number | null = null
 
   const softCapBytes = overrides?.softCapBytes ?? 100
   const queue = createWsOutboundBackpressureQueue<string>({
@@ -36,13 +37,16 @@ function createHarness(overrides?: {
     softCapBytes,
     maxQueuedBytes: overrides?.maxQueuedBytes ?? 1000,
     maxQueuedFrames: overrides?.maxQueuedFrames,
+    maxDrainFramesPerTurn: overrides?.maxDrainFramesPerTurn,
     drainPollMs: 10,
-    setTimer: (cb) => {
+    setTimer: (cb, delay) => {
       pendingTimer = cb
+      pendingTimerDelay = delay
       return 1 as unknown as ReturnType<typeof setTimeout>
     },
     clearTimer: () => {
       pendingTimer = null
+      pendingTimerDelay = null
     }
   })
 
@@ -59,9 +63,11 @@ function createHarness(overrides?: {
     runTimer: () => {
       const cb = pendingTimer
       pendingTimer = null
+      pendingTimerDelay = null
       cb?.()
     },
-    hasTimer: () => pendingTimer !== null
+    hasTimer: () => pendingTimer !== null,
+    timerDelay: () => pendingTimerDelay
   }
 }
 
@@ -88,22 +94,53 @@ describe('ws outbound backpressure queue', () => {
 
   it('applies prospective admission to a direct-send frame', () => {
     const sent = vi.fn()
-    const canSend = vi.fn(() => false)
+    const canSend = vi.fn().mockReturnValueOnce(false).mockReturnValue(true)
+    let pendingTimer: (() => void) | null = null
     const queue = createWsOutboundBackpressureQueue<string>({
       send: sent,
       byteLengthOf: (frame) => frame.length,
       getBufferedAmount: () => 0,
       isWritable: () => true,
       canSend,
-      onOverflow: vi.fn()
+      onOverflow: vi.fn(),
+      setTimer: (callback) => {
+        pendingTimer = callback
+        return 1 as unknown as ReturnType<typeof setTimeout>
+      },
+      clearTimer: () => {
+        pendingTimer = null
+      }
     })
 
     expect(queue.enqueue('frame')).toBe(true)
 
-    expect(canSend).toHaveBeenCalledWith(5)
+    expect(canSend).toHaveBeenCalledWith(5, false)
     expect(sent).not.toHaveBeenCalled()
     expect(queue.queuedBytes()).toBe(5)
+
+    const scheduled = pendingTimer as (() => void) | null
+    scheduled?.()
+    expect(canSend).toHaveBeenLastCalledWith(5, true)
+    expect(sent).toHaveBeenCalledWith('frame')
     queue.dispose()
+  })
+
+  it('yields after a configured drain quantum while preserving FIFO order', () => {
+    const h = createHarness({ maxDrainFramesPerTurn: 2 })
+    h.setBuffered(101)
+    h.queue.enqueue('a')
+    h.queue.enqueue('b')
+    h.queue.enqueue('c')
+    h.setBuffered(0)
+
+    h.runTimer()
+    expect(h.sent).toEqual(['a', 'b'])
+    expect(h.hasTimer()).toBe(true)
+    expect(h.timerDelay()).toBe(0)
+
+    h.runTimer()
+    expect(h.sent).toEqual(['a', 'b', 'c'])
+    expect(h.hasTimer()).toBe(false)
   })
 
   it('rejects an oversized frame before the direct-send fast path', () => {
@@ -126,15 +163,14 @@ describe('ws outbound backpressure queue', () => {
 
   it('parks frames in order while over the cap and drains on recovery without loss', () => {
     const h = createHarness({ softCapBytes: 100 })
-    h.setBuffered(200) // over cap
+    h.setBuffered(200)
     h.queue.enqueue('one')
     h.queue.enqueue('two')
     h.queue.enqueue('three')
-    // Nothing sent yet; all held in order.
     expect(h.sent).toEqual([])
     expect(h.queue.queuedBytes()).toBe('one'.length + 'two'.length + 'three'.length)
+    expect(h.timerDelay()).toBe(10)
 
-    // Link recovers; the drain timer flushes everything in FIFO order.
     h.setBuffered(0)
     h.runTimer()
     expect(h.sent).toEqual(['one', 'two', 'three'])
@@ -163,8 +199,7 @@ describe('ws outbound backpressure queue', () => {
     h.setBuffered(200)
     h.queue.enqueue('first')
     h.setBuffered(0)
-    // Even though the wire is now clear, an existing backlog means the new
-    // frame must queue behind it, not jump the line.
+    // New frames must stay behind existing backlog even when the wire clears.
     h.queue.enqueue('second')
     expect(h.sent).toEqual([])
     h.runTimer()
@@ -220,31 +255,34 @@ describe('ws outbound backpressure queue', () => {
     let bufferedAmount = 100
     let pendingTimer: (() => void) | null = null
     const sent: string[] = []
-    const queue = createWsOutboundBackpressureQueue<string>({
-      send: (frame) => sent.push(frame),
-      byteLengthOf: (frame) => frame.length,
-      getBufferedAmount: () => bufferedAmount,
-      isWritable: () => true,
-      onOverflow: overflow,
-      softCapBytes: 10,
-      setTimer: (callback) => {
-        pendingTimer = callback
-        return 1 as unknown as ReturnType<typeof setTimeout>
-      },
-      clearTimer: () => {
-        pendingTimer = null
-      },
-      claimQueuedBytes: (bytes) => {
-        if (denyClaims) {
-          return null
+    const createQueue = () =>
+      createWsOutboundBackpressureQueue<string>({
+        send: (frame) => sent.push(frame),
+        byteLengthOf: (frame) => frame.length,
+        getBufferedAmount: () => bufferedAmount,
+        isWritable: () => true,
+        onOverflow: overflow,
+        softCapBytes: 10,
+        setTimer: (callback) => {
+          pendingTimer = callback
+          // SAFETY: clearTimer only tracks this callback; no native timer API consumes the handle.
+          return 1 as unknown as ReturnType<typeof setTimeout>
+        },
+        clearTimer: () => {
+          pendingTimer = null
+        },
+        claimQueuedBytes: (bytes) => {
+          if (denyClaims) {
+            return null
+          }
+          claimedBytes += bytes
+          return () => {
+            claimedBytes -= bytes
+          }
         }
-        claimedBytes += bytes
-        return () => {
-          claimedBytes -= bytes
-        }
-      }
-    })
+      })
 
+    const queue = createQueue()
     queue.enqueue('one')
     expect(claimedBytes).toBe(3)
     bufferedAmount = 0
@@ -266,16 +304,23 @@ describe('ws outbound backpressure queue', () => {
     expect(claimedBytes).toBe(0)
     queue.dispose()
     expect(claimedBytes).toBe(0)
+
+    denyClaims = false
+    const disposal = createQueue()
+    disposal.enqueue('retained')
+    expect(claimedBytes).toBe(8)
+    disposal.dispose()
+    expect(claimedBytes).toBe(0)
   })
 
   it('signals overflow (and drops backlog) when the hard cap is exceeded', () => {
     const h = createHarness({ softCapBytes: 10, maxQueuedBytes: 8 })
-    h.setBuffered(100) // over soft cap: everything queues
-    h.queue.enqueue('12345') // 5 bytes queued
+    h.setBuffered(100)
+    h.queue.enqueue('12345')
     expect(h.overflow).not.toHaveBeenCalled()
-    h.queue.enqueue('67890') // 10 bytes total > 8 -> overflow
+    h.queue.enqueue('67890')
     expect(h.overflow).toHaveBeenCalledTimes(1)
-    // After overflow the queue is inert: no sends, no further overflow calls.
+    // Overflow makes the queue inert, with no repeated notification.
     h.setBuffered(0)
     h.runTimer()
     h.queue.enqueue('later')

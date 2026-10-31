@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildGitHubCheckSummary, type GitHubCheckLike } from './github-check-summary'
 import { buildGitLabCheckSummary } from './gitlab-check-summary'
-import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
-import type { ProviderCheckSummary } from '../../../src/shared/types'
+import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
 
 describe('buildGitHubCheckSummary', () => {
   it('returns none for empty check lists', () => {
@@ -30,22 +29,6 @@ describe('buildGitHubCheckSummary', () => {
       failed: 1,
       pending: 1,
       neutral: 0
-    })
-  })
-
-  it('keeps neutral and unknown terminal conclusions out of passed without demoting the PR', () => {
-    expect(
-      buildGitHubCheckSummary([
-        { status: 'completed', conclusion: 'success' },
-        { status: 'completed', conclusion: 'neutral' }
-      ])
-    ).toEqual({
-      state: 'success',
-      total: 2,
-      passed: 1,
-      failed: 0,
-      pending: 0,
-      neutral: 1
     })
   })
 
@@ -112,11 +95,10 @@ const PARITY_CASES: ParityCase[] = [
   }
 ]
 
-describe('mobile / desktop check classification parity', () => {
-  it.each(PARITY_CASES)('$name matches the shared desktop classifier', ({ checks, expected }) => {
+describe('mobile check classification', () => {
+  it.each(PARITY_CASES)('classifies GitHub $name', ({ checks, expected }) => {
     const summary = { ...expected, total: checks.length }
     expect(buildGitHubCheckSummary(checks)).toEqual(summary)
-    expect(summarizeProviderChecks(checks)).toEqual(summary)
   })
 
   it.each([

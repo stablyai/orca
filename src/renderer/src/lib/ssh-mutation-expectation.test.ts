@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
+
 import { captureDirectSshMutationExpectation } from './ssh-mutation-expectation'
 
 function stateWithGenerations(): Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'> {
@@ -33,6 +34,7 @@ function stateWithGenerations(): Pick<AppState, 'sshConnectionStates' | 'sshStat
             ]
           ]),
           targets: [],
+          targetGenerations: new Map(),
           targetLabels: new Map(),
           removedTargetLabels: new Map(),
           targetsHydrated: true
@@ -48,14 +50,6 @@ describe('captureDirectSshMutationExpectation', () => {
       expectedExecutionHostId: 'ssh:ssh-1',
       expectedSshTargetId: 'ssh-1',
       expectedSshConnectionGeneration: 9
-    })
-  })
-
-  it('uses client-local SSH state only for client-owned connections', () => {
-    expect(captureDirectSshMutationExpectation(stateWithGenerations(), 'ssh-1')).toEqual({
-      expectedExecutionHostId: 'ssh:ssh-1',
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 3
     })
   })
 

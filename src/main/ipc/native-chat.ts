@@ -1,3 +1,4 @@
+import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watch-contract'
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
 import type {
   AgentType,
@@ -9,43 +10,43 @@ import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
 import {
   subscribeNativeChatTranscript,
   readNativeChatTranscriptTail,
-  type NativeChatTranscriptSubscription
+  type NativeChatTranscriptSubscription,
+  type SubscribeNativeChatTranscriptArgs
 } from '../native-chat/transcript-watch'
+import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { openNativeChatTranscript } from '../native-chat/native-chat-open-wake'
 
-// Re-export so existing test imports of `clearNativeChatTranscriptCache` from
-// this module keep working after the cache moved to transcript-read-cache.ts.
 export { clearNativeChatTranscriptCache }
 
 export type NativeChatReadSessionArgs = {
   agent: AgentType
   sessionId: string
-  /** How many of the most-recent turns to return. The renderer starts at the
-   *  default window and raises this to page in older history as it scrolls up. */
+  /** Recent-turn window; increase it to page backward. */
   limit?: number
-  /** Authoritative transcript path from the agent hook (providerSession), used to
-   *  locate the file when the session id no longer names it (recent Claude Code). */
+  /** Hook-authoritative path when session IDs no longer identify transcript filenames. */
   transcriptPath?: string
 }
 
-// Why: render and parse only the recent window so long transcripts do not stall
-// either the main process or the message list. Pagination raises this limit.
-const DESKTOP_READ_WINDOW = 300
+// Bound parsing and rendering to the recent window; pagination raises the limit.
 
 async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
   const { agent, sessionId } = args
-  // Clamp to a positive window; default to the desktop window for the first page.
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
+  // Showing or paging a chat's history is a user act on its WSL distro.
+  const { transcriptPath, waking } = openNativeChatTranscript(sessionId, args.transcriptPath)
+  await waking
   return readNativeChatTranscriptTail({
     agent,
     sessionId,
-    transcriptPath: args.transcriptPath,
-    limit
+    transcriptPath,
+    limit,
+    sourceOrder: true
   })
 }
 
 export type NativeChatSubscribeArgs = {
-  /** Renderer-minted id, unique per webContents, echoed back on every emit so
-   *  the renderer can route appends to the right hook instance. */
+  /** Renderer ID unique within WebContents, echoed on updates to route each viewer. */
   subscriptionId: string
   agent: AgentType
   sessionId: string
@@ -63,6 +64,8 @@ export type NativeChatAppendedPayload = {
         hasMore: boolean
         error?: string
         lifecycle?: NativeChatTurnLifecycle
+        /** The current window has no transcript yet; do not treat it as settled history. */
+        pending?: boolean
       }
     | {
         type: 'replacement'
@@ -81,17 +84,19 @@ type LiveSubscription = {
   subscription: NativeChatTranscriptSubscription
 }
 
-// Why: live subscriptions are keyed by (webContents.id, subscriptionId) so the
-// same renderer can watch several panes, and a destroyed window tears down all
-// of its watchers — strict teardown to avoid fd leaks (plan U4 risk).
+type PendingSubscription = {
+  controller: AbortController
+}
+
+// A renderer document owns its viewers; replacement, crash, or destruction releases them.
 const liveSubscriptions = new Map<number, Map<string, LiveSubscription>>()
-// Why: unsubscribe and renderer destruction must invalidate async watcher setup
-// before it can publish a late subscription into the live map.
-const pendingSubscriptions = new Map<number, Map<string, symbol>>()
-const senderCleanupRegistered = new Set<number>()
+// Retire pending setup on unsubscribe/destruction before it can publish a late watcher.
+const pendingSubscriptions = new Map<number, Map<string, PendingSubscription>>()
+const senderLifetimes = new Map<number, ReturnType<typeof abortWhenRendererGone>>()
 
 function teardownSubscription(senderId: number, subscriptionId: string): void {
   const pendingBySubId = pendingSubscriptions.get(senderId)
+  pendingBySubId?.get(subscriptionId)?.controller.abort()
   pendingBySubId?.delete(subscriptionId)
   if (pendingBySubId?.size === 0) {
     pendingSubscriptions.delete(senderId)
@@ -109,8 +114,12 @@ function teardownSubscription(senderId: number, subscriptionId: string): void {
 }
 
 function teardownAllForSender(senderId: number): void {
-  // The destroyed event can arrive before async subscription setup stores a watcher.
-  senderCleanupRegistered.delete(senderId)
+  const lifetime = senderLifetimes.get(senderId)
+  senderLifetimes.delete(senderId)
+  lifetime?.dispose()
+  for (const pending of pendingSubscriptions.get(senderId)?.values() ?? []) {
+    pending.controller.abort()
+  }
   pendingSubscriptions.delete(senderId)
   const bySubId = liveSubscriptions.get(senderId)
   if (!bySubId) {
@@ -122,27 +131,40 @@ function teardownAllForSender(senderId: number): void {
   liveSubscriptions.delete(senderId)
 }
 
-function registerSenderCleanup(sender: WebContents): void {
-  if (senderCleanupRegistered.has(sender.id)) {
-    return
+function registerSenderCleanup(sender: WebContents): AbortSignal {
+  const existing = senderLifetimes.get(sender.id)
+  if (existing) {
+    return existing.signal
   }
-  senderCleanupRegistered.add(sender.id)
-  // Strict teardown: a closed/reloaded window releases every watcher it owns.
-  sender.once('destroyed', () => teardownAllForSender(sender.id))
+  const lifetime = abortWhenRendererGone(sender)
+  const onRendererGone = (): void => teardownAllForSender(sender.id)
+  senderLifetimes.set(sender.id, {
+    signal: lifetime.signal,
+    dispose: () => {
+      lifetime.signal.removeEventListener('abort', onRendererGone)
+      lifetime.dispose()
+    }
+  })
+  lifetime.signal.addEventListener('abort', onRendererGone, { once: true })
+  return lifetime.signal
 }
 
-function beginPendingSubscription(senderId: number, subscriptionId: string): symbol {
+function beginPendingSubscription(senderId: number, subscriptionId: string): PendingSubscription {
   teardownSubscription(senderId, subscriptionId)
-  const token = Symbol(subscriptionId)
-  const bySubId = pendingSubscriptions.get(senderId) ?? new Map<string, symbol>()
-  bySubId.set(subscriptionId, token)
+  const pending = { controller: new AbortController() }
+  const bySubId = pendingSubscriptions.get(senderId) ?? new Map<string, PendingSubscription>()
+  bySubId.set(subscriptionId, pending)
   pendingSubscriptions.set(senderId, bySubId)
-  return token
+  return pending
 }
 
-function takePendingSubscription(senderId: number, subscriptionId: string, token: symbol): boolean {
+function takePendingSubscription(
+  senderId: number,
+  subscriptionId: string,
+  pending: PendingSubscription
+): boolean {
   const bySubId = pendingSubscriptions.get(senderId)
-  if (bySubId?.get(subscriptionId) !== token) {
+  if (bySubId?.get(subscriptionId) !== pending) {
     return false
   }
   bySubId.delete(subscriptionId)
@@ -159,85 +181,101 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   }
   const { subscriptionId, agent, sessionId, transcriptPath } = args
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
-  // Replace any prior subscription under the same id (session change/resubscribe).
-  const pendingToken = beginPendingSubscription(sender.id, subscriptionId)
-  registerSenderCleanup(sender)
+  const pending = beginPendingSubscription(sender.id, subscriptionId)
+  const rendererSignal = registerSenderCleanup(sender)
+  const canPublish = (): boolean =>
+    !sender.isDestroyed() && !rendererSignal.aborted && !pending.controller.signal.aborted
 
+  // Opening a chat is a user act on its WSL distro; the watch that follows stays background.
+  const opened = openNativeChatTranscript(sessionId, transcriptPath)
+  const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
+    agent,
+    sessionId,
+    transcriptPath: opened.transcriptPath,
+    initialLimit: limit,
+    sourceOrder: true,
+    onTranscriptPending: () => {
+      if (!canPublish()) {
+        return
+      }
+      // Legacy clients ignore pending but still stop spinning on the empty snapshot.
+      const payload: NativeChatAppendedPayload = {
+        subscriptionId,
+        frame: { type: 'snapshot', messages: [], hasMore: false, pending: true }
+      }
+      sender.send('nativeChat:appended', payload)
+    },
+    onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle) => {
+      if (!canPublish()) {
+        return
+      }
+      // Put initial drain errors on the first frame so clients cannot remain stuck loading.
+      const payload: NativeChatAppendedPayload = {
+        subscriptionId,
+        frame: {
+          type: 'snapshot',
+          messages,
+          hasMore,
+          ...(error ? { error } : {}),
+          ...(lifecycle ? { lifecycle } : {})
+        }
+      }
+      sender.send('nativeChat:appended', payload)
+    },
+    onReplace: (messages, hasMore, _beforeOffset, lifecycle) => {
+      if (!canPublish()) {
+        return
+      }
+      sender.send('nativeChat:appended', {
+        subscriptionId,
+        frame: {
+          type: 'replacement',
+          messages,
+          hasMore,
+          ...(lifecycle ? { lifecycle } : {})
+        }
+      } satisfies NativeChatAppendedPayload)
+    },
+    onAppend: (messages, lifecycle) => {
+      if (!canPublish()) {
+        return
+      }
+      const payload: NativeChatAppendedPayload = {
+        subscriptionId,
+        frame: {
+          type: 'appended',
+          messages,
+          ...(lifecycle ? { lifecycle } : {})
+        }
+      }
+      sender.send('nativeChat:appended', payload)
+    }
+  }
   let subscription: NativeChatTranscriptSubscription
   try {
-    subscription = await subscribeNativeChatTranscript({
-      agent,
-      sessionId,
-      transcriptPath,
-      initialLimit: limit,
-      onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle) => {
-        if (sender.isDestroyed()) {
-          return
-        }
-        // Forward an initial-drain error so a watching client's first frame carries it
-        // instead of stranding the view at 'loading' when the read keeps throwing.
-        const payload: NativeChatAppendedPayload = {
-          subscriptionId,
-          frame: {
-            type: 'snapshot',
-            messages,
-            hasMore,
-            ...(error ? { error } : {}),
-            ...(lifecycle ? { lifecycle } : {})
-          }
-        }
-        sender.send('nativeChat:appended', payload)
-      },
-      onReplace: (messages, hasMore, _beforeOffset, lifecycle) => {
-        if (sender.isDestroyed()) {
-          return
-        }
-        sender.send('nativeChat:appended', {
-          subscriptionId,
-          frame: {
-            type: 'replacement',
-            messages,
-            hasMore,
-            ...(lifecycle ? { lifecycle } : {})
-          }
-        } satisfies NativeChatAppendedPayload)
-      },
-      onAppend: (messages, lifecycle) => {
-        if (sender.isDestroyed()) {
-          return
-        }
-        const payload: NativeChatAppendedPayload = {
-          subscriptionId,
-          frame: {
-            type: 'appended',
-            messages,
-            ...(lifecycle ? { lifecycle } : {})
-          }
-        }
-        sender.send('nativeChat:appended', payload)
-      }
-    })
+    if (opened.waking) {
+      await opened.waking
+    }
+    subscription = await subscribeNativeChatTranscript(subscribeArgs, pending.controller.signal)
   } catch {
-    takePendingSubscription(sender.id, subscriptionId, pendingToken)
+    takePendingSubscription(sender.id, subscriptionId, pending)
     return
   }
 
-  // Why: unmount, destruction, or a newer same-id subscribe can invalidate setup
-  // while path resolution is pending; only the owning token may publish its watcher.
-  const stillCurrent = takePendingSubscription(sender.id, subscriptionId, pendingToken)
-  if (sender.isDestroyed() || !stillCurrent) {
+  // Publish only the generation still owning this subscription after async path resolution.
+  const stillCurrent = takePendingSubscription(sender.id, subscriptionId, pending)
+  if (!canPublish() || !stillCurrent) {
     subscription.unsubscribe()
     return
   }
   const bySubId = liveSubscriptions.get(sender.id) ?? new Map<string, LiveSubscription>()
-  // A concurrent subscribe with the same id beat us here; honor the latest.
   const existing = bySubId.get(subscriptionId)
   if (existing) {
     existing.subscription.unsubscribe()
   }
   bySubId.set(subscriptionId, { subscription })
   liveSubscriptions.set(sender.id, bySubId)
-  if (!subscription.watching && !sender.isDestroyed()) {
+  if (!subscription.watching && canPublish()) {
     const payload: NativeChatAppendedPayload = {
       subscriptionId,
       frame: {
@@ -253,16 +291,19 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
 
 /** Test-only: drop all live and pending transcript subscriptions between runs. */
 export function clearNativeChatSubscriptions(): void {
-  const senderIds = new Set([...liveSubscriptions.keys(), ...pendingSubscriptions.keys()])
+  const senderIds = new Set([
+    ...senderLifetimes.keys(),
+    ...liveSubscriptions.keys(),
+    ...pendingSubscriptions.keys()
+  ])
   for (const senderId of senderIds) {
     teardownAllForSender(senderId)
   }
   pendingSubscriptions.clear()
-  senderCleanupRegistered.clear()
 }
 
 export function _getNativeChatSenderCleanupCountForTest(): number {
-  return senderCleanupRegistered.size
+  return senderLifetimes.size
 }
 
 export function _getNativeChatPendingSubscriptionCountForTest(): number {
@@ -282,5 +323,10 @@ export function registerNativeChatHandlers(): void {
   })
   ipcMain.on('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
     teardownSubscription(event.sender.id, args.subscriptionId)
+  })
+  // Failure output is local-only because paired hosts do not transmit agent output.
+  ipcMain.handle('nativeChat:conversationNameFailureOutput', (_event, sessionId: unknown) => {
+    const naming = getStructuredAgentSessionHost()?.deps.conversationNaming
+    return typeof sessionId === 'string' ? (naming?.failureOutput(sessionId) ?? null) : null
   })
 }

@@ -1,15 +1,18 @@
-import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { createServer } from 'node:net'
+import { chmod, link, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   describeObservedSkillFile,
-  matchingKnownSnapshot,
-  observeSkillPackage,
-  skillPackageDigest
+  matchesBundledSkillFiles,
+  observeSkillPackage
 } from './skill-package-identity'
 
 const temporaryDirectories: string[] = []
+const execFileAsync = promisify(execFile)
 
 async function temporarySkill(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-skill-freshness-'))
@@ -22,25 +25,15 @@ afterEach(async () => {
 })
 
 describe('skill package identity', () => {
-  it('matches CRLF installed text to an LF official snapshot', async () => {
+  it('matches CRLF installed text to LF bundled files', async () => {
     const root = await temporarySkill()
     await writeFile(join(root, 'SKILL.md'), 'first\r\nsecond\r\n')
     const observed = await observeSkillPackage(root)
     const expected = describeObservedSkillFile('SKILL.md', Buffer.from('first\nsecond\n'), false)
 
-    // Why: scans can observe several package byte budgets concurrently; only
-    // hashes, not raw file buffers, should survive each file's identity pass.
+    // Concurrent identities may reach multiple byte budgets; retain file hashes rather than raw buffers.
     expect(observed.files[0]).not.toHaveProperty('bytes')
-    expect(
-      matchingKnownSnapshot(observed, [
-        {
-          releaseRevision: 1,
-          packageDigest: skillPackageDigest([expected]),
-          gitTreeSha: 'tree',
-          files: [expected]
-        }
-      ])?.releaseRevision
-    ).toBe(1)
+    expect(matchesBundledSkillFiles(observed, [expected])).toBe(true)
   })
 
   it('uses exact bytes for executable and binary files', async () => {
@@ -49,6 +42,33 @@ describe('skill package identity', () => {
     expect(executable.identitySha256).toBe(executable.exactSha256)
     expect(binary.identitySha256).toBe(binary.exactSha256)
     expect(binary.classification).toBe('binary')
+  })
+
+  it('infers shebang scripts as executable on Windows filesystems', async () => {
+    const root = await temporarySkill()
+    await writeFile(join(root, 'SKILL.md'), 'skill\n')
+    await writeFile(join(root, 'run.sh'), '#!/bin/sh\necho ok\n')
+
+    const observed = await observeSkillPackage(root, undefined, undefined, undefined, 'win32', true)
+
+    expect(observed.files.find((file) => file.path === 'run.sh')?.executable).toBe(true)
+    expect(observed.files.find((file) => file.path === 'SKILL.md')?.executable).toBe(false)
+  })
+
+  it('matches receipt executable paths case-insensitively on Windows', async () => {
+    const root = await temporarySkill()
+    await writeFile(join(root, 'SKILL.md'), 'skill\n')
+    await writeFile(join(root, 'run.sh'), '#!/bin/sh\necho ok\n')
+
+    const observed = await observeSkillPackage(
+      root,
+      undefined,
+      new Set(['Run.sh']),
+      undefined,
+      'win32'
+    )
+
+    expect(observed.files.find((file) => file.path === 'run.sh')?.executable).toBe(true)
   })
 
   it('orders package files by locale-independent code units', async () => {
@@ -80,16 +100,39 @@ describe('skill package identity', () => {
     ).rejects.toThrow('skill-package-entry-limit')
   })
 
-  it('ignores OS-authored sidecars so a browsed folder still matches its snapshot', async () => {
+  it.runIf(process.platform !== 'win32')('rejects hardlinks, FIFOs, and Unix sockets', async () => {
+    const root = await temporarySkill()
+    const source = join(root, 'SKILL.md')
+    await writeFile(source, 'skill')
+    await link(source, join(root, 'hardlink.md'))
+    await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-link')
+    await rm(join(root, 'hardlink.md'))
+
+    const fifo = join(root, 'named-pipe')
+    await execFileAsync('mkfifo', [fifo])
+    await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-special-file')
+    await rm(fifo)
+
+    const socket = join(root, 'unix-socket')
+    const server = createServer()
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(socket, resolve)
+    })
+    try {
+      await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-special-file')
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it('ignores OS-authored sidecars so a browsed folder still matches the bundle', async () => {
     const pristine = await temporarySkill()
     await writeFile(join(pristine, 'SKILL.md'), 'skill\n')
     const official = await observeSkillPackage(pristine)
 
     const browsed = await temporarySkill()
     await writeFile(join(browsed, 'SKILL.md'), 'skill\n')
-    // Every name the OS writes on its own, including one that sorts BEFORE SKILL.md —
-    // the index-aligned comparison in matchingKnownSnapshot misaligns on a leading entry,
-    // so a trailing-name-only fixture would pass while the reported bug survived.
     await writeFile(join(browsed, '.DS_Store'), Buffer.from([0, 1, 2, 3]))
     await writeFile(join(browsed, '._SKILL.md'), Buffer.from([0, 5]))
     await writeFile(join(browsed, 'Thumbs.db'), Buffer.from([9]))
@@ -98,26 +141,14 @@ describe('skill package identity', () => {
     const observed = await observeSkillPackage(browsed)
 
     expect(observed.files.map((file) => file.path)).toEqual(['SKILL.md'])
-    // The lock-trust path compares this against the updater's recorded source tree, so it
-    // has to come out clean too, not just the digest.
-    expect(observed.observedGitTreeSha).toBe(official.observedGitTreeSha)
-    expect(
-      matchingKnownSnapshot(observed, [
-        {
-          releaseRevision: 1,
-          packageDigest: official.observedDigest,
-          gitTreeSha: official.observedGitTreeSha,
-          files: official.files
-        }
-      ])?.releaseRevision
-    ).toBe(1)
+    expect(observed.observedDigest).toBe(official.observedDigest)
+    expect(matchesBundledSkillFiles(observed, official.files)).toBe(true)
   })
 
   it('keeps guarding a directory or link that only wears an OS metadata name', async () => {
     const root = await temporarySkill()
     await writeFile(join(root, 'SKILL.md'), 'skill\n')
-    // The OS writes these names as plain files only, so a subtree behind one is real content:
-    // dropping it on the name alone would hide it from identity and read as pristine.
+    // Metadata names are safe only as plain files; a matching directory is real content.
     await mkdir(join(root, '._scripts'))
     await writeFile(join(root, '._scripts', 'payload.sh'), '#!/bin/sh\n')
 
@@ -141,22 +172,29 @@ describe('skill package identity', () => {
     const edited = await temporarySkill()
     await writeFile(join(edited, 'SKILL.md'), 'skill\nlocal tweak\n')
     await writeFile(join(edited, '.DS_Store'), Buffer.from([0, 1]))
-    // An unexpected file that is NOT OS metadata must keep failing closed; tolerating
-    // extras in general would let an injected payload ride along beside a clean SKILL.md.
+    // Agent CLI sidecars may coexist with unchanged official bytes.
     const withPayload = await temporarySkill()
     await writeFile(join(withPayload, 'SKILL.md'), 'skill\n')
-    await writeFile(join(withPayload, 'payload.sh'), '#!/bin/sh\n')
+    await mkdir(join(withPayload, 'agents'), { recursive: true })
+    await writeFile(join(withPayload, 'agents', 'openai.yaml'), 'display_name: test\n')
 
-    const snapshot = [
-      {
-        releaseRevision: 1,
-        packageDigest: official.observedDigest,
-        gitTreeSha: official.observedGitTreeSha,
-        files: official.files
-      }
-    ]
-    expect(matchingKnownSnapshot(await observeSkillPackage(edited), snapshot)).toBeNull()
-    expect(matchingKnownSnapshot(await observeSkillPackage(withPayload), snapshot)).toBeNull()
+    expect(matchesBundledSkillFiles(await observeSkillPackage(edited), official.files)).toBe(false)
+    expect(matchesBundledSkillFiles(await observeSkillPackage(withPayload), official.files)).toBe(
+      true
+    )
+  })
+
+  it('reports a missing bundled file as unmatched', async () => {
+    const shipped = await temporarySkill()
+    await writeFile(join(shipped, 'SKILL.md'), 'skill\n')
+    await mkdir(join(shipped, 'references'), { recursive: true })
+    await writeFile(join(shipped, 'references', 'x.md'), 'reference\n')
+    const official = await observeSkillPackage(shipped)
+
+    const partial = await temporarySkill()
+    await writeFile(join(partial, 'SKILL.md'), 'skill\n')
+
+    expect(matchesBundledSkillFiles(await observeSkillPackage(partial), official.files)).toBe(false)
   })
 
   it.runIf(process.platform !== 'win32')('tracks executable mode in package identity', async () => {

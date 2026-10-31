@@ -3,16 +3,19 @@ import type { SshConnectionState, SshTargetSummary } from '../../../shared/ssh-t
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-admission'
+import {
+  collectSshTargetGenerations,
+  sshTargetGenerationsEqual,
+  sshTargetLabelsEqual
+} from '@/store/slices/ssh-target-cleanup'
+import { sanitizeSshTargetGeneration } from '../../../shared/ssh-target-generation'
+import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 
-/**
- * Mirrors a remote Orca server's own SSH targets into that environment's
- * per-environment SSH bucket (store slice `runtime-environment-ssh`), so a
- * desktop client attached to the server gets live reconnect overlays for the
- * server's SSH-backed workspaces (STA-1468, desktop topology). Never touches
- * the local SSH maps.
- */
+/** Mirror server-owned SSH state into only its per-environment bucket so paired desktops get reconnect overlays (STA-1468); local SSH maps remain independent. */
 
 const SSH_RPC_TIMEOUT_MS = 15_000
+// Decorative reads share the host’s 8-slot foreground lane; bound concurrency to cut N×15s stalls without starving interactions.
+export const SSH_STATE_READ_CONCURRENCY = 3
 
 function environmentTarget(environmentId: string): { kind: 'environment'; environmentId: string } {
   return { kind: 'environment', environmentId }
@@ -32,7 +35,13 @@ async function fetchEnvironmentSshTargets(environmentId: string): Promise<SshTar
     if (typeof target.id !== 'string' || typeof target.label !== 'string') {
       throw new Error('Remote SSH target metadata is invalid')
     }
-    return { id: target.id, label: target.label }
+    // Why: an old server omits `generation`; a malformed one is dropped rather than trusted as a fence value.
+    const generation = sanitizeSshTargetGeneration(target.generation)
+    return {
+      id: target.id,
+      label: target.label,
+      ...(generation === undefined ? {} : { generation })
+    }
   })
 }
 
@@ -44,7 +53,18 @@ async function syncEnvironmentSshTargetMetadata(
   generation: number
 ): Promise<SshTargetSummary[]> {
   const targets = await fetchEnvironmentSshTargets(environmentId)
+  if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
+    return []
+  }
   useAppStore.getState().setEnvironmentSshTargetsMetadata(environmentId, targets, generation)
+  await syncEnvironmentRemovedSshTargetLabels(environmentId, generation)
+  return generation === getEnvironmentSshStateGeneration(environmentId) ? targets : []
+}
+
+async function syncEnvironmentRemovedSshTargetLabels(
+  environmentId: string,
+  generation: number
+): Promise<void> {
   try {
     const { labels } = await callRuntimeRpc<{ labels: Record<string, string> }>(
       environmentTarget(environmentId),
@@ -56,7 +76,6 @@ async function syncEnvironmentSshTargetMetadata(
   } catch {
     // Best-effort — a missing map just falls back to the raw target id.
   }
-  return targets
 }
 
 async function fetchEnvironmentSshConnectionStates(
@@ -64,7 +83,10 @@ async function fetchEnvironmentSshConnectionStates(
   targets: readonly SshTargetSummary[],
   generation: number
 ): Promise<void> {
-  for (const target of targets) {
+  await forEachWithConcurrency(targets, SSH_STATE_READ_CONCURRENCY, async (target) => {
+    if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
+      return
+    }
     try {
       const { state } = await callRuntimeRpc<{ state: SshConnectionState | null }>(
         environmentTarget(environmentId),
@@ -81,11 +103,24 @@ async function fetchEnvironmentSshConnectionStates(
     } catch {
       // Why: a timeout or unsupported RPC is not authoritative evidence that the HUB's SSH link disconnected.
     }
-  }
+  })
 }
 
-type HydrationEntry = { promise: Promise<void>; rerunRequested: boolean }
-const hydrationsInFlight = new Map<string, HydrationEntry>()
+type SshRefreshKind = 'metadata' | 'full'
+type SshRefreshEntry = {
+  promise: Promise<void>
+  generation: number
+  kind: SshRefreshKind
+  rerunKind: SshRefreshKind | null
+}
+const sshRefreshesInFlight = new Map<string, SshRefreshEntry>()
+
+function mergeSshRefreshKind(
+  current: SshRefreshKind | null,
+  requested: SshRefreshKind
+): SshRefreshKind {
+  return current === 'full' || requested === 'full' ? 'full' : 'metadata'
+}
 
 async function runEnvironmentSshHydration(environmentId: string): Promise<void> {
   const generation = getEnvironmentSshStateGeneration(environmentId)
@@ -93,24 +128,97 @@ async function runEnvironmentSshHydration(environmentId: string): Promise<void> 
   await fetchEnvironmentSshConnectionStates(environmentId, targets, generation)
 }
 
-/**
- * Fetches the environment's SSH targets, removal tombstones, and per-target
- * connection states into its bucket. Single-flight per environment; a `force`
- * request during an in-flight run schedules exactly one follow-up run so a
- * refresh triggered by a just-added target can't be swallowed by a stale
- * in-flight fetch.
- *
- * Hosts without the ssh.* RPC methods fail here and leave the bucket
- * un-hydrated — reads then resolve to "unknown", never to destructive UI.
- */
+async function runEnvironmentSshTargetMetadataRefresh(environmentId: string): Promise<void> {
+  const generation = getEnvironmentSshStateGeneration(environmentId)
+  const bucket = useAppStore.getState().sshStateByEnvironment.get(environmentId)
+  const targets = await fetchEnvironmentSshTargets(environmentId)
+  if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
+    return
+  }
+  const priorTargetGenerations = bucket?.targetGenerations ?? new Map<string, number>()
+  const nextTargetGenerations = collectSshTargetGenerations(targets)
+  const metadataChanged =
+    !bucket?.targetsHydrated ||
+    !sshTargetLabelsEqual(bucket.targetLabels, targets) ||
+    !sshTargetGenerationsEqual(priorTargetGenerations, nextTargetGenerations)
+  useAppStore.getState().setEnvironmentSshTargetsMetadata(environmentId, targets, generation)
+  const priorTargetIds = new Set(bucket?.targetLabels.keys() ?? [])
+  // Why: read states after the write — a resync racing this fetch can label a target that never had one read.
+  const knownStates = useAppStore
+    .getState()
+    .sshStateByEnvironment.get(environmentId)?.connectionStates
+  const needStateRead = targets.filter(
+    (target) =>
+      !priorTargetIds.has(target.id) ||
+      !knownStates?.has(target.id) ||
+      priorTargetGenerations.get(target.id) !== nextTargetGenerations.get(target.id)
+  )
+  if (!metadataChanged) {
+    await fetchEnvironmentSshConnectionStates(environmentId, needStateRead, generation)
+    return
+  }
+  await syncEnvironmentRemovedSshTargetLabels(environmentId, generation)
+  await fetchEnvironmentSshConnectionStates(environmentId, needStateRead, generation)
+}
+
+function requestSshRefreshRerun(entry: SshRefreshEntry, kind: SshRefreshKind): void {
+  entry.rerunKind = mergeSshRefreshKind(entry.rerunKind, kind)
+}
+
+function startEnvironmentSshRefresh(
+  environmentId: string,
+  initialKind: SshRefreshKind
+): Promise<void> {
+  const entry: SshRefreshEntry = {
+    promise: Promise.resolve(),
+    generation: getEnvironmentSshStateGeneration(environmentId),
+    kind: initialKind,
+    rerunKind: null
+  }
+  entry.promise = (async () => {
+    let nextKind: SshRefreshKind | null = initialKind
+    let lastError: unknown = null
+    try {
+      while (nextKind) {
+        entry.kind = nextKind
+        entry.generation = getEnvironmentSshStateGeneration(environmentId)
+        entry.rerunKind = null
+        try {
+          await (entry.kind === 'full'
+            ? runEnvironmentSshHydration(environmentId)
+            : runEnvironmentSshTargetMetadataRefresh(environmentId))
+          lastError = null
+        } catch (error) {
+          lastError = error
+          if (entry.rerunKind) {
+            entry.rerunKind = mergeSshRefreshKind(entry.rerunKind, entry.kind)
+          }
+        }
+        nextKind = entry.rerunKind
+      }
+      if (lastError) {
+        throw lastError
+      }
+    } finally {
+      if (sshRefreshesInFlight.get(environmentId) === entry) {
+        sshRefreshesInFlight.delete(environmentId)
+      }
+    }
+  })()
+  sshRefreshesInFlight.set(environmentId, entry)
+  return entry.promise
+}
+
+/** Single-flight hydrate targets/tombstones/states. force during flight queues one follow-up so newly added targets cannot be lost behind stale fetches. Unsupported hosts stay unhydrated/unknown, never destructive. */
 export async function hydrateRuntimeEnvironmentSshState(
   environmentId: string,
   options: { force?: boolean } = {}
 ): Promise<void> {
-  const inFlight = hydrationsInFlight.get(environmentId)
+  const generation = getEnvironmentSshStateGeneration(environmentId)
+  const inFlight = sshRefreshesInFlight.get(environmentId)
   if (inFlight) {
-    if (options.force) {
-      inFlight.rerunRequested = true
+    if (options.force || inFlight.generation !== generation) {
+      requestSshRefreshRerun(inFlight, 'full')
     }
     return inFlight.promise
   }
@@ -118,38 +226,24 @@ export async function hydrateRuntimeEnvironmentSshState(
   if (!options.force && bucket?.targetsHydrated) {
     return
   }
-  const entry: HydrationEntry = { promise: Promise.resolve(), rerunRequested: false }
-  entry.promise = (async () => {
-    let lastError: unknown = null
-    try {
-      do {
-        entry.rerunRequested = false
-        try {
-          await runEnvironmentSshHydration(environmentId)
-          lastError = null
-        } catch (error) {
-          lastError = error
-        }
-      } while (entry.rerunRequested)
-      if (lastError) {
-        throw lastError
-      }
-    } finally {
-      hydrationsInFlight.delete(environmentId)
-    }
-  })()
-  hydrationsInFlight.set(environmentId, entry)
-  return entry.promise
+  return startEnvironmentSshRefresh(environmentId, 'full')
 }
 
-/**
- * Applies a `sshStateChanged` runtime client event from `environmentId` to
- * that environment's bucket. For a target the bucket doesn't know yet
- * (added after hydration, or a disconnect racing a removal), the authoritative
- * target list is re-fetched instead of trusting the event: the forced
- * hydration also re-reads the state, so a removed target's trailing event
- * can't resurrect it.
- */
+/** Refreshes target membership without re-reading every known target state. */
+export async function refreshRuntimeEnvironmentSshTargetMetadata(
+  environmentId: string
+): Promise<void> {
+  const generation = getEnvironmentSshStateGeneration(environmentId)
+  const inFlight = sshRefreshesInFlight.get(environmentId)
+  if (inFlight) {
+    requestSshRefreshRerun(inFlight, inFlight.generation === generation ? 'metadata' : 'full')
+    return inFlight.promise
+  }
+  const bucket = useAppStore.getState().sshStateByEnvironment.get(environmentId)
+  return startEnvironmentSshRefresh(environmentId, bucket?.targetsHydrated ? 'metadata' : 'full')
+}
+
+/** Known-target events update that environment only. Unknown targets force authoritative membership/state hydration, preventing trailing removed-target events from resurrecting them. */
 export function applyRuntimeEnvironmentSshStateChanged(
   environmentId: string,
   targetId: string,
@@ -195,11 +289,7 @@ export async function connectRuntimeEnvironmentSshTarget(
   return admittedState
 }
 
-/** Resyncs the environment's target metadata after a failed connect so a
- * stale overlay converges to the ghost/re-adopted state (STA-1468). */
+/** After failed connect, fully hydrate metadata AND state so ghost/re-adopted hosts converge; metadata alone leaves new target IDs’ chips/mutation gates dead (STA-1468). */
 export async function resyncRuntimeEnvironmentSshTargets(environmentId: string): Promise<void> {
-  await syncEnvironmentSshTargetMetadata(
-    environmentId,
-    getEnvironmentSshStateGeneration(environmentId)
-  )
+  await hydrateRuntimeEnvironmentSshState(environmentId, { force: true })
 }

@@ -3,12 +3,13 @@ import { act, useMemo } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import type { Tab, TabGroup, TerminalTab } from '../../../../shared/types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useActiveTerminalRepair } from './use-active-terminal-repair'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-// Why: React throws #185 at 51 nested commits; 400 proves divergence, not slowness.
+// React fails at 51 nested commits; 400 bounds prove divergence rather than slow settling.
 const MAX_PASSES = 400
 
 function terminalTab(id: string, worktreeId: string): TerminalTab {
@@ -117,8 +118,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
   })
 
   it('settles when another worktree reuses the tab id and is scanned first', () => {
-    // Why regression: first-match ownership skipped activeTabId while reallocating
-    // activeTabIdByWorktree, retriggering the repair effect indefinitely.
+    // First-match ownership once skipped activeTabId while reallocating its map, retriggering repair indefinitely.
     useAppStore.setState({
       activeWorktreeId: 'wt-active',
       activeTabType: 'terminal',
@@ -131,8 +131,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
       unifiedTabsByWorktree: {}
     })
     expect(measureRepairPasses()).toBeLessThan(10)
-    // Why: settling by refusing to write would leave the repair permanently
-    // unsatisfied — quiet, but with activeTabId stuck on a tab that is gone.
+    // Settling must repair the selection, not merely stop writes while it names a deleted tab.
     expect(useAppStore.getState().activeTabId).toBe('t1')
     expect(useAppStore.getState().activeTabIdByWorktree['wt-active']).toBe('t1')
   })
@@ -209,8 +208,7 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
   })
 
   it('does not reallocate activeTabIdByWorktree when the tab is already active', () => {
-    // Why: that map is a dependency of both the repair effect and the parked
-    // watcher sync, so a redundant activation must not re-run either.
+    // Both repair and parked watcher sync depend on map identity; redundant activation must preserve it.
     useAppStore.setState({
       activeWorktreeId: 'wt-active',
       activeTabType: 'terminal',

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useFeatureWallTourKeyboardShortcut({
   isOpen,
@@ -21,7 +22,7 @@ export function useFeatureWallTourKeyboardShortcut({
       event.preventDefault()
       onContinue()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [enabled, isOpen, onContinue])
 }

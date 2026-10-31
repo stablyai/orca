@@ -1,22 +1,41 @@
-import { z } from 'zod'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
-import { Screencast } from './browser-schemas'
+import { defineMethod, defineStreamingMethod } from '../core'
+import { Screencast } from '../../../../shared/rpc-contract/browser-params'
+import { BrowserError } from '../../../browser/browser-error'
+import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/runtime-types'
+import { runtimeBrowserCommandsFactoryIsAvailable } from '../../runtime-browser-commands-factory'
+import { ScreencastUnsubscribe } from '../../../../shared/rpc-contract/browser-screencast-params'
 
-const ScreencastUnsubscribe = z.object({
-  subscriptionId: z.string().min(1, 'Missing required --subscription-id')
-})
-
-export const BROWSER_SCREENCAST_METHODS: RpcAnyMethod[] = [
+export const BROWSER_SCREENCAST_METHODS = [
   defineStreamingMethod({
     name: 'browser.screencast',
+    permission: 'workspace',
     params: Screencast,
-    handler: async (params, { runtime, connectionId, sendBinary, signal }, emit) =>
-      runtime.browserScreencast(params, { connectionId, sendBinary, signal, emit })
+    handler: async (
+      params,
+      { runtime, connectionId, pairedDeviceId, clientKind, sendBinary, signal },
+      emit
+    ) =>
+      runtime.browserScreencast(params, {
+        connectionId,
+        pairedDeviceId,
+        // Pairing scope distinguishes phone drivers from desktop/web viewers of the same stream.
+        clientKind,
+        sendBinary,
+        signal,
+        emit
+      })
   }),
   defineMethod({
     name: 'browser.screencast.unsubscribe',
+    permission: 'workspace',
     params: ScreencastUnsubscribe,
     handler: async (params, { runtime }) => {
+      if (!runtimeBrowserCommandsFactoryIsAvailable()) {
+        throw new BrowserError(
+          BROWSER_UNAVAILABLE_ERROR_CODE,
+          'Browser automation is unavailable on this host.'
+        )
+      }
       runtime.cleanupSubscription(params.subscriptionId)
       return { unsubscribed: true }
     }

@@ -1,25 +1,52 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from './rpc-client'
-import type { ConnectionState, RpcSuccess } from './types'
+import type { ConnectionState } from './types'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
-import type { DesktopStatus } from '../worktree/host-worktree-rpc-types'
+import type { HostStatusReply } from './host-status-reply-schema'
+import { normalizeHostAppVersion } from './host-app-version'
+import { recordHostAppVersion } from './host-app-version-store'
+import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
+import { startRuntimeStatusProbe } from './runtime-status-probe'
 
 export type HostStatusGates = {
   hostCapabilities: string[]
   floatingWorkspaceEnabled: boolean
+  desktopAppVersion: string | null
   compatVerdict: CompatVerdict
+  // Expose reply protocol fields for consumers with their own compatibility windows.
+  hostProtocolWindow: HostProtocolWindow
   statusPending: boolean
+  // Distinguish readable old-host status from no usable answer; only the former may justify a terminal compatibility wall.
+  statusReadable: boolean
 }
 
-type LoadedHostStatusGates = HostStatusGates & {
+// statusPending is not stored: pending-ness belongs to the live connection, not to the answer.
+type LoadedHostStatusGates = Omit<HostStatusGates, 'statusPending'> & {
   hostId: string | undefined
   client: RpcClient
 }
 
-const EMPTY_HOST_CAPABILITIES: string[] = []
+export type HostProtocolWindow = Pick<
+  HostStatusReply,
+  'protocolVersion' | 'minCompatibleMobileVersion'
+>
 
-// Reads status.get on connect for capabilities, protocol-compat verdict, and the
-// floating-workspace flag. Compat constants are wide-open today so this never blocks yet.
+const EMPTY_HOST_CAPABILITIES: string[] = []
+// Keep sentinel identity stable for consumers; explicit undefined keys match salvaged reply fields and mean oldest host/no floor.
+const EMPTY_HOST_PROTOCOL_WINDOW: HostProtocolWindow = {
+  protocolVersion: undefined,
+  minCompatibleMobileVersion: undefined
+}
+
+const UNREADABLE_STATUS_GATES: Omit<HostStatusGates, 'statusPending'> = {
+  hostCapabilities: EMPTY_HOST_CAPABILITIES,
+  floatingWorkspaceEnabled: false,
+  desktopAppVersion: null,
+  compatVerdict: { kind: 'ok' },
+  hostProtocolWindow: EMPTY_HOST_PROTOCOL_WINDOW,
+  statusReadable: false
+}
+
 export function useHostStatusGates(args: {
   hostId: string | undefined
   client: RpcClient | null
@@ -27,94 +54,99 @@ export function useHostStatusGates(args: {
 }): HostStatusGates {
   const { hostId, client, connState } = args
   const [loaded, setLoaded] = useState<LoadedHostStatusGates | null>(null)
+  // Keep proven capabilities across drops while marking them unverified until the reconnect read settles.
+  const [unverified, setUnverified] = useState(false)
 
   useEffect(() => {
     if (connState !== 'connected' || !client) {
-      // Why: reconnecting the same host/client must revalidate gates instead of reviving its prior status response.
-      setLoaded(null)
+      setUnverified(true)
       return
     }
-    let cancelled = false
-    const requestClient = client
-    void (async () => {
-      try {
-        const response = await requestClient.sendRequest('status.get')
-        if (cancelled) {
-          return
-        }
-        if (!response.ok) {
-          setLoaded({
-            hostId,
-            client: requestClient,
-            hostCapabilities: [],
-            floatingWorkspaceEnabled: false,
-            compatVerdict: { kind: 'ok' },
-            statusPending: false
-          })
-          return
-        }
-        const status = (response as RpcSuccess).result as DesktopStatus & {
-          capabilities?: string[]
-        }
-        const verdict = evaluateCompat({
-          desktopProtocolVersion: status.protocolVersion,
-          desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
-        })
-        setLoaded({
-          hostId,
-          client: requestClient,
-          hostCapabilities: status.capabilities ?? [],
-          floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
-          compatVerdict: verdict,
-          statusPending: false
-        })
-        if (verdict.kind === 'blocked') {
-          // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
-          console.warn('[protocol-compat] blocked', {
-            reason: verdict.reason,
-            desktopVersion: verdict.desktopVersion,
-            requiredMobileVersion: verdict.requiredMobileVersion,
-            requiredDesktopVersion: verdict.requiredDesktopVersion
-          })
-        }
-      } catch {
-        // Why: a transient status failure must not trap navigation; conservative feature gates remain disabled.
-        if (!cancelled) {
-          setLoaded({
-            hostId,
-            client: requestClient,
-            hostCapabilities: [],
-            floatingWorkspaceEnabled: false,
-            compatVerdict: { kind: 'ok' },
-            statusPending: false
-          })
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
+    return startHostStatusRead(client, hostId, (gates) => {
+      setLoaded({ hostId, client, ...gates })
+      setUnverified(false)
+    })
   }, [client, connState, hostId])
 
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
-  if (
-    connState !== 'connected' ||
-    !client ||
-    !loaded ||
-    loaded.hostId !== hostId ||
-    loaded.client !== client
-  ) {
+  const proven = loaded && loaded.hostId === hostId && loaded.client === client ? loaded : null
+  if (!proven) {
     return {
       hostCapabilities: EMPTY_HOST_CAPABILITIES,
       floatingWorkspaceEnabled: false,
+      desktopAppVersion: null,
       compatVerdict: { kind: 'ok' },
-      statusPending: connState === 'connected' && client !== null
+      hostProtocolWindow: EMPTY_HOST_PROTOCOL_WINDOW,
+      statusPending: connState === 'connected' && client !== null,
+      statusReadable: false
     }
   }
   return {
-    hostCapabilities: loaded.hostCapabilities,
-    floatingWorkspaceEnabled: loaded.floatingWorkspaceEnabled,
-    compatVerdict: loaded.compatVerdict,
-    statusPending: false
+    hostCapabilities: proven.hostCapabilities,
+    floatingWorkspaceEnabled: proven.floatingWorkspaceEnabled,
+    desktopAppVersion: proven.desktopAppVersion,
+    compatVerdict: proven.compatVerdict,
+    hostProtocolWindow: proven.hostProtocolWindow,
+    statusReadable: proven.statusReadable,
+    statusPending: connState === 'connected' && unverified
   }
+}
+
+// Settle closed on first failure while the owned probe keeps retrying; return its stop function to React.
+function startHostStatusRead(
+  client: RpcClient,
+  hostId: string | undefined,
+  settle: (gates: Omit<HostStatusGates, 'statusPending'>) => void
+): () => void {
+  let settledClosed = false
+  // Settle conservative gates once so transient failures cannot trap navigation or repeatedly rerender identical state.
+  const settleClosed = () => {
+    if (!settledClosed) {
+      settledClosed = true
+      settle(UNREADABLE_STATUS_GATES)
+    }
+  }
+  return startRuntimeStatusProbe(
+    client,
+    (status) => {
+      // A status this app cannot decode reads the same on every retry, so the probe stops on it.
+      if (!status) {
+        settleClosed()
+        return
+      }
+      const verdict = evaluateCompat({
+        desktopProtocolVersion: status.protocolVersion,
+        desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
+      })
+      const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
+      if (hostId && desktopAppVersion) {
+        void recordHostAppVersion(hostId, desktopAppVersion)
+      }
+      if (hostId) {
+        // Record here too because pages lack the connection-layer probe; the recorder tolerates duplicate feeds.
+        recordHostDescriptorFromStatus(hostId, status)
+      }
+      settle({
+        hostCapabilities: status.capabilities ?? [],
+        floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
+        desktopAppVersion,
+        compatVerdict: verdict,
+        hostProtocolWindow: {
+          protocolVersion: status.protocolVersion,
+          minCompatibleMobileVersion: status.minCompatibleMobileVersion
+        },
+        statusReadable: true
+      })
+      if (verdict.kind === 'blocked') {
+        // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
+        console.warn('[protocol-compat] blocked', {
+          reason: verdict.reason,
+          desktopVersion: verdict.desktopVersion,
+          requiredMobileVersion: verdict.requiredMobileVersion,
+          requiredDesktopVersion: verdict.requiredDesktopVersion
+        })
+      }
+    },
+    settleClosed
+  )
 }

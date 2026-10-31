@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentHookEventPayload } from '../../shared/agent-hook-listener'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
+import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
@@ -30,7 +31,7 @@ describe('AgentHookServer authority evidence', () => {
       receivedAt: 100,
       stateStartedAt: 100
     } satisfies AgentHookEventPayload & { receivedAt: number; stateStartedAt: number }
-    server._getStateForTests().lastStatusByPaneKey.set(PANE_KEY, hydrated)
+    seedLegacyAgentStatusForTests(server._getStateForTests(), hydrated)
 
     await server.start()
     const commitments = server.getHydratedAuthorityCommitments()
@@ -195,7 +196,7 @@ describe('AgentHookServer authority evidence', () => {
       receivedAt: 100,
       stateStartedAt: 100
     } satisfies AgentHookEventPayload & { receivedAt: number; stateStartedAt: number }
-    server._getStateForTests().lastStatusByPaneKey.set(PANE_KEY, hydrated)
+    seedLegacyAgentStatusForTests(server._getStateForTests(), hydrated)
     server.registerPaneKeyAlias('tab-authority:0', PANE_KEY, 'old-pty')
     await server.start()
     server.ingestRemote(

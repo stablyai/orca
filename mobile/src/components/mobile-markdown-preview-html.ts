@@ -6,8 +6,7 @@ import {
   stripMobileMarkdownMarkupTags
 } from './mobile-markdown-preview-tag-stripper'
 
-// Why: README HTML snippets can document escaped entities; repeated cleanup
-// passes must not turn `&amp;lt;` into a real tag and strip it.
+// Avoid repeated entity decoding: escaped README &amp;lt; must not become real tag and disappear.
 const escapedHtmlEntityTokens = [
   { pattern: /&amp;nbsp;/gi, token: '\uE000ORCA_MD_ENTITY_NBSP\uE000', value: '&nbsp;' },
   { pattern: /&amp;lt;/gi, token: '\uE000ORCA_MD_ENTITY_LT\uE000', value: '&lt;' },
@@ -97,7 +96,7 @@ function attrValue(tag: string, name: string): string {
     const valueStart = cursor
     if (quote) {
       const valueEnd = tag.indexOf(quote, cursor)
-      if (valueEnd < 0) {
+      if (valueEnd === -1) {
         return ''
       }
       cursor = valueEnd + 1
@@ -204,11 +203,18 @@ function escapeRegExp(value: string): string {
 }
 
 function codePlaceholderPrefix(content: string): string {
-  let prefix = CODE_PLACEHOLDER_PREFIX_BASE
-  while (content.includes(prefix)) {
-    prefix = `${prefix}_`
+  let suffixLength = 0
+  let cursor = 0
+  while ((cursor = content.indexOf(CODE_PLACEHOLDER_PREFIX_BASE, cursor)) !== -1) {
+    cursor += CODE_PLACEHOLDER_PREFIX_BASE.length
+    const suffixStart = cursor
+    while (content[cursor] === '_') {
+      cursor += 1
+    }
+    // One extra underscore keeps the prefix longer than every authored run.
+    suffixLength = Math.max(suffixLength, cursor - suffixStart + 1)
   }
-  return prefix
+  return CODE_PLACEHOLDER_PREFIX_BASE + '_'.repeat(suffixLength)
 }
 
 function protectMarkdownCode(content: string): {
@@ -267,9 +273,7 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
   )
   let next = protectedText
 
-  // Why: repository Markdown often uses small HTML islands for centered README
-  // headers and badges. Preview mode should read like Markdown, while Source
-  // mode remains the exact file bytes.
+  // Normalize README HTML headers/badges for readable Preview; Source keeps exact bytes.
   next = replaceMobileMarkdownPairedMarkupTags(
     next,
     ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],

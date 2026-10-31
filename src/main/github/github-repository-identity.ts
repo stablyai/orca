@@ -1,7 +1,8 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { readRemoteUrl } from '../git/remote-url-probe'
-import type { GitHubOwnerRepo } from '../../shared/types'
-import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
+import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
   parseGitHubOwnerRepo,
@@ -10,6 +11,10 @@ import {
 } from './github-remote-identity-parsing'
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
 import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
+import { resolveGitHubProjectAccount } from './github-project-account'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -20,10 +25,31 @@ export type GitHubRepoContext = {
   repoPath: string
   connectionId?: string | null
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
+  /** SSH keeps the binding even when cwd is omitted from gh options. */
+  ghAccount?: GhAccountBinding
 }
 
 export type LocalGitExecOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
+  ghAccount?: GhAccountBinding
+}
+
+export type GitHubRemoteIdentityProbeOptions = {
+  requireVerifiedSshProbe?: boolean
+}
+
+const operations = new AsyncLocalStorage<GitHubRepoContext>()
+
+export async function withGitHubRepoExecution<T>(
+  repoPath: string,
+  connectionId: string | null | undefined,
+  options: LocalGitExecOptions,
+  operation: () => Promise<T>
+): Promise<T> {
+  // Async descendants keep the selection through settlement, including detached cache work.
+  return operations.run(githubRepoContext(repoPath, connectionId, options), operation)
 }
 
 export function githubRepoContext(
@@ -31,28 +57,48 @@ export function githubRepoContext(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): GitHubRepoContext {
-  return {
+  const context = {
     repoPath,
     connectionId: connectionId ?? null,
-    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+    ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {}),
+    ...(localGitOptions.ghAccount ? { ghAccount: localGitOptions.ghAccount } : {})
   }
+  const scope = operations.getStore()
+  const pinned =
+    scope &&
+    scope.repoPath === repoPath &&
+    scope.connectionId === context.connectionId &&
+    scope.wslDistro === context.wslDistro
+      ? scope
+      : null
+  const account = pinned ?? resolveGitHubProjectAccount(context) ?? context
+  const binding = account.ghAccount ? Object.freeze({ ...account.ghAccount }) : undefined
+  return Object.freeze({ ...context, ghAccount: binding })
 }
 
 export function ghRepoExecOptions(context: GitHubRepoContext): {
   cwd?: string
   encoding?: BufferEncoding
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
+  ghAccount?: GhAccountBinding
 } {
+  const account = context.ghAccount ? { ghAccount: context.ghAccount } : {}
   return context.connectionId
-    ? {}
+    ? { ...account }
     : {
         cwd: context.repoPath,
-        ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+        ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
+        ...(context.admissionTier ? { admissionTier: context.admissionTier } : {}),
+        ...account
       }
 }
 
 const OWNER_REPO_POSITIVE_CACHE_TTL_MS = 30_000
 const OWNER_REPO_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
+// Signed entries revalidate against Git config before reuse.
+const OWNER_REPO_SIGNED_CACHE_TTL_MS = 5 * 60_000
 const OWNER_REPO_CACHE_MAX_ENTRIES = 512
 
 type OwnerRepoCacheEntry = {
@@ -98,28 +144,33 @@ export async function getRemoteUrlForRepo(
 }
 
 function getOwnerRepoCacheTtl(value: OwnerRepo | null, configSignature?: string): number {
-  if (value) {
-    return OWNER_REPO_POSITIVE_CACHE_TTL_MS
+  if (configSignature) {
+    return value ? OWNER_REPO_SIGNED_CACHE_TTL_MS : OWNER_REPO_NEGATIVE_CACHE_TTL_MS
   }
-  return configSignature ? OWNER_REPO_NEGATIVE_CACHE_TTL_MS : OWNER_REPO_POSITIVE_CACHE_TTL_MS
+  return OWNER_REPO_POSITIVE_CACHE_TTL_MS
 }
 
 export async function getOwnerRepoForRemote(
   repoPath: string,
   remoteName: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
+  if (probeOptions.requireVerifiedSshProbe) {
+    requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
+  }
   const runtimeKey = context.connectionId
-    ? `ssh:${context.connectionId}:${getSshGitProviderGeneration(context.connectionId)}`
+    ? `ssh:${context.connectionId}`
     : `local:${context.wslDistro ?? 'host'}`
   const cacheKey = `${runtimeKey}\0${context.repoPath}\0${remoteName}`
   const now = Date.now()
   pruneOwnerRepoCache(now)
   const cached = ownerRepoCache.get(cacheKey)
   if (cached && cached.expiresAt > now) {
-    if (cached.value === null && cached.configSignature !== undefined) {
+    // Revalidate signed hits so remote changes are immediately visible.
+    if (cached.configSignature !== undefined) {
       const currentSignature = await readLocalGitConfigSignature(context)
       if (currentSignature !== cached.configSignature) {
         ownerRepoCache.delete(cacheKey)
@@ -141,12 +192,16 @@ export async function getOwnerRepoForRemote(
     return refreshedCached.value
   }
 
-  // Why: startup can resolve issue sources, PR candidates, and repo metadata
-  // for the same repo concurrently. Coalesce missing-remote probes — but only
-  // onto one young enough to still answer, so a wedged probe cannot pin the
-  // repo's identity for the life of the process (P1-D).
-  return runCoalescedProbe(ownerRepoInFlight, cacheKey, () =>
-    resolveOwnerRepoForRemote(context, remoteName, cacheKey, nextConfigSignature)
+  // Coalesce concurrent identity probes, but retire wedged work so it cannot pin identity forever.
+  const inFlightKey = `${cacheKey}\0${probeOptions.requireVerifiedSshProbe ? 'verified' : 'tolerant'}`
+  return runCoalescedProbe(ownerRepoInFlight, inFlightKey, () =>
+    resolveOwnerRepoForRemote(
+      context,
+      remoteName,
+      cacheKey,
+      nextConfigSignature,
+      probeOptions.requireVerifiedSshProbe === true
+    )
   )
 }
 
@@ -154,12 +209,16 @@ async function resolveOwnerRepoForRemote(
   context: GitHubRepoContext,
   remoteName: string,
   cacheKey: string,
-  configSignature?: string
+  configSignature: string | undefined,
+  requireVerifiedSshProbe: boolean
 ): Promise<OwnerRepo | null> {
   const now = Date.now()
   try {
     const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
     if (!remoteUrl) {
+      if (requireVerifiedSshProbe) {
+        requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
+      }
       // Empty remote URL is stable until git config changes.
       ownerRepoCache.set(cacheKey, {
         value: null,
@@ -169,18 +228,22 @@ async function resolveOwnerRepoForRemote(
       pruneOwnerRepoCache(now)
       return null
     }
-    // Why: PR mutations need the effective host behind an SSH alias.
     const classification = await classifyGitHubOwnerRepoFromRemoteUrl(remoteUrl, context)
     if (classification.kind === 'github') {
+      // Signed entries still expire and revalidate Git config on reuse.
       ownerRepoCache.set(cacheKey, {
         value: classification.ownerRepo,
-        expiresAt: now + getOwnerRepoCacheTtl(classification.ownerRepo, configSignature)
+        expiresAt: now + getOwnerRepoCacheTtl(classification.ownerRepo, configSignature),
+        ...(configSignature ? { configSignature } : {})
       })
       pruneOwnerRepoCache(now)
       return classification.ownerRepo
     }
     if (classification.kind === 'indeterminate') {
       // Why: a failed ssh -G probe is not a stable "not GitHub" result.
+      if (requireVerifiedSshProbe && context.connectionId) {
+        throw new Error('Remote repository identity is unverifiable.')
+      }
       return null
     }
     const stableConfigSignature = classification.cacheWithGitConfigSignature
@@ -194,14 +257,15 @@ async function resolveOwnerRepoForRemote(
     pruneOwnerRepoCache(now)
     return null
   } catch (error) {
-    // Why: only stable "no such remote" misses are safe to hold for minutes.
-    // Transient git lock/IO failures must retry on the next lookup.
+    // Cache stable missing remotes only; transient lock/I/O failures must retry.
     if (!isStableMissingGitRemoteError(error)) {
+      if (requireVerifiedSshProbe && context.connectionId) {
+        throw error
+      }
       return null
     }
   }
-  // Why: a missing remote is stable until `.git/config` changes.
-  // Holding that negative longer avoids Git process churn across PR polling.
+  // Config changes invalidate stable negative remote results before their longer TTL.
   ownerRepoCache.set(cacheKey, {
     value: null,
     expiresAt: now + getOwnerRepoCacheTtl(null, configSignature),

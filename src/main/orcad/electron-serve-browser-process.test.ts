@@ -1,0 +1,595 @@
+import type * as OrcadBrowserProviderModule from './orcad-browser-provider'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
+import { existsSync } from 'node:fs'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
+import type * as RunProcessModule from '@orca/process-host'
+import type * as FsPromisesModule from 'node:fs/promises'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
+import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
+
+const { spawnProcessMock, lockedRemovalPaths } = vi.hoisted(() => ({
+  spawnProcessMock:
+    vi.fn<(spec: ProcessSpec) => ReturnType<typeof RunProcessModule.spawnProcess>>(),
+  lockedRemovalPaths: new Set<string>()
+}))
+
+// Simulate Windows helpers briefly retaining a stopped sidecar’s profile.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromisesModule>()
+  const rm: typeof actual.rm = async (path, options) => {
+    if (lockedRemovalPaths.has(String(path))) {
+      throw Object.assign(new Error(`EBUSY: resource busy or locked, rmdir '${String(path)}'`), {
+        code: 'EBUSY'
+      })
+    }
+    return actual.rm(path, options)
+  }
+  return { ...actual, rm, default: { ...actual, rm } }
+})
+
+// Swap only the executable; retain real spawning, argv/env handling and a signalable PID.
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof RunProcessModule>()),
+  spawnProcess: spawnProcessMock
+}))
+
+import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime'
+import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
+import { ElectronServeBrowserProcess } from './electron-serve-browser-process'
+import { startOrcadBrowserProvider } from './orcad-browser-startup'
+import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
+import {
+  createRuntimeBrowserCommands,
+  runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
+  setRuntimeBrowserCommandsFactory
+} from '../runtime/runtime-browser-commands-factory'
+
+vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
+// The fixture's /Applications/Orca.app path would open a real macOS install park.
+vi.mock('./orcad-browser-install-park', () => ({ openOrcadBrowserInstallPark: () => null }))
+
+vi.mock('electron', () => ({ app: { getPath: () => harnessRoot }, ipcMain: {} }))
+vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
+vi.mock('../browser/cookies/browser-cookie-import', () => ({
+  detectInstalledBrowsers: () => [{ family: 'chrome', profiles: [], selectedProfile: 'Default' }],
+  importCookiesFromBrowser: async () => ({ ok: true, summary: {} })
+}))
+import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserProfileRpcFixture } from '../runtime/browser/browser-profile-rpc-test-fixture'
+
+const actual = await vi.importActual<typeof OrcadBrowserProviderModule>('./orcad-browser-provider')
+
+const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-orcad-electron-sidecar.cjs')
+const INSTALLED_EXECUTABLE = join('/Applications', 'Orca.app', 'Contents', 'MacOS', 'Orca')
+
+const AGENT_BROWSER_ENVIRONMENT_KEYS = [
+  'AGENT_BROWSER_ARGS',
+  'AGENT_BROWSER_AUTO_CONNECT',
+  'AGENT_BROWSER_CDP',
+  'AGENT_BROWSER_ENGINE',
+  'AGENT_BROWSER_EXECUTABLE_PATH',
+  'AGENT_BROWSER_HEADED',
+  'AGENT_BROWSER_PROFILE',
+  'AGENT_BROWSER_PROVIDER',
+  'AGENT_BROWSER_SESSION',
+  'AGENT_BROWSER_SESSION_NAME',
+  'AGENT_BROWSER_STATE'
+]
+
+type SidecarRequest = { method: string; params: Record<string, unknown>; authToken: string | null }
+
+const host: RuntimeBrowserCommandHost = {
+  getRuntimeId: () => 'owner',
+  getAgentBrowserBridge: () => null,
+  // Distinct IDs prove registry fencing uses resolved workspaces, not caller selectors.
+  resolveWorkspaceSelector: async (selector) => ({ id: `id-${selector}` }),
+  resolveBrowserWorkspace: async (selector) => ({ id: `id-${selector}` }),
+  resolveBrowserNetworkExecutionHost: () => {
+    throw new Error('No browser network execution host')
+  },
+  getBrowserHostLeaseRegistry: () => {
+    throw new Error('No browser host lease registry')
+  },
+  getRuntimeBrowserPageRegistry: () => {
+    throw new Error('No runtime browser page registry')
+  },
+  getAuthoritativeWindow: () => {
+    throw new Error('No renderer')
+  },
+  getAvailableAuthoritativeWindow: () => null,
+  getOffscreenBrowserBackend: () => null
+}
+
+let harnessRoot: string
+let logPath: string
+let controlPath: string
+let sidecarMode: string | undefined
+let started: ElectronServeBrowserProcess[]
+
+async function setControl(control: Record<string, unknown>): Promise<void> {
+  await writeFile(controlPath, JSON.stringify(control))
+}
+
+async function sidecarRequests(): Promise<SidecarRequest[]> {
+  const raw = await readFile(logPath, 'utf8')
+  return raw
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => JSON.parse(line) as SidecarRequest)
+}
+
+async function browserRequests(): Promise<SidecarRequest[]> {
+  return (await sidecarRequests()).filter((request) => request.method !== 'status.get')
+}
+
+async function startProvider(): Promise<ElectronServeBrowserProcess> {
+  const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+  started.push(processHandle)
+  await processHandle.start()
+  return processHandle
+}
+
+function spawnSpec(): ProcessSpec {
+  return spawnProcessMock.mock.calls[0][0]
+}
+
+beforeEach(async () => {
+  harnessRoot = await mkdtemp(join(tmpdir(), 'orcad-electron-harness-'))
+  logPath = join(harnessRoot, 'requests.jsonl')
+  controlPath = join(harnessRoot, 'control.json')
+  sidecarMode = undefined
+  started = []
+  await writeFile(logPath, '')
+  await setControl({})
+  const actual = await vi.importActual<typeof RunProcessModule>('@orca/process-host')
+  spawnProcessMock.mockReset()
+  spawnProcessMock.mockImplementation((spec: ProcessSpec) =>
+    actual.spawnProcess({
+      ...spec,
+      program: process.execPath,
+      args: [FAKE_SIDECAR, ...(spec.args ?? [])],
+      env: {
+        ...spec.env,
+        ORCA_FAKE_SIDECAR_LOG: logPath,
+        ORCA_FAKE_SIDECAR_CONTROL: controlPath,
+        ...(sidecarMode ? { ORCA_FAKE_SIDECAR_MODE: sidecarMode } : {})
+      }
+    })
+  )
+})
+
+afterEach(async () => {
+  for (const processHandle of started) {
+    await processHandle.stop()
+  }
+  setRuntimeBrowserCommandsFactory(null)
+  vi.unstubAllEnvs()
+  await rm(harnessRoot, { recursive: true, force: true })
+})
+
+describe('ElectronServeBrowserProcess start-up', () => {
+  it('opens an owner IPC channel for automatic browser cleanup after parent loss', async () => {
+    await startProvider()
+    expect(spawnSpec().stdio).toEqual(['pipe', 'pipe', 'pipe', 'ipc'])
+    expect(spawnSpec().serialization).toBe('json')
+    expect(spawnSpec().env?.[BROWSER_SIDECAR_OWNER_ENV]).toBe('1')
+  })
+
+  it('does not launch when startup is already cancelled', async () => {
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    started.push(processHandle)
+    await expect(processHandle.start(AbortSignal.abort())).rejects.toThrow()
+    expect(spawnProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('cancels readiness polling and cleans up the unready sidecar', async () => {
+    await setControl({ capabilities: [['runtime.v1']] })
+    const controller = new AbortController()
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    started.push(processHandle)
+    const starting = processHandle.start(controller.signal)
+    const outcome = starting.then(
+      () => ({ rejected: false }),
+      () => ({ rejected: true })
+    )
+    try {
+      await vi.waitFor(async () => expect(await sidecarRequests()).not.toHaveLength(0), {
+        timeout: 10_000
+      })
+    } finally {
+      controller.abort()
+      await outcome
+    }
+    expect(await outcome).toEqual({ rejected: true })
+    expect(processHandle.isAvailable()).toBe(false)
+    const userDataPath = (spawnSpec().args ?? [])
+      .find((arg) => arg.startsWith('--user-data-dir='))!
+      .slice('--user-data-dir='.length)
+    const metadata = JSON.parse(await readFile(join(userDataPath, 'orca-runtime.json'), 'utf8'))
+    await processHandle.stop()
+    expect(existsSync(userDataPath)).toBe(false)
+    expect(() => process.kill(metadata.pid, 0)).toThrow()
+  })
+
+  it('launches the installed app in headless serve mode without orcad browser env', async () => {
+    for (const key of AGENT_BROWSER_ENVIRONMENT_KEYS) {
+      vi.stubEnv(key, `leaked-${key}`)
+    }
+    vi.stubEnv('ORCA_HARNESS_UNRELATED', 'preserved')
+    for (const key of ['ORCA_E2E_USER_DATA_DIR', 'ORCA_USER_DATA', 'ORCA_USER_DATA_PATH']) {
+      vi.stubEnv(key, harnessRoot)
+    }
+    const isolatedHome = join(harnessRoot, 'home')
+    vi.stubEnv('ORCA_E2E_HOME_DIR', isolatedHome)
+    vi.stubEnv('HOME', isolatedHome)
+    vi.stubEnv('XDG_DATA_HOME', join(isolatedHome, 'data'))
+    vi.stubEnv('XDG_STATE_HOME', join(isolatedHome, 'state'))
+
+    const processHandle = await startProvider()
+
+    const spec = spawnSpec()
+    expect(spec.program).toBe(INSTALLED_EXECUTABLE)
+    const args = [...(spec.args ?? [])]
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '--serve',
+        '--serve-port',
+        '--serve-json',
+        '--serve-no-pairing',
+        ...headlessServeOzonePlatformSwitches(process.platform)
+      ])
+    )
+    const port = Number(args[args.indexOf('--serve-port') + 1])
+    expect(Number.isInteger(port) && port > 0 && port < 65_536).toBe(true)
+    const userDataArg = args.find((arg) => arg.startsWith('--user-data-dir='))
+    expect(userDataArg).toBeDefined()
+    for (const key of AGENT_BROWSER_ENVIRONMENT_KEYS) {
+      expect(spec.env).not.toHaveProperty(key)
+    }
+    expect(spec.env?.ORCA_HARNESS_UNRELATED).toBe('preserved')
+    for (const key of ['ORCA_USER_DATA', 'ORCA_USER_DATA_PATH']) {
+      expect(spec.env).not.toHaveProperty(key)
+    }
+    expect(spec.env?.ORCA_E2E_USER_DATA_DIR).toBe(userDataArg?.slice('--user-data-dir='.length))
+    expect(spec.env?.ORCA_E2E_HOME_DIR).toBe(isolatedHome)
+    expect(spec.env?.HOME).toBe(isolatedHome)
+    expect(spec.env?.XDG_DATA_HOME).toBe(join(isolatedHome, 'data'))
+    expect(spec.env?.XDG_STATE_HOME).toBe(join(isolatedHome, 'state'))
+    expect(args).toEqual(expect.arrayContaining(['--password-store=basic', '--use-mock-keychain']))
+    expect(processHandle.isAvailable()).toBe(true)
+  })
+
+  it('marks the launch as the orcad sidecar so the installed app hands user opens on', async () => {
+    await startProvider()
+
+    expect(spawnSpec().env?.ORCA_ORCAD_SIDECAR).toBe('1')
+  })
+
+  it('keeps polling until the sidecar advertises browser.headless.v1', async () => {
+    await setControl({
+      capabilities: [['runtime.v1'], ['runtime.v1'], ['runtime.v1', 'browser.headless.v1']]
+    })
+
+    const processHandle = await startProvider()
+
+    const statusCalls = (await sidecarRequests()).filter(
+      (request) => request.method === 'status.get'
+    )
+    expect(statusCalls).toHaveLength(3)
+    expect(processHandle.isAvailable()).toBe(true)
+  })
+
+  it('fails fast when the installed app exits before publishing runtime metadata', async () => {
+    sidecarMode = 'exit-before-ready'
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    started.push(processHandle)
+
+    await expect(processHandle.start()).rejects.toThrow(/did not become ready/)
+    expect(processHandle.isAvailable()).toBe(false)
+  })
+
+  it('stops the sidecar process and removes its user data directory', async () => {
+    const processHandle = await startProvider()
+    const userDataPath = (spawnSpec().args ?? [])
+      .find((arg) => arg.startsWith('--user-data-dir='))!
+      .slice('--user-data-dir='.length)
+    const metadata = JSON.parse(
+      await readFile(join(userDataPath, 'orca-runtime.json'), 'utf8')
+    ) as { pid: number }
+
+    await processHandle.stop()
+
+    expect(processHandle.isAvailable()).toBe(false)
+    expect(existsSync(userDataPath)).toBe(false)
+    expect(() => process.kill(metadata.pid, 0)).toThrow()
+  })
+
+  it('still stops cleanly when the sidecar profile stays locked after the process exits', async () => {
+    const processHandle = await startProvider()
+    const userDataPath = (spawnSpec().args ?? [])
+      .find((arg) => arg.startsWith('--user-data-dir='))!
+      .slice('--user-data-dir='.length)
+    const metadata = JSON.parse(
+      await readFile(join(userDataPath, 'orca-runtime.json'), 'utf8')
+    ) as { pid: number }
+    lockedRemovalPaths.add(userDataPath)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      await expect(processHandle.stop()).resolves.toBeUndefined()
+      expect(warn).toHaveBeenCalledWith(
+        '[orcad] Electron browser sidecar data was not removed:',
+        expect.objectContaining({ code: 'EBUSY' })
+      )
+      expect(() => process.kill(metadata.pid, 0)).toThrow()
+    } finally {
+      lockedRemovalPaths.delete(userDataPath)
+      warn.mockRestore()
+      await rm(userDataPath, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('ElectronServeBrowserProcess command routing', () => {
+  it('rejects commands before start and after stop', async () => {
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    await expect(
+      processHandle.createCommands(host).browserGoto({ url: 'https://example.test/' })
+    ).rejects.toMatchObject({ code: 'browser_unavailable' })
+
+    const runningHandle = await startProvider()
+    const commands = runningHandle.createCommands(host)
+    await runningHandle.stop()
+    await expect(commands.browserGoto({ url: 'https://example.test/' })).rejects.toMatchObject({
+      code: 'browser_unavailable'
+    })
+  })
+
+  it('refuses screencast without reaching the sidecar', async () => {
+    const processHandle = await startProvider()
+
+    await expect(
+      processHandle
+        .createCommands(host)
+        .browserScreencast({ worktree: 'wt-a', format: 'jpeg' }, { sendBinary: () => true })
+    ).rejects.toMatchObject({ code: 'browser_screencast_unavailable' })
+    expect(await browserRequests()).toEqual([])
+  })
+
+  it('forwards the sidecar auth token and strips the worktree selector from params', async () => {
+    const commands = (await startProvider()).createCommands(host)
+
+    const created = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
+      browserPageId: string
+    }
+    await commands.browserGoto({ worktree: 'wt-a', url: 'https://example.test/' })
+
+    const requests = await browserRequests()
+    expect(requests.map((request) => request.method)).toEqual(['browser.tabCreate', 'browser.goto'])
+    for (const request of requests) {
+      expect(request.authToken).toBe('fake-sidecar-auth-token')
+      expect(request.params).not.toHaveProperty('worktree')
+    }
+    expect(requests[1].params.page).toBe(created.browserPageId)
+  })
+
+  it('leaves targetless methods untargeted and renumbers listed tabs per worktree', async () => {
+    const commands = (await startProvider()).createCommands(host)
+    const first = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
+      browserPageId: string
+    }
+    const second = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
+      browserPageId: string
+    }
+    await commands.browserTabCreate({ worktree: 'wt-b' })
+
+    const listed = (await commands.browserTabList({ worktree: 'wt-a' })) as {
+      tabs: { browserPageId: string; index: number }[]
+    }
+
+    expect(listed.tabs).toEqual([
+      expect.objectContaining({ browserPageId: first.browserPageId, index: 0 }),
+      expect.objectContaining({ browserPageId: second.browserPageId, index: 1 })
+    ])
+    const listRequest = (await browserRequests()).find(
+      (request) => request.method === 'browser.tabList'
+    )
+    expect(listRequest?.params).not.toHaveProperty('page')
+  })
+
+  it('fences pages to the worktree that created them without calling the sidecar', async () => {
+    const commands = (await startProvider()).createCommands(host)
+    const created = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
+      browserPageId: string
+    }
+    const before = (await browserRequests()).length
+
+    await expect(
+      commands.browserGoto({
+        worktree: 'wt-b',
+        page: created.browserPageId,
+        url: 'https://example.test/'
+      })
+    ).rejects.toMatchObject({ code: 'browser_tab_not_found' })
+    expect(await browserRequests()).toHaveLength(before)
+  })
+
+  it('routes browserTabCurrent to browser.tabShow for the active page', async () => {
+    const commands = (await startProvider()).createCommands(host)
+    const created = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
+      browserPageId: string
+    }
+
+    await commands.browserTabCurrent({ worktree: 'wt-a' })
+
+    const request = (await browserRequests()).at(-1)
+    expect(request?.method).toBe('browser.tabShow')
+    expect(request?.params.page).toBe(created.browserPageId)
+  })
+
+  it('re-creating a known page id is idempotent and issues no sidecar request', async () => {
+    const commands = (await startProvider()).createCommands(host)
+    const created = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
+      browserPageId: string
+    }
+    const before = (await browserRequests()).length
+
+    await expect(
+      commands.browserTabCreate({ worktree: 'wt-a', page: created.browserPageId })
+    ).resolves.toEqual({ browserPageId: created.browserPageId })
+    expect(await browserRequests()).toHaveLength(before)
+  })
+
+  it('forgets a page the sidecar reports as closed', async () => {
+    const commands = (await startProvider()).createCommands(host)
+    await commands.browserTabCreate({ worktree: 'wt-a' })
+    await setControl({
+      errors: { 'browser.goto': { code: 'browser_tab_closed', message: 'Tab was closed.' } }
+    })
+
+    await expect(
+      commands.browserGoto({ worktree: 'wt-a', url: 'https://example.test/' })
+    ).rejects.toMatchObject({ code: 'browser_tab_closed' })
+
+    await setControl({})
+    await expect(commands.browserTabCurrent({ worktree: 'wt-a' })).rejects.toMatchObject({
+      code: 'browser_no_tab'
+    })
+  })
+
+  it('scopes a folder workspace through the browser-workspace resolver', async () => {
+    const folderHost: RuntimeBrowserCommandHost = {
+      ...host,
+      resolveWorkspaceSelector: async () => {
+        throw new Error('selector_not_found')
+      },
+      resolveBrowserWorkspace: async () => ({ id: 'folder:docs' })
+    }
+    const commands = (await startProvider()).createCommands(folderHost)
+
+    const created = z
+      .object({ browserPageId: z.string() })
+      .parse(await commands.browserTabCreate({ worktree: 'id:folder:docs' }))
+    await commands.browserGoto({ worktree: 'id:folder:docs', url: 'https://example.test/' })
+
+    const request = (await browserRequests()).at(-1)
+    expect(request?.method).toBe('browser.goto')
+    expect(request?.params.page).toBe(created.browserPageId)
+  })
+
+  // Known-ID creation accepts provisional IDs advertised by the runtime before a page exists.
+  it('creates a tab under a caller-chosen page id', async () => {
+    const commands = (await startProvider()).createCommands(host)
+
+    await expect(
+      commands.browserTabCreate({ worktree: 'wt-a', page: 'provisional-page-1' })
+    ).resolves.toEqual({ browserPageId: 'provisional-page-1' })
+  })
+})
+
+it('forwards tab commands through startup to the Electron sidecar', async () => {
+  const browser = await startProvider()
+  vi.mocked(resolveOrcadBrowserProvider).mockResolvedValueOnce({
+    kind: 'electron',
+    factory: (commandHost) => browser.createCommands(commandHost),
+    isAvailable: () => browser.isAvailable(),
+    stop: () => browser.stop()
+  })
+  const startup = startOrcadBrowserProvider({ userDataPath: harnessRoot })
+  await startup.ready
+  try {
+    const commands = createRuntimeBrowserCommands({
+      ...host,
+      getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry()
+    })
+    await commands.browserTabCreate({ worktree: 'wt-a' })
+    await commands.browserTabList({ worktree: 'wt-a' })
+    expect((await browserRequests()).map((request) => request.method)).toEqual([
+      'browser.tabCreate',
+      'browser.tabList'
+    ])
+    const providerCommands = browser.createCommands(host)
+    expect('browserTabList' in providerCommands).toBe(true)
+    expect('then' in providerCommands).toBe(false)
+    expect(Symbol.iterator in providerCommands).toBe(false)
+  } finally {
+    await startup.stop()
+  }
+})
+
+// Subprocess forwarding contract; executed by CI or an admitted QA machine.
+it.each([false, true])(
+  'installs the actual provider with executor support=%s and forwards owner stamps unchanged',
+  async (supported) => {
+    const commandHost = {
+      ...host,
+      getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry()
+    }
+    browserSessionRegistry.configureForOrcaProfile({
+      orcaProfileId: 'fixture',
+      profileDirectory: harnessRoot
+    })
+    const owner = browserProfileRpcFixture('S2').profiles
+    const list = await owner.browserProfileList()
+    const imported = await owner.browserProfileImportFromBrowser({
+      profileId: 'default',
+      browserFamily: 'chrome'
+    })
+    await setControl({
+      capabilities: [
+        ['browser.headless.v1', ...(supported ? ['browser.google-cookie-clear.v1'] : [])]
+      ],
+      results: { 'browser.profileList': list, 'browser.profileImportFromBrowser': imported }
+    })
+    vi.mocked(resolveOrcadBrowserProvider).mockImplementation((options) =>
+      actual.resolveOrcadBrowserProvider({
+        ...options,
+        resolveInstalledElectronExecutable: async () => INSTALLED_EXECUTABLE
+      })
+    )
+    const startup = startOrcadBrowserProvider({ userDataPath: harnessRoot })
+    await startup.ready
+    try {
+      expect(runtimeBrowserCommandsFactorySupportsGoogleCookieClear()).toBe(supported)
+      const commands = createRuntimeBrowserCommands(commandHost)
+      await commands.browserTabList({})
+      expect(await commands.browserProfileList()).toEqual(list)
+      expect(
+        await commands.browserProfileImportFromBrowser({
+          profileId: 'default',
+          browserFamily: 'chrome'
+        })
+      ).toMatchObject({ ok: true, executorRuntimeId: 'S2' })
+      if (supported) {
+        await commands.browserProfileClearGoogleCookies({
+          profileId: 'default',
+          executorRuntimeId: 'S1'
+        })
+        expect((await browserRequests()).at(-1)).toMatchObject({
+          method: 'browser.profileClearGoogleCookies',
+          params: { profileId: 'default', executorRuntimeId: 'S1' }
+        })
+      }
+    } finally {
+      await startup.stop()
+    }
+    expect(runtimeBrowserCommandsFactorySupportsGoogleCookieClear()).toBe(false)
+    await setControl({
+      capabilities: [
+        ['browser.headless.v1', ...(!supported ? ['browser.google-cookie-clear.v1'] : [])]
+      ]
+    })
+    const restarted = startOrcadBrowserProvider({ userDataPath: harnessRoot })
+    await restarted.ready
+    try {
+      expect(runtimeBrowserCommandsFactorySupportsGoogleCookieClear()).toBe(!supported)
+      await createRuntimeBrowserCommands(commandHost).browserTabList({})
+    } finally {
+      await restarted.stop()
+    }
+  }
+)

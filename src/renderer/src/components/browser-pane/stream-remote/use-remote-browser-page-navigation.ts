@@ -1,0 +1,224 @@
+import { useCallback, useRef } from 'react'
+import { useAppStore } from '@/store'
+import { redactKagiSessionToken } from '../../../../../shared/browser-url'
+import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session-browser-history'
+import { resolveBrowserAddressBarSubmission } from '../navigate/browser-address-bar-navigation'
+import { routeWorkspaceDocAddressSubmission } from '../navigate/workspace-doc-address-submission'
+import { deferBrowserPageNavigation } from '../navigate/browser-page-deferred-navigation'
+import type {
+  BrowserBackResult,
+  BrowserGotoResult,
+  BrowserReloadResult,
+  BrowserTabInfo
+} from '../../../../../shared/runtime-types'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
+import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
+import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
+import type { BrowserPageUrlSetter, BrowserTabPageState } from '../describe-page/browser-page-types'
+import { getBrowserDisplayTitle, toDisplayUrl } from '../describe-page/browser-page-url-display'
+import type {
+  RemoteBrowserPaneNotice,
+  RemoteBrowserRuntimeTarget
+} from './remote-browser-page-input-model'
+
+export function useRemoteBrowserPageNavigation({
+  browserTab,
+  stagedPage,
+  addressBarValue,
+  setAddressBarValueFromPage,
+  lifecycle,
+  runtimeWorktree,
+  runtimeTarget,
+  createRemoteOperationToken,
+  isCurrentRemoteOperationToken,
+  closeMissingRemotePage,
+  onSetUrl,
+  onUpdatePageState,
+  setPaneNotice,
+  setPaneBusy
+}: {
+  browserTab: BrowserPageState
+  /** The host has not minted this page yet, so nothing here may be sent to the runtime. */
+  stagedPage: boolean
+  addressBarValue: string
+  setAddressBarValueFromPage: (value: string) => void
+  lifecycle: RemoteBrowserStreamLifecycle
+  runtimeWorktree: string
+  runtimeTarget: () => RemoteBrowserRuntimeTarget | null
+  createRemoteOperationToken: (remotePageId?: string | null) => RemoteBrowserOperationToken | null
+  isCurrentRemoteOperationToken: (token: RemoteBrowserOperationToken) => boolean
+  closeMissingRemotePage: (remotePageId?: string | null) => void
+  onSetUrl: BrowserPageUrlSetter
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
+  setPaneBusy: (busy: boolean) => void
+}): {
+  applyRemoteTabInfo: (tab: Pick<BrowserTabInfo, 'url' | 'title'>) => void
+  scheduleRemoteTabInfoRefresh: (token: RemoteBrowserOperationToken, delayMs?: number) => void
+  runRemoteNavigation: (
+    method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
+    url?: string
+  ) => Promise<void>
+  navigateToUrl: (url: string) => void
+  submitAddressBar: () => void
+} {
+  const addBrowserHistoryEntry = useAppStore((state) => state.addBrowserHistoryEntry)
+  const lastFiledHistoryRef = useRef<string | null>(null)
+
+  const applyRemoteTabInfo = useCallback(
+    (tab: Pick<BrowserTabInfo, 'url' | 'title'>): void => {
+      const safeUrl = redactKagiSessionToken(tab.url || 'about:blank')
+      const title = getBrowserDisplayTitle(tab.title, safeUrl)
+      onSetUrl(browserTab.id, safeUrl)
+      onUpdatePageState(browserTab.id, {
+        title,
+        loading: false,
+        loadError: null
+      })
+      // File remote navigations in client suggestion history only when URL/title changes; post-input tab reads must not rewrite the store.
+      const filing = `${normalizeBrowserHistoryUrl(safeUrl)}\n${title}`
+      if (filing !== lastFiledHistoryRef.current) {
+        lastFiledHistoryRef.current = filing
+        addBrowserHistoryEntry(safeUrl, title)
+      }
+      setAddressBarValueFromPage(toDisplayUrl(safeUrl))
+    },
+    [addBrowserHistoryEntry, browserTab.id, onSetUrl, onUpdatePageState, setAddressBarValueFromPage]
+  )
+
+  const scheduleRemoteTabInfoRefresh = useCallback(
+    (token: RemoteBrowserOperationToken, delayMs = 250): void => {
+      lifecycle.session.scheduleTabInfoRefresh(token, delayMs)
+    },
+    [lifecycle]
+  )
+
+  const runRemoteNavigation = useCallback(
+    async (
+      method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
+      url?: string
+    ) => {
+      const target = runtimeTarget()
+      if (!target) {
+        return
+      }
+      if (stagedPage) {
+        // No staged host page exists yet: park goto until adoption; history/reload cannot replay against an uncreated page.
+        if (method === 'browser.goto' && url) {
+          deferBrowserPageNavigation(browserTab.id, url)
+          onUpdatePageState(browserTab.id, { loading: true, loadError: null })
+        }
+        return
+      }
+      const operationToken = createRemoteOperationToken()
+      if (!operationToken) {
+        return
+      }
+      const pageId = await lifecycle.session.ensureRemotePage(operationToken)
+      if (!pageId) {
+        return
+      }
+      const pageToken = { ...operationToken, remotePageId: pageId }
+      if (!isCurrentRemoteOperationToken(pageToken)) {
+        return
+      }
+      setPaneBusy(true)
+      setPaneNotice(null)
+      // Why: a standing failure (and its auto-retry) stays up until a load succeeds or fails anew.
+      onUpdatePageState(browserTab.id, { loading: true })
+      try {
+        const params =
+          method === 'browser.goto'
+            ? { worktree: runtimeWorktree, page: pageId, url: url ?? 'about:blank' }
+            : { worktree: runtimeWorktree, page: pageId }
+        const result = await callRuntimeRpc<
+          BrowserGotoResult | BrowserBackResult | BrowserReloadResult
+        >(target, method, params, { timeoutMs: 30_000, suppressFeatureInteraction: true })
+        if (isCurrentRemoteOperationToken(pageToken)) {
+          applyRemoteTabInfo(result)
+        }
+      } catch (error) {
+        if (!isCurrentRemoteOperationToken(pageToken)) {
+          return
+        }
+        if (isRemoteBrowserPageMissingError(error)) {
+          closeMissingRemotePage(pageId)
+          return
+        }
+        const message = error instanceof Error ? error.message : 'Remote browser command failed.'
+        setPaneNotice({ kind: 'consequence', text: message })
+        // Why: goto results carry no load error, but the rejection keeps Electron's "ERR_NAME (-code)" text.
+        const netError = /\b(ERR_[A-Z_]+) \((-\d+)\)/.exec(message)
+        onUpdatePageState(browserTab.id, {
+          loading: false,
+          // Why: validatedUrl is persisted, so redact the Kagi session token like the main-process failure path does.
+          loadError: {
+            code: netError ? Number(netError[2]) : 0,
+            description: netError ? netError[1] : message,
+            validatedUrl: redactKagiSessionToken(url ?? browserTab.url)
+          }
+        })
+      } finally {
+        if (isCurrentRemoteOperationToken(pageToken)) {
+          setPaneBusy(false)
+        }
+      }
+    },
+    [
+      applyRemoteTabInfo,
+      browserTab.id,
+      browserTab.url,
+      createRemoteOperationToken,
+      lifecycle,
+      closeMissingRemotePage,
+      isCurrentRemoteOperationToken,
+      onUpdatePageState,
+      runtimeTarget,
+      runtimeWorktree,
+      setPaneBusy,
+      setPaneNotice,
+      stagedPage
+    ]
+  )
+
+  const navigateToUrl = useCallback(
+    (url: string): void => {
+      void runRemoteNavigation('browser.goto', url)
+    },
+    [runRemoteNavigation]
+  )
+
+  const submitAddressBar = (): void => {
+    // Typed workspace paths convert the local preview rather than navigating the runtime guest.
+    const consumedAsWorkspaceDoc = routeWorkspaceDocAddressSubmission({
+      worktreeId: browserTab.worktreeId,
+      pageId: browserTab.id,
+      value: addressBarValue,
+      onLoadError: (loadError) => {
+        setPaneNotice({ kind: 'direct', text: loadError.description })
+        onUpdatePageState(browserTab.id, { loadError })
+      }
+    })
+    if (consumedAsWorkspaceDoc) {
+      return
+    }
+    const submission = resolveBrowserAddressBarSubmission(addressBarValue, { allowFileUrls: false })
+    if (submission.status === 'invalid') {
+      // Direct validation is the only visible response to an empty submission, so it must outrank stream failures.
+      setPaneNotice({ kind: 'direct', text: submission.loadError.description })
+      onUpdatePageState(browserTab.id, { loadError: submission.loadError })
+      return
+    }
+    navigateToUrl(submission.url)
+  }
+
+  return {
+    applyRemoteTabInfo,
+    scheduleRemoteTabInfoRefresh,
+    runRemoteNavigation,
+    navigateToUrl,
+    submitAddressBar
+  }
+}

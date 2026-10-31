@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultOnboardingState, getDefaultVoiceSettings } from '../../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import type { GlobalSettings, OnboardingState } from '../../../../shared/types'
-import { getFeatureTipsAppOpenDecision, isCliFeatureTipCompleted } from './feature-tip-startup-gate'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import {
+  chatUiLaunchTipVariant,
+  type ChatUiLaunchTipVariant
+} from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import {
+  getFeatureTipsAppOpenDecision,
+  isCliFeatureTipCompleted,
+  isSessionSearchFeatureTipCompleted
+} from './feature-tip-startup-gate'
 
 const existingUserOnboarding: OnboardingState = {
   ...getDefaultOnboardingState(),
@@ -13,12 +23,17 @@ const existingUserOnboarding: OnboardingState = {
 
 const firstTimeOnboarding: OnboardingState = getDefaultOnboardingState()
 
-function makeSettings(voiceEnabled = false): Pick<GlobalSettings, 'voice'> {
+// Session search defaults on so tests about the older tips don't see the session-search tip first.
+function makeSettings(
+  voiceEnabled = false,
+  sessionSearchEnabled = true
+): Pick<GlobalSettings, 'voice' | 'aiVaultSearch'> {
   return {
     voice: {
       ...getDefaultVoiceSettings(),
       enabled: voiceEnabled
-    }
+    },
+    aiVaultSearch: { enabled: sessionSearchEnabled, historyDays: null }
   }
 }
 
@@ -48,11 +63,13 @@ describe('feature tip startup gate', () => {
         cliInstalled: false,
         featureTipsSeenIds: [],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
         promptedThisSession: false,
         settings: makeSettings(),
-        suppressedByOnboardingThisSession: false
+        suppressedByOnboardingThisSession: false,
+        webClient: false
       })
     ).toEqual({ kind: 'open', tipId: 'orca-cli' })
   })
@@ -64,11 +81,13 @@ describe('feature tip startup gate', () => {
         cliInstalled: false,
         featureTipsSeenIds: [],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: firstTimeOnboarding,
         persistedUIReady: true,
         promptedThisSession: false,
         settings: makeSettings(),
-        suppressedByOnboardingThisSession: false
+        suppressedByOnboardingThisSession: false,
+        webClient: false
       })
     ).toEqual({ kind: 'suppress-for-onboarding' })
   })
@@ -80,45 +99,15 @@ describe('feature tip startup gate', () => {
         cliInstalled: false,
         featureTipsSeenIds: [],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
         promptedThisSession: false,
         settings: makeSettings(),
-        suppressedByOnboardingThisSession: true
+        suppressedByOnboardingThisSession: true,
+        webClient: false
       })
     ).toEqual({ kind: 'skip' })
-  })
-
-  it('opens the CLI tip after the voice tip was marked seen', () => {
-    expect(
-      getFeatureTipsAppOpenDecision({
-        activeModal: 'none',
-        cliInstalled: false,
-        featureTipsSeenIds: ['voice-dictation'],
-        featureInteractions: {},
-        onboarding: existingUserOnboarding,
-        persistedUIReady: true,
-        promptedThisSession: false,
-        settings: makeSettings(),
-        suppressedByOnboardingThisSession: false
-      })
-    ).toEqual({ kind: 'open', tipId: 'orca-cli' })
-  })
-
-  it('opens the CLI tip after voice dictation is already enabled', () => {
-    expect(
-      getFeatureTipsAppOpenDecision({
-        activeModal: 'none',
-        cliInstalled: false,
-        featureTipsSeenIds: [],
-        featureInteractions: {},
-        onboarding: existingUserOnboarding,
-        persistedUIReady: true,
-        promptedThisSession: false,
-        settings: makeSettings(true),
-        suppressedByOnboardingThisSession: false
-      })
-    ).toEqual({ kind: 'open', tipId: 'orca-cli' })
   })
 
   it('opens the command palette tip after the CLI tip was marked seen', () => {
@@ -128,11 +117,13 @@ describe('feature tip startup gate', () => {
         cliInstalled: true,
         featureTipsSeenIds: ['orca-cli'],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
         promptedThisSession: false,
         settings: makeSettings(),
-        suppressedByOnboardingThisSession: false
+        suppressedByOnboardingThisSession: false,
+        webClient: false
       })
     ).toEqual({ kind: 'open', tipId: 'cmd-j-palette' })
   })
@@ -144,11 +135,13 @@ describe('feature tip startup gate', () => {
         cliInstalled: false,
         featureTipsSeenIds: ['voice-dictation', 'orca-cli', 'cmd-j-palette'],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
         promptedThisSession: false,
         settings: makeSettings(),
-        suppressedByOnboardingThisSession: false
+        suppressedByOnboardingThisSession: false,
+        webClient: false
       })
     ).toEqual({ kind: 'skip' })
   })
@@ -160,11 +153,13 @@ describe('feature tip startup gate', () => {
         cliInstalled: true,
         featureTipsSeenIds: ['voice-dictation', 'cmd-j-palette'],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
         promptedThisSession: false,
         settings: makeSettings(false),
-        suppressedByOnboardingThisSession: false
+        suppressedByOnboardingThisSession: false,
+        webClient: false
       })
     ).toEqual({ kind: 'skip' })
   })
@@ -176,27 +171,13 @@ describe('feature tip startup gate', () => {
         cliInstalled: true,
         featureTipsSeenIds: ['voice-dictation', 'cmd-j-palette'],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
         promptedThisSession: false,
         settings: makeSettings(),
-        suppressedByOnboardingThisSession: false
-      })
-    ).toEqual({ kind: 'skip' })
-  })
-
-  it('waits for CLI install status before opening the CLI tip', () => {
-    expect(
-      getFeatureTipsAppOpenDecision({
-        activeModal: 'none',
-        cliInstalled: null,
-        featureTipsSeenIds: ['voice-dictation'],
-        featureInteractions: {},
-        onboarding: existingUserOnboarding,
-        persistedUIReady: true,
-        promptedThisSession: false,
-        settings: makeSettings(),
-        suppressedByOnboardingThisSession: false
+        suppressedByOnboardingThisSession: false,
+        webClient: false
       })
     ).toEqual({ kind: 'skip' })
   })
@@ -208,11 +189,13 @@ describe('feature tip startup gate', () => {
         cliInstalled: null,
         featureTipsSeenIds: [],
         featureInteractions: {},
+        chatUiLaunchTipVariant: 'none',
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
         promptedThisSession: false,
         settings: makeSettings(),
-        suppressedByOnboardingThisSession: false
+        suppressedByOnboardingThisSession: false,
+        webClient: false
       })
     ).toEqual({ kind: 'skip' })
   })
@@ -223,6 +206,7 @@ describe('feature tip startup gate', () => {
         activeModal: 'none',
         cliInstalled: true,
         featureTipsSeenIds: ['cmd-j-palette'],
+        chatUiLaunchTipVariant: 'none',
         featureInteractions: {
           'voice-dictation': { firstInteractedAt: 100, interactionCount: 1 }
         },
@@ -230,7 +214,8 @@ describe('feature tip startup gate', () => {
         persistedUIReady: true,
         promptedThisSession: false,
         settings: makeSettings(),
-        suppressedByOnboardingThisSession: false
+        suppressedByOnboardingThisSession: false,
+        webClient: false
       })
     ).toEqual({ kind: 'skip' })
   })
@@ -250,5 +235,84 @@ describe('feature tip startup gate', () => {
         })
       )
     ).toBe(true)
+  })
+
+  function decideForExistingUser(args: {
+    sessionSearchEnabled: boolean
+    webClient: boolean
+    featureTipsSeenIds?: ('agent-session-search' | 'orca-cli')[]
+    chatUiLaunchTipVariant?: ChatUiLaunchTipVariant | null
+  }): ReturnType<typeof getFeatureTipsAppOpenDecision> {
+    return getFeatureTipsAppOpenDecision({
+      activeModal: 'none',
+      cliInstalled: false,
+      featureTipsSeenIds: args.featureTipsSeenIds ?? [],
+      featureInteractions: {},
+      chatUiLaunchTipVariant:
+        args.chatUiLaunchTipVariant === undefined ? 'none' : args.chatUiLaunchTipVariant,
+      onboarding: existingUserOnboarding,
+      persistedUIReady: true,
+      promptedThisSession: false,
+      settings: makeSettings(false, args.sessionSearchEnabled),
+      suppressedByOnboardingThisSession: false,
+      webClient: args.webClient
+    })
+  }
+
+  it('opens the session search tip first while search is off', () => {
+    expect(decideForExistingUser({ sessionSearchEnabled: false, webClient: false })).toEqual({
+      kind: 'open',
+      tipId: 'agent-session-search'
+    })
+  })
+
+  it('skips the session search tip once it has been seen', () => {
+    expect(
+      decideForExistingUser({
+        sessionSearchEnabled: false,
+        webClient: false,
+        featureTipsSeenIds: ['agent-session-search']
+      })
+    ).toEqual({ kind: 'open', tipId: 'orca-cli' })
+  })
+
+  it('skips the session search tip when search is already on or on a web client', () => {
+    expect(decideForExistingUser({ sessionSearchEnabled: true, webClient: false })).toEqual({
+      kind: 'open',
+      tipId: 'orca-cli'
+    })
+    expect(decideForExistingUser({ sessionSearchEnabled: false, webClient: true })).toEqual({
+      kind: 'open',
+      tipId: 'orca-cli'
+    })
+  })
+
+  it('opens the Chat UI tip first only for profiles main recorded in its audience', () => {
+    const decide = (variant: ChatUiLaunchTipVariant | null, webClient = false) =>
+      decideForExistingUser({
+        sessionSearchEnabled: true,
+        webClient,
+        chatUiLaunchTipVariant: variant
+      })
+    expect(decide('chat-ui-off')).toEqual({ kind: 'open', tipId: 'chat-ui-here' })
+    expect(decide('chat-ui-on')).toEqual({ kind: 'open', tipId: 'chat-ui-here' })
+    expect(decide('none')).toEqual({ kind: 'open', tipId: 'orca-cli' })
+    expect(decide('chat-ui-on', true)).toEqual({ kind: 'open', tipId: 'orca-cli' })
+    // Waits for main's answer rather than showing a later tip first.
+    expect(decide(null)).toEqual({ kind: 'skip' })
+  })
+
+  it.each([
+    ['eligible', 'chat-ui-off', 'chat-ui-off'],
+    ['eligible', 'chat-ui-on', 'chat-ui-on'],
+    ['excluded', 'new-profile', 'none'],
+    ['excluded', 'unreadable-record', 'none'],
+    ['excluded', 'chat-ui-off', 'none']
+  ] as const)('maps a %s %s record to the %s variant', (membership, basis, variant) => {
+    expect(chatUiLaunchTipVariant({ version: 1, membership, basis })).toBe(variant)
+  })
+
+  it('treats a profile with no session search settings as search off', () => {
+    expect(isSessionSearchFeatureTipCompleted({}, false)).toBe(false)
   })
 })

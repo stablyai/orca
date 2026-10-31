@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { foldToolMessages } from '../../../src/shared/native-chat/tools/native-chat-tool-fold'
+import { pairToolBlocks } from '../../../src/shared/native-chat/tools/native-chat-tool-pairs'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import {
-  foldToolMessages,
-  pairToolBlocks,
-  splitNativeChatBlocks
-} from './mobile-native-chat-blocks'
 
 function msg(
   role: NativeChatMessage['role'],
@@ -14,18 +11,6 @@ function msg(
   return { id, role, blocks, timestamp: 0, source: 'transcript' }
 }
 
-describe('splitNativeChatBlocks', () => {
-  it('separates prose from tool blocks', () => {
-    const { prose, tools } = splitNativeChatBlocks([
-      { type: 'text', text: 'hi' },
-      { type: 'tool-call', name: 'Bash', input: {} },
-      { type: 'tool-result', output: 'ok' }
-    ])
-    expect(prose.map((b) => b.type)).toEqual(['text'])
-    expect(tools.map((b) => b.type)).toEqual(['tool-call', 'tool-result'])
-  })
-})
-
 describe('pairToolBlocks', () => {
   it('pairs each call with the following result', () => {
     const pairs = pairToolBlocks([
@@ -34,10 +19,16 @@ describe('pairToolBlocks', () => {
       { type: 'tool-call', name: 'Edit', input: {} },
       { type: 'tool-result', output: 'ok' }
     ])
-    expect(pairs).toHaveLength(2)
-    expect(pairs[0]!.call?.name).toBe('Bash')
-    expect(pairs[0]!.result?.output).toBe('a\nb')
-    expect(pairs[1]!.call?.name).toBe('Edit')
+    expect(pairs).toEqual([
+      {
+        call: { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+        result: { type: 'tool-result', output: 'a\nb' }
+      },
+      {
+        call: { type: 'tool-call', name: 'Edit', input: {} },
+        result: { type: 'tool-result', output: 'ok' }
+      }
+    ])
   })
 
   it('keeps an orphan result on its own', () => {
@@ -61,8 +52,6 @@ describe('pairToolBlocks', () => {
     const call2 = { type: 'tool-call' as const, name: 'Bash', input: { command: 'b' } }
     const result1 = { type: 'tool-result' as const, output: 'out-a' }
     const result2 = { type: 'tool-result' as const, output: 'out-b' }
-    // Parallel calls stream as [call, call, result, result]; the Nth result
-    // answers the Nth call, so result1 must land on call1 (not the nearer call2).
     const pairs = pairToolBlocks([call1, call2, result1, result2])
 
     expect(pairs).toHaveLength(2)
@@ -81,11 +70,10 @@ describe('pairToolBlocks', () => {
 
     expect(pairs).toHaveLength(2)
     expect(pairs[0]).toEqual({ call: call1, result: result1 })
-    // call3 was dropped past the limit, so result3 must not misgraft onto call2.
     expect(pairs[1]).toEqual({ call: call2, result: result2 })
   })
 
-  it('retains the last result while bounding rendered pairs', () => {
+  it('keeps the first completed pairs at the rendering limit', () => {
     const blocks = Array.from({ length: 20 }, (_unused, index) => [
       { type: 'tool-call' as const, name: 'Bash', input: { index } },
       { type: 'tool-result' as const, output: String(index) }
@@ -107,12 +95,12 @@ describe('foldToolMessages', () => {
       msg('tool', [{ type: 'tool-result', output: 'ok' }], 't2')
     ])
     expect(folded).toHaveLength(1)
-    expect(folded[0]!.blocks.map((b) => b.type)).toEqual([
-      'text',
-      'tool-call',
-      'tool-result',
-      'tool-call',
-      'tool-result'
+    expect(folded[0]!.blocks).toEqual([
+      { type: 'text', text: 'doing' },
+      { type: 'tool-call', name: 'Bash', input: {} },
+      { type: 'tool-result', output: 'done' },
+      { type: 'tool-call', name: 'Edit', input: {} },
+      { type: 'tool-result', output: 'ok' }
     ])
   })
 
@@ -125,10 +113,9 @@ describe('foldToolMessages', () => {
     expect(folded.map((m) => m.id)).toEqual(['a0', 'a2'])
   })
 
-  it('keeps a tool message standalone when no assistant precedes it', () => {
+  it('drops a tool message whose call is outside the loaded window', () => {
     const folded = foldToolMessages([msg('tool', [{ type: 'tool-result', output: 'x' }])])
-    expect(folded).toHaveLength(1)
-    expect(folded[0]!.role).toBe('tool')
+    expect(folded).toHaveLength(0)
   })
 
   it('does not merge across a user message', () => {
@@ -137,17 +124,18 @@ describe('foldToolMessages', () => {
       msg('user', [{ type: 'text', text: 'q' }], 'u'),
       msg('tool', [{ type: 'tool-result', output: 'r' }], 't')
     ])
-    expect(folded.map((m) => m.role)).toEqual(['assistant', 'user', 'tool'])
+    expect(folded.map((m) => m.role)).toEqual(['assistant', 'user'])
   })
 
   it('folds a long tool run without mutating the source assistant', () => {
     const assistant = msg('assistant', [{ type: 'text', text: 'working' }], 'a')
-    const tools = Array.from({ length: 1_000 }, (_unused, index) =>
+    const tools = Array.from({ length: 1_000 }, (_unused, index) => [
+      msg('assistant', [{ type: 'tool-call', name: 'Bash', input: {} }], `c-${index}`),
       msg('tool', [{ type: 'tool-result', output: String(index) }], `t-${index}`)
-    )
+    ]).flat()
     const folded = foldToolMessages([assistant, ...tools])
 
-    expect(folded[0].blocks).toHaveLength(1_001)
+    expect(folded[0].blocks).toHaveLength(2_001)
     expect(assistant.blocks).toHaveLength(1)
   })
 })

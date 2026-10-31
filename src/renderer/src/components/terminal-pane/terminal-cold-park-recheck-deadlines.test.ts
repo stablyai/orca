@@ -78,9 +78,7 @@ describe('getTerminalWorktreeColdParkRecheckDelayMs', () => {
     ).toBeNull()
   })
 
-  // Why: past the ordinary deadlines nothing else would wake the verdict
-  // effect, and the cool-down is what keeps the candidate out of the parked
-  // set — without this wakeup a measured worktree never re-parks.
+  // With earlier deadlines exhausted, only the cool-down wakeup lets this worktree park again.
   it('wakes at the measure cool-down deadline when all ordinary deadlines have passed', () => {
     expect(
       getTerminalWorktreeColdParkRecheckDelayMs({
@@ -166,6 +164,45 @@ describe('getTerminalTabColdParkRecheckDelayMs', () => {
         coldParkDelayMs: 100,
         hotRetainMs: 1_000,
         parkCooldownUntilMs: 2_750
+      })
+    ).toBe(250)
+  })
+
+  // A damped tab has no other pending wakeup; pin expiry must release it to parking.
+  it('wakes at the flip-damping pin deadline when all ordinary deadlines have passed', () => {
+    expect(
+      getTerminalTabColdParkRecheckDelayMs({
+        parkingEnabled: true,
+        hiddenSinceMs: 1_000,
+        nowMs: 1_000_000,
+        coldParkDelayMs: 100,
+        hotRetainMs: 1_000,
+        parkVerdictPinUntilMs: 1_060_000
+      })
+    ).toBe(60_000)
+  })
+
+  // Pins and cool-downs must not delay each other’s earlier wakeup.
+  it('takes the nearest of the pin and cool-down deadlines', () => {
+    const base = {
+      parkingEnabled: true,
+      hiddenSinceMs: 1_000,
+      nowMs: 2_500,
+      coldParkDelayMs: 100,
+      hotRetainMs: 1_000
+    }
+    expect(
+      getTerminalTabColdParkRecheckDelayMs({
+        ...base,
+        parkCooldownUntilMs: 2_750,
+        parkVerdictPinUntilMs: 62_500
+      })
+    ).toBe(250)
+    expect(
+      getTerminalTabColdParkRecheckDelayMs({
+        ...base,
+        parkCooldownUntilMs: 62_500,
+        parkVerdictPinUntilMs: 2_750
       })
     ).toBe(250)
   })

@@ -1,23 +1,17 @@
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId,
-  toSshExecutionHostId
+  toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '@/store'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 
 type AddedRepoOwner = {
   runtimeEnvironmentId?: string | null
-  sshConnectionId?: string | null
 }
 
 function repoWithCapturedOwner(repo: Repo, owner: AddedRepoOwner): Repo {
-  const sshConnectionId = owner.sshConnectionId?.trim()
-  if (sshConnectionId) {
-    return { ...repo, executionHostId: toSshExecutionHostId(sshConnectionId) }
-  }
   if (owner.runtimeEnvironmentId !== undefined) {
     const runtimeEnvironmentId = owner.runtimeEnvironmentId?.trim()
     return {
@@ -43,8 +37,7 @@ export function upsertAddedRepoWithProjectHostSetup(
     : [...state.repos, ownedRepo]
   const projection = projectHostSetupProjectionFromRepos(repos)
 
-  // Why: these Add Project flows call IPC directly, bypassing the repo slice
-  // action that normally keeps the project-first compatibility model synced.
+  // Direct IPC bypasses repo-slice compatibility projection; synchronize project-first state here.
   useAppStore.setState({
     repos,
     projects: projection.projects,

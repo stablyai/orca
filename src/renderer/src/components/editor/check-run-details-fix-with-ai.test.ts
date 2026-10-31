@@ -1,13 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRInfo,
-  Repo,
-  Worktree
-} from '../../../../shared/types'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as normalization from '@/lib/check-run-details-log-normalization'
+import * as sanitation from '../../../../shared/check-job-log-excerpt'
 import {
-  getCheckRunDetailsFixDisabledReason,
+  captured,
+  checkLogDetails,
+  checkLogJob
+} from '@/lib/check-run-details-log-normalization-test-fixture'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import {
   isCheckRunDetailsFixCandidate,
   resolveCheckRunDetailsFixCheck,
   resolveHostedReviewForCheckRunDetailsFix,
@@ -101,7 +104,7 @@ const storeState = vi.hoisted(() => ({
   hostedReviewCache: {} as Record<string, { data: unknown }>
 }))
 
-vi.mock('@/lib/worktree-git-identity-display', () => ({
+vi.mock('../../../../shared/worktree/git-identity-display', () => ({
   getWorktreeGitIdentityDisplay: () => ({ kind: 'branch', branchName: 'feature' })
 }))
 
@@ -135,16 +138,48 @@ beforeEach(() => {
   }
   storeState.hostedReviewCache = {}
 })
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 describe('check-run-details-fix-with-ai', () => {
-  it('detects failing checks as fix candidates', () => {
-    expect(isCheckRunDetailsFixCandidate(fixtures.failingCheck)).toBe(true)
-    expect(
-      isCheckRunDetailsFixCandidate({
-        ...fixtures.failingCheck,
-        conclusion: 'success'
+  it('reuses normalized loaded evidence for repeated AI actions with zero details calls', async () => {
+    const prCheckDetails = vi.fn()
+    const fetchPRCheckDetails = vi.fn()
+    const runtimeCall = vi.fn()
+    vi.stubGlobal('window', {
+      api: {
+        gh: { prCheckDetails },
+        runtime: { call: runtimeCall },
+        runtimeEnvironments: { call: runtimeCall, subscribe: runtimeCall }
+      }
+    })
+    Object.assign(storeState, { fetchPRCheckDetails })
+    const normalize = vi.spyOn(normalization, 'normalizeCheckRunDetailsLogTails')
+    const sanitize = vi.spyOn(sanitation, 'sanitizeCheckJobLogExcerpt')
+    const loaded = normalization.normalizeCheckRunDetailsLogTails(
+      checkLogDetails([checkLogJob(captured.rawLog)])
+    )
+    for (let i = 0; i < 2; i += 1) {
+      await startCheckRunDetailsFixWithAI({
+        worktreeId: fixtures.worktree.id,
+        check: fixtures.failingCheck,
+        details: loaded
       })
-    ).toBe(false)
+    }
+    expect(startFixChecksAgent).toHaveBeenCalledTimes(2)
+    for (const [launch] of startFixChecksAgent.mock.calls) {
+      expect(launch.basePrompt).toContain('bounded log excerpts')
+      expect(launch.basePrompt).toContain(JSON.stringify(captured.expectedDiagnostic).slice(1, -1))
+      expect(launch.basePrompt).toContain(captured.expectedStackFrame)
+      expect(launch.basePrompt).not.toContain('\\u001b')
+    }
+    expect(normalize).toHaveBeenCalledOnce()
+    expect(sanitize).toHaveBeenCalledOnce()
+    expect(prCheckDetails).not.toHaveBeenCalled()
+    expect(fetchPRCheckDetails).not.toHaveBeenCalled()
+    expect(runtimeCall).not.toHaveBeenCalled()
   })
 
   it('prefers loaded details conclusion over the list-level check', () => {
@@ -169,17 +204,18 @@ describe('check-run-details-fix-with-ai', () => {
     ).toBe(true)
   })
 
-  it('resolves hosted review metadata from the worktree PR cache', () => {
-    expect(resolveHostedReviewForCheckRunDetailsFix(fixtures.worktree.id)).toMatchObject({
-      number: 42,
-      title: 'Fix CI',
-      url: 'https://github.com/acme/widgets/pull/42'
-    })
-  })
+  it('does not resolve a matching suppressed GitHub PR', () => {
+    storeState.worktreesByRepo = {
+      'repo-1': [
+        {
+          ...fixtures.worktree,
+          linkedPR: null,
+          suppressedGitHubPR: fixtures.pr.number
+        }
+      ]
+    }
 
-  it('requires a hosted review before launching an AI fix', () => {
-    storeState.prCache = {}
-    expect(getCheckRunDetailsFixDisabledReason(fixtures.worktree.id)).toContain('PR or MR')
+    expect(resolveHostedReviewForCheckRunDetailsFix(fixtures.worktree.id)).toBeNull()
   })
 
   it('starts a single-check AI fix prompt for the owning worktree', async () => {

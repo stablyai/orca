@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -20,7 +20,7 @@ describe('repo header create state', () => {
       getRepoHeaderCreateState({
         repo: makeRepo(),
         label: 'orca',
-        sshStatus: null
+        sshGate: { connectionId: null, status: null }
       })
     ).toEqual({
       disabled: false,
@@ -35,7 +35,7 @@ describe('repo header create state', () => {
       getRepoHeaderCreateState({
         repo: makeRepo({ kind: 'folder' }),
         label: 'docs',
-        sshStatus: null
+        sshGate: { connectionId: null, status: null }
       })
     ).toMatchObject({
       disabled: false,
@@ -49,7 +49,7 @@ describe('repo header create state', () => {
       getRepoHeaderCreateState({
         repo: makeRepo({ connectionId: 'ssh-1' }),
         label: 'remote',
-        sshStatus: 'connected'
+        sshGate: { connectionId: 'ssh-1', status: 'connected' }
       })
     ).toMatchObject({
       disabled: false,
@@ -71,7 +71,7 @@ describe('repo header create state', () => {
         getRepoHeaderCreateState({
           repo: makeRepo({ connectionId: 'ssh-1' }),
           label: 'remote',
-          sshStatus
+          sshGate: { connectionId: 'ssh-1', status: sshStatus }
         })
       ).toEqual({
         disabled: true,

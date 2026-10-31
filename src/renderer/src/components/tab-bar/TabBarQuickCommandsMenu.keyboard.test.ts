@@ -1,6 +1,6 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Capture window keydown listeners so tests can fire them directly.
 const windowListeners = vi.hoisted(() => new Map<string, (e: KeyboardEvent) => void>())
 
 const keybindingsMock = vi.hoisted(() => ({
@@ -17,7 +17,6 @@ const appStoreMock = vi.hoisted(() => ({
   }
 }))
 
-// Minimal React hook runtime: track useState values and useEffect callbacks.
 const reactRuntime = vi.hoisted(() => ({
   states: [] as unknown[],
   index: 0,
@@ -25,7 +24,7 @@ const reactRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useState<T>(initial: T | (() => T)) {
@@ -56,6 +55,14 @@ vi.mock('react', async () => {
 
 vi.mock('../../../../shared/keybindings', () => ({
   keybindingMatchesAction: keybindingsMock.matchAction
+}))
+
+// Why: the stubbed window stands in for the app keyboard router's capture stage.
+vi.mock('@/lib/app-keyboard-router', () => ({
+  addAppKeyListener: (type: 'keydown' | 'keyup', handler: (e: KeyboardEvent) => void) =>
+    window.addEventListener(type, handler, { capture: true }),
+  removeAppKeyListener: (type: 'keydown' | 'keyup', handler: (e: KeyboardEvent) => void) =>
+    window.removeEventListener(type, handler, { capture: true })
 }))
 
 vi.mock('@/lib/shortcut-platform', () => ({
@@ -125,12 +132,17 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 function makeProps() {
   return {
+    isFocused: true,
     repoCommands: [] as never[],
     globalCommands: [] as never[],
     mostRecent: null,
+    addHosts: [],
+    hostLoadFailed: false,
+    hostOwnershipPending: false,
     onAddCommand: vi.fn(),
     onDeleteCommand: vi.fn(),
     onEditCommand: vi.fn(),
+    onMenuOpen: vi.fn(),
     onRunCommand: vi.fn()
   }
 }
@@ -160,7 +172,7 @@ beforeEach(() => {
   appStoreMock.state.keybindings = {}
   appStoreMock.state.settings.terminalShortcutPolicy = 'orca-first'
   vi.stubGlobal('window', {
-    addEventListener: vi.fn((type: string, handler: (e: KeyboardEvent) => void) => {
+    addEventListener: vi.fn((type: 'keydown' | 'keyup', handler: (e: KeyboardEvent) => void) => {
       windowListeners.set(type, handler)
     }),
     removeEventListener: vi.fn()
@@ -173,6 +185,37 @@ beforeEach(() => {
 })
 
 describe('TabBarQuickCommandsMenu keyboard shortcut', () => {
+  it('does not register either shortcut path for an unfocused group', async () => {
+    const { TabBarQuickCommandsMenu } = await import('./TabBarQuickCommandsMenu')
+    TabBarQuickCommandsMenu({ ...makeProps(), isFocused: false })
+
+    reactRuntime.effects[0]()
+    reactRuntime.effects[1]()
+
+    expect(window.addEventListener).not.toHaveBeenCalled()
+  })
+
+  it('closes an open menu when its group loses focus', async () => {
+    const { TabBarQuickCommandsMenu } = await import('./TabBarQuickCommandsMenu')
+    reactRuntime.states[0] = true
+    TabBarQuickCommandsMenu({ ...makeProps(), isFocused: false })
+
+    // Effect index 2 closes the menu for an inactive group.
+    reactRuntime.effects[2]()
+
+    expect(reactRuntime.states[0]).toBe(false)
+  })
+
+  it('keeps an open menu for the focused group', async () => {
+    const { TabBarQuickCommandsMenu } = await import('./TabBarQuickCommandsMenu')
+    reactRuntime.states[0] = true
+    TabBarQuickCommandsMenu(makeProps())
+
+    reactRuntime.effects[2]()
+
+    expect(reactRuntime.states[0]).toBe(true)
+  })
+
   it('registers a capturing keydown listener on mount', async () => {
     reactRuntime.index = 0
     const { TabBarQuickCommandsMenu } = await import('./TabBarQuickCommandsMenu')
@@ -217,7 +260,6 @@ describe('TabBarQuickCommandsMenu keyboard shortcut', () => {
     expect(handler).toBeDefined()
     handler!(makeKeyEvent())
 
-    // menuOpen is useState index 0, initial false → toggled to true.
     expect(reactRuntime.states[0]).toBe(true)
   })
 
@@ -231,8 +273,7 @@ describe('TabBarQuickCommandsMenu keyboard shortcut', () => {
     windowListeners.get('keydown')!(makeKeyEvent())
     expect(reactRuntime.states[0]).toBe(true)
 
-    // Simulate React re-running the effect after menuOpen changed to true,
-    // so the handler closes over the updated value.
+    // Rebuild effects after toggling so the new handler closes over the open state.
     reactRuntime.index = 0
     reactRuntime.effects = []
     TabBarQuickCommandsMenu(makeProps())

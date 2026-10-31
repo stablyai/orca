@@ -11,11 +11,15 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { worktreeRowSurface } from './worktree-row-locators'
+import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
 import { RuntimeClient } from '../../src/cli/runtime/client'
+import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalListResult,
-  RuntimeTerminalSplit
+  RuntimeTerminalSplit,
+  RuntimeWorktreeRecord
 } from '../../src/shared/runtime-types'
 
 test.describe.configure({ mode: 'serial' })
@@ -56,14 +60,39 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     expect(await getWorktreeTabs(firstLaunch.page, worktreeId)).toHaveLength(1)
 
     const client = new RuntimeClient(session.userDataDir, 30_000)
+    await expect
+      .poll(
+        async () => {
+          try {
+            const shown = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+              worktree: `id:${worktreeId}`
+            })
+            return shown.result.worktree.id
+          } catch (error) {
+            if (error instanceof RuntimeRpcFailureError && error.code === 'selector_not_found') {
+              return null
+            }
+            throw error
+          }
+        },
+        { message: 'Split target did not become runtime-worktree-resolvable' }
+      )
+      .toBe(worktreeId)
     let activeHandle: string | null = null
     await expect
       .poll(
         async () => {
-          const listed = await client.call<RuntimeTerminalListResult>('terminal.list', {
-            worktree: `id:${worktreeId}`
+          // The pane's terminal can still be binding; the host then says it can't answer yet.
+          const listed = await readFreshTerminalInventory(async () => {
+            const response = await client.call<RuntimeTerminalListResult>('terminal.list', {
+              worktree: `id:${worktreeId}`
+            })
+            return response.result
           })
-          const matching = listed.result.terminals.filter(
+          if (!listed) {
+            return null
+          }
+          const matching = listed.terminals.filter(
             (terminal) => terminal.worktreeId === worktreeId && terminal.tabId === closedTabId
           )
           activeHandle = matching.length === 1 ? (matching[0]?.handle ?? null) : null
@@ -99,10 +128,13 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     await expect
       .poll(
         async () => {
-          const afterClose = await client.call<RuntimeTerminalListResult>('terminal.list', {
-            worktree: `id:${worktreeId}`
+          const afterClose = await readFreshTerminalInventory(async () => {
+            const response = await client.call<RuntimeTerminalListResult>('terminal.list', {
+              worktree: `id:${worktreeId}`
+            })
+            return response.result
           })
-          return afterClose.result.terminals
+          return afterClose?.terminals
             .filter((terminal) => terminal.tabId === closedTabId)
             .map((terminal) => terminal.handle)
         },
@@ -116,29 +148,39 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     const secondLaunch = await session.launch()
     secondApp = secondLaunch.app
     await waitForSessionReady(secondLaunch.page)
-    const restoredWorktreeId = await attachRepoAndOpenTerminal(secondLaunch.page, repoPath)
-    expect(restoredWorktreeId).toBe(worktreeId)
+    // Activation deliberately creates a fresh terminal; observe passive hydration first.
+    await expect
+      .poll(() =>
+        secondLaunch.page.evaluate(
+          (id) =>
+            window.__store
+              ?.getState()
+              .allWorktrees()
+              .some((worktree) => worktree.id === id),
+          worktreeId
+        )
+      )
+      .toBe(true)
 
-    // Why: wait past initial worktree effects so this checks resurrection, not
-    // only the first hydrated frame before default-tab logic has run.
+    // Wait beyond initial effects so late default-tab creation cannot resurrect the closed tab unnoticed.
     await secondLaunch.page.waitForTimeout(1_000)
-    // Why: reattaching to an emptied worktree intentionally spawns a fresh
-    // "Terminal 1" tab (Terminal.tsx's shouldAutoCreateInitialTerminal
-    // fallback fires whenever the active worktree has zero renderable tabs —
-    // true for a durably-closed worktree just like a brand-new one). That
-    // fallback is unrelated to this test and reproduces even mid-session with
-    // no restart at all, so asserting an eternally-empty tab list here is
-    // wrong. What "durable" actually promises is that the specific closed
-    // split tab never comes back — assert on its identity, not on tab count.
     const restoredTabs = await getWorktreeTabs(secondLaunch.page, worktreeId)
-    expect(restoredTabs.some((tab) => tab.id === closedTabId)).toBe(false)
+    expect(restoredTabs).toEqual([])
 
     const afterRestart = await client.call<RuntimeTerminalListResult>('terminal.list', {
       worktree: `id:${worktreeId}`
     })
-    expect(
-      afterRestart.result.terminals.filter((terminal) => terminal.tabId === closedTabId)
-    ).toEqual([])
+    expect(afterRestart.result.terminals).toEqual([])
+
+    // Tombstones govern passive hydration; explicit sidebar activation must create a fresh terminal instead of #14590’s blank bar.
+    await worktreeRowSurface(secondLaunch.page, worktreeId).click()
+    await expect
+      .poll(() => getWorktreeTabs(secondLaunch.page, worktreeId), {
+        message: 'Explicit sidebar activation did not re-seed a terminal tab'
+      })
+      .toHaveLength(1)
+    const reseededTabs = await getWorktreeTabs(secondLaunch.page, worktreeId)
+    expect(reseededTabs[0]?.id).not.toBe(closedTabId)
   } finally {
     if (firstApp) {
       await session.close(firstApp)

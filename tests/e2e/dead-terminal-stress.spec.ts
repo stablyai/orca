@@ -1,12 +1,4 @@
-/**
- * Aggressive stress tests for dead-terminal reproduction.
- *
- * These tests target specific failure vectors beyond the basic setup-split flow:
- * - Forced WebGL context loss (simulating Chromium memory pressure)
- * - Rapid switching during the ~200ms scheduleSplitScrollRestore window
- *
- * All tests require @headful mode for WebGL to be active.
- */
+// Require @headful WebGL for context-loss and split-restore race coverage.
 
 import { test, expect } from './helpers/orca-app'
 import {
@@ -18,7 +10,7 @@ import {
 } from './helpers/store'
 import { waitForActiveTerminalManager, waitForPaneCount } from './helpers/terminal'
 import {
-  createAndActivateWorktreeWithSetup,
+  createAndActivateWorktreeWithManualSplit,
   removeWorktreeViaStore,
   waitForAllPanesToHaveContent
 } from './helpers/dead-terminal'
@@ -32,14 +24,6 @@ test.describe('Dead Terminal Stress @headful', () => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
-
-    await orcaPage.evaluate(async () => {
-      const state = window.__store?.getState()
-      if (!state) {
-        return
-      }
-      state.updateSettings({ setupScriptLaunchMode: 'split-vertical' })
-    })
   })
 
   test.afterEach(async ({ orcaPage }) => {
@@ -49,19 +33,18 @@ test.describe('Dead Terminal Stress @headful', () => {
     createdWorktreeIds.length = 0
   })
 
-  /**
-   * Force WebGL context loss on visible canvases immediately after a setup
-   * split. In production, Chromium reclaims WebGL contexts under memory
-   * pressure — especially with many worktrees open. The recovery path is:
-   * onContextLoss → dispose WebGL → DOM fallback → rAF → fit + refresh.
-   */
-  test('@headful setup-split with forced WebGL context loss recovers', async ({ orcaPage }) => {
+  // Force context loss like Chromium under memory pressure; recovery must fall back to DOM then fit/refresh.
+  test('@headful manual-split with forced WebGL context loss recovers', async ({ orcaPage }) => {
     test.setTimeout(120_000)
     const homeWorktreeId = await waitForActiveWorktree(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     for (let i = 0; i < STRESS_ITERATIONS; i++) {
-      const newId = await createAndActivateWorktreeWithSetup(orcaPage, `ctxloss-${i}`, 'vertical')
+      const newId = await createAndActivateWorktreeWithManualSplit(
+        orcaPage,
+        `ctxloss-${i}`,
+        'vertical'
+      )
       createdWorktreeIds.push(newId)
 
       await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(newId)
@@ -102,18 +85,18 @@ test.describe('Dead Terminal Stress @headful', () => {
     }
   })
 
-  /**
-   * Switch worktrees WITHOUT waiting for the split to settle. This hits the
-   * race between wrapInSplit() reparenting, WebGL context creation during
-   * resumeRendering(), and the scheduleSplitScrollRestore 200ms timer.
-   */
-  test('@headful rapid worktree switching during setup-split lifecycle', async ({ orcaPage }) => {
+  // Switch before split settlement to race reparenting, WebGL resume and the 200ms scroll-restore timer.
+  test('@headful rapid worktree switching during manual-split lifecycle', async ({ orcaPage }) => {
     test.setTimeout(120_000)
     const homeWorktreeId = await waitForActiveWorktree(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     for (let i = 0; i < 3; i++) {
-      const newId = await createAndActivateWorktreeWithSetup(orcaPage, `rapid-${i}`, 'vertical')
+      const newId = await createAndActivateWorktreeWithManualSplit(
+        orcaPage,
+        `rapid-${i}`,
+        'vertical'
+      )
       createdWorktreeIds.push(newId)
 
       // Switch away during the ~200ms scheduleSplitScrollRestore window
@@ -121,7 +104,6 @@ test.describe('Dead Terminal Stress @headful', () => {
       await switchToWorktree(orcaPage, homeWorktreeId)
       await orcaPage.waitForTimeout(50)
 
-      // Switch back — triggers resumeRendering on partially-initialized panes
       await switchToWorktree(orcaPage, newId)
       await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(newId)
       await ensureTerminalVisible(orcaPage)

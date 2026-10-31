@@ -1,10 +1,12 @@
+import { seedPendingRuntimeRepoRemovals } from '@/store/repos/pending-runtime-repo-removals'
+import { replayPendingRuntimeRepoRemovalsForReadyServers } from '@/store/repos/pending-runtime-repo-removal-replay'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../shared/constants'
-import type { PersistedUIState } from '../../../shared/types'
+import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 
 export function hydratePersistedUIAfterStartupRead({
   persistedUI,
@@ -19,6 +21,9 @@ export function hydratePersistedUIAfterStartupRead({
     return false
   }
 
+  // Before any catalog merge, so a server that still lists a removed project cannot re-add it.
+  seedPendingRuntimeRepoRemovals(persistedUI.pendingRuntimeRepoRemovals)
+  replayPendingRuntimeRepoRemovalsForReadyServers()
   hydratePersistedUI(persistedUI, 'startup')
   return true
 }
@@ -28,9 +33,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     return undefined
   }
 
-  // Why (issue #1158): the app shell still needs persistedUIReady=true when
-  // startup fails before ui.get(), but these defaults must never replace a
-  // successfully loaded UI snapshot after a later session hydration failure.
+  // Startup failure still needs persistedUIReady (#1158), but defaults must not replace UI loaded before a later session failure.
   return {
     lastActiveRepoId: null,
     lastActiveWorktreeId: null,
@@ -51,6 +54,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     hideDefaultBranchWorkspace: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    alwaysShowDefaultBranchWorkspace: true,
     hideAutomationGeneratedWorkspaces: false,
     filterRepoIds: [],
     collapsedGroups: [],

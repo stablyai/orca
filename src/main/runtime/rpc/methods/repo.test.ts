@@ -1,14 +1,180 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { REPO_METHODS } from './repo'
-
-function makeRequest(method: string, params?: unknown): RpcRequest {
-  return { id: 'req-1', authToken: 'tok', method, params }
-}
+import { makeRequest, repoDispatcher } from './repo-rpc.test-fixture'
+import {
+  NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
+  RUNTIME_CAPABILITIES,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
+import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../../../shared/repo-search-limits'
+import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../../../../shared/ssh-target-management'
 
 describe('repo RPC methods', () => {
+  it('advertises qualified-ref support from hosts and native remote clients', () => {
+    expect(RUNTIME_CAPABILITIES).toContain(REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY)
+    expect(NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(
+      REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY
+    )
+    expect(remoteRuntimeClientCapabilities()).toContain(
+      REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY
+    )
+  })
+
+  it('passes oversized safe ref-search limits to the runtime clamp', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      searchRepoRefs: vi.fn().mockResolvedValue({ refs: [], truncated: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.searchRefs', {
+        repo: 'id:repo-1',
+        query: 'main',
+        limit: REPO_SEARCH_REFS_MAX_LIMIT + 1
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true, result: { refs: [], truncated: true } })
+    expect(runtime.searchRepoRefs).toHaveBeenCalledWith(
+      'id:repo-1',
+      'main',
+      REPO_SEARCH_REFS_MAX_LIMIT + 1,
+      true
+    )
+  })
+
+  it('only exposes namespace-qualified ref selectors to capable clients', async () => {
+    const result = {
+      refs: ['refs/heads/feature/local', 'refs/remotes/origin/feature/remote', 'main'],
+      refDetails: [
+        { refName: 'refs/heads/feature/local', localBranchName: 'feature/local' },
+        {
+          refName: 'refs/remotes/origin/feature/remote',
+          localBranchName: 'feature/remote'
+        },
+        { refName: 'main', localBranchName: 'main' }
+      ],
+      truncated: false
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.searchRefs only calls the fixture methods defined below.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      searchRepoRefs: vi.fn().mockResolvedValue(result)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+    const legacyReplies: string[] = []
+    const capableReplies: string[] = []
+    const inProcessResponse = await dispatcher.dispatch(
+      makeRequest('repo.searchRefs', { repo: 'id:repo-1', query: 'feature', limit: 20 })
+    )
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('repo.searchRefs', { repo: 'id:repo-1', query: 'feature', limit: 20 }),
+      (reply) => legacyReplies.push(reply),
+      { clientCapabilities: [] }
+    )
+    await dispatcher.dispatchStreaming(
+      makeRequest('repo.searchRefs', { repo: 'id:repo-1', query: 'feature', limit: 20 }),
+      (reply) => capableReplies.push(reply),
+      { clientCapabilities: [REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY] }
+    )
+
+    expect(runtime.searchRepoRefs).toHaveBeenNthCalledWith(2, 'id:repo-1', 'feature', 20, false)
+    expect(runtime.searchRepoRefs).toHaveBeenNthCalledWith(3, 'id:repo-1', 'feature', 20, true)
+    expect(JSON.parse(legacyReplies[0]!).result).toEqual({
+      refs: ['main'],
+      refDetails: [{ refName: 'main', localBranchName: 'main' }],
+      truncated: false
+    })
+    expect(JSON.parse(capableReplies[0]!).result).toEqual(result)
+    expect(inProcessResponse).toMatchObject({ ok: true, result })
+  })
+
+  it('projects inherited visibility on repo mutation responses for old clients', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/repo',
+      kind: 'git' as const,
+      externalWorktreeVisibilityLegacy: false
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.add, visibility projection and response envelope use only these supplied runtime methods, including raw settings.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      addRepo: vi.fn().mockResolvedValue(repo),
+      requireStore: () => ({
+        getSettings: () => ({ worktreeVisibilityDefaults: { external: 'show' } })
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const legacyResponse = await dispatcher.dispatch(
+      makeRequest('repo.add', { path: '/repo', kind: 'git' })
+    )
+    const currentReplies: string[] = []
+    await dispatcher.dispatchStreaming(
+      makeRequest('repo.add', { path: '/repo', kind: 'git' }),
+      (reply) => currentReplies.push(reply),
+      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
+    )
+    const currentResponse = JSON.parse(currentReplies[0]!)
+
+    expect(legacyResponse).toMatchObject({
+      ok: true,
+      result: { repo: { externalWorktreeVisibility: 'show' } }
+    })
+    expect(currentResponse).toMatchObject({ ok: true, result: { repo } })
+    expect((currentResponse as { result: { repo: typeof repo } }).result.repo).not.toHaveProperty(
+      'externalWorktreeVisibility'
+    )
+  })
+
+  it('advertises server SSH target management so clients can gate the remote project flow', () => {
+    expect(RUNTIME_CAPABILITIES).toContain(SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY)
+  })
+
+  // Harvested from the community PR #8492 by @jae-heo.
+  it('adds an existing folder on one of the server SSH targets as a project', async () => {
+    const repo = {
+      id: 'repo-p8',
+      path: '/srv/project',
+      displayName: 'project',
+      badgeColor: '#737373',
+      addedAt: 1,
+      connectionId: 'ssh-p8',
+      kind: 'git' as const
+    }
+    const addSshRepo = vi.fn<OrcaRuntimeService['addSshRepo']>().mockResolvedValue(repo)
+    const addRepo = vi.fn<OrcaRuntimeService['addRepo']>()
+    const dispatcher = repoDispatcher({ getRuntimeId: () => 'test-runtime', addSshRepo, addRepo })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.addRemote', { connectionId: 'ssh-p8', remotePath: '/srv/project' }),
+      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
+    )
+
+    expect(addSshRepo).toHaveBeenCalledWith({ connectionId: 'ssh-p8', remotePath: '/srv/project' })
+    expect(addRepo).not.toHaveBeenCalled()
+    expect(response).toMatchObject({ ok: true, result: { repo: { connectionId: 'ssh-p8' } } })
+  })
+
+  it('refuses a remote project without an SSH target rather than adding a server path', async () => {
+    const addSshRepo = vi.fn<OrcaRuntimeService['addSshRepo']>()
+    const dispatcher = repoDispatcher({ getRuntimeId: () => 'test-runtime', addSshRepo })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.addRemote', { remotePath: '/srv/project' })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(addSshRepo).not.toHaveBeenCalled()
+  })
+
   it('updates project runtime preferences on the runtime server', async () => {
     const project = {
       id: 'project-1',
@@ -229,8 +395,16 @@ describe('repo RPC methods', () => {
 
     const hooksResponse = await dispatcher.dispatch(makeRequest('repo.hooks', { repo: 'repo-1' }))
     await dispatcher.dispatch(makeRequest('repo.hooksCheck', { repo: 'repo-1' }))
+    await dispatcher.dispatch(makeRequest('repo.hooksCheck', { repo: 'repo-1', background: true }))
     await dispatcher.dispatch(makeRequest('repo.setupScriptImports', { repo: 'repo-1' }))
     await dispatcher.dispatch(makeRequest('repo.issueCommandRead', { repo: 'repo-1' }))
+    // A launch's wake reaches the read; a non-boolean value is dropped, as older clients send none.
+    await dispatcher.dispatch(
+      makeRequest('repo.issueCommandRead', { repo: 'repo-1', wakeWslDistro: true })
+    )
+    await dispatcher.dispatch(
+      makeRequest('repo.issueCommandRead', { repo: 'repo-1', wakeWslDistro: 'yes' })
+    )
     await dispatcher.dispatch(
       makeRequest('repo.issueCommandWrite', {
         repo: 'repo-1',
@@ -243,10 +417,18 @@ describe('repo RPC methods', () => {
       ok: true,
       result: { setupTrust: { contentHash: 'hash-1', scriptContent: 'pnpm install' } }
     })
-    expect(runtime.checkRepoHooks).toHaveBeenCalledWith('repo-1')
+    expect(runtime.checkRepoHooks).toHaveBeenNthCalledWith(1, 'repo-1', { background: false })
+    // A render-driven check from a newer client asks the host to spare a stopped distro.
+    expect(runtime.checkRepoHooks).toHaveBeenNthCalledWith(2, 'repo-1', { background: true })
     expect(runtime.inspectRepoSetupScriptImports).toHaveBeenCalledWith('repo-1')
-    expect(runtime.readRepoIssueCommand).toHaveBeenCalledWith('repo-1')
-    expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'Fix it')
+    expect(vi.mocked(runtime.readRepoIssueCommand).mock.calls).toEqual([
+      ['repo-1', { wakeWslDistro: undefined }],
+      ['repo-1', { wakeWslDistro: true }],
+      ['repo-1', { wakeWslDistro: undefined }]
+    ])
+    expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'Fix it', {
+      wakeWslDistro: undefined
+    })
   })
 
   it('persists GitHub issue source preference updates', async () => {
@@ -303,6 +485,120 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('persists normalized ghAccount bindings and clear sentinels', async () => {
+    const updateRepo = vi.fn<OrcaRuntimeService['updateRepo']>().mockResolvedValue({
+      id: 'repo-1',
+      path: '/srv/repo',
+      displayName: 'repo',
+      badgeColor: '#000000',
+      addedAt: 0,
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    const dispatcher = repoDispatcher({ getRuntimeId: () => 'test-runtime', updateRepo })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: { host: ' GitHub.COM ', user: ' Alice ' } }
+      }),
+      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
+    )
+
+    expect(updateRepo).toHaveBeenCalledWith('repo-1', {
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', ghAccount: { host: 'github.com', user: 'Alice' } } }
+    })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: null }
+      })
+    )
+    expect(updateRepo).toHaveBeenLastCalledWith('repo-1', { ghAccount: null })
+  })
+
+  it('persists agent worktree visibility updates', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        agentWorktreeVisibility: 'show'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { agentWorktreeVisibility: 'show' }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      agentWorktreeVisibility: 'show'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', agentWorktreeVisibility: 'show' } }
+    })
+  })
+
+  it('validates additive source settings at the remote RPC boundary', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({ id: 'repo-1', path: '/srv/repo' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: {
+          customWorktreeVisibilitySources: [
+            { id: 'team', rootPath: ' /srv/team ' },
+            { id: 'relative', rootPath: '../team' }
+          ],
+          worktreeVisibilitySourcePreferences: {
+            builtIn: { claude: 'show', gsd: 'bad' },
+            custom: { team: 'hide' }
+          }
+        }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team' }],
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show' },
+        custom: { team: 'hide' }
+      }
+    })
+  })
+
+  it('passes the null visibility sentinel through to clear a repository override', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({ id: 'repo-1', path: '/srv/repo' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { externalWorktreeVisibility: null }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      externalWorktreeVisibility: null
+    })
+  })
+
   it('persists resolved GitHub upstream metadata updates', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -342,14 +638,15 @@ describe('repo RPC methods', () => {
       createdAt: 1,
       updatedAt: 1
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the project-group methods only call the fixture methods defined below.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      listProjectGroups: vi.fn().mockReturnValue([group]),
+      listVisibleProjectGroups: vi.fn().mockReturnValue([group]),
       createProjectGroup: vi.fn().mockResolvedValue(group),
       updateProjectGroup: vi.fn().mockResolvedValue({ ...group, name: 'Core' }),
       deleteProjectGroup: vi.fn().mockResolvedValue({ deleted: true }),
       moveProjectToGroup: vi.fn().mockResolvedValue({ id: 'repo-1', projectGroupId: group.id }),
-      listFolderWorkspaces: vi.fn().mockReturnValue([
+      listVisibleFolderWorkspaces: vi.fn().mockReturnValue([
         {
           id: 'folder-workspace-1',
           projectGroupId: group.id,
@@ -393,7 +690,8 @@ describe('repo RPC methods', () => {
       makeRequest('projectGroup.moveProject', {
         repo: 'repo-1',
         groupId: group.id,
-        order: 2
+        order: 2,
+        connectionId: 'srv-ssh'
       })
     )
     const folderListResponse = await dispatcher.dispatch(makeRequest('folderWorkspace.list'))
@@ -425,7 +723,7 @@ describe('repo RPC methods', () => {
       })
     )
 
-    expect(runtime.listProjectGroups).toHaveBeenCalled()
+    expect(runtime.listVisibleProjectGroups).toHaveBeenCalled()
     expect(runtime.createProjectGroup).toHaveBeenCalledWith({
       name: 'Platform',
       parentPath: '/srv/platform',
@@ -436,11 +734,12 @@ describe('repo RPC methods', () => {
       isCollapsed: true
     })
     expect(runtime.deleteProjectGroup).toHaveBeenCalledWith(group.id)
-    expect(runtime.moveProjectToGroup).toHaveBeenCalledWith('repo-1', group.id, 2)
-    expect(runtime.listFolderWorkspaces).toHaveBeenCalled()
+    expect(runtime.moveProjectToGroup).toHaveBeenCalledWith('repo-1', group.id, 2, 'srv-ssh')
+    expect(runtime.listVisibleFolderWorkspaces).toHaveBeenCalled()
     expect(runtime.createFolderWorkspace).toHaveBeenCalledWith({
       projectGroupId: group.id,
-      name: 'Refund fix'
+      name: 'Refund fix',
+      creatorProvenance: { kind: 'host' }
     })
     expect(runtime.updateFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
       comment: 'x'

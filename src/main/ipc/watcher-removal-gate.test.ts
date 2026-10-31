@@ -6,7 +6,7 @@ import {
   TerminalRemovalInProgressError,
   WatcherRemovalInProgressError
 } from './watcher-removal-gate'
-import { isWorktreeRemovalFenceError } from '../../shared/worktree-removal-fence-error'
+import { isWorktreeRemovalFenceError } from '../../shared/worktree/removal-fence-error'
 
 describe('watcher removal gate', () => {
   it('waits for an existing install and rejects later equivalent-path installs', async () => {
@@ -53,7 +53,7 @@ describe('watcher removal gate', () => {
     const removal = acquireWatcherRemovalGate('/repo')
     removal.abandonPendingInstalls()
     removal.release()
-    // Why: a late finishInstall from the abandoned slot must not release a newer install's fence.
+    // A wedged predecessor finishing late must not release a successor's install fence.
     const finishFresh = beginWatcherInstall('/repo')
     wedged()
 
@@ -149,9 +149,7 @@ describe('watcher removal gate', () => {
     removal.release()
   })
 
-  // Why: the renderer swallows this fence via isWorktreeRemovalFenceError so a
-  // doomed pane never shows the raw error. That only holds if the thrown message
-  // still matches the shared predicate — pin the cross-module contract here.
+  // Renderer removal handling depends on recognizing the exact shared fence-error predicate.
   it('throws fence errors the renderer recognizes as benign removal fences', async () => {
     const removal = acquireWatcherRemovalGate('/repo')
     await removal.ready

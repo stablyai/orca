@@ -11,10 +11,13 @@ import {
   findTerminalHandleTarget,
   focusRendererTerminalHandle
 } from './terminal-handle-links'
+import type { TerminalLinkActionContext } from './terminal-link-action-request'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
   activateTabAndFocusPane: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
+  revealFloatingWorkspacePanel: vi.fn(),
   storeState: {
     tabsByWorktree: {},
     ptyIdsByTabId: {},
@@ -24,6 +27,8 @@ const mocks = vi.hoisted(() => ({
     runtimeAgentOrchestrationByPaneKey: {},
     setActiveWorktree: vi.fn(),
     markWorktreeVisited: vi.fn(),
+    recordWorktreeVisit: vi.fn(),
+    isNavigatingHistory: false,
     setActiveView: vi.fn(),
     setActiveTabType: vi.fn(),
     revealWorktreeInSidebar: vi.fn(),
@@ -39,6 +44,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
+}))
+
+vi.mock('@/lib/floating-workspace-panel-reveal', () => ({
+  revealFloatingWorkspacePanel: mocks.revealFloatingWorkspacePanel
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -84,7 +93,8 @@ function setPlatform(userAgent: string): void {
 async function collectLinks(
   rows: TestBufferLine[],
   bufferLineNumber = 1,
-  runtimeEnvironmentId: string | null = null
+  runtimeEnvironmentId: string | null = null,
+  linkActionContext?: TerminalLinkActionContext
 ): Promise<ILink[]> {
   const terminal = {
     buffer: {
@@ -97,7 +107,8 @@ async function collectLinks(
   const provider = createTerminalHandleLinkProvider({
     getTerminal: () => terminal as never,
     getRuntimeEnvironmentId: () => runtimeEnvironmentId,
-    linkTooltip: { textContent: '', style: { display: '' } } as unknown as HTMLElement
+    linkTooltip: { textContent: '', style: { display: '' } } as unknown as HTMLElement,
+    getLinkActionContext: () => linkActionContext ?? null
   })
   return await new Promise<ILink[]>((resolve) => {
     provider.provideLinks(bufferLineNumber, (links) => resolve(links ?? []))
@@ -238,7 +249,38 @@ describe('focusRendererTerminalHandle', () => {
 
     expect(mocks.storeState.setActiveWorktree).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.setActiveView).toHaveBeenCalledWith('terminal')
-    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
+    expect(mocks.storeState.setActiveTab).toHaveBeenCalledWith('tab-1')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('opens the floating panel for a floating terminal instead of selecting it in the main window', () => {
+    mocks.storeState.tabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: 'tab-1',
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          ptyId: 'term_direct',
+          title: 'Terminal',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    }
+
+    expect(focusRendererTerminalHandle('term_direct')).toBe(true)
+
+    expect(mocks.revealFloatingWorkspacePanel).toHaveBeenCalledOnce()
+    expect(mocks.storeState.setActiveWorktree).not.toHaveBeenCalled()
+    expect(mocks.storeState.setActiveView).not.toHaveBeenCalled()
+    expect(mocks.storeState.recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(mocks.storeState.revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith(
+      'terminal',
+      FLOATING_TERMINAL_WORKTREE_ID
+    )
     expect(mocks.storeState.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
   })
@@ -301,6 +343,40 @@ describe('createTerminalHandleLinkProvider', () => {
       method: 'terminal.focus',
       params: { terminal: 'term_worker', navigation: 'host' }
     })
+  })
+
+  it('defers a plain terminal-handle click to the action popover', async () => {
+    const request = vi.fn()
+    const links = await collectLinks([makeBufferLine('Worker: term_worker')], 1, null, {
+      paneId: 4,
+      pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+      claimPtyMouse: vi.fn(() => true),
+      request,
+      focusTerminal: vi.fn()
+    })
+
+    links[0].activate(
+      {
+        button: 0,
+        metaKey: false,
+        ctrlKey: false,
+        shiftKey: false,
+        altKey: false,
+        clientX: 20,
+        clientY: 30,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent,
+      links[0].text
+    )
+
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        destination: 'term_worker',
+        kind: 'terminal',
+        primary: expect.objectContaining({ label: 'Switch terminal' })
+      })
+    )
+    expect(window.api.runtime.call).not.toHaveBeenCalled()
   })
 
   it('uses the owning runtime for terminal links when a renderer match belongs to another runtime', async () => {
@@ -434,7 +510,7 @@ describe('createTerminalHandleLinkProvider', () => {
     expect(mocks.storeState.setActiveWorktree).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.markWorktreeVisited).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.setActiveView).toHaveBeenCalledWith('terminal')
-    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(mocks.storeState.revealWorktreeInSidebar).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')

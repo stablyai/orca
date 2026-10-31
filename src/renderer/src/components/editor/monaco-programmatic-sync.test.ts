@@ -12,25 +12,25 @@ afterEach(() => {
 
 describe('shouldIgnoreMonacoContentChange', () => {
   it('ignores echoed shared-model changes in the sibling split pane', () => {
-    const filePath = '/repo/seed.spec.ts'
+    const modelKey = '/repo/seed.spec.ts'
 
-    beginProgrammaticContentSync(filePath)
+    beginProgrammaticContentSync(modelKey)
     try {
       expect(
         shouldIgnoreMonacoContentChange({
-          filePath,
+          modelKey,
           isApplyingProgrammaticContent: false
         })
       ).toBe(true)
     } finally {
-      endProgrammaticContentSync(filePath)
+      endProgrammaticContentSync(modelKey)
     }
   })
 
   it('ignores local programmatic sync even without a sibling pane', () => {
     expect(
       shouldIgnoreMonacoContentChange({
-        filePath: '/repo/seed.spec.ts',
+        modelKey: '/repo/seed.spec.ts',
         isApplyingProgrammaticContent: true
       })
     ).toBe(true)
@@ -39,18 +39,27 @@ describe('shouldIgnoreMonacoContentChange', () => {
   it('does not ignore a real user edit once programmatic sync is finished', () => {
     expect(
       shouldIgnoreMonacoContentChange({
-        filePath: '/repo/seed.spec.ts',
+        modelKey: '/repo/seed.spec.ts',
         isApplyingProgrammaticContent: false
       })
     ).toBe(false)
   })
 
-  it('does not ignore a user edit that happens to match the saved prop content', () => {
+  it('keeps nested sync suppression scoped to one model owner', () => {
+    const local = 'file:///repo/file.ts'
+    const remote = `${local}#remote-owner`
+    beginProgrammaticContentSync(local)
+    beginProgrammaticContentSync(local)
+    endProgrammaticContentSync(local)
     expect(
-      shouldIgnoreMonacoContentChange({
-        filePath: '/repo/seed.spec.ts',
-        isApplyingProgrammaticContent: false
-      })
+      shouldIgnoreMonacoContentChange({ modelKey: local, isApplyingProgrammaticContent: false })
+    ).toBe(true)
+    expect(
+      shouldIgnoreMonacoContentChange({ modelKey: remote, isApplyingProgrammaticContent: false })
+    ).toBe(false)
+    endProgrammaticContentSync(local)
+    expect(
+      shouldIgnoreMonacoContentChange({ modelKey: local, isApplyingProgrammaticContent: false })
     ).toBe(false)
   })
 })

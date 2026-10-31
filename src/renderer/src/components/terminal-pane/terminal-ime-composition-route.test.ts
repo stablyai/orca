@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import {
   hasPendingTerminalImeComposition,
   installTerminalImeCompositionRoute,
@@ -63,16 +63,13 @@ describe('installTerminalImeCompositionRoute', () => {
     expect(() => route.dispose()).not.toThrow()
   })
 
-  it.each(['visible blur', 'terminal tab switch', 'split pane switch'])(
-    'delivers one Hangul commit to the captured route after %s',
-    () => {
-      const harness = createHarness()
-      harness.start(1)
+  it('delivers one Hangul commit to the captured route', () => {
+    const harness = createHarness()
+    harness.start(1)
 
-      expect(harness.end(1, '한')).toBe(false)
-      expect(harness.input).toHaveBeenCalledExactlyOnceWith('한')
-    }
-  )
+    expect(harness.end(1, '한')).toBe(false)
+    expect(harness.input).toHaveBeenCalledExactlyOnceWith('한')
+  })
 
   it('never routes a switched composition to an unrelated transport', () => {
     const harness = createHarness()
@@ -149,16 +146,80 @@ describe('installTerminalImeCompositionRoute', () => {
     expect(harness.input).not.toHaveBeenCalled()
   })
 
-  it.each(['terminal close', 'tab unmount'])(
-    'releases the captured session and listeners on %s',
-    () => {
-      const harness = createHarness()
-      harness.start(1)
-      harness.route.dispose()
+  // A route installed mid-session cannot replace xterm’s commit; cancelling would lose the text.
+  it('leaves an uncaptured session to xterm when installed mid-composition', () => {
+    const harness = createHarness()
 
-      expect(harness.end(1, '한')).toBe(true)
-      expect(harness.input).not.toHaveBeenCalled()
-      expect(hasPendingTerminalImeComposition(harness.element)).toBe(false)
-    }
-  )
+    expect(harness.end(1, '한')).toBe(true)
+    expect(harness.input).not.toHaveBeenCalled()
+  })
+
+  it('does not swallow a commit when the connection re-installs the route mid-composition', () => {
+    const element = document.createElement('div')
+    const transport = createTransport('pty-original')
+    const input = vi.fn()
+    const install = () =>
+      installTerminalImeCompositionRoute({
+        terminalElement: element,
+        terminal: { input },
+        capturedTransport: transport,
+        getCurrentTransport: () => transport
+      })
+    const firstRoute = install()
+
+    element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1))
+    firstRoute.dispose()
+    const secondRoute = install()
+
+    expect(element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_END_EVENT, 1, '한'))).toBe(
+      true
+    )
+    expect(input).not.toHaveBeenCalled()
+
+    secondRoute.dispose()
+  })
+
+  it('still suppresses xterm insertion for a captured session it deliberately drops', () => {
+    const harness = createHarness()
+    harness.start(1)
+    harness.state.currentTransport = createTransport('pty-replacement')
+
+    expect(harness.end(1, '한')).toBe(false)
+    expect(harness.input).not.toHaveBeenCalled()
+  })
+
+  it('keeps a shared session pending until every overlapping route releases it', () => {
+    const element = document.createElement('div')
+    const firstTransport = createTransport('pty-first')
+    const secondTransport = createTransport('pty-second')
+    const firstRoute = installTerminalImeCompositionRoute({
+      terminalElement: element,
+      terminal: { input: vi.fn() },
+      capturedTransport: firstTransport,
+      getCurrentTransport: () => firstTransport
+    })
+    const secondRoute = installTerminalImeCompositionRoute({
+      terminalElement: element,
+      terminal: { input: vi.fn() },
+      capturedTransport: secondTransport,
+      getCurrentTransport: () => secondTransport
+    })
+
+    element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1))
+    firstRoute.dispose()
+    expect(hasPendingTerminalImeComposition(element)).toBe(true)
+
+    secondRoute.dispose()
+    expect(hasPendingTerminalImeComposition(element)).toBe(false)
+  })
+
+  it('releases the captured session and listeners', () => {
+    const harness = createHarness()
+    harness.start(1)
+    harness.route.dispose()
+
+    expect(harness.end(1, '한')).toBe(true)
+    expect(harness.input).not.toHaveBeenCalled()
+    expect(hasPendingTerminalImeComposition(harness.element)).toBe(false)
+  })
 })

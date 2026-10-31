@@ -10,8 +10,8 @@ import { execFile } from 'node:child_process'
 import { delimiter, join } from 'node:path'
 import { promisify } from 'node:util'
 
-import { importCookiesFromJson } from './browser-cookie-import'
-import type { BrowserCookieImportResult } from '../../shared/types'
+import { importCookiesFromJson } from './cookies/browser-cookie-import'
+import type { BrowserCookieImportResult } from '../../shared/browser-workspace-types'
 
 const execFileAsync = promisify(execFile)
 
@@ -25,7 +25,7 @@ export const DEFAULT_AGENTCOOKIE_SYNC_INTERVAL_MS = 5 * 60 * 1000
 export type AgentcookieSyncStatus = {
   detected: boolean
   lastSyncAt: number | null
-  lastImported: number | null
+  lastImportedCount: number | null
 }
 
 // detectAgentcookie resolves an `agentcookie` executable on PATH, or null when
@@ -101,7 +101,11 @@ export class AgentcookieSessionSync {
       return
     }
     const binary = detectAgentcookie()
-    this.options.onStatus?.({ detected: binary !== null, lastSyncAt: null, lastImported: null })
+    this.options.onStatus?.({
+      detected: binary !== null,
+      lastSyncAt: null,
+      lastImportedCount: null
+    })
     if (!binary || !this.options.isEnabled()) {
       return
     }
@@ -124,7 +128,7 @@ export class AgentcookieSessionSync {
   async syncNow(): Promise<AgentcookieSyncStatus> {
     const binary = detectAgentcookie()
     if (!binary || this.running) {
-      const status = { detected: binary !== null, lastSyncAt: null, lastImported: null }
+      const status = { detected: binary !== null, lastSyncAt: null, lastImportedCount: null }
       this.options.onStatus?.(status)
       return status
     }
@@ -135,7 +139,7 @@ export class AgentcookieSessionSync {
       const status: AgentcookieSyncStatus = {
         detected: true,
         lastSyncAt: Date.now(),
-        lastImported: imported
+        lastImportedCount: imported
       }
       this.options.onStatus?.(status)
       return status

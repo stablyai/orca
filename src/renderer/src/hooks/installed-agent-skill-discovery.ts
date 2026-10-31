@@ -1,9 +1,14 @@
-import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared/skills'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type {
+  SkillDiscoveryResult,
+  SkillDiscoveryTarget,
+  SkillSourceKind
+} from '../../../shared/skills'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 import {
   clearInstalledAgentSkillDiscoveryCache,
+  deleteInstalledAgentSkillDiscoveryCache,
   peekInstalledAgentSkillDiscoveryCache,
   readInstalledAgentSkillDiscoveryCache,
   resetInstalledAgentSkillDiscoveryCacheForTests,
@@ -32,10 +37,27 @@ export function notifyInstalledAgentSkillsChanged(): void {
 export function invalidateInstalledAgentSkillDiscovery(): void {
   discoveryGeneration += 1
   clearInstalledAgentSkillDiscoveryCache()
-  // Why: an install/uninstall must start a post-mutation scan; older pending
-  // reads may finish, but their generation can no longer repopulate the cache.
+  // Install/uninstall advances generation so older reads cannot repopulate the cache.
   pendingDiscoveryByTarget.clear()
   pendingDiscoverySatisfiesForcedRefreshByTarget.clear()
+}
+
+export function evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(
+  environmentIds: Iterable<string>
+): void {
+  for (const environmentId of environmentIds) {
+    const key = getRuntimeScopedSkillDiscoveryKey({ kind: 'environment', environmentId }, undefined)
+    const filteredPrefix = `[${JSON.stringify(key)},`
+    const belongsToRuntime = (candidate: string): boolean =>
+      candidate === key || candidate.startsWith(filteredPrefix)
+    deleteInstalledAgentSkillDiscoveryCache(belongsToRuntime)
+    for (const pendingKey of pendingDiscoveryByTarget.keys()) {
+      if (belongsToRuntime(pendingKey)) {
+        pendingDiscoveryByTarget.delete(pendingKey)
+        pendingDiscoverySatisfiesForcedRefreshByTarget.delete(pendingKey)
+      }
+    }
+  }
 }
 
 export function resetSkillDiscoveryCacheForTests(): void {
@@ -46,67 +68,110 @@ export function resetSkillDiscoveryCacheForTests(): void {
 }
 
 function normalizeSkillDiscoveryTarget(
-  target: SkillDiscoveryTarget | undefined
+  target: SkillDiscoveryTarget | undefined,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
 ): SkillDiscoveryTarget | undefined {
+  const requestedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean) ?? []
+  const targetNames = target?.names?.map((name) => name.trim().toLowerCase()).filter(Boolean) ?? []
+  const effectiveNames = [...new Set(requestedNames.length > 0 ? requestedNames : targetNames)]
+  const effectiveSourceKinds = [
+    ...new Set(sourceKinds?.length ? sourceKinds : (target?.sourceKinds ?? []))
+  ]
+  const filters = {
+    ...(effectiveNames?.length ? { names: [...effectiveNames] } : {}),
+    ...(effectiveSourceKinds?.length ? { sourceKinds: [...effectiveSourceKinds] } : {})
+  }
   const projectRuntime = target?.projectRuntime
   if (projectRuntime) {
     if (projectRuntime.status === 'repair-required') {
-      return { projectRuntime }
+      return { projectRuntime, ...filters }
     }
     if (projectRuntime.runtime.kind === 'wsl') {
       return {
         runtime: 'wsl',
         wslDistro: projectRuntime.runtime.distro,
-        projectRuntime
+        projectRuntime,
+        ...filters
       }
     }
     return {
       runtime: 'host',
-      projectRuntime
+      projectRuntime,
+      ...filters
     }
   }
 
   if (target?.runtime !== 'wsl') {
-    return undefined
+    return Object.keys(filters).length > 0 ? filters : undefined
   }
-  return { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null }
+  return { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null, ...filters }
 }
 
-export function getSkillDiscoveryTargetKey(target: SkillDiscoveryTarget | undefined): string {
+function appendSkillDiscoveryFiltersToKey(
+  runtimeKey: string,
+  target: SkillDiscoveryTarget | undefined
+): string {
+  return target?.names?.length || target?.sourceKinds?.length
+    ? JSON.stringify([
+        runtimeKey,
+        target.names ? [...target.names].sort() : null,
+        target.sourceKinds ? [...target.sourceKinds].sort() : null
+      ])
+    : runtimeKey
+}
+
+function getNormalizedSkillDiscoveryRuntimeKey(target: SkillDiscoveryTarget | undefined): string {
   if (target?.projectRuntime) {
     return target.projectRuntime.status === 'resolved'
       ? target.projectRuntime.runtime.cacheKey
       : target.projectRuntime.repair.cacheKey
   }
-  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
-  return normalizedTarget?.runtime === 'wsl' ? `wsl:${normalizedTarget.wslDistro ?? ''}` : 'host'
+  return target?.runtime === 'wsl' ? `wsl:${target.wslDistro ?? ''}` : 'host'
 }
 
-// Why: a connected remote runtime scans its own disk. Sharing the local key
-// would keep showing the client's skills after switching environments. The
-// caller's target is dropped for a remote scan (it describes the client's WSL /
-// project runtime), so it must not fragment the key either — otherwise the same
-// remote gets rescanned once per client-side target shape.
+export function getSkillDiscoveryTargetKey(
+  target: SkillDiscoveryTarget | undefined,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
+): string {
+  const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
+  return appendSkillDiscoveryFiltersToKey(
+    getNormalizedSkillDiscoveryRuntimeKey(normalizedTarget),
+    normalizedTarget
+  )
+}
+
+// Remote scans read the remote disk: isolate environment keys from local results and omit client target shape to avoid duplicate scans.
 export function getRuntimeScopedSkillDiscoveryKey(
   runtimeTarget: RuntimeClientTarget,
-  target: SkillDiscoveryTarget | undefined
+  target: SkillDiscoveryTarget | undefined,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
 ): string {
-  return runtimeTarget.kind === 'environment'
-    ? `runtime:${runtimeTarget.environmentId}`
-    : getSkillDiscoveryTargetKey(target)
+  const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
+  const runtimeKey =
+    runtimeTarget.kind === 'environment'
+      ? `runtime:${runtimeTarget.environmentId}`
+      : getNormalizedSkillDiscoveryRuntimeKey(normalizedTarget)
+  return appendSkillDiscoveryFiltersToKey(runtimeKey, normalizedTarget)
 }
 
 function startInstalledAgentSkillDiscovery(
   force: boolean,
   target: SkillDiscoveryTarget | undefined,
   runtimeTarget: RuntimeClientTarget,
-  key: string
+  key: string,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
 ): Promise<SkillDiscoveryResult> {
   const generation = discoveryGeneration
-  const normalizedTarget = normalizeSkillDiscoveryTarget(target)
-  const discovery = discoverSkillsForRuntimeTarget(runtimeTarget, normalizedTarget)
+  const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
+  // Forced post-mutation rechecks must bypass host scan sharing as well as window cache.
+  const requestTarget = force ? { ...normalizedTarget, refresh: true } : normalizedTarget
+  const discovery = discoverSkillsForRuntimeTarget(runtimeTarget, requestTarget)
     .then((result) => {
-      if (generation === discoveryGeneration) {
+      if (generation === discoveryGeneration && pendingDiscoveryByTarget.get(key) === discovery) {
         writeInstalledAgentSkillDiscoveryCache(key, result)
       }
       return result
@@ -122,19 +187,17 @@ function startInstalledAgentSkillDiscovery(
   return discovery
 }
 
-/**
- * Cached, de-duplicated skill scan for one runtime. Concurrent callers share a
- * single in-flight scan per key; `force` bypasses the cache to re-read disk.
- */
+/** Share one pending scan per runtime-scoped key; force rereads disk. */
 export async function discoverInstalledAgentSkills(
   force: boolean,
   target?: SkillDiscoveryTarget,
-  runtimeTarget: RuntimeClientTarget = LOCAL_RUNTIME_TARGET
+  runtimeTarget: RuntimeClientTarget = LOCAL_RUNTIME_TARGET,
+  names?: readonly string[],
+  sourceKinds?: readonly SkillSourceKind[]
 ): Promise<SkillDiscoveryResult> {
-  const key = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, target)
+  const key = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, target, names, sourceKinds)
   if (!force) {
-    // Why: only a cache-serving read should refresh recency — a forced refresh
-    // discards the entry it would otherwise promote.
+    // Promote only cache-serving reads; forced refresh discards the entry instead.
     const cachedDiscovery = readInstalledAgentSkillDiscoveryCache(key)
     if (cachedDiscovery) {
       return cachedDiscovery
@@ -149,8 +212,7 @@ export async function discoverInstalledAgentSkills(
     try {
       await inFlightDiscovery
     } catch {
-      // Why: an explicit re-check should still read current disk state even if
-      // the older background scan failed.
+      // Explicit rechecks still read disk after earlier background scan failure.
     }
     const nextPendingDiscovery = pendingDiscoveryByTarget.get(key)
     if (nextPendingDiscovery && nextPendingDiscovery !== inFlightDiscovery) {
@@ -158,5 +220,5 @@ export async function discoverInstalledAgentSkills(
     }
   }
 
-  return startInstalledAgentSkillDiscovery(force, target, runtimeTarget, key)
+  return startInstalledAgentSkillDiscovery(force, target, runtimeTarget, key, names, sourceKinds)
 }

@@ -6,13 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../shared/types'
-import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
+import { resolveTabAgentFromSignals } from '../../../shared/tab-agent-from-signals'
+import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
-let latestHookAgent: TuiAgent | null | undefined
+let latestHookAgent: TerminalAgent | null | undefined
 const hookRoots: Root[] = []
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
@@ -258,8 +260,7 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('claude')
   })
 
-  // Why: #8478 — OpenCode native `OC | …` titles must reclaim a stale Claude
-  // launch identity so the tab icon is OpenCode, not Claude.
+  // Native OC titles must reclaim stale Claude launch identity (#8478).
   it('uses OpenCode native session titles to replace stale Claude launch identity', () => {
     expect(
       resolveTabAgentFromSignals({
@@ -270,6 +271,38 @@ describe('resolveTabAgentFromSignals', () => {
         launchAgent: 'claude'
       })
     ).toBe('opencode')
+  })
+
+  // Task text mentioning Claude must not steal OpenCode identity when hooks go stale (#8940).
+  it('keeps an OpenCode tab OpenCode when its task title merely mentions Claude', () => {
+    for (const title of [
+      'OC | ⠋ ask claude about this',
+      '⠋ OpenCode',
+      '⠋ use Claude Sonnet',
+      '⠋ claude 스타일로 리팩터',
+      'OpenCode ready'
+    ]) {
+      for (const hasObservedAgentSignal of [true, false]) {
+        expect(
+          resolveTabAgentFromSignals({
+            hasObservedAgentSignal,
+            isRemote: false,
+            title,
+            hookAgent: null,
+            launchAgent: 'opencode'
+          })
+        ).toBe('opencode')
+      }
+    }
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '✳ Claude Code',
+        hookAgent: null,
+        launchAgent: 'opencode'
+      })
+    ).toBe('claude')
   })
 
   it('does not let an explicit title override launch identity before any activity is observed', () => {
@@ -284,9 +317,6 @@ describe('resolveTabAgentFromSignals', () => {
       })
     ).toBe('codex')
   })
-
-  // Pi/OMP identity (shared title-identity group, launchAgent-loss flicker)
-  // lives in use-tab-agent-pi-identity.test.ts.
 
   it('prefers explicit hook identity over a conflicting title mention', () => {
     expect(
@@ -385,7 +415,7 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('codex')
   })
 
-  it('treats Claude-prefixed title text as Claude only when it names Claude', () => {
+  it('requires a Claude identity frame even without a known owner', () => {
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: false,
@@ -404,12 +434,11 @@ describe('resolveTabAgentFromSignals', () => {
         hookAgent: null,
         launchAgent: undefined
       })
-    ).toBe('claude')
+    ).toBeNull()
   })
 
   it('clears local launch identity once observed activity vanishes at a shell title', () => {
-    // Why: matches the clear effect — the dropped hook row plus a shell title
-    // is the crash/kill exit evidence, so the resolver must not lag it.
+    // Dropped hooks plus shell title prove local crash/kill exit; resolver must match the clear effect without lag.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -435,8 +464,7 @@ describe('resolveTabAgentFromSignals', () => {
   })
 
   it('keeps remote launch identity at a shell title without completed-hook evidence', () => {
-    // Why: remote hook rows also drop on transport blips, so vanished activity
-    // alone must not count as exit evidence for remote panes.
+    // Remote activity can disappear on transport blips; absence alone never proves exit.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -488,9 +516,7 @@ describe('resolveTabAgentFromSignals', () => {
   })
 
   it('clears local launch identity once a completed hook and shell title prove exit', () => {
-    // Why: without foreground probing, a completed hook plus the title back at
-    // a shell is the process-gone evidence — the same signals that clear the
-    // sidebar row — so stale launch identity must not keep painting the tab.
+    // Completed hooks plus shell title replace foreground probes as exit evidence; stale launch must stop painting.
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -519,6 +545,22 @@ describe('useTabAgent', () => {
     createdAt: 1,
     launchAgent: 'codex'
   }
+
+  it('paints the completed owner while its task names another agent', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      agentStatusByPaneKey: { [paneKey]: { ...completedAgentStatus(paneKey), agentType: 'claude' } }
+    })
+    await renderHookProbe({ ...baseTab, launchAgent: 'claude', title: '⠋ fix the grok launcher' })
+    expect(latestHookAgent).toBe('claude')
+  })
 
   beforeEach(() => {
     latestHookAgent = undefined
@@ -723,8 +765,7 @@ describe('useTabAgent', () => {
 
     const root = await renderHookProbe(remoteTab)
 
-    // Why: remote rows also drop on transport blips (reconnect, snapshot gaps)
-    // that say nothing about the process — only a completed hook may clear.
+    // Remote transport gaps do not prove exit; require completion evidence to clear identity.
     await act(async () => {
       useAppStore.setState({ agentStatusByPaneKey: {} })
     })
@@ -749,7 +790,6 @@ describe('useTabAgent', () => {
 
     const root = await renderHookProbe(splitTab)
 
-    // Focused row drops but the sibling agent still runs: no exit evidence yet.
     await act(async () => {
       useAppStore.setState({
         agentStatusByPaneKey: { [siblingPaneKey]: workingAgentStatus(siblingPaneKey) }
@@ -773,8 +813,7 @@ describe('useTabAgent', () => {
       }
     })
 
-    // Why: the inferred-interrupt flow resets titles to the tab's default
-    // ("Terminal N"), not a shell name — that must still count as exit.
+    // Inferred interrupts reset to neutral Terminal N, which must count like a shell title as exit evidence.
     await renderHookProbe({ ...baseTab, title: 'Terminal 3', defaultTitle: 'Terminal 3' })
 
     expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
@@ -783,8 +822,7 @@ describe('useTabAgent', () => {
   it('clears hookless launch identity once its own title evidence ends at a shell', async () => {
     const geminiTab = { ...baseTab, launchAgent: 'gemini' as const, title: '✦ Gemini CLI' }
 
-    // Why: agents without hook integration prove activity via a title naming
-    // the launched agent; the later shell title is then exit evidence.
+    // Hookless agents first prove activity through their own title; later shell title then proves exit.
     const root = await renderHookProbe(geminiTab)
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
 
@@ -824,9 +862,7 @@ describe('useTabAgent', () => {
     const root = await renderHookProbe(baseTab)
     expect(latestHookAgent).toBe('codex')
 
-    // Why: a respawn/focus switch can land the new ptyId, the dropped row, and
-    // a shell title in one commit — the previous generation's observed signal
-    // must not clear the new generation's launch identity.
+    // Respawn can replace PTY, drop hook and show shell in one commit; old-generation observations must not clear new launch intent.
     await act(async () => {
       useAppStore.setState({
         terminalLayoutsByTabId: {

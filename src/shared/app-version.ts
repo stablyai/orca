@@ -22,6 +22,14 @@ export function isValidAppVersion(value: string): boolean {
   return parseVersion(value) !== null
 }
 
+/** Extracts the first valid semver (with prerelease/build) from CLI `--version` output. */
+export function parseCliVersion(output: string | null | undefined): string | null {
+  const version = output?.match(
+    /(?<![\w.-])v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)(?![\w.+-])/
+  )?.[1]
+  return version && isValidAppVersion(version) ? version : null
+}
+
 export function isPrereleaseAppVersion(value: string): boolean {
   const parsed = parseVersion(value)
   return parsed !== null && parsed.prerelease.length > 0
@@ -45,7 +53,7 @@ function compareIdentifiers(left: string, right: string): number {
   if (rightNumeric) {
     return 1
   }
-  return left.localeCompare(right)
+  return left.localeCompare(right, 'en')
 }
 
 /** Returns negative if left < right, 0 if equal, positive if left > right. */
@@ -93,4 +101,14 @@ export function compareAppVersions(left: string, right: string): number {
   }
 
   return 0
+}
+
+/** True when `current` is at or past `target`. Unparseable or absent versions never qualify. */
+export function hasReachedAppVersion(current: string, target: string | null): boolean {
+  return (
+    target !== null &&
+    isValidAppVersion(current) &&
+    isValidAppVersion(target) &&
+    compareAppVersions(current, target) >= 0
+  )
 }

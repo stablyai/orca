@@ -1,0 +1,329 @@
+// @vitest-environment happy-dom
+/** Exercise real inline sign-in wiring through reauthentication, restart prompts and success/failure feedback. */
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import React from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type {
+  CodexManagedAccountSummary,
+  CodexRateLimitAccountsState
+} from '../../../../shared/managed-account-types'
+import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+
+const markLiveCodexSessionsForRestart = vi.fn(async () => {})
+const toastSuccess = vi.fn()
+const toastError = vi.fn()
+const fetchInactiveCodexAccountUsage = vi.fn(async () => {})
+const fetchSettings = vi.fn(async () => {})
+const reauthenticate = vi.fn(async (_args: unknown) => codexSnapshot(null))
+
+let storeSettings: GlobalSettings
+let accountOwner: RuntimeClientTarget
+
+function codexAccount(id: string, updatedAt: number): CodexManagedAccountSummary {
+  return {
+    id,
+    email: `${id}@example.com`,
+    managedHomeRuntime: 'host',
+    wslDistro: null,
+    providerAccountId: `provider-${id}`,
+    workspaceLabel: null,
+    workspaceAccountId: null,
+    createdAt: updatedAt,
+    updatedAt,
+    lastAuthenticatedAt: updatedAt
+  }
+}
+
+function codexSnapshot(activeAccountId: string | null): CodexRateLimitAccountsState {
+  return {
+    accounts: [codexAccount('account-1', 2), codexAccount('account-2', 1)],
+    activeAccountId,
+    activeAccountIdsByRuntime: { host: activeAccountId, wsl: {} }
+  }
+}
+
+function settingsWithActive(activeAccountId: string | null): GlobalSettings {
+  return {
+    codexManagedAccounts: [codexAccount('account-1', 2), codexAccount('account-2', 1)],
+    activeCodexManagedAccountId: activeAccountId,
+    activeCodexManagedAccountIdsByRuntime: { host: activeAccountId, wsl: {} },
+    claudeManagedAccounts: [],
+    activeClaudeManagedAccountId: null,
+    localAccountRuntime: 'host',
+    localAccountWslDistro: null,
+    skipCodexRateLimitResetConfirm: false
+  } as unknown as GlobalSettings
+}
+
+const unavailableUsage: ProviderRateLimits = {
+  provider: 'codex',
+  session: null,
+  weekly: null,
+  status: 'error',
+  error: 'Not signed in',
+  updatedAt: 1
+} as unknown as ProviderRateLimits
+
+vi.mock('sonner', () => ({
+  toast: { success: toastSuccess, error: toastError }
+}))
+
+vi.mock('@/lib/codex-session-restart', () => ({
+  markLiveCodexSessionsForRestart,
+  resolveCodexRestartPromptAccountLabel: (
+    accounts: readonly { id: string; email: string }[],
+    accountId: string | null | undefined
+  ) => accounts.find((entry) => entry.id === accountId)?.email ?? 'System default'
+}))
+
+vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+  fetchProviderAccountsSnapshot: vi.fn(async () => ({
+    codex: codexSnapshot(null),
+    claude: { accounts: [], activeAccountId: null },
+    failedProviders: []
+  })),
+  selectCodexProviderAccount: vi.fn(async () => codexSnapshot(null)),
+  selectClaudeProviderAccount: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+}))
+
+vi.mock('@/runtime/use-worktree-runtime-target', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useActiveAccountOwner: () => ({ target: accountOwner, wslHostDistro: null })
+}))
+
+vi.mock('@/lib/windows-terminal-capabilities', () => ({
+  useWindowsTerminalCapabilities: () => ({ wslDistros: [], isLoading: false }),
+  getWindowsTerminalCapabilityOwnerKey: () => 'local'
+}))
+
+vi.mock('./tooltip', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ProviderIcon: () => null,
+  ProviderPanel: () => null
+}))
+
+// Render Radix portals eagerly because the DOM shim cannot drive their pointer capture.
+vi.mock('@/components/ui/dropdown-menu', () => {
+  const passthrough =
+    (role?: string) =>
+    ({
+      children,
+      onSelect
+    }: {
+      children?: React.ReactNode
+      onSelect?: (event: { preventDefault: () => void }) => void
+    }): React.JSX.Element =>
+      React.createElement(
+        'div',
+        {
+          role,
+          onClick: onSelect ? () => onSelect({ preventDefault: () => {} }) : undefined
+        },
+        children
+      )
+  return {
+    DropdownMenu: passthrough(),
+    DropdownMenuCheckboxItem: passthrough(),
+    DropdownMenuContent: passthrough(),
+    DropdownMenuItem: passthrough('menuitem'),
+    DropdownMenuLabel: passthrough(),
+    DropdownMenuSeparator: passthrough(),
+    DropdownMenuSub: passthrough(),
+    DropdownMenuSubContent: passthrough(),
+    DropdownMenuSubTrigger: passthrough(),
+    DropdownMenuTrigger: passthrough()
+  }
+})
+
+vi.mock('../../store', () => {
+  const state = (): Record<string, unknown> => ({
+    settings: storeSettings,
+    runtimeEnvironments: [],
+    usagePercentageDisplay: 'used',
+    openSettingsPage: vi.fn(),
+    openSettingsTarget: vi.fn(),
+    fetchSettings,
+    updateSettings: vi.fn(),
+    recordFeatureInteraction: vi.fn(),
+    refreshCodexRateLimitsForTarget: vi.fn(),
+    consumeCodexRateLimitResetCredit: vi.fn(),
+    fetchInactiveCodexAccountUsage,
+    rateLimits: {
+      inactiveCodexAccounts: [
+        { accountId: 'account-2', isFetching: false, rateLimits: unavailableUsage }
+      ],
+      codexTarget: { runtime: 'host', wslDistro: null }
+    }
+  })
+  const useAppStore = (selector: (value: Record<string, unknown>) => unknown): unknown =>
+    selector(state())
+  useAppStore.getState = state
+  return { useAppStore }
+})
+
+const codexProvider: ProviderRateLimits = {
+  provider: 'codex',
+  session: null,
+  weekly: null,
+  status: 'error',
+  error: 'Not signed in',
+  updatedAt: 1
+} as unknown as ProviderRateLimits
+
+const liveUsage: ProviderRateLimits = {
+  ...codexProvider,
+  status: 'ok',
+  error: null,
+  weekly: { usedPercent: 11, windowMinutes: 10_080, resetsAt: null, resetDescription: null }
+}
+
+async function renderSwitcherAndOpenAccounts(
+  summaryLabel: string,
+  codex = codexProvider
+): Promise<void> {
+  const { CodexSwitcherMenu } = await import('./StatusBar')
+  render(
+    React.createElement(CodexSwitcherMenu, {
+      codex,
+      compact: false,
+      iconOnly: false
+    })
+  )
+  fireEvent.click(screen.getByText(summaryLabel))
+  await waitFor(() => expect(screen.getByRole('button', { name: /Sign in/ })).toBeTruthy())
+}
+
+describe('status bar Codex sign-in action', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    storeSettings = settingsWithActive(null)
+    accountOwner = { kind: 'local' }
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      writable: true,
+      value: { codexAccounts: { reauthenticate } }
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it.each([null, 'account-1'])(
+    'shows live usage in the active account row, including system default: %s',
+    async (activeAccountId) => {
+      storeSettings = settingsWithActive(activeAccountId)
+      await renderSwitcherAndOpenAccounts(
+        activeAccountId ? 'account-1@example.com' : 'System default',
+        liveUsage
+      )
+
+      const activeRow = screen.getByRole('menuitem', { name: /Active/ })
+      expect(within(activeRow).getByText('11% used wk')).toBeTruthy()
+    }
+  )
+
+  it("keeps a remote owner's usage off rows picked by this desktop's runtime target", async () => {
+    accountOwner = { kind: 'environment', environmentId: 'remote-1' }
+    const { CodexSwitcherMenu } = await import('./StatusBar')
+    render(
+      React.createElement(CodexSwitcherMenu, { codex: liveUsage, compact: false, iconOnly: false })
+    )
+    fireEvent.click(screen.getByText('System default'))
+
+    const activeRow = await screen.findByRole('menuitem', { name: /Active/ })
+    expect(within(activeRow).queryByText('11% used wk')).toBeNull()
+  })
+
+  it.each([null, 'Enterprise'])(
+    'selects the exact same-email account when workspace labels collide: %s',
+    async (workspaceLabel) => {
+      storeSettings.codexManagedAccounts = storeSettings.codexManagedAccounts.map((account) => ({
+        ...account,
+        email: 'same@example.com',
+        workspaceLabel
+      }))
+      const { selectCodexProviderAccount } =
+        await import('@/runtime/runtime-provider-accounts-client')
+      vi.mocked(selectCodexProviderAccount).mockResolvedValueOnce({
+        accounts: storeSettings.codexManagedAccounts,
+        activeAccountId: 'account-2',
+        activeAccountIdsByRuntime: { host: 'account-2', wsl: {} }
+      })
+
+      await renderSwitcherAndOpenAccounts('System default')
+      const detail = workspaceLabel ? `${workspaceLabel} · ` : ''
+      expect(screen.getByText(`same@example.com (${detail}account-1)`)).toBeTruthy()
+      fireEvent.click(screen.getByText(`same@example.com (${detail}account-2)`))
+
+      await waitFor(() =>
+        expect(selectCodexProviderAccount).toHaveBeenCalledWith(
+          { kind: 'local' },
+          {
+            accountId: 'account-2',
+            runtime: 'host',
+            wslDistro: null
+          }
+        )
+      )
+      expect(markLiveCodexSessionsForRestart).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nextAccountId: 'account-2'
+        })
+      )
+    }
+  )
+
+  it('activates the signed-in account and runs the same restart workflow a switch runs', async () => {
+    reauthenticate.mockResolvedValue(codexSnapshot('account-2'))
+
+    await renderSwitcherAndOpenAccounts('System default')
+    fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1))
+    expect(reauthenticate).toHaveBeenCalledWith({
+      accountId: 'account-2',
+      activateIfSelectionWasEmpty: true
+    })
+    expect(markLiveCodexSessionsForRestart).toHaveBeenCalledTimes(1)
+    expect(markLiveCodexSessionsForRestart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        previousAccountId: null,
+        nextAccountId: 'account-2',
+        target: { runtime: 'host', wslDistro: null }
+      })
+    )
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('does not disturb live panes when the effective account did not change', async () => {
+    storeSettings = settingsWithActive('account-1')
+    reauthenticate.mockResolvedValue(codexSnapshot('account-1'))
+
+    await renderSwitcherAndOpenAccounts('account-1@example.com')
+    fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1))
+    expect(reauthenticate).toHaveBeenCalledWith({
+      accountId: 'account-2',
+      activateIfSelectionWasEmpty: true
+    })
+    expect(markLiveCodexSessionsForRestart).not.toHaveBeenCalled()
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('reports a failed sign-in instead of leaving the click silent', async () => {
+    reauthenticate.mockRejectedValue(new Error('Codex login exited with code 1.'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await renderSwitcherAndOpenAccounts('System default')
+    fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1))
+    expect(toastSuccess).not.toHaveBeenCalled()
+    expect(markLiveCodexSessionsForRestart).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
+  })
+})

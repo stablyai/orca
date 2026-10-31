@@ -9,4 +9,15 @@ export class QuitTeardownStartGate {
     this.started = true
     return true
   }
+
+  hasStarted(): boolean {
+    return this.started
+  }
+
+  resetForTests(): void {
+    this.started = false
+  }
 }
+
+// All subsystems must observe the same committed quit.
+export const quitTeardownStartGate = new QuitTeardownStartGate()

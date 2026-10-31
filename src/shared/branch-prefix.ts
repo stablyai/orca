@@ -1,4 +1,4 @@
-import type { BranchPrefixStrategy } from './types'
+import type { BranchPrefixStrategy } from './ui-chrome-types'
 
 /** The branch-prefix settings slice the prefix helpers read. */
 export type BranchPrefixSettings = {
@@ -6,15 +6,11 @@ export type BranchPrefixSettings = {
   branchPrefixCustom?: string
 }
 
-/**
- * Pick the raw, un-normalized value the configured strategy contributes, or
- * null when no prefix applies. Shared so the main-process branch builder and
- * the renderer's live settings feedback agree on which field each strategy uses.
- */
+/** Share strategy-to-raw-prefix selection between branch creation and live settings feedback; null disables prefixing. */
 export function selectBranchPrefixInput(
-  settings: BranchPrefixSettings,
+  settings: Omit<BranchPrefixSettings, 'branchPrefix'> & { branchPrefix: string },
   gitUsername: string | null
-): string | null {
+): string | null | void {
   switch (settings.branchPrefix) {
     case 'git-username':
       return gitUsername
@@ -25,16 +21,7 @@ export function selectBranchPrefixInput(
   }
 }
 
-/**
- * Normalize a configured branch prefix into the segment that gets prepended
- * before the `/` separator when building a branch name.
- *
- * Why: the branch-name join (`${prefix}/${leaf}`) already inserts a single `/`,
- * so a user-typed prefix like `team/` would otherwise yield `team//name`, which
- * git check-ref-format rejects. Strip surrounding whitespace and slashes and
- * collapse internal runs so the join always produces exactly one separator.
- * Legitimate multi-segment prefixes (e.g. `team/frontend`) are preserved.
- */
+/** Normalize whitespace/slash runs before prefix/leaf joining to avoid Git-invalid team//name while preserving multi-segment prefixes. */
 export function normalizeBranchPrefix(rawPrefix: string): string {
   return rawPrefix
     .trim()
@@ -45,11 +32,7 @@ export function normalizeBranchPrefix(rawPrefix: string): string {
 // Ref-reserved characters git check-ref-format rejects inside a branch name.
 const INVALID_BRANCH_PREFIX_CHARS = /[~^:?*[\\]/
 
-/**
- * Whether the value contains an ASCII control character or space, both of which
- * git rejects. Checked by code point (like `sanitizeWorktreeDisplayName`) to
- * avoid a control-character regex that the linter forbids.
- */
+/** Check ASCII controls/spaces by code point, matching sanitizeWorktreeDisplayName without a forbidden control regex. */
 function hasControlOrSpace(value: string): boolean {
   return [...value].some((char) => {
     const code = char.charCodeAt(0)
@@ -57,25 +40,14 @@ function hasControlOrSpace(value: string): boolean {
   })
 }
 
-/**
- * Detect whether a branch prefix, after normalization, still contains characters
- * git check-ref-format rejects. Returns a reason code (not a UI string, so the
- * renderer owns translation) or null when the prefix is usable.
- *
- * This is a lightweight mirror of the relevant check-ref-format rules for live
- * settings feedback; git remains the source of truth at worktree-create time.
- */
+/** Mirror relevant check-ref-format rules for live feedback, returning translatable reason codes. Git remains authoritative during creation. */
 export function getBranchPrefixIssue(rawPrefix: string): 'invalid-characters' | null {
   const normalized = normalizeBranchPrefix(rawPrefix)
   if (!normalized) {
     // Empty after normalization means "no prefix" — valid.
     return null
   }
-  // Mirror git check-ref-format exactly so we don't reject prefixes git accepts:
-  // control chars/space, the ref-reserved set, `..`, and `@{` are forbidden
-  // anywhere; the whole ref may not start with `-` (arg-injection / leading-dash)
-  // nor end with `.`; and each `/`-segment may not start with `.` nor end with
-  // `.lock`. Hyphens and mid-segment dots elsewhere are fine (e.g. `team./x`).
+  // Match Git rules without overrejecting valid mid-segment dots/hyphens: forbid controls/spaces/reserved chars, .., @{, leading -, trailing ., dot-leading segments and .lock suffixes.
   if (
     hasControlOrSpace(normalized) ||
     INVALID_BRANCH_PREFIX_CHARS.test(normalized) ||
@@ -90,11 +62,7 @@ export function getBranchPrefixIssue(rawPrefix: string): 'invalid-characters' | 
   return null
 }
 
-/**
- * Fail fast when a configured prefix would produce a branch name git rejects.
- * Used on the main-process worktree-create path so users get a clear error
- * instead of an opaque check-ref-format failure later.
- */
+/** Fail configured prefixes early on worktree creation with clear errors instead of later check-ref-format failures. */
 export function assertBranchPrefixValid(prefix: string): void {
   if (getBranchPrefixIssue(prefix) !== null) {
     throw new Error(

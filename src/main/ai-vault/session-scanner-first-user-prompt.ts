@@ -1,33 +1,25 @@
 import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
 import { getFirstUserPromptCaptureMode } from './session-scanner-first-user-prompt-capture'
 import { stripGrokUserQueryEnvelope } from './session-scanner-grok-user-text'
-// Direct import: session-scanner-values re-exports this module, so going through
-// it here would close an import cycle.
+// Import directly to avoid a cycle through the session-scanner-values re-export.
 import { sliceAtCodeUnitLimit } from './session-scanner-text-normalization'
 
-// Why: safety only for pathological multi-MB pastes. Copy path must not use the
-// 220-char list preview cap.
+// Bound pathological pastes without applying the much smaller list-preview cap.
 const FULL_FIRST_USER_PROMPT_SAFETY_LIMIT = 256 * 1024
 
-// Codex uses input_text; most others use text. Never treat tool/image blocks as
-// the written first ask.
+// Ignore tool/image blocks; providers use several text-block spellings.
 const TEXT_LIKE_BLOCK_TYPES = new Set(['text', 'input_text', 'output_text'])
 
-/** True only while an on-demand first-prompt read is re-parsing one transcript. */
 export function shouldCaptureFullFirstUserPrompt(): boolean {
   return getFirstUserPromptCaptureMode() === 'full'
 }
 
-/**
- * Extract the written first-user ask for copy/reuse. Preserves newlines and does
- * not apply list-preview caps. Returns null for non-text / harness / empty.
- */
+/** Preserve prompt newlines for copy/reuse; exclude empty, harness and non-text content. */
 export function extractFullFirstUserPromptText(value: unknown): string | null {
   if (typeof value === 'string') {
     return finalizeFullFirstUserPrompt(value)
   }
 
-  // Single content block object (not wrapped in an array).
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const blockText = firstUserPromptContentItemText(value)
     return blockText != null ? finalizeFullFirstUserPrompt(blockText) : null
@@ -55,8 +47,6 @@ export function normalizeFullFirstUserPromptText(value: string): string | null {
 }
 
 function finalizeFullFirstUserPrompt(value: string): string | null {
-  // Why: Grok (and some pasted transcripts) wrap the real ask in <user_query>;
-  // strip that before copy so the clipboard is the typed prompt, not user_info.
   const unwrapped = stripGrokUserQueryEnvelope(value.replace(/^\uFEFF/, ''))
   const trimmed = unwrapped.trim()
   if (!trimmed) {
@@ -68,12 +58,14 @@ function finalizeFullFirstUserPrompt(value: string): string | null {
   if (isKnownHarnessInjectedUserTurnText(trimmed)) {
     return null
   }
-  // Reject pure Grok bootstrap dumps even when they arrived via a non-Grok path.
-  const lower = trimmed.toLowerCase()
+  // Bound before scanning so a multi-MB paste cannot force a full lowercase copy.
+  const bounded = sliceAtCodeUnitLimit(trimmed, FULL_FIRST_USER_PROMPT_SAFETY_LIMIT)
+  // The full envelope was stripped before bounding, so this bootstrap check cannot hide a late user_query.
+  const lower = bounded.toLowerCase()
   if (lower.startsWith('<user_info>') && !lower.includes('<user_query>')) {
     return null
   }
-  return sliceAtCodeUnitLimit(trimmed, FULL_FIRST_USER_PROMPT_SAFETY_LIMIT)
+  return bounded
 }
 
 function isSuppressedFullFirstUserPrompt(value: string): boolean {

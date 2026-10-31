@@ -73,7 +73,10 @@ describe('TabGroupSplitLayout', () => {
   })
 
   function getLayoutWrapper(element: ReturnType<typeof TabGroupSplitLayout>) {
-    const dndContext = asElement(element.props.children)
+    // The layout composes WorkspaceTabDragLayer (a render prop) around the chrome wrapper:
+    // invoke it to reach TabDragProvider > DndContext > [wrapper, DragOverlay, split overlay].
+    const providerElement = asElement(invokeComponent(asElement(element)))
+    const dndContext = asElement(providerElement.props.children)
     return React.Children.toArray(dndContext.props.children as React.ReactNode)[0]
   }
 
@@ -82,9 +85,12 @@ describe('TabGroupSplitLayout', () => {
       asElement(getLayoutWrapper(element)).props.children as React.ReactNode
     )
     const splitBody = layoutWrapperChildren[1]
-    const splitNodeElement = React.Children.only(
+    const treeElement = React.Children.only(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wrapper's split body renders exactly the tree element; props are untyped in this shallow-walk rig.
       asElement(splitBody).props.children as React.ReactNode
     )
+    // TabGroupSplitNodeTree renders the recursive SplitNode; invoke both to reach the leaf/split.
+    const splitNodeElement = invokeComponent(asElement(treeElement))
     return invokeComponent(asElement(splitNodeElement))
   }
 
@@ -100,6 +106,7 @@ describe('TabGroupSplitLayout', () => {
     return tabGroupPanelElement.props as {
       groupId: string
       worktreeId: string
+      isVisible: boolean
       isFocused: boolean
       hasSplitGroups: boolean
       reserveClosedExplorerToggleSpace: boolean
@@ -112,6 +119,7 @@ describe('TabGroupSplitLayout', () => {
       expect.objectContaining({
         groupId: 'group-1',
         worktreeId: 'wt-1',
+        isVisible: false,
         isFocused: false,
         hasSplitGroups: false,
         reserveClosedExplorerToggleSpace: true,
@@ -125,6 +133,7 @@ describe('TabGroupSplitLayout', () => {
       expect.objectContaining({
         groupId: 'group-1',
         worktreeId: 'wt-1',
+        isVisible: true,
         isFocused: true,
         hasSplitGroups: false,
         reserveClosedExplorerToggleSpace: true,
@@ -183,27 +192,5 @@ describe('TabGroupSplitLayout', () => {
         reserveCollapsedSidebarHeaderSpace: false
       })
     )
-  })
-
-  it('records pane resizing at the start of the gesture', () => {
-    const element = TabGroupSplitLayout({
-      layout: {
-        type: 'split',
-        direction: 'horizontal',
-        ratio: 0.5,
-        first: { type: 'leaf', groupId: 'left-group' },
-        second: { type: 'leaf', groupId: 'right-group' }
-      },
-      worktreeId: 'wt-1',
-      focusedGroupId: 'right-group',
-      isWorktreeActive: true
-    })
-
-    const rootElement = asElement(getSplitNodeElement(element))
-    const resizeHandle = asElement((rootElement.props.children as unknown[])[1])
-
-    ;(resizeHandle.props.onResizeStart as () => void)()
-
-    expect(recordFeatureInteractionMock).toHaveBeenCalledWith('terminal-panes')
   })
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab, Worktree } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { countWorkingAgents, getWorkingAgentsPerWorktree } from './agent-status'
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
@@ -43,10 +44,7 @@ function worktrees(...ids: string[]): Record<string, Worktree[]> {
   }
 }
 
-// Why: build a live-pty map from tab ids so each test can declare which tabs
-// are actually alive without manually tracking parallel `tab.ptyId` values.
-// `tab.ptyId` is the wake-hint sessionId preserved across sleep, not a
-// liveness signal — slept-tab tests below pin the gap.
+// Derive liveness from explicit tab IDs; preserved tab.ptyId is only a wake hint, not a live binding.
 function livePtyMap(...tabIds: string[]): Record<string, string[]> {
   return Object.fromEntries(tabIds.map((id, i) => [id, [`pty-${i}`]]))
 }
@@ -138,12 +136,7 @@ describe('countWorkingAgents', () => {
     ).toBe(1)
   })
 
-  // Why: sleep preserves runtimePaneTitlesByTabId and tab.ptyId as wake hints
-  // while ptyIdsByTabId[tab.id] is cleared to []. Both branches of the
-  // counter (primary pane-titles and tab-title fallback) must respect that
-  // liveness gate — otherwise the title-bar agent count, dock badge, and
-  // workingAgentsPerWorktree aggregates report ghost activity for slept
-  // worktrees.
+  // Both pane-title and tab-title branches must reject slept tabs with preserved titles/ptyId but empty live bindings.
   it('returns 0 for a slept tab whose preserved pane titles still match working (primary branch)', () => {
     expect(
       countWorkingAgents({
@@ -153,8 +146,6 @@ describe('countWorkingAgents', () => {
         runtimePaneTitlesByTabId: {
           'tab-1': { 0: '⠂ Claude Code' }
         },
-        // Slept: live-pty array is empty even though tab.ptyId is set as a
-        // wake-hint sessionId.
         ptyIdsByTabId: { 'tab-1': [] },
         worktreesByRepo: worktrees('wt-1')
       })
@@ -220,8 +211,7 @@ describe('getWorkingAgentsPerWorktree', () => {
     })
   })
 
-  // See countWorkingAgents slept-tab tests above — the same liveness gate
-  // applies here on both branches of the per-worktree aggregation.
+  // Apply the same live-binding gate to both per-worktree count branches.
   it('returns nothing for a slept tab whose preserved pane titles still match working (primary branch)', () => {
     expect(
       getWorkingAgentsPerWorktree({

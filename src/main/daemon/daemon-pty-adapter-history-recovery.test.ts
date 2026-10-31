@@ -1,4 +1,4 @@
-/* History recovery / quarantine / reconcile regressions for DaemonPtyAdapter. */
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -16,6 +16,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
+import { createMockSubprocess, waitFor } from './daemon-pty-adapter-test-harness'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { HistoryManager } from './history-manager'
@@ -30,7 +31,6 @@ import {
 } from './terminal-history-recovery-quarantine'
 import { encodeLogBatch, encodeLogHeader } from './terminal-history-log'
 import type { HistoryReader } from './history-reader'
-import type { SubprocessHandle } from './session'
 import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
@@ -39,7 +39,7 @@ const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
 }))
 
-// Why not just posix: mode 0o500 does not block writes for uid 0, so root CI containers would never hit the failure.
+// Root bypasses 0o500 write restrictions, so permission-failure tests require an unprivileged user.
 const itOnUnprivilegedPosix = it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)
 
 vi.mock('./daemon-health', async (importOriginal) => {
@@ -79,54 +79,6 @@ async function leaveFailedQuarantineProtection(
     quarantineUnreadableRecovery: true
   })
   expect(manager.isSessionDisabled(sessionId)).toBe(true)
-}
-
-function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle & {
-  pause: ReturnType<typeof vi.fn<() => void>>
-  resume: ReturnType<typeof vi.fn<() => void>>
-  _simulateData: (data: string) => void
-  _simulateExit: (code: number) => void
-} {
-  let onDataCb: ((data: string) => void) | null = null
-  let onExitCb: ((code: number) => void) | null = null
-  return {
-    // Why: getCwd falls back to OS pid lookup; an implausibly-high fake pid can't collide with a real process' cwd.
-    pid: 999_999_999,
-    getForegroundProcess: vi.fn(() => null),
-    write: vi.fn(),
-    resize: vi.fn(),
-    pause: vi.fn<() => void>(),
-    resume: vi.fn<() => void>(),
-    kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
-    signal: vi.fn(),
-    onData(cb) {
-      onDataCb = cb
-      if (dataOnSubscribe) {
-        cb(dataOnSubscribe)
-      }
-    },
-    onExit(cb) {
-      onExitCb = cb
-    },
-    dispose: vi.fn(),
-    _simulateData(data: string) {
-      onDataCb?.(data)
-    },
-    _simulateExit(code: number) {
-      onExitCb?.(code)
-    }
-  }
-}
-
-async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
-  const start = Date.now()
-  while (!predicate()) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error('waitFor timed out')
-    }
-    await new Promise((r) => setTimeout(r, 10))
-  }
 }
 
 describe('DaemonPtyAdapter history recovery', () => {
@@ -283,15 +235,19 @@ describe('DaemonPtyAdapter history recovery', () => {
           ).id
       )
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `checkpointSessions` and `runExclusiveCheckpoint` are `protected` on the checkpoint scheduler, so they are absent from the adapter's public type; the shape below mirrors their declarations and this suite only spies on them.
     const internals = historyAdapter as unknown as {
       checkpointSessions(
         sessionIds: Iterable<string>,
         opts?: { final?: boolean; teardown?: boolean }
       ): Promise<Set<string>>
-      runExclusiveCheckpoint(operation: () => Promise<void>, options?: object): Promise<void>
+      runExclusiveCheckpoint(
+        operation: () => Promise<void>,
+        options?: { rescheduleDirty?: boolean; callerDeadlineMs?: number }
+      ): Promise<void>
     }
     const originalCheckpointSessions = internals.checkpointSessions.bind(historyAdapter)
-    // Call-through spy: entering the exclusive gate is the observable "queued behind the in-flight checkpoint" moment.
+    // Observe gate entry without bypassing checkpoint serialization.
     const exclusiveEntries = vi.spyOn(internals, 'runExclusiveCheckpoint')
     let activeCheckpoints = 0
     let maxActiveCheckpoints = 0
@@ -329,8 +285,8 @@ describe('DaemonPtyAdapter history recovery', () => {
       historyAdapter.shutdown(sessionIds[2], { immediate: true, keepHistory: true }),
       historyAdapter.disconnectOnly()
     ]
-    // Why not a fixed sleep: releasing before both queued shutdowns enter the gate makes maxActiveCheckpoints===1 vacuous.
-    // (disconnectOnly's own entry lands after it drains the keepHistory shutdowns, so it can't be waited on here.)
+    // Queue both shutdowns before release; otherwise maxActiveCheckpoints === 1 could pass vacuously.
+    // disconnectOnly enters after draining those shutdowns, so waiting for its entry would deadlock.
     await waitFor(() => exclusiveEntries.mock.calls.length >= 3)
     releaseFirstCheckpoint()
     await Promise.all([firstShutdown, ...queuedOperations])
@@ -604,7 +560,7 @@ describe('DaemonPtyAdapter history recovery', () => {
           quarantineUnreadableRecovery: true
         })
       } finally {
-        // Why finally: a leaked 0o500 dir turns teardown into a confusing EACCES instead of the real assertion failure.
+        // Restore permissions even on failure so teardown cannot mask the assertion with EACCES.
         chmodSync(sessionDir, 0o700)
       }
       expect(failedManager.isSessionDisabled(sessionId)).toBe(true)
@@ -731,7 +687,7 @@ describe('DaemonPtyAdapter history recovery', () => {
       expect(manager.hasWriter(sessionId)).toBe(true)
       expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(true)
 
-      // Why both: the spy fires inside takeSnapshotAndCheckpoint; the set clears only after that await returns.
+      // The spy fires before the awaited checkpoint clears the pending flag.
       await waitFor(
         () =>
           checkpointSpy.mock.calls.some(([id]) => id === sessionId) &&
@@ -769,7 +725,7 @@ describe('DaemonPtyAdapter history recovery', () => {
     const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
     let releaseDetection!: () => void
     let detectCalls = 0
-    // Why only the first call blocks: a second never-resolving promise would hang the test instead of failing it.
+    // Block only the first call so an unexpected retry fails instead of hanging.
     vi.spyOn(reader, 'detectColdRestoreState').mockImplementation(() => {
       if (detectCalls++ > 0) {
         return Promise.resolve({ status: 'none' })

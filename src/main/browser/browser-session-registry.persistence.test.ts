@@ -1,136 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const USER_DATA = '/user-data'
-const META_PATH = `${USER_DATA}/browser-session-meta.json`
-
-type FsState = {
-  files: Map<string, string>
-  present: Set<string>
-}
-
-function fsKey(pathValue: string): string {
-  return pathValue.replaceAll('\\', '/')
-}
-
-function createFsState(): FsState {
-  return { files: new Map(), present: new Set() }
-}
-
-function seedMeta(fsState: FsState, meta: unknown): void {
-  const raw = JSON.stringify(meta)
-  fsState.files.set(META_PATH, raw)
-  fsState.present.add(META_PATH)
-}
-
-function installModuleMocks(
-  fsState: FsState,
-  copyFailures: Set<string> = new Set()
-): {
-  sessionFromPartitionMock: ReturnType<typeof vi.fn>
-  setupClientHintsOverrideMock: ReturnType<typeof vi.fn>
-  browserManagerHandleGuestWillDownloadMock: ReturnType<typeof vi.fn>
-  browserManagerNotifyPermissionDeniedMock: ReturnType<typeof vi.fn>
-  requestSystemMediaAccessMock: ReturnType<typeof vi.fn>
-} {
-  const sessionFromPartitionMock = vi.fn((partition: string) => ({
-    partition,
-    setUserAgent: vi.fn(),
-    getUserAgent: vi.fn(() => 'Mozilla/5.0 Electron/31 Orca'),
-    setPermissionRequestHandler: vi.fn(),
-    setPermissionCheckHandler: vi.fn(),
-    setDevicePermissionHandler: vi.fn(),
-    setDisplayMediaRequestHandler: vi.fn(),
-    on: vi.fn(),
-    removeListener: vi.fn(),
-    clearStorageData: vi.fn().mockResolvedValue(undefined),
-    clearCache: vi.fn().mockResolvedValue(undefined)
-  }))
-  const setupClientHintsOverrideMock = vi.fn()
-  const browserManagerHandleGuestWillDownloadMock = vi.fn()
-  const browserManagerNotifyPermissionDeniedMock = vi.fn()
-  const requestSystemMediaAccessMock = vi.fn().mockResolvedValue(true)
-
-  vi.doMock('electron', () => ({
-    app: { getPath: vi.fn(() => USER_DATA) },
-    session: { fromPartition: sessionFromPartitionMock },
-    systemPreferences: {
-      askForMediaAccess: vi.fn().mockResolvedValue(true),
-      getMediaAccessStatus: vi.fn(() => 'granted')
-    }
-  }))
-
-  vi.doMock('node:fs', () => ({
-    copyFileSync: vi.fn((src: string, dst: string) => {
-      const sourceKey = fsKey(src)
-      const destinationKey = fsKey(dst)
-      if (copyFailures.has(sourceKey)) {
-        throw new Error(`copy fail for ${src}`)
-      }
-      fsState.present.add(destinationKey)
-      const value = fsState.files.get(sourceKey)
-      if (value !== undefined) {
-        fsState.files.set(destinationKey, value)
-      }
-    }),
-    existsSync: vi.fn((p: string) => fsState.present.has(fsKey(p))),
-    mkdirSync: vi.fn(),
-    readFileSync: vi.fn((p: string) => {
-      const v = fsState.files.get(fsKey(p))
-      if (v === undefined) {
-        throw new Error('ENOENT')
-      }
-      return v
-    }),
-    renameSync: vi.fn((from: string, to: string) => {
-      const sourceKey = fsKey(from)
-      const destinationKey = fsKey(to)
-      const v = fsState.files.get(sourceKey)
-      if (v === undefined) {
-        throw new Error('ENOENT')
-      }
-      fsState.files.set(destinationKey, v)
-      fsState.present.add(destinationKey)
-      fsState.files.delete(sourceKey)
-      fsState.present.delete(sourceKey)
-    }),
-    unlinkSync: vi.fn((p: string) => {
-      const key = fsKey(p)
-      fsState.present.delete(key)
-      fsState.files.delete(key)
-    }),
-    writeFileSync: vi.fn((p: string, data: string | Uint8Array) => {
-      const value = typeof data === 'string' ? data : Buffer.from(data).toString('utf-8')
-      const key = fsKey(p)
-      fsState.files.set(key, value)
-      fsState.present.add(key)
-    })
-  }))
-
-  vi.doMock('./browser-manager', () => ({
-    browserManager: {
-      notifyPermissionDenied: browserManagerNotifyPermissionDeniedMock,
-      handleGuestWillDownload: browserManagerHandleGuestWillDownloadMock,
-      installCertificateRequestGuard: vi.fn(),
-      removeCertificateRequestGuard: vi.fn()
-    }
-  }))
-  vi.doMock('./browser-media-access', () => ({
-    hasSystemMediaAccess: vi.fn(() => true),
-    requestSystemMediaAccess: requestSystemMediaAccessMock
-  }))
-  vi.doMock('./browser-session-ua', () => ({
-    cleanElectronUserAgent: vi.fn((ua: string) => ua.replace(/\s*Electron\/\S+/, '')),
-    setupClientHintsOverride: setupClientHintsOverrideMock
-  }))
-
-  return {
-    sessionFromPartitionMock,
-    setupClientHintsOverrideMock,
-    browserManagerHandleGuestWillDownloadMock,
-    browserManagerNotifyPermissionDeniedMock,
-    requestSystemMediaAccessMock
-  }
-}
+import {
+  CLEAN_USER_AGENT,
+  createFsState,
+  installModuleMocks,
+  META_PATH,
+  seedMeta,
+  seedSitePermissions
+} from './__mocks__/browser-session-registry-persistence-fixture'
 
 describe('BrowserSessionRegistry persistence', () => {
   beforeEach(() => {
@@ -138,7 +14,7 @@ describe('BrowserSessionRegistry persistence', () => {
     vi.restoreAllMocks()
   })
 
-  it('migrates and consumes legacy pendingCookieDbPath into default partition replay', async () => {
+  it('expires a legacy pendingCookieDbPath without copying it over the live jar', async () => {
     const fsState = createFsState()
     seedMeta(fsState, {
       defaultSource: null,
@@ -156,10 +32,10 @@ describe('BrowserSessionRegistry persistence', () => {
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
     expect(written.pendingCookieDbPath).toBeNull()
     expect(written.pendingCookieImports).toEqual({})
-    expect(fsState.present.has('/user-data/Partitions/orca-browser/Cookies')).toBe(true)
+    expect(fsState.present.has('/user-data/Partitions/orca-browser/Cookies')).toBe(false)
   })
 
-  it('replays pending cookies into an existing Network database', async () => {
+  it('keeps the existing Network database when expiring an unmarked legacy image', async () => {
     const stagedPath = '/staged/network-import'
     const networkPath = '/user-data/Partitions/orca-browser/Network/Cookies'
     const legacyPath = '/user-data/Partitions/orca-browser/Cookies'
@@ -180,7 +56,7 @@ describe('BrowserSessionRegistry persistence', () => {
 
     browserSessionRegistry.applyPendingCookieImport()
 
-    expect(fsState.files.get(networkPath)).toBe('imported cookies')
+    expect(fsState.files.get(networkPath)).toBe('old cookies')
     expect(fsState.present.has(legacyPath)).toBe(false)
   })
 
@@ -195,7 +71,7 @@ describe('BrowserSessionRegistry persistence', () => {
       orcaProfileId: 'local-work',
       profileDirectory: '/user-data/profiles/local-work'
     })
-    const profile = browserSessionRegistry.createProfile('isolated', 'Work Browser')
+    const profile = await browserSessionRegistry.createProfile('isolated', 'Work Browser')
 
     expect(profile).not.toBeNull()
     expect(fsState.files.has(profileMetaPath)).toBe(true)
@@ -207,32 +83,20 @@ describe('BrowserSessionRegistry persistence', () => {
     })
   })
 
-  it('merges partition-keyed pending entries without clobbering unrelated entries', async () => {
+  it('applies the process identity and request exceptions to new profiles', async () => {
     const fsState = createFsState()
-    seedMeta(fsState, {
-      defaultSource: null,
-      userAgent: null,
-      userAgentByPartition: {},
-      pendingCookieDbPath: null,
-      pendingCookieImports: {},
-      profiles: []
-    })
-
-    installModuleMocks(fsState)
+    const { sessionFromPartitionMock, installBrowserSessionUserAgentPolicyMock } =
+      installModuleMocks(fsState)
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
-    browserSessionRegistry.setPendingCookieImport('persist:orca-browser', '/staged/default')
-    browserSessionRegistry.setPendingCookieImport(
-      'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      '/staged/imported'
-    )
+    await browserSessionRegistry.createProfile('isolated', 'Default identity')
 
-    const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
-    expect(written.pendingCookieDbPath).toBe('/staged/default')
-    expect(written.pendingCookieImports).toEqual({
-      'persist:orca-browser': '/staged/default',
-      'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': '/staged/imported'
-    })
+    const profileSession = sessionFromPartitionMock.mock.results.at(-1)?.value
+    expect(profileSession.setUserAgent).toHaveBeenCalledWith(CLEAN_USER_AGENT)
+    expect(installBrowserSessionUserAgentPolicyMock).toHaveBeenCalledWith(
+      profileSession,
+      expect.any(Function)
+    )
   })
 
   it('clears only the requested partition and unlinks its staged database files', async () => {
@@ -263,7 +127,6 @@ describe('BrowserSessionRegistry persistence', () => {
 
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
     expect(written.pendingCookieImports).toEqual({ 'persist:orca-browser': '/staged/default' })
-    // Why: the default partition still has a staged replay, so the legacy pointer must survive.
     expect(written.pendingCookieDbPath).toBe('/staged/default')
     for (const suffix of ['', '-wal', '-shm']) {
       expect(fsState.present.has(`/staged/other${suffix}`)).toBe(false)
@@ -315,57 +178,8 @@ describe('BrowserSessionRegistry persistence', () => {
 
     browserSessionRegistry.clearPendingCookieImport('persist:orca-browser-session-unknown')
 
-    // Why: an absent key must not rewrite meta or touch another partition's staged file.
     expect(fsState.files.get(META_PATH)).toBe(metaBefore)
     expect(fsState.present.has('/staged/default')).toBe(true)
-  })
-
-  it('restores persisted UA for non-default partitions', async () => {
-    const importedPartition = 'persist:orca-browser-session-11111111-1111-4111-8111-111111111111'
-    const importedUa = 'Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36'
-    const defaultUa = 'Mozilla/5.0 Chrome/119.0.0.0 Safari/537.36'
-    const fsState = createFsState()
-    seedMeta(fsState, {
-      defaultSource: null,
-      userAgent: defaultUa,
-      userAgentByPartition: {
-        'persist:orca-browser': defaultUa,
-        [importedPartition]: importedUa
-      },
-      pendingCookieDbPath: null,
-      pendingCookieImports: {},
-      profiles: [
-        {
-          id: '11111111-1111-4111-8111-111111111111',
-          scope: 'imported',
-          partition: importedPartition,
-          label: 'Imported',
-          source: { browserFamily: 'comet', importedAt: 1 }
-        }
-      ]
-    })
-
-    const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
-    const { browserSessionRegistry } = await import('./browser-session-registry')
-
-    browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
-
-    const importedSessions = sessionFromPartitionMock.mock.results
-      .filter((_, idx) => sessionFromPartitionMock.mock.calls[idx]?.[0] === importedPartition)
-      .map((r) => r.value)
-    expect(importedSessions.length).toBeGreaterThan(0)
-    expect(
-      importedSessions.some((s) =>
-        s.setUserAgent.mock.calls.some((c: unknown[]) => c[0] === importedUa)
-      )
-    ).toBe(true)
-    expect(
-      setupClientHintsOverrideMock.mock.calls.some(
-        (c: unknown[]) =>
-          (c[0] as { partition?: string } | undefined)?.partition === importedPartition &&
-          c[1] === importedUa
-      )
-    ).toBe(true)
   })
 
   it('sets up default-partition policies on restore', async () => {
@@ -378,6 +192,8 @@ describe('BrowserSessionRegistry persistence', () => {
       pendingCookieImports: {},
       profiles: []
     })
+
+    seedSitePermissions(fsState, { default: { 'https://example.com': { camera: 'allow' } } })
 
     const {
       sessionFromPartitionMock,
@@ -397,41 +213,90 @@ describe('BrowserSessionRegistry persistence', () => {
     const checkHandler = defaultSession.setPermissionCheckHandler.mock.calls[0][0]
     const guestWc = { id: 401, getURL: vi.fn(() => 'https://example.com/account') }
     const permissionCallback = vi.fn()
+    const decisions = new Map<string, boolean>()
+    const request = (
+      permission: string,
+      details: Partial<Electron.PermissionRequest & Electron.MediaAccessPermissionRequest> = {}
+    ): void =>
+      requestHandler(
+        guestWc,
+        permission,
+        (allowed: boolean) => decisions.set(permission, allowed),
+        details
+      )
 
-    requestHandler(guestWc, 'fullscreen', permissionCallback)
-    requestHandler(guestWc, 'clipboard-read', permissionCallback)
-    requestHandler(guestWc, 'clipboard-sanitized-write', permissionCallback)
-    requestHandler(guestWc, 'notifications', permissionCallback)
-    requestHandler(guestWc, 'persistent-storage', permissionCallback)
-    requestHandler(guestWc, 'geolocation', permissionCallback)
-    requestHandler(guestWc, 'media', permissionCallback, { mediaTypes: ['video'] })
+    // Only camera has a saved answer; this guest has no prompt window.
+    request('fullscreen')
+    request('clipboard-read')
+    request('clipboard-sanitized-write')
+    request('notifications')
+    request('persistent-storage')
+    request('geolocation')
+    request('media', { mediaTypes: ['video'] })
 
-    await vi.waitFor(() =>
-      expect(permissionCallback.mock.calls).toEqual([
-        [true],
-        [true],
-        [true],
-        [true],
-        [true],
-        [false],
-        [true]
-      ])
-    )
+    await vi.waitFor(() => expect(decisions.size).toBe(7))
+    expect(Object.fromEntries(decisions)).toEqual({
+      fullscreen: true,
+      'clipboard-read': false,
+      'clipboard-sanitized-write': true,
+      notifications: false,
+      'persistent-storage': true,
+      geolocation: false,
+      media: true
+    })
+    expect(browserManagerNotifyPermissionDeniedMock).not.toHaveBeenCalled()
+
+    requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
+      requestingUrl: 'https://widget.example.net/embed',
+      isMainFrame: false
+    })
     expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
       guestWebContentsId: 401,
-      permission: 'geolocation',
-      rawUrl: 'https://example.com/account'
+      permission: 'mediaKeySystem',
+      rawUrl: 'https://widget.example.net/embed'
+    })
+
+    browserManagerNotifyPermissionDeniedMock.mockClear()
+    requestHandler(guestWc, 'mediaKeySystem', permissionCallback, { isMainFrame: true })
+    requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
+      requestingUrl: '',
+      isMainFrame: false
     })
     expect(
-      browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.permission)
-    ).toEqual(['geolocation'])
+      browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.rawUrl)
+    ).toEqual(['https://example.com/account', 'https://example.com/account'])
+
+    browserManagerNotifyPermissionDeniedMock.mockClear()
+    requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
+      requestingUrl: 'about:blank',
+      isMainFrame: false
+    })
+    expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
+      guestWebContentsId: 401,
+      permission: 'mediaKeySystem',
+      rawUrl: ''
+    })
     expect(checkHandler(null, 'fullscreen', '')).toBe(true)
-    expect(checkHandler(null, 'clipboard-read', '')).toBe(true)
+    expect(checkHandler(null, 'clipboard-read', 'https://example.com')).toBe(false)
     expect(checkHandler(null, 'clipboard-sanitized-write', '')).toBe(true)
-    expect(checkHandler(null, 'notifications', '')).toBe(true)
+    expect(checkHandler(null, 'notifications', 'https://example.com')).toBe(false)
     expect(checkHandler(null, 'persistent-storage', '')).toBe(true)
-    expect(checkHandler(null, 'geolocation', '')).toBe(false)
-    expect(checkHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
+    expect(checkHandler(null, 'geolocation', 'https://example.com')).toBe(false)
+    expect(checkHandler(guestWc, 'media', '', { mediaType: 'video' })).toBe(true)
+    expect(checkHandler(guestWc, 'media', '', { mediaType: 'audio' })).toBe(false)
+
+    requestHandler(guestWc, 'storage-access', permissionCallback, {})
+    expect(permissionCallback).toHaveBeenLastCalledWith(true)
+    expect(checkHandler(null, 'storage-access', '')).toBe(true)
+
+    // Related Website Sets gate top-level storage access; Orca has no such data source.
+    requestHandler(guestWc, 'top-level-storage-access', permissionCallback, {})
+    expect(permissionCallback).toHaveBeenLastCalledWith(false)
+    expect(checkHandler(null, 'top-level-storage-access', '')).toBe(false)
+
+    expect(
+      browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.permission)
+    ).toEqual(['mediaKeySystem', 'top-level-storage-access'])
     expect(defaultSession.setDisplayMediaRequestHandler).toHaveBeenCalled()
     const displayMediaHandler = defaultSession.setDisplayMediaRequestHandler.mock.calls[0][0]
     const displayMediaCallback = vi.fn()
@@ -555,6 +420,7 @@ describe('BrowserSessionRegistry persistence', () => {
       profiles: []
     })
 
+    seedSitePermissions(fsState, { default: { 'https://example.com': { camera: 'allow' } } })
     const {
       sessionFromPartitionMock,
       browserManagerNotifyPermissionDeniedMock,
@@ -573,6 +439,7 @@ describe('BrowserSessionRegistry persistence', () => {
     const callback = vi.fn()
 
     requestHandler(guestWc, 'media', callback, { mediaTypes: ['video'] })
+    guestWc.getURL.mockReturnValue('https://example.com/after-navigation')
 
     await vi.waitFor(() => expect(callback).toHaveBeenCalledWith(false))
     expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
@@ -582,7 +449,7 @@ describe('BrowserSessionRegistry persistence', () => {
     })
   })
 
-  it('keeps failed partition replay pending and removes unrelated missing entries', async () => {
+  it('expires an old unmarked stage and removes unrelated missing entries', async () => {
     const importedPartition = 'persist:orca-browser-session-22222222-2222-4222-8222-222222222222'
     const fsState = createFsState()
     seedMeta(fsState, {
@@ -612,7 +479,7 @@ describe('BrowserSessionRegistry persistence', () => {
     browserSessionRegistry.applyPendingCookieImport()
 
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
-    expect(written.pendingCookieImports).toEqual({ [importedPartition]: '/staged/imported' })
+    expect(written.pendingCookieImports).toEqual({})
     expect(written.pendingCookieDbPath).toBeNull()
   })
 

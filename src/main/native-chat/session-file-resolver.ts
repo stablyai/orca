@@ -1,36 +1,54 @@
-import { existsSync } from 'node:fs'
+import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
-import { basename, extname, join } from 'node:path'
+import { extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+import {
+  resolveNativeChatTranscriptAgent,
+  type NativeChatTranscriptAgent
+} from '../../shared/native-chat-agent-support'
+import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
-import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
+import {
+  claudeProjectsHostDirs,
+  codexHomeSessionsDir,
+  uniqueDirs
+} from '../ai-vault/session-scanner-roots'
+import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
+import {
+  hostAdditionalCodexHomePaths,
+  needsWslHostResolution,
+  toHostReadableTranscriptPath,
+  wslAgentSessionsDirs
+} from './host-readable-transcript-path'
+import { SESSION_FILE_ID_LAYOUTS, type SessionIdLookupAgent } from './session-file-id-layouts'
+import { findWslSessionPath } from './wsl-session-path-scan'
+import { parseSshTranscriptPath } from './ssh-transcript-path'
+import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
-// Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
-// run in the main process against the runtime's own home directory; over SSH
-// the remote main resolves its local home, so we never hardcode an absolute
-// user path — homedir()/CODEX_HOME resolution stays runtime-relative and is
-// computed per call (not at module load) so it tracks the live home.
-function claudeProjectsDir(): string {
-  return join(homedir(), '.claude', 'projects')
+// Read shared discovery roots per call; preference order prevents cross-account matches.
+function claudeProjectsDirs(): string[] {
+  return uniqueDirs([...claudeProjectsHostDirs(), ...claudeProfileHistoryDirs('projects')])
 }
 
-// Why: Orca launches Codex with ORCA_CODEX_HOME pointing at its own managed
-// runtime home, so Orca-started Codex rollout files land under
-// `<managed home>/sessions`, NOT `~/.codex/sessions`. Search the managed home
-// first (that's where this main process's Codex sessions actually live), then
-// fall back to CODEX_HOME/~/.codex so a non-Orca Codex transcript still resolves.
-// Duplicates are filtered so a managed-home symlink to ~/.codex isn't scanned twice.
+// Search managed Codex before user homes; use the path-only getter to avoid launch-time mkdirSync on polls.
 function codexSessionsDirs(): string[] {
-  const candidates = [
-    join(getOrcaManagedCodexHomePath(), 'sessions'),
-    join(process.env.CODEX_HOME?.trim() || join(homedir(), '.codex'), 'sessions')
-  ]
-  return candidates.filter((dir, index) => candidates.indexOf(dir) === index)
+  return uniqueDirs([join(resolveOrcaManagedCodexHomePath(), 'sessions'), codexHomeSessionsDir()])
+}
+
+// Enumerate account homes only after common roots miss to avoid unnecessary disk work.
+function codexAccountSessionsDirs(): string[] {
+  try {
+    return hostAdditionalCodexHomePaths().map((home) => join(home, 'sessions'))
+  } catch (error) {
+    // Account enumeration failure must still allow the WSL tier.
+    console.warn('[session-file-resolver] could not list Codex account homes:', error)
+    return []
+  }
 }
 
 function grokSessionsDir(): string {
@@ -38,108 +56,229 @@ function grokSessionsDir(): string {
 }
 
 export type ResolveSessionFileOptions = {
-  /** Override the Claude projects root (used by tests / isolated scans). */
+  strictErrors?: boolean
   claudeProjectsDir?: string
-  /** Override the Codex sessions roots, searched in order (tests / isolated
-   *  scans). Defaults to the orca-managed home then CODEX_HOME/~/.codex. */
+  /** Defaults to managed Codex then CODEX_HOME/~/.codex, in order. */
   codexSessionsDirs?: string[]
-  /** Override the Grok sessions root (`~/.grok/sessions`). */
   grokSessionsDir?: string
-  /** Authoritative transcript path reported by the agent hook
-   *  (`providerSession.transcriptPath`). When set and the file exists, it is used
-   *  directly — recent Claude Code names the transcript with a UUID that differs
-   *  from the hook session_id, so the id-based glob below would miss it. */
+  ompSessionsDir?: string
+  /** Hook paths are authoritative: Claude filenames may differ from its reported session ID. */
   transcriptPath?: string
+  /** Restrict exact-path resolution to this attested guest. */
+  wslDistro?: string
 }
 
-/**
- * Resolve the on-disk JSONL transcript path for a given agent + session id.
- *
- * Prefers the hook-reported `transcriptPath` when it exists on disk (authoritative).
- * Otherwise: Claude nests transcripts by project slug
- * (`~/.claude/projects/<slug>/<id>.jsonl`), so we glob the projects subdirs for
- * `<id>.jsonl`. Codex stores rollout files under date-nested dirs whose file name
- * embeds the session id, so we match by the session id appearing in the file name.
- * Returns null when no matching transcript exists.
- */
+/** Prefer hook paths, then provider-specific ID lookup; null means no matching transcript. */
 export async function resolveSessionFilePath(
   agent: AgentType,
   sessionId: string,
-  options: ResolveSessionFileOptions = {}
+  options: ResolveSessionFileOptions = {},
+  signal?: AbortSignal
 ): Promise<string | null> {
+  signal?.throwIfAborted()
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  if (!transcriptAgent) {
+  if (!transcriptAgent || transcriptAgent === 'opencode') {
     return null
   }
-  // Why: the hook's transcript_path is the exact file the agent is writing, so it
-  // beats reconstructing a path from the session id. Guard with existsSync so a
-  // stale/remote path falls through to the id-based search rather than returning
-  // a non-existent file.
+  let unavailable: WslTranscriptFsError | undefined
   const hookPath = options.transcriptPath?.trim()
-  if (hookPath && extname(hookPath) === '.jsonl' && existsSync(hookPath)) {
-    return hookPath
+  const jsonlHookPath = hookPath && extname(hookPath) === '.jsonl' ? hookPath : undefined
+  // SSH paths are readable only on their attested host; never fall back to this machine.
+  if (hookPath && parseSshTranscriptPath(hookPath)) {
+    return jsonlHookPath ?? null
+  }
+  if (jsonlHookPath) {
+    try {
+      const hostReadable = await toHostReadableTranscriptPath(jsonlHookPath, {
+        signal,
+        wslDistro: options.wslDistro
+      })
+      if (hostReadable) {
+        return hostReadable
+      }
+    } catch (error) {
+      signal?.throwIfAborted()
+      // Preserve incomplete-probe refusal unless ID lookup finds a valid hit.
+      unavailable = wslTranscriptFsRefusal(error)
+    }
   }
 
+  // Guest hook paths remain authoritative without attestation; never cross to host/other-distro ID matches.
+  if (hookPath && needsWslHostResolution(hookPath)) {
+    if (unavailable) {
+      throw unavailable
+    }
+    return null
+  }
+
+  // Attested WSL sessions cannot fall back to host or other-distro ID matches.
+  if (options.wslDistro?.trim()) {
+    if (unavailable) {
+      throw unavailable
+    }
+    return null
+  }
+
+  // Host hook paths prove a host-launched agent, so its transcript cannot be in a guest.
+  const wslTier = !jsonlHookPath
+  const resolved = await resolveSessionFileById(
+    transcriptAgent,
+    sessionId,
+    options,
+    wslTier,
+    signal
+  )
+  if (!resolved && unavailable) {
+    throw unavailable
+  }
+  return resolved
+}
+
+async function resolveSessionFileById(
+  transcriptAgent: NativeChatTranscriptAgent,
+  sessionId: string,
+  options: ResolveSessionFileOptions,
+  wslTier: boolean,
+  signal?: AbortSignal
+): Promise<string | null> {
+  if (transcriptAgent === 'opencode') {
+    return null
+  }
   const trimmedId = sessionId.trim()
   if (!trimmedId) {
     return null
   }
 
+  // Explicit roots pin an account; fallback could silently read another account’s transcript.
   if (transcriptAgent === 'claude') {
-    return resolveClaudeSessionFile(trimmedId, options.claudeProjectsDir ?? claudeProjectsDir())
+    const override = options.claudeProjectsDir
+    return resolveTiered('claude', trimmedId, override ? [override] : claudeProjectsDirs(), {
+      wslTier: wslTier && !override,
+      signal,
+      strictErrors: options.strictErrors
+    })
   }
   if (transcriptAgent === 'codex') {
-    return resolveCodexSessionFile(trimmedId, options.codexSessionsDirs ?? codexSessionsDirs())
+    const override = options.codexSessionsDirs
+    return resolveTiered('codex', trimmedId, override ?? codexSessionsDirs(), {
+      wslTier: wslTier && !override,
+      ...(override ? {} : { accountDirs: codexAccountSessionsDirs }),
+      signal,
+      strictErrors: options.strictErrors
+    })
   }
   if (transcriptAgent === 'grok') {
-    return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir())
+    const override = options.grokSessionsDir
+    return resolveTiered('grok', trimmedId, [override ?? grokSessionsDir()], {
+      wslTier: wslTier && !override,
+      signal,
+      strictErrors: options.strictErrors
+    })
+  }
+  if (transcriptAgent === 'omp') {
+    const override = options.ompSessionsDir
+    const root = resolveOmpSessionsDir({ sessionsDir: override })
+    return resolveTiered('omp', trimmedId, root ? [root] : [], {
+      wslTier: wslTier && override === undefined,
+      signal,
+      strictErrors: options.strictErrors
+    })
+  }
+  transcriptAgent satisfies never
+  return null
+}
+
+/** Search preferred host roots, account roots, then running WSL distros. */
+async function resolveTiered(
+  agent: SessionIdLookupAgent,
+  sessionId: string,
+  hostDirs: readonly string[],
+  options: {
+    wslTier: boolean
+    accountDirs?: () => readonly string[]
+    signal?: AbortSignal
+    strictErrors?: boolean
+  }
+): Promise<string | null> {
+  const { signal } = options
+  const hit = await findFirstInDirs(agent, sessionId, hostDirs, signal, options.strictErrors)
+  if (hit) {
+    return hit
+  }
+  const accountDirs = (options.accountDirs?.() ?? []).filter((dir) => !hostDirs.includes(dir))
+  const accountHit = await findFirstInDirs(
+    agent,
+    sessionId,
+    accountDirs,
+    signal,
+    options.strictErrors
+  )
+  if (accountHit || !options.wslTier) {
+    return accountHit
+  }
+  signal?.throwIfAborted()
+  // Defer WSL process/filesystem discovery until host roots miss.
+  const wslDirs = (await wslAgentSessionsDirs(agent)).filter((dir) => !hostDirs.includes(dir))
+  signal?.throwIfAborted()
+  return findFirstInDirs(agent, sessionId, wslDirs, signal, options.strictErrors)
+}
+
+async function findFirstInDirs(
+  agent: SessionIdLookupAgent,
+  sessionId: string,
+  dirs: readonly string[],
+  signal?: AbortSignal,
+  strictErrors?: boolean
+): Promise<string | null> {
+  let unavailable: WslTranscriptFsError | undefined
+  for (const dir of dirs) {
+    try {
+      const hit = isWslUncPath(dir)
+        ? await findWslSessionPath(agent, dir, sessionId, signal)
+        : await findHostSessionFile(agent, dir, sessionId, signal, strictErrors)
+      if (hit) {
+        return hit
+      }
+    } catch (error) {
+      signal?.throwIfAborted()
+      if (strictErrors) {
+        throw error
+      }
+      unavailable = wslTranscriptFsRefusal(error)
+    }
+  }
+  // An incomplete scan cannot prove absence.
+  if (unavailable) {
+    throw unavailable
   }
   return null
 }
 
-async function resolveClaudeSessionFile(
+async function findHostSessionFile(
+  agent: SessionIdLookupAgent,
+  root: string,
   sessionId: string,
-  projectsDir: string
+  signal?: AbortSignal,
+  strictErrors?: boolean
 ): Promise<string | null> {
-  const targetName = `${sessionId}.jsonl`
-  const files = await walkSessionFiles(projectsDir, 'claude', [], {
+  if (agent === 'grok' && !strictErrors) {
+    // Bound main-thread work with direct-layout async lookup rather than a recursive scan.
+    signal?.throwIfAborted()
+    const history = await findGrokChatHistoryBySessionId(root, sessionId)
+    signal?.throwIfAborted()
+    return history
+  }
+  const { fileMatchesId, directoryPredicate } = SESSION_FILE_ID_LAYOUTS[agent]
+  const wanted = (id: string): boolean => id === sessionId
+  // The walk handles missing roots; synchronous existence probes would block the main thread.
+  const files = await walkSessionFiles(root, agent, [], {
     extensions: new Set(['.jsonl']),
-    filePredicate: (path) => basename(path) === targetName
+    filePredicate: (path) => fileMatchesId(path, sessionId),
+    directoryPredicate: directoryPredicate
+      ? (name, depth) => directoryPredicate(name, depth, wanted)
+      : undefined,
+    signal,
+    strictErrors
   })
   return files[0] ?? null
-}
-
-async function resolveCodexSessionFile(
-  sessionId: string,
-  sessionsDirs: string[]
-): Promise<string | null> {
-  // Codex rollout file names embed the session id (rollout-<ts>-<id>.jsonl), so
-  // match the id as a suffix of the file's base name rather than an exact name.
-  // Search each candidate root (managed home first) and stop at the first match.
-  for (const sessionsDir of sessionsDirs) {
-    if (!existsSync(sessionsDir)) {
-      continue
-    }
-    const files = await walkSessionFiles(sessionsDir, 'codex', [], {
-      extensions: new Set(['.jsonl']),
-      filePredicate: (path) => {
-        const name = basename(path, extname(path))
-        return name === sessionId || name.endsWith(`-${sessionId}`)
-      }
-    })
-    if (files[0]) {
-      return files[0]
-    }
-  }
-  return null
-}
-
-async function resolveGrokSessionFile(
-  sessionId: string,
-  sessionsDir: string
-): Promise<string | null> {
-  // Why: Native Chat runs on the main thread; use the bounded async direct-layout
-  // lookup instead of blocking, then repeating, a recursive full-tree scan.
-  const history = await findGrokChatHistoryBySessionId(sessionsDir, sessionId)
-  return history
 }

@@ -46,7 +46,7 @@ describe('renderer crash diagnostics', () => {
         }
       }
     })
-    vi.doMock('../components/browser-pane/webview-registry', () => ({
+    vi.doMock('../components/browser-pane/host-guest/webview-registry', () => ({
       getBrowserWebviewMemoryProfile: () => ({
         browserWebviewCount: 4,
         registeredBrowserGuestCount: 3
@@ -78,11 +78,11 @@ describe('renderer crash diagnostics', () => {
       name: 'renderer_memory',
       data: {
         reason: 'startup',
+        rendererSurface: 'main',
         usedHeapMB: 32,
         totalHeapMB: 64,
         heapLimitMB: 512,
-        // Why: without this tag a reader cannot tell an exact heap number from a
-        // Blink-quantized one, which is what made earlier bundles unanalyzable.
+        // Tag exact versus Blink-quantized heap readings so bundles remain interpretable.
         heapSource: 'quantized',
         browserWebviews: 4,
         registeredBrowserGuests: 3
@@ -135,6 +135,55 @@ describe('renderer crash diagnostics', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(2)
     expect(recordBreadcrumbMock).not.toHaveBeenCalled()
+  })
+
+  it('includes delivered and queued long tasks once in each memory sample', () => {
+    let now = 0
+    let deliver = (_durations: number[]): void => {}
+    const pending: { duration: number }[] = []
+    const observe = vi.fn()
+    vi.stubGlobal('performance', { now: () => now })
+    vi.stubGlobal(
+      'PerformanceObserver',
+      class {
+        static supportedEntryTypes = ['longtask']
+        constructor(callback: (list: { getEntries: () => { duration: number }[] }) => void) {
+          deliver = (durations) =>
+            callback({ getEntries: () => durations.map((duration) => ({ duration })) })
+        }
+        observe = observe
+        disconnect = vi.fn()
+        takeRecords = () => pending.splice(0)
+      }
+    )
+    diagnostics.installRendererCrashDiagnostics()
+    diagnostics.installRendererCrashDiagnostics()
+    expect(observe).toHaveBeenCalledTimes(1)
+    deliver([75, 100])
+    pending.push({ duration: 125 })
+    now = 90_000
+    const sample = setIntervalMock.mock.calls[0][0]
+    sample()
+    expect(recordBreadcrumbMock).toHaveBeenLastCalledWith({
+      name: 'renderer_memory',
+      data: expect.objectContaining({
+        longTaskMs: 300,
+        longTaskCount: 3,
+        longestTaskMs: 125,
+        sampleWindowMs: 90_000
+      })
+    })
+    now += 60_000
+    sample()
+    expect(recordBreadcrumbMock).toHaveBeenLastCalledWith({
+      name: 'renderer_memory',
+      data: expect.objectContaining({
+        longTaskMs: 0,
+        longTaskCount: 0,
+        longestTaskMs: 0,
+        sampleWindowMs: 60_000
+      })
+    })
   })
 
   it('records application errors that only mention a ResizeObserver loop', () => {
@@ -260,8 +309,7 @@ describe('renderer crash diagnostics', () => {
 
       diagnostics.installRendererCrashDiagnostics()
 
-      // Why: performance.memory still says 32MB here. Reporting 101 proves the
-      // exact reading wins rather than merely being recorded alongside.
+      // Blink still reports 32MB; 101 proves exact data replaces it rather than merely accompanying it.
       expect(recordBreadcrumbMock).toHaveBeenCalledWith({
         name: 'renderer_memory',
         data: expect.objectContaining({
@@ -275,9 +323,7 @@ describe('renderer crash diagnostics', () => {
     })
 
     it('observes growth that performance.memory quantizes away', () => {
-      // Why: this is the whole point. Blink pins usedJSHeapSize to a bucket and
-      // caches it ~20min, so a real climb reports byte-identical values and a
-      // highwater threshold never fires. Exact stats must still cross it.
+      // Blink’s long-lived quantized bucket can hide heap growth; exact readings must still cross highwater thresholds.
       const quantized = (window.performance as unknown as { memory: Record<string, number> }).memory
       quantized.usedJSHeapSize = 32 * 1024 * 1024
       stubHeap(100)
@@ -306,8 +352,7 @@ describe('renderer crash diagnostics', () => {
     })
 
     it('omits the Blink field instead of emitting a junk value for it', () => {
-      // Why: `undefined * 1024` is NaN. The breadcrumb must carry no
-      // blinkAllocatedMB at all rather than a meaningless number.
+      // Missing source data must omit blinkAllocatedMB rather than emit NaN from undefined * 1024.
       readHeapStatistics.mockReturnValue({
         usedHeapKB: 77 * KB,
         totalHeapKB: 154 * KB,
@@ -345,6 +390,148 @@ describe('renderer crash diagnostics', () => {
         name: 'renderer_memory',
         data: expect.objectContaining({ usedHeapMB: 32, heapSource: 'quantized' })
       })
+    })
+  })
+
+  describe('process footprint outside the heap counters', () => {
+    const KB = 1024
+    let readHeapStatistics: ReturnType<typeof vi.fn>
+    let readProcessMemory: ReturnType<typeof vi.fn>
+
+    const stubFootprint = (privateMB: number): void => {
+      readProcessMemory.mockResolvedValue({ privateKB: privateMB * KB })
+    }
+
+    beforeEach(() => {
+      readHeapStatistics = vi.fn().mockReturnValue({
+        usedHeapKB: 150 * KB,
+        totalHeapKB: 305 * KB,
+        heapLimitKB: 4192 * KB,
+        mallocedKB: 1 * KB,
+        blinkAllocatedKB: 29 * KB
+      })
+      readProcessMemory = vi.fn().mockResolvedValue(null)
+      Object.assign(window.api.crashReports as unknown as Record<string, unknown>, {
+        readHeapStatistics,
+        readProcessMemory
+      })
+      vi.stubGlobal('document', {
+        getElementsByTagName: () => ({ length: 3064 }),
+        querySelectorAll: () => ({ length: 24 })
+      })
+    })
+
+    const flush = async (): Promise<void> => {
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+
+    const memoryCalls = (): { data: Record<string, unknown> }[] =>
+      recordBreadcrumbMock.mock.calls
+        .filter((call) => (call[0] as { name: string }).name === 'renderer_memory')
+        .map((call) => call[0] as { data: Record<string, unknown> })
+
+    const highwaterCalls = (): { data: Record<string, unknown> }[] =>
+      recordBreadcrumbMock.mock.calls
+        .filter((call) => (call[0] as { name: string }).name === 'renderer_memory_highwater')
+        .map((call) => call[0] as { data: Record<string, unknown> })
+
+    it('reports the private footprint and what it holds outside the heap counters', async () => {
+      // Model Windows crash 36048e26: private memory far exceeds V8 heap, exposing native xterm/atlas growth that heap counters miss.
+      stubFootprint(618)
+      diagnostics.installRendererCrashDiagnostics()
+      await flush()
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      tick()
+
+      const latest = memoryCalls().at(-1)!
+      expect(latest.data).toMatchObject({
+        usedHeapMB: 150,
+        privateMB: 618,
+        outsideHeapMB: 438
+      })
+    })
+
+    it('arms the leak census on footprint even when the heap ratio never trips', async () => {
+      // Low heap/limit ratio must not prevent the census that identifies native-memory growth.
+      stubFootprint(618)
+      diagnostics.installRendererCrashDiagnostics()
+      expect(highwaterCalls()).toHaveLength(0)
+      await flush()
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      tick()
+
+      expect(highwaterCalls()).toHaveLength(1)
+      expect(highwaterCalls()[0].data).toMatchObject({
+        thresholdPrivateMB: 600,
+        privateMB: 618,
+        terminalElements: 24,
+        domNodes: 3064
+      })
+      expect(highwaterCalls()[0].data).not.toHaveProperty('thresholdPct')
+    })
+
+    it('emits each footprint mark once and both when one sample clears them', async () => {
+      stubFootprint(618)
+      diagnostics.installRendererCrashDiagnostics()
+      await flush()
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      tick()
+      expect(highwaterCalls()).toHaveLength(1)
+
+      await flush()
+      tick()
+      expect(highwaterCalls()).toHaveLength(1)
+
+      stubFootprint(1200)
+      await flush()
+      tick()
+      await flush()
+      tick()
+      expect(highwaterCalls()).toHaveLength(2)
+      expect(highwaterCalls().at(-1)!.data).toMatchObject({ thresholdPrivateMB: 1000 })
+    })
+
+    it('keeps sampling when the shell has no footprint bridge at all', async () => {
+      ;(window.api.crashReports as unknown as Record<string, unknown>).readProcessMemory = undefined
+
+      expect(() => diagnostics.installRendererCrashDiagnostics()).not.toThrow()
+      await flush()
+      const latest = memoryCalls().at(-1)!
+      expect(latest.data).toMatchObject({ usedHeapMB: 150 })
+      expect(latest.data).not.toHaveProperty('privateMB')
+      expect(highwaterCalls()).toHaveLength(0)
+    })
+
+    it('does not let a rejected footprint read break the heap sample', async () => {
+      readProcessMemory.mockRejectedValue(new Error('bridge gone'))
+
+      diagnostics.installRendererCrashDiagnostics()
+      await flush()
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      expect(() => tick()).not.toThrow()
+      expect(memoryCalls().at(-1)!.data).toMatchObject({ usedHeapMB: 150 })
+    })
+
+    it('does not overlap footprint reads while the previous read is pending', async () => {
+      let resolveRead: (value: { privateKB: number } | null) => void = () => undefined
+      readProcessMemory.mockImplementation(
+        () =>
+          new Promise<{ privateKB: number } | null>((resolve) => {
+            resolveRead = resolve
+          })
+      )
+
+      diagnostics.installRendererCrashDiagnostics()
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      tick()
+      tick()
+      expect(readProcessMemory).toHaveBeenCalledTimes(1)
+
+      resolveRead({ privateKB: 618 * KB })
+      await flush()
+      tick()
+      expect(readProcessMemory).toHaveBeenCalledTimes(2)
     })
   })
 })

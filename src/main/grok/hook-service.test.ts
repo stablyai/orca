@@ -1,5 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -16,11 +28,93 @@ vi.mock('os', async () => {
 })
 
 import { getGrokToolEventMatcherForTests, GrokHookService } from './hook-service'
-import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
+import { buildWindowsGrokHookScript } from './windows-grok-hook-script'
+import {
+  POSIX_HOOK_JSON_STDIN_PRELUDE,
+  POSIX_HOOK_JSON_STDIN_READER
+} from '../agent-hooks/hook-stdin-contract'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
+
+// Bare cmd-safe paths and encoded fallback launchers both identify the managed Windows script.
+function registersManagedGrokScript(command: string): boolean {
+  return command.includes(GROK_SCRIPT_FILE_NAME) || WINDOWS_POWERSHELL_LAUNCHER.test(command)
+}
+
+type WindowsGrokHookRun = {
+  status: number | null
+  stderr: string
+  stdout: string
+  request?: { path: string; body: string }
+}
+
+function createWindowsGrokHookEnvironment(grokHome?: string): NodeJS.ProcessEnv {
+  const env = { ...process.env } as NodeJS.ProcessEnv
+  delete env.ORCA_AGENT_HOOK_ENDPOINT
+  if (grokHome === undefined) {
+    delete env.GROK_HOME
+  } else {
+    env.GROK_HOME = grokHome
+  }
+  env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
+  env.ORCA_PANE_KEY = 'pane-test'
+  return env
+}
+
+async function runWindowsGrokHook(
+  scriptPath: string,
+  env: NodeJS.ProcessEnv,
+  input: string
+): Promise<WindowsGrokHookRun> {
+  let request: WindowsGrokHookRun['request']
+  const server = createServer((incoming, response) => {
+    let body = ''
+    incoming.setEncoding('utf8')
+    incoming.on('data', (chunk: string) => {
+      body += chunk
+    })
+    incoming.on('end', () => {
+      request = { path: incoming.url ?? '', body }
+      response.writeHead(204).end()
+    })
+  })
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject)
+      resolve()
+    })
+  })
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Could not resolve Windows Grok hook test listener port')
+  }
+  env.ORCA_AGENT_HOOK_PORT = String(address.port)
+  try {
+    const result = await new Promise<Omit<WindowsGrokHookRun, 'request'>>((resolve, reject) => {
+      const child = spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', scriptPath], {
+        env,
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+      let stderr = ''
+      let stdout = ''
+      child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+        stderr += chunk
+      })
+      child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+        stdout += chunk
+      })
+      child.once('error', reject)
+      child.once('close', (status) => resolve({ status, stderr, stdout }))
+      child.stdin.end(input)
+    })
+    return { ...result, request }
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+}
 
 describe('GrokHookService', () => {
   let homeDir: string
@@ -34,6 +128,106 @@ describe('GrokHookService', () => {
     vi.clearAllMocks()
     rmSync(homeDir, { recursive: true, force: true })
   })
+
+  it('guards Windows GROK_HOME substring checks when empty (#9358)', () => {
+    const script = buildWindowsGrokHookScript()
+    expect(script).toContain('set "ORCA_GROK_HOME="')
+    expect(script).toContain('if not defined GROK_HOME goto :orca_grok_home_ready')
+    expect(script).toContain('%GROK_HOME:~4096,1%')
+    expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME:"=%"')
+    expect(script).toContain('%ORCA_GROK_HOME:~4096,1%')
+    expect(script).toContain(':orca_grok_home_ready')
+    expect(script).toContain('if not defined ORCA_GROK_HOME goto :orca_grok_home_ready')
+    expect(script).toContain('if "%ORCA_GROK_HOME:~-1%"=="\\"')
+    expect(script).toContain('if not "%GROK_HOME:~4096,1%"=="" goto :orca_grok_home_ready')
+    // Parenthesized blocks still expand percent variables before their guard executes.
+    expect(script).not.toMatch(/if defined GROK_HOME \(/)
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'generated grok-hook.cmd exits 0 when GROK_HOME is unset (#9358)',
+    async () => {
+      const scriptPath = join(homeDir, 'grok-hook-unset.cmd')
+      writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
+      // Delete rather than empty so cmd observes the undefined-variable path.
+      const result = await runWindowsGrokHook(
+        scriptPath,
+        createWindowsGrokHookEnvironment(),
+        '{"hook_event_name":"SessionStart"}'
+      )
+      expect(result.status, `stderr=${result.stderr}\nstdout=${result.stdout}`).toBe(0)
+      expect(`${result.stderr ?? ''}${result.stdout ?? ''}`).not.toMatch(
+        /syntax of the command is incorrect|命令语法不正确/i
+      )
+      expect(result.request?.path).toBe('/hook/grok')
+      const form = new URLSearchParams(result.request?.body)
+      expect(form.get('grokHome')).toBe('')
+      expect(form.get('payload')).toBe('{"hook_event_name":"SessionStart"}')
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'generated grok-hook.cmd exits 0 with trailing-backslash GROK_HOME (#9358)',
+    async () => {
+      const scriptPath = join(homeDir, 'grok-hook-slash.cmd')
+      writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
+      const trailing = `${join(homeDir, 'grok-home-with-slash')}\\`
+      const result = await runWindowsGrokHook(
+        scriptPath,
+        createWindowsGrokHookEnvironment(trailing),
+        '{"hook_event_name":"UserPromptSubmit"}'
+      )
+      expect(result.status, `stderr=${result.stderr}\nstdout=${result.stdout}`).toBe(0)
+      expect(`${result.stderr ?? ''}${result.stdout ?? ''}`).not.toMatch(
+        /syntax of the command is incorrect|命令语法不正确/i
+      )
+      expect(result.request?.path).toBe('/hook/grok')
+      const form = new URLSearchParams(result.request?.body)
+      expect(form.get('grokHome')).toBe(`${trailing}.`)
+      expect(form.get('payload')).toBe('{"hook_event_name":"UserPromptSubmit"}')
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'generated grok-hook.cmd exits 0 with an oversized GROK_HOME (#9358)',
+    async () => {
+      const scriptPath = join(homeDir, 'grok-hook-oversized.cmd')
+      writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
+      const result = await runWindowsGrokHook(
+        scriptPath,
+        createWindowsGrokHookEnvironment(`C:\\${'a'.repeat(9000)}`),
+        '{"hook_event_name":"UserPromptSubmit"}'
+      )
+      expect(result.status, `stderr=${result.stderr}\nstdout=${result.stdout}`).toBe(0)
+      expect(`${result.stderr ?? ''}${result.stdout ?? ''}`).not.toMatch(
+        /syntax of the command is incorrect|命令语法不正确/i
+      )
+      expect(result.request?.path).toBe('/hook/grok')
+      const form = new URLSearchParams(result.request?.body)
+      expect(form.get('grokHome')).toBe('')
+      expect(form.get('payload')).toBe('{"hook_event_name":"UserPromptSubmit"}')
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'omits a max-length trailing-backslash GROK_HOME after safe normalization (#9358)',
+    async () => {
+      const scriptPath = join(homeDir, 'grok-hook-max-trailing.cmd')
+      writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
+      const trailingAtLimit = `C:\\${'a'.repeat(4092)}\\`
+      expect(trailingAtLimit).toHaveLength(4096)
+      const result = await runWindowsGrokHook(
+        scriptPath,
+        createWindowsGrokHookEnvironment(trailingAtLimit),
+        '{"hook_event_name":"UserPromptSubmit"}'
+      )
+      expect(result.status, `stderr=${result.stderr}\nstdout=${result.stdout}`).toBe(0)
+      expect(result.request?.path).toBe('/hook/grok')
+      const form = new URLSearchParams(result.request?.body)
+      expect(form.get('grokHome')).toBe('')
+      expect(form.get('payload')).toBe('{"hook_event_name":"UserPromptSubmit"}')
+    }
+  )
 
   it('installs a dedicated global Grok hook config and managed script', () => {
     const status = new GrokHookService().install()
@@ -50,36 +244,37 @@ describe('GrokHookService', () => {
     expect(Object.keys(config.hooks).sort()).toEqual(
       [
         'Notification',
+        'PreToolUse',
         'PostToolUse',
         'PostToolUseFailure',
-        'PreToolUse',
         'SessionEnd',
         'SessionStart',
         'Stop',
+        'StopCancelled',
         'StopFailure',
         'UserPromptSubmit'
       ].sort()
     )
-    // Why: Grok matchers are real regexes; bare `*` does not match-all.
+    // PreToolUse is needed for in-flight tools and question waits.
     expect(config.hooks.PreToolUse[0].matcher).toBe('.*')
+    expect(registersManagedGrokScript(config.hooks.PreToolUse[0].hooks[0].command)).toBe(true)
+    // Grok uses real regex matchers; bare * is invalid.
     expect(config.hooks.PostToolUseFailure[0].matcher).toBe('.*')
     expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
-    // Why: StopFailure must not carry a tool matcher — lifecycle-only event.
+    expect(config.hooks.StopCancelled[0].matcher).toBeUndefined()
     expect(config.hooks.StopFailure[0].matcher).toBeUndefined()
     expect(config.hooks.Notification[0].matcher).toBeUndefined()
-    // Why: assert the shipped helper still matches what install wrote (regression
-    // guard if GROK_TOOL_EVENT_MATCHER drifts from install).
     expect(getGrokToolEventMatcherForTests()).toBe('.*')
     expect(getGrokToolEventMatcherForTests()).not.toBe('*')
     expect(new RegExp(getGrokToolEventMatcherForTests()).test('run_terminal_command')).toBe(true)
-    // Why: build the invalid pattern at runtime so static lint does not flag it.
+    // Construct invalid regex dynamically to avoid static lint rejection.
     const bareStar = ['*', ''].join('')
     expect(() => new RegExp(bareStar)).toThrow()
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
-      process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /grok-hook/
-    )
+    expect(registersManagedGrokScript(config.hooks.PostToolUse[0].hooks[0].command)).toBe(true)
     if (process.platform !== 'win32') {
-      expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
+      const command = config.hooks.PostToolUse[0].hooks[0].command
+      expect(command).toContain(join(homeDir, '.orca'))
+      expect(command).toMatch(/^if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
     }
 
     const script = readFileSync(
@@ -89,17 +284,17 @@ describe('GrokHookService', () => {
     expect(script).toContain('/hook/grok')
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-      expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
-      expect(script).toContain('%GROK_HOME:~4096,1%')
-      expect(script).toContain(
-        'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
-      )
+      expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME:"=%"')
       expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
     } else {
-      // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-      // on the curl command line (EDR oversized-command-line false positive).
-      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
-      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      // Stream payload to curl stdin; reader variables must be initialized before capture.
+      const prelude = POSIX_HOOK_JSON_STDIN_PRELUDE.join('\n')
+      expect(script).toContain(prelude)
+      expect(script.indexOf(prelude)).toBeLessThan(
+        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
+      )
+      expect(script).toContain(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
+      expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
       expect(script).toContain('--data-urlencode "payload@-"')
       expect(script).toContain('${#GROK_HOME}" -le 4096')
       expect(script).toContain('--data-urlencode "grokHome=${grok_home}"')
@@ -107,10 +302,7 @@ describe('GrokHookService', () => {
     }
   })
 
-  // Why: #6078 — a Windows user profile path with a space used to be written
-  // verbatim as the hook command, so the agent split it at the space. The
-  // managed command must use an encoded launcher so the path never appears raw
-  // on the cmd.exe command line.
+  // Profile-path spaces need the encoded fallback so Grok cannot split the managed path.
   it.skipIf(process.platform !== 'win32')(
     'wraps the managed hook command to survive spaces in the profile path (#6078)',
     () => {
@@ -145,7 +337,6 @@ describe('GrokHookService', () => {
       expect(readFileSync(join(grokHome, 'hooks', 'orca-status.json'), 'utf8')).toContain(
         'SessionStart'
       )
-      // Why: must not also write into the mocked ~/.grok when GROK_HOME wins.
       expect(() =>
         readFileSync(join(homeDir, '.grok', 'hooks', 'orca-status.json'), 'utf8')
       ).toThrow()
@@ -159,6 +350,153 @@ describe('GrokHookService', () => {
     }
   })
 
+  it('does not restore a user-cleared global hook config on the next launch', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const userClearedConfig = '{  "hooks" : {}  }\n'
+
+    expect(service.install().state).toBe('installed')
+    writeFileSync(configPath, userClearedConfig, 'utf8')
+
+    service.install()
+
+    expect(readFileSync(configPath, 'utf8')).toBe(userClearedConfig)
+  })
+
+  it('preserves a user-cleared config during session cleanup', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const userClearedConfig = '{  "hooks" : {}  }\n'
+
+    expect(service.install().state).toBe('installed')
+    writeFileSync(configPath, userClearedConfig, 'utf8')
+
+    expect(service.remove().state).toBe('not_installed')
+    expect(readFileSync(configPath, 'utf8')).toBe(userClearedConfig)
+  })
+
+  it('removes the empty managed config when hooks are disabled', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    service.install()
+    expect(service.remove().state).toBe('not_installed')
+    expect(() => readFileSync(configPath, 'utf8')).toThrow()
+  })
+
+  it('removes the managed config even when a non-hook key remains', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    const withSchema = JSON.parse(readFileSync(configPath, 'utf8')) as Record<string, unknown>
+    withSchema.$schema = 'https://grok.example/hooks.schema.json'
+    writeFileSync(configPath, `${JSON.stringify(withSchema, null, 2)}\n`, 'utf8')
+
+    expect(service.remove().state).toBe('not_installed')
+
+    expect(existsSync(configPath)).toBe(false)
+    expect(service.install().state).toBe('installed')
+  })
+
+  // Respect startup opt-out while allowing explicit re-enabling to override it.
+  it('leaves a user-cleared config alone on a startup install', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const userCleared = '{  "hooks" : {}  }\n'
+
+    expect(service.install().state).toBe('installed')
+    writeFileSync(configPath, userCleared, 'utf8')
+
+    service.install()
+
+    expect(readFileSync(configPath, 'utf8')).toBe(userCleared)
+  })
+
+  it('restores a user-cleared config when the user turns hooks back on', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const userCleared = '{  "hooks" : {}  }\n'
+
+    expect(service.install().state).toBe('installed')
+    writeFileSync(configPath, userCleared, 'utf8')
+
+    expect(service.install({ userInitiated: true }).state).toBe('installed')
+
+    expect(readFileSync(configPath, 'utf8')).not.toBe(userCleared)
+    expect(service.getStatus().managedHooksPresent).toBe(true)
+  })
+
+  // Strip managed entries through symlinks so user dotfile links stay connected.
+  it('writes through a symlinked config instead of destroying the link', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    mkdirSync(dirname(realConfig), { recursive: true })
+    renameSync(configPath, realConfig)
+    symlinkSync(realConfig, configPath)
+
+    await service.removeAsync()
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(realConfig)).toBe(true)
+    expect(service.getStatus().managedHooksPresent).toBe(false)
+  })
+
+  it('respects an empty user-managed symlink as an opt-out', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
+    const userCleared = '{"hooks":{}}\n'
+    mkdirSync(dirname(configPath), { recursive: true })
+    mkdirSync(dirname(realConfig), { recursive: true })
+    writeFileSync(realConfig, userCleared)
+    symlinkSync(realConfig, configPath)
+
+    expect(service.install().state).toBe('not_installed')
+    expect(readFileSync(realConfig, 'utf8')).toBe(userCleared)
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+  })
+
+  it('writes through a symlinked config on the sync remove path too', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    mkdirSync(dirname(realConfig), { recursive: true })
+    renameSync(configPath, realConfig)
+    symlinkSync(realConfig, configPath)
+
+    expect(service.remove().state).toBe('not_installed')
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(realConfig)).toBe(true)
+    expect(service.getStatus().managedHooksPresent).toBe(false)
+  })
+
+  // Identify Orca's prior emptying separately from a deliberate user opt-out after restart.
+  it('reinstalls into a symlinked config on the launch after a quit', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    mkdirSync(dirname(realConfig), { recursive: true })
+    renameSync(configPath, realConfig)
+    symlinkSync(realConfig, configPath)
+    await service.removeAsync()
+    expect(service.getStatus().managedHooksPresent).toBe(false)
+
+    expect(new GrokHookService().install().state).toBe('installed')
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(realConfig)).toBe(true)
+    expect(service.getStatus().managedHooksPresent).toBe(true)
+  })
+
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
     mkdirSync(dirname(configPath), { recursive: true })
@@ -167,7 +505,11 @@ describe('GrokHookService', () => {
       `${JSON.stringify(
         {
           hooks: {
-            Notification: [{ hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] }]
+            Notification: [
+              {
+                hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }]
+              }
+            ]
           }
         },
         null,
@@ -184,12 +526,6 @@ describe('GrokHookService', () => {
       definition.hooks.map((hook) => hook.command)
     )
     expect(commands).toContain('/usr/local/bin/user-hook')
-    expect(
-      commands.some((command) =>
-        process.platform === 'win32'
-          ? WINDOWS_POWERSHELL_LAUNCHER.test(command)
-          : command.includes(GROK_SCRIPT_FILE_NAME)
-      )
-    ).toBe(true)
+    expect(commands.some(registersManagedGrokScript)).toBe(true)
   })
 })

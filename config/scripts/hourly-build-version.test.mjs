@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { createHourlyBuildVersion, formatHourlyReleaseName } from './hourly-build-version.mjs'
+import {
+  createHourlyBuildVersion,
+  formatHourlyReleaseName,
+  getHourlyBuildIdentity,
+  nextHourlyBuildNumber
+} from './hourly-build-version.mjs'
 import { compareAppVersions } from '../../src/shared/app-version'
 
 describe('createHourlyBuildVersion', () => {
@@ -9,18 +14,11 @@ describe('createHourlyBuildVersion', () => {
     )
   })
 
-  // Why: main's package.json carries the in-flight RC tail. Keeping it would make
-  // every hourly semver-NEWER than the RC it was cut from (1.4.160-rc.3-hourly.X >
-  // 1.4.160-rc.3), so an ordinary RC-channel check would offer untested hourly
-  // builds to RC users. Dropping it parks hourlies below both rc.N and stable,
-  // reachable only by an explicit pinned jump.
+  // RC-tail hourlies outrank RC; drop tail so routine checks cannot offer untested builds over RC/stable.
   it('drops an in-flight rc tail so hourlies never outrank the rc series', () => {
     const version = createHourlyBuildVersion('1.4.160-rc.3', new Date('2026-07-28T14:00:00Z'))
     expect(version).toBe('1.4.160-hourly.202607281400')
     expect(compareAppVersions(version, '1.4.160-rc.3')).toBeLessThan(0)
-    expect(compareAppVersions('1.4.160-rc.3-hourly.202607281400', '1.4.160-rc.3')).toBeGreaterThan(
-      0
-    )
   })
 
   it('rejects invalid input', () => {
@@ -34,21 +32,17 @@ describe('formatHourlyReleaseName', () => {
     formatHourlyReleaseName('1.4.163-hourly.x', buildNumber, commit, new Date(iso))
 
   it('renders version, number, Pacific timestamp, and short sha', () => {
-    expect(name('2026-07-31T20:54:00Z')).toBe('1.4.163 • 01 • 07-31 13:54 • e698241')
+    expect(name('2026-07-31T20:54:00Z')).toBe('1.4.163 • 01 • Jul 31, 1:54PM • e698241')
   })
 
-  // Why both sides of DST: the tag's stamp is UTC and the title is Pacific, so
-  // the offset between them is not a constant. A test pinned to one season would
-  // pass all summer and start failing in November.
+  // Tag is UTC, title Pacific; test both DST offsets to catch seasonal failures.
   it('follows the Pacific offset across DST', () => {
-    expect(name('2026-01-15T02:30:00Z')).toBe('1.4.163 • 01 • 01-14 18:30 • e698241')
-    expect(name('2026-07-31T07:00:00Z')).toBe('1.4.163 • 01 • 07-31 00:00 • e698241')
+    expect(name('2026-01-15T02:30:00Z')).toBe('1.4.163 • 01 • Jan 14, 6:30PM • e698241')
+    expect(name('2026-07-31T07:00:00Z')).toBe('1.4.163 • 01 • Jul 31, 12:00AM • e698241')
   })
 
-  // Why: hour12: false renders midnight as "24" on some ICU builds, which would
-  // read as an hour that does not exist and sort oddly beside 00:xx.
-  it('renders midnight as 00, never 24', () => {
-    expect(name('2026-07-31T07:00:00Z')).toContain(' 00:00 ')
+  it('renders noon as 12', () => {
+    expect(name('2026-07-31T19:00:00Z')).toContain('12:00PM')
   })
 
   it('pads to two digits and grows past them', () => {
@@ -68,5 +62,72 @@ describe('formatHourlyReleaseName', () => {
     expect(() => formatHourlyReleaseName('1.4.163', 1, 'abcdefg', new Date('nope'))).toThrow(
       /invalid/
     )
+  })
+})
+
+describe('nextHourlyBuildNumber', () => {
+  const titles = [
+    '1.4.163 • 01 • Jul 31, 1:54PM • e698241',
+    '1.4.163 • 02 • Jul 31, 2:54PM • aaaaaaa',
+    '1.4.163 • 37 • Aug 01, 9:00AM • bbbbbbb'
+  ]
+
+  it('continues the series for the version being built', () => {
+    expect(nextHourlyBuildNumber('1.4.163', titles)).toBe(38)
+  })
+
+  // New patch starts at 01 instead of inheriting unrelated prior-patch build count.
+  it('restarts at 1 when the base version moves', () => {
+    expect(nextHourlyBuildNumber('1.4.164', titles)).toBe(1)
+    expect(
+      nextHourlyBuildNumber('1.4.164', [...titles, '1.4.164 • 01 • Aug 02, 8:00AM • ccccccc'])
+    ).toBe(2)
+  })
+
+  // Retention pruning shrinks count; max avoids reissuing numbers.
+  it('takes the highest number, not the count', () => {
+    expect(nextHourlyBuildNumber('1.4.163', ['1.4.163 • 09 • Jul 31, 1:54PM • e698241'])).toBe(10)
+  })
+
+  it('starts at 1 with no history at all', () => {
+    expect(nextHourlyBuildNumber('1.4.163')).toBe(1)
+    expect(nextHourlyBuildNumber('1.4.163', [])).toBe(1)
+  })
+
+  // Legacy raw-tag titles must not make 1.4.16 match 1.4.163’s series.
+  it('ignores titles that are not this version', () => {
+    expect(nextHourlyBuildNumber('1.4.16', ['1.4.163 • 37 • Aug 01, 9:00AM • bbbbbbb'])).toBe(1)
+    expect(nextHourlyBuildNumber('1.4.163', ['v1.4.163-hourly.202607311354', null, ''])).toBe(1)
+  })
+})
+
+describe('getHourlyBuildIdentity', () => {
+  // Deleted stable release must not reset hourlies below installed 1.4.203; retained/channel tags keep floor.
+  it('stays on the already-shipped hourly base after a buggy main release is unpublished', () => {
+    const identity = getHourlyBuildIdentity(new Date('2026-09-14T20:00:00Z'), {
+      packageVersion: '1.4.201',
+      publishedVersions: [
+        'v1.4.201',
+        'v1.4.202',
+        'v1.4.202-hourly.202609141912',
+        'v1.4.203-hourly.202609140417'
+      ],
+      releaseNames: [
+        '1.4.202 • 14 • Sep 14, 12:12PM • 875b86d',
+        '1.4.203 • 04 • Sep 13, 9:17PM • 2ce252f'
+      ]
+    })
+    expect(identity.version).toBe('1.4.203-hourly.202609142000')
+    expect(identity.buildNumber).toBe(5)
+  })
+
+  it('keeps a newer package version as the hourly base floor', () => {
+    const identity = getHourlyBuildIdentity(new Date('2026-09-14T20:00:00Z'), {
+      packageVersion: '1.4.214',
+      publishedVersions: ['v1.4.202', 'v1.4.203-hourly.202609140417'],
+      releaseNames: ['1.4.203 • 04 • Sep 13, 9:17PM • 2ce252f']
+    })
+    expect(identity.version).toBe('1.4.214-hourly.202609142000')
+    expect(identity.buildNumber).toBe(1)
   })
 })

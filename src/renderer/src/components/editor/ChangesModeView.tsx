@@ -1,18 +1,15 @@
 import React from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitDiffResult, GitStatusEntry } from '../../../../shared/types'
+import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { ConflictBanner } from './ConflictComponents'
 import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
 
 const DiffViewer = lazy(() => import('./DiffViewer'))
 
-// Why: Changes view mode renders an edit-mode tab as a HEAD-vs-working-tree
-// diff without creating a separate diff-tab object. The draft is the live
-// source on the modified side; onContentChange is the same callback as normal
-// edit mode so dirty tracking, autosave, and close-prompt plumbing all continue
-// to work unchanged. See reviews/changes-view-mode-plan.md.
+// Render HEAD against the live edit draft so existing dirty tracking, autosave and close prompts keep working without a separate diff tab.
 export function ChangesModeView({
   activeFile,
   dc,
@@ -60,16 +57,10 @@ export function ChangesModeView({
       </div>
     )
   }
-  // Why: Monaco renders an empty diff when the two sides match, which reads as
-  // a broken view. Surface an inline banner so the user knows Changes mode is
-  // active but there is simply nothing to diff right now.
+  // Matching sides render blank in Monaco; explain that Changes mode has no changes to show.
   const isDiffBodyPruned = dc.largeDiffRenderLimit?.limited === true
   const isIdentical = !isDiffBodyPruned && dc.originalContent === modifiedContent
-  // Why: after a terminal commit/pull/rebase, Changes mode refreshes the
-  // HEAD-side blob in React state, but Monaco can keep painting the previous
-  // diff if we reuse the same kept model identities. Rotate only the
-  // original-side model identity so Monaco rebuilds the stale HEAD snapshot
-  // without throwing away the modified-side undo history.
+  // Rotate only the HEAD model after commit/pull/rebase to refresh Monaco’s retained snapshot while preserving modified-side undo.
   const headContentSignature = getDiffContentSignature(dc.originalContent)
   const originalModelKey = `${diffViewStateKey}:original:${headContentSignature}`
   return (

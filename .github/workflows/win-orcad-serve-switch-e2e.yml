@@ -1,0 +1,106 @@
+name: Windows packaged orcad serve switch E2E
+
+# D7 packaged Windows proof: relocated desktop daemon survives orcad serve adoption and desktop reattach, with settings writes after data-root ACL. Run install only on disposable CI; unpackaged E2E cannot exercise relocation.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - 'src/main/daemon/**'
+      - '!src/main/daemon/**/*.test.ts'
+      - '!src/main/daemon/serialize-grid-roundtrip.ts'
+      - '!src/main/daemon/mock-descendant-sweep.ts'
+      - '!src/main/daemon/daemon-host-relocation.test-fixture.ts'
+      - '!src/main/daemon/daemon-endpoint-reachability-test-harness.ts'
+      # D7 packages production entries; the unit jobs own these test roots.
+      - 'src/main/orcad/**'
+      - '!src/main/orcad/**/*.test.ts'
+      - 'src/cli/runtime/**'
+      - '!src/cli/runtime/**/*.test.ts'
+      - 'src/shared/orcad-local-serve-selection.ts'
+      - 'tests/tools/win-update-e2e/**'
+      - '.github/workflows/win-orcad-serve-switch-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: win-orcad-serve-switch-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  serve-switch:
+    name: packaged Windows Electron/orcad serve switch (D7)
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: windows-2022
+    timeout-minutes: 75
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      ORCA_BACKGROUND_LAUNCH: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - uses: ./.github/actions/install-mobile-dependencies
+
+      - uses: ./.github/actions/prepare-windows-agent-hook
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+          no-cache: true
+
+      # Before the template exists: packaging verifies a present template for every target.
+      # Uncached: a src/**-keyed installer hit ~0.3% of runs while each 173 MB save evicted shared caches.
+      - name: Build Windows installer (unsigned)
+        shell: bash
+        env:
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          pnpm run build:desktop:ci
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+
+      # The win32-x64 template the harness drops into the install, which is where serve looks.
+      - uses: ./.github/actions/prepare-orcad-prebuilds
+        with:
+          resolve-windows-cache: 'true'
+          restore-windows-cache: 'true'
+      - uses: ./.github/actions/prepare-windows-cli-launcher
+        with:
+          arches: x64
+      - uses: ./.github/actions/build-mobile-web-bundle
+      - name: Build the win32-x64 orcad template
+        shell: bash
+        env:
+          ORCA_REUSE_PREPARED_WINDOWS_SECURITY: 'true'
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=node
+          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64 --reuse-prepared-runtime
+          node config/scripts/build-orcad-template.mjs --targets win32-x64
+
+      - name: Switch serve hosts on the installed app's profile
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          node tests/tools/win-update-e2e/serve-switch.mjs \
+            --installer dist/orca-windows-setup.exe \
+            --template out/orcad-template 2>&1 | tee artifacts/serve-switch.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload serve switch output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-orcad-serve-switch-output
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn

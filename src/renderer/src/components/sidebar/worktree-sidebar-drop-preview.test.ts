@@ -54,9 +54,7 @@ describe('computeWorktreeSidebarDropPreview', () => {
       draggedIds: ['parent']
     })
 
-    // Sibling slides up to 0 and the 282px-tall parent unit lands right after it,
-    // so the line marks 106 - 3. The old rule pointed at the sibling's stale
-    // bottom (391), a full lineage-height below where the card actually lands.
+    // The parent lands after the sibling at 106px; mark 103px rather than its old bottom at 391px.
     expect(preview).toMatchObject({
       dropIndex: 2,
       dropIndicatorY: 103
@@ -81,8 +79,7 @@ describe('computeWorktreeSidebarDropPreview', () => {
       draggingWorktreeId: 'b'
     })
 
-    // c/d/e slide up one slot, so the placeholder opens at 224 and the line marks
-    // 221 — not 277, which was one whole card height below the real gap.
+    // Rows slide upward to open a slot at 224px; mark 221px rather than the old 277px slot.
     expect(preview).toMatchObject({
       dropIndex: 5,
       dropIndicatorY: 221
@@ -119,8 +116,7 @@ describe('computeWorktreeSidebarDropPreview', () => {
   })
 
   it('marks the gap the row previews open, not the displaced card top', () => {
-    // One expanded agent card (404px) among collapsed ones: dragging 'a' below it
-    // is exactly the case where the old rule put the line a card-height off.
+    // An expanded 404px neighbor exposes card-height errors in insertion-line placement.
     const rects = [
       { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 116 },
       { worktreeId: 'b', groupIndex: 1, top: 122, bottom: 238 },
@@ -146,8 +142,6 @@ describe('computeWorktreeSidebarDropPreview', () => {
     expect(offsets.get('d')).toBe(-122)
     // d ends at 532..648, so a's slot opens at 654 and the line marks 651.
     expect(preview.dropIndicatorY).toBe(651)
-    // The old rule had no rect at this index and fell back to the pre-drag list
-    // bottom (773) — 122px below the gap the user could see opening.
   })
 
   it('resolves the same slot wherever a tall card is grabbed', () => {
@@ -173,6 +167,80 @@ describe('computeWorktreeSidebarDropPreview', () => {
     })
 
     expect(new Set(dropIndexes).size).toBe(1)
+  })
+
+  it('keeps a downward end drop stable when leading rows are virtualized', () => {
+    const groupIds = ['a', 'b', 'c', 'd', 'e', 'f']
+    const mountedRects = [
+      { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+      { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 },
+      { worktreeId: 'f', groupIndex: 5, top: 280, bottom: 330 }
+    ]
+    const input = {
+      pointerY: 320,
+      containerTop: 0,
+      scrollTop: 0,
+      rects: mountedRects,
+      groupIds,
+      draggedIds: ['a'],
+      draggingWorktreeId: 'a',
+      grab: { offsetY: 25, height: 50 }
+    }
+
+    const first = computeWorktreeSidebarDropPreview(input)!
+    const held = computeWorktreeSidebarDropPreview({
+      ...input,
+      anchor: { beforeWorktreeId: first.dropAnchorId, pointerY: 320, scrollTop: 0 }
+    })!
+
+    for (const preview of [first, held]) {
+      expect(preview).toMatchObject({
+        dropIndex: 6,
+        dropIndicatorY: 277,
+        dropAnchorId: null
+      })
+      expect(Array.from(preview.previewOffsetsByWorktreeId)).toEqual([
+        ['d', -56],
+        ['e', -56],
+        ['f', -56]
+      ])
+    }
+  })
+
+  it('uses the full group index when the dragged row is outside the mounted window', () => {
+    const preview = computeWorktreeSidebarDropPreview({
+      pointerY: 193,
+      containerTop: 0,
+      scrollTop: 0,
+      rects: [
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 },
+        { worktreeId: 'f', groupIndex: 5, top: 280, bottom: 330 }
+      ],
+      groupIds: ['a', 'b', 'c', 'd', 'e', 'f'],
+      draggedIds: ['e'],
+      draggingWorktreeId: 'e',
+      grab: { offsetY: 25, height: 50 }
+    })
+
+    expect(preview?.dropIndex).toBe(3)
+  })
+
+  it('preserves the virtual row gap when only one row remains mounted', () => {
+    const preview = computeWorktreeSidebarDropPreview({
+      pointerY: 305,
+      containerTop: 0,
+      scrollTop: 0,
+      rects: [{ worktreeId: 'f', groupIndex: 5, top: 280, bottom: 330 }],
+      groupIds: ['a', 'b', 'c', 'd', 'e', 'f'],
+      draggedIds: ['a'],
+      draggingWorktreeId: 'a',
+      fallbackGap: 6,
+      grab: { offsetY: 25, height: 50 }
+    })
+
+    expect(preview).toMatchObject({ dropIndex: 6, dropIndicatorY: 277 })
+    expect(Array.from(preview?.previewOffsetsByWorktreeId ?? [])).toEqual([['f', -56]])
   })
 })
 

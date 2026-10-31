@@ -1,12 +1,10 @@
-import type { GlobalSettings } from './types'
+import type { GlobalSettings } from './global-settings-types'
 
 export type TerminalColorSchemeMode = 'dark' | 'light'
 
 const MODE_2031_SCAN_TAIL_LIMIT = 128
 
-// Contour/Kitty "color-scheme update" protocol (DEC mode 2031 + CSI 997):
-// terminals push `CSI ?997;1n` for dark and `CSI ?997;2n` for light to
-// subscribed TUIs.
+// Contour/Kitty mode-2031 subscribers receive CSI ?997;1n for dark, ?997;2n for light.
 export function mode2031SequenceFor(mode: TerminalColorSchemeMode): string {
   return mode === 'dark' ? '\x1b[?997;1n' : '\x1b[?997;2n'
 }
@@ -24,10 +22,7 @@ export type Mode2031ScanResult = {
   unsubscribe: boolean
   finalState: 'subscribed' | 'unsubscribed' | null
   tail: string
-  /**
-   * The retained tail is a private-mode sequence still capable of resolving to
-   * 2031 once the next chunk arrives — so `finalState` is provisional, not final.
-   */
+  /** An incomplete private-mode tail can still resolve to 2031; finalState remains provisional. */
   tailMayResolveToMode2031: boolean
 }
 
@@ -156,11 +151,7 @@ function isIncompletePrivateModeParams(params: string): boolean {
   return /^[0-9;]*$/.test(params)
 }
 
-/**
- * Whether a retained (incomplete) private-mode tail could still turn out to be a
- * 2031 toggle. Lets the caller hold a provisional decision for one chunk instead
- * of answering a subscribe that the very next bytes withdraw (#9993).
- */
+/** Hold provisional decisions while the next bytes could withdraw a 2031 subscription (#9993). */
 function tailCouldStillBeMode2031(tail: string): boolean {
   // Any retained private-mode prefix can still append `;2031` before its final byte.
   return tail.length > 0

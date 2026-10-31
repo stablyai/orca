@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Badge } from '../ui/badge'
-import { Button } from '../ui/button'
 import { translate } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
+import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/utils'
-import type { MobileRelayStatus } from '../../../../shared/mobile-relay-status'
+import type {
+  MobileRelayStatus,
+  MobileRelayStatusDetail
+} from '../../../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import { MobilePairingPathOption } from './MobilePairingPathOption'
+import { MobileRelaySignInPanel } from './MobileRelaySignInPanel'
+import { relayClockSkewMessage } from '../mobile/relay-clock-skew-message'
 
 function relayStatusLabel(status: MobileRelayStatus): string {
   if (status === 'registered') {
@@ -36,76 +41,13 @@ function relayStatusLabel(status: MobileRelayStatus): string {
   )
 }
 
-type PathOptionProps = {
-  selected: boolean
-  onSelect: () => void
-  title: string
-  description: string
-  trailing?: ReactNode
-  tabIndex: number
-  disabled?: boolean
-  optionRef?: (el: HTMLDivElement | null) => void
-}
-
-// Why: this is a bespoke radio row rather than the canonical SettingsSegmentedControl
-// because each option needs a two-line title + description plus a trailing status
-// badge, which the single-line segmented pill cannot carry (STYLEGUIDE.md's
-// "real difference in role" carve-out). Arrow-key nav and roving tabindex below
-// keep it a conformant ARIA radiogroup.
-function PathOption({
-  selected,
-  onSelect,
-  title,
-  description,
-  trailing,
-  tabIndex,
-  disabled = false,
-  optionRef
-}: PathOptionProps): React.JSX.Element {
-  return (
-    <div
-      ref={optionRef}
-      role="radio"
-      tabIndex={tabIndex}
-      aria-checked={selected}
-      aria-disabled={disabled}
-      onClick={disabled ? undefined : onSelect}
-      onKeyDown={(event) => {
-        if (disabled) {
-          return
-        }
-        if (event.key === ' ' || event.key === 'Enter') {
-          event.preventDefault()
-          onSelect()
-        }
-      }}
-      className={cn(
-        'flex cursor-pointer items-start gap-3 px-3 py-2.5 outline-none transition-colors',
-        // Why: match SettingsFormControls focus ring so keyboard focus is visible
-        // even when the selected row already uses bg-accent/40.
-        'focus-visible:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        disabled && 'cursor-not-allowed opacity-60',
-        selected ? 'bg-accent/40' : 'hover:bg-accent/20'
-      )}
-    >
-      <span
-        className={cn(
-          'mt-0.5 flex size-3.5 shrink-0 items-center justify-center rounded-full border',
-          selected ? 'border-foreground bg-foreground' : 'border-muted-foreground/40'
-        )}
-        aria-hidden
-      >
-        {selected ? <span className="size-1.5 rounded-full bg-background" /> : null}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium leading-none">{title}</span>
-          {trailing}
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-      </div>
-    </div>
-  )
+// Show the landed Relay cell for support; the scheme offers no actionable detail.
+function relayCellLabel(cellUrl: string): string | null {
+  try {
+    return new URL(cellUrl).host || null
+  } catch {
+    return null
+  }
 }
 
 export function MobilePairingConnectionOptions({
@@ -123,59 +65,60 @@ export function MobilePairingConnectionOptions({
   relayMintRetrying?: boolean
 }): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connecting = useAppStore((state) => state.orcaProfileConnecting)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
-  const fetchAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
-  const [relayStatus, setRelayStatus] = useState<MobileRelayStatus>('offline')
+  const [relayStatus, setRelayStatus] = useState<MobileRelayStatusDetail>({ status: 'offline' })
   const signedIn = authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
-  // Why: an unconfigured build has no Relay endpoint to sign into, so a Sign in
-  // CTA would be dead. Treat that case as unavailable (matching the prior UI)
-  // and only offer Sign in when the build can actually reach Relay.
+  // Unconfigured builds have no Relay sign-in endpoint; mark unavailable instead of offering a dead CTA.
   const configured = authStatus?.configured !== false
   const needsSignIn = value === 'automatic' && !signedIn && configured
-  const relayUnavailable = value === 'automatic' && !signedIn && !configured
+  // Availability is a property of the build, not of the current selection.
+  const relayUnavailable = !signedIn && !configured
+  const relayDisabled = relayMintRetrying || relayUnavailable
   const optionRefs = useRef<Record<MobilePairingConnectionMode, HTMLDivElement | null>>({
     automatic: null,
     'local-only': null
   })
 
-  // Why: ARIA radiogroups move selection with the arrow keys; wrap between the
-  // two options and move focus so keyboard users get standard behavior.
+  // Wrap/focus radio arrow navigation, but leave nested Sign in controls’ arrows untouched.
   const handleArrowKeys = (event: React.KeyboardEvent): void => {
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
       return
     }
-    if (relayMintRetrying && value !== 'automatic') {
+    const target = event.target
+    if (!(target instanceof HTMLElement) || target.getAttribute('role') !== 'radio') {
+      return
+    }
+    if (relayDisabled && value !== 'automatic') {
       return
     }
     event.preventDefault()
     const next: MobilePairingConnectionMode =
-      relayMintRetrying || value === 'automatic' ? 'local-only' : 'automatic'
+      relayDisabled || value === 'automatic' ? 'local-only' : 'automatic'
     onChange(next)
     optionRefs.current[next]?.focus()
   }
 
-  useEffect(() => {
-    if (!authStatus) {
-      void fetchAuthStatus()
-    }
-  }, [authStatus, fetchAuthStatus])
+  const relayCell = relayStatus.cellUrl ? relayCellLabel(relayStatus.cellUrl) : null
+
+  useOrcaProfileAuthStatusRefresh()
 
   useEffect(() => {
     let receivedEvent = false
     let active = true
-    const unsubscribe = window.api.mobile.onRelayStatusChanged((status) => {
+    const apply = (detail: MobileRelayStatusDetail): void => {
+      setRelayStatus(detail)
+    }
+    const unsubscribe = window.api.mobile.onRelayStatusChanged((detail) => {
       receivedEvent = true
       if (active) {
-        setRelayStatus(status)
+        apply(detail)
       }
     })
     void window.api.mobile
       .getRelayStatus()
-      .then(({ status }) => {
+      .then((detail) => {
         if (active && !receivedEvent) {
-          setRelayStatus(status)
+          apply(detail)
         }
       })
       .catch(() => {})
@@ -196,10 +139,12 @@ export function MobilePairingConnectionOptions({
         onKeyDown={handleArrowKeys}
         className="overflow-hidden rounded-md border border-border"
       >
-        <PathOption
+        <MobilePairingPathOption
           selected={value === 'automatic'}
-          tabIndex={value === 'automatic' && !relayMintRetrying ? 0 : -1}
-          disabled={relayMintRetrying}
+          tabIndex={value === 'automatic' && !relayDisabled ? 0 : -1}
+          disabled={relayDisabled}
+          positionInSet={1}
+          setSize={2}
           optionRef={(el) => {
             optionRefs.current.automatic = el
           }}
@@ -208,12 +153,26 @@ export function MobilePairingConnectionOptions({
             'auto.components.settings.MobilePairingConnectionOptions.anywhereTitle',
             'Orca Relay'
           )}
-          description={translate(
-            'auto.components.settings.MobilePairingConnectionOptions.anywhereDescription',
-            'Phone can be on cellular or any Wi‑Fi. Sign-in required.'
-          )}
+          description={
+            relayUnavailable
+              ? translate(
+                  'auto.components.settings.MobilePairingConnectionOptions.relayUnavailable',
+                  'Orca Relay isn’t available in this build. Use LAN.'
+                )
+              : translate(
+                  'auto.components.settings.MobilePairingConnectionOptions.anywhereDescription',
+                  'Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.'
+                )
+          }
           trailing={
-            signedIn && value === 'automatic' ? (
+            relayUnavailable ? (
+              <Badge variant="outline" className="text-[11px]">
+                {translate(
+                  'auto.components.settings.MobilePairingConnectionOptions.unavailable',
+                  'Unavailable'
+                )}
+              </Badge>
+            ) : signedIn && value === 'automatic' ? (
               <Badge variant="outline" className="text-[11px]">
                 {relayMintRetrying
                   ? translate(
@@ -225,15 +184,38 @@ export function MobilePairingConnectionOptions({
                         'auto.components.settings.MobilePairingConnectionOptions.unavailable',
                         'Unavailable'
                       )
-                    : relayStatusLabel(relayStatus)}
+                    : relayStatusLabel(relayStatus.status)}
               </Badge>
             ) : null
           }
         />
+        {needsSignIn ? <MobileRelaySignInPanel reconnectRequired={reconnectRequired} /> : null}
+        {signedIn &&
+        value === 'automatic' &&
+        !relayMintFailed &&
+        relayStatus.clockOffsetMs !== undefined ? (
+          <p className="border-t border-border/60 px-3 py-2 text-xs text-destructive" role="alert">
+            {relayClockSkewMessage(relayStatus.clockOffsetMs)}
+          </p>
+        ) : null}
+        {value === 'automatic' && relayCell ? (
+          <p
+            className="border-t border-border/60 py-2 pl-10 pr-3 text-xs text-muted-foreground"
+            data-testid="relay-cell-line"
+          >
+            {translate(
+              'auto.components.settings.MobilePairingConnectionOptions.relayCell',
+              'Relay cell'
+            )}
+            {`: ${relayCell}`}
+          </p>
+        ) : null}
         <div className="border-t border-border" />
-        <PathOption
+        <MobilePairingPathOption
           selected={value === 'local-only'}
-          tabIndex={value === 'local-only' || relayMintRetrying ? 0 : -1}
+          tabIndex={value === 'local-only' || relayDisabled ? 0 : -1}
+          positionInSet={2}
+          setSize={2}
           optionRef={(el) => {
             optionRefs.current['local-only'] = el
           }}
@@ -244,64 +226,10 @@ export function MobilePairingConnectionOptions({
           )}
           description={translate(
             'auto.components.settings.MobilePairingConnectionOptions.localDescription',
-            'Phone must be on this Wi‑Fi or connected through Tailscale. No sign-in required.'
+            'Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.'
           )}
         />
       </div>
-
-      {needsSignIn ? (
-        <div
-          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
-          data-testid="anywhere-sign-in-panel"
-        >
-          <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.MobilePairingConnectionOptions.signInRequired',
-              'Sign in to use Orca Mobile Relay.'
-            )}
-          </p>
-          <Button
-            type="button"
-            size="sm"
-            disabled={connecting}
-            onClick={() => {
-              onChange('automatic')
-              void connect()
-            }}
-          >
-            {connecting ? <Loader2 className="animate-spin" /> : null}
-            {reconnectRequired
-              ? translate(
-                  'auto.components.settings.MobilePairingConnectionOptions.signInAgain',
-                  'Sign in again'
-                )
-              : translate(
-                  'auto.components.settings.MobilePairingConnectionOptions.signIn',
-                  'Sign in'
-                )}
-          </Button>
-        </div>
-      ) : null}
-
-      {relayUnavailable ? (
-        <div
-          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
-          data-testid="anywhere-unavailable-panel"
-        >
-          <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.MobilePairingConnectionOptions.relayUnavailable',
-              'Orca Relay isn’t available in this build. Use LAN.'
-            )}
-          </p>
-          <Badge variant="outline" className="shrink-0">
-            {translate(
-              'auto.components.settings.MobilePairingConnectionOptions.unavailable',
-              'Unavailable'
-            )}
-          </Badge>
-        </div>
-      ) : null}
     </div>
   )
 }

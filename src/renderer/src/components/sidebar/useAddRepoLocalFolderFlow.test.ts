@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
@@ -57,6 +58,7 @@ function makeRepo(path: string): Repo {
 describe('useAddRepoLocalFolderFlow', () => {
   const addRepoPath = vi.fn()
   const closeModal = vi.fn()
+  const openModal = vi.fn()
   const fetchWorktrees = vi.fn()
   const scanNestedRepos = vi.fn()
   const setActiveNestedScanId = vi.fn()
@@ -91,6 +93,7 @@ describe('useAddRepoLocalFolderFlow', () => {
       droppedLocalPath: '',
       activeRuntimeEnvironmentId: null,
       addRepoPath,
+      openModal,
       closeModal,
       fetchWorktrees,
       scanNestedRepos,
@@ -129,6 +132,38 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker', 'local')
   })
 
+  it('holds a single browsed folder the WSL host offer takes, and adds nothing', async () => {
+    const path = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+    pickFolders.mockResolvedValue([path])
+    const offerWslHost = vi.fn(() => true)
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+    const { handleBrowse } = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      openModal,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel,
+      offerWslHost
+    })
+
+    await handleBrowse()
+
+    expect(offerWslHost).toHaveBeenCalledWith(path, 'local_folder_picker')
+    expect(scanNestedRepos).not.toHaveBeenCalled()
+    expect(addRepoPath).not.toHaveBeenCalled()
+    expect(setIsAdding).toHaveBeenLastCalledWith(false)
+  })
+
   it('skips nested-review folders in a multi-folder add and continues with git folders', async () => {
     pickFolders.mockResolvedValue(['/projects/monorepo', '/projects/later'])
     scanNestedRepos.mockImplementationOnce(async (_path, _connectionId, controls) => {
@@ -146,6 +181,7 @@ describe('useAddRepoLocalFolderFlow', () => {
       droppedLocalPath: '',
       activeRuntimeEnvironmentId: null,
       addRepoPath,
+      openModal,
       closeModal,
       fetchWorktrees,
       scanNestedRepos,
@@ -183,6 +219,7 @@ describe('useAddRepoLocalFolderFlow', () => {
       droppedLocalPath: '',
       activeRuntimeEnvironmentId: null,
       addRepoPath,
+      openModal,
       closeModal,
       fetchWorktrees,
       scanNestedRepos,
@@ -204,7 +241,7 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(onGitRepoReady).toHaveBeenCalledWith('git', 'local_folder_picker', 'local')
   })
 
-  it('drops a local scan completion after host-scoped reset', async () => {
+  it('ignores stale scans and offers Open as Folder only for the current plain directory', async () => {
     pickFolders.mockResolvedValue(['/projects/stale'])
     let resolveScan!: (scan: NestedRepoScanResult) => void
     scanNestedRepos.mockReturnValueOnce(
@@ -218,6 +255,7 @@ describe('useAddRepoLocalFolderFlow', () => {
       droppedLocalPath: '',
       activeRuntimeEnvironmentId: null,
       addRepoPath,
+      openModal,
       closeModal,
       fetchWorktrees,
       scanNestedRepos,
@@ -237,5 +275,16 @@ describe('useAddRepoLocalFolderFlow', () => {
 
     expect(addRepoPath).not.toHaveBeenCalled()
     expect(onGitRepoReady).not.toHaveBeenCalled()
+    scanNestedRepos.mockResolvedValueOnce(
+      makeScan('/projects/notes', { selectedPathKind: 'non_git_folder' })
+    )
+    await flow.handleAddLocalPath('/projects/notes', 'local_folder_picker')
+    expect(openModal).toHaveBeenCalledWith('confirm-non-git-folder', {
+      folderPath: '/projects/notes'
+    })
+    expect(closeModal.mock.invocationCallOrder[0]).toBeLessThan(
+      openModal.mock.invocationCallOrder[0]
+    )
+    expect(addRepoPath).not.toHaveBeenCalled()
   })
 })

@@ -1,10 +1,11 @@
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 
 export type SshRepoReconciliation = {
-  repos: Repo[]
-  pendingReadoptions: SshRepoReadoption[]
+  repos: readonly Repo[]
+  pendingReadoptions: readonly SshRepoReadoption[]
 }
 
 function repoBelongsToTarget(repo: Repo, targetId: string): boolean {
@@ -14,15 +15,7 @@ function repoBelongsToTarget(repo: Repo, targetId: string): boolean {
   )
 }
 
-function repoOwnerKey(hostId: string, repoId: string): string {
-  return `${hostId}\0${repoId}`
-}
-
-/**
- * Drops old-host rows only when main reports the exact repo re-adoption and the
- * renderer has received the corresponding new-host row. Evidence stays pending
- * across the add-response/repos:changed race until that row arrives.
- */
+/** Prune old-host rows only with exact main re-adoption evidence and corresponding new-host row; keep evidence across add-response/repos:changed races. */
 export function reconcileReadoptedSshRepoRows(
   repos: readonly Repo[],
   readoptions: readonly SshRepoReadoption[]
@@ -32,7 +25,7 @@ export function reconcileReadoptedSshRepoRows(
   const directSshOwners = new Set(
     repos.flatMap((repo) =>
       repo.connectionId && repoBelongsToTarget(repo, repo.connectionId)
-        ? [repoOwnerKey(getRepoExecutionHostId(repo), repo.id)]
+        ? [getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))]
         : []
     )
   )
@@ -40,25 +33,32 @@ export function reconcileReadoptedSshRepoRows(
   for (const readoption of readoptions) {
     const pendingRepoIds: string[] = []
     for (const repoId of readoption.repoIds) {
-      const newOwner = repoOwnerKey(toSshExecutionHostId(readoption.newTargetId), repoId)
+      const newOwner = getRepoHostIdentityForParts(
+        repoId,
+        toSshExecutionHostId(readoption.newTargetId)
+      )
       const hasNewRow = directSshOwners.has(newOwner)
       if (!hasNewRow) {
         pendingRepoIds.push(repoId)
         continue
       }
-      prunedOwners.add(repoOwnerKey(toSshExecutionHostId(readoption.oldTargetId), repoId))
+      prunedOwners.add(
+        getRepoHostIdentityForParts(repoId, toSshExecutionHostId(readoption.oldTargetId))
+      )
     }
     if (pendingRepoIds.length > 0) {
       pendingReadoptions.push({ ...readoption, repoIds: pendingRepoIds })
     }
   }
 
+  // No-op pruning preserves upstream reconciliation’s array identity.
   if (prunedOwners.size === 0) {
-    return { repos: [...repos], pendingReadoptions }
+    return { repos, pendingReadoptions }
   }
   return {
     repos: repos.filter(
-      (repo) => !prunedOwners.has(repoOwnerKey(getRepoExecutionHostId(repo), repo.id))
+      (repo) =>
+        !prunedOwners.has(getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)))
     ),
     pendingReadoptions
   }
@@ -67,7 +67,7 @@ export function reconcileReadoptedSshRepoRows(
 export function mergeSshRepoReadoptions(
   pending: readonly SshRepoReadoption[],
   incoming: readonly SshRepoReadoption[]
-): SshRepoReadoption[] {
+): readonly SshRepoReadoption[] {
   const repoIdsByMigration = new Map<string, Set<string>>()
   for (const readoption of [...pending, ...incoming]) {
     const key = `${readoption.oldTargetId}\0${readoption.newTargetId}`

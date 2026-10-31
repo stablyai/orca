@@ -1,40 +1,52 @@
 // @vitest-environment happy-dom
 
-import { act, useState, type ComponentProps } from 'react'
+import { act, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import type { BundledSkillInstallResult } from '../../../../shared/bundled-skill-plan'
+import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
+import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
+import { doneResult, planOf, sharedEntry } from '../skills/bundled-skill-plan-fixtures.test-support'
 import { TooltipProvider } from '../ui/tooltip'
+import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 
-const INSTALL_COMMAND = 'npx skills add https://github.com/stablyai/orca --skill orca-cli --global'
-const UPDATE_COMMAND = 'npx skills update orca-cli --global'
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-const mocks = vi.hoisted(() => ({
-  clipboardWrite: vi.fn(),
-  terminalProps: [] as {
-    command: string
-    description: string
-    onTerminalExit?: () => void
-    onCommandFinished?: (bestEffortExitCode: number | null) => void
-  }[],
-  toastError: vi.fn(),
-  toastSuccess: vi.fn(),
-  skillsChanged: vi.fn(),
-  skillsRefreshed: vi.fn(),
-  freshnessRefresh: vi.fn(),
-  terminalInstanceCount: 0
+const mocks = vi.hoisted(() => {
+  const localTarget = (): BundledSkillTarget | null => ({ kind: 'local' })
+  return {
+    plan: vi.fn(),
+    execute: vi.fn(),
+    target: localTarget(),
+    agentRuntime: ((): ProjectAgentSkillRuntime | undefined => undefined)(),
+    installDisabledReason: ((): string | null => null)(),
+    terminalShellOverride: ((): string | undefined => undefined)(),
+    skillsChanged: vi.fn(),
+    skillsRefreshed: vi.fn(),
+    freshnessRefresh: vi.fn()
+  }
+})
+
+vi.mock('@/runtime/runtime-bundled-skills-client', () => ({
+  planBundledSkillsOnTarget: mocks.plan,
+  executeBundledSkillsOnTarget: mocks.execute
 }))
 
-vi.mock('sonner', () => ({
-  toast: {
-    error: mocks.toastError,
-    success: mocks.toastSuccess
-  }
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => ({
+    bundledSkillTarget: mocks.target,
+    agentRuntime: mocks.agentRuntime,
+    installDisabledReason: mocks.installDisabledReason,
+    terminalShellOverride: mocks.terminalShellOverride
+  })
+}))
+
+vi.mock('@/hooks/installed-agent-skill-discovery', () => ({
+  notifyInstalledAgentSkillsChanged: mocks.skillsChanged
 }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
-  notifyInstalledAgentSkillsChanged: mocks.skillsChanged,
   notifyInstalledAgentSkillsRefreshed: mocks.skillsRefreshed
 }))
 
@@ -43,35 +55,20 @@ vi.mock('@/hooks/useSkillFreshness', () => ({
 }))
 
 vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
-  OnboardingInlineCommandTerminal: (props: {
+  OnboardingInlineCommandTerminal: ({
+    command,
+    shellOverride
+  }: {
     command: string
-    description: string
-    onTerminalExit?: () => void
-    onCommandFinished?: (bestEffortExitCode: number | null) => void
-  }) => {
-    const [instance] = useState(() => {
-      mocks.terminalInstanceCount += 1
-      return mocks.terminalInstanceCount
-    })
-    mocks.terminalProps.push(props)
-    return (
-      <div
-        data-testid="inline-command-terminal"
-        data-command={props.command}
-        data-description={props.description}
-        data-instance={instance}
-      >
-        {props.command}
-      </div>
-    )
-  }
-}))
-
-vi.mock('../skills/SkillFreshnessStatusPill', () => ({
-  SkillFreshnessStatusPill: ({ skillName }: { skillName: string }) => (
-    <span data-testid="skill-freshness">{skillName}</span>
+    shellOverride?: string
+  }) => (
+    <pre data-testid="wsl-terminal" data-shell={shellOverride}>
+      {command}
+    </pre>
   )
 }))
+
+const WRITE_PLAN = planOf([sharedEntry('orca-cli', 'write')])
 
 function panelProps(
   overrides: Partial<ComponentProps<typeof AgentSkillSetupPanel>> = {}
@@ -79,10 +76,7 @@ function panelProps(
   return {
     title: 'CLI skill',
     description: 'Enables agents to use Orca workflows.',
-    command: INSTALL_COMMAND,
-    terminalTitle: 'CLI skill setup',
-    terminalAriaLabel: 'CLI skill install terminal',
-    terminalWorktreeId: 'settings-cli-skill-terminal',
+    skillNames: ['orca-cli'],
     installed: false,
     loading: false,
     error: null,
@@ -119,13 +113,6 @@ async function renderInteractivePanel(
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  await rerenderInteractivePanel(overrides)
-  return container
-}
-
-async function rerenderInteractivePanel(
-  overrides: Partial<ComponentProps<typeof AgentSkillSetupPanel>> = {}
-): Promise<void> {
   await act(async () => {
     root?.render(
       <TooltipProvider>
@@ -134,6 +121,7 @@ async function rerenderInteractivePanel(
     )
   })
   await act(async () => {})
+  return container
 }
 
 function findButton(label: string): HTMLButtonElement {
@@ -153,27 +141,18 @@ async function clickButton(label: string): Promise<void> {
 
 describe('AgentSkillSetupPanel', () => {
   beforeEach(() => {
-    mocks.clipboardWrite.mockReset()
-    mocks.clipboardWrite.mockResolvedValue(undefined)
-    mocks.terminalProps.length = 0
-    mocks.toastError.mockReset()
-    mocks.toastSuccess.mockReset()
+    mocks.plan.mockReset()
+    mocks.plan.mockResolvedValue({ kind: 'plan', plan: WRITE_PLAN })
+    mocks.execute.mockReset()
+    mocks.execute.mockResolvedValue(doneResult(WRITE_PLAN))
+    mocks.agentRuntime = undefined
+    mocks.installDisabledReason = null
+    mocks.terminalShellOverride = undefined
+    mocks.target = { kind: 'local' }
     mocks.skillsChanged.mockReset()
     mocks.skillsRefreshed.mockReset()
     mocks.freshnessRefresh.mockReset()
     mocks.freshnessRefresh.mockResolvedValue(undefined)
-    mocks.terminalInstanceCount = 0
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: {
-        cli: {
-          getInstallStatus: vi.fn()
-        },
-        ui: {
-          writeClipboardText: mocks.clipboardWrite
-        }
-      }
-    })
   })
 
   afterEach(async () => {
@@ -185,18 +164,31 @@ describe('AgentSkillSetupPanel', () => {
     root = null
     container?.remove()
     container = null
-    Reflect.deleteProperty(window, 'api')
   })
 
-  it('keeps the install action visible after the skill is detected', () => {
-    const html = renderPanel({ installed: true })
+  it('offers Update once installed only when the plan would change something', async () => {
+    mocks.plan.mockResolvedValue({
+      kind: 'plan',
+      plan: planOf([sharedEntry('orca-cli', 'update')])
+    })
+    await renderInteractivePanel({ installed: true })
 
-    expect(html).toContain('Installed')
-    expect(buttonLabels(html)).toContain('Update')
-    expect(buttonLabels(html)).toContain('Re-check')
+    expect(container?.textContent).toContain('Update available')
+    expect(findButton('Update')).toBeDefined()
+    expect(findButton('Re-check')).toBeDefined()
   })
 
-  it('surfaces skill freshness under hideHeader for guided setup hubs', () => {
+  it('shows only Re-check when the installed copy is already current', async () => {
+    mocks.plan.mockResolvedValue({ kind: 'plan', plan: planOf([sharedEntry('orca-cli', 'keep')]) })
+    await renderInteractivePanel({ installed: true })
+
+    const labels = Array.from(container?.querySelectorAll('button') ?? [], (button) =>
+      button.textContent?.trim()
+    )
+    expect(labels).toEqual(['Re-check'])
+  })
+
+  it('shows a checking verdict before the guided setup plan loads', () => {
     const html = renderPanel({
       installed: true,
       hideHeader: true,
@@ -204,8 +196,7 @@ describe('AgentSkillSetupPanel', () => {
       freshnessSkillName: 'orca-linear'
     })
 
-    expect(html).toContain('data-testid="skill-freshness"')
-    expect(html).toContain('orca-linear')
+    expect(html).toContain('Checking...')
     expect(html).not.toContain('CLI skill')
   })
 
@@ -216,49 +207,17 @@ describe('AgentSkillSetupPanel', () => {
     expect(html).not.toMatch(/<p class="text-\[13px\] leading-snug text-muted-foreground"><\/p>/)
   })
 
-  it('hides only re-check when installed re-checks are disabled', () => {
-    const html = renderPanel({ installed: true, showRecheckWhenInstalled: false })
+  it('hides only re-check when installed re-checks are disabled', async () => {
+    await renderInteractivePanel({ installed: true, showRecheckWhenInstalled: false })
 
-    expect(html).toContain('Installed')
-    expect(buttonLabels(html)).toContain('Update')
-    expect(buttonLabels(html)).not.toContain('Re-check')
-  })
-
-  it('keeps update copy until the installed panel checks CLI prerequisites', () => {
-    const html = renderPanel({
-      installed: true,
-      installLabel: 'Install CLI & Skill',
-      preInstallNotice: 'Install the Orca CLI before running agent skill setup.'
-    })
-
-    expect(html).toContain('Installed')
-    expect(buttonLabels(html)).toContain('Update')
-    expect(buttonLabels(html)).not.toContain('Install CLI &amp; Skill')
-  })
-
-  it('keeps the installed action label when CLI prerequisites are missing', async () => {
-    await renderInteractivePanel({
-      installed: true,
-      installedCommand: UPDATE_COMMAND,
-      installLabel: 'Install CLI & Skill',
-      preInstallNotice: 'Install the Orca CLI before running agent skill setup.',
-      getPrerequisiteStatus: vi.fn(
-        async () =>
-          ({
-            state: 'not_installed'
-          }) as Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
-      ),
-      isPrerequisiteAvailable: () => false
-    })
-
-    expect(findButton('Update').disabled).toBe(false)
-    expect(container?.textContent).not.toContain('Install CLI & Skill')
+    expect(findButton('Install')).toBeDefined()
+    expect(container?.textContent).not.toContain('Re-check')
   })
 
   it('can hide install after the skill is detected', () => {
     const html = renderPanel({ installed: true, showInstallWhenInstalled: false })
 
-    expect(html).toContain('Installed')
+    expect(html).toContain('Checking...')
     expect(buttonLabels(html)).not.toContain('Install')
     expect(buttonLabels(html)).toContain('Re-check')
   })
@@ -295,315 +254,297 @@ describe('AgentSkillSetupPanel', () => {
     expect(mocks.skillsChanged).not.toHaveBeenCalled()
   })
 
-  it('rechecks presence without invalidating local freshness when no local verdict exists', async () => {
+  it('plans the named skills on the active host, runs that plan, and rechecks', async () => {
     const onRecheck = vi.fn(async () => {})
-    await renderInteractivePanel({ onRecheck })
+    await renderInteractivePanel({ onRecheck, freshnessSkillName: 'orca-cli' })
+
     await clickButton('Install')
 
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onCommandFinished?.(0)
-      mocks.terminalProps.at(-1)?.onTerminalExit?.()
+    expect(mocks.plan).toHaveBeenCalledWith({ kind: 'local' }, { names: ['orca-cli'] })
+    expect(mocks.execute).toHaveBeenCalledWith({ kind: 'local' }, WRITE_PLAN.planDigest, {
+      names: ['orca-cli']
     })
-    await act(async () => {})
-
+    expect(container?.textContent).toContain('Installed')
+    expect(mocks.skillsChanged).toHaveBeenCalledOnce()
     expect(onRecheck).toHaveBeenCalledOnce()
-    expect(mocks.skillsRefreshed).toHaveBeenCalledOnce()
-    expect(mocks.skillsChanged).not.toHaveBeenCalled()
-    expect(mocks.freshnessRefresh).not.toHaveBeenCalled()
-  })
-
-  it('refreshes first-install freshness only after the terminal re-check finishes', async () => {
-    let finishRecheck: (() => void) | null = null
-    const recheck = new Promise<void>((resolve) => {
-      finishRecheck = resolve
-    })
-    const onRecheck = vi.fn(() => recheck)
-    await renderInteractivePanel({ freshnessSkillName: 'orca-cli', onRecheck })
-    await clickButton('Install')
-
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onTerminalExit?.()
-    })
-
-    expect(onRecheck).toHaveBeenCalledOnce()
-    expect(mocks.freshnessRefresh).not.toHaveBeenCalled()
-    expect(mocks.skillsRefreshed).not.toHaveBeenCalled()
-
-    await act(async () => {
-      finishRecheck?.()
-      await recheck
-    })
-
-    expect(mocks.skillsChanged).not.toHaveBeenCalled()
-    expect(mocks.skillsRefreshed).toHaveBeenCalledOnce()
     expect(mocks.freshnessRefresh).toHaveBeenCalledOnce()
   })
 
-  it('opens not-installed setup with the install command for preview, copy, and terminal', async () => {
-    await renderInteractivePanel({ installedCommand: UPDATE_COMMAND })
-
-    await clickButton('Install')
-
-    expect(container?.textContent).toContain(INSTALL_COMMAND)
-    expect(mocks.terminalProps.at(-1)).toMatchObject({
-      command: INSTALL_COMMAND,
-      description: 'Press Enter to run the command.'
-    })
-
-    await act(async () => {
-      container
-        ?.querySelector<HTMLButtonElement>('button[aria-label="Copy command"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(mocks.clipboardWrite).toHaveBeenCalledWith(INSTALL_COMMAND)
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Copied command.')
-  })
-
-  it('shows a visible pending state while CLI setup preflight is running', async () => {
-    let resolvePreflight: (() => void) | null = null
-    const preflight = new Promise<void>((resolve) => {
-      resolvePreflight = resolve
-    })
-
-    await renderInteractivePanel({
-      onBeforeOpenTerminal: () => preflight
-    })
-
-    await clickButton('Install')
-
-    expect(findButton('Preparing...').disabled).toBe(true)
-    expect(container?.textContent).toContain('Preparing setup terminal.')
-    expect(container?.textContent).not.toContain(INSTALL_COMMAND)
-
-    await act(async () => {
-      resolvePreflight?.()
-      await preflight
-    })
-    await act(async () => {})
-
-    expect(container?.textContent).toContain(INSTALL_COMMAND)
-    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: INSTALL_COMMAND })
-  })
-
-  it('opens installed setup with the installed command for preview, copy, and terminal', async () => {
-    await renderInteractivePanel({ installed: true, installedCommand: UPDATE_COMMAND })
-
-    await clickButton('Update')
-
-    expect(container?.textContent).toContain(UPDATE_COMMAND)
-    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: UPDATE_COMMAND })
-
-    await act(async () => {
-      container
-        ?.querySelector<HTMLButtonElement>('button[aria-label="Copy command"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(mocks.clipboardWrite).toHaveBeenCalledWith(UPDATE_COMMAND)
-  })
-
-  it('keeps an open terminal on the command captured when it opened', async () => {
-    await renderInteractivePanel({ installed: false, installedCommand: UPDATE_COMMAND })
-    await clickButton('Install')
-
-    await rerenderInteractivePanel({ installed: true, installedCommand: UPDATE_COMMAND })
-
-    expect(container?.textContent).toContain(INSTALL_COMMAND)
-    expect(container?.textContent).not.toContain(UPDATE_COMMAND)
-    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: INSTALL_COMMAND })
-  })
-
-  it('falls back to the install command for installed callers without installedCommand', async () => {
-    await renderInteractivePanel({ installed: true })
-
-    await clickButton('Update')
-
-    expect(container?.textContent).toContain(INSTALL_COMMAND)
-    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: INSTALL_COMMAND })
-  })
-
-  it('keeps a failed setup command visible with durable recovery', async () => {
-    const onRecheck = vi.fn()
-    await renderInteractivePanel({ onRecheck })
-    await clickButton('Install')
-    onRecheck.mockClear()
-
-    await act(async () => {
-      const onCommandFinished = mocks.terminalProps.at(-1)?.onCommandFinished
-      onCommandFinished?.(1)
-      onCommandFinished?.(0)
-    })
-
-    expect(container?.textContent).toContain(
-      'The setup command exited with code 1. This error will clear after a successful retry.'
-    )
-    expect(container?.textContent).toContain('Setup failed')
-    expect(container?.querySelector('[data-testid="inline-command-terminal"]')).not.toBeNull()
-    expect(findButton('Retry').disabled).toBe(false)
-    expect(onRecheck).toHaveBeenCalledTimes(1)
-  })
-
-  it('clears the failure notice when a later command succeeds', async () => {
+  it('plans the named skills for a paired host', async () => {
+    mocks.target = { kind: 'environment', environmentId: 'env-1' }
     await renderInteractivePanel()
+
     await clickButton('Install')
 
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
-    })
-    await clickButton('Retry')
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onCommandFinished?.(0)
-    })
-
-    expect(container?.textContent).not.toContain('exited with code')
-  })
-
-  it('keeps the failure verdict when a command finishes without an exit code', async () => {
-    await renderInteractivePanel()
-    await clickButton('Install')
-
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
-    })
-    await clickButton('Retry')
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onCommandFinished?.(null)
-    })
-
-    expect(container?.textContent).toContain(
-      'The setup command exited with code 1. This error will clear after a successful retry.'
+    expect(mocks.plan).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      { names: ['orca-cli'] }
     )
   })
 
-  it('retries a failed command in a fresh interactive terminal', async () => {
-    let finishRetryPreflight: (() => void) | null = null
-    const retryPreflight = new Promise<void>((resolve) => {
-      finishRetryPreflight = resolve
-    })
-    let preflightCount = 0
-    await renderInteractivePanel({
-      onBeforeOpenTerminal: () => {
-        preflightCount += 1
-        return preflightCount === 1 ? undefined : retryPreflight
-      }
-    })
+  it('shows progress while the install runs', async () => {
+    let finish: ((value: BundledSkillInstallResult) => void) | null = null
+    mocks.execute.mockReturnValue(
+      new Promise<BundledSkillInstallResult>((resolve) => {
+        finish = resolve
+      })
+    )
+    await renderInteractivePanel()
+
     await clickButton('Install')
-    const firstInstance = container
-      ?.querySelector('[data-testid="inline-command-terminal"]')
-      ?.getAttribute('data-instance')
+    expect(findButton('Installing...').disabled).toBe(true)
 
     await act(async () => {
-      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
+      finish?.(doneResult(WRITE_PLAN))
     })
-    await clickButton('Retry')
-    expect(container?.querySelector('[data-testid="inline-command-terminal"]')).toBeNull()
-
-    await act(async () => {
-      finishRetryPreflight?.()
-      await retryPreflight
-    })
-    await act(async () => {})
-
-    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: INSTALL_COMMAND })
-    expect(
-      container
-        ?.querySelector('[data-testid="inline-command-terminal"]')
-        ?.getAttribute('data-instance')
-    ).not.toBe(firstInstance)
-    expect(findButton('Retry').disabled).toBe(true)
+    expect(findButton('Install').disabled).toBe(false)
   })
 
-  it('keeps the command failure authoritative over presence discovery', async () => {
-    await renderInteractivePanel({ freshnessSkillName: 'orca-cli' })
-    await clickButton('Install')
-
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
-    })
-    await rerenderInteractivePanel({ installed: true, freshnessSkillName: 'orca-cli' })
-
-    expect(container?.textContent).toContain('Setup failed')
-    expect(container?.textContent).toContain('exited with code 1')
-    expect(container?.textContent).not.toContain('Installed')
-    expect(container?.querySelector('[data-testid="skill-freshness"]')).toBeNull()
-    expect(findButton('Retry').disabled).toBe(false)
-  })
-
-  it('keeps failed updates recoverable when installed re-check is hidden', async () => {
+  it('updates the installed name when it differs from the install name', async () => {
+    const plan = planOf([sharedEntry('linear-tickets', 'update')])
+    mocks.plan.mockResolvedValue({ kind: 'plan', plan })
+    mocks.execute.mockResolvedValue(doneResult(plan))
     await renderInteractivePanel({
       installed: true,
-      installedCommand: UPDATE_COMMAND,
-      showRecheckWhenInstalled: false
+      skillNames: ['orca-linear'],
+      installedSkillNames: ['linear-tickets']
     })
+
     await clickButton('Update')
 
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
+    expect(mocks.plan).toHaveBeenCalledWith({ kind: 'local' }, { names: ['linear-tickets'] })
+  })
+
+  it('offers Replace for an edited copy and replaces only that path', async () => {
+    const edited = planOf([
+      sharedEntry('orca-cli', 'leave', { reason: 'edited', replaceable: true })
+    ])
+    const replaced = planOf([sharedEntry('orca-cli', 'replace')])
+    mocks.plan.mockResolvedValue({ kind: 'plan', plan: edited })
+    await renderInteractivePanel({ installed: true })
+    expect(container?.textContent).not.toContain('Update')
+
+    mocks.plan.mockResolvedValue({ kind: 'plan', plan: replaced })
+    mocks.execute.mockResolvedValueOnce(doneResult(replaced))
+    await clickButton("Replace with Orca's copy")
+
+    const path = '/home/u/.agents/skills/orca-cli'
+    expect(mocks.plan).toHaveBeenCalledWith(
+      { kind: 'local' },
+      { names: ['orca-cli'], force: [path] }
+    )
+    expect(mocks.execute).toHaveBeenCalledWith({ kind: 'local' }, replaced.planDigest, {
+      names: ['orca-cli'],
+      force: [path]
     })
+    expect(container?.textContent).toContain('Replaced · Your copy was saved as a backup')
+  })
 
-    expect(container?.textContent).toContain('Setup failed')
-    expect(container?.textContent).toContain('exited with code 1')
-    expect(findButton('Retry').disabled).toBe(false)
+  it('says why an edited copy was left alone, without calling it a failure', async () => {
+    const plan = planOf([sharedEntry('orca-cli', 'leave', { reason: 'edited', replaceable: true })])
+    mocks.plan.mockResolvedValue({ kind: 'plan', plan })
+    mocks.execute.mockResolvedValueOnce(doneResult(plan))
+    await renderInteractivePanel()
 
+    await clickButton("Replace with Orca's copy")
+
+    expect(container?.textContent).toContain(
+      'Installed · Update skipped in Shared folder: Skill edited outside Orca'
+    )
+    expect(container?.textContent).not.toContain('Needs attention')
+  })
+
+  it('reports a run that found the disk changed as needing attention, and retries it', async () => {
+    mocks.execute.mockResolvedValueOnce({
+      scope: 'global',
+      skills: [{ name: 'orca-cli', status: 'changed', ops: [] }]
+    })
+    await renderInteractivePanel()
+
+    await clickButton('Install')
+
+    expect(container?.textContent).toContain('Needs attention')
     await clickButton('Retry')
-    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: UPDATE_COMMAND })
+    expect(mocks.execute).toHaveBeenCalledTimes(2)
+    expect(container?.textContent).not.toContain('Needs attention')
   })
 
-  it('refreshes shared skill state after the direct completion re-check', async () => {
-    const calls: string[] = []
-    mocks.skillsRefreshed.mockImplementation(() => calls.push('presence'))
-    mocks.freshnessRefresh.mockImplementation(async () => {
-      calls.push('freshness')
-    })
-    const onRecheck = vi.fn(() => {
-      calls.push('recheck')
-    })
-    await renderInteractivePanel({ freshnessSkillName: 'orca-cli', onRecheck })
-    await clickButton('Install')
-    calls.length = 0
+  it('reports a known thrown install error in plain words', async () => {
+    await renderInteractivePanel()
+    mocks.plan.mockRejectedValue(
+      new Error(
+        "Error invoking remote method 'skills:bundledPlan': Error: skill-install-wsl-unavailable"
+      )
+    )
 
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onCommandFinished?.(0)
-    })
-
-    expect(calls).toEqual(['recheck', 'presence', 'freshness'])
-  })
-
-  it('rechecks once when command completion is followed by terminal exit', async () => {
-    const onRecheck = vi.fn()
-    await renderInteractivePanel({ freshnessSkillName: 'orca-cli', onRecheck })
     await clickButton('Install')
 
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onCommandFinished?.(0)
-    })
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onTerminalExit?.()
-    })
-    await act(async () => {})
-
-    expect(onRecheck).toHaveBeenCalledOnce()
-    expect(mocks.skillsRefreshed).toHaveBeenCalledOnce()
-    expect(mocks.freshnessRefresh).toHaveBeenCalledOnce()
+    expect(container?.textContent).toContain(
+      'WSL is not available on this machine, so Orca could not install the skills there.'
+    )
+    expect(container?.textContent).not.toContain('Error invoking remote method')
   })
 
-  it('re-enables Install after the setup shell exits so a failed attempt can retry', async () => {
+  it('names an unknown install error code after the plain failure', async () => {
+    mocks.execute.mockRejectedValueOnce(new Error('skill-install-journal-invalid'))
+    await renderInteractivePanel()
+
+    await clickButton('Install')
+
+    expect(container?.textContent).toContain(
+      'Orca could not install the skills. (skill-install-journal-invalid)'
+    )
+  })
+
+  it('shows Retry in place of Install after a failure', async () => {
+    mocks.execute.mockRejectedValue(new Error('skill-install-home-unavailable'))
+    await renderInteractivePanel()
+
+    await clickButton('Install')
+
+    const labels = Array.from(container?.querySelectorAll('button') ?? [], (button) =>
+      button.textContent?.trim()
+    )
+    expect(labels).toContain('Retry')
+    expect(labels).not.toContain('Install')
+  })
+
+  it('keeps each host its own result', async () => {
+    mocks.execute.mockRejectedValue(new Error('skill-install-home-unavailable'))
     await renderInteractivePanel()
     await clickButton('Install')
+    expect(container?.textContent).toContain('Needs attention')
+
+    mocks.target = { kind: 'environment', environmentId: 'env-2' }
+    await act(async () => {
+      root?.render(
+        <TooltipProvider>
+          <AgentSkillSetupPanel {...panelProps()} />
+        </TooltipProvider>
+      )
+    })
+    expect(container?.textContent).not.toContain('Needs attention')
+    expect(findButton('Install').disabled).toBe(false)
+
+    mocks.target = { kind: 'local' }
+    await act(async () => {
+      root?.render(
+        <TooltipProvider>
+          <AgentSkillSetupPanel {...panelProps()} />
+        </TooltipProvider>
+      )
+    })
+    expect(container?.textContent).toContain('Needs attention')
+  })
+
+  it('keeps Install disabled while the host that runs the agents is unknown', async () => {
+    mocks.target = null
+    await renderInteractivePanel()
 
     expect(findButton('Install').disabled).toBe(true)
+    expect(container?.textContent).toContain(
+      "Orca can't install skills on this workspace's machine yet."
+    )
+  })
 
-    await act(async () => {
-      mocks.terminalProps.at(-1)?.onTerminalExit?.()
+  it('does not install when the caller cancels before install', async () => {
+    await renderInteractivePanel({
+      onBeforeInstall: async () => {
+        throw new Error('cancelled')
+      }
     })
-
-    expect(findButton('Install').disabled).toBe(false)
-    expect(container?.querySelector('[data-testid="inline-command-terminal"]')).toBeNull()
 
     await clickButton('Install')
 
+    expect(mocks.execute).not.toHaveBeenCalled()
+    expect(mocks.plan).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks to connect an SSH host no server serves yet, writing nothing here', async () => {
+    mocks.target = { kind: 'ssh', targetId: 'box' }
+    mocks.plan.mockResolvedValue({ kind: 'unsupported', reason: 'connect-host' })
+    await renderInteractivePanel()
+
+    expect(container?.textContent).toContain('Connect to this SSH host to install its skills.')
+    expect(buttonLabels(container?.innerHTML ?? '')).not.toContain('Install')
+    expect(mocks.execute).not.toHaveBeenCalled()
+  })
+
+  it('plans and installs on an explicit surface target even when the active project is WSL', async () => {
+    mocks.target = null
+    mocks.agentRuntime = { runtime: 'wsl', wslDistro: 'Debian', label: 'WSL Debian' }
+    const target = { kind: 'environment', environmentId: 'selected-host' } as const
+    await renderInteractivePanel({ target, installed: true })
+    expect(mocks.plan).toHaveBeenCalledWith(target, { names: ['orca-cli'] })
+    await clickButton('Install')
+    expect(mocks.execute).toHaveBeenCalledWith(target, WRITE_PLAN.planDigest, {
+      names: ['orca-cli']
+    })
+    expect(container?.querySelector('[data-testid="wsl-terminal"]')).toBeNull()
+  })
+
+  it('does not infer WSL from an explicitly unresolved surface target', async () => {
+    mocks.agentRuntime = { runtime: 'wsl', wslDistro: 'Debian', label: 'WSL Debian' }
+    await renderInteractivePanel({ target: null })
     expect(findButton('Install').disabled).toBe(true)
-    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: INSTALL_COMMAND })
+    expect(mocks.plan).not.toHaveBeenCalled()
+  })
+
+  it('keeps the main npx command in a legacy WSL terminal without invoking the bundled installer', async () => {
+    mocks.target = null
+    mocks.agentRuntime = { runtime: 'wsl', wslDistro: 'Debian', label: 'WSL Debian' }
+    await renderInteractivePanel()
+    await clickButton('Install')
+    expect(container?.querySelector('[data-testid="wsl-terminal"]')?.textContent).toBe(
+      `env LC_ALL=C npx skills@1.7.2 add https://github.com/stablyai/orca/tree/${'0'.repeat(40)} --skill orca-cli --global`
+    )
+    expect(mocks.plan).not.toHaveBeenCalled()
+    expect(mocks.execute).not.toHaveBeenCalled()
+  })
+
+  it('uses the selected WSL runtime and shell even when another project needs repair', async () => {
+    mocks.target = null
+    mocks.agentRuntime = { runtime: 'wsl', wslDistro: 'Debian', label: 'WSL Debian' }
+    mocks.installDisabledReason = 'Debian is missing'
+    mocks.terminalShellOverride = 'wsl.exe'
+    await renderInteractivePanel({
+      target: null,
+      terminalRuntime: { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' }
+    })
+    expect(findButton('Install').disabled).toBe(false)
+    await clickButton('Install')
+    expect(
+      container?.querySelector('[data-testid="wsl-terminal"]')?.getAttribute('data-shell')
+    ).toBe('powershell.exe')
+    expect(mocks.plan).not.toHaveBeenCalled()
+  })
+
+  it('keeps the repair gate when setup targets the active project', async () => {
+    mocks.target = null
+    mocks.agentRuntime = { runtime: 'wsl', wslDistro: 'Debian', label: 'WSL Debian' }
+    mocks.installDisabledReason = 'Debian is missing'
+    await renderInteractivePanel()
+    expect(findButton('Install').disabled).toBe(true)
+  })
+
+  it('honors the selected WSL surface disabled state', async () => {
+    await renderInteractivePanel({
+      target: null,
+      terminalRuntime: { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' },
+      installDisabled: true
+    })
+    expect(findButton('Install').disabled).toBe(true)
+  })
+
+  it('asks for a newer Orca on a server without the installer, writing nothing here', async () => {
+    mocks.plan.mockResolvedValue({ kind: 'unsupported', reason: 'update-server' })
+    mocks.target = { kind: 'environment', environmentId: 'old' }
+    const onRecheck = vi.fn(async () => {})
+    await renderInteractivePanel({ onRecheck })
+
+    expect(container?.textContent).toContain('Update Orca on the server to install its skills.')
+    expect(buttonLabels(container?.innerHTML ?? '')).not.toContain('Install')
+    expect(mocks.execute).not.toHaveBeenCalled()
+    expect(onRecheck).not.toHaveBeenCalled()
   })
 })

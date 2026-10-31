@@ -1,16 +1,8 @@
-import { execFile } from 'node:child_process'
-import {
-  accessSync,
-  chmodSync,
-  constants,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync
-} from 'node:fs'
-import { app } from 'electron'
+import { runProcess } from '@orca/process-host'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { platform, tmpdir } from 'node:os'
-import { delimiter, dirname, join } from 'node:path'
+import { delimiter, join } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { EmulatorError } from './emulator-errors'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
 
@@ -68,7 +60,6 @@ function getServeSimEnv(executable: ServeSimExecutable): NodeJS.ProcessEnv {
   return env
 }
 
-// Cached per process: materialization is a one-time copy; later calls only stat.
 let materializedServeSimPackageDir: string | null | undefined
 
 function resolveMaterializedServeSimPackageDir(bundledPackageDir: string): string | null {
@@ -77,8 +68,8 @@ function resolveMaterializedServeSimPackageDir(bundledPackageDir: string): strin
   }
   materializedServeSimPackageDir = materializeServeSimRuntime({
     bundledPackageDir,
-    targetRootDir: join(app.getPath('userData'), 'serve-sim-runtime'),
-    version: app.getVersion()
+    targetRootDir: join(getAppEnvironment().getPath('userData'), 'serve-sim-runtime'),
+    version: getAppEnvironment().getVersion()
   })
   if (materializedServeSimPackageDir === null) {
     console.warn(
@@ -93,17 +84,20 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
   const bundledResourcesPath =
     process.resourcesPath ??
     (process.platform === 'darwin'
-      ? join(app.getPath('exe'), '..', '..', 'Resources')
-      : join(app.getPath('exe'), '..', 'resources'))
-  const bundled = join(bundledResourcesPath, 'serve-sim', 'dist', 'serve-sim.js')
-  if (existsSync(bundled)) {
+      ? join(getAppEnvironment().getPath('exe'), '..', '..', 'Resources')
+      : join(getAppEnvironment().getPath('exe'), '..', 'resources'))
+  // Prefer the legacy Resources/serve-sim path for already-installed bundles.
+  for (const bundledPackageDir of [
+    join(bundledResourcesPath, 'serve-sim'),
+    join(bundledResourcesPath, 'node_modules', 'serve-sim')
+  ]) {
+    const bundledEntry = join(bundledPackageDir, 'dist', 'serve-sim.js')
+    if (!existsSync(bundledEntry)) {
+      continue
+    }
     if (process.platform === 'darwin') {
-      // Why: the bundled camera dylib is signed but has no Gatekeeper ticket
-      // (iOS-simulator arch), so injecting it from the quarantined app bundle
-      // can trip syspolicyd; run serve-sim from an unquarantined copy instead.
-      const materializedDir = resolveMaterializedServeSimPackageDir(
-        join(bundledResourcesPath, 'serve-sim')
-      )
+      // Materialize an unquarantined copy so Gatekeeper accepts the injected simulator dylib.
+      const materializedDir = resolveMaterializedServeSimPackageDir(bundledPackageDir)
       if (materializedDir) {
         return {
           command: process.execPath,
@@ -112,29 +106,21 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
         }
       }
     }
-    return { command: process.execPath, baseArgs: [bundled], usesElectronAsNode: true }
+    return { command: process.execPath, baseArgs: [bundledEntry], usesElectronAsNode: true }
   }
 
-  const nodeModulesEntry = join(
-    app.getAppPath(),
-    'node_modules',
-    'serve-sim',
-    'dist',
-    'serve-sim.js'
-  )
+  const nodeModulesPackageDir = join(getAppEnvironment().getAppPath(), 'node_modules', 'serve-sim')
+  const nodeModulesEntry = join(nodeModulesPackageDir, 'dist', 'serve-sim.js')
   if (existsSync(nodeModulesEntry)) {
-    const helperBin = join(dirname(nodeModulesEntry), '..', 'bin', 'serve-sim-bin')
-    if (existsSync(helperBin) && process.platform !== 'win32') {
-      try {
-        accessSync(helperBin, constants.X_OK)
-      } catch {
-        chmodSync(helperBin, 0o755)
-      }
-    }
     return { command: process.execPath, baseArgs: [nodeModulesEntry], usesElectronAsNode: true }
   }
 
   return { command: 'serve-sim', baseArgs: [], usesElectronAsNode: false }
+}
+
+// Why: `--kill [device]` has an optional value; a detached udid is dropped and serve-sim kills every stream.
+export function serveSimKillArgs(udid: string): string[] {
+  return [`--kill=${udid}`, '-q']
 }
 
 export function parseServeSimCommandArgs(input: string): string[] {
@@ -196,37 +182,37 @@ export async function execServeSimCommand(
     finalArgs.push('-q')
   }
 
-  return new Promise((resolve, reject) => {
-    execFile(
-      executable.command,
-      [...executable.baseArgs, ...finalArgs],
-      { timeout, maxBuffer: 10 * 1024 * 1024, env: getServeSimEnv(executable) },
-      (error, stdout, stderr) => {
-        if (error) {
-          const message =
-            stdout.toString() || stderr.toString() || error.message || 'serve-sim command failed'
-          if (/no serve-sim server|not running/i.test(message)) {
-            reject(
-              new EmulatorError(
-                'emulator_no_active',
-                'No active emulator for this worktree — use orca emulator list/attach or open the pane'
-              )
-            )
-            return
-          }
-          reject(new EmulatorError('emulator_error', message))
-          return
-        }
-        if (options?.json) {
-          try {
-            resolve(JSON.parse(stdout.toString()))
-          } catch {
-            resolve(stdout.toString().trim())
-          }
-          return
-        }
-        resolve(stdout.toString().trim())
-      }
+  let result
+  try {
+    result = await runProcess({
+      program: executable.command,
+      args: [...executable.baseArgs, ...finalArgs],
+      env: getServeSimEnv(executable),
+      maxOutputBytes: 10 * 1024 * 1024,
+      timeoutMs: timeout
+    })
+  } catch (error) {
+    throw new EmulatorError(
+      'emulator_error',
+      error instanceof Error ? error.message : 'serve-sim command failed'
     )
-  })
+  }
+  if (result.code !== 0 || result.timedOut) {
+    const message = result.stdout || result.stderr || 'serve-sim command failed'
+    if (/no serve-sim server|not running/i.test(message)) {
+      throw new EmulatorError(
+        'emulator_no_active',
+        'No active emulator for this worktree — use orca emulator list/attach or open the pane'
+      )
+    }
+    throw new EmulatorError('emulator_error', message)
+  }
+  if (options?.json) {
+    try {
+      return JSON.parse(result.stdout)
+    } catch {
+      return result.stdout.trim()
+    }
+  }
+  return result.stdout.trim()
 }

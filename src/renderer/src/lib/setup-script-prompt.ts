@@ -1,9 +1,12 @@
 import { getDefaultRepoHookSettings } from '../../../shared/constants'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
-import type { Repo, RepoHookSettings } from '../../../shared/types'
+import type { RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
+import type { Repo } from '../../../shared/repo-types'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
-import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-client'
+import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-result'
+import { hasEffectiveSetupCommand } from './setup-script-status'
+import { translate } from '@/i18n/i18n'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'
 
@@ -19,13 +22,24 @@ export type SetupScriptPromptInspection =
       status: 'error'
       repoId: string
     }
-  // Why: a forbidden (mobile-scope) failure is permanent, not transient — the
-  // card must not offer a retry that re-fires repo.hooksCheck on every focus.
-  // The global scope-mismatch banner already explains the cause.
+  // Mobile-scope forbiddance is permanent; the global banner explains it, and retry-on-focus would repeatedly call hooksCheck.
   | {
       status: 'forbidden'
       repoId: string
     }
+  // The repo's WSL distro is stopped: nothing to say until it runs, and a Retry could not succeed.
+  | {
+      status: 'distro-stopped'
+      repoId: string
+    }
+
+/**
+ * States the card shows nothing for: mobile-scope forbiddance (the global banner explains it) and a
+ * stopped WSL distro (focus re-inspects, so the card returns once it runs; a Retry could not succeed).
+ */
+export function isSilentSetupScriptPromptState(state: { status: string }): boolean {
+  return state.status === 'forbidden' || state.status === 'distro-stopped'
+}
 
 export async function inspectSetupScriptPromptState({
   repo,
@@ -39,7 +53,9 @@ export async function inspectSetupScriptPromptState({
   try {
     const hooksResult = await checkHooks()
     if (hooksResult.status === 'error') {
-      return { status: 'error', repoId: repo.id }
+      return hooksResult.unavailable === 'wsl-distro-stopped'
+        ? { status: 'distro-stopped', repoId: repo.id }
+        : { status: 'error', repoId: repo.id }
     }
     const hasEffectiveSetup = hasEffectiveSetupCommand(repo, hooksResult)
     if (hasEffectiveSetup) {
@@ -69,25 +85,6 @@ export async function inspectSetupScriptPromptState({
   }
 }
 
-export function hasEffectiveSetupCommand(repo: Repo, hooksResult: HookCheckResult): boolean {
-  const localSetup = repo.hookSettings?.scripts?.setup?.trim()
-  const sharedSetup = hooksResult.hooks?.scripts?.setup?.trim()
-  const rawPolicy = repo.hookSettings?.commandSourcePolicy
-  const sourcePolicy = resolveHookCommandSourcePolicy(rawPolicy, {
-    hasLocalScript: Boolean(localSetup)
-  })
-
-  if (sourcePolicy === 'local-only') {
-    return Boolean(localSetup)
-  }
-
-  if (sourcePolicy === 'run-both') {
-    return Boolean(sharedSetup || localSetup)
-  }
-
-  return Boolean(sharedSetup)
-}
-
 export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boolean {
   const localSetup = repo.hookSettings?.scripts?.setup?.trim()
   return (
@@ -101,6 +98,12 @@ export function getSetupScriptPromptDismissalKey(repoHostIdentity: string): stri
   return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoHostIdentity}`
 }
 
+/** The repo of a dismissal key, host-qualified (`<host>\0<repoId>`) or legacy bare. */
+export function getSetupScriptPromptDismissalRepoId(entry: string): string {
+  const identity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
+  return identity.slice(identity.indexOf('\0') + 1)
+}
+
 export function isSetupScriptPromptDismissed(
   repoHostIdentity: string,
   dismissedEntries: readonly string[]
@@ -108,14 +111,25 @@ export function isSetupScriptPromptDismissed(
   return dismissedEntries.includes(getSetupScriptPromptDismissalKey(repoHostIdentity))
 }
 
+function isUnchangedDismissalList(
+  value: unknown,
+  next: readonly string[]
+): value is readonly string[] {
+  return (
+    Array.isArray(value) &&
+    value.length === next.length &&
+    value.every((entry, index) => entry === next[index])
+  )
+}
+
 export function filterSetupScriptPromptDismissalsToValidRepos(
   value: unknown,
   validRepoHostIdentities: Set<string>
-): string[] {
+): readonly string[] {
   const unambiguousIdentityByRepoId = new Map<string, string | null>()
   for (const identity of validRepoHostIdentities) {
     const separatorIndex = identity.indexOf('\0')
-    const repoId = separatorIndex >= 0 ? identity.slice(separatorIndex + 1) : identity
+    const repoId = separatorIndex !== -1 ? identity.slice(separatorIndex + 1) : identity
     unambiguousIdentityByRepoId.set(
       repoId,
       unambiguousIdentityByRepoId.has(repoId) ? null : identity
@@ -135,10 +149,14 @@ export function filterSetupScriptPromptDismissalsToValidRepos(
       }
     }
   }
+  // No-op pruning must return the original array for Object.is subscribers on every catalog refresh; sanitize always allocates, even for valid/empty input.
+  if (isUnchangedDismissalList(value, next)) {
+    return value
+  }
   return next
 }
 
-export function sanitizeSetupScriptPromptDismissals(value: unknown): string[] {
+export function sanitizeSetupScriptPromptDismissals(value: unknown): readonly string[] {
   if (!Array.isArray(value)) {
     return []
   }
@@ -166,9 +184,7 @@ export function buildImportedHookSettings(
     ...defaults,
     ...current,
     setupRunPolicy: current?.setupRunPolicy ?? defaults.setupRunPolicy,
-    // Why: imported setup commands are stored as local settings. If a shared
-    // hook file exists, run-both preserves its archive hook; otherwise local
-    // settings need to be authoritative so the imported setup actually runs.
+    // Imported local commands need authority unless a shared hook exists, in which case run-both preserves it.
     commandSourcePolicy:
       current?.commandSourcePolicy === 'local-only'
         ? 'local-only'
@@ -184,19 +200,29 @@ export function buildImportedHookSettings(
   }
 }
 
-export function formatCandidateSource(candidate: SetupScriptImportCandidate): string {
-  const [primaryFile, ...remainingFiles] = candidate.files
-  if (!primaryFile) {
-    return candidate.label
+// Product names stay as detected; descriptive labels translate by provider.
+function candidateLabel(candidate: SetupScriptImportCandidate): string {
+  if (candidate.provider === 'codex') {
+    return translate('setupScriptPrompt.candidateLabels.codexEnvironment', 'Codex environment')
   }
-  return remainingFiles.length > 0
-    ? `${candidate.label} (${primaryFile} +${remainingFiles.length})`
-    : `${candidate.label} (${primaryFile})`
+  if (candidate.provider === 'package-manager') {
+    return translate('setupScriptPrompt.candidateLabels.packageManager', 'package manager')
+  }
+  return candidate.label
 }
 
-// Why: card provenance shows the file(s) we matched, not the provider label.
-// For a single file we just print its name; for two we join with "and"; for
-// more we keep the leading file and summarize the rest as "+N more".
+export function formatCandidateSource(candidate: SetupScriptImportCandidate): string {
+  const label = candidateLabel(candidate)
+  const [primaryFile, ...remainingFiles] = candidate.files
+  if (!primaryFile) {
+    return label
+  }
+  return remainingFiles.length > 0
+    ? `${label} (${primaryFile} +${remainingFiles.length})`
+    : `${label} (${primaryFile})`
+}
+
+// Show matched filenames as provenance: one name, two with and, or first +N more; never substitute provider labels.
 export function formatCandidateProvenance(candidate: SetupScriptImportCandidate): string | null {
   if (candidate.provider === 'package-manager') {
     const lockfile = candidate.files.find((file) => file !== 'package.json')

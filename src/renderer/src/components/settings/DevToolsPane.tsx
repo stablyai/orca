@@ -5,9 +5,11 @@ import { Badge } from '../ui/badge'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { showDeleteWorktreeFailureToast } from '../sidebar/delete-worktree-failure-toast'
 import { showLocalBaseRefUpdateSuggestionToast } from '../sidebar/local-base-ref-suggestion-toast'
+import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
 
 const LONG_WORKSPACE_NAME = 'feature/dev-toast-layout-with-a-long-workspace-name'
 const DEV_TOAST_DESCRIPTION =
@@ -101,6 +103,13 @@ function showDeleteFailureToast(): void {
     ),
     canForceDelete: true,
     forceDeleteReason: 'dirty',
+    onDeleteAnyway: () =>
+      toast.error(
+        translate(
+          'auto.components.settings.DevToolsPane.deleteAnywayClicked',
+          'Delete Anyway clicked'
+        )
+      ),
     onViewChanges: () =>
       toast.message(
         translate(
@@ -126,17 +135,14 @@ function showDeleteFailureToast(): void {
   })
 }
 
-// Dev-only preview of the first-party Orca Cloud sign-in. The sidebar/titlebar
-// account switcher is hidden in packaged builds while the feature is in
-// progress; this surfaces it (and its status) in dev when the env vars are set.
+// Preview Cloud auth under dev environment flags while packaged account switchers remain hidden.
 function OrcaCloudDevSubsection(): React.JSX.Element {
   const authStatus = useAppStore((s) => s.orcaProfileAuthStatus)
-  const connecting = useAppStore((s) => s.orcaProfileConnecting)
-  const connect = useAppStore((s) => s.connectCurrentOrcaProfile)
   const signOut = useAppStore((s) => s.signOutCurrentOrcaProfile)
   const refresh = useAppStore((s) => s.fetchOrcaProfileAuthStatus)
   const configured = authStatus?.configured === true
   const connected = authStatus?.state === 'connected'
+  useOrcaProfileAuthStatusRefresh()
 
   return (
     <section className="space-y-3">
@@ -161,29 +167,18 @@ function OrcaCloudDevSubsection(): React.JSX.Element {
           </p>
           <div className="flex flex-wrap gap-2">
             {connected ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={connecting}
-                onClick={() => void signOut()}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={() => void signOut()}>
                 {translate('auto.components.settings.DevToolsPane.orcaCloudSignOut', 'Sign out')}
               </Button>
             ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={connecting}
-                onClick={() => void connect()}
-              >
+              <OrcaSignInButton variant="outline" size="sm">
                 {translate(
                   'auto.components.settings.DevToolsPane.orcaCloudConnect',
                   'Connect profile'
                 )}
-              </Button>
+              </OrcaSignInButton>
             )}
+            {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
             <Button type="button" variant="ghost" size="sm" onClick={() => void refresh()}>
               {translate(
                 'auto.components.settings.DevToolsPane.orcaCloudRefresh',

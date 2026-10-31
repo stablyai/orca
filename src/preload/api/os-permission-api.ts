@@ -1,0 +1,67 @@
+import type {
+  ComputerUsePermissionId,
+  ComputerUsePermissionResetResult,
+  ComputerUsePermissionSetupResult,
+  ComputerUsePermissionStatusResult
+} from '../../shared/computer-use-permissions-types'
+import type {
+  DeveloperPermissionId,
+  DeveloperPermissionRequestResult,
+  DeveloperPermissionState,
+  LocalNetworkConnectionTestResult
+} from '../../shared/developer-permissions-types'
+import type {
+  NotificationDeliveryProbeResult,
+  NotificationDismissResult,
+  NotificationDispatchRequest,
+  NotificationDispatchResult,
+  NotificationPermissionStatusResult,
+  NotificationSoundResult,
+  StructuredNotificationRead
+} from '../../shared/notification-settings-types'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+
+export type NotificationsApi = {
+  getDesktopAwayState: () => Promise<boolean | undefined>
+  dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
+  /** `paneKeys` also retires every id main announced for those subjects. */
+  dismiss: (
+    ids: string[],
+    paneKeys?: string[],
+    reads?: StructuredNotificationRead[]
+  ) => Promise<NotificationDismissResult>
+  /** The remote host owning this session reports no prompt pending; retires relayed prompt alerts. */
+  settleStructuredPrompts: (
+    scope: AgentSessionExecutionLocation,
+    sessionId: string
+  ) => Promise<void>
+  openSystemSettings: () => Promise<void>
+  getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
+  probeDelivery: (args?: { force?: boolean }) => Promise<NotificationDeliveryProbeResult>
+  playSound: (options?: { force?: boolean; volume?: number }) => Promise<NotificationSoundResult>
+}
+
+export type MacosTccPromptsApi = {
+  /** Fires once macOS has raised its Nth consent dialog naming Orca (#9756). */
+  onThreshold: (callback: (payload: { promptCount: number }) => void) => () => void
+  consumePending: () => Promise<{ claimId: number; promptCount: number } | null>
+  acknowledgePending: (claimId: number) => Promise<void>
+  releasePending: (claimId: number) => Promise<void>
+  dismiss: () => Promise<void>
+}
+
+export type DeveloperPermissionsApi = {
+  getStatus: () => Promise<DeveloperPermissionState[]>
+  request: (args: { id: DeveloperPermissionId }) => Promise<DeveloperPermissionRequestResult>
+  openSettings: (args: { id: DeveloperPermissionId }) => Promise<void>
+  testLocalNetworkConnection: (args: {
+    host: string
+    port: number
+  }) => Promise<LocalNetworkConnectionTestResult>
+}
+
+export type ComputerUsePermissionsApi = {
+  getStatus: () => Promise<ComputerUsePermissionStatusResult>
+  openSetup: (args?: { id?: ComputerUsePermissionId }) => Promise<ComputerUsePermissionSetupResult>
+  reset: () => Promise<ComputerUsePermissionResetResult>
+}

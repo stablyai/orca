@@ -136,7 +136,7 @@ function parseTomlMultilineString(
       remainder = lines[index]
     }
     const closeIndex = remainder.indexOf(delimiter)
-    if (closeIndex >= 0) {
+    if (closeIndex !== -1) {
       if (!oversized && !append(remainder.slice(0, closeIndex))) {
         oversized = true
       }

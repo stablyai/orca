@@ -1,4 +1,4 @@
-import type { LinearComment, LinearIssue } from '../../../shared/types'
+import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
 
 export const LINEAR_ISSUE_CONTEXT_CAPS = {
   descriptionChars: 3000,
@@ -24,8 +24,7 @@ function normalizeInline(value: string): string {
   return foldLinearInlineWhitespace(value, LINEAR_INLINE_FIELD_MAX_CHARS)
 }
 
-// Why: Linear fields can contain pasted text, but the final context snapshot
-// is capped; inline metadata should not allocate a full regex-normalized copy.
+// Bound metadata whitespace work to the final snapshot; pasted fields can be much larger.
 function foldLinearInlineWhitespace(value: string, maxChars: number): string {
   const suffix = ` ${TRUNCATED_MARKER}`
   const bodyLimit = Math.max(0, maxChars - suffix.length)

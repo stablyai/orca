@@ -1,14 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { create } from 'zustand'
-import type { AppState } from '../types'
-import type { DiffComment, Worktree } from '../../../../shared/types'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
-// Mock sonner (imported transitively by other slices)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
@@ -32,7 +30,6 @@ const mockApi = {
     set: vi.fn().mockResolvedValue(undefined)
   },
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({}),
     remove: vi.fn().mockResolvedValue(undefined),
     updateMeta
@@ -105,91 +102,7 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createRepoSlice } from './repos'
-import { createSparsePresetsSlice } from './sparse-presets'
-import { createWorktreeSlice } from './worktrees'
-import { createTerminalSlice } from './terminals'
-import { createTabsSlice } from './tabs'
-import { createUISlice } from './ui'
-import { createSettingsSlice } from './settings'
-import { createKeybindingsSlice } from './keybindings'
-import { createGitHubSlice } from './github'
-import { createHostedReviewSlice } from './hosted-review'
-import { createLinearSlice } from './linear'
-import { createPreflightSlice } from './preflight'
-import { createJiraSlice } from './jira'
-import { createEditorSlice } from './editor'
-import { createStatsSlice } from './stats'
-import { createMemorySlice } from './memory'
-import { createWorkspaceSpaceSlice } from './workspace-space'
-import { createClaudeUsageSlice } from './claude-usage'
-import { createCodexUsageSlice } from './codex-usage'
-import { createOpenCodeUsageSlice } from './opencode-usage'
-import { createBrowserSlice } from './browser'
-import { createRateLimitSlice } from './rate-limits'
-import { createSshSlice } from './ssh'
-import { createRuntimeEnvironmentSshSlice } from './runtime-environment-ssh'
-import { createAgentStatusSlice } from './agent-status'
-import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
-import { createDiffCommentsSlice } from './diffComments'
-import { createDetectedAgentsSlice } from './detected-agents'
-import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
-import { createWorktreeNavHistorySlice } from './worktree-nav-history'
-import { createDictationSlice } from './dictation'
-import { createWorkspaceCleanupSlice } from './workspace-cleanup'
-import { createRuntimeStatusSlice } from './runtime-status'
-import { createPullRequestGenerationSlice } from './pull-request-generation'
-import { createCommitMessageGenerationSlice } from './commit-message-generation'
-import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
-import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
-import { createOrcaProfilesSlice } from './orca-profiles'
-import { createNewIssueDraftSlice } from './new-issue-draft'
-import { createRemoteServerUpdatesSlice } from './remote-server-updates'
-
-function createTestStore() {
-  return create<AppState>()((...a) => ({
-    ...createRepoSlice(...a),
-    ...createSparsePresetsSlice(...a),
-    ...createWorktreeSlice(...a),
-    ...createTerminalSlice(...a),
-    ...createTabsSlice(...a),
-    ...createUISlice(...a),
-    ...createSettingsSlice(...a),
-    ...createKeybindingsSlice(...a),
-    ...createGitHubSlice(...a),
-    ...createHostedReviewSlice(...a),
-    ...createLinearSlice(...a),
-    ...createPreflightSlice(...a),
-    ...createJiraSlice(...a),
-    ...createEditorSlice(...a),
-    ...createStatsSlice(...a),
-    ...createMemorySlice(...a),
-    ...createWorkspaceSpaceSlice(...a),
-    ...createClaudeUsageSlice(...a),
-    ...createCodexUsageSlice(...a),
-    ...createOpenCodeUsageSlice(...a),
-    ...createBrowserSlice(...a),
-    ...createRateLimitSlice(...a),
-    ...createSshSlice(...a),
-    ...createRuntimeEnvironmentSshSlice(...a),
-    ...createAgentStatusSlice(...a),
-    ...createPaneForegroundAgentSlice(...a),
-    ...createDiffCommentsSlice(...a),
-    ...createDetectedAgentsSlice(...a),
-    ...createRuntimeDetectedAgentsSlice(...a),
-    ...createWorktreeNavHistorySlice(...a),
-    ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a),
-    ...createRuntimeStatusSlice(...a),
-    ...createPullRequestGenerationSlice(...a),
-    ...createCommitMessageGenerationSlice(...a),
-    ...createPinnedTabCloseConfirmSlice(...a),
-    ...createRecentlyClosedTabsSlice(...a),
-    ...createOrcaProfilesSlice(...a),
-    ...createNewIssueDraftSlice(...a),
-    ...createRemoteServerUpdatesSlice(...a)
-  }))
-}
+import { createTestStore } from './store-test-helpers'
 
 const REPO = 'repo1'
 const WT = 'repo1::/path/wt'
@@ -235,6 +148,7 @@ function seed(
   worktreeOverrides: Partial<Worktree> = {}
 ): void {
   store.setState({
+    repos: [{ id: REPO, path: '/path/repo', displayName: 'repo', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: { [REPO]: [{ ...makeWorktree(comments), ...worktreeOverrides }] }
   })
 }
@@ -330,7 +244,6 @@ describe('updateDiffComment', () => {
     expect(ok).toBe(true)
     const saved = store.getState().getDiffComments(WT)[0]
     expect(saved.body).toBe('new body')
-    // identity-preserving fields untouched
     expect(saved.id).toBe('c1')
     expect(saved.lineNumber).toBe(10)
     expect(saved.createdAt).toBe(1000)
@@ -665,6 +578,43 @@ describe('bulk clear diff comments', () => {
     })
   })
 
+  it('keeps markdown notes when asked, so a hidden markdown note survives a clear', async () => {
+    const store = createTestStore()
+    seed(store, [
+      makeComment({ id: 'diff', filePath: 'README.md' }),
+      makeComment({ id: 'md', filePath: 'README.md', source: 'markdown' }),
+      makeComment({ id: 'other', filePath: 'src/foo.ts' })
+    ])
+
+    await store.getState().clearDiffCommentsForFile(WT, 'README.md', { keepMarkdownNotes: true })
+    expect(
+      store
+        .getState()
+        .getDiffComments(WT)
+        .map((c) => c.id)
+    ).toEqual(['md', 'other'])
+
+    await store.getState().clearDiffComments(WT, { keepMarkdownNotes: true })
+    expect(
+      store
+        .getState()
+        .getDiffComments(WT)
+        .map((c) => c.id)
+    ).toEqual(['md'])
+  })
+
+  it('does not persist a keep-markdown clear that removes nothing', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'md', filePath: 'README.md', source: 'markdown' })]
+    seed(store, comments)
+
+    const ok = await store.getState().clearDiffComments(WT, { keepMarkdownNotes: true })
+
+    expect(ok).toBe(true)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(updateMeta).not.toHaveBeenCalled()
+  })
+
   it('returns success without persisting when no file notes match', async () => {
     const store = createTestStore()
     const comments = [makeComment({ id: 'c1', filePath: 'src/foo.ts' })]
@@ -745,5 +695,85 @@ describe('bulk clear diff comments', () => {
     expect(ok).toBe(false)
     expect(store.getState().getDiffComments(WT)).toBe(laterComments)
     errSpy.mockRestore()
+  })
+})
+
+describe('worktree diff comment rollback convergence', () => {
+  let errSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    updateMeta.mockResolvedValue({})
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    errSpy.mockRestore()
+  })
+
+  function addNote(store: ReturnType<typeof createTestStore>, body: string, lineNumber: number) {
+    return store.getState().addDiffComment({
+      worktreeId: WT,
+      filePath: 'src/foo.ts',
+      lineNumber,
+      body,
+      side: 'modified'
+    })
+  }
+
+  it('converges to the pre-burst list when two consecutive writes fail', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' })]
+    seed(store, comments)
+    updateMeta.mockRejectedValue(new Error('disk full'))
+
+    await expect(Promise.all([addNote(store, 'A', 11), addNote(store, 'B', 12)])).resolves.toEqual([
+      null,
+      null
+    ])
+    expect(updateMeta).toHaveBeenCalledTimes(2)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+  })
+
+  it('converges a mixed-mutator failing burst and still reports the delete failure', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' }), makeComment({ id: 'c2' })]
+    seed(store, comments)
+    updateMeta.mockRejectedValue(new Error('disk full'))
+
+    const removed = store.getState().deleteDiffComment(WT, 'c1')
+    const marked = store.getState().markDiffCommentsSent(WT, ['c2'], 3000)
+
+    // deleteDiffComment returns no boolean; absent return must not hide write failures.
+    await expect(removed).resolves.toBeUndefined()
+    await expect(marked).resolves.toBe(false)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(errSpy).toHaveBeenCalled()
+  })
+
+  it('converges on the runtime branch when two consecutive writes fail', async () => {
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+    const comments = [makeComment({ id: 'c1' })]
+    seed(store, comments, { hostId: 'local', runtimeOwnerEnvironmentId: 'env-1' })
+    runtimeEnvironmentCall.mockRejectedValue(new Error('runtime unreachable'))
+
+    await expect(Promise.all([addNote(store, 'A', 11), addNote(store, 'B', 12)])).resolves.toEqual([
+      null,
+      null
+    ])
+    expect(updateMeta).not.toHaveBeenCalled()
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
   })
 })

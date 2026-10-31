@@ -1,12 +1,9 @@
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type {
-  FolderWorkspace,
-  Worktree,
-  WorktreeLineage,
-  WorkspaceLineage
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
-import { getProjectedWorktreeLineageChildrenByParentId } from '../sidebar/worktree-lineage-projection'
+import { getProjectedWorktreeLineageChildrenByParentId } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
 export type AttachedWorktreeResolution = {
   folderWorkspace: FolderWorkspace | null
@@ -134,7 +131,8 @@ function getWorktreeById(
   )
 }
 
-function getLineageChildWorktree(
+/** Exported so the composer's parent picker offers exactly the roots this view attaches. */
+export function getLineageChildWorktree(
   lineage: WorkspaceLineage,
   worktreeById: Map<string, Worktree>
 ): Worktree | null {

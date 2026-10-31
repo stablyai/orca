@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 const terminalTabLookupByArray = new WeakMap<readonly TerminalTab[], Map<string, TerminalTab>>()
 
@@ -13,8 +13,7 @@ export function getCachedTerminalTabForWorktree(
   }
   let lookup = terminalTabLookupByArray.get(tabs)
   if (!lookup) {
-    // Why: every mounted TerminalPane asks for its own tab on store updates.
-    // Build the per-array lookup once so 200 panes do not repeat the same scan.
+    // Build one immutable-array index so every mounted pane can find its tab without repeated linear scans.
     lookup = new Map()
     for (const tab of tabs) {
       lookup.set(tab.id, tab)

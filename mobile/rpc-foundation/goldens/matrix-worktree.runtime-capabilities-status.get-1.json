@@ -1,0 +1,599 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "tasks.worktree-capabilities",
+  "family": "worktree.runtime-capabilities",
+  "namedDeltas": [],
+  "values": {
+    "0474a1603b70": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "0ccee4def5e0": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "16a71e555cb2": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "216adda2100c": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["mobile.tasks.v1", "worktree.create-idempotency.v1"],
+            "platform": "linux",
+            "worktreeCreateIdempotency": {
+              "dedupeTtlMs": 45000
+            }
+          }
+        }
+      }
+    },
+    "2b8c44a85130": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "41e8e39cc47e": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "456a1f9383e3": {
+      "capabilities": {
+        "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
+    "59a45eb98b67": {
+      "capabilities": {
+        "$rpc": "null"
+      }
+    },
+    "73bcd4456e97": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "7b0d9b0d2428": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "82f760e2c99f": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "a0a149765d23": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": false,
+        "worktreeCreateIdempotency": false
+      }
+    },
+    "b62568733b13": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
+    "b799ba7b0c33": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "dc4e306d6dfc": {
+      "capabilities": {
+        "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": false,
+        "worktreeCreateIdempotency": false
+      }
+    },
+    "e90520ab92af": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "ee20a1dc39e7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "null"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-worktree.runtime-capabilities-status.get-1",
+    "checkpoints": [
+      {
+        "id": "tw-capabilities-advertised.normal:probed",
+        "observation": {
+          "sender": ["216adda2100c"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "b62568733b13"
+          },
+          "state": "456a1f9383e3",
+          "effects": []
+        }
+      },
+      {
+        "id": "tw-capabilities-advertised.result-absent:probed",
+        "observation": {
+          "sender": ["0ccee4def5e0"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "ee20a1dc39e7"
+          },
+          "state": "59a45eb98b67",
+          "effects": []
+        }
+      },
+      {
+        "id": "tw-capabilities-advertised.result-null:probed",
+        "observation": {
+          "sender": ["73bcd4456e97"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "ee20a1dc39e7"
+          },
+          "state": "59a45eb98b67",
+          "effects": []
+        }
+      },
+      {
+        "id": "tw-capabilities-advertised.inner-ok-missing:probed",
+        "observation": {
+          "sender": ["7b0d9b0d2428"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "a0a149765d23"
+          },
+          "state": "dc4e306d6dfc",
+          "effects": []
+        }
+      },
+      {
+        "id": "tw-capabilities-advertised.inner-false-string-error:probed",
+        "observation": {
+          "sender": ["0474a1603b70"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "a0a149765d23"
+          },
+          "state": "dc4e306d6dfc",
+          "effects": []
+        }
+      },
+      {
+        "id": "tw-capabilities-advertised.inner-false-object-error:probed",
+        "observation": {
+          "sender": ["41e8e39cc47e"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "a0a149765d23"
+          },
+          "state": "dc4e306d6dfc",
+          "effects": []
+        }
+      },
+      {
+        "id": "tw-capabilities-advertised.outer-refused:probed",
+        "observation": {
+          "sender": ["16a71e555cb2"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "ee20a1dc39e7"
+          },
+          "state": "59a45eb98b67",
+          "effects": []
+        }
+      },
+      {
+        "id": "tw-capabilities-advertised.outer-refused-no-message:probed",
+        "observation": {
+          "sender": ["82f760e2c99f"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "ee20a1dc39e7"
+          },
+          "state": "59a45eb98b67",
+          "effects": []
+        }
+      },
+      {
+        "id": "tw-capabilities-advertised.method-not-found:probed",
+        "observation": {
+          "sender": ["e90520ab92af"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "ee20a1dc39e7"
+          },
+          "state": "59a45eb98b67",
+          "effects": []
+        }
+      },
+      {
+        "id": "tw-capabilities-advertised.transport-rejection:probed",
+        "observation": {
+          "sender": ["2b8c44a85130"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "ee20a1dc39e7"
+          },
+          "state": "59a45eb98b67",
+          "effects": []
+        }
+      },
+      {
+        "id": "tw-capabilities-advertised.transport-rejection-no-message:probed",
+        "observation": {
+          "sender": ["b799ba7b0c33"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "ee20a1dc39e7"
+          },
+          "state": "59a45eb98b67",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

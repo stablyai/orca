@@ -16,12 +16,16 @@ import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
 } from './electron-home-isolation'
+import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { forwardElectronProcessLogs } from './orca-app'
 import {
   replaceRuntimePairingInPlace,
   type SameIdPairingReplacement
 } from './nested-runtime-same-id-pairing'
 import { createPairedWebClientUrl, type PairedWebClientOptions } from './paired-web-client-url'
+import { selectPairedRuntimeEnvironment } from './paired-client-runtime-environment'
+
+export { rePairPairedElectronClient } from './paired-client-runtime-environment'
 
 export type { SameIdPairingReplacement } from './nested-runtime-same-id-pairing'
 
@@ -30,10 +34,15 @@ export type PairedElectronClient = {
   page: Page
   environmentId: string
   captureDirectSshAttempts: () => Promise<void>
+  /** Closes the app AND deletes the profile. For a restart, use `quitPreservingProfile`. */
   dispose: () => Promise<void>
+  // Keep the profile and bounded shutdown path for restart; dispose deletes persistence and bare app.close can hang.
+  quitPreservingProfile: () => Promise<void>
   getDirectSshAttemptTargetIds: () => Promise<string[]>
   installDirectSshAttemptProbe: () => Promise<void>
   replacePairingInPlace: (offer: RuntimeDesktopPairingOffer) => Promise<SameIdPairingReplacement>
+  /** Profile directory backing this client. Pass it to `reuseUserDataDir` to relaunch the same device. */
+  userDataDir: string
 }
 
 export type RuntimeDesktopPairingOffer = {
@@ -91,6 +100,22 @@ export async function createRuntimeDesktopPairingOffer(
   })
 }
 
+/** The phone QR a desktop shows in Settings, minted LAN-only so no Relay is involved. */
+export async function createDesktopMobilePairingOffer(
+  desktopPage: Page
+): Promise<RuntimeDesktopPairingOffer> {
+  return desktopPage.evaluate(async () => {
+    const offer = await window.api.mobile.getPairingQR({
+      address: '127.0.0.1',
+      connectionMode: 'local-only'
+    })
+    if (!offer.available) {
+      throw new Error(`Desktop did not mint a mobile pairing offer: ${JSON.stringify(offer)}`)
+    }
+    return { pairingUrl: offer.pairingUrl }
+  })
+}
+
 export async function launchPairedWebClient(
   hubApp: ElectronApplication,
   offer: RuntimeDesktopPairingOffer,
@@ -141,22 +166,27 @@ export async function launchPairedWebClient(
 export async function launchPairedElectronClient(
   offer: RuntimeDesktopPairingOffer,
   testInfo: TestInfo,
-  name: string
+  name: string,
+  // Reuse the stored pairing credential/device id across relaunch, matching a real reopen.
+  options: { extraEnv?: Record<string, string>; reuseUserDataDir?: string } = {}
 ): Promise<PairedElectronClient> {
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
+  const reusedProfile = options.reuseUserDataDir !== undefined
+  const userDataDir =
+    options.reuseUserDataDir ?? mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
   const directSshProbePath = path.join(userDataDir, 'forbidden-local-ssh-connects.jsonl')
-  writeFileSync(
-    path.join(userDataDir, 'orca-data.json'),
-    `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
-  )
+  if (!reusedProfile) {
+    writeFileSync(
+      path.join(userDataDir, 'orca-data.json'),
+      `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
+    )
+  }
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
   const homeIsolation = createElectronHomeIsolation({
     inheritedEnv: cleanEnv,
     launchEnv: {},
-    extraEnv: {},
-    userDataDir,
-    codexRealHomeEnabled: false
+    extraEnv: options.extraEnv ?? {},
+    userDataDir
   })
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const app = await electron.launch({
@@ -169,12 +199,15 @@ export async function launchPairedElectronClient(
     }
   })
 
+  // Forward logs before the home assertion so startup failures retain app diagnostics.
+  forwardElectronProcessLogs(app, testInfo)
   try {
     assertElectronResolvedIsolatedHome(
-      await app.evaluate(({ app: electronApp }) => electronApp.getPath('home')),
+      await retryTransientMainEvaluate(() =>
+        app.evaluate(({ app: electronApp }) => electronApp.getPath('home'))
+      ),
       homeIsolation
     )
-    forwardElectronProcessLogs(app, testInfo)
     const page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
@@ -198,42 +231,23 @@ export async function launchPairedElectronClient(
       throw new Error('Paired-client direct SSH probe did not intercept its canary attempt')
     }
 
-    const environmentId = await page.evaluate(
-      async ({ name, pairingUrl }) => {
-        const store = window.__store
-        if (!store) {
-          throw new Error('Paired desktop store is unavailable')
-        }
-        const result = await window.api.runtimeEnvironments.addFromPairingCode({
-          name,
-          pairingCode: pairingUrl
-        })
-        const environments = await window.api.runtimeEnvironments.list()
-        store.getState().setRuntimeEnvironments(environments)
-        if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
-          throw new Error('Paired desktop could not reach the HUB runtime')
-        }
-        if (
-          !(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))
-        ) {
-          throw new Error('Paired desktop could not select the HUB runtime')
-        }
-        return result.environment.id
-      },
-      { name, pairingUrl: offer.pairingUrl }
-    )
+    const environmentId = await selectPairedRuntimeEnvironment(page, {
+      name,
+      pairingUrl: offer.pairingUrl,
+      reusedProfile
+    })
     const captureDirectSshAttempts = async (): Promise<void> => {}
     const replacePairingInPlace = async (
       replacementOffer: RuntimeDesktopPairingOffer
     ): Promise<SameIdPairingReplacement> =>
       replaceRuntimePairingInPlace({
-        environmentId,
+        environmentId: client.environmentId,
         page,
         pairingUrl: replacementOffer.pairingUrl,
         userDataDir
       })
 
-    return {
+    const client: PairedElectronClient = {
       app,
       page,
       environmentId,
@@ -243,74 +257,24 @@ export async function launchPairedElectronClient(
         await cleanupE2EDaemons(userDataDir)
         await removeProfile(userDataDir)
       },
+      quitPreservingProfile: async () => {
+        await closeElectronAppForE2E(app)
+        await cleanupE2EDaemons(userDataDir)
+      },
       getDirectSshAttemptTargetIds: async () => {
         return readDirectSshAttemptTargetIds(directSshProbePath).filter(
           (targetId) => targetId !== DIRECT_SSH_PROBE_CANARY_TARGET_ID
         )
       },
       installDirectSshAttemptProbe: async () => {},
-      replacePairingInPlace
+      replacePairingInPlace,
+      userDataDir
     }
+    return client
   } catch (error) {
     await closeElectronAppForE2E(app)
     await cleanupE2EDaemons(userDataDir)
     await removeProfile(userDataDir)
     throw error
-  }
-}
-
-export async function rePairPairedElectronClient(
-  client: PairedElectronClient,
-  offer: RuntimeDesktopPairingOffer,
-  name: string
-): Promise<void> {
-  await client.captureDirectSshAttempts()
-  const environmentId = await client.page.evaluate(
-    async ({ currentEnvironmentId, name, pairingUrl }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('Paired desktop store is unavailable')
-      }
-      await window.api.runtimeEnvironments.remove({ selector: currentEnvironmentId })
-      const result = await window.api.runtimeEnvironments.addFromPairingCode({
-        name,
-        pairingCode: pairingUrl
-      })
-      store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
-      if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
-        throw new Error('Re-paired desktop could not reach the HUB runtime')
-      }
-      if (!(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))) {
-        throw new Error('Re-paired desktop could not select the HUB runtime')
-      }
-      return result.environment.id
-    },
-    {
-      currentEnvironmentId: client.environmentId,
-      name,
-      pairingUrl: offer.pairingUrl
-    }
-  )
-  client.environmentId = environmentId
-  // Why: removing and re-adding the same HUB changes the environment identity; remount so no pane keeps the retired transport wrapper.
-  await client.page.reload()
-  await client.page.waitForFunction(
-    () => window.__store?.getState().workspaceSessionReady === true,
-    null,
-    { timeout: 30_000 }
-  )
-  await client.installDirectSshAttemptProbe()
-  const reachable = await client.page.evaluate(async (nextEnvironmentId) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Re-paired desktop store is unavailable after reload')
-    }
-    if (!(await store.getState().refreshRuntimeEnvironmentStatus(nextEnvironmentId))) {
-      return false
-    }
-    return store.getState().setActiveRuntimeEnvironmentPreference(nextEnvironmentId)
-  }, environmentId)
-  if (!reachable) {
-    throw new Error('Re-paired desktop could not reach the HUB after reload')
   }
 }

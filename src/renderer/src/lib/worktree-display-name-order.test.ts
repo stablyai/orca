@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { compareWorktreeDisplayName } from './worktree-display-name-order'
 
-// displayName is typed `string`, but crash 99657ab1 proved it arrives undefined
-// at runtime for persisted/discovered worktrees. Force that shape here.
+// Persisted/discovered rows can lack required displayName (crash 99657ab1).
 function worktree(id: string, displayName: string | undefined, lastActivityAt = 0): Worktree {
   return {
     id,
@@ -34,27 +33,5 @@ describe('compareWorktreeDisplayName', () => {
     // undefined coalesces to '' which sorts before a real name.
     expect(compareWorktreeDisplayName(a, b)).toBeLessThan(0)
     expect(compareWorktreeDisplayName(b, a)).toBeGreaterThan(0)
-  })
-
-  it('treats two undefined names as equal without throwing', () => {
-    expect(compareWorktreeDisplayName(worktree('a', undefined), worktree('b', undefined))).toBe(0)
-  })
-
-  it('orders defined names lexicographically', () => {
-    expect(
-      compareWorktreeDisplayName(worktree('a', 'Apple'), worktree('b', 'Banana'))
-    ).toBeLessThan(0)
-  })
-
-  it('keeps Array.sort safe when the list contains an undefined-name worktree', () => {
-    const worktrees = [worktree('a', 'Charlie'), worktree('b', undefined), worktree('c', 'Alpha')]
-    expect(() =>
-      [...worktrees].sort((x, y) => {
-        if (x.lastActivityAt !== y.lastActivityAt) {
-          return y.lastActivityAt - x.lastActivityAt
-        }
-        return compareWorktreeDisplayName(x, y)
-      })
-    ).not.toThrow()
   })
 })

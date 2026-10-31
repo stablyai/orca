@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({
   stateValues: [] as unknown[],
@@ -17,7 +17,9 @@ const mocks = vi.hoisted(() => ({
   onGitRepoReady: vi.fn(),
   setAddProjectBusyLabel: vi.fn(),
   markOnboardingProjectAdded: vi.fn(),
-  track: vi.fn()
+  track: vi.fn(),
+  onWindowsDriveRefusal: vi.fn(),
+  wslHostEnvironmentIds: new Set<string>()
 }))
 
 vi.mock('react', async (importOriginal) => {
@@ -49,6 +51,11 @@ vi.mock('@/lib/telemetry', () => ({
   track: mocks.track
 }))
 
+vi.mock('@/lib/windows-path-access', () => ({
+  getWindowsPathAccess: (hostId: string) =>
+    [...mocks.wslHostEnvironmentIds].some((id) => hostId === `runtime:${id}`) ? {} : null
+}))
+
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'server-folder',
@@ -67,6 +74,67 @@ describe('useAddRepoServerPathFlow', () => {
     mocks.stateIndex = 0
     mocks.stateSetters = []
     mocks.stateValues = ['/server/docs', false]
+    mocks.wslHostEnvironmentIds = new Set()
+  })
+
+  function renderFlow(activeRuntimeEnvironmentId: string) {
+    return import('./useAddRepoServerPathFlow').then(({ useAddRepoServerPathFlow }) =>
+      useAddRepoServerPathFlow({
+        addRepoPath: mocks.addRepoPath,
+        activeRuntimeEnvironmentId,
+        closeModal: mocks.closeModal,
+        fetchWorktrees: mocks.fetchWorktrees,
+        getNestedRepoRuntimeKind: mocks.getNestedRepoRuntimeKind,
+        scanNestedRepos: mocks.scanNestedRepos,
+        setActiveNestedScanId: mocks.setActiveNestedScanId,
+        setNestedScanInProgress: mocks.setNestedScanInProgress,
+        showNestedRepoReview: mocks.showNestedRepoReview,
+        onGitRepoReady: mocks.onGitRepoReady,
+        setAddProjectBusyLabel: mocks.setAddProjectBusyLabel,
+        onWindowsDriveRefusal: mocks.onWindowsDriveRefusal
+      })
+    )
+  }
+
+  it.each([
+    ['  /mnt/c/Users/me/src  ', 'C:\\Users\\me\\src'],
+    ['/mnt/C/x', 'C:\\x'],
+    ['/home/me/../../mnt/d/./work/', 'D:\\work']
+  ])('refuses typed %j on a WSL host inline, before scanning', async (typed, windowsPath) => {
+    mocks.wslHostEnvironmentIds.add('wsl-env')
+    mocks.stateValues = [typed, false]
+    const flow = await renderFlow('wsl-env')
+    await flow.handleAddServerPath('git')
+
+    expect(mocks.scanNestedRepos).not.toHaveBeenCalled()
+    expect(mocks.addRepoPath).not.toHaveBeenCalled()
+    expect(mocks.onWindowsDriveRefusal).toHaveBeenCalledWith({
+      kind: 'wsl_host_windows_drive_path',
+      windowsPath
+    })
+  })
+
+  it('lets a typed path that only passes through /mnt/<drive> reach the host', async () => {
+    mocks.wslHostEnvironmentIds.add('wsl-env')
+    mocks.stateValues = ['/mnt/c/../../home/me', false]
+    mocks.addRepoPath.mockResolvedValue(makeRepo({ path: '/home/me' }))
+    const flow = await renderFlow('wsl-env')
+    await flow.handleAddServerPath('folder')
+    expect(mocks.onWindowsDriveRefusal).not.toHaveBeenCalled()
+    expect(mocks.addRepoPath).toHaveBeenCalled()
+  })
+
+  it('leaves /mnt/<drive> paths alone on SSH and paired hosts, and routes host refusals inline', async () => {
+    mocks.stateValues = ['/mnt/c/src', false]
+    mocks.addRepoPath.mockResolvedValue(makeRepo({ path: '/mnt/c/src' }))
+    const flow = await renderFlow('ssh-env')
+    await flow.handleAddServerPath('folder')
+
+    expect(mocks.onWindowsDriveRefusal).not.toHaveBeenCalled()
+    expect(mocks.addRepoPath).toHaveBeenCalledWith('/mnt/c/src', 'folder', {
+      runtimeEnvironmentId: 'ssh-env',
+      onWindowsDriveRefusal: mocks.onWindowsDriveRefusal
+    })
   })
 
   it('marks onboarding folder progress before closing server folder adds', async () => {
@@ -85,12 +153,14 @@ describe('useAddRepoServerPathFlow', () => {
       setNestedScanInProgress: mocks.setNestedScanInProgress,
       showNestedRepoReview: mocks.showNestedRepoReview,
       onGitRepoReady: mocks.onGitRepoReady,
-      setAddProjectBusyLabel: mocks.setAddProjectBusyLabel
+      setAddProjectBusyLabel: mocks.setAddProjectBusyLabel,
+      onWindowsDriveRefusal: mocks.onWindowsDriveRefusal
     })
     await result.handleAddServerPath('folder')
 
     expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'folder', {
-      runtimeEnvironmentId: 'box1-environment-id'
+      runtimeEnvironmentId: 'box1-environment-id',
+      onWindowsDriveRefusal: mocks.onWindowsDriveRefusal
     })
     expect(mocks.scanNestedRepos).not.toHaveBeenCalled()
     expect(mocks.fetchWorktrees).not.toHaveBeenCalled()
@@ -121,7 +191,8 @@ describe('useAddRepoServerPathFlow', () => {
       setNestedScanInProgress: mocks.setNestedScanInProgress,
       showNestedRepoReview: mocks.showNestedRepoReview,
       onGitRepoReady: mocks.onGitRepoReady,
-      setAddProjectBusyLabel: mocks.setAddProjectBusyLabel
+      setAddProjectBusyLabel: mocks.setAddProjectBusyLabel,
+      onWindowsDriveRefusal: mocks.onWindowsDriveRefusal
     })
     await result.handleAddServerPath('git')
 
@@ -131,7 +202,8 @@ describe('useAddRepoServerPathFlow', () => {
       expect.objectContaining({ runtimeEnvironmentId: 'box1-environment-id' })
     )
     expect(mocks.addRepoPath).toHaveBeenCalledWith('/server/docs', 'git', {
-      runtimeEnvironmentId: 'box1-environment-id'
+      runtimeEnvironmentId: 'box1-environment-id',
+      onWindowsDriveRefusal: mocks.onWindowsDriveRefusal
     })
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith('server-git', {
       requireAuthoritative: true,

@@ -3,7 +3,10 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 const openModal = vi.fn()
 const setRenamingWorktreeId = vi.fn()
@@ -11,41 +14,50 @@ const updateWorktreeMeta = vi.fn()
 const testDoubles = vi.hoisted(() => ({
   activateWorktreeFromSidebar: vi.fn()
 }))
+const sleepMocks = vi.hoisted(() => ({
+  sleeping: false
+}))
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'comment']
 let settings: Partial<GlobalSettings> | null = null
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      browserTabsByWorktree: {},
-      createBrowserTab: vi.fn(),
-      deleteFolderWorkspace: vi.fn(),
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch: vi.fn(),
-      fetchIssue: vi.fn(),
-      fetchLinearIssue: vi.fn(),
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache: {},
-      issueCache: {},
-      linearIssueCache: {},
-      openModal,
-      openTaskPage: vi.fn(),
-      projectGroups: [],
-      ptyIdsByTabId: {},
-      remoteBranchConflictByWorktreeId: {},
-      renamingWorktreeId: null,
-      setActiveWorktree: vi.fn(),
-      setRemoteBrowserPageHandle: vi.fn(),
-      setRenamingWorktreeId,
-      settings,
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      tabsByWorktree: {},
-      updateWorktreeMeta,
-      workspacePortScan: null,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    browserTabsByWorktree: {},
+    createBrowserTab: vi.fn(),
+    deleteFolderWorkspace: vi.fn(),
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch: vi.fn(),
+    fetchIssue: vi.fn(),
+    fetchLinearIssue: vi.fn(),
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache: {},
+    issueCache: {},
+    linearIssueCache: {},
+    openModal,
+    openTaskPage: vi.fn(),
+    projectGroups: [],
+    ptyIdsByTabId: {},
+    remoteBranchConflictByWorktreeId: {},
+    renamingWorktreeId: null,
+    setActiveWorktree: vi.fn(),
+    setRemoteBrowserPageHandle: vi.fn(),
+    setRenamingWorktreeId,
+    settings,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    updateWorktreeMeta,
+    workspacePortScan: null,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState,
+      subscribe: () => () => {}
     })
-}))
+  }
+})
 
 vi.mock('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -63,12 +75,12 @@ vi.mock('@/lib/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: testDoubles.activateWorktreeFromSidebar
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'local' })
-}))
-
 vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'idle'
+}))
+
+vi.mock('./use-worktree-sleep-state', () => ({
+  useIsSleepingWorktree: () => sleepMocks.sleeping
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -80,15 +92,10 @@ vi.mock('./WorktreeCardAgents', () => ({
   default: () => <div data-testid="inline-agents" />
 }))
 
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
-}))
-
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => (
     <div data-testid="context-menu-wrapper">{children}</div>
   ),
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
@@ -155,6 +162,7 @@ describe('WorktreeCard affiliate list mode', () => {
     vi.clearAllMocks()
     worktreeCardProperties = ['status', 'comment']
     settings = null
+    sleepMocks.sleeping = false
   })
 
   afterEach(() => {
@@ -228,5 +236,89 @@ describe('WorktreeCard affiliate list mode', () => {
     })
 
     expect(container.querySelector('[data-testid="inline-agents"]')).not.toBeNull()
+  })
+
+  it('dims the full card surface for sleeping workspaces in new card style', () => {
+    sleepMocks.sleeping = true
+    settings = { experimentalNewWorktreeCardStyle: true }
+
+    act(() => {
+      root.render(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo()}
+          isActive={false}
+          nativeDragEnabled
+          flushSurface
+          affiliateListMode
+        />
+      )
+    })
+
+    expect(container.querySelector('[data-worktree-sleeping-dim=""]')).not.toBeNull()
+    const dim = container.querySelector('[data-worktree-sleeping-dim=""]')
+    expect(dim).not.toBeNull()
+    // Theme-token mixing must keep sleeping dim visible on light surfaces/custom tints without fading the whole backdrop.
+    expect(dim?.getAttribute('class') ?? '').not.toContain('opacity-')
+    expect(dim?.getAttribute('class') ?? '').not.toContain('backdrop-')
+  })
+
+  it('keeps awake cards at full opacity in new card style', () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+
+    act(() => {
+      root.render(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo()}
+          isActive={false}
+          nativeDragEnabled
+          flushSurface
+          affiliateListMode
+        />
+      )
+    })
+
+    expect(container.querySelector('[data-worktree-sleeping-dim=""]')).toBeNull()
+  })
+
+  it('keeps legacy sleeping cards undimmed', () => {
+    sleepMocks.sleeping = true
+
+    act(() => {
+      root.render(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo()}
+          isActive={false}
+          nativeDragEnabled
+          flushSurface
+          affiliateListMode
+        />
+      )
+    })
+
+    expect(container.querySelector('[data-worktree-sleeping-dim=""]')).toBeNull()
+  })
+
+  it('keeps the unread badge rendered on a dimmed sleeping card', () => {
+    sleepMocks.sleeping = true
+    settings = { experimentalNewWorktreeCardStyle: true }
+
+    act(() => {
+      root.render(
+        <WorktreeCard
+          worktree={makeWorktree({ isUnread: true })}
+          repo={makeRepo()}
+          isActive={false}
+          nativeDragEnabled
+          flushSurface
+          affiliateListMode
+        />
+      )
+    })
+
+    expect(container.querySelector('[data-worktree-sleeping-dim=""]')).not.toBeNull()
+    expect(container.querySelector('[data-worktree-unread-alert=""]')).not.toBeNull()
   })
 })

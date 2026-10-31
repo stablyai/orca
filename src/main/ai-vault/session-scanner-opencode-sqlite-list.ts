@@ -1,27 +1,22 @@
-import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
 } from './session-scanner-opencode-sqlite-paths'
+import {
+  openCodeDatabaseScanIssue,
+  readOpenCodeDatabase
+} from './session-scanner-opencode-sqlite-open'
 import type { SessionFileCandidate } from './session-scanner-types'
-import { errorMessage } from './session-scanner-values'
-import SyncDatabase from '../sqlite/sync-database'
+import type SyncDatabase from '../sqlite/sync-database'
+import { scopedSessionRows } from './session-scanner-sqlite-scope-rows'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
-
-// Why: the SQLite session-list query + reader lives in its own electron-free
-// module so both the worker entry and the main-thread worker client can import
-// it without pulling in the client's Electron dependency.
 
 type SessionRow = {
   id: string
   time_created: number
   time_updated: number
-}
-
-function openReadonlyDatabase(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
-  db.pragma('query_only = ON')
-  return db
+  directory?: unknown
 }
 
 function canReadOpenCodeSessions(db: SyncDatabase): boolean {
@@ -32,29 +27,53 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   )
 }
 
-function buildSessionListQuery(db: SyncDatabase): string {
+function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boolean): string {
   const parentIdPredicate = columnExists(db, 'session', 'parent_id') ? 'AND parent_id IS NULL' : ''
   const archivedPredicate = columnExists(db, 'session', 'time_archived')
     ? 'AND time_archived IS NULL'
     : ''
 
-  // Why (#8864): discovery needs only identity and recency. Reading message
-  // blobs or unused session metadata here repeats expensive work on every
-  // refresh; the parse path loads metadata only for candidates it actually uses.
-  return `SELECT id, time_created, time_updated
+  // Discovery needs identity and recency; defer message blobs and unused metadata until parsing.
+  const directory = scoped && columnExists(db, 'session', 'directory') ? ', directory' : ''
+  return `SELECT id, time_created, time_updated${directory}
           FROM session
           WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
-          LIMIT ?`
+          ${limited ? 'LIMIT ?' : ''}`
 }
 
-function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
+function readSessionRows(
+  db: SyncDatabase,
+  limit: number,
+  scopePaths: readonly string[] | undefined,
+  dbPath: string
+): SessionRow[] {
+  if (!canReadOpenCodeSessions(db)) {
+    return []
+  }
+  const scoped = scopePaths !== undefined && scopePaths.length > 0
+  const limited = Number.isFinite(limit) && !scoped
+  const statement = db.prepare(buildSessionListQuery(db, limited, scoped))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query above selects exactly these columns.
+  const rows = (
+    limited ? statement.all(limit) : scoped ? statement.iterate() : statement.all()
+  ) as Iterable<SessionRow>
+  return scoped && scopePaths
+    ? scopedSessionRows(rows, scopePaths, limit, dbPath)
+    : Array.from(rows)
+}
+
+function rowToCandidate(
+  row: SessionRow,
+  dbPath: string,
+  agent: 'opencode' | 'zcode'
+): SessionFileCandidate {
   const mtimeMs =
     typeof row.time_updated === 'number' && row.time_updated > 0
       ? row.time_updated
       : row.time_created
   return {
-    agent: 'opencode' as AiVaultAgent,
+    agent,
     file: {
       path: buildOpenCodeSqliteCandidatePath(dbPath, row.id),
       mtimeMs,
@@ -64,10 +83,13 @@ function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
   }
 }
 
-function dedupeAndSortSqliteCandidates(candidates: SessionFileCandidate[]): SessionFileCandidate[] {
+function dedupeAndSortSqliteCandidates(
+  candidates: SessionFileCandidate[],
+  agent: 'opencode' | 'zcode'
+): SessionFileCandidate[] {
   const candidatesBySessionId = new Map<string, SessionFileCandidate>()
   for (const candidate of candidates) {
-    const parsed = splitOpenCodeSqliteCandidate(candidate.file.path)
+    const parsed = splitOpenCodeSqliteCandidate(candidate.file.path, agent)
     if (!parsed) {
       continue
     }
@@ -81,43 +103,29 @@ function dedupeAndSortSqliteCandidates(candidates: SessionFileCandidate[]): Sess
   })
 }
 
-/**
- * List OpenCode sessions from one or more SQLite databases as synthetic
- * `SessionFileCandidate` entries. Each candidate's file path is a synthetic
- * `<dbPath>#<sessionId>` string that the parser dispatcher routes to
- * `parseOpenCodeSqliteSession`. Databases that lack the `session` table are
- * silently skipped; errors are recorded as scan issues.
- * @param args.dbPaths - Absolute paths to opencode.db files to scan.
- * @param args.limit - Maximum number of sessions to return per database.
- * @param args.issues - Collected scan issues to append errors to.
- * @returns Array of synthetic candidates sorted by effective recency.
- */
+/** List synthetic db#session candidates; skip absent session schemas and report database failures as scan issues. */
 export async function listOpenCodeSqliteSessions(args: {
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
+  agent?: 'opencode' | 'zcode'
+  /** Lists only sessions whose directory is in scope, newest `limit` of them. */
+  scopePaths?: readonly string[]
 }): Promise<SessionFileCandidate[]> {
   const candidates: SessionFileCandidate[] = []
+  const agent = args.agent ?? 'opencode'
   for (const dbPath of args.dbPaths) {
-    let db: SyncDatabase | null = null
     try {
-      db = openReadonlyDatabase(dbPath)
-      if (!canReadOpenCodeSessions(db)) {
-        continue
-      }
-      const rows = db.prepare(buildSessionListQuery(db)).all(args.limit) as SessionRow[]
+      const rows = readOpenCodeDatabase({
+        dbPath,
+        read: (db) => readSessionRows(db, args.limit, args.scopePaths, dbPath)
+      })
       for (const row of rows) {
-        candidates.push(rowToCandidate(row, dbPath))
+        candidates.push(rowToCandidate(row, dbPath, agent))
       }
     } catch (err) {
-      args.issues.push({
-        agent: 'opencode',
-        path: dbPath,
-        message: errorMessage(err)
-      })
-    } finally {
-      db?.close()
+      args.issues.push(openCodeDatabaseScanIssue(dbPath, err, agent))
     }
   }
-  return dedupeAndSortSqliteCandidates(candidates)
+  return dedupeAndSortSqliteCandidates(candidates, agent)
 }

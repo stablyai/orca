@@ -1,8 +1,13 @@
 import { basename } from 'node:path'
-import type { Repo } from '../shared/types'
-import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../shared/worktree-id'
+import type { Repo } from '../shared/repo-types'
+import {
+  getRepoMainWorktreeId,
+  splitWorktreeId,
+  splitWorktreeIdForFilesystem
+} from '../shared/worktree/id'
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Store } from './persistence'
+import { getRepoRoutingConnectionId } from '../shared/execution-host'
 
 export type UsageWorktreeRef = {
   worktreeId: string
@@ -18,15 +23,22 @@ export function loadKnownUsageWorktreesByRepo(
   store: Pick<Store, 'getAllWorktreeMeta'>,
   repos: Repo[]
 ): Map<string, UsageWorktreeRef[]> {
-  const localRepos = repos.filter((repo) => !repo.connectionId)
-  const repoIds = new Set(localRepos.map((repo) => repo.id))
+  const localRepos = repos.filter((repo) => !getRepoRoutingConnectionId(repo))
+  const localReposById = new Map<string, Repo>()
+  for (const repo of localRepos) {
+    const repoId = repo.id
+    // Preserve the first match if corrupt state repeats a repo id.
+    if (!localReposById.has(repoId)) {
+      localReposById.set(repoId, repo)
+    }
+  }
   const worktreesByRepo = new Map<string, UsageWorktreeRef[]>()
   const seenPathsByRepo = new Map<string, Set<string>>()
 
   for (const repo of localRepos) {
     worktreesByRepo.set(repo.id, [
       {
-        worktreeId: `${repo.id}::${repo.path}`,
+        worktreeId: getRepoMainWorktreeId(repo),
         path: repo.path,
         displayName: repo.displayName || getDefaultUsageWorktreeLabel(repo.path)
       }
@@ -34,18 +46,19 @@ export function loadKnownUsageWorktreesByRepo(
     seenPathsByRepo.set(repo.id, new Set([repo.path]))
   }
 
-  // Why: usage scans are background/opt-in analytics. Do not spawn
-  // `git worktree list` here; it can re-touch macOS protected folders.
+  // Background analytics must not spawn git scans that re-touch macOS protected folders.
   for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
     const parsed = splitWorktreeId(worktreeId)
-    if (!parsed || !repoIds.has(parsed.repoId)) {
+    if (!parsed) {
       continue
     }
-    const repo = localRepos.find((item) => item.id === parsed.repoId)
-    const worktreePath =
-      repo && isFolderRepo(repo)
-        ? (splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? parsed.worktreePath)
-        : parsed.worktreePath
+    const repo = localReposById.get(parsed.repoId)
+    if (!repo) {
+      continue
+    }
+    const worktreePath = isFolderRepo(repo)
+      ? (splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? parsed.worktreePath)
+      : parsed.worktreePath
     const seenPaths = seenPathsByRepo.get(parsed.repoId)
     if (seenPaths?.has(worktreePath)) {
       continue

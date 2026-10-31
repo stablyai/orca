@@ -88,7 +88,7 @@ export function BrowserNewProfileDialog({
             )}
             autoFocus
             maxLength={50}
-            className="mb-4"
+            className="mb-3"
           />
           <DialogFooter>
             <Button type="button" variant="outline" size="sm" onClick={handleClose}>

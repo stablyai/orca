@@ -1,15 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
-import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
   buildMobileAiVaultResumeLaunch,
-  buildMobileAiVaultResumeCommand,
   createMobileAiVaultResumeMutationRegistry,
-  readMobileRuntimeHostPlatform,
+  readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
   resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
+import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
@@ -38,168 +37,27 @@ function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   }
 }
 
-describe('buildMobileAiVaultResumeCommand', () => {
-  it('delegates POSIX command construction to the shared AI Vault builder', () => {
-    expect(buildMobileAiVaultResumeCommand({ session: session(), hostPlatform: 'darwin' })).toBe(
-      "cd '/Users/ada/repo' && claude --resume 'session 1'"
-    )
-  })
-
-  it('uses PowerShell-safe queued command construction for default local Windows terminals', () => {
-    expect(
-      buildMobileAiVaultResumeCommand({
-        session: session({
-          agent: 'codex',
-          sessionId: 'codex-1',
-          cwd: 'C:\\repo app',
-          codexHome: 'C:\\Users\\Ada\\.codex'
-        }),
-        hostPlatform: 'win32'
-      })
-    ).toBe(
-      "Set-Location -LiteralPath 'C:\\repo app'; $env:CODEX_HOME='C:\\Users\\Ada\\.codex'; codex resume 'codex-1'"
-    )
-  })
-
-  it('resumes OMP sessions by absolute transcript path like desktop', () => {
-    // Regression: custom OMP_CODING_AGENT_DIR / WSL-store sessions miss on an
-    // id lookup, so the forwarded filePath must win over the session id.
-    expect(
-      buildMobileAiVaultResumeCommand({
-        session: session({
-          agent: 'omp',
-          sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
-          filePath: '/Users/ada/.omp/agent/sessions/repo/sess.jsonl',
-          cwd: '/Users/ada/repo'
-        }),
-        hostPlatform: 'darwin'
-      })
-    ).toBe("cd '/Users/ada/repo' && omp --resume '/Users/ada/.omp/agent/sessions/repo/sess.jsonl'")
-  })
-
-  it('uses direct cmd syntax when the host Windows terminal is already cmd', () => {
-    // Why: resume text is typed into the live host tab. Nested `cmd /d /s /c`
-    // wrappers break interactive cmd quoting (see buildAiVaultResumeShellCommand).
-    const command = buildMobileAiVaultResumeCommand({
-      session: session({
-        agent: 'codex',
-        sessionId: 'codex-1',
-        cwd: 'C:\\repo app',
-        codexHome: 'C:\\Users\\Ada\\.codex'
-      }),
-      hostPlatform: 'win32',
-      hostTerminalWindowsShell: 'cmd.exe'
-    })
-    expect(command).toBe(
-      'cd /d "C:\\repo app" && set "CODEX_HOME=C:\\Users\\Ada\\.codex" && codex resume "codex-1"'
-    )
-  })
-
-  it('uses POSIX command construction and converts Codex home for WSL targets', () => {
-    expect(
-      buildMobileAiVaultResumeCommand({
-        session: session({
-          agent: 'codex',
-          sessionId: 'codex-1',
-          cwd: '/home/ada/repo',
-          codexHome: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex'
-        }),
-        hostPlatform: 'linux'
-      })
-    ).toBe("cd '/home/ada/repo' && CODEX_HOME='/home/ada/.codex' codex resume 'codex-1'")
-  })
-
-  it('passes command overrides through to the shared builder', () => {
-    expect(
-      buildMobileAiVaultResumeCommand({
-        session: session({ sessionId: 'abc' }),
-        hostPlatform: 'linux',
-        commandOverride: 'claude-dev'
-      })
-    ).toBe("cd '/Users/ada/repo' && claude-dev --resume 'abc'")
-  })
-})
-
 describe('buildMobileAiVaultResumeLaunch', () => {
-  it('preserves an arbitrary OMP transcript locator for later cold resume', () => {
+  it('resumes Cursor by conversation id with its default args and launch config like desktop', () => {
     const launch = buildMobileAiVaultResumeLaunch({
-      session: session({
-        agent: 'omp',
-        sessionId: 'omp-custom-1',
-        filePath: '/custom/omp-sessions/project/session.jsonl'
-      }),
-      hostPlatform: 'linux',
-      settings: {
-        agentDefaultArgs: { omp: '--model custom' },
-        agentDefaultEnv: { omp: { OMP_PROFILE: 'custom' } }
-      }
+      session: session({ agent: 'cursor', sessionId: 'cursor-1' }),
+      workspacePlatform: 'darwin',
+      settings: { agentDefaultArgs: { cursor: '--model gpt-5' } }
     })
 
     expect(launch).toMatchObject({
-      command:
-        "cd '/Users/ada/repo' && omp '--model' 'custom' --resume '/custom/omp-sessions/project/session.jsonl'",
-      env: { OMP_PROFILE: 'custom' },
-      launchConfig: {
-        agentCommand: "omp '--model' 'custom'",
-        agentArgs: '--model custom',
-        agentEnv: { OMP_PROFILE: 'custom' },
-        ompResumeFilePath: '/custom/omp-sessions/project/session.jsonl'
-      },
-      launchAgent: 'omp'
+      launchConfig: { agentArgs: '--model gpt-5' },
+      launchAgent: 'cursor',
+      resumeProviderSession: { key: 'conversation_id', id: 'cursor-1' }
     })
-
-    const coldLaunch = buildAgentResumeStartupPlan({
-      agent: 'omp',
-      providerSession: { key: 'session_id', id: 'omp-custom-1' },
-      cmdOverrides: {},
-      agentArgs: launch.launchConfig?.agentArgs,
-      agentEnv: launch.launchConfig?.agentEnv,
-      agentCommand: launch.launchConfig?.agentCommand,
-      ompResumeFilePath: launch.launchConfig?.ompResumeFilePath,
-      platform: 'linux'
-    })
-    expect(coldLaunch).toMatchObject({
-      launchCommand:
-        "omp '--model' 'custom' '--resume' '/custom/omp-sessions/project/session.jsonl'",
-      env: { OMP_PROFILE: 'custom' }
-    })
-  })
-
-  it('uses shared TUI startup planning for default args, env, and launch config', () => {
-    const launch = buildMobileAiVaultResumeLaunch({
-      session: session({
-        agent: 'claude',
-        sessionId: 'abc 123',
-        cwd: '/Users/ada/repo'
-      }),
-      hostPlatform: 'darwin',
-      settings: {
-        agentCmdOverrides: { claude: 'claude-dev' },
-        agentDefaultArgs: { claude: '--model opus' },
-        agentDefaultEnv: { claude: { ANTHROPIC_BASE_URL: 'http://localhost:3000' } }
-      }
-    })
-    expect(launch.command).toBe(
-      "cd '/Users/ada/repo' && claude-dev '--model' 'opus' '--resume' 'abc 123'"
-    )
-    expect(launch.env).toEqual({ ANTHROPIC_BASE_URL: 'http://localhost:3000' })
-    expect(launch.launchAgent).toBe('claude')
-    expect(launch.launchConfig).toEqual({
-      agentCommand: "claude-dev '--model' 'opus'",
-      agentArgs: '--model opus',
-      agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
-    })
-    // Only bare real-home Codex resumes request env deletion.
-    expect(launch.envToDelete).toBeUndefined()
+    expect(launch.command).toContain("'--model' 'gpt-5'")
   })
 
   it('deletes inherited Codex homes when resuming a real-home session like desktop', () => {
-    // Regression: a user agentDefaultEnv CODEX_HOME (or a stale daemon-
-    // inherited home) must not reroute a bare real-home resume typed into the
-    // created pane; desktop already strips the pair at pane spawn.
+    // Strip inherited/default CODEX_HOME when resuming a real-home Codex session.
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({ agent: 'codex', sessionId: 'codex-1', codexHome: null }),
-      hostPlatform: 'darwin',
+      workspacePlatform: 'darwin',
       settings: {
         agentDefaultEnv: { codex: { CODEX_HOME: '/Users/ada/.codex-pinned' } }
       }
@@ -207,22 +65,78 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     expect(launch.command).not.toContain('CODEX_HOME=')
     expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
   })
-
-  it('keeps managed-home Codex resumes free of env deletion', () => {
-    const launch = buildMobileAiVaultResumeLaunch({
-      session: session({
-        agent: 'codex',
-        sessionId: 'codex-1',
-        codexHome: '/Users/ada/.orca/codex-runtime-home/home'
-      }),
-      hostPlatform: 'darwin'
-    })
-    expect(launch.command).toContain("CODEX_HOME='/Users/ada/.orca/codex-runtime-home/home'")
-    expect(launch.envToDelete).toBeUndefined()
-  })
 })
 
 describe('resumeAiVaultSessionInTerminal', () => {
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'lets the %s execution host select the Qoder resume command at creation',
+    async (hostPlatform) => {
+      const launch = buildMobileAiVaultResumeLaunch({
+        session: session({ agent: 'qoder', sessionId: 'same-qoder-session' }),
+        workspacePlatform: hostPlatform
+      })
+      const sendRequest = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' } }
+        })
+        .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+      await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', {
+        ...launch,
+        clientMutationId: 'qoder-resume',
+        hostCapabilities: ['session.tabs.qoderOwnedCreate.v1']
+      })
+      expect(sendRequest).toHaveBeenCalledTimes(1)
+      expect(sendRequest).toHaveBeenCalledWith(
+        'session.tabs.createTerminal',
+        expect.objectContaining({
+          command: launch.command,
+          launchAgent: 'qoder',
+          launchConfig: launch.launchConfig
+        }),
+        { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+      )
+      expect(launch.command).toContain('same-qoder-session')
+    }
+  )
+
+  it.each(
+    [undefined, [], ['aiVault.v1']].flatMap((hostCapabilities) =>
+      (['darwin', 'linux', 'win32'] as const).map((hostPlatform) => ({
+        hostCapabilities,
+        hostPlatform
+      }))
+    )
+  )(
+    'keeps the acknowledged-create fallback on an older $hostPlatform host',
+    async ({ hostCapabilities, hostPlatform }) => {
+      const launch = buildMobileAiVaultResumeLaunch({
+        session: session({ agent: 'qoder', sessionId: 'legacy-session' }),
+        workspacePlatform: hostPlatform
+      })
+      const sendRequest = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' } }
+        })
+        .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+      await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', {
+        ...launch,
+        hostCapabilities,
+        clientMutationId: 'same-legacy-resume'
+      })
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+      expect(sendRequest.mock.calls[0]?.[1]).not.toHaveProperty('command')
+      expect(sendRequest.mock.calls[1]).toEqual([
+        'terminal.send',
+        { terminal: 'pty-1', text: launch.command, enter: true },
+        { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+      ])
+    }
+  )
+
   it('creates a fresh terminal and sends the command with Enter', async () => {
     const sendRequest = vi
       .fn()
@@ -243,10 +157,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
           agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
         },
         launchAgent: 'claude',
-        clientMutationId: 'resume-1',
-        activate: false,
-        select: true,
-        navigation: 'caller'
+        clientMutationId: 'resume-1'
       })
     ).resolves.toMatchObject({ id: 'tab-1', terminal: 'pty-1' })
     expect(sendRequest).toHaveBeenNthCalledWith(
@@ -283,6 +194,32 @@ describe('resumeAiVaultSessionInTerminal', () => {
     )
   })
 
+  it('tells the host which conversation the created pane resumes', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' } }
+      })
+      .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1' }),
+      workspacePlatform: 'darwin'
+    })
+
+    await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch)
+
+    expect(sendRequest).toHaveBeenNthCalledWith(
+      1,
+      'session.tabs.createTerminal',
+      expect.objectContaining({
+        launchAgent: 'codex',
+        resumeProviderSession: { key: 'session_id', id: 'codex-1' }
+      }),
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    )
+  })
+
   it('throws when terminal creation fails', async () => {
     const sendRequest = vi.fn().mockResolvedValueOnce({
       ok: false,
@@ -297,7 +234,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
     const sendRequest = vi.fn().mockResolvedValueOnce({ ok: true, result: { tab: { id: 'x' } } })
     await expect(
       resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', { command: 'command' })
-    ).rejects.toThrow('Created terminal response was invalid')
+    ).rejects.toThrow('The host sent a reply this app could not read (session.tabs.createTerminal)')
   })
 
   it('throws when terminal send fails or is locked', async () => {
@@ -338,11 +275,9 @@ describe('createMobileAiVaultResumeMutationRegistry', () => {
     })
 
     expect(registry.claim('session-a')).toBe('session-a:mutation-1')
-    // A failed attempt keeps the key so the host can dedup the retry.
     expect(registry.claim('session-a')).toBe('session-a:mutation-1')
 
     registry.releaseOnSuccess('session-a')
-    // A resume after success mints fresh so the user can fork intentionally.
     expect(registry.claim('session-a')).toBe('session-a:mutation-2')
   })
 
@@ -381,4 +316,20 @@ describe('resume platform helpers', () => {
     expect(resolveMobileAiVaultResumePlatform('local', 'win32', 'C:\\repo', 'linux')).toBe('linux')
     expect(resolveMobileAiVaultResumePlatform('runtime', 'linux')).toBeNull()
   })
+})
+
+it.each([null, {}, { capabilities: 'session.tabs.qoderOwnedCreate.v1' }, { capabilities: [1] }])(
+  'does not infer safe Qoder creation from unreadable host capabilities',
+  (status) => {
+    expect(readMobileAiVaultResumeHost(status).capabilities).toBeUndefined()
+  }
+)
+
+it('reads the execution platform and advertised safe-create capability together', () => {
+  expect(
+    readMobileAiVaultResumeHost({
+      hostPlatform: 'win32',
+      capabilities: ['session.tabs.qoderOwnedCreate.v1']
+    })
+  ).toEqual({ platform: 'win32', capabilities: ['session.tabs.qoderOwnedCreate.v1'] })
 })

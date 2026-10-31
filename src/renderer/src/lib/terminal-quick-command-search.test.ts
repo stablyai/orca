@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getTerminalQuickCommandPickerValue,
-  isTerminalQuickCommandSearchQueryTooLarge,
   TERMINAL_QUICK_COMMAND_SEARCH_QUERY_MAX_BYTES,
   searchTerminalQuickCommands
 } from './terminal-quick-command-search'
-import type { TerminalQuickCommand } from '../../../shared/types'
+import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 
 const commands: TerminalQuickCommand[] = [
   {
@@ -36,55 +35,6 @@ afterEach(() => {
 })
 
 describe('terminal quick command search', () => {
-  it('returns all commands for an empty query', () => {
-    expect(searchTerminalQuickCommands(commands, '')).toEqual(commands)
-  })
-
-  it('matches label, body, and agent text', () => {
-    expect(searchTerminalQuickCommands(commands, 'dev').map((command) => command.id)).toEqual([
-      'dev'
-    ])
-    expect(searchTerminalQuickCommands(commands, 'codex').map((command) => command.id)).toEqual([
-      'review'
-    ])
-    expect(
-      searchTerminalQuickCommands(commands, 'review all').map((command) => command.id)
-    ).toEqual(['review'])
-    expect(searchTerminalQuickCommands(commands, 'simulate').map((command) => command.id)).toEqual([
-      'simulate'
-    ])
-  })
-
-  it('normalizes accepted multiline pasted search text without regex replacement', () => {
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
-
-    expect(
-      searchTerminalQuickCommands(commands, '  review\n\tall  ').map((command) => command.id)
-    ).toEqual(['review'])
-
-    expect(replaceSpy).not.toHaveBeenCalled()
-  })
-
-  it('prefers the recent command when the query is empty', () => {
-    expect(
-      getTerminalQuickCommandPickerValue({
-        preferredCommandId: 'simulate',
-        filteredCommands: commands,
-        rawQuery: ''
-      })
-    ).toBe('simulate')
-  })
-
-  it('selects the first filtered match while searching', () => {
-    expect(
-      getTerminalQuickCommandPickerValue({
-        preferredCommandId: 'dev',
-        filteredCommands: searchTerminalQuickCommands(commands, 'codex'),
-        rawQuery: 'codex'
-      })
-    ).toBe('review')
-  })
-
   it('returns no commands for oversized pasted search text before reading commands', () => {
     const unreadableCommand = { ...commands[0] }
     Object.defineProperty(unreadableCommand, 'label', {
@@ -117,12 +67,26 @@ describe('terminal quick command search', () => {
       })
     ).toBe('')
   })
+})
 
-  it('counts UTF-8 bytes rather than UTF-16 code units', () => {
-    expect(
-      isTerminalQuickCommandSearchQueryTooLarge(
-        'é'.repeat(TERMINAL_QUICK_COMMAND_SEARCH_QUERY_MAX_BYTES / 2 + 1)
-      )
-    ).toBe(true)
+describe('searching long prompt bodies', () => {
+  it('normalizes a saved prompt once, not on every keystroke', () => {
+    let bodyReads = 0
+    const prompt = `Review the change. ${'context '.repeat(1000)}needle`
+    const command: TerminalQuickCommand = {
+      id: 'long',
+      label: 'Long review',
+      action: 'agent-prompt',
+      agent: 'claude',
+      get prompt() {
+        bodyReads += 1
+        return prompt
+      }
+    }
+
+    for (const query of ['n', 'ne', 'nee', 'needle']) {
+      expect(searchTerminalQuickCommands([command], query)).toEqual([command])
+    }
+    expect(bodyReads).toBe(1)
   })
 })

@@ -1,8 +1,18 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { useAppStore } from '@/store'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
+import { useAppStore, type AppState } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const initialAppStoreState = useAppStore.getState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -35,7 +45,7 @@ function makeRecord(
   }
 }
 
-function makeTerminalTab(id: string): Record<string, unknown> {
+function makeTerminalTab(id: string): TerminalTab {
   return {
     id,
     ptyId: null,
@@ -52,7 +62,7 @@ function makeWorkingStatus(
   paneKey: string,
   tabId: string,
   record: SleepingAgentSessionRecord
-): Record<string, unknown> {
+): AgentStatusEntry {
   return {
     paneKey,
     tabId,
@@ -67,7 +77,7 @@ function makeWorkingStatus(
   }
 }
 
-function makePreservedPaneState(record: SleepingAgentSessionRecord): Record<string, unknown> {
+function makePreservedPaneState(record: SleepingAgentSessionRecord): Partial<AppState> {
   return {
     activeWorktreeId: 'wt-1',
     activeTabType: 'terminal',
@@ -93,7 +103,7 @@ describe('resume sleeping agent provider claims', () => {
       ...makePreservedPaneState(record),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1')] },
       agentStatusByPaneKey: { [paneKey]: makeWorkingStatus(paneKey, 'tab-1', record) }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -114,7 +124,7 @@ describe('resume sleeping agent provider claims', () => {
       agentStatusByPaneKey: {
         [otherPaneKey]: makeWorkingStatus(otherPaneKey, 'tab-2', record)
       }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -125,7 +135,7 @@ describe('resume sleeping agent provider claims', () => {
 
   it('does not launch a hidden pane whose same provider session is still working', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    const record = makeRecord(paneKey, 'worktree-sleep')
+    const record = makeRecord(paneKey, 'quit')
     useAppStore.setState({
       ...makePreservedPaneState(record),
       activeWorktreeId: 'wt-other',
@@ -133,7 +143,7 @@ describe('resume sleeping agent provider claims', () => {
       activeTabIdByWorktree: {},
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1')] },
       agentStatusByPaneKey: { [paneKey]: makeWorkingStatus(paneKey, 'tab-1', record) }
-    } as never)
+    })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
 
@@ -141,4 +151,107 @@ describe('resume sleeping agent provider claims', () => {
     expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
+
+  // Orphan adoption rekeys tabs without sleeping records; a live PTY owns its transcript across workspace IDs, including done turns. Cover both same/cross-workspace claims so the sweep never forks that session.
+  it('does not fork a provider session a live pane in this workspace already finished a turn on', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
+    const record = makeRecord(paneKey)
+    useAppStore.setState({
+      activeWorktreeId: 'wt-1',
+      activeTabType: 'terminal',
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-peer')] },
+      terminalLayoutsByTabId: {
+        'tab-peer': {
+          root: { type: 'leaf', leafId: OTHER_LEAF_ID },
+          activeLeafId: OTHER_LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [OTHER_LEAF_ID]: 'pty-peer' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-peer': ['pty-peer'] },
+      sleepingAgentSessionsByPaneKey: { [paneKey]: record },
+      agentStatusByPaneKey: {
+        [peerPaneKey]: { ...makeWorkingStatus(peerPaneKey, 'tab-peer', record), state: 'done' }
+      }
+    })
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  // Only cross-workspace live+done proves ownership ignores workspace scope; live means PTY, not unfinished agent turn.
+  it('does not fork a provider session a live pane in another workspace already finished a turn on', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
+    const record = makeRecord(paneKey)
+    useAppStore.setState({
+      activeWorktreeId: 'wt-1',
+      activeTabType: 'terminal',
+      tabsByWorktree: { 'wt-1': [], 'wt-2': [makeTerminalTab('tab-peer')] },
+      terminalLayoutsByTabId: {
+        'tab-peer': {
+          root: { type: 'leaf', leafId: OTHER_LEAF_ID },
+          activeLeafId: OTHER_LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [OTHER_LEAF_ID]: 'pty-peer' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-peer': ['pty-peer'] },
+      sleepingAgentSessionsByPaneKey: { [paneKey]: record },
+      agentStatusByPaneKey: {
+        [peerPaneKey]: {
+          ...makeWorkingStatus(peerPaneKey, 'tab-peer', record),
+          worktreeId: 'wt-2',
+          state: 'done'
+        }
+      }
+    })
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
+
+    const state = useAppStore.getState()
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(0)
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  // Without a live PTY the peer is history, not a claim; resume must remain possible.
+  it('still resumes when the other workspace peer finished and holds no live PTY', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const peerPaneKey = makePaneKey('tab-peer', OTHER_LEAF_ID)
+    const record = makeRecord(paneKey)
+    useAppStore.setState({
+      activeWorktreeId: 'wt-1',
+      activeTabType: 'terminal',
+      tabsByWorktree: { 'wt-1': [], 'wt-2': [makeTerminalTab('tab-peer')] },
+      terminalLayoutsByTabId: {
+        'tab-peer': {
+          root: { type: 'leaf', leafId: OTHER_LEAF_ID },
+          activeLeafId: OTHER_LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [OTHER_LEAF_ID]: 'pty-peer' }
+        }
+      },
+      ptyIdsByTabId: {},
+      sleepingAgentSessionsByPaneKey: { [paneKey]: record },
+      agentStatusByPaneKey: {
+        [peerPaneKey]: {
+          ...makeWorkingStatus(peerPaneKey, 'tab-peer', record),
+          worktreeId: 'wt-2',
+          state: 'done'
+        }
+      }
+    })
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
+  })
+})
+
+it('keeps the same OMP provider claim when a later hook supplies its transcript path', () => {
+  const record = makeRecord(makePaneKey('tab-1', LEAF_ID))
+  const enriched = {
+    ...record,
+    providerSession: { ...record.providerSession, transcriptPath: '/custom/session.jsonl' }
+  }
+  expect(getProviderSessionClaimKey(enriched)).toBe(getProviderSessionClaimKey(record))
 })

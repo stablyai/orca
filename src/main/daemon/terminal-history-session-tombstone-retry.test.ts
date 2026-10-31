@@ -18,8 +18,6 @@ import {
   SESSION_TREE_REMOVAL_RETRY_DELAYS_MS
 } from './terminal-history-session-tombstone'
 
-/** Mirrors the worktree-level tombstone retry: a session tree whose rm fails must be re-queued
- *  in-process instead of waiting for the next HistoryManager construction. */
 describe('tombstoned session tree removal retries', () => {
   let basePath: string
 
@@ -56,7 +54,7 @@ describe('tombstoned session tree removal retries', () => {
       expect(removeHostTreeMock).toHaveBeenCalledTimes(index + 2)
     }
 
-    // Bounded: a permanently wedged tree waits for the next construction's drain.
+    // Exhausted retries leave reclamation for the next startup drain.
     await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(removeHostTreeMock).toHaveBeenCalledTimes(
       SESSION_TREE_REMOVAL_RETRY_DELAYS_MS.length + 1

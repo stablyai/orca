@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY } from '../../../../shared/constants'
 import { NumberField, SettingsSubsectionHeader } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
@@ -42,7 +42,6 @@ export function TerminalPaneAppearanceSection({
               'auto.components.settings.TerminalAppearanceSection.a6fdd6a3b1',
               'Inactive Pane Opacity'
             )}
-            // Why: clarify which panes get dimmed; tightened per the copy audit.
             description={translate(
               'auto.components.settings.TerminalAppearanceSection.dimUnfocusedPanes',
               'Dim unfocused panes.'

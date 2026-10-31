@@ -1,11 +1,11 @@
-import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../shared/constants'
+import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../shared/onboarding-defaults'
 import { CONTEXTUAL_TOUR_IDS } from '../../shared/contextual-tours'
 import {
   FEATURE_INTERACTION_IDS,
   type FeatureInteractionState
 } from '../../shared/feature-interactions'
 import { FEATURE_TIP_IDS } from '../../shared/feature-tips'
-import type { PersistedUIState } from '../../shared/types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { Store } from '../persistence'
 
 export const DEV_SHOW_FIRST_RUN_EDUCATION_ENV = 'ORCA_DEV_SHOW_FIRST_RUN_EDUCATION'
@@ -27,8 +27,7 @@ export function shouldSuppressDevEducation(args: {
 export function suppressDevEducationForStore(store: DevEducationStore, now = Date.now()): void {
   const onboarding = store.getOnboarding()
   if (onboarding.closedAt === null) {
-    // Why: default dev launches should behave like an already-productive
-    // profile, while the env escape hatch keeps first-run surfaces testable.
+    // Default dev profiles skip first-run surfaces; the env override keeps onboarding testable.
     store.updateOnboarding({
       flowVersion: ONBOARDING_FLOW_VERSION,
       closedAt: now,

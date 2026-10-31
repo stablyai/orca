@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setTerminalWebglDiagnosticRecorder } from '../../../../shared/terminal-webgl-diagnostics'
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { resumePaneRendering } from './pane-rendering-control'
-import { attachWebgl, resetTerminalWebglSuggestion } from './pane-webgl-renderer'
+import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-control'
+import { collectPaneRenderingDiagnostics } from './pane-rendering-diagnostics'
+import { schedulePaneRevealPresent } from './pane-reveal-repaint'
+import {
+  attachWebgl,
+  primeTerminalWebglAddon,
+  resetTerminalWebglSuggestion
+} from './pane-webgl-renderer'
+import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 
 function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
@@ -11,9 +18,11 @@ function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneIntern
     leafId,
     stablePaneId: leafId,
     terminal: {
+      options: { cursorBlink: true },
       cols: 80,
       rows: 24,
       refresh: vi.fn(),
+      blur: vi.fn(),
       loadAddon: vi.fn(options.loadAddon)
     } as never,
     container: {} as never,
@@ -25,6 +34,7 @@ function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneIntern
     webglDisabledAfterContextLoss: false,
     hasComplexScriptOutput: false,
     webglAddon: null,
+    imageAddon: null,
     ligaturesAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -49,14 +59,14 @@ function throwWebglUnavailable(): never {
 }
 
 function fireContextLoss(pane: ManagedPaneInternal): void {
-  // Fire the addon's real context-loss emitter so the loss -> latch -> resume
-  // cycle runs through the production onContextLoss handler.
+  // Use the real context-loss emitter to cover production latch/resume wiring.
   const addon = pane.webglAddon as unknown as { _onContextLoss: { fire: () => void } }
   addon._onContextLoss.fire()
 }
 
 describe('terminal WebGL context recovery', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await primeTerminalWebglAddon()
     resetTerminalWebglSuggestion()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -78,8 +88,7 @@ describe('terminal WebGL context recovery', () => {
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
     expect(pane.webglAddon).toBeNull()
 
-    // Title changes re-enter attach via setPaneGpuRendering; while WebGL is
-    // blocked these must not construct new addons or log again.
+    // Title changes reenter attach; while blocked, they must neither allocate addons nor log again.
     attachWebgl(pane)
     attachWebgl(pane)
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
@@ -112,6 +121,47 @@ describe('terminal WebGL context recovery', () => {
     expect(pane.webglAddon).not.toBeNull()
   })
 
+  it('defers retained replay rebuilds until rendering resumes', () => {
+    const owner = {}
+    const pane = createPane()
+    attachWebgl(pane)
+    const retainedAddon = pane.webglAddon
+    suspendPaneRendering([pane], { owner, livePanes: () => [pane] })
+
+    rebuildAttachedWebgl(pane)
+
+    expect(pane.webglAddon).toBe(retainedAddon)
+    expect(pane.webglRebuildDeferred).toBe(true)
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+
+    resumePaneRendering([pane], owner)
+
+    expect(pane.webglAddon).not.toBe(retainedAddon)
+    expect(pane.webglRebuildDeferred).toBe(false)
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(2)
+  })
+
+  it('replaces a retained context lost before xterm dispatches its loss event', () => {
+    const pane = createPane()
+    const dispose = vi.fn()
+    const lostAddon = {
+      dispose,
+      _renderer: {
+        _gl: {
+          getExtension: vi.fn(() => null),
+          isContextLost: vi.fn(() => true)
+        }
+      }
+    }
+    pane.webglAddon = lostAddon as never
+
+    resumePaneRendering([pane])
+
+    expect(dispose).toHaveBeenCalledTimes(1)
+    expect(pane.webglAddon).not.toBe(lostAddon)
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
   it('re-latches when the retried context is lost again', () => {
     const pane = createPane()
 
@@ -125,10 +175,45 @@ describe('terminal WebGL context recovery', () => {
     expect(pane.webglAddon).toBeNull()
   })
 
-  // Why exact keys: a GPU death loses every pane's context at once and the
-  // crash ring coalesces the repeats, so the population has to survive on the
-  // payload. It must use the same names the fit-retry crumb uses, or one ring
-  // ends up describing one measurement two ways.
+  it('stops resume retries after repeated losses in the retry window', () => {
+    const pane = createPane()
+
+    attachWebgl(pane)
+    fireContextLoss(pane)
+    resumePaneRendering([pane])
+    fireContextLoss(pane)
+    resumePaneRendering([pane])
+    fireContextLoss(pane)
+
+    expect(pane.webglContextLossTimestamps).toHaveLength(3)
+    expect(pane.webglDisabledAfterContextLoss).toBe(true)
+    expect(pane.webglAddon).toBeNull()
+
+    resumePaneRendering([pane])
+
+    expect(pane.webglDisabledAfterContextLoss).toBe(true)
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(3)
+  })
+
+  it('stops reveal retries after repeated losses in the retry window', () => {
+    const pane = createPane()
+
+    attachWebgl(pane)
+    fireContextLoss(pane)
+    resumePaneRendering([pane])
+    fireContextLoss(pane)
+    resumePaneRendering([pane])
+    fireContextLoss(pane)
+
+    schedulePaneRevealPresent(() => [pane])
+
+    expect(pane.webglDisabledAfterContextLoss).toBe(true)
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(3)
+  })
+
+  // GPU death affects all panes; coalesced crumbs need the same census keys as fit retry to preserve population evidence.
   it('carries the pane census under the same field names the fit-retry crumb uses', () => {
     const recorded: { kind: string; detail?: Record<string, unknown> }[] = []
     setTerminalWebglDiagnosticRecorder((kind, detail) => recorded.push({ kind, detail }))
@@ -143,8 +228,25 @@ describe('terminal WebGL context recovery', () => {
     expect(recorded).toEqual([
       {
         kind: 'webgl-context-loss',
-        detail: { paneId: 1, livePanes: expect.any(Number), livePaneManagers: expect.any(Number) }
+        detail: {
+          paneId: 1,
+          lossesInWindow: 1,
+          livePanes: expect.any(Number),
+          livePaneManagers: expect.any(Number)
+        }
       }
     ])
+  })
+
+  it('reports only recent context losses in rendering diagnostics', () => {
+    const now = 1_700_000_000_000
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    const pane = createPane()
+    pane.webglContextLossTimestamps = [now - 60_001, now - 1_000]
+
+    const [diagnostics] = collectPaneRenderingDiagnostics(new Map([[pane.id, pane]]))
+
+    expect(diagnostics.webglContextLossesInWindow).toBe(1)
+    expect(pane.webglContextLossTimestamps).toEqual([now - 60_001, now - 1_000])
   })
 })

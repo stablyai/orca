@@ -1,176 +1,114 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import type { RmOptions } from 'node:fs'
+import { createServer } from 'node:net'
+import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, type ElectronApplication } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../../src/cli/runtime/client'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import {
+  cleanupE2EDaemons,
+  closeElectronAppForE2E,
+  stopServeElectronAppForE2E
+} from './electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
 } from './electron-home-isolation'
 import type { RuntimeDesktopPairingOffer } from './paired-electron-client'
-
-type ServeReady = {
-  type?: unknown
-  pairing?: {
-    available?: unknown
-    url?: unknown
-    webClientUrl?: unknown
-  }
-}
-
-const STARTUP_DIAGNOSTIC_LIMIT = 8_000
-const PAIRING_URL_PATTERN = /orca:\/\/[^\s"\\]+/g
-const WEB_CLIENT_PAIRING_PATTERN = /([#&]pairing=)[^&\s"\\]+/g
+import { readPairingOffer, readServeReadiness } from './headless-paired-runtime-serve-readiness'
+import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 
 export type HeadlessPairedRuntimeHost = {
-  app: ElectronApplication
+  /** Current serve process. Replaced by `restartServeProcess`, so always read it fresh. */
+  readonly app: ElectronApplication
   client: RuntimeClient
   dispose: () => Promise<void>
   offer: RuntimeDesktopPairingOffer
+  // Reuse profile, pairing keys and port on serve restart; requires pinnedServePort to preserve existing client identity.
+  restartServeProcess: (options?: {
+    // Edit only between processes: the old host flushes on quit and the replacement reads on startup.
+    betweenProcesses?: () => void | Promise<void>
+  }) => Promise<void>
+  userDataDir: string
+  /** The isolated launch environment, for another host started on the same profile. */
+  env: NodeJS.ProcessEnv
+  /** Electron's own argv for this serve host, without the serve flags. */
+  electronArgs: string[]
 }
 
-export class HeadlessPairedRuntimeStartupDiagnosticBuffer {
-  private completed = ''
-  private discardingOversizedLine = false
-  private pending = ''
+type HeadlessHostCleanup = () => Promise<void> | void
 
-  append(chunk: Buffer): void {
-    let value = chunk.toString()
-    if (this.discardingOversizedLine) {
-      const newlineIndex = value.indexOf('\n')
-      if (newlineIndex === -1) {
-        return
-      }
-      value = value.slice(newlineIndex + 1)
-      this.discardingOversizedLine = false
-    }
+// Why: Windows keeps a just-killed daemon's handles on the profile briefly, so removal sees EPERM.
+const PROFILE_REMOVAL: RmOptions = { recursive: true, force: true, maxRetries: 50, retryDelay: 100 }
 
-    const combined = `${this.pending}${value}`
-    const newlineIndex = combined.lastIndexOf('\n')
-    if (newlineIndex !== -1) {
-      this.completed = `${this.completed}${redactPairingMaterial(
-        combined.slice(0, newlineIndex + 1)
-      )}`.slice(-STARTUP_DIAGNOSTIC_LIMIT)
-      this.pending = combined.slice(newlineIndex + 1)
-    } else {
-      this.pending = combined
-    }
-    if (this.pending.length > STARTUP_DIAGNOSTIC_LIMIT) {
-      this.pending = ''
-      this.discardingOversizedLine = true
-    }
-  }
-
-  read(): string {
-    const pending = this.discardingOversizedLine ? '' : redactPairingMaterial(this.pending)
-    return `${this.completed}${pending}`.slice(-STARTUP_DIAGNOSTIC_LIMIT)
+/** CI diagnostics: the profile's logs outlive its deletion when this names a directory. */
+function preserveProfileLogs(userDataDir: string): void {
+  const target = process.env.ORCA_E2E_PRESERVE_PROFILE_LOGS_DIR
+  const logs = path.join(userDataDir, 'logs')
+  if (target && existsSync(logs)) {
+    cpSync(logs, path.join(target, path.basename(userDataDir)), { recursive: true })
   }
 }
 
-export function formatHeadlessPairedRuntimeStartupDiagnostics(
-  stdout: string,
-  stderr: string
-): string {
-  return [
-    stdout ? `stdout:\n${redactPairingMaterial(stdout)}` : '',
-    stderr ? `stderr:\n${redactPairingMaterial(stderr)}` : ''
-  ]
-    .filter(Boolean)
-    .join('\n')
-}
-
-function redactPairingMaterial(value: string): string {
-  return value
-    .replace(PAIRING_URL_PATTERN, 'orca://[redacted]')
-    .replace(WEB_CLIENT_PAIRING_PATTERN, '$1[redacted]')
-}
-
-async function readPairingOffer(app: ElectronApplication): Promise<RuntimeDesktopPairingOffer> {
-  const child = app.process()
-  const stdout = child.stdout
-  if (!stdout) {
-    throw new Error('Headless runtime stdout is unavailable')
+async function cleanupHeadlessHostResources(cleanups: HeadlessHostCleanup[]): Promise<void> {
+  const failures: unknown[] = []
+  for (const cleanup of cleanups) {
+    try {
+      await cleanup()
+    } catch (error) {
+      failures.push(error)
+    }
   }
-  return new Promise((resolve, reject) => {
-    let buffered = ''
-    const stdoutDiagnostic = new HeadlessPairedRuntimeStartupDiagnosticBuffer()
-    const stderrDiagnostic = new HeadlessPairedRuntimeStartupDiagnosticBuffer()
-    const stderr = child.stderr
-    const timeout = setTimeout(() => {
-      cleanup()
-      const diagnostics = formatHeadlessPairedRuntimeStartupDiagnostics(
-        stdoutDiagnostic.read(),
-        stderrDiagnostic.read()
-      )
-      reject(
-        new Error(
-          `Headless runtime did not publish pairing readiness${diagnostics ? `\n${diagnostics}` : ''}`
-        )
-      )
-    }, 60_000)
-    const cleanup = (): void => {
-      clearTimeout(timeout)
-      stdout.off('data', onData)
-      stderr?.off('data', onStderr)
-      child.off('close', onClose)
-    }
-    const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
-      cleanup()
-      const diagnostics = formatHeadlessPairedRuntimeStartupDiagnostics(
-        stdoutDiagnostic.read(),
-        stderrDiagnostic.read()
-      )
-      reject(
-        new Error(
-          `Headless runtime exited before pairing readiness (code=${code ?? 'none'}, signal=${signal ?? 'none'})${diagnostics ? `\n${diagnostics}` : ''}`
-        )
-      )
-    }
-    const onStderr = (chunk: Buffer): void => {
-      stderrDiagnostic.append(chunk)
-    }
-    const onData = (chunk: Buffer): void => {
-      stdoutDiagnostic.append(chunk)
-      buffered += chunk.toString()
-      const lines = buffered.split(/\r?\n/)
-      buffered = lines.pop() ?? ''
-      for (const line of lines) {
-        let readiness: ServeReady
-        try {
-          readiness = JSON.parse(line) as ServeReady
-        } catch {
-          continue
-        }
-        const pairing = readiness.pairing
-        if (
-          readiness.type !== 'orca_server_ready' ||
-          pairing?.available !== true ||
-          typeof pairing.url !== 'string' ||
-          typeof pairing.webClientUrl !== 'string'
-        ) {
-          continue
-        }
-        cleanup()
-        resolve({ pairingUrl: pairing.url, webClientUrl: pairing.webClientUrl })
-        return
-      }
-    }
-    stdout.on('data', onData)
-    stderr?.on('data', onStderr)
-    child.on('close', onClose)
-    if (child.exitCode !== null || child.signalCode !== null) {
-      onClose(child.exitCode, child.signalCode)
-    }
-  })
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'Failed to clean up headless paired runtime host')
+  }
 }
 
-export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedRuntimeHost> {
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-headless-paired-'))
+// Reserve a stable port for relaunch; --serve-port 0 would strand clients on the previous endpoint.
+async function reserveFreeLoopbackPort(): Promise<number> {
+  const probe = createServer()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      probe.once('error', reject)
+      probe.listen(0, '127.0.0.1', () => {
+        probe.off('error', reject)
+        resolve()
+      })
+    })
+    return (probe.address() as AddressInfo).port
+  } finally {
+    await new Promise<void>((resolve) => probe.close(() => resolve()))
+  }
+}
+
+export async function launchHeadlessPairedRuntimeHost(
+  options: {
+    agentBrowserSocketParent?: string
+    executablePath?: string
+    /** Host-only env seams (e.g. a forced-unavailable snapshot) the paired client must not inherit. */
+    extraEnv?: Record<string, string>
+    // Mobile scope creates the host’s only offer; desktop plus direct-phone pairing is unsupported.
+    pairingScope?: 'runtime' | 'mobile'
+    /** Bind a stable loopback port so `restartServeProcess` can reclaim it. */
+    pinnedServePort?: boolean
+    userDataParent?: string
+    /** No browser of its own, as the WSL distro's server: its browser tabs live only on clients. */
+    withoutBrowser?: boolean
+  } = {}
+): Promise<HeadlessPairedRuntimeHost> {
+  const userDataDir = mkdtempSync(
+    path.join(options.userDataParent ?? os.tmpdir(), 'orca-e2e-headless-paired-')
+  )
+  const servePort = options.pinnedServePort === true ? await reserveFreeLoopbackPort() : 0
+  let agentBrowserSocketDir: string | null = null
   let app: ElectronApplication | undefined
   try {
+    agentBrowserSocketDir = options.agentBrowserSocketParent
+      ? mkdtempSync(path.join(options.agentBrowserSocketParent, 'orca-ab-'))
+      : null
     writeFileSync(
       path.join(userDataDir, 'orca-data.json'),
       `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
@@ -182,49 +120,109 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
       launchEnv: {
         NODE_ENV: 'development',
         ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1',
-        ORCA_E2E_HEADLESS: '1'
+        ORCA_E2E_HEADLESS: '1',
+        ...(options.withoutBrowser ? { ORCA_E2E_HEADLESS_SERVE_WITHOUT_BROWSER: '1' } : {})
       },
-      extraEnv: {},
-      userDataDir,
-      codexRealHomeEnabled: false
+      extraEnv: options.extraEnv ?? {},
+      userDataDir
     })
+    if (agentBrowserSocketDir) {
+      isolation.env.AGENT_BROWSER_SOCKET_DIR = agentBrowserSocketDir
+    }
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
-    app = await electron.launch({
-      args: [
-        ...getOrcaElectronLaunchArgs(mainPath, false),
-        '--serve',
-        '--serve-json',
-        '--serve-port',
-        '0',
-        '--serve-pairing-address',
-        '127.0.0.1'
-      ],
-      env: isolation.env
-    })
+    const launchServeProcess = (): Promise<ElectronApplication> =>
+      electron.launch({
+        ...(options.executablePath ? { executablePath: options.executablePath } : {}),
+        args: [
+          ...(options.executablePath ? [] : getOrcaElectronLaunchArgs(mainPath, false)),
+          '--serve',
+          '--serve-json',
+          '--serve-port',
+          String(servePort),
+          '--serve-pairing-address',
+          '127.0.0.1',
+          ...(options.pairingScope === 'mobile' ? ['--serve-mobile-pairing'] : [])
+        ],
+        env: isolation.env
+      })
+    const launchedApp = await launchServeProcess()
+    app = launchedApp
     const [offer] = await Promise.all([
-      readPairingOffer(app),
-      app
-        .evaluate(({ app: electronApp }) => electronApp.getPath('home'))
-        .then((home) => assertElectronResolvedIsolatedHome(home, isolation))
+      readPairingOffer(launchedApp),
+      retryTransientMainEvaluate(() =>
+        launchedApp.evaluate(({ app: electronApp }) => electronApp.getPath('home'))
+      ).then((home) => assertElectronResolvedIsolatedHome(home, isolation))
     ])
+    let serveProcess = launchedApp
+    // Do not re-close an app after failed relaunch or disposal can replace the launch error.
+    let serveProcessOpen = true
     return {
-      app,
+      get app() {
+        return serveProcess
+      },
       client: new RuntimeClient(userDataDir, 5_000),
       offer,
+      userDataDir,
+      env: isolation.env,
+      electronArgs: options.executablePath ? [] : getOrcaElectronLaunchArgs(mainPath, false),
+      restartServeProcess: async (restartOptions = {}) => {
+        if (options.pinnedServePort !== true) {
+          throw new Error(
+            'restartServeProcess requires launchHeadlessPairedRuntimeHost({ pinnedServePort: true })'
+          )
+        }
+        await stopServeElectronAppForE2E(serveProcess)
+        serveProcessOpen = false
+        await restartOptions.betweenProcesses?.()
+        const relaunched = await launchServeProcess()
+        serveProcess = relaunched
+        serveProcessOpen = true
+        await readServeReadiness(relaunched, { requirePairingOffer: false })
+      },
       dispose: async () => {
-        await closeElectronAppForE2E(app)
-        await cleanupE2EDaemons(userDataDir)
-        rmSync(userDataDir, { recursive: true, force: true })
+        const socketDir = agentBrowserSocketDir
+        await cleanupHeadlessHostResources([
+          ...(serveProcessOpen
+            ? [
+                () =>
+                  closeElectronAppForE2E(serveProcess, {
+                    cleanupDaemonsForUserDataDir: userDataDir
+                  })
+              ]
+            : []),
+          () => cleanupE2EDaemons(userDataDir),
+          () => preserveProfileLogs(userDataDir),
+          () => rmSync(userDataDir, PROFILE_REMOVAL),
+          ...(socketDir
+            ? [
+                () =>
+                  rmSync(socketDir, {
+                    recursive: true,
+                    force: true
+                  })
+              ]
+            : [])
+        ])
       }
     }
   } catch (error) {
+    const launchedApp = app
+    const socketDir = agentBrowserSocketDir
     try {
-      if (app) {
-        await closeElectronAppForE2E(app)
-      }
-      await cleanupE2EDaemons(userDataDir)
-    } finally {
-      rmSync(userDataDir, { recursive: true, force: true })
+      await cleanupHeadlessHostResources([
+        ...(launchedApp
+          ? [
+              () =>
+                closeElectronAppForE2E(launchedApp, { cleanupDaemonsForUserDataDir: userDataDir })
+            ]
+          : []),
+        () => cleanupE2EDaemons(userDataDir),
+        () => preserveProfileLogs(userDataDir),
+        () => rmSync(userDataDir, PROFILE_REMOVAL),
+        ...(socketDir ? [() => rmSync(socketDir, { recursive: true, force: true })] : [])
+      ])
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Headless runtime startup and cleanup failed')
     }
     throw error
   }

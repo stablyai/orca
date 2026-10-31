@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
 
@@ -103,4 +103,13 @@ describe('Markdown document worktree path selector', () => {
     ).toBe('/worktrees/next')
     expect(selectMarkdownDocumentWorktreePath({ worktreesByRepo: {} }, null)).toBeNull()
   })
+})
+
+it('resolves Markdown document listing roots for non-git folder workspaces', () => {
+  expect(
+    selectMarkdownDocumentWorktreePath(
+      { worktreesByRepo: {}, folderWorkspaces: [{ id: 'folder-id', folderPath: '/notes' }] },
+      'folder:folder-id'
+    )
+  ).toBe('/notes')
 })

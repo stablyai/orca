@@ -1,4 +1,5 @@
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AppState } from '@/store/types'
 import type {
   AgentStatusEntry,
@@ -13,13 +14,19 @@ import {
   recordLiveEntriesFullRebuild
 } from './worktree-agent-live-index-patch'
 import { selectWorktreeAgentOrchestration } from './worktree-agent-orchestration-index'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import { createWorktreeRecordSelector } from '@/store/worktree-record-selector-cache'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
-const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
-const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES: MigrationUnsupportedPtyEntry[] = []
-const EMPTY_RETAINED: RetainedAgentEntry[] = []
-// Why: selector unit tests often pass partial store mocks; production state
-// owns these maps, but missing mock maps should behave like empty slices.
+// Why frozen and exported: card hooks return these from their inactive branch,
+// so the identity has to be shared app-wide and safe from stray writes.
+export const EMPTY_LIVE_ENTRIES = Object.freeze([]) as unknown as AgentStatusEntry[]
+export const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES = Object.freeze(
+  []
+) as unknown as MigrationUnsupportedPtyEntry[]
+export const EMPTY_RETAINED = Object.freeze([]) as unknown as RetainedAgentEntry[]
+export const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> =
+  Object.freeze({})
+// Partial test stores need missing maps to behave as stable empty slices.
 const EMPTY_RECORD = {}
 
 type WorktreeAgentRowsState = Pick<
@@ -28,11 +35,17 @@ type WorktreeAgentRowsState = Pick<
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
   | 'tabsByWorktree'
->
+> & {
+  unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
+}
 
 type TabWorktreeIndexCache = {
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
   tabIdToWorktreeId: Map<string, string>
+}
+
+type LiveTabWorktreeIndexCache = TabWorktreeIndexCache & {
+  unifiedTabsByWorktree: WorktreeAgentRowsState['unifiedTabsByWorktree']
 }
 
 type MigrationUnsupportedByWorktreeCache = {
@@ -47,13 +60,12 @@ type RetainedEntriesByWorktreeCache = {
 }
 
 let tabWorktreeIndexCache: TabWorktreeIndexCache | null = null
+let liveTabWorktreeIndexCache: LiveTabWorktreeIndexCache | null = null
 let liveEntriesByWorktreeCache: LiveEntriesByWorktreeCache | null = null
 let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
 let retainedEntriesByWorktreeCache: RetainedEntriesByWorktreeCache | null = null
 
-// Why exported: WorktreeList reuses this exact-equality identity check to keep
-// derived arrays referentially stable across order-preserving epoch bumps so
-// memo'd cards can bail out of re-render.
+// Share exact array reuse with WorktreeList so equal epoch-derived rows do not rerender cards.
 export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] {
   if (!previous || previous.length !== next.length) {
     return next
@@ -66,7 +78,8 @@ export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] 
   return previous
 }
 
-function getTabIdToWorktreeId(
+// Settings reuses this tab index to avoid rescanning every bucket on each store write.
+export function getTabIdToWorktreeId(
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
 ): Map<string, string> {
   if (tabWorktreeIndexCache?.tabsByWorktree === tabsByWorktree) {
@@ -82,26 +95,58 @@ function getTabIdToWorktreeId(
   return tabIdToWorktreeId
 }
 
+function getLiveTabIdToWorktreeId(
+  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree'],
+  unifiedTabsByWorktree: WorktreeAgentRowsState['unifiedTabsByWorktree']
+): Map<string, string> {
+  if (
+    liveTabWorktreeIndexCache?.tabsByWorktree === tabsByWorktree &&
+    liveTabWorktreeIndexCache.unifiedTabsByWorktree === unifiedTabsByWorktree
+  ) {
+    return liveTabWorktreeIndexCache.tabIdToWorktreeId
+  }
+  const tabIdToWorktreeId = new Map(getTabIdToWorktreeId(tabsByWorktree))
+  for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      if (tab.contentType === 'agent-session') {
+        tabIdToWorktreeId.set(tab.id, worktreeId)
+      }
+    }
+  }
+  liveTabWorktreeIndexCache = { tabsByWorktree, unifiedTabsByWorktree, tabIdToWorktreeId }
+  return tabIdToWorktreeId
+}
+
 function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, AgentStatusEntry[]> {
   const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_RECORD
   const tabsByWorktree = state.tabsByWorktree ?? EMPTY_RECORD
+  const unifiedTabsByWorktree = state.unifiedTabsByWorktree
   if (
     liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree &&
+    liveEntriesByWorktreeCache.unifiedTabsByWorktree === unifiedTabsByWorktree &&
     liveEntriesByWorktreeCache.agentStatusByPaneKey === agentStatusByPaneKey
   ) {
     return liveEntriesByWorktreeCache.entriesByWorktree
   }
 
-  const tabIdToWorktreeId = getTabIdToWorktreeId(tabsByWorktree)
-  if (liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree) {
+  const tabIdToWorktreeId = getLiveTabIdToWorktreeId(tabsByWorktree, unifiedTabsByWorktree)
+  const represented = unifiedTabsByWorktree
+    ? getStructuredAgentSessionTabsByPaneKey(unifiedTabsByWorktree)
+    : undefined
+  if (
+    liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree &&
+    liveEntriesByWorktreeCache.unifiedTabsByWorktree === unifiedTabsByWorktree
+  ) {
     const patched = patchLiveEntriesByWorktree(
       liveEntriesByWorktreeCache,
       agentStatusByPaneKey,
-      tabIdToWorktreeId
+      tabIdToWorktreeId,
+      represented
     )
     if (patched) {
       liveEntriesByWorktreeCache = {
         tabsByWorktree,
+        unifiedTabsByWorktree,
         agentStatusByPaneKey,
         entriesByWorktree: patched
       }
@@ -112,7 +157,7 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
   const previous = liveEntriesByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, AgentStatusEntry[]>()
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
-    const worktreeId = liveEntryWorktreeId(paneKey, entry, tabIdToWorktreeId)
+    const worktreeId = liveEntryWorktreeId(paneKey, entry, tabIdToWorktreeId, represented)
     if (!worktreeId) {
       continue
     }
@@ -128,6 +173,7 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
   }
   liveEntriesByWorktreeCache = {
     tabsByWorktree,
+    unifiedTabsByWorktree,
     agentStatusByPaneKey,
     entriesByWorktree
   }
@@ -227,10 +273,7 @@ export function selectRetainedAgentEntriesForWorktree(
   return getRetainedEntriesByWorktree(state).get(worktreeId) ?? EMPTY_RETAINED
 }
 
-// Why: reads a shared worktree-keyed index instead of rescanning every
-// orchestration context. Zustand re-runs each mounted card's selector on every
-// publication, so the old per-card scan was O(cards x contexts) on unrelated
-// traffic; only the first card through a given store version now pays a build.
+// Share one orchestration index across cards instead of scanning all contexts per card per publication.
 export function selectRuntimeAgentOrchestrationForWorktree(
   state: Pick<
     AppState,
@@ -244,13 +287,20 @@ export function selectRuntimeAgentOrchestrationForWorktree(
   return selectWorktreeAgentOrchestration(state, worktreeId)
 }
 
-export function selectTerminalLayoutsForWorktree(
-  state: Pick<AppState, 'tabsByWorktree' | 'terminalLayoutsByTabId'>,
-  worktreeId: string
-): Record<string, TerminalLayoutSnapshot | undefined> {
-  const out: Record<string, TerminalLayoutSnapshot | undefined> = {}
-  for (const tab of (state.tabsByWorktree ?? EMPTY_RECORD)[worktreeId] ?? []) {
-    out[tab.id] = (state.terminalLayoutsByTabId ?? EMPTY_RECORD)[tab.id]
+export const selectTerminalLayoutsForWorktree = createWorktreeRecordSelector<
+  Pick<AppState, 'tabsByWorktree' | 'terminalLayoutsByTabId'>,
+  Record<string, TerminalLayoutSnapshot | undefined>
+>({
+  readSources: (state) => [
+    state.tabsByWorktree ?? EMPTY_RECORD,
+    state.terminalLayoutsByTabId ?? EMPTY_RECORD
+  ],
+  empty: EMPTY_TERMINAL_LAYOUTS,
+  build: (state, worktreeId) => {
+    const out: Record<string, TerminalLayoutSnapshot | undefined> = {}
+    for (const tab of (state.tabsByWorktree ?? EMPTY_RECORD)[worktreeId] ?? []) {
+      out[tab.id] = (state.terminalLayoutsByTabId ?? EMPTY_RECORD)[tab.id]
+    }
+    return out
   }
-  return out
-}
+})

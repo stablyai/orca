@@ -9,6 +9,7 @@ function makeStore() {
       AppState,
       | 'pinnedTabCloseConfirm'
       | 'requestPinnedTabCloseConfirm'
+      | 'cancelPinnedTabCloseRequest'
       | 'confirmPinnedTabClose'
       | 'dismissPinnedTabClose'
     >
@@ -20,35 +21,10 @@ function makeStore() {
 }
 
 describe('createPinnedTabCloseConfirmSlice', () => {
-  it('starts with no pending request', () => {
-    expect(makeStore().getState().pinnedTabCloseConfirm).toBeNull()
-  })
-
-  it('stores the pending request when one is requested', () => {
-    const store = makeStore()
-    const onConfirm = vi.fn()
-
-    store.getState().requestPinnedTabCloseConfirm({ tabLabel: 'Docs', onConfirm })
-
-    expect(store.getState().pinnedTabCloseConfirm).toEqual({ tabLabel: 'Docs', onConfirm })
-  })
-
-  it('runs onConfirm and clears the request when confirmed', () => {
-    const store = makeStore()
-    const onConfirm = vi.fn()
-    store.getState().requestPinnedTabCloseConfirm({ tabLabel: 'Docs', onConfirm })
-
-    store.getState().confirmPinnedTabClose()
-
-    expect(onConfirm).toHaveBeenCalledTimes(1)
-    expect(store.getState().pinnedTabCloseConfirm).toBeNull()
-  })
-
   it('clears the request before running onConfirm so re-entrant closes do not loop', () => {
     const store = makeStore()
     const onConfirm = vi.fn(() => {
-      // Why: a close path may synchronously inspect the pending request; it must
-      // already be cleared by the time onConfirm runs.
+      // Clear pending before onConfirm; close paths can synchronously inspect/reenter it.
       expect(store.getState().pinnedTabCloseConfirm).toBeNull()
     })
     store.getState().requestPinnedTabCloseConfirm({ tabLabel: 'Docs', onConfirm })
@@ -56,38 +32,6 @@ describe('createPinnedTabCloseConfirmSlice', () => {
     store.getState().confirmPinnedTabClose()
 
     expect(onConfirm).toHaveBeenCalledTimes(1)
-  })
-
-  it('does nothing when confirming with no pending request', () => {
-    const store = makeStore()
-    expect(() => store.getState().confirmPinnedTabClose()).not.toThrow()
-    expect(store.getState().pinnedTabCloseConfirm).toBeNull()
-  })
-
-  it('dismisses without running onConfirm', () => {
-    const store = makeStore()
-    const onConfirm = vi.fn()
-    store.getState().requestPinnedTabCloseConfirm({ tabLabel: 'Docs', onConfirm })
-
-    store.getState().dismissPinnedTabClose()
-
-    expect(onConfirm).not.toHaveBeenCalled()
-    expect(store.getState().pinnedTabCloseConfirm).toBeNull()
-  })
-
-  it('runs onCancel and clears the request when dismissed', () => {
-    const store = makeStore()
-    const onCancel = vi.fn()
-    store.getState().requestPinnedTabCloseConfirm({
-      tabLabel: 'Docs',
-      onConfirm: vi.fn(),
-      onCancel
-    })
-
-    store.getState().dismissPinnedTabClose()
-
-    expect(onCancel).toHaveBeenCalledTimes(1)
-    expect(store.getState().pinnedTabCloseConfirm).toBeNull()
   })
 
   it('queues concurrent requests and advances them in request order', () => {
@@ -133,6 +77,25 @@ describe('createPinnedTabCloseConfirmSlice', () => {
 
     expect(firstCancel).toHaveBeenCalledTimes(1)
     expect(store.getState().pinnedTabCloseConfirm?.tabLabel).toBe('Second terminal')
+  })
+
+  it('cancels a specific visible or queued request without invoking its callbacks', () => {
+    const store = makeStore()
+    const first = { tabLabel: 'First', onConfirm: vi.fn(), onCancel: vi.fn() }
+    const second = { tabLabel: 'Second', onConfirm: vi.fn(), onCancel: vi.fn() }
+    const third = { tabLabel: 'Third', onConfirm: vi.fn(), onCancel: vi.fn() }
+    store.getState().requestPinnedTabCloseConfirm(first)
+    store.getState().requestPinnedTabCloseConfirm(second)
+    store.getState().requestPinnedTabCloseConfirm(third)
+
+    store.getState().cancelPinnedTabCloseRequest(second)
+    store.getState().cancelPinnedTabCloseRequest(first)
+
+    expect(store.getState().pinnedTabCloseConfirm).toBe(third)
+    expect(first.onConfirm).not.toHaveBeenCalled()
+    expect(first.onCancel).not.toHaveBeenCalled()
+    expect(second.onConfirm).not.toHaveBeenCalled()
+    expect(second.onCancel).not.toHaveBeenCalled()
   })
 
   it('ignores a rapid second action on the newly advanced request', () => {

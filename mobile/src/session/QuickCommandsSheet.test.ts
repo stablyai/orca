@@ -1,10 +1,12 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement, Fragment, startTransition, Suspense, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/types'
-import type { RpcClient } from '../transport/rpc-client'
-import { MAX_QUICK_COMMANDS } from '../terminal/quick-commands'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
+import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
+import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => ({
   alert: vi.fn(),
@@ -13,6 +15,15 @@ const mocks = vi.hoisted(() => ({
 }))
 const quickCommandEditorForm = 'QuickCommandEditorForm'
 const quickCommandsList = 'QuickCommandsList'
+const suspended = new Promise<void>(() => {})
+const suspendedRender = vi.fn()
+function Suspend({ active }: { active: boolean }) {
+  if (active) {
+    suspendedRender()
+    throw suspended
+  }
+  return null
+}
 const command: TerminalQuickCommand = {
   id: 'command',
   label: 'Test',
@@ -65,26 +76,15 @@ function deferred<T>() {
 
 describe('QuickCommandsSheet', () => {
   let renderer: ReactTestRenderer | null = null
-  let consoleSpy: MockInstance
-
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     mocks.alert.mockReset()
     mocks.commands = []
     mocks.persist.mockReset()
-    const originalConsoleError = console.error
-    consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      originalConsoleError(...args)
-    })
   })
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
-    consoleSpy.mockRestore()
   })
 
   it('keeps the sheet open when a launch is rejected', async () => {
@@ -95,15 +95,16 @@ describe('QuickCommandsSheet', () => {
         createElement(QuickCommandsSheet, {
           visible: true,
           onClose,
-          client: {} as RpcClient,
+          client: stubRpcClient(),
           repoId: 'repo-1',
           repoName: 'Repo',
+          agentPromptMaxLength: null,
           onLaunch
         })
       )
     })
 
-    act(() => renderer!.root.findByType(quickCommandsList).props.onLaunch(command))
+    act(() => findByHostType(renderer!.root, quickCommandsList).props.onLaunch(command))
 
     expect(onLaunch).toHaveBeenCalledWith(command)
     expect(onClose).not.toHaveBeenCalled()
@@ -117,21 +118,22 @@ describe('QuickCommandsSheet', () => {
         createElement(QuickCommandsSheet, {
           visible: true,
           onClose: vi.fn(),
-          client: {} as RpcClient,
+          client: stubRpcClient(),
           repoId: 'repo-1',
           repoName: 'Repo',
+          agentPromptMaxLength: null,
           onLaunch: () => true
         })
       )
     })
 
-    act(() => renderer!.root.findByType(quickCommandsList).props.onAdd())
-    const editor = renderer!.root.findByType(quickCommandEditorForm)
+    act(() => findByHostType(renderer!.root, quickCommandsList).props.onAdd())
+    const editor = findByHostType(renderer!.root, quickCommandEditorForm)
     act(() => {
       editor.props.onChange({ label: 'Test' })
       editor.props.onChange({ command: 'pnpm test' })
     })
-    const readyEditor = renderer!.root.findByType(quickCommandEditorForm)
+    const readyEditor = findByHostType(renderer!.root, quickCommandEditorForm)
     act(() => {
       readyEditor.props.onSave()
       readyEditor.props.onSave()
@@ -144,8 +146,209 @@ describe('QuickCommandsSheet', () => {
     })
   })
 
-  it('keeps creation closed when the host command limit is reached', async () => {
-    mocks.commands = Array.from({ length: MAX_QUICK_COMMANDS }, (_, index) => ({
+  it('keeps save ownership when a repository transition suspends before commit', async () => {
+    const save = deferred<boolean>()
+    mocks.persist.mockReturnValue(save.promise)
+    const onClose = vi.fn()
+    const onLaunch = () => true
+    const render = (suspend = false) =>
+      createElement(
+        Suspense,
+        { fallback: null },
+        createElement(
+          Fragment,
+          null,
+          createElement(QuickCommandsSheet, {
+            visible: true,
+            client: null,
+            repoId: suspend ? 'repo-2' : 'repo-1',
+            repoName: 'Repo',
+            agentPromptMaxLength: null,
+            onClose,
+            onLaunch
+          }),
+          createElement(Suspend, { active: suspend })
+        )
+      )
+    act(() => {
+      renderer = create(render())
+    })
+    act(() => findByHostType(renderer!.root, quickCommandsList).props.onAdd())
+    act(() =>
+      findByHostType(renderer!.root, quickCommandEditorForm).props.onChange({
+        label: 'Test',
+        command: 'pnpm test'
+      })
+    )
+    act(() => findByHostType(renderer!.root, quickCommandEditorForm).props.onSave())
+    suspendedRender.mockClear()
+    act(() => {
+      startTransition(() => renderer?.update(render(true)))
+    })
+    expect(suspendedRender).toHaveBeenCalled()
+    await act(async () => {
+      save.resolve(true)
+      await save.promise
+    })
+    expect(findAllByHostType(renderer!.root, quickCommandEditorForm)).toHaveLength(0)
+    expect(findAllByHostType(renderer!.root, quickCommandsList)).toHaveLength(1)
+  })
+
+  it.each(['new editor', 'newer edits'])(
+    'preserves %s when an older save completes',
+    async (change) => {
+      const save = deferred<boolean>()
+      mocks.persist.mockReturnValue(save.promise)
+      await act(async () => {
+        renderer = create(
+          createElement(QuickCommandsSheet, {
+            visible: true,
+            onClose: vi.fn(),
+            client: null,
+            repoId: 'repo-1',
+            repoName: 'Repo',
+            agentPromptMaxLength: null,
+            onLaunch: () => true
+          })
+        )
+      })
+      act(() => findByHostType(renderer!.root, quickCommandsList).props.onAdd())
+      act(() =>
+        findByHostType(renderer!.root, quickCommandEditorForm).props.onChange({
+          label: 'First',
+          command: 'first'
+        })
+      )
+      act(() => findByHostType(renderer!.root, quickCommandEditorForm).props.onSave())
+      if (change === 'new editor') {
+        act(() => findByHostType(renderer!.root, quickCommandEditorForm).props.onCancel())
+        act(() => findByHostType(renderer!.root, quickCommandsList).props.onAdd())
+      }
+      act(() =>
+        findByHostType(renderer!.root, quickCommandEditorForm).props.onChange({
+          label: 'Second',
+          command: 'second'
+        })
+      )
+      await act(async () => {
+        save.resolve(true)
+        await save.promise
+      })
+      expect(findAllByHostType(renderer!.root, quickCommandEditorForm)).toHaveLength(1)
+      expect(findByHostType(renderer!.root, quickCommandEditorForm).props.draft.label).toBe(
+        'Second'
+      )
+      if (change === 'newer edits') {
+        act(() => findByHostType(renderer!.root, quickCommandEditorForm).props.onSave())
+        expect(mocks.persist.mock.calls[1]?.[0].command).toMatchObject({
+          id: mocks.persist.mock.calls[0]?.[0].command.id,
+          label: 'Second',
+          command: 'second'
+        })
+      }
+    }
+  )
+
+  it.each(['client', 'repo'])('isolates pending saves across a changed %s', async (context) => {
+    const first = deferred<boolean>()
+    const second = deferred<boolean>()
+    mocks.persist.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    const props = {
+      visible: true,
+      onClose: vi.fn(),
+      client: null,
+      repoId: 'repo-1',
+      repoName: 'Repo',
+      agentPromptMaxLength: null,
+      onLaunch: () => true
+    }
+    act(() => {
+      renderer = create(createElement(QuickCommandsSheet, props))
+    })
+    act(() => findByHostType(renderer!.root, quickCommandsList).props.onAdd())
+    act(() =>
+      findByHostType(renderer!.root, quickCommandEditorForm).props.onChange({
+        label: 'First',
+        command: 'first'
+      })
+    )
+    act(() => findByHostType(renderer!.root, quickCommandEditorForm).props.onSave())
+    const nextClient = stubRpcClient()
+    act(() =>
+      renderer!.update(
+        createElement(QuickCommandsSheet, {
+          ...props,
+          client: context === 'client' ? nextClient : null,
+          repoId: context === 'repo' ? 'repo-2' : 'repo-1'
+        })
+      )
+    )
+    act(() => findByHostType(renderer!.root, quickCommandsList).props.onAdd())
+    act(() =>
+      findByHostType(renderer!.root, quickCommandEditorForm).props.onChange({
+        label: 'Second',
+        command: 'second'
+      })
+    )
+    act(() => findByHostType(renderer!.root, quickCommandEditorForm).props.onSave())
+    expect(mocks.persist).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      first.resolve(true)
+      await first.promise
+    })
+    const editor = findByHostType(renderer!.root, quickCommandEditorForm)
+    expect(editor.props.draft.label).toBe('Second')
+    expect(editor.props.saving).toBe(true)
+    act(() => editor.props.onSave())
+    expect(mocks.persist).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      second.resolve(true)
+      await second.promise
+    })
+    expect(findAllByHostType(renderer!.root, quickCommandEditorForm)).toHaveLength(0)
+  })
+
+  it('keeps newer edits and the pending save when the same computer changes connection paths', async () => {
+    const saved = deferred<boolean>()
+    mocks.persist.mockReturnValue(saved.promise)
+    const client = createStableLogicalRpcClient(new FakeSession('connected'), 'relay')
+    const props = {
+      visible: true,
+      onClose: vi.fn(),
+      client,
+      repoId: 'repo-1',
+      repoName: 'Repo',
+      agentPromptMaxLength: null,
+      onLaunch: () => true
+    }
+    act(() => {
+      renderer = create(createElement(QuickCommandsSheet, props))
+    })
+    act(() => findByHostType(renderer!.root, quickCommandsList).props.onAdd())
+    const editor = () => findByHostType(renderer!.root, quickCommandEditorForm)
+    act(() => editor().props.onChange({ label: 'First', command: 'first' }))
+    act(() => editor().props.onSave())
+    act(() => editor().props.onChange({ label: 'Newer', command: 'newer' }))
+    await act(async () => {
+      await client.migrateTo(new FakeSession('connected'), 'lan')
+      renderer!.update(createElement(QuickCommandsSheet, props))
+    })
+    expect(editor().props.draft.label).toBe('Newer')
+    expect(editor().props.saving).toBe(true)
+    await act(async () => {
+      saved.resolve(true)
+      await saved.promise
+    })
+    expect(editor().props.draft).toMatchObject({
+      label: 'Newer',
+      id: mocks.persist.mock.calls[0]?.[0].command.id
+    })
+    expect(editor().props.saving).toBe(false)
+    client.close()
+  })
+
+  it('allows saving another command when forty commands already exist', async () => {
+    mocks.commands = Array.from({ length: 40 }, (_, index) => ({
       ...command,
       id: `command-${index}`
     }))
@@ -154,18 +357,26 @@ describe('QuickCommandsSheet', () => {
         createElement(QuickCommandsSheet, {
           visible: true,
           onClose: vi.fn(),
-          client: {} as RpcClient,
+          client: stubRpcClient(),
           repoId: 'repo-1',
           repoName: 'Repo',
+          agentPromptMaxLength: null,
           onLaunch: () => true
         })
       )
     })
 
-    const list = renderer!.root.findByType(quickCommandsList)
-    expect(list.props.canAdd).toBe(false)
+    const list = findByHostType(renderer!.root, quickCommandsList)
     act(() => list.props.onAdd())
-    expect(renderer!.root.findAllByType(quickCommandEditorForm)).toHaveLength(0)
+    const editor = () => findByHostType(renderer!.root, quickCommandEditorForm)
+    act(() => editor().props.onChange({ label: 'Another command', command: 'echo saved' }))
+    mocks.persist.mockResolvedValue(true)
+    await act(async () => editor().props.onSave())
+    expect(mocks.persist).toHaveBeenCalledWith({
+      type: 'upsert',
+      command: expect.objectContaining({ label: 'Another command', command: 'echo saved' })
+    })
+    expect(findAllByHostType(renderer!.root, quickCommandEditorForm)).toHaveLength(0)
   })
 
   it('shows only global commands and defaults new commands to global without a repo', async () => {
@@ -180,19 +391,20 @@ describe('QuickCommandsSheet', () => {
         createElement(QuickCommandsSheet, {
           visible: true,
           onClose: vi.fn(),
-          client: {} as RpcClient,
+          client: stubRpcClient(),
           repoId: null,
           repoName: 'Folder workspace',
+          agentPromptMaxLength: null,
           onLaunch: () => true
         })
       )
     })
 
-    const list = renderer!.root.findByType(quickCommandsList)
+    const list = findByHostType(renderer!.root, quickCommandsList)
     expect(list.props.globalCommands).toEqual([command])
     expect(list.props.repoCommands).toEqual([])
     act(() => list.props.onAdd())
-    expect(renderer!.root.findByType(quickCommandEditorForm).props.draft.scope).toEqual({
+    expect(findByHostType(renderer!.root, quickCommandEditorForm).props.draft.scope).toEqual({
       type: 'global'
     })
   })
@@ -203,15 +415,16 @@ describe('QuickCommandsSheet', () => {
         createElement(QuickCommandsSheet, {
           visible: true,
           onClose: vi.fn(),
-          client: {} as RpcClient,
+          client: stubRpcClient(),
           repoId: 'repo-1',
           repoName: 'Repo',
+          agentPromptMaxLength: null,
           onLaunch: () => true
         })
       )
     })
 
-    act(() => renderer!.root.findByType(quickCommandsList).props.onDelete(command))
+    act(() => findByHostType(renderer!.root, quickCommandsList).props.onDelete(command))
     expect(mocks.persist).not.toHaveBeenCalled()
 
     const actions = mocks.alert.mock.calls[0]?.[2] as

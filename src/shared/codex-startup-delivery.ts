@@ -1,4 +1,5 @@
 import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import { shellReadyMarkerComesFromLineEditor } from './shell-ready-marker-timing'
 
 export type StartupCommandDelivery = 'fast' | 'shell-ready'
 
@@ -74,9 +75,21 @@ export function hasCodexNativeDraftFlag(command: string | null | undefined): boo
   )
 }
 
+export function isCodexStartupCommand(command: string | null | undefined): boolean {
+  return recognizeAgentProcessFromCommandLine(command)?.agent === 'codex'
+}
+
 export function shouldUseShellReadyStartupDelivery(args: {
   command: string | null | undefined
   startupCommandDelivery?: StartupCommandDelivery
+  /** Plain Codex waits for line-editor handshake markers to avoid an early launch write echoing twice; use the deciding side’s shell when known. */
+  shellPath?: string
 }): boolean {
-  return args.startupCommandDelivery === 'shell-ready' || hasCodexNativeDraftFlag(args.command)
+  return (
+    args.startupCommandDelivery === 'shell-ready' ||
+    hasCodexNativeDraftFlag(args.command) ||
+    (args.shellPath !== undefined &&
+      shellReadyMarkerComesFromLineEditor(args.shellPath) &&
+      isCodexStartupCommand(args.command))
+  )
 }

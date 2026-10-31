@@ -1,30 +1,28 @@
-/* eslint-disable max-lines -- Why: this hook owns Monaco view-zone lifecycle, inline React roots, range selection, and scroll coordination in one place. */
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import * as monaco from 'monaco-editor'
-import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
+import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
-import type { DiffComment } from '../../../../shared/types'
 import { getCommentBodyLayoutLineCount } from '@/lib/comment-body-line-count'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
-import { formatDiffComments } from '@/lib/diff-comments-format'
-import { useAppStore } from '@/store'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { DiffCommentCard } from './DiffCommentCard'
-import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
-import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
-import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import {
+  installDiffCommentAddButtonOverlay,
+  type DiffCommentAddButtonOverlayHandle
+} from './diff-comment-add-button-overlay'
+import { installDiffCommentAddNoteShortcut } from './diff-comment-add-note-shortcut'
+import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
+import { getRenderSignature, renderDiffCommentZoneCard } from './diff-comment-zone-card'
+import type { DecoratedDiffComment } from './decorated-diff-comment'
+import {
+  resizeDiffCommentZone,
+  ZONE_CHROME_PX,
+  ZONE_LINE_PX,
+  ZONE_MIN_PX,
+  type ZoneEntry
+} from './diff-comment-view-zone-entry'
+import type { DiffCommentLineRange, DiffCommentLineTarget } from './diff-comment-line-range'
+import { useDiffCommentDraftZone, type DiffCommentDraft } from './diff-comment-draft-zone'
 
-// Monaco glyph decorations don't expose usable click events, so we own an absolutely-positioned "+" button that follows the hovered line.
-
-export type DecoratedDiffComment = DiffComment & {
-  author?: string
-  authorAvatarUrl?: string
-  createdAtLabel?: string
-  url?: string
-  canDelete?: boolean
-  canEdit?: boolean
-}
+export type { DiffCommentDraft }
 
 type DecoratorArgs = {
   editor: monacoEditor.ICodeEditor | null
@@ -35,7 +33,18 @@ type DecoratorArgs = {
   comments: readonly DecoratedDiffComment[]
   commentableLineNumbers?: readonly number[]
   addButtonLabel?: string
-  onAddCommentClick: (args: { lineNumber: number; startLine?: number; top: number }) => void
+  pendingCommentTarget?: DiffCommentLineTarget | null
+  // Markdown editors already bind this chord through their input bindings.
+  addNoteShortcutEnabled?: boolean
+  onCreateComment?: (args: {
+    lineNumber: number
+    startLine?: number
+    body: string
+  }) => Promise<boolean>
+  draftPlaceholder?: string
+  draftSubmitLabel?: string
+  canOpenDraft?: boolean
+  onAddCommentClick?: (args: { lineNumber: number; startLine?: number; top: number }) => void
   onDeleteComment: (commentId: string) => void
   // Present only on surfaces that allow editing (local diffs); PR review notes are remote and can't be edited here.
   onUpdateComment?: (commentId: string, body: string) => Promise<boolean>
@@ -45,57 +54,6 @@ type DecoratorArgs = {
   onPendingScrollConsumed?: () => void
 }
 
-type ZoneEntry = {
-  zoneId: string
-  domNode: HTMLElement
-  // Hold the delegate so layoutZone re-reads our updated heightInPx — mutating the delegate is the supported way to resize a zone in place.
-  delegate: monacoEditor.IViewZone
-  root: Root
-  disposeMouseDownStopper: () => void
-  lastRenderSignature: string
-  // First onDomNodeTop = deterministic "zone laid out" signal; gates scroll-to-note instead of polling getTopForLineNumber.
-  laidOut: boolean
-}
-
-// Card chrome + per-line body height; used by the initial estimate and the live resize, so keep in lockstep.
-const ZONE_CHROME_PX = 68
-const ZONE_LINE_PX = 20
-const ZONE_MIN_PX = 88
-
-function getRenderSignature(
-  comment: DecoratedDiffComment,
-  formatCommentPrompt?: (comment: DecoratedDiffComment) => string
-): string {
-  return JSON.stringify({
-    body: comment.body,
-    sentAt: comment.sentAt ?? null,
-    author: comment.author ?? null,
-    authorAvatarUrl: comment.authorAvatarUrl ?? null,
-    createdAtLabel: comment.createdAtLabel ?? null,
-    url: comment.url ?? null,
-    canDelete: comment.canDelete ?? null,
-    canEdit: comment.canEdit ?? null,
-    sendPrompt: formatCommentPrompt ? formatCommentPrompt(comment) : null
-  })
-}
-
-function getSingleCommentSendScopes(
-  comment: DecoratedDiffComment,
-  formatCommentPrompt?: (comment: DecoratedDiffComment) => string
-): NotesSendMenuScope<DecoratedDiffComment>[] {
-  return [
-    {
-      id: 'note',
-      label: translate(
-        'auto.components.diff.comments.useDiffCommentDecorator.995fa28b50',
-        'This note'
-      ),
-      notes: comment.sentAt ? [] : [comment],
-      prompt: formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
-    }
-  ]
-}
-
 export function useDiffCommentDecorator({
   editor,
   monacoModelIdentity,
@@ -103,7 +61,16 @@ export function useDiffCommentDecorator({
   worktreeId,
   comments,
   commentableLineNumbers,
-  addButtonLabel = 'Add note for the AI',
+  addButtonLabel = translate(
+    'auto.components.diff.comments.DiffCommentPopover.f6c449191e',
+    'Add note for the AI'
+  ),
+  pendingCommentTarget = null,
+  addNoteShortcutEnabled = false,
+  onCreateComment,
+  draftPlaceholder,
+  draftSubmitLabel,
+  canOpenDraft,
   onAddCommentClick,
   onDeleteComment,
   onUpdateComment,
@@ -116,23 +83,37 @@ export function useDiffCommentDecorator({
     worktreeId ? (s.activeGroupIdByWorktree[worktreeId] ?? worktreeId) : worktreeId
   )
   const hoverLineRef = useRef<number | null>(null)
-  // One React root per view zone: body updates re-render into it so Monaco's zone DOM stays put and only the card contents change.
+  const overlayRef = useRef<DiffCommentAddButtonOverlayHandle | null>(null)
+  const pendingCommentRangeRef = useRef<DiffCommentLineRange | null>(null)
+  const setPendingCommentRange = useCallback((range: DiffCommentLineRange | null): void => {
+    pendingCommentRangeRef.current = range
+    overlayRef.current?.setPendingRange(range)
+  }, [])
+  // Reuse one root per zone so body edits preserve Monaco DOM and selection.
   const zonesRef = useRef<Map<string, ZoneEntry>>(new Map())
-  const disposablesRef = useRef<IDisposable[]>([])
-  // Pending scroll-to-note comment id; a ref (not state) so the request survives renders while we wait for layout.
+  // Keep scroll requests across renders while waiting for layout.
   const pendingScrollRef = useRef<string | null>(null)
   // Stash the diff-zones effect's scrollToZone closure so the request-effect can invoke the latest version.
   const scrollToZoneRef = useRef<((commentId: string) => void) | null>(null)
   const scrollToZoneFrameRef = useRef<number | null>(null)
-  // Stash callbacks in refs so the effect doesn't tear down + re-attach on every parent render (parent passes inline arrows) — avoids flicker.
-  const onAddCommentClickRef = useRef(onAddCommentClick)
+
+  // Read current inline callbacks without tearing down zones on every parent render.
   const onDeleteCommentRef = useRef(onDeleteComment)
   const onUpdateCommentRef = useRef(onUpdateComment)
   const onPendingScrollConsumedRef = useRef(onPendingScrollConsumed)
-  onAddCommentClickRef.current = onAddCommentClick
   onDeleteCommentRef.current = onDeleteComment
   onUpdateCommentRef.current = onUpdateComment
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
+
+  const { onAddCommentClickRef, isDraftOpen } = useDiffCommentDraftZone({
+    editor,
+    monacoModelIdentity,
+    onCreateComment,
+    draftPlaceholder,
+    draftSubmitLabel,
+    canOpenDraft,
+    onAddCommentClick
+  })
 
   const cancelScrollToZoneFrame = useCallback((): void => {
     if (scrollToZoneFrameRef.current === null) {
@@ -142,11 +123,18 @@ export function useDiffCommentDecorator({
     scrollToZoneFrameRef.current = null
   }, [])
 
-  const commentableLineSet = useMemo(
-    () => (commentableLineNumbers ? new Set(commentableLineNumbers) : null),
+  // Key consumers by line values to avoid refresh churn; memoize the join by array identity because large patches are expensive to scan per render.
+  const commentableLineKey = useMemo(
+    () => commentableLineNumbers?.join(','),
     [commentableLineNumbers]
   )
+  const commentableLineSet = useMemo(
+    () => (commentableLineNumbers ? new Set(commentableLineNumbers) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [commentableLineKey]
+  )
 
+  // Overlay labels and line sets require rebuilds independently of the zone lifecycle below.
   useEffect(() => {
     if (!editor) {
       return
@@ -157,192 +145,90 @@ export function useDiffCommentDecorator({
       return
     }
 
+    const overlay = installDiffCommentAddButtonOverlay({
+      editor,
+      editorDomNode,
+      addButtonLabel,
+      commentableLineSet,
+      hoverLineRef,
+      onAddCommentClickRef
+    })
+    overlayRef.current = overlay
+    overlay.setPendingRange(pendingCommentRangeRef.current)
+    return () => {
+      overlayRef.current = null
+      overlay.dispose()
+    }
+  }, [addButtonLabel, commentableLineSet, editor, monacoModelIdentity, onAddCommentClickRef])
+
+  const pendingLineNumber = pendingCommentTarget?.lineNumber ?? null
+  const pendingStartLine = pendingCommentTarget?.startLine ?? null
+  useEffect(() => {
+    const range =
+      pendingLineNumber === null
+        ? null
+        : { startLine: pendingStartLine ?? pendingLineNumber, endLine: pendingLineNumber }
+    setPendingCommentRange(range)
+  }, [pendingLineNumber, pendingStartLine, setPendingCommentRange])
+
+  const hasDraftComposer = onCreateComment !== undefined
+  useEffect(() => {
+    if (!editor || !addNoteShortcutEnabled) {
+      return
+    }
+    return installDiffCommentAddNoteShortcut({
+      editor,
+      commentableLineSet,
+      // Open composers and live drags own the chord; reopening at the editor selection would move the draft. Synchronous draft mounting also claims same-turn repeats.
+      isComposerOpen: () =>
+        isDraftOpen() ||
+        pendingCommentRangeRef.current !== null ||
+        overlayRef.current?.isDragging() === true,
+      onOpenComposer: (args) => {
+        // Legacy popovers commit through React: claim same-turn repeats until their target clears. Inline drafts have no target to release this claim.
+        if (!hasDraftComposer) {
+          setPendingCommentRange({
+            startLine: args.startLine ?? args.lineNumber,
+            endLine: args.lineNumber
+          })
+        }
+        onAddCommentClickRef.current(args)
+      }
+    })
+  }, [
+    addNoteShortcutEnabled,
+    commentableLineSet,
+    editor,
+    hasDraftComposer,
+    isDraftOpen,
+    monacoModelIdentity,
+    onAddCommentClickRef,
+    setPendingCommentRange
+  ])
+
+  // Deps must stay a subset of the zone-creating effect's, or a teardown here is never followed by a rebuild.
+  useEffect(() => {
+    if (!editor) {
+      return
+    }
+
     const zones = zonesRef.current
-    const plus = document.createElement('button')
-    plus.type = 'button'
-    plus.className = 'orca-diff-comment-add-btn'
-    plus.title = addButtonLabel
-    plus.setAttribute('aria-label', addButtonLabel)
-    plus.innerHTML =
-      '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>'
-    plus.style.display = 'none'
-    editorDomNode.appendChild(plus)
-
-    const getLineHeight = (): number => {
-      const h = editor.getOption(monaco.editor.EditorOption.lineHeight)
-      return typeof h === 'number' && h > 0 ? h : 19
-    }
-
-    // Cache last-applied styles so positionAtLine skips redundant DOM writes on high-freq mousemove (restyling under the cursor flickers).
-    let lastTop: number | null = null
-    let lastDisplay: string | null = null
-
-    const setDisplay = (value: string): void => {
-      if (lastDisplay === value) {
-        return
-      }
-      plus.style.display = value
-      lastDisplay = value
-    }
-
-    // Fixed 18px square centered in the line box — tracking line-height made a rectangle on taller line-heights.
-    const BUTTON_SIZE = 18
-    let rangeDecorationIds: string[] = []
-    let dragState: { startLine: number; endLine: number } | null = null
-
-    const clearRangeDecoration = (): void => {
-      if (rangeDecorationIds.length > 0) {
-        rangeDecorationIds = editor.deltaDecorations(rangeDecorationIds, [])
-      }
-    }
-
-    const updateRangeDecoration = (startLine: number, endLine: number): void => {
-      const from = Math.min(startLine, endLine)
-      const to = Math.max(startLine, endLine)
-      rangeDecorationIds = editor.deltaDecorations(rangeDecorationIds, [
-        {
-          range: new monaco.Range(from, 1, to, 1),
-          options: {
-            isWholeLine: true,
-            className: 'orca-diff-comment-range-highlight'
-          }
-        }
-      ])
-    }
-
-    const getLineAtClientPoint = (clientX: number, clientY: number): number | null => {
-      return editor.getTargetAtClientPoint(clientX, clientY)?.position?.lineNumber ?? null
-    }
-
-    const canCommentOnLine = (lineNumber: number): boolean => {
-      return commentableLineSet === null || commentableLineSet.has(lineNumber)
-    }
-
-    const canCommentOnRange = (startLine: number, endLine: number): boolean => {
-      if (commentableLineSet === null) {
-        return true
-      }
-      const from = Math.min(startLine, endLine)
-      const to = Math.max(startLine, endLine)
-      for (let line = from; line <= to; line++) {
-        if (!commentableLineSet.has(line)) {
-          return false
-        }
-      }
-      return true
-    }
-
-    const positionAtLine = (lineNumber: number): void => {
-      const lineTop = editor.getTopForLineNumber(lineNumber) - editor.getScrollTop()
-      const top = Math.round(lineTop + (getLineHeight() - BUTTON_SIZE) / 2)
-      if (top !== lastTop) {
-        plus.style.top = `${top}px`
-        lastTop = top
-      }
-      setDisplay('flex')
-    }
-
-    const finishRangeDrag = (ev: MouseEvent): void => {
-      ev.preventDefault()
-      ev.stopPropagation()
-      document.removeEventListener('mousemove', handleRangeDragMove)
-      document.removeEventListener('mouseup', finishRangeDrag)
-      const currentDrag = dragState
-      dragState = null
-      clearRangeDecoration()
-      if (!currentDrag) {
-        return
-      }
-      if (!canCommentOnRange(currentDrag.startLine, currentDrag.endLine)) {
-        return
-      }
-      const startLine = Math.min(currentDrag.startLine, currentDrag.endLine)
-      const lineNumber = Math.max(currentDrag.startLine, currentDrag.endLine)
-      const top = getDiffCommentPopoverTop(editor, lineNumber, getLineHeight())
-      if (top == null) {
-        return
-      }
-      onAddCommentClickRef.current({
-        lineNumber,
-        startLine: startLine === lineNumber ? undefined : startLine,
-        top
-      })
-    }
-
-    const handleRangeDragMove = (ev: MouseEvent): void => {
-      if (!dragState) {
-        return
-      }
-      const line = getLineAtClientPoint(ev.clientX, ev.clientY)
-      if (
-        line == null ||
-        line === dragState.endLine ||
-        !canCommentOnLine(line) ||
-        !canCommentOnRange(dragState.startLine, line)
-      ) {
-        return
-      }
-      dragState = { ...dragState, endLine: line }
-      updateRangeDecoration(dragState.startLine, line)
-    }
-
-    const handleMouseDown = (ev: MouseEvent): void => {
-      ev.preventDefault()
-      ev.stopPropagation()
-      const line = hoverLineRef.current
-      if (line == null || !canCommentOnLine(line)) {
-        return
-      }
-      dragState = { startLine: line, endLine: line }
-      updateRangeDecoration(line, line)
-      document.addEventListener('mousemove', handleRangeDragMove)
-      document.addEventListener('mouseup', finishRangeDrag)
-    }
-    plus.addEventListener('mousedown', handleMouseDown)
-
-    const onMouseMove = editor.onMouseMove((e) => {
-      // Monaco reports null position over our "+" button; hiding on null would flicker-loop, so keep it visible while the cursor's on it.
-      const srcEvent = e.event?.browserEvent as MouseEvent | undefined
-      if (srcEvent && plus.contains(srcEvent.target as Node)) {
-        return
-      }
-      const ln = e.target.position?.lineNumber ?? null
-      if (ln == null || !canCommentOnLine(ln)) {
-        hoverLineRef.current = null
-        setDisplay('none')
-        return
-      }
-      hoverLineRef.current = ln
-      positionAtLine(ln)
-    })
-    // Keep hoverLineRef on mouse-leave: Monaco's content-area leave fires before the button's, so a click in that gap still resolves to the last-hovered line.
-    const onMouseLeave = editor.onMouseLeave(() => {
-      setDisplay('none')
-    })
-    const onScroll = editor.onDidScrollChange(() => {
-      if (hoverLineRef.current != null) {
-        positionAtLine(hoverLineRef.current)
-      }
-    })
-
-    disposablesRef.current = [onMouseMove, onMouseLeave, onScroll]
 
     return () => {
-      for (const d of disposablesRef.current) {
-        d.dispose()
-      }
-      disposablesRef.current = []
-      document.removeEventListener('mousemove', handleRangeDragMove)
-      document.removeEventListener('mouseup', finishRangeDrag)
-      clearRangeDecoration()
-      plus.removeEventListener('mousedown', handleMouseDown)
-      plus.remove()
-      // Editor swapped/torn down: unmount roots and clear tracking so the next mount starts known-empty.
-      // Defer unmount via queueMicrotask: a sync unmount during React's commit triggers React 19's "unmount while rendering" warning; clear zones synchronously.
+      // Clear zones synchronously; defer root unmounts until after React 19’s commit to avoid unmount-while-rendering warnings.
       const rootsToUnmount = Array.from(zones.values(), (z) => {
         z.disposeMouseDownStopper()
         return z.root
       })
+      // Remove Monaco zones too; clearing tracking alone strands blank gaps in a live editor.
+      if (zones.size > 0) {
+        const zoneIds = Array.from(zones.values(), (z) => z.zoneId)
+        editor.changeViewZones((accessor) => {
+          for (const zoneId of zoneIds) {
+            accessor.removeZone(zoneId)
+          }
+        })
+      }
       zones.clear()
       if (rootsToUnmount.length > 0) {
         queueMicrotask(() => {
@@ -351,12 +237,11 @@ export function useDiffCommentDecorator({
           }
         })
       }
-      // Editor gone: drop the in-flight scroll request and resolver closure (captured the now-disposed editor).
       cancelScrollToZoneFrame()
       pendingScrollRef.current = null
       scrollToZoneRef.current = null
     }
-  }, [addButtonLabel, cancelScrollToZoneFrame, commentableLineSet, editor, monacoModelIdentity])
+  }, [cancelScrollToZoneFrame, editor, monacoModelIdentity])
 
   useEffect(() => {
     if (!editor) {
@@ -370,35 +255,15 @@ export function useDiffCommentDecorator({
     // Unmounting a root inside changeViewZones races Monaco's zone bookkeeping; collect roots and unmount after the batch.
     const rootsToUnmount: Root[] = []
 
-    // Re-measure/re-layout the zone: mutate delegate.heightInPx first (Monaco's _layoutZone re-reads it) so inline edit expands without clipping.
     const resizeZone = (commentId: string): void => {
       const entry = zones.get(commentId)
       if (!entry) {
         return
       }
-      const child = entry.domNode.firstElementChild
-      const wrapperStyle = window.getComputedStyle(entry.domNode)
-      const verticalPadding =
-        Number.parseFloat(wrapperStyle.paddingTop) + Number.parseFloat(wrapperStyle.paddingBottom)
-      // Monaco pins the zone node to its previous height (scrollHeight can't shrink), so measure the rendered card+padding to allow collapse.
-      const childHeight = child?.getBoundingClientRect().height ?? 0
-      // React can commit while Monaco's zone is detached; preserve the safe
-      // initial estimate until the observer sees a measurable card.
-      if (childHeight <= 0) {
-        return
-      }
-      const measured = Math.ceil(childHeight + verticalPadding)
-      if (entry.delegate.heightInPx === measured) {
-        return
-      }
-      entry.delegate.heightInPx = measured
-      editor.changeViewZones((acc) => {
-        acc.layoutZone(entry.zoneId)
-      })
+      resizeDiffCommentZone(editor, entry)
     }
 
-    // One-shot scroll resolver: getTopForLineNumber(line, includeZones=true) centers on the line+card pair (card sits in a zone above the line).
-    // rAF defer is intentional: run after DiffViewer's restoreViewState rAF so its cached scroll doesn't snap us back off the note.
+    // Center on the line/card pair with includeZones=true; defer past DiffViewer’s restore frame so cached scroll cannot override this request.
     const scrollToZone = (commentId: string): void => {
       cancelScrollToZoneFrame()
       scrollToZoneFrameRef.current = requestAnimationFrame(() => {
@@ -419,64 +284,28 @@ export function useDiffCommentDecorator({
     }
     scrollToZoneRef.current = scrollToZone
 
-    // Shared by the new-zone and patch branches so the card's prop wiring stays in lockstep.
     const renderCard = (root: Root, comment: DecoratedDiffComment): void => {
-      root.render(
-        // View zones are separate React roots outside the app root, so App.tsx context providers don't reach them.
-        <TooltipProvider delayDuration={400}>
-          <DiffCommentCard
-            lineNumber={comment.lineNumber}
-            startLine={comment.startLine}
-            label={comment.author ? getDiffCommentLineLabel(comment).toLowerCase() : undefined}
-            body={comment.body}
-            sentAt={comment.sentAt}
-            author={comment.author}
-            createdAtLabel={comment.createdAtLabel}
-            url={comment.url}
-            onDelete={
-              comment.canDelete === false ? undefined : () => onDeleteCommentRef.current(comment.id)
-            }
-            onSubmitEdit={
-              onUpdateCommentRef.current && comment.canEdit !== false
-                ? async (body) => {
-                    const fn = onUpdateCommentRef.current
-                    if (!fn) {
-                      return false
-                    }
-                    return fn(comment.id, body)
-                  }
-                : undefined
-            }
-            onContentResize={() => resizeZone(comment.id)}
-            observeRenderedSize
-            headerActions={
-              worktreeId && comment.author === undefined ? (
-                <NotesSendMenu
-                  worktreeId={worktreeId}
-                  groupId={activeGroupId}
-                  modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
-                  scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
-                  targetModeLabel="This note"
-                  triggerClassName="orca-diff-comment-edit"
-                  disabledTooltip="Note already sent"
-                  onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
-                />
-              ) : null
-            }
-          />
-        </TooltipProvider>
-      )
+      renderDiffCommentZoneCard(root, comment, {
+        worktreeId,
+        filePath,
+        activeGroupId,
+        formatCommentPrompt,
+        resizeZone,
+        onDeleteCommentRef,
+        onUpdateCommentRef,
+        clearDeliveredDiffComments
+      })
     }
 
     editor.changeViewZones((accessor) => {
-      // Remove only zones whose comments are gone; rebuilding all caused flicker and dropped focus/selection.
+      // Keep surviving zones to preserve focus and selection.
       for (const [commentId, entry] of zones) {
         if (!relevantMap.has(commentId)) {
           accessor.removeZone(entry.zoneId)
           entry.disposeMouseDownStopper()
           rootsToUnmount.push(entry.root)
           zones.delete(commentId)
-          // Comment deleted: drop any pending scroll request so a future zone reusing the id can't pick up a stale request.
+          // Deleted notes must not leave scroll requests for a reused ID.
           if (pendingScrollRef.current === commentId) {
             pendingScrollRef.current = null
           }
@@ -489,23 +318,23 @@ export function useDiffCommentDecorator({
         }
         const dom = document.createElement('div')
         dom.className = 'orca-diff-comment-inline'
-        // Swallow mousedown on the zone so the editor doesn't steal focus / start a selection drag; Delete still fires (click is on the button).
+        // Stop editor selection/focus theft while allowing card button clicks.
         const disposeMouseDownStopper = installDiffCommentZoneMouseDownStopper(dom)
 
         const root = createRoot(dom)
 
-        // Estimate height up front: Monaco fixes heightInPx at insertion and never re-measures, so an underestimate bleeds into the next line.
+        // Monaco never remeasures inserted zones; underestimate and the card overlaps the next line.
         const lineCount = getCommentBodyLayoutLineCount(c.body)
         const heightInPx = Math.max(ZONE_MIN_PX, ZONE_CHROME_PX + lineCount * ZONE_LINE_PX)
 
-        // suppressMouseDown: false so clicks (Delete button) reach our DOM listeners; true would route mousedown to the editor.
+        // Let card DOM receive mouse events instead of routing them to Monaco.
         const commentId = c.id
         const delegate: monacoEditor.IViewZone = {
           afterLineNumber: c.lineNumber,
           heightInPx,
           domNode: dom,
           suppressMouseDown: false,
-          // First onDomNodeTop = deterministic "zone placed" signal: resolve any waiting scroll and flip laidOut.
+          // The first layout callback resolves waiting scroll requests without polling.
           onDomNodeTop: () => {
             const entry = zones.get(commentId)
             if (!entry) {
@@ -531,7 +360,6 @@ export function useDiffCommentDecorator({
         renderCard(root, c)
       }
 
-      // Patch existing zones in place — re-render the same root instead of removing/re-adding.
       for (const c of relevant) {
         const entry = zones.get(c.id)
         if (!entry) {
@@ -546,7 +374,6 @@ export function useDiffCommentDecorator({
       }
     })
 
-    // Deferred unmount so Monaco finishes its zone batch before we tear down the React trees.
     if (rootsToUnmount.length > 0) {
       queueMicrotask(() => {
         for (const root of rootsToUnmount) {
@@ -554,25 +381,25 @@ export function useDiffCommentDecorator({
         }
       })
     }
-    // Intentionally no cleanup: React would wipe all zones on every comments change (flicker). Teardown lives in the editor-scoped effect above.
+    // Teardown belongs to the editor-scoped effect; per-comment cleanup would wipe every zone and flicker.
   }, [
     activeGroupId,
     cancelScrollToZoneFrame,
     clearDeliveredDiffComments,
+    comments,
     editor,
     filePath,
     formatCommentPrompt,
     monacoModelIdentity,
-    worktreeId,
-    comments
+    worktreeId
   ])
 
-  // Scroll-to-note resolution splits across this effect (request after layout) and onDomNodeTop (before), via pendingScrollRef.
+  // Resolve scroll requests here after layout or in onDomNodeTop before layout, sharing pendingScrollRef.
   useEffect(() => {
     if (!editor) {
       return
     }
-    // Null request: drop any in-flight pending id so a late onDomNodeTop doesn't snap-scroll the user.
+    // Cancel cleared requests so late layout callbacks cannot snap-scroll.
     if (!pendingScrollCommentId) {
       cancelScrollToZoneFrame()
       pendingScrollRef.current = null
@@ -583,7 +410,7 @@ export function useDiffCommentDecorator({
         c.id === pendingScrollCommentId && c.filePath === filePath && c.worktreeId === worktreeId
     )
     if (!target) {
-      // Not our comment; drop prior pending id so a late onDomNodeTop can't ack another surface's request.
+      // Drop foreign requests so late layout cannot acknowledge another surface’s note.
       cancelScrollToZoneFrame()
       pendingScrollRef.current = null
       return
@@ -593,7 +420,6 @@ export function useDiffCommentDecorator({
     if (entry?.laidOut) {
       scrollToZoneRef.current?.(pendingScrollCommentId)
     }
-    // If !laidOut, onDomNodeTop picks up the request once Monaco places the zone.
   }, [
     cancelScrollToZoneFrame,
     editor,

@@ -21,7 +21,6 @@ const {
 vi.mock('electron', () => ({
   app: {
     exit: vi.fn(),
-    getPath: () => '/tmp/orca-user-data',
     relaunch: vi.fn()
   },
   ipcMain: {
@@ -56,9 +55,12 @@ vi.mock('../orca-profiles/profile-cloud-service', () => ({
 }))
 
 import { registerOrcaProfileHandlers } from './orca-profiles'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 describe('registerOrcaProfileHandlers auth channels', () => {
   beforeEach(() => {
+    // Reinstall AppEnvironment per test after global beforeEach resets its fake.
+    installFakeAppEnvironment({ getPath: () => '/tmp/orca-user-data' })
     handlers.clear()
     createCloudLinkedOrcaProfileMock.mockReset()
     connectCurrentOrcaProfileMock.mockReset()

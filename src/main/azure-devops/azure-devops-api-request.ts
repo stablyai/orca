@@ -3,6 +3,63 @@ import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
+// Newest first: older on-prem Servers reject newer versions with VssVersionOutOfRangeException.
+const API_VERSIONS: readonly string[] = ['7.1', '6.1', '5.1']
+// Each retry either lowers the version or adds -preview once, so this bounds negotiation.
+export const AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS = API_VERSIONS.length + 1
+
+// Remember origins that require the -preview API version suffix.
+const previewApiVersionOrigins = new Set<string>()
+const apiVersionIndexByOrigin = new Map<string, number>()
+
+/** @internal - exposed for tests only */
+export function _resetAzureDevOpsApiVersionCache(): void {
+  previewApiVersionOrigins.clear()
+  apiVersionIndexByOrigin.clear()
+}
+
+export function azureDevOpsApiVersionForOrigin(origin: string): string {
+  const version = API_VERSIONS[apiVersionIndexByOrigin.get(origin) ?? 0]
+  return previewApiVersionOrigins.has(origin) ? `${version}-preview` : version
+}
+
+function errorTypeKey(body: string): unknown {
+  try {
+    const parsed: unknown = JSON.parse(body)
+    return typeof parsed === 'object' && parsed !== null && 'typeKey' in parsed
+      ? parsed.typeKey
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** Returns true when the rejected request should be retried with the newly negotiated version. */
+export function recordAzureDevOpsApiVersionRejection(
+  url: URL,
+  status: number | null,
+  body: string
+): boolean {
+  const typeKey = status === 400 ? errorTypeKey(body) : null
+  const requested = url.searchParams.get('api-version') ?? ''
+  if (typeKey === 'VssInvalidPreviewVersionException' && !requested.endsWith('-preview')) {
+    previewApiVersionOrigins.add(url.origin)
+    return true
+  }
+  if (typeKey !== 'VssVersionOutOfRangeException') {
+    return false
+  }
+  const next = API_VERSIONS.indexOf(requested.replace(/-preview$/, '')) + 1
+  if (next === 0 || next >= API_VERSIONS.length) {
+    return false
+  }
+  // Never move back up: a concurrent request may already have negotiated lower.
+  apiVersionIndexByOrigin.set(
+    url.origin,
+    Math.max(next, apiVersionIndexByOrigin.get(url.origin) ?? 0)
+  )
+  return true
+}
 
 type AzureDevOpsAuthConfig = {
   apiBaseUrl: string | null
@@ -52,9 +109,29 @@ function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
   return {}
 }
 
-function configuredApiBaseUrl(repo: AzureDevOpsRepoRef): string {
+function isUrlPathAncestor(ancestor: string, descendant: string): boolean {
+  try {
+    const ancestorUrl = new URL(ancestor)
+    const descendantUrl = new URL(descendant)
+    const ancestorPath = ancestorUrl.pathname.replace(/\/+$/, '')
+    const descendantPath = descendantUrl.pathname.replace(/\/+$/, '')
+    return (
+      ancestorUrl.origin === descendantUrl.origin &&
+      (ancestorPath === descendantPath || descendantPath.startsWith(`${ancestorPath}/`))
+    )
+  } catch {
+    return false
+  }
+}
+
+export function resolveAzureDevOpsGitApiBaseUrl(repo: AzureDevOpsRepoRef): string {
   const configured = getAzureDevOpsAuthConfig().apiBaseUrl
-  return configured ? normalizeAzureDevOpsApiBaseUrl(configured) : repo.apiBaseUrl
+  if (!configured) {
+    return repo.apiBaseUrl
+  }
+  const normalized = normalizeAzureDevOpsApiBaseUrl(configured)
+  // Git endpoints need the remote's project path, even when auth probes use a collection URL.
+  return isUrlPathAncestor(normalized, repo.apiBaseUrl) ? repo.apiBaseUrl : normalized
 }
 
 function apiUrl(
@@ -63,7 +140,10 @@ function apiUrl(
   searchParams?: AzureDevOpsRequestOptions['searchParams']
 ): URL {
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
-  const params = { ...searchParams, 'api-version': searchParams?.['api-version'] ?? '7.1' }
+  const params = {
+    ...searchParams,
+    'api-version': azureDevOpsApiVersionForOrigin(url.origin)
+  }
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, String(value))
   }
@@ -74,28 +154,37 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   baseUrl: string,
   path: string,
   options: AzureDevOpsRequestOptions = {},
-  // Why: the existing-review lookup behind Create must distinguish a real
-  // transport/auth failure from an accepted "no PR". When true, a failed request
-  // throws instead of collapsing to null so callers never report false not_found.
+  // Creation preflight must distinguish lookup failure from an absent PR.
   throwOnFailure = false
 ): Promise<T | null> {
   const config = getAzureDevOpsAuthConfig()
-  try {
-    const response = await fetch(apiUrl(baseUrl, path, options.searchParams), {
+  const doFetch = (url: URL): Promise<Response> =>
+    fetch(url, {
       headers: {
         Accept: 'application/json',
         ...authHeaders(config)
       },
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
-    if (!response.ok) {
-      await cancelUnreadResponseBody(response)
-      if (throwOnFailure) {
-        throw new Error(`Azure DevOps request failed: HTTP ${response.status}`)
+  try {
+    for (let attempt = 1; ; attempt++) {
+      const url = apiUrl(baseUrl, path, options.searchParams)
+      const response = await doFetch(url)
+      if (response.ok) {
+        return (await response.json()) as T
       }
-      return null
+      const body = response.status === 400 ? await response.text().catch(() => '') : ''
+      await cancelUnreadResponseBody(response)
+      if (
+        attempt >= AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS ||
+        !recordAzureDevOpsApiVersionRejection(url, response.status, body)
+      ) {
+        if (throwOnFailure) {
+          throw new Error(`Azure DevOps request failed: HTTP ${response.status}`)
+        }
+        return null
+      }
     }
-    return (await response.json()) as T
   } catch (error) {
     if (throwOnFailure) {
       throw error
@@ -110,5 +199,10 @@ export function requestAzureDevOpsJson<T>(
   options: AzureDevOpsRequestOptions = {},
   throwOnFailure = false
 ): Promise<T | null> {
-  return requestAzureDevOpsJsonAtBase(configuredApiBaseUrl(repo), path, options, throwOnFailure)
+  return requestAzureDevOpsJsonAtBase(
+    resolveAzureDevOpsGitApiBaseUrl(repo),
+    path,
+    options,
+    throwOnFailure
+  )
 }

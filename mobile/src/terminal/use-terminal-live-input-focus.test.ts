@@ -1,6 +1,6 @@
 import { createElement, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   TerminalLiveInputFocusTarget,
   TerminalLiveInputFocusTimerRef
@@ -11,25 +11,16 @@ type HarnessProps = {
   readonly activeHandleRef: RefObject<string | null>
   readonly canSend: boolean
   readonly inputRef: RefObject<TerminalLiveInputFocusTarget | null>
+  readonly commandInputRef: RefObject<TerminalLiveInputFocusTarget | null>
   readonly keyboardHeight?: number
   readonly lifecycleIdentity: object | null
   readonly lifecycleKey: string
   readonly liveInputEnabled: boolean
+  readonly reopenFocusedInputWhenKeyboardHidden: boolean
   readonly timerRef: TerminalLiveInputFocusTimerRef
 }
 
 type FocusHandlers = ReturnType<typeof useTerminalLiveInputFocus>
-
-function suppressReactTestRendererWarning(): () => void {
-  const originalConsoleError = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => spy.mockRestore()
-}
 
 function createFocusTarget(initiallyFocused = false): TerminalLiveInputFocusTarget & {
   readonly blur: ReturnType<typeof vi.fn>
@@ -67,14 +58,9 @@ function createHarness(initialProps: HarnessProps): {
     return null
   }
 
-  const restoreWarning = suppressReactTestRendererWarning()
-  try {
-    act(() => {
-      renderer = create(createElement(Harness, initialProps))
-    })
-  } finally {
-    restoreWarning()
-  }
+  act(() => {
+    renderer = create(createElement(Harness, initialProps))
+  })
   if (!handlers || !renderer) {
     throw new Error('terminal live input focus harness did not render')
   }
@@ -105,18 +91,16 @@ function connectedProps(
     activeHandleRef,
     canSend: true,
     inputRef,
+    commandInputRef: { current: null },
     lifecycleIdentity: null,
     lifecycleKey: 'host-a:worktree-a:connected',
     liveInputEnabled: true,
+    reopenFocusedInputWhenKeyboardHidden: true,
     timerRef
   }
 }
 
 describe('terminal live input focus hook', () => {
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
-
   afterEach(() => {
     vi.useRealTimers()
   })
@@ -134,7 +118,7 @@ describe('terminal live input focus hook', () => {
     harness.unmount()
   })
 
-  it('reacquires focus for mouse-aware and non-mouse terminal tap notifications', () => {
+  it('reacquires focus after successive terminal tap notifications', () => {
     vi.useFakeTimers()
     const input = createFocusTarget()
     const harness = createHarness(connectedProps({ current: input }))
@@ -146,6 +130,22 @@ describe('terminal live input focus hook', () => {
 
     expect(input.blur).toHaveBeenCalledTimes(1)
     expect(input.focus).toHaveBeenCalledTimes(2)
+    harness.unmount()
+  })
+  it('preserves the focused iPad responder when a hardware keyboard keeps keyboard height at zero', () => {
+    vi.useFakeTimers()
+    const input = createFocusTarget(true)
+    const inputRef = { current: input }
+    const harness = createHarness({
+      ...connectedProps(inputRef),
+      reopenFocusedInputWhenKeyboardHidden: false
+    })
+
+    harness.handlers().handleTerminalTap('terminal-a')
+    vi.runAllTimers()
+
+    expect(input.blur).not.toHaveBeenCalled()
+    expect(input.focus).toHaveBeenCalledTimes(1)
     harness.unmount()
   })
 

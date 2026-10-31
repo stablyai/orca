@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
-import type { CommitMessageAiSettings, TuiAgent } from '../../../../shared/types'
+import type { CommitMessageAiSettings } from '../../../../shared/commit-message-ai-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentCapability,

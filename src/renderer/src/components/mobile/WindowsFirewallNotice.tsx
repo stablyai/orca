@@ -10,12 +10,15 @@ import { cn } from '../../lib/utils'
 type WindowsFirewallNoticeProps = {
   pairingReady: boolean
   address?: string
+  /** Relay offers still carry a LAN endpoint, but a blocked one is not fatal. */
+  usingRelay?: boolean
   className?: string
 }
 
 export function WindowsFirewallNotice({
   pairingReady,
   address,
+  usingRelay = false,
   className
 }: WindowsFirewallNoticeProps): React.JSX.Element | null {
   const [status, setStatus] = useState<WindowsMobileFirewallStatus | null>(null)
@@ -24,8 +27,7 @@ export function WindowsFirewallNotice({
   const inspectIdRef = useRef(0)
 
   const inspect = useCallback(async (): Promise<WindowsMobileFirewallStatus | null> => {
-    // Why: UAC elevation steals and returns window focus, so a focus-triggered
-    // inspection can race the post-repair one; only the latest result may win.
+    // UAC focus changes can race post-repair inspection; publish only the latest result.
     const inspectId = ++inspectIdRef.current
     if (!pairingReady) {
       setStatus(null)
@@ -79,8 +81,7 @@ export function WindowsFirewallNotice({
         return
       }
       if (result.ok) {
-        // Why: elevation success only confirms the script ran; managed policy
-        // can still leave an overriding Block rule in effect.
+        // Successful elevation proves execution, not that managed policy removed overriding Block rules.
         const next = await inspect()
         if (!mountedRef.current) {
           return
@@ -173,6 +174,14 @@ export function WindowsFirewallNotice({
                       { port: firewallStatus.port }
                     )}
             </p>
+            {usingRelay ? (
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.mobile.WindowsFirewallNotice.relay-note',
+                  'Pairing still works over Orca Relay — allowing this only adds the faster local connection.'
+                )}
+              </p>
+            ) : null}
           </div>
           {networkIsPublic ? (
             <Button

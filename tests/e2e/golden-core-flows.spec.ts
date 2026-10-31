@@ -1,3 +1,7 @@
+import {
+  openSidebarProjectDialog,
+  openSidebarWorkspaceComposer
+} from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -16,7 +20,6 @@ import {
 
 const tempRoots: string[] = []
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
-const REPO_STEP_HEADING = /Point Orca at some code/i
 const TASK_SOURCES_HEADING = /Set up GitHub tasks|Connect your task sources/i
 const WINDOWS_TERMINAL_HEADING = /Set Windows terminal defaults/i
 const ONBOARDING_ADVANCE_LABEL = /^Continue\b|^Add your first project\b/
@@ -31,9 +34,7 @@ function escapeRegExp(value: string): string {
 }
 
 async function createGitRepo(prefix: string, name: string): Promise<string> {
-  // Why: macOS os.tmpdir() (/var/...) symlinks to /private/var/..., and the app
-  // canonicalizes repo.path via `git rev-parse --show-toplevel` on add. Resolve
-  // the symlink here so the path the test asserts on matches what the store holds.
+  // Resolve macOS /var symlinks like git does when registering repo.path.
   const rootPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), prefix)))
   tempRoots.push(rootPath)
   const repoPath = path.join(rootPath, name)
@@ -95,7 +96,7 @@ async function continueOnboarding(page: Page): Promise<void> {
 }
 
 async function selectCodexAgent(page: Page): Promise<void> {
-  const codexButton = page.getByRole('button', { name: /^Codex\s/ })
+  const codexButton = page.getByRole('button', { name: 'Codex', exact: true })
   const codexVisible = await codexButton
     .first()
     .waitFor({ state: 'visible', timeout: 1_000 })
@@ -161,7 +162,7 @@ async function continueThroughOptionalSetupToNotifications(page: Page): Promise<
   await expect(page.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
 }
 
-async function continueFromNotificationsToRepo(page: Page): Promise<void> {
+async function continueFromNotificationsToAddProject(page: Page): Promise<void> {
   await continueOnboarding(page)
   const taskSourcesVisible = await page
     .getByRole('heading', { name: TASK_SOURCES_HEADING })
@@ -179,22 +180,9 @@ async function continueFromNotificationsToRepo(page: Page): Promise<void> {
   if (windowsTerminalVisible) {
     await continueOnboarding(page)
   }
-  const repoHeading = page.getByRole('heading', { name: REPO_STEP_HEADING })
-  const addProjectDialog = page.getByRole('dialog', { name: /Add a project/i })
-  await expect
-    .poll(
-      async () => {
-        if (await repoHeading.isVisible().catch(() => false)) {
-          return 'repo-step'
-        }
-        if (await addProjectDialog.isVisible().catch(() => false)) {
-          return 'add-project-dialog'
-        }
-        return 'waiting'
-      },
-      { timeout: 15_000 }
-    )
-    .not.toBe('waiting')
+  await expect(page.getByRole('dialog', { name: /Add a project/i })).toBeVisible({
+    timeout: 15_000
+  })
 }
 
 async function waitForRepoLoaded(page: Page, repoPath: string): Promise<void> {
@@ -225,10 +213,7 @@ async function addProjectFromSidebar(
   repoPath: string
 ): Promise<void> {
   await chooseFolderInNativeDialog(electronApp, repoPath)
-  await page
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openSidebarProjectDialog(page)
   const addDialog = page.getByRole('dialog', { name: /Add a project/i })
   await expect(addDialog).toBeVisible()
   await addDialog.getByRole('button', { name: /Browse folder/i }).click()
@@ -247,7 +232,7 @@ async function addProjectFromSidebar(
 }
 
 async function createWorkspace(page: Page, workspaceName: string): Promise<void> {
-  await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(page)
   const dialog = page.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   await expect(dialog).toBeVisible()
   const nameInput = dialog.getByPlaceholder(/Type a name/i)
@@ -311,11 +296,15 @@ async function renderedTabIds(page: Page): Promise<string[]> {
 }
 
 async function expectTerminalSurface(page: Page): Promise<void> {
-  await expect
-    .poll(() => page.locator('[data-terminal-tab-id]').count(), { timeout: 30_000 })
-    .toBeGreaterThan(0)
-  const terminalSurface = page.locator('[data-terminal-tab-id]').first()
-  await expect(terminalSurface).toHaveAttribute('data-native-file-drop-target', 'terminal')
+  const terminalSurface = page
+    .locator('[data-terminal-tab-id][data-terminal-layout-leaf-ids]:visible')
+    .first()
+  await expect(terminalSurface).toBeVisible({ timeout: 30_000 })
+  await expect(terminalSurface).not.toHaveAttribute('data-os-file-drop-owner')
+  await expect(terminalSurface.locator('.pane[data-leaf-id]').first()).toHaveAttribute(
+    'data-os-file-drop-owner',
+    ''
+  )
 }
 
 async function waitForTerminalPaneManager(page: Page): Promise<void> {
@@ -385,9 +374,7 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
 async function completeWorkspaceCreationTour(page: Page, workspaceName: string): Promise<void> {
   const pickProjectStep = page.getByRole('dialog', { name: /Pick a project/i })
   await expect(pickProjectStep).toBeVisible()
-  // Why: the project picker can leave its command popover open after the tour
-  // starts. Keyboard-activate the step button so the golden verifies the tour
-  // transition instead of pointer geometry around that popover.
+  // Keyboard-activate Next so a lingering project popover cannot obscure the tour transition.
   await pickProjectStep.getByRole('button', { name: /^Next$/ }).focus()
   await page.keyboard.press('Enter')
   const nameStep = page.getByRole('dialog', { name: /Name it, or start from existing work/i })
@@ -457,16 +444,13 @@ test.describe('New-user golden core flow', () => {
     await continueThroughOptionalSetupToNotifications(orcaPage)
     await expect(orcaPage.getByRole('button', { name: /Send Test Notification/i })).toBeVisible()
     await chooseNotificationSound(orcaPage)
-    await continueFromNotificationsToRepo(orcaPage)
+    await continueFromNotificationsToAddProject(orcaPage)
 
     const repoPath = await createGitRepo('orca-e2e-golden-new-', 'golden-new-project')
     await chooseFolderInNativeDialog(electronApp, repoPath)
     await orcaPage
       .getByRole('button', { name: /Browse for a folder|Open a folder|Browse folder/i })
       .click()
-    await expect(orcaPage.getByRole('heading', { name: REPO_STEP_HEADING })).toHaveCount(0, {
-      timeout: 30_000
-    })
     await waitForRepoLoaded(orcaPage, repoPath)
     await expectProjectVisible(orcaPage, repoPath)
     await waitForActiveWorktree(orcaPage)

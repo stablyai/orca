@@ -1,7 +1,4 @@
-// Why: pure preview/search-text core for Agent Session History, lifted to
-// /shared so both the renderer and the mobile package (which cannot import
-// renderer modules) can build session previews from the same logic.
-// INVARIANT: /shared is a leaf — this module imports only types from /shared.
+// Share preview/search text with mobile, which cannot import renderer modules. Keep this shared leaf limited to shared type imports.
 import type { AiVaultSession, AiVaultSessionPreviewMessage } from './ai-vault-types'
 
 const CONVERSATION_ROLES = new Set<AiVaultSessionPreviewMessage['role']>(['user', 'assistant'])
@@ -10,6 +7,11 @@ export type AiVaultSessionDisplayTurn = {
   role: AiVaultSessionPreviewMessage['role']
   text: string
   timestamp: string | null
+}
+
+export type AiVaultSessionPromptPreview = {
+  text: string
+  source: 'first-user-prompt' | 'preview-window'
 }
 
 export function latestSessionConversationTurn(
@@ -44,15 +46,11 @@ export function sessionDetailConversationTurns(
   return dedupeAdjacentConversationTurns(turns).slice(-limit)
 }
 
-/**
- * Placeholder text for the first-prompt row while the full body loads on demand.
- * List scans no longer store firstUserPrompt (payload/perf); this is preview-only.
- */
-export function sessionFirstPrompt(session: AiVaultSession): string | null {
-  // Prefer a stored full body when present (on-demand re-parse / tests).
+/** Prompt text with enough provenance for the renderer to avoid overclaiming. */
+export function sessionPromptPreview(session: AiVaultSession): AiVaultSessionPromptPreview | null {
   const stored = session.firstUserPrompt?.trim()
   if (stored) {
-    return stored
+    return { text: stored, source: 'first-user-prompt' }
   }
 
   for (const message of session.previewMessages) {
@@ -61,7 +59,7 @@ export function sessionFirstPrompt(session: AiVaultSession): string | null {
     }
     const text = message.text.trim()
     if (text) {
-      return text
+      return { text, source: 'preview-window' }
     }
   }
 
@@ -122,8 +120,7 @@ function displayableSessionPreviewMessages(
     CONVERSATION_ROLES.has(message.role)
   )
 
-  // Why: search hits should be explainable by the preview UI; tool/system text is
-  // only searchable when it is the fallback preview shown for the session.
+  // Search tool/system text only as the displayed fallback preview so hits remain explainable.
   return conversationTurns.length > 0 ? conversationTurns : session.previewMessages
 }
 

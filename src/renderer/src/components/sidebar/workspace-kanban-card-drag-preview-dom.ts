@@ -27,22 +27,21 @@ export function setDragDocumentStyles(enabled: boolean): void {
 
 export function setDraggedCardsDragging(args: {
   board: HTMLElement | null
-  worktreeIds: readonly string[]
+  worktreeIdentities: readonly string[]
   enabled: boolean
 }): void {
-  const { board, worktreeIds, enabled } = args
+  const { board, worktreeIdentities, enabled } = args
   if (!board) {
     return
   }
-  // Why: virtual lanes remount cards during scroll; query live nodes by id
-  // instead of holding HTMLElement references across unmounts.
+  // Virtual scrolling remounts cards; query live nodes by ID instead of retaining elements.
   if (!enabled) {
     board.querySelectorAll<HTMLElement>(`[${POINTER_CARD_DRAGGING_ATTR}]`).forEach((card) => {
       card.removeAttribute(POINTER_CARD_DRAGGING_ATTR)
     })
     return
   }
-  const ids = new Set(worktreeIds)
+  const ids = new Set(worktreeIdentities)
   for (const card of board.querySelectorAll<HTMLElement>(CARD_SELECTOR)) {
     if (ids.has(card.dataset.workspaceBoardCardId ?? '')) {
       card.setAttribute(POINTER_CARD_DRAGGING_ATTR, 'true')

@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { writeStartupDiagnosticLineMock } = vi.hoisted(() => ({
+  writeStartupDiagnosticLineMock: vi.fn()
+}))
+vi.mock('../startup/startup-diagnostics', () => ({
+  writeStartupDiagnosticLine: writeStartupDiagnosticLineMock
+}))
+
 import {
   MAIN_THREAD_DIAGNOSTICS_ENV,
   classifySubprocessCommand,
   drainSubprocessSpawnStats,
   isMainThreadDiagnosticsEnabled,
-  recordSubprocessSpawn
+  recordSubprocessSpawn,
+  startMainThreadChurnProbe
 } from './main-thread-churn-probe'
 
 afterEach(() => {
@@ -33,10 +42,25 @@ describe('classifySubprocessCommand', () => {
     expect(classifySubprocessCommand('gh', ['api', 'rate_limit'])).toBe('gh api')
   })
 
-  it('unwraps wsl.exe-routed commands', () => {
+  it.each([
+    // Orca's own spawns use --exec; `--`/`-e` still arrive from foreign wsl.exe processes.
+    ['--exec', '--exec'],
+    ['-e', '-e'],
+    ['--', '--']
+  ])('unwraps wsl.exe-routed commands past %s', (_label, separator) => {
     expect(
-      classifySubprocessCommand('wsl.exe', ['-d', 'Ubuntu', '--', 'git', 'status', '--porcelain'])
+      classifySubprocessCommand('wsl.exe', [
+        '-d',
+        'Ubuntu',
+        separator,
+        'git',
+        'status',
+        '--porcelain'
+      ])
     ).toBe('git status')
+  })
+
+  it('reports bare wsl.exe with no guest command as wsl', () => {
     expect(classifySubprocessCommand('wsl.exe', ['-d', 'Ubuntu'])).toBe('wsl')
   })
 
@@ -45,8 +69,6 @@ describe('classifySubprocessCommand', () => {
   })
 
   it('never treats positionals or git-flag values as subcommands for non-subcommand CLIs', () => {
-    // rg's -C takes a number; it must not be consumed as a git-style flag
-    // value, and "3"/"pattern" must not become fake subcommand buckets.
     expect(classifySubprocessCommand('rg', ['-C', '3', 'pattern'])).toBe('rg')
     expect(classifySubprocessCommand('node', ['script.js'])).toBe('node')
   })
@@ -70,5 +92,24 @@ describe('recordSubprocessSpawn', () => {
       'git rev-list': { count: 1, blockMsTotal: 1.5, blockMsMax: 1.5 }
     })
     expect(drainSubprocessSpawnStats()).toEqual({})
+  })
+})
+
+describe('startMainThreadChurnProbe', () => {
+  it('folds caller-contributed counters into the report line', async () => {
+    vi.stubEnv(MAIN_THREAD_DIAGNOSTICS_ENV, '1')
+    writeStartupDiagnosticLineMock.mockClear()
+    vi.useFakeTimers()
+    try {
+      startMainThreadChurnProbe({ extraStats: () => ({ diffCache: { hits: 3, misses: 1 } }) })
+      await vi.advanceTimersByTimeAsync(5_100)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const line = String(writeStartupDiagnosticLineMock.mock.calls.at(-1)?.[0] ?? '')
+    expect(JSON.parse(line.replace('[main-thread] ', ''))).toMatchObject({
+      diffCache: { hits: 3, misses: 1 }
+    })
   })
 })

@@ -1,15 +1,22 @@
 import { join, basename } from 'node:path'
-import { mkdirSync, existsSync, writeFileSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
+import {
+  dropInheritedOrcaFishHistory,
+  fishHistorySessionName,
+  isSafeFishHistorySession,
+  resolveFishHistoryDir
+} from './fish-history-session'
+import { dropInheritedOrcaHistFile } from './worktree-history-file-path'
 import { parseWslPath, toLinuxPath } from './wsl'
-import { getHistoryRoot, getHistoryRootWsl, hashWorktreeId } from './terminal-history-paths'
+import { getHistoryRoot, getHistoryRootWsl } from './terminal-history-paths'
+import { hashWorktreeId } from './terminal-history-id'
 
 type ShellKind = 'zsh' | 'bash' | 'fish' | 'pwsh' | 'powershell' | 'cmd' | 'unknown'
 
-// ─── Shell Detection ───────────────────────────────────────────────
+export const MAX_HISTORY_META_BYTES = 32 * 1024
 
-/** Resolve the shell kind from a shell binary path.
- *  Uses basename + prefix matching to handle versioned names like `bash-5.2`
- *  and nix-store paths like `/nix/store/.../bin/zsh`. */
+// Prefix matching accepts versioned shell names such as bash-5.2.
 export function resolveShellKind(shellPath: string): ShellKind {
   const name = basename(shellPath).toLowerCase()
   if (name.startsWith('zsh')) {
@@ -33,14 +40,13 @@ export function resolveShellKind(shellPath: string): ShellKind {
   return 'unknown'
 }
 
-/** Map shell kind to the filename used inside the history directory. */
+// Fish ignores HISTFILE; its history lives in a session-named file outside this tree.
 function historyFilename(shell: ShellKind): string | null {
   switch (shell) {
     case 'zsh':
       return 'zsh_history'
     case 'bash':
       return 'bash_history'
-    // Phase 2: fish and PowerShell use different mechanisms
     case 'fish':
     case 'pwsh':
     case 'powershell':
@@ -50,10 +56,6 @@ function historyFilename(shell: ShellKind): string | null {
   }
 }
 
-// ─── Directory Management ──────────────────────────────────────────
-
-/** Ensure the history directory exists for a given worktree hash.
- *  Returns the directory path, or null if creation failed. */
 export function ensureHistoryDir(worktreeHash: string, wslDistro?: string): string | null {
   try {
     const root = wslDistro ? getHistoryRootWsl(wslDistro) : getHistoryRoot()
@@ -68,34 +70,133 @@ export function ensureHistoryDir(worktreeHash: string, wslDistro?: string): stri
   }
 }
 
-/** Write meta.json alongside history files for debuggability. */
-function writeMetaFile(dir: string, worktreeId: string): void {
+// Record the fish session and spawn-time data dir so deletion can find its out-of-tree history.
+function writeMetaFile(
+  dir: string,
+  worktreeId: string,
+  fish?: { session: string; historyDir?: string }
+): void {
   try {
     const metaPath = join(dir, 'meta.json')
-    if (!existsSync(metaPath)) {
-      writeFileSync(metaPath, JSON.stringify({ worktreeId, createdAt: new Date().toISOString() }), {
-        mode: 0o600
-      })
+    const existing = existsSync(metaPath) ? readHistoryMeta(dir) : null
+    if (
+      existing &&
+      (!fish ||
+        (existing.fishSession === fish.session && existing.fishHistoryDir === fish.historyDir))
+    ) {
+      return
     }
+    writeFileSync(
+      metaPath,
+      JSON.stringify({
+        worktreeId,
+        createdAt: existing?.createdAt ?? new Date().toISOString(),
+        ...(fish ? { fishSession: fish.session } : {}),
+        ...(fish?.historyDir ? { fishHistoryDir: fish.historyDir } : {}),
+        ...(existing?.installedMigrationBlobs
+          ? { installedMigrationBlobs: existing.installedMigrationBlobs }
+          : {})
+      }),
+      { mode: 0o600 }
+    )
   } catch {
-    // Non-fatal — meta.json is purely for diagnostics.
+    // A metadata failure must not prevent terminal startup.
   }
 }
 
-// ─── Environment Injection ─────────────────────────────────────────
+export type HistoryDirMeta = {
+  worktreeId?: string
+  createdAt?: string
+  fishSession?: string
+  /** Spawn-time directory; may differ from this process's environment. */
+  fishHistoryDir?: string
+  /** Installed migration hashes prevent duplicate prepends on retry. */
+  installedMigrationBlobs?: InstalledMigrationHistoryBlob[]
+}
+
+export type InstalledMigrationHistoryBlob = { sha256: string; shell: string }
+
+export function readHistoryMeta(dir: string): HistoryDirMeta | null {
+  try {
+    const metaPath = join(dir, 'meta.json')
+    if (statSync(metaPath).size > MAX_HISTORY_META_BYTES) {
+      return null
+    }
+    return parseHistoryMeta(dir, readFileSync(metaPath, 'utf-8'))
+  } catch {
+    return null
+  }
+}
+
+export async function readHistoryMetaAsync(dir: string): Promise<HistoryDirMeta | null> {
+  try {
+    const metaPath = join(dir, 'meta.json')
+    if ((await stat(metaPath)).size > MAX_HISTORY_META_BYTES) {
+      return null
+    }
+    return parseHistoryMeta(dir, await readFile(metaPath, 'utf-8'))
+  } catch {
+    return null
+  }
+}
+
+function parseHistoryMeta(dir: string, contents: string): HistoryDirMeta | null {
+  try {
+    const raw: unknown = JSON.parse(contents)
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return null
+    }
+    const record = raw as Record<string, unknown>
+    // Do not let tampered metadata steer deletion to another session.
+    const expectedFishSession = fishHistorySessionName(basename(dir).split('.')[0])
+    const fishSession =
+      isSafeFishHistorySession(record.fishSession) && record.fishSession === expectedFishSession
+        ? record.fishSession
+        : undefined
+    const fishHistoryDir =
+      fishSession && typeof record.fishHistoryDir === 'string' && record.fishHistoryDir
+        ? record.fishHistoryDir
+        : undefined
+    return {
+      ...(typeof record.worktreeId === 'string' ? { worktreeId: record.worktreeId } : {}),
+      ...(typeof record.createdAt === 'string' ? { createdAt: record.createdAt } : {}),
+      ...(fishSession ? { fishSession } : {}),
+      ...(fishHistoryDir ? { fishHistoryDir } : {}),
+      ...parseInstalledMigrationBlobs(record.installedMigrationBlobs)
+    }
+  } catch {
+    return null
+  }
+}
+
+function parseInstalledMigrationBlobs(
+  value: unknown
+): Pick<HistoryDirMeta, 'installedMigrationBlobs'> {
+  if (!Array.isArray(value)) {
+    return {}
+  }
+  const blobs = value.flatMap((entry: unknown) =>
+    entry &&
+    typeof entry === 'object' &&
+    'sha256' in entry &&
+    typeof entry.sha256 === 'string' &&
+    'shell' in entry &&
+    typeof entry.shell === 'string'
+      ? [{ sha256: entry.sha256, shell: entry.shell }]
+      : []
+  )
+  return blobs.length > 0 ? { installedMigrationBlobs: blobs } : {}
+}
 
 export type HistoryInjectionResult = {
   shell: ShellKind
   histFile: string | null
+  /** Exported as fish_history. */
+  fishSession: string | null
+  /** Path as seen by the spawned shell, including WSL translation. */
+  historyDir: string | null
 }
 
-/** Build shell-specific history env overrides for a PTY spawn.
- *  Returns the injection result for diagnostics logging.
- *
- *  Why this is the industry-standard approach: Ghostty, Kitty, and VS Code
- *  all use check-before-set for HISTFILE. The major zsh frameworks (oh-my-zsh,
- *  Prezto) guard their HISTFILE assignments, so env-var injection works for
- *  the vast majority of users (see design doc §9). */
 export function injectHistoryEnv(
   spawnEnv: Record<string, string>,
   worktreeId: string,
@@ -103,30 +204,46 @@ export function injectHistoryEnv(
   cwd: string,
   options: { wslDistro?: string | null } = {}
 ): HistoryInjectionResult {
+  // Nested Orca launches inherit this value; clear it before any early return to prevent history leaks.
+  delete spawnEnv.ORCA_HISTFILE
+  dropInheritedOrcaFishHistory(spawnEnv)
+  dropInheritedOrcaHistFile(spawnEnv)
+
   const shell = resolveShellKind(shellPath)
-  const result: HistoryInjectionResult = { shell, histFile: null }
+  const result: HistoryInjectionResult = {
+    shell,
+    histFile: null,
+    fishSession: null,
+    historyDir: null
+  }
 
   const filename = historyFilename(shell)
-  if (!filename) {
-    // Unknown shell or Phase 2 shell (fish, pwsh, cmd) — leave unchanged.
+  if (!filename && shell !== 'fish') {
     return result
   }
 
-  // Check-before-set: if the caller already provided HISTFILE, preserve it.
-  // This follows the pattern used by Ghostty, Kitty, and VS Code (§6).
-  if (spawnEnv.HISTFILE) {
+  // Preserve caller-provided history settings after dropping inherited Orca values.
+  if (shell === 'fish' ? spawnEnv.fish_history : spawnEnv.HISTFILE) {
     return result
   }
 
   const worktreeHash = hashWorktreeId(worktreeId)
 
-  // WSL: store under a separate root keyed by distro, and convert the
-  // HISTFILE path to a Linux-visible /mnt/... path for the inner shell.
   const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
   const wslDistro = wslInfo?.distro ?? options.wslDistro?.trim()
   const histDir = ensureHistoryDir(worktreeHash, wslDistro)
   if (!histDir) {
-    // Directory creation failed — degrade gracefully to shared history.
+    return result
+  }
+
+  if (!filename) {
+    // Fish history lives outside histDir; metadata links it to this worktree.
+    const session = fishHistorySessionName(worktreeHash)
+    // The PTY's spawn environment determines fish's data directory.
+    writeMetaFile(histDir, worktreeId, { session, historyDir: resolveFishHistoryDir(spawnEnv) })
+    spawnEnv.fish_history = session
+    result.fishSession = session
+    result.historyDir = histDir
     return result
   }
 
@@ -134,42 +251,63 @@ export function injectHistoryEnv(
 
   const histFilePath = join(histDir, filename)
 
-  // For WSL, convert the Windows path to a Linux-visible path.
   spawnEnv.HISTFILE = wslDistro ? toLinuxPath(histFilePath) : histFilePath
+  // Preserve the injected path across system zshrc's unconditional HISTFILE assignment.
+  spawnEnv.ORCA_HISTFILE = spawnEnv.HISTFILE
 
   result.histFile = spawnEnv.HISTFILE
+  result.historyDir = spawnEnv.HISTFILE.replace(/[/\\][^/\\]+$/, '')
   return result
 }
 
-/** Update HISTFILE in spawnEnv when shell fallback changes the shell kind.
- *  For example, if zsh fails and bash takes over, the HISTFILE should point
- *  to bash_history instead of zsh_history. */
-export function updateHistFileForFallback(
+/** WSL's outer executable hides the login shell, so carry both history knobs. */
+export function injectWslFishHistoryEnv(
   spawnEnv: Record<string, string>,
-  fallbackShellPath: string
-): void {
-  if (!spawnEnv.HISTFILE) {
-    return
+  worktreeId: string,
+  wslDistro: string
+): string | null {
+  // Drop inherited Orca sessions even when the caller did not run injectHistoryEnv first.
+  dropInheritedOrcaFishHistory(spawnEnv)
+  if (spawnEnv.fish_history) {
+    return null
   }
-
-  const newShell = resolveShellKind(fallbackShellPath)
-  const newFilename = historyFilename(newShell)
-  if (!newFilename) {
-    // Fallback to an unknown shell — remove HISTFILE override entirely
-    // so the shell uses its own default.
-    delete spawnEnv.HISTFILE
-    return
+  const worktreeHash = hashWorktreeId(worktreeId)
+  const historyDir = ensureHistoryDir(worktreeHash, wslDistro)
+  if (!historyDir) {
+    return null
   }
-
-  // Replace the filename portion of the HISTFILE path.
-  const dir = spawnEnv.HISTFILE.replace(/[/\\][^/\\]+$/, '')
-  spawnEnv.HISTFILE = `${dir}/${newFilename}`
+  const session = fishHistorySessionName(worktreeHash)
+  // Omit host historyDir: WSL cleanup must resolve the fish data path inside its distro.
+  writeMetaFile(historyDir, worktreeId, { session })
+  spawnEnv.fish_history = session
+  return session
 }
 
-/** Log the history injection result for diagnostics. */
+export function updateHistoryEnvForFallback(
+  spawnEnv: Record<string, string>,
+  fallbackShellPath: string,
+  injected: HistoryInjectionResult
+): void {
+  if (injected.fishSession && spawnEnv.fish_history === injected.fishSession) {
+    delete spawnEnv.fish_history
+  }
+  if (!injected.historyDir) {
+    return
+  }
+
+  const newFilename = historyFilename(resolveShellKind(fallbackShellPath))
+  if (!newFilename) {
+    delete spawnEnv.HISTFILE
+    delete spawnEnv.ORCA_HISTFILE
+    return
+  }
+  spawnEnv.HISTFILE = `${injected.historyDir}/${newFilename}`
+  spawnEnv.ORCA_HISTFILE = spawnEnv.HISTFILE
+}
+
 export function logHistoryInjection(worktreeId: string, result: HistoryInjectionResult): void {
   const truncatedId = worktreeId.length > 60 ? `${worktreeId.slice(0, 60)}...` : worktreeId
   console.log(
-    `[pty:history] worktreeId=${truncatedId} shell=${result.shell} histFile=${result.histFile ?? 'none'}`
+    `[pty:history] worktreeId=${truncatedId} shell=${result.shell} histFile=${result.histFile ?? 'none'} fishSession=${result.fishSession ?? 'none'}`
   )
 }

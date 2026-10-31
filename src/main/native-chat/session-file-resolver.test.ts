@@ -137,9 +137,53 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
+  it('matches omp transcripts by session id suffix inside the per-cwd directory', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-omp-')
+    const ompSessionsDir = join(root, 'omp-sessions')
+    const cwdDir = join(ompSessionsDir, '-Users-ada-repo')
+    await mkdir(cwdDir, { recursive: true })
+    const target = join(cwdDir, '2026-07-16T00-27-02-222Z_sess-omp-1.jsonl')
+    await writeFile(target, '{}\n')
+
+    const resolved = await resolveSessionFilePath('omp', 'sess-omp-1', { ompSessionsDir })
+    expect(resolved).toBe(target)
+  })
+
+  it('never descends into an omp session artifact dir', async () => {
+    // Put the only match inside the artifact directory so success cannot depend on readdir ordering.
+    const root = await makeRoot('orca-native-chat-resolve-omp-artifact-')
+    const ompSessionsDir = join(root, 'omp-sessions')
+    const cwdDir = join(ompSessionsDir, '-Users-ada-repo')
+    const stem = '2026-07-16T00-27-02-222Z_019fd8e2-fd56-7000-acfe-2e497adfa83c'
+    await mkdir(join(cwdDir, stem), { recursive: true })
+    await writeFile(join(cwdDir, `${stem}.jsonl`), '{}\n')
+    await writeFile(join(cwdDir, stem, 'worker_sess-omp-child.jsonl'), '{}\n')
+
+    await expect(
+      resolveSessionFilePath('omp', 'sess-omp-child', { ompSessionsDir })
+    ).resolves.toBeNull()
+    await expect(
+      resolveSessionFilePath('omp', '019fd8e2-fd56-7000-acfe-2e497adfa83c', { ompSessionsDir })
+    ).resolves.toBe(join(cwdDir, `${stem}.jsonl`))
+  })
+
+  it('honors OMP_CODING_AGENT_DIR when resolving omp transcripts', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-omp-env-')
+    const cwdDir = join(root, 'omp-sessions', '-Users-ada-repo')
+    await mkdir(cwdDir, { recursive: true })
+    const target = join(cwdDir, '2026-07-16T00-27-02-222Z_sess-omp-env.jsonl')
+    await writeFile(target, '{}\n')
+
+    const previous = process.env.OMP_CODING_AGENT_DIR
+    process.env.OMP_CODING_AGENT_DIR = join(root, 'omp-sessions')
+    try {
+      await expect(resolveSessionFilePath('omp', 'sess-omp-env')).resolves.toBe(target)
+    } finally {
+      restoreEnv('OMP_CODING_AGENT_DIR', previous)
+    }
+  })
+
   it('resolves a rollout from the orca-managed Codex home (ORCA_USER_DATA_PATH)', async () => {
-    // Orca launches Codex with its own managed CODEX_HOME, so rollout files land
-    // under <userData>/codex-runtime-home/home/sessions, NOT ~/.codex/sessions.
     const root = await makeRoot('orca-native-chat-resolve-managed-')
     const managedSessionsDir = join(root, 'codex-runtime-home', 'home', 'sessions')
     const dayDir = join(managedSessionsDir, '2026', '06', '19')
@@ -174,7 +218,6 @@ describe('resolveSessionFilePath', () => {
     const previousCodex = process.env.CODEX_HOME
     const previousUserData = process.env.ORCA_USER_DATA_PATH
     process.env.CODEX_HOME = codexHome
-    // Point the managed home at an empty dir so the fallback is exercised.
     process.env.ORCA_USER_DATA_PATH = managedRoot
     try {
       const resolved = await resolveSessionFilePath('codex', 'xyz-session')
@@ -197,13 +240,10 @@ describe('resolveSessionFilePath', () => {
   })
 
   it('prefers the hook transcriptPath when it exists (Claude id != file name)', async () => {
-    // Recent Claude Code names the file with a UUID that differs from the hook
-    // session_id, so the id glob would miss it — but transcript_path is exact.
     const root = await makeRoot('orca-native-chat-resolve-path-')
     const claudeProjectsDir = join(root, 'claude-projects')
     const projectDir = join(claudeProjectsDir, '-Users-ada-repo')
     await mkdir(projectDir, { recursive: true })
-    // The real transcript is named by a DIFFERENT id than the hook session id.
     const realFile = join(projectDir, 'real-file-uuid.jsonl')
     await writeFile(realFile, '{}\n')
 
@@ -244,5 +284,39 @@ describe('resolveSessionFilePath', () => {
       transcriptPath: bogus
     })
     expect(resolved).toBe(target)
+  })
+})
+
+// Mobile uses default roots, which must match the CLI’s CLAUDE_CONFIG_DIR or its transcript disappears.
+describe('the default Claude transcript root mobile falls back to', () => {
+  it('follows CLAUDE_CONFIG_DIR, the same variable the pinned account home follows', async () => {
+    const configDir = await makeRoot('orca-native-chat-claude-config-dir-')
+    const slugDir = join(configDir, 'projects', '-repos-workspace-1')
+    await mkdir(slugDir, { recursive: true })
+    const transcript = join(slugDir, 'session-under-config-dir.jsonl')
+    await writeFile(transcript, '', 'utf8')
+    const previous = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = configDir
+
+    try {
+      await expect(resolveSessionFilePath('claude', 'session-under-config-dir')).resolves.toBe(
+        transcript
+      )
+    } finally {
+      restoreEnv('CLAUDE_CONFIG_DIR', previous)
+    }
+  })
+
+  it('ignores a blank CLAUDE_CONFIG_DIR rather than resolving against the filesystem root', async () => {
+    const previous = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = '   '
+
+    try {
+      await expect(
+        resolveSessionFilePath('claude', 'session-that-does-not-exist')
+      ).resolves.toBeNull()
+    } finally {
+      restoreEnv('CLAUDE_CONFIG_DIR', previous)
+    }
   })
 })

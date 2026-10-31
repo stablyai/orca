@@ -7,8 +7,7 @@ type LigatureRange = [number, number]
 type CharacterJoiner = (text: string) => LigatureRange[]
 
 const LIGATURE_CACHE_CHARACTER_BUDGET = 100_000
-// Why: short attribute segments can otherwise create tens of thousands of Map
-// entries per pane; 2K is still far beyond one visible grid's working set.
+// Bound tiny attribute-segment caches; 2K entries exceeds one visible grid without permitting tens of thousands per pane.
 const LIGATURE_CACHE_ENTRY_BUDGET = 2_048
 
 function cloneRanges(ranges: readonly LigatureRange[]): LigatureRange[] {
@@ -27,8 +26,7 @@ class LigatureRangeCache {
     }
     this.entries.delete(text)
     this.entries.set(text, entry)
-    // Why: xterm translates and merges joiner ranges in place, so callers must
-    // never receive the cache's retained tuples.
+    // xterm mutates/merges joiner ranges; never expose cached tuples directly.
     return cloneRanges(entry.ranges)
   }
 
@@ -84,8 +82,7 @@ function createCachedCharacterJoiner(
     }
     const generationBeforeJoin = cache.generation
     const ranges = joiner(text)
-    // Why: the addon refreshes when async font discovery completes. If that
-    // happened during this call, do not repopulate the cleared fallback data.
+    // Async font discovery may refresh during this call; do not refill a just-cleared fallback cache.
     if (cache.generation === generationBeforeJoin) {
       cache.set(text, ranges)
     }
@@ -93,9 +90,7 @@ function createCachedCharacterJoiner(
   }
 }
 
-/** LigaturesAddon with a bounded exact-row cache around its character joiner.
- *  Active TUIs repaint mostly unchanged rows, while the upstream fallback
- *  matcher otherwise retries every known ligature at every character. */
+/** Cache exact rows with bounded retention: TUIs repaint unchanged rows while upstream otherwise retries every ligature at every character. */
 export class TerminalLigaturesAddon extends LigaturesAddon {
   override activate(terminal: Terminal): void {
     const cache = new LigatureRangeCache()
@@ -111,6 +106,7 @@ export class TerminalLigaturesAddon extends LigaturesAddon {
             target.refresh(start, end)
           }
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
         const value = Reflect.get(target, property, target) as unknown
         return typeof value === 'function' ? value.bind(target) : value
       }

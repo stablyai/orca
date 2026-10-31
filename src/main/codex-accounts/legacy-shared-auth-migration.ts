@@ -1,14 +1,12 @@
 import { lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { CodexManagedAccount } from '../../shared/types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { writeFileAtomically } from './fs-utils'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
 import { codexAuthMatchesManagedAccount, compareCodexAuthFreshness } from './codex-auth-identity'
 
 export const LEGACY_SHARED_AUTH_MIGRATION_MARKER = 'per-account-auth-migration-v1.json'
-// Why: the auth and MCP carries are independent generations. A build that ran
-// only the auth migration already stamped the v1 marker, so gating the MCP
-// carry (#8440) on that same marker would strand .credentials.json forever.
+// MCP migration needs its own marker for upgrades that already completed auth-only migration (#8440).
 export const LEGACY_SHARED_MCP_CREDENTIALS_MIGRATION_MARKER =
   'per-account-mcp-creds-migration-v1.json'
 
@@ -57,8 +55,7 @@ export function migrateLegacySharedAuthToPerAccountHome({
 
   const sharedAuthContents = readRegularFile(join(sharedRuntimeHome, 'auth.json'))
   if (sharedAuthContents === null) {
-    // Why: MCP tokens carry no identity claim of their own; without a shared
-    // auth.json there is no ownership proof, so both lanes conclude.
+    // MCP tokens have no identity claims; missing shared auth rules out both migrations.
     if (!authDone) {
       writeCompletedMarker(authMarkerPath, 'no-shared-auth')
     }
@@ -74,8 +71,7 @@ export function migrateLegacySharedAuthToPerAccountHome({
   const matches = candidates.filter(({ account, authContents }) =>
     codexAuthMatchesManagedAccount(sharedAuthContents, account, authContents)
   )
-  // Why: a stale PTY can leave another account in the shared mirror. Only a
-  // unique identity can prove which account home owns these bytes.
+  // Stale PTYs may leave another account's auth; require a unique match to the active account.
   if (matches.length !== 1 || matches[0].account.id !== activeHostAccountId) {
     return
   }
@@ -85,11 +81,7 @@ export function migrateLegacySharedAuthToPerAccountHome({
     return
   }
 
-  // Why: Codex file-mode MCP OAuth tokens live in $CODEX_HOME/.credentials.json
-  // (issue #8440), keyed by MCP server URL with no account identity of their
-  // own. The uniquely-matched auth.json is the only proof this shared mirror is
-  // the active account's, so carry its co-located MCP store into the same
-  // per-account home or those servers silently need re-auth after upgrade.
+  // Carry identity-free MCP tokens only alongside this proven account's auth (#8440).
   if (!mcpDone) {
     writeCompletedMarker(
       mcpMarkerPath,
@@ -114,8 +106,6 @@ export function migrateLegacySharedAuthToPerAccountHome({
     return
   }
 
-  // Why: replacing the file atomically with a 0600 temporary prevents a crash
-  // from truncating the only proven-fresh credential or widening permissions.
   writeFileAtomically(match.authPath, sharedAuthContents, { mode: 0o600 })
   writeCompletedMarker(authMarkerPath, 'migrated', match.account.id)
 }
@@ -134,9 +124,7 @@ function readTrustedAccountAuth(
       expectedAccountId: account.id
     })
   } catch (error) {
-    // Why: one stale or unproven account home must not abort every other
-    // account's migration. Stored identity fields keep this account in the
-    // unique-ownership gate, but nothing inside its home is read or written.
+    // Keep stored identity in the uniqueness check without accessing an untrusted home.
     console.warn('[codex-legacy-auth-migration] Skipping untrusted managed account home:', error)
     return { account, authContents: null, authPath: null, homePath: null }
   }
@@ -150,10 +138,6 @@ function readTrustedAccountAuth(
   return { account, authContents, authPath, homePath: trustedHome }
 }
 
-// Why: MCP OAuth tokens have no identity claim to match on, so we only ever
-// write the shared store into the one identity-proven account's home, and never
-// clobber a newer .credentials.json that account authed in its own home going
-// forward. Absent source is a plain no-op.
 function migrateSharedMcpCredentials(
   sharedRuntimeHome: string,
   perAccountHome: string
@@ -166,8 +150,6 @@ function migrateSharedMcpCredentials(
   if (regularFileState(perAccountCredentialsPath) === 'present') {
     return 'per-account-present'
   }
-  // Why: atomic 0600 write mirrors auth.json so a crash cannot leave a partial
-  // MCP store or widen permissions on sensitive tokens.
   writeFileAtomically(perAccountCredentialsPath, sharedCredentials, { mode: 0o600 })
   return 'migrated'
 }

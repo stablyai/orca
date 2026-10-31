@@ -6,6 +6,7 @@ export type SendTargetInputsState = Pick<
   | 'agentSendPopoverTargetMode'
   | 'agentStatusByPaneKey'
   | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
@@ -21,32 +22,23 @@ export type SendTargetControlInputs = {
   agentStatusEpoch: number
 }
 
-// Why: shared stable reference returned whenever the send-target popover isn't
-// targeting this card. useShallow keeps the same result across unrelated
-// pane-title / agent-status churn, so idle agent bodies stop re-rendering.
-// Frozen so this shared singleton can never be mutated by a consumer.
+// Share an inactive-card sentinel so pane-title/status churn cannot wake every idle agent body.
 export const EMPTY_SEND_TARGET_INPUTS: RunningAgentTargetState = Object.freeze({
   agentStatusByPaneKey: {},
   tabsByWorktree: {},
+  unifiedTabsByWorktree: {},
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
   runtimePaneTitlesByTabId: {}
 })
 
-// Why: the picker mode and freshness epoch are irrelevant to every card except
-// its current target. Keep inactive bodies stable across both global writes.
+// Inactive cards ignore picker-mode and freshness-epoch changes.
 export const EMPTY_SEND_TARGET_CONTROL_INPUTS: SendTargetControlInputs = Object.freeze({
   targetMode: null,
   agentStatusEpoch: 0
 })
 
-/**
- * Select the five maps `deriveRunningAgentSendTargets` needs — but only while
- * the send-target popover targets this worktree. When it doesn't, return a
- * stable empty constant so a useShallow-wrapped subscription stays referentially
- * equal across the (very hot) pane-title / agent-status writes and skips the
- * re-render that would otherwise fire on every mounted agent body app-wide.
- */
+/** Select live send-target maps only for the targeted card; all others reuse the empty sentinel. */
 export function selectSendTargetInputs(
   s: SendTargetInputsState,
   worktreeId: string
@@ -57,6 +49,7 @@ export function selectSendTargetInputs(
   return {
     agentStatusByPaneKey: s.agentStatusByPaneKey,
     tabsByWorktree: s.tabsByWorktree,
+    unifiedTabsByWorktree: s.unifiedTabsByWorktree,
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,
     ptyIdsByTabId: s.ptyIdsByTabId,
     runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId

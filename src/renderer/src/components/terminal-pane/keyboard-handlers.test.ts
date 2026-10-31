@@ -1,4 +1,3 @@
-// src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
 import {
@@ -6,7 +5,7 @@ import {
   matchSearchNavigate,
   resolveTerminalKeyboardShortcutAction,
   runTerminalSearchNavigation
-} from './keyboard-handlers'
+} from './terminal-keyboard-shortcut-matching'
 
 function makeKeyEvent(
   overrides: Partial<{
@@ -93,6 +92,24 @@ describe('matchSearchNavigate', () => {
 })
 
 describe('resolveTerminalKeyboardShortcutAction', () => {
+  it('routes native Option dead keys to consume-only release tracking', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Dead', altKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        () => 2,
+        undefined,
+        () => 'alt-enter',
+        () => false
+      )
+    ).toEqual({ type: 'trackNativeOptionDeadKey' })
+  })
+
   it('routes macOS Shift+Enter with the active Windows PTY host bytes', () => {
     expect(
       resolveTerminalKeyboardShortcutAction(
@@ -110,10 +127,35 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
       )
     ).toEqual({ type: 'sendInput', data: '\x1b\r' })
   })
+
+  it('forwards trusted Ctrl+Enter authority to the shared policy', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Enter', ctrlKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        () => true,
+        () => 0,
+        undefined,
+        () => 'alt-enter',
+        () => true,
+        'orca-first',
+        () => true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+  })
 })
 
 describe('runTerminalSearchNavigation', () => {
   const searchState = { query: 'hello', caseSensitive: true, regex: false }
+  const decoratedOptions = expect.objectContaining({
+    caseSensitive: true,
+    regex: false,
+    decorations: expect.objectContaining({ activeMatchBackground: expect.any(String) })
+  })
 
   it('runs the next search through the guarded xterm path', () => {
     const findNext = vi.fn(() => true)
@@ -123,7 +165,7 @@ describe('runTerminalSearchNavigation', () => {
     >[0]
 
     expect(runTerminalSearchNavigation(pane, 'next', searchState)).toBe(true)
-    expect(findNext).toHaveBeenCalledWith('hello', { caseSensitive: true, regex: false })
+    expect(findNext).toHaveBeenCalledWith('hello', decoratedOptions)
     expect(findPrevious).not.toHaveBeenCalled()
   })
 
@@ -135,7 +177,7 @@ describe('runTerminalSearchNavigation', () => {
     >[0]
 
     expect(runTerminalSearchNavigation(pane, 'previous', searchState)).toBe(true)
-    expect(findPrevious).toHaveBeenCalledWith('hello', { caseSensitive: true, regex: false })
+    expect(findPrevious).toHaveBeenCalledWith('hello', decoratedOptions)
     expect(findNext).not.toHaveBeenCalled()
   })
 

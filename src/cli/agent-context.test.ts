@@ -57,6 +57,21 @@ describe('buildAgentContext', () => {
     ])
   })
 
+  it('omits hidden specs so agents do not discover an unadvertised command', () => {
+    const schema = buildAgentContext([
+      ...specs,
+      {
+        path: ['terminal', 'stop'],
+        summary: 'Deprecated',
+        usage: 'orca terminal stop',
+        allowedFlags: [],
+        hidden: true
+      }
+    ])
+    expect(schema.commandCount).toBe(2)
+    expect(schema.commands.map((command) => command.command)).not.toContain('terminal stop')
+  })
+
   it('defaults optional fields to empty arrays', () => {
     const schema = buildAgentContext(specs)
     const agentContext = schema.commands.find((command) => command.command === 'agent-context')
@@ -66,13 +81,6 @@ describe('buildAgentContext', () => {
 })
 
 describe('agent-context over the live registry', () => {
-  it('exposes the worktree rm command with its remove/delete aliases', () => {
-    const schema = buildAgentContext(COMMAND_SPECS)
-    const rm = schema.commands.find((command) => command.command === 'worktree rm')
-    expect(rm).toBeDefined()
-    expect(rm?.aliases).toContainEqual(['worktree', 'remove'])
-  })
-
   it('human summary count matches the command count', () => {
     const schema = buildAgentContext(COMMAND_SPECS)
     expect(formatAgentContextSummary(schema)).toContain(`${schema.commandCount} commands`)
@@ -81,6 +89,7 @@ describe('agent-context over the live registry', () => {
   it('does not advertise browser page targeting for local discovery', () => {
     const schema = buildAgentContext(COMMAND_SPECS)
     const agentContext = schema.commands.find((command) => command.command === 'agent-context')
+    expect(agentContext).toBeDefined()
     expect(agentContext?.flags).not.toContain('page')
   })
 

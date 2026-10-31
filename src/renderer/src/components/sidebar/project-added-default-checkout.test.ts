@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultOnboardingState } from '../../../../shared/constants'
+import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
   DetectedWorktree,
   DetectedWorktreeListResult,
-  Repo,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
 import {
   finishProjectAddWithDefaultCheckout,
   getProjectDefaultCheckout,
@@ -212,6 +212,26 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     await openProjectDefaultCheckout({
       repoId: 'repo-1',
       source: 'clone_url',
+      executionHostId: 'runtime:env-1',
+      setHideDefaultBranchWorkspace: vi.fn()
+    })
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
+      executionHostId: 'runtime:env-1'
+    })
+  })
+
+  it('activates a runtime-owned checkout even when its physical host is private SSH', async () => {
+    const runtimeMain = makeWorktree({
+      id: 'repo-1::runtime-ssh',
+      hostId: 'ssh:private-target',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
+    mocks.state.worktreesByRepo = { 'repo-1': [runtimeMain] }
+
+    await openProjectDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'runtime_server_path',
       executionHostId: 'runtime:env-1',
       setHideDefaultBranchWorkspace: vi.fn()
     })
@@ -509,7 +529,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       reason: 'no_authoritative_detection'
     })
     expect(mocks.state.setActiveRepo).toHaveBeenCalledWith('repo-1')
-    expect(mocks.state.setFilterRepoIds).toHaveBeenCalledWith([])
+    expect(mocks.state.setFilterRepoIds).toHaveBeenCalledWith(['repo-2', 'repo-1'])
     expect(mocks.state.setShowActiveOnly).toHaveBeenCalledWith(false)
   })
 })

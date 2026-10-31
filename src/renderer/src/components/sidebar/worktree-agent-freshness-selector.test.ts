@@ -4,7 +4,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { createWorktreeAgentFreshnessSelector } from './worktree-agent-freshness-selector'
 
 const WT_1_PANE = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
@@ -64,8 +64,7 @@ describe('createWorktreeAgentFreshnessSelector', () => {
     now = AGENT_STATUS_STALE_AFTER_MS + 1
     const nextState = { ...state, agentStatusEpoch: 2 }
 
-    // The global scheduler bumps one epoch for all cards. Zustand compares the
-    // selected string by value, so the unrelated card now skips its render.
+    // The shared epoch wakes selectors, but equal per-card signatures must skip unrelated renders.
     expect(selectWt1(nextState)).toBe(firstWt1)
     expect(selectWt2(nextState)).not.toBe(firstWt2)
   })

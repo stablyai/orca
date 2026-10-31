@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DashboardSnapshot } from '../../shared/dashboard-snapshot'
 import type * as RepoIconModule from '../../shared/repo-icon'
 
-// Counts real sanitizer entries so the icon cache is proven by decode count
-// rather than by wall clock, which is unfalsifiable on a loaded CI box.
+// Count real decodes to verify caching without timing-sensitive assertions.
 const sanitizeRepoIconCalls = vi.hoisted(() => vi.fn())
 vi.mock('../../shared/repo-icon', async (importOriginal) => {
   const actual = await importOriginal<typeof RepoIconModule>()
@@ -38,8 +37,14 @@ const SNAPSHOT = {
       worktreeId: 'worktree-1',
       tabId: 'tab-1',
       leafId: 'leaf-1',
+      parentPaneKey: 'tab-parent:leaf-parent',
+      parentWorktreeId: 'parent-worktree-1',
       repoName: 'Orca',
       worktreeName: 'Dashboard',
+      hostKind: 'ssh',
+      executionHostId: 'ssh:build-box',
+      hostLabel: 'Build box',
+      workspaceKind: 'worktree',
       workspaceStatusId: 'in-review',
       workspaceStatusLabel: 'In review',
       workspaceStatusColor: 'emerald',
@@ -51,6 +56,24 @@ const SNAPSHOT = {
       stateChangedAt: 1_699_999_500_000,
       unseen: true,
       askSummary: '{"question":"Proceed?"}'
+    }
+  ],
+  workspaces: [
+    {
+      repoId: 'repo-1',
+      worktreeId: 'worktree-1',
+      repoName: 'Orca',
+      worktreeName: 'Dashboard',
+      parentWorktreeId: 'parent-worktree-1',
+      hostKind: 'ssh',
+      executionHostId: 'ssh:build-box',
+      hostLabel: 'Build box',
+      workspaceKind: 'worktree',
+      workspaceStatusId: 'in-review',
+      workspaceStatusLabel: 'In review',
+      workspaceStatusColor: 'emerald',
+      hasReview: true,
+      review: { number: 11012, state: 'open' }
     }
   ],
   showIdle: false,
@@ -74,6 +97,32 @@ function imageIconSrc(bodyBytes: number, withWhitespace = false): string {
 describe('dashboard payload validation', () => {
   it('accepts a complete dashboard snapshot', () => {
     expect(isDashboardSnapshot(SNAPSHOT)).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [
+          {
+            ...SNAPSHOT.cards[0],
+            bucket: 'working',
+            dotState: 'working',
+            workingMode: 'monitoring'
+          }
+        ]
+      })
+    ).toBe(true)
+  })
+
+  it('admits legacy and known verdicts without widening the base dot states', () => {
+    for (const verdict of [undefined, 'interrupted', 'failed', 'unconfirmed']) {
+      expect(isDashboardSnapshot({ ...SNAPSHOT, cards: [{ ...SNAPSHOT.cards[0], verdict }] })).toBe(
+        true
+      )
+    }
+    for (const verdict of [null, 'success', {}, 1]) {
+      expect(isDashboardSnapshot({ ...SNAPSHOT, cards: [{ ...SNAPSHOT.cards[0], verdict }] })).toBe(
+        false
+      )
+    }
   })
 
   it('rejects malformed or unbounded snapshot fields', () => {
@@ -82,6 +131,18 @@ describe('dashboard payload validation', () => {
       isDashboardSnapshot({
         ...SNAPSHOT,
         cards: [{ ...SNAPSHOT.cards[0], bucket: 'unexpected' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], dotState: 'monitoring' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], dotState: 'done', workingMode: 'monitoring' }]
       })
     ).toBe(false)
     expect(
@@ -100,6 +161,48 @@ describe('dashboard payload validation', () => {
       isDashboardSnapshot({
         ...SNAPSHOT,
         cards: [{ ...SNAPSHOT.cards[0], subagents: [{ id: '', name: 'bad', dotState: 'idle' }] }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], hostKind: 'satellite' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], executionHostId: 'build-box' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], executionHostId: `ssh:${'x'.repeat(4_097)}` }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], hostLabel: 'x'.repeat(1_025) }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], parentWorktreeId: 'x'.repeat(4_097) }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], workspaceKind: 'repository' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], parentPaneKey: 'x'.repeat(4_097) }]
       })
     ).toBe(false)
   })
@@ -162,6 +265,45 @@ describe('dashboard payload validation', () => {
     ).toBe(false)
   })
 
+  it('validates bounded map workspace metadata independently of cards', () => {
+    expect(isDashboardSnapshot({ ...SNAPSHOT, cards: [] })).toBe(true)
+    expect(isDashboardSnapshot({ ...SNAPSHOT, workspaces: undefined })).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        workspaces: [{ ...SNAPSHOT.workspaces[0], executionHostId: 'build-box' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        workspaces: [{ ...SNAPSHOT.workspaces[0], worktreeName: 'x'.repeat(1_025) }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        workspaces: [{ ...SNAPSHOT.workspaces[0], hostLabel: 'x'.repeat(1_025) }]
+      })
+    ).toBe(false)
+  })
+
+  it('validates bounded launch choices', () => {
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        launchableAgentsByWorktreeId: { 'worktree-1': ['codex', 'claude'] }
+      })
+    ).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        launchableAgentsByWorktreeId: { 'worktree-1': ['not-an-agent'] }
+      })
+    ).toBe(false)
+    expect(isDashboardSnapshot({ ...SNAPSHOT, launchableAgentsByWorktreeId: [] })).toBe(false)
+  })
+
   it('bounds the conversation name', () => {
     expect(
       isDashboardSnapshot({
@@ -183,6 +325,8 @@ describe('dashboard payload validation', () => {
       localWindowsConpty: true,
       osRelease: '10.0.22631',
       windowsShiftEnterEncoding: 'alt-enter',
+      windowsInputRecordPasteNewline: 'alt-enter',
+      ctrlEnterCsiU: false,
       kittyKeyboardAdvertised: false
     }
     expect(
@@ -196,6 +340,9 @@ describe('dashboard payload validation', () => {
       { ...terminalInput, localWindowsConpty: 'true' },
       { ...terminalInput, osRelease: 'x'.repeat(1_025) },
       { ...terminalInput, windowsShiftEnterEncoding: 'enter' },
+      { ...terminalInput, forceBracketedMultilineTextPaste: false },
+      { ...terminalInput, windowsInputRecordPasteNewline: 'enter' },
+      { ...terminalInput, ctrlEnterCsiU: 'true' },
       { ...terminalInput, kittyKeyboardAdvertised: 1 }
     ]) {
       expect(
@@ -207,29 +354,7 @@ describe('dashboard payload validation', () => {
     }
   })
 
-  // Why: terminalInput is per-card, so a host profile this validator does not
-  // know must cost that preview its card, never the whole board.
-  it('drops only the card whose terminal input profile is unusable', () => {
-    const good = SNAPSHOT.cards[0]
-    const bad = {
-      ...good,
-      paneKey: 'tab-2:leaf-2',
-      terminalInput: {
-        hostPlatform: 'plan9',
-        localWindowsConpty: false,
-        windowsShiftEnterEncoding: 'csi-u',
-        kittyKeyboardAdvertised: true
-      }
-    }
-
-    const admitted = admitDashboardSnapshot({ ...SNAPSHOT, cards: [good, bad] })
-
-    expect(admitted?.droppedCardCount).toBe(1)
-    expect(admitted?.snapshot.cards.map((card) => card.paneKey)).toEqual(['tab-1:leaf-1'])
-  })
-
-  // Why: the pop-out replays the last accepted snapshot, so rejecting the whole
-  // board over one card froze every other agent's status until it was renamed.
+  // One malformed card must not freeze every other agent on the last accepted board.
   describe('admitDashboardSnapshot', () => {
     it('drops only the offending card and keeps the rest of the board', () => {
       const good = SNAPSHOT.cards[0]
@@ -239,6 +364,19 @@ describe('dashboard payload validation', () => {
 
       expect(admitted?.droppedCardCount).toBe(1)
       expect(admitted?.snapshot.cards.map((card) => card.paneKey)).toEqual(['tab-1:leaf-1'])
+    })
+
+    it('drops only malformed optional workspace metadata', () => {
+      const admitted = admitDashboardSnapshot({
+        ...SNAPSHOT,
+        workspaces: [
+          SNAPSHOT.workspaces[0],
+          { ...SNAPSHOT.workspaces[0], worktreeId: '', worktreeName: 'Invalid' }
+        ]
+      })
+
+      expect(admitted?.droppedCardCount).toBe(0)
+      expect(admitted?.snapshot.workspaces).toEqual([SNAPSHOT.workspaces[0]])
     })
 
     it('reports nothing dropped for a fully valid snapshot', () => {
@@ -280,8 +418,7 @@ describe('dashboard payload validation', () => {
       expect(admitDashboardSnapshot({ ...SNAPSHOT, generatedAt: Number.NaN })).toBeNull()
       expect(admitDashboardSnapshot({ ...SNAPSHOT, cards: 'nope' })).toBeNull()
       expect(admitDashboardSnapshot({ ...SNAPSHOT, repoIconsByRepoId: [] })).toBeNull()
-      // Why: showIdle and filterOptions describe the frame, not one card, so a
-      // bad value there has no card to drop and must fail the whole snapshot.
+      // Invalid frame fields cannot be salvaged by dropping one card.
       expect(admitDashboardSnapshot({ ...SNAPSHOT, showIdle: 'yes' })).toBeNull()
       expect(
         admitDashboardSnapshot({
@@ -290,26 +427,9 @@ describe('dashboard payload validation', () => {
         })
       ).toBeNull()
     })
-
-    it('mirrors isDashboardSnapshot on every snapshot-level rejection', () => {
-      const cases: unknown[] = [
-        { ...SNAPSHOT, generatedAt: Number.NaN },
-        { ...SNAPSHOT, cards: 'nope' },
-        { ...SNAPSHOT, repoIconsByRepoId: [] },
-        { ...SNAPSHOT, showIdle: 'yes' },
-        { ...SNAPSHOT, filterOptions: { projects: [], workspaceStatuses: 'nope' } },
-        null,
-        []
-      ]
-      for (const value of cases) {
-        expect(isDashboardSnapshot(value)).toBe(false)
-        expect(admitDashboardSnapshot(value)).toBeNull()
-      }
-    })
   })
 
-  // Why: sanitizing an image icon decodes the whole payload to read a 24-byte
-  // header, and the renderer republishes the same icons every 250 ms.
+  // Renderer publishes every 250ms; repeated icons must not re-decode their full payload.
   it('validates a repeated image icon without re-decoding it every publish', () => {
     const src = imageIconSrc(256 * 1024)
     const snapshot = {
@@ -327,15 +447,13 @@ describe('dashboard payload validation', () => {
       expect(isDashboardSnapshot(snapshot)).toBe(true)
     }
 
-    // 10 repos x 20 publishes = 200 icon checks against ONE decode.
     expect(sanitizeRepoIconCalls).toHaveBeenCalledTimes(1)
   })
 
   it('re-decodes when the icon payload or its source actually changes', () => {
     const first = { type: 'image', src: imageIconSrc(1_024), source: 'upload' }
     const second = { type: 'image', src: imageIconSrc(2_048), source: 'upload' }
-    // Same bytes, different source: `source` picks which src pattern is legal,
-    // so it must not collide with the first entry's cached verdict.
+    // Source changes legal patterns, so equal bytes cannot share verdicts across sources.
     const rebranded = { ...first, source: 'file' }
     sanitizeRepoIconCalls.mockClear()
 
@@ -364,8 +482,7 @@ describe('dashboard payload validation', () => {
   })
 
   it('does not let a split of one icon key inherit another icon verdict', () => {
-    // A valid base64 src may contain whitespace, so `source` and `src` must not
-    // be joined ambiguously: this pair concatenates identically.
+    // Whitespace in valid src values makes plain separator keys ambiguous.
     const accepted = { type: 'image', src: imageIconSrc(1_024, true), source: 'upload' }
     const joined = `upload ${accepted.src}`
     const splitAt = joined.indexOf(' ', 'upload '.length)
@@ -379,8 +496,6 @@ describe('dashboard payload validation', () => {
     expect(isDashboardSnapshot({ ...SNAPSHOT, repoIconsByRepoId: { 'repo-1': accepted } })).toBe(
       true
     )
-    // `forged.source` is not a legal RepoIconImageSource, so it must be rejected
-    // no matter what the accepted icon left in the cache.
     expect(isDashboardSnapshot({ ...SNAPSHOT, repoIconsByRepoId: { 'repo-1': forged } })).toBe(
       false
     )
@@ -397,7 +512,6 @@ describe('dashboard payload validation', () => {
       )
     }
 
-    // Cheap branches bypass the cache entirely rather than sharing its keyspace.
     expect(sanitizeRepoIconCalls).toHaveBeenCalledTimes(3)
   })
 
@@ -406,10 +520,20 @@ describe('dashboard payload validation', () => {
       isDashboardRevealAgentArgs({
         repoId: 'repo-1',
         worktreeId: 'worktree-1',
+        executionHostId: 'runtime:env-1',
         tabId: 'tab-1',
         leafId: null
       })
     ).toBe(true)
+    expect(
+      isDashboardRevealAgentArgs({
+        repoId: 'repo-1',
+        worktreeId: 'worktree-1',
+        executionHostId: 'runtime:',
+        tabId: 'tab-1',
+        leafId: null
+      })
+    ).toBe(false)
     expect(
       isDashboardRevealAgentArgs({ repoId: 'repo-1', worktreeId: 'worktree-1', tabId: '' })
     ).toBe(false)

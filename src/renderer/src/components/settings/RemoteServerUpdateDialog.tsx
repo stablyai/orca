@@ -93,7 +93,9 @@ function ServerUpdateRow({
       {help ? (
         <p
           className={
-            entry.phase === 'failed' ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'
+            entry.phase === 'failed'
+              ? 'text-xs break-words text-destructive'
+              : 'text-xs break-words text-muted-foreground'
           }
         >
           {help}

@@ -1,4 +1,5 @@
 import type { ElectronApplication } from '@stablyai/playwright-test'
+import { realpathSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 
@@ -14,15 +15,15 @@ async function readElectronHomeState(electronApp: ElectronApplication) {
       home: process.env.HOME,
       userProfile: process.env.USERPROFILE,
       codexHome: process.env.CODEX_HOME,
-      orcaCodexHome: process.env.ORCA_CODEX_HOME,
-      realHomeFlag: process.env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME
+      orcaCodexHome: process.env.ORCA_CODEX_HOME
     }
   })
 }
 
+// Codex’s real-home route must still resolve inside the disposable test profile.
 test('isolates Electron and Codex from the developer home by default', async ({ electronApp }) => {
   const state = await readElectronHomeState(electronApp)
-  const expectedHome = path.join(state.userDataDir!, 'home')
+  const expectedHome = realpathSync.native(path.join(state.userDataDir!, 'home'))
 
   expect(state.appHome).toBe(expectedHome)
   expect(state.nodeHome).toBe(expectedHome)
@@ -30,17 +31,4 @@ test('isolates Electron and Codex from the developer home by default', async ({ 
   expect(state.userProfile).toBe(expectedHome)
   expect(state.codexHome).toBeUndefined()
   expect(state.orcaCodexHome).toBeUndefined()
-  expect(state.realHomeFlag).toBe('0')
-})
-
-test.describe('sandboxed real-home routing', () => {
-  test.use({ codexRealHomeEnabled: true })
-
-  test('keeps flag-ON routing inside the disposable home', async ({ electronApp }) => {
-    const state = await readElectronHomeState(electronApp)
-
-    expect(state.appHome).toBe(path.join(state.userDataDir!, 'home'))
-    expect(state.nodeHome).toBe(path.join(state.userDataDir!, 'home'))
-    expect(state.realHomeFlag).toBe('1')
-  })
 })

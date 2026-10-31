@@ -1,0 +1,115 @@
+import type { CommandHandler } from '../../dispatch'
+import { printResult } from '../../format'
+import { printOrchestrationResult } from './agent-view'
+import { TASK_LIST_VIEW, TASK_RECEIPT_VIEW, type TaskListResult } from './task-agent-views'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
+import { RuntimeClientError } from '../../runtime-client'
+import { abbreviateOrchestrationTasks } from '../../../shared/orchestration-task-summary'
+import { callOrchestrationMutation } from './mutation-request'
+import { readTextOrFileFlag } from '../../command-body-input'
+import { resolveCoordinatorTerminalHandle, runScopedSessionCaller } from './terminal-identity'
+
+const TASK_STATUS_VALUES = [
+  'pending',
+  'ready',
+  'dispatched',
+  'completed',
+  'failed',
+  'blocked'
+] as const
+
+export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration task-create': async ({ flags, client, cwd, json }) => {
+    const callerTerminalHandle = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await callOrchestrationMutation<{ task: { id: string; status: string } }>(
+      client,
+      flags,
+      'orchestration.taskCreate',
+      {
+        spec: await readTextOrFileFlag(flags, cwd, 'spec', true),
+        taskTitle: getOptionalStringFlag(flags, 'task-title'),
+        displayName: getOptionalStringFlag(flags, 'display-name'),
+        deps: getOptionalStringFlag(flags, 'deps'),
+        parent: getOptionalStringFlag(flags, 'parent'),
+        run: getOptionalStringFlag(flags, 'run'),
+        callerTerminalHandle
+      }
+    )
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, TASK_RECEIPT_VIEW)
+      return
+    }
+    printResult(result, json, (r) => `Created ${r.task.id} [${r.task.status}]`)
+  },
+
+  'orchestration task-list': async ({ flags, client, cwd, json }) => {
+    const brief = flags.has('brief')
+    const run = getOptionalStringFlag(flags, 'run')
+    const callerTerminalHandle = run
+      ? runScopedSessionCaller(flags)
+      : await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await client.call<TaskListResult>('orchestration.taskList', {
+      status: getOptionalStringFlag(flags, 'status'),
+      ready: flags.has('ready') ? true : undefined,
+      brief: brief ? true : undefined,
+      run,
+      callerTerminalHandle
+    })
+    // Only hosts that omit spec_truncated need client-side abbreviation.
+    const needsClientAbbreviation =
+      brief && result.result.tasks.some((task) => task.spec_truncated === undefined)
+    const output = needsClientAbbreviation
+      ? {
+          ...result,
+          result: { ...result.result, tasks: abbreviateOrchestrationTasks(result.result.tasks) }
+        }
+      : result
+    if (!flags.has('full')) {
+      printOrchestrationResult(output, json, TASK_LIST_VIEW)
+      return
+    }
+    printResult(output, json, (r) => {
+      if (r.count === 0) {
+        return r.legacyReadOnly ? 'No legacy tasks (read-only).' : 'No tasks.'
+      }
+      const tasks = r.tasks
+        .map((task) => {
+          const label = task.display_name ?? task.task_title ?? task.spec
+          const head = `${task.id} [${task.status}] ${label.slice(0, 60)}`
+          if (task.status === 'dispatched' && task.assignee_handle) {
+            return `${head} -> ${task.assignee_handle} (${task.dispatch_id ?? '?'})`
+          }
+          return head
+        })
+        .join('\n')
+      return r.legacyReadOnly ? `Legacy Run ${r.runId} (read-only)\n${tasks}` : tasks
+    })
+  },
+
+  'orchestration task-update': async ({ flags, client, cwd, json }) => {
+    const status = getRequiredStringFlag(flags, 'status')
+    if (!TASK_STATUS_VALUES.includes(status as (typeof TASK_STATUS_VALUES)[number])) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `invalid status '${status}', expected one of: ${TASK_STATUS_VALUES.join(', ')}`
+      )
+    }
+    const result = await callOrchestrationMutation<{ task: { id: string; status: string } }>(
+      client,
+      flags,
+      'orchestration.taskUpdate',
+      {
+        id: getRequiredStringFlag(flags, 'id'),
+        status,
+        result: getOptionalStringFlag(flags, 'result'),
+        run: getOptionalStringFlag(flags, 'run'),
+        callerTerminalHandle: await resolveCoordinatorTerminalHandle(flags, cwd, client)
+      }
+    )
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, TASK_RECEIPT_VIEW)
+      return
+    }
+    printResult(result, json, (r) => `Updated ${r.task.id} -> ${r.task.status}`)
+  }
+}

@@ -1,9 +1,6 @@
-const METADATA_TTL = 300_000 // 5 min
+const METADATA_TTL = 300_000
 const MAX_METADATA_CACHE_ENTRIES = 500
-// Why: an unreachable provider/runtime fails every consumer render; without a
-// negative cache each settlement re-issues the fetch, which storms a dead
-// remote. Failures are remembered briefly so retries are paced, not disabled —
-// short enough that a recovered provider is picked up within seconds.
+// Briefly cache failures to pace unreachable-provider retries without delaying recovery indefinitely.
 const METADATA_FAILURE_TTL = 10_000
 const MAX_METADATA_FAILURE_ENTRIES = 200
 
@@ -14,6 +11,7 @@ export type MetadataRequestStore<T> = {
   cache: Map<string, CachedMetadata<T>>
   inflight: Map<string, Promise<T>>
   failures: Map<string, CachedMetadataFailure>
+  nextCacheExpiryAt: number
   generation: number
 }
 
@@ -22,6 +20,7 @@ export function createMetadataRequestStore<T>(): MetadataRequestStore<T> {
     cache: new Map(),
     inflight: new Map(),
     failures: new Map(),
+    nextCacheExpiryAt: Infinity,
     generation: 0
   }
 }
@@ -29,6 +28,7 @@ export function createMetadataRequestStore<T>(): MetadataRequestStore<T> {
 export function clearMetadataRequestStore<T>(store: MetadataRequestStore<T>): void {
   store.generation += 1
   store.cache.clear()
+  store.nextCacheExpiryAt = Infinity
   store.inflight.clear()
   store.failures.clear()
 }
@@ -38,9 +38,12 @@ function pruneMetadataCache<T>(
   now: number,
   maxEntries = MAX_METADATA_CACHE_ENTRIES
 ): void {
+  store.nextCacheExpiryAt = Infinity
   for (const [key, entry] of store.cache) {
     if (now - entry.fetchedAt >= METADATA_TTL) {
       store.cache.delete(key)
+    } else {
+      store.nextCacheExpiryAt = Math.min(store.nextCacheExpiryAt, entry.fetchedAt + METADATA_TTL)
     }
   }
   if (store.cache.size <= maxEntries) {
@@ -50,6 +53,9 @@ function pruneMetadataCache<T>(
   for (const [key] of sorted.slice(maxEntries)) {
     store.cache.delete(key)
   }
+  // Capacity eviction can remove the gated expiry; recompute it to avoid needless sweeps.
+  const oldestSurvivor = sorted[maxEntries - 1]?.[1]
+  store.nextCacheExpiryAt = oldestSurvivor ? oldestSurvivor.fetchedAt + METADATA_TTL : Infinity
 }
 
 export function getFreshMetadata<T>(
@@ -57,7 +63,9 @@ export function getFreshMetadata<T>(
   key: string,
   now = Date.now()
 ): CachedMetadata<T> | null {
-  pruneMetadataCache(store, now)
+  if (now >= store.nextCacheExpiryAt) {
+    pruneMetadataCache(store, now)
+  }
   const entry = store.cache.get(key)
   if (!entry || now - entry.fetchedAt >= METADATA_TTL) {
     return null
@@ -117,8 +125,7 @@ export function loadMetadata<T>(
     return Promise.reject(recentFailure.error)
   }
 
-  // Why: clearMetadataRequestStore invalidates auth/repo boundaries; late
-  // responses from the previous generation must not repopulate the cache.
+  // Clearing auth/repo boundaries advances generation so old responses cannot repopulate cache.
   const generation = store.generation
   const promise = fetcher()
     .then((data) => {
@@ -126,9 +133,7 @@ export function loadMetadata<T>(
         const fetchedAt = now()
         store.cache.set(key, { data, fetchedAt })
         store.failures.delete(key)
-        // Why: these module-level stores are reused across dialogs and
-        // repo/runtime keys; TTL controls freshness but also needs pruning so
-        // long sessions do not retain stale metadata indefinitely.
+        // Prune TTL-expired module caches so long sessions do not retain stale repo/runtime metadata.
         pruneMetadataCache(store, fetchedAt)
       }
       return data

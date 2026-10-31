@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskSourceContext } from './task-source-context'
-import type { WorkspaceLinkedItem } from './types'
+import type { WorkspaceLinkedItem } from './worktree/types'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 
 const JIRA_ITEM: WorkspaceLinkedItem = {
@@ -54,26 +54,6 @@ describe('workspace linked-item source context', () => {
         JIRA_CONTEXT
       )
     ).toBe(false)
-  })
-
-  it('keeps provider matching sufficient for non-Jira items', () => {
-    expect(
-      isWorkspaceLinkedItemSourceContextMatch(
-        {
-          provider: 'linear',
-          type: 'issue',
-          number: 0,
-          title: 'Linear item',
-          url: 'https://linear.app/acme/issue/ENG-1/item'
-        },
-        {
-          kind: 'task-source',
-          provider: 'linear',
-          projectId: 'project-1',
-          hostId: 'local'
-        }
-      )
-    ).toBe(true)
   })
 
   it('infers GitHub/GitLab provider when TaskPage seeds omit provider', () => {

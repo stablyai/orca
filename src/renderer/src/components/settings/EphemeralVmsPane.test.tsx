@@ -5,6 +5,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EphemeralVmsPane } from './EphemeralVmsPane'
 
+vi.mock('@/components/terminal-pane/TerminalPane', () => ({
+  default: () => {
+    throw new Error('This suite must not render a terminal pane')
+  }
+}))
+
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn()
 }))
@@ -138,26 +144,29 @@ describe('EphemeralVmsPane', () => {
     })
   })
 
-  it('refreshes the catalog when plugin content changes', async () => {
-    const listRecipeCatalog = window.api.ephemeralVm.listRecipeCatalog as ReturnType<typeof vi.fn>
+  it('does not schedule a reset when clipboard completion arrives after unmount', async () => {
+    let finishClipboard!: () => void
+    vi.mocked(window.api.ui.writeClipboardText).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishClipboard = resolve
+      })
+    )
     const container = await renderPane()
-    await vi.waitFor(() => expect(container.textContent).toContain('Cloud Sandbox'))
-    listRecipeCatalog.mockResolvedValueOnce([
-      {
-        repoId: 'repo-1',
-        repoName: 'Repo',
-        repoPath: '/repo',
-        diagnostics: [],
-        recipes: [{ id: 'plugin-recipe', name: 'Plugin Recipe', create: 'create' }]
-      }
-    ])
-
-    await act(async () => {
-      ;(window.api.plugins as never as { emitContentChanged: () => void }).emitContentChanged()
-    })
-
-    await vi.waitFor(() => expect(container.textContent).toContain('Plugin Recipe'))
-    expect(listRecipeCatalog).toHaveBeenCalledTimes(2)
+    const setTimeout = vi.spyOn(window, 'setTimeout')
+    try {
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')?.click()
+      })
+      await act(async () => roots.pop()?.unmount())
+      setTimeout.mockClear()
+      await act(async () => {
+        finishClipboard()
+        await Promise.resolve()
+      })
+      expect(setTimeout.mock.calls.filter(([, delay]) => delay === 1500)).toHaveLength(0)
+    } finally {
+      setTimeout.mockRestore()
+    }
   })
 
   it('ignores an older refresh that finishes after a plugin-content refresh', async () => {

@@ -1,18 +1,21 @@
-import type {
-  Tab,
-  TabGroup,
-  TabGroupLayoutNode,
-  WorkspaceSessionState
-} from '../../../../shared/types'
+import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { resolveTabGroupOwners } from '../../../../shared/workspace-layout/tab-group-owners'
 import {
-  dedupeTabOrder,
+  adoptGrouplessTabs,
+  appendOwnedTabIdsToGroups,
+  layoutSpanningGroups
+} from './tab-group-reference-repair'
+import {
+  dedupeEditorTabsWithinGroups,
   getPersistedEditFileIdsByWorktree,
-  isTransientEditorContentType,
   sanitizeRecentTabIds,
   selectHydratedActiveGroupId
 } from './tab-group-state'
+import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
+import { restoresSavedContentTab } from '../../../../shared/workspace-layout/saved-editor-tab-restore'
 
 type HydratedTabState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
@@ -21,16 +24,29 @@ type HydratedTabState = {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
 }
 
+/** Keep one leaf per surviving group; repeats draw duplicate tab strips in separate columns. */
 export function pruneTabGroupLayoutForGroups(
   root: TabGroupLayoutNode,
   validGroupIds: Set<string>
 ): TabGroupLayoutNode | null {
+  return pruneLayoutNodeForGroups(root, validGroupIds, new Set())
+}
+
+function pruneLayoutNodeForGroups(
+  root: TabGroupLayoutNode,
+  validGroupIds: Set<string>,
+  placedGroupIds: Set<string>
+): TabGroupLayoutNode | null {
   if (root.type === 'leaf') {
-    return validGroupIds.has(root.groupId) ? root : null
+    if (!validGroupIds.has(root.groupId) || placedGroupIds.has(root.groupId)) {
+      return null
+    }
+    placedGroupIds.add(root.groupId)
+    return root
   }
 
-  const first = pruneTabGroupLayoutForGroups(root.first, validGroupIds)
-  const second = pruneTabGroupLayoutForGroups(root.second, validGroupIds)
+  const first = pruneLayoutNodeForGroups(root.first, validGroupIds, placedGroupIds)
+  const second = pruneLayoutNodeForGroups(root.second, validGroupIds, placedGroupIds)
 
   if (first === null) {
     return second
@@ -45,18 +61,27 @@ export function pruneTabGroupLayoutForGroups(
   return { ...root, first, second }
 }
 
-function hydrateUnifiedFormat(
+/**
+ * Tabs come from the tab bar alone; terminal rows it lacks are adopted later by reconciliation.
+ * A chat-only workspace (a project a WSL host now owns) keeps just its native chat tabs.
+ */
+export function buildHydratedTabState(
   session: WorkspaceSessionState,
-  validWorktreeIds: Set<string>
+  validWorktreeIds: Set<string>,
+  /** A diff, conflict or check tab a frame build keeps: its frame carries the tab's view. */
+  keepsTransientTab: (worktreeId: string, entityId: string) => boolean = () => false,
+  chatOnlyWorktreeIds: ReadonlySet<string> = new Set()
 ): HydratedTabState {
   const tabsByWorktree: Record<string, Tab[]> = {}
   const groupsByWorktree: Record<string, TabGroup[]> = {}
   const activeGroupIdByWorktree: Record<string, string> = {}
   const layoutByWorktree: Record<string, TabGroupLayoutNode> = {}
+  const tabIdAliasesByWorktree: Record<string, Map<string, Map<string, string>>> = {}
   const persistedEditFileIdsByWorktree = getPersistedEditFileIdsByWorktree(session)
 
-  for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs!)) {
-    if (!validWorktreeIds.has(worktreeId)) {
+  for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs ?? {})) {
+    const chatOnly = chatOnlyWorktreeIds.has(worktreeId)
+    if (!validWorktreeIds.has(worktreeId) && !chatOnly) {
       continue
     }
     if (tabs.length === 0) {
@@ -73,7 +98,12 @@ function hydrateUnifiedFormat(
         .filter((tab) => tab.quickCommandLabel?.trim())
         .map((tab) => [tab.id, tab.quickCommandLabel!.trim()])
     )
-    tabsByWorktree[worktreeId] = [...tabs]
+    const aiVaultTitleByTerminalId = new Map(
+      (session.tabsByWorktree[worktreeId] ?? [])
+        .filter((tab) => tab.aiVaultTitle)
+        .map((tab) => [tab.id, tab.aiVaultTitle!])
+    )
+    const hydratedTabs = [...tabs]
       .map((tab) => ({
         ...tab,
         entityId: tab.entityId ?? tab.id
@@ -86,49 +116,66 @@ function hydrateUnifiedFormat(
           ? tab.quickCommandLabel.trim()
           : quickCommandLabelByTerminalId.get(tab.entityId)
         const generatedLabel = generatedTitleByTerminalId.get(tab.entityId)
+        const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(tab.entityId)
         return {
           ...tab,
           ...(quickCommandLabel ? { quickCommandLabel } : {}),
+          ...(aiVaultTitle ? { aiVaultTitle } : {}),
           ...(!tab.generatedLabel?.trim() && generatedLabel ? { generatedLabel } : {})
         }
       })
       .filter((tab) => {
+        if (chatOnly && tab.contentType !== 'agent-session') {
+          return false
+        }
         if (tab.contentType === 'terminal') {
           // Why: old web-client sessions could persist host surface ids
           // containing "::"; those are invalid pane-key tab ids.
           return isValidTerminalTabId(tab.id) && isValidTerminalTabId(tab.entityId)
         }
-        if (!isTransientEditorContentType(tab.contentType)) {
-          return true
-        }
-        // Why: restore skips backing editor state for transient diff/conflict
-        // items. Hydration must drop their tab chrome too or the split group
-        // comes back pointing at a document that no longer exists.
-        return persistedEditFileIds.has(tab.entityId)
+        // The same rule main's layout load applies, so neither holds a tab the other drops.
+        return restoresSavedContentTab(tab, persistedEditFileIds, () =>
+          keepsTransientTab(worktreeId, tab.entityId)
+        )
       })
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
+    // Why after the sort: the surviving record is the one the strip renders first.
+    const deduped = dedupeEditorTabsWithinGroups(hydratedTabs)
+    tabsByWorktree[worktreeId] = deduped.tabs
+    tabIdAliasesByWorktree[worktreeId] = deduped.tabIdAliasesByGroup
   }
 
-  for (const [worktreeId, groups] of Object.entries(session.tabGroups!)) {
-    if (!validWorktreeIds.has(worktreeId)) {
+  for (const [worktreeId, groups] of Object.entries(session.tabGroups ?? {})) {
+    if (!validWorktreeIds.has(worktreeId) && !chatOnlyWorktreeIds.has(worktreeId)) {
       continue
     }
     if (groups.length === 0) {
       continue
     }
 
-    const validTabIds = new Set((tabsByWorktree[worktreeId] ?? []).map((t) => t.id))
-    const validatedGroups = groups.map((g) => {
-      // Why: persisted tabOrder can contain duplicates from older buggy
-      // writes. Deduping during hydration restores the store invariant before
-      // later group operations branch on tab counts or neighbors.
-      const tabOrder = dedupeTabOrder(g.tabOrder.filter((tid) => validTabIds.has(tid)))
-      const activeTabId = g.activeTabId && validTabIds.has(g.activeTabId) ? g.activeTabId : null
-      // Why: persisted MRU may reference tabs that no longer exist. Sanitize
-      // against the live tabOrder, then ensure the current active tab sits at
-      // the tail so the first close after restore jumps back to the previous
-      // tab rather than falling through to neighbor selection.
-      const sanitizedRecent = sanitizeRecentTabIds(g.recentTabIds, tabOrder)
+    const hydratedTabsForWorktree = tabsByWorktree[worktreeId] ?? []
+    const tabIdAliasesByGroup = tabIdAliasesByWorktree[worktreeId]
+    const tabOwners = resolveTabGroupOwners(hydratedTabsForWorktree, groups, tabIdAliasesByGroup)
+    const validatedGroups = appendOwnedTabIdsToGroups(groups, tabOwners).map((g) => {
+      const slots = structuredLaunchSlotIds(worktreeId, g.id)
+      const tabIdAliases = tabIdAliasesByGroup?.get(g.id)
+      const canonicalTabId = (tabId: string): string => tabIdAliases?.get(tabId) ?? tabId
+      // Repair persisted duplicate tabOrder IDs before neighbor/count-dependent operations.
+      const tabOrder = dedupeTabOrder(
+        g.tabOrder
+          .map(canonicalTabId)
+          .filter((tid) => tabOwners.get(tid) === g.id || slots.has(tid))
+      )
+      const canonicalActiveTabId = g.activeTabId ? canonicalTabId(g.activeTabId) : null
+      const activeTabId =
+        canonicalActiveTabId && tabOwners.get(canonicalActiveTabId) === g.id
+          ? canonicalActiveTabId
+          : null
+      // Sanitize stale MRU IDs and put active tab last so first close restores prior selection rather than a neighbor.
+      const sanitizedRecent = sanitizeRecentTabIds(
+        g.recentTabIds?.map(canonicalTabId),
+        tabOrder.filter((id) => tabOwners.get(id) === g.id)
+      )
       const recentTabIds =
         activeTabId && sanitizedRecent.at(-1) !== activeTabId
           ? [...sanitizedRecent.filter((id) => id !== activeTabId), activeTabId]
@@ -169,14 +216,11 @@ function hydrateUnifiedFormat(
     const hydratedLayout = session.tabGroupLayouts?.[worktreeId]
       ? pruneTabGroupLayoutForGroups(session.tabGroupLayouts[worktreeId], hydratedGroupIds)
       : null
-    layoutByWorktree[worktreeId] = hydratedLayout ?? {
-      type: 'leaf',
-      // Why: if transient-only groups were removed during hydration, the
-      // persisted split tree can collapse to a single surviving group. The
-      // fallback leaf keeps restore aligned with the remaining real tabs.
-      groupId: hydratedGroups[0].id
-    }
+    // A partial layout must still render every surviving group.
+    layoutByWorktree[worktreeId] = layoutSpanningGroups(hydratedGroups, hydratedLayout)
   }
+
+  adoptGrouplessTabs(tabsByWorktree, groupsByWorktree, activeGroupIdByWorktree, layoutByWorktree)
 
   return {
     unifiedTabsByWorktree: tabsByWorktree,
@@ -184,120 +228,4 @@ function hydrateUnifiedFormat(
     activeGroupIdByWorktree,
     layoutByWorktree
   }
-}
-
-function hydrateLegacyFormat(
-  session: WorkspaceSessionState,
-  validWorktreeIds: Set<string>
-): HydratedTabState {
-  const tabsByWorktree: Record<string, Tab[]> = {}
-  const groupsByWorktree: Record<string, TabGroup[]> = {}
-  const activeGroupIdByWorktree: Record<string, string> = {}
-  const layoutByWorktree: Record<string, TabGroupLayoutNode> = {}
-
-  for (const worktreeId of validWorktreeIds) {
-    const terminalTabs = (session.tabsByWorktree[worktreeId] ?? []).filter((tab) =>
-      isValidTerminalTabId(tab.id)
-    )
-    const editorFiles = session.openFilesByWorktree?.[worktreeId] ?? []
-
-    if (terminalTabs.length === 0 && editorFiles.length === 0) {
-      continue
-    }
-
-    const groupId = createBrowserUuid()
-    const tabs: Tab[] = []
-    const tabOrder: string[] = []
-
-    for (const tt of terminalTabs) {
-      tabs.push({
-        id: tt.id,
-        entityId: tt.id,
-        groupId,
-        worktreeId,
-        contentType: 'terminal',
-        label: tt.title,
-        ...(tt.quickCommandLabel?.trim() ? { quickCommandLabel: tt.quickCommandLabel.trim() } : {}),
-        ...(tt.generatedTitle?.trim() ? { generatedLabel: tt.generatedTitle.trim() } : {}),
-        customLabel: tt.customTitle,
-        color: tt.color,
-        sortOrder: tt.sortOrder,
-        createdAt: tt.createdAt,
-        isPreview: false,
-        isPinned: false
-      })
-      tabOrder.push(tt.id)
-    }
-
-    for (const ef of editorFiles) {
-      tabs.push({
-        id: ef.filePath,
-        entityId: ef.filePath,
-        groupId,
-        worktreeId,
-        contentType: 'editor',
-        label: ef.relativePath,
-        customLabel: null,
-        color: null,
-        sortOrder: tabs.length,
-        createdAt: Date.now(),
-        isPreview: ef.isPreview,
-        isPinned: false
-      })
-      tabOrder.push(ef.filePath)
-    }
-
-    const activeTabType = session.activeTabTypeByWorktree?.[worktreeId] ?? 'terminal'
-    let activeTabId: string | null = null
-    if (activeTabType === 'editor') {
-      activeTabId = session.activeFileIdByWorktree?.[worktreeId] ?? null
-    } else {
-      // Why: honor this worktree's own remembered terminal before the global
-      // active tab. The global session.activeTabId only names the last-focused
-      // worktree's tab, so using it here reset every other worktree to its
-      // first terminal on restart.
-      const rememberedTabId = session.activeTabIdByWorktree?.[worktreeId]
-      if (rememberedTabId && terminalTabs.some((t) => t.id === rememberedTabId)) {
-        activeTabId = rememberedTabId
-      } else if (session.activeTabId && terminalTabs.some((t) => t.id === session.activeTabId)) {
-        activeTabId = session.activeTabId
-      }
-    }
-    if (activeTabId && !tabs.some((t) => t.id === activeTabId)) {
-      activeTabId = tabs[0]?.id ?? null
-    }
-
-    tabsByWorktree[worktreeId] = tabs
-    groupsByWorktree[worktreeId] = [
-      {
-        id: groupId,
-        worktreeId,
-        activeTabId,
-        tabOrder,
-        // Why: legacy sessions don't persist MRU; seed with the active tab so
-        // the first close after a legacy restore still behaves MRU-ish (falls
-        // back to neighbor selection if only one tab is in the stack).
-        recentTabIds: activeTabId ? [activeTabId] : []
-      }
-    ]
-    activeGroupIdByWorktree[worktreeId] = groupId
-    layoutByWorktree[worktreeId] = { type: 'leaf', groupId }
-  }
-
-  return {
-    unifiedTabsByWorktree: tabsByWorktree,
-    groupsByWorktree,
-    activeGroupIdByWorktree,
-    layoutByWorktree
-  }
-}
-
-export function buildHydratedTabState(
-  session: WorkspaceSessionState,
-  validWorktreeIds: Set<string>
-): HydratedTabState {
-  if (session.unifiedTabs && session.tabGroups) {
-    return hydrateUnifiedFormat(session, validWorktreeIds)
-  }
-  return hydrateLegacyFormat(session, validWorktreeIds)
 }

@@ -1,38 +1,46 @@
-import { isBrowserFindSource, type BrowserFindSource } from '../shared/browser-find-source'
+import { asBrowserFindTarget, type BrowserFindSource } from '../shared/browser-find-source'
 
 type BrowserFindCallback = () => void
 
 export function createBrowserFindSubscriptions(): {
-  dispatch: (source: unknown) => void
+  dispatch: (target: unknown) => void
   subscribe: (source: BrowserFindSource, callback: BrowserFindCallback) => () => void
+  subscribedPageCount: () => number
 } {
-  const callbacksByWorkspace = new Map<string, Map<string, Set<BrowserFindCallback>>>()
+  // Page-only targets must reach every workspace holding that page.
+  const callbacksByPage = new Map<string, Map<string, Set<BrowserFindCallback>>>()
 
   return {
-    dispatch: (source) => {
-      if (!isBrowserFindSource(source)) {
+    subscribedPageCount: () => callbacksByPage.size,
+    dispatch: (target) => {
+      const findTarget = asBrowserFindTarget(target)
+      if (!findTarget) {
         return
       }
-      const callbacks = callbacksByWorkspace
-        .get(source.browserWorkspaceId)
-        ?.get(source.browserPageId)
-      if (!callbacks) {
+      const callbacksByWorkspace = callbacksByPage.get(findTarget.browserPageId)
+      if (!callbacksByWorkspace) {
         return
       }
-      for (const callback of callbacks) {
-        callback()
+      const scoped =
+        findTarget.browserWorkspaceId === undefined
+          ? [...callbacksByWorkspace.values()]
+          : [callbacksByWorkspace.get(findTarget.browserWorkspaceId)]
+      for (const callbacks of scoped) {
+        for (const callback of callbacks ?? []) {
+          callback()
+        }
       }
     },
     subscribe: (source, callback) => {
-      let callbacksByPage = callbacksByWorkspace.get(source.browserWorkspaceId)
-      if (!callbacksByPage) {
-        callbacksByPage = new Map()
-        callbacksByWorkspace.set(source.browserWorkspaceId, callbacksByPage)
+      let callbacksByWorkspace = callbacksByPage.get(source.browserPageId)
+      if (!callbacksByWorkspace) {
+        callbacksByWorkspace = new Map()
+        callbacksByPage.set(source.browserPageId, callbacksByWorkspace)
       }
-      let callbacks = callbacksByPage.get(source.browserPageId)
+      let callbacks = callbacksByWorkspace.get(source.browserWorkspaceId)
       if (!callbacks) {
         callbacks = new Set()
-        callbacksByPage.set(source.browserPageId, callbacks)
+        callbacksByWorkspace.set(source.browserWorkspaceId, callbacks)
       }
       callbacks.add(callback)
 
@@ -41,9 +49,9 @@ export function createBrowserFindSubscriptions(): {
         if (callbacks.size > 0) {
           return
         }
-        callbacksByPage.delete(source.browserPageId)
-        if (callbacksByPage.size === 0) {
-          callbacksByWorkspace.delete(source.browserWorkspaceId)
+        callbacksByWorkspace.delete(source.browserWorkspaceId)
+        if (callbacksByWorkspace.size === 0) {
+          callbacksByPage.delete(source.browserPageId)
         }
       }
     }

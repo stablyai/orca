@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
 import type { Worktree } from './workspace-list-sections'
+import { worktreeCatalogRead } from './worktree-catalog-operations'
 
 // Why: worktree.ps silently truncates at 200; use a high cap so large hosts don't drop workspaces.
 export const WORKTREE_PS_FULL_LIMIT = 10_000
@@ -10,11 +10,16 @@ export type WorktreeCatalogAdmission<T> =
   | { kind: 'unchanged'; snapshotId: string }
   | { kind: 'invalid' }
 
-type PendingWorktreeCatalog = {
+export type PendingWorktreeCatalog = {
   admission: WorktreeCatalogAdmission<Worktree>
   client: RpcClient
   hostId: string
 }
+
+// Keep fetch failure distinct from an empty host catalog (STA-3123).
+export type WorktreeCatalogFetchResult =
+  | { kind: 'response'; pending: PendingWorktreeCatalog }
+  | { kind: 'request_failed'; code: string }
 
 function validSnapshotId(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 && value.length <= 128 ? value : null
@@ -32,9 +37,7 @@ export function admitWorktreeCatalogResponse<T>(
     unchanged?: unknown
     worktrees?: unknown
   }
-  // Why: a full response is defined by carrying rows, so discriminate on that rather
-  // than on the presence of `unchanged` — the latter could collide with a future
-  // catalog field and silently reclassify a full response.
+  // Rows identify a full response; a future unchanged field must not reclassify one.
   if (Array.isArray(response.worktrees)) {
     return {
       kind: 'full',
@@ -56,7 +59,7 @@ export class WorktreeCatalogSnapshotClient {
   private snapshotId: string | null = null
   private confirmedWorktrees: Worktree[] | null = null
 
-  async fetch(client: RpcClient, hostId: string): Promise<PendingWorktreeCatalog | null> {
+  async fetch(client: RpcClient, hostId: string): Promise<WorktreeCatalogFetchResult> {
     if (this.client !== client || this.hostId !== hostId) {
       this.client = client
       this.hostId = hostId
@@ -64,20 +67,26 @@ export class WorktreeCatalogSnapshotClient {
       this.confirmedWorktrees = null
     }
     const requestedSnapshotId = this.snapshotId
-    const response = await client.sendRequest('worktree.ps', {
+    const reply = await worktreeCatalogRead.request(client, {
       limit: WORKTREE_PS_FULL_LIMIT,
       afterSnapshotId: requestedSnapshotId
     })
-    if (!response.ok) {
-      return null
+    const catalog = worktreeCatalogRead.interpret(reply)
+    if (!catalog.accepted) {
+      // The refusal code the caller reports lives on the envelope; no acceptance policy carries it.
+      const code = reply.ok ? undefined : reply.error?.code
+      return {
+        kind: 'request_failed',
+        code: typeof code === 'string' && code.length > 0 ? code : 'request_failed'
+      }
     }
     return {
-      admission: admitWorktreeCatalogResponse<Worktree>(
-        (response as RpcSuccess).result,
-        requestedSnapshotId
-      ),
-      client,
-      hostId
+      kind: 'response',
+      pending: {
+        admission: admitWorktreeCatalogResponse<Worktree>(catalog.value, requestedSnapshotId),
+        client,
+        hostId
+      }
     }
   }
 
@@ -86,8 +95,7 @@ export class WorktreeCatalogSnapshotClient {
     if (!pending) {
       return null
     }
-    // Why: a response from a superseded client/host is stale, not wrong — dropping it
-    // must not invalidate the token the current client/host just established.
+    // Discard stale client/host replies without invalidating the current session’s token.
     if (pending.client !== this.client || pending.hostId !== this.hostId) {
       return null
     }
@@ -100,8 +108,7 @@ export class WorktreeCatalogSnapshotClient {
     if (pending.admission.kind === 'full') {
       this.confirmedWorktrees = pending.admission.worktrees
     }
-    // Why: unchanged responses still return the confirmed rows so every poll reasserts
-    // host truth over optimistic local edits, exactly as the full-payload path did.
+    // Reassert confirmed host rows on unchanged polls too, overriding optimistic local edits.
     return this.confirmedWorktrees
   }
 }

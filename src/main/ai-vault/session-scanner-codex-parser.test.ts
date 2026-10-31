@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseCodexSessionFile } from './session-scanner-codex-parser'
+import {
+  createCodexSessionResumeState,
+  parseCodexSessionFile
+} from './session-scanner-codex-parser'
+import type { TranscriptMessage } from './session-transcript-consumers'
 
 let tempRoots: string[] = []
 
@@ -16,6 +20,165 @@ function jsonLines(records: unknown[]): string {
 }
 
 describe('parseCodexSessionFile', () => {
+  it('publishes a paginated agent reply whose block is typed Text to transcript consumers', () => {
+    const timestamp = '2026-08-10T10:00:00.000Z'
+    const messages: TranscriptMessage[] = []
+    const state = createCodexSessionResumeState(
+      { path: '/fixture/rollout.jsonl', mtimeMs: Date.parse(timestamp), modifiedAt: timestamp },
+      null,
+      { active: true, push: (message) => messages.push(message) }
+    )
+    const consume = (type: string, payload: Record<string, unknown>) =>
+      state.consumeLineBytes!(Buffer.from(JSON.stringify({ timestamp, type, payload })))
+    consume('session_meta', { id: 'paginated-session', history_mode: 'paginated' })
+    consume('event_msg', {
+      type: 'item_completed',
+      item: { type: 'AgentMessage', content: [{ type: 'Text', text: 'the reply' }] }
+    })
+    expect(messages).toEqual([{ role: 'assistant', text: 'the reply', timestamp }])
+  })
+
+  it('uses completed user items for paginated session metadata', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-paginated-'))
+    tempRoots.push(root)
+    const sessionPath = join(root, 'sessions', '2026', '08', '10', 'rollout-paginated.jsonl')
+    await mkdir(dirname(sessionPath), { recursive: true })
+
+    await writeFile(
+      sessionPath,
+      jsonLines([
+        {
+          timestamp: '2026-08-10T10:00:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'paginated-session', history_mode: 'paginated', cwd: '/repo/app' }
+        },
+        {
+          timestamp: '2026-08-10T10:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'model-only prompt copy' }]
+          }
+        },
+        {
+          timestamp: '2026-08-10T10:00:02.000Z',
+          type: 'event_msg',
+          payload: {
+            type: 'item_completed',
+            item: {
+              type: 'UserMessage',
+              content: [{ type: 'text', text: 'Visible paginated prompt' }]
+            }
+          }
+        },
+        {
+          timestamp: '2026-08-10T10:00:03.000Z',
+          type: 'event_msg',
+          payload: {
+            type: 'item_completed',
+            item: {
+              type: 'AgentMessage',
+              content: [{ type: 'Text', text: 'Visible paginated response' }]
+            }
+          }
+        }
+      ])
+    )
+
+    const sessionStat = await stat(sessionPath)
+    const session = await parseCodexSessionFile(
+      {
+        path: sessionPath,
+        mtimeMs: sessionStat.mtimeMs,
+        modifiedAt: sessionStat.mtime.toISOString()
+      },
+      'darwin',
+      root
+    )
+
+    expect(session).toMatchObject({
+      title: 'Visible paginated prompt',
+      lastUserPrompt: 'Visible paginated prompt',
+      messageCount: 2,
+      previewMessages: [
+        { role: 'user', text: 'Visible paginated prompt' },
+        { role: 'assistant', text: 'Visible paginated response' }
+      ]
+    })
+  })
+
+  it("keeps a fork's own session_meta when its parent's follows it", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-fork-'))
+    tempRoots.push(root)
+    const sessionPath = join(root, 'sessions', '2026', '10', '07', 'rollout-fork.jsonl')
+    await mkdir(dirname(sessionPath), { recursive: true })
+
+    await writeFile(
+      sessionPath,
+      jsonLines([
+        {
+          timestamp: '2026-10-07T10:00:00.000Z',
+          type: 'session_meta',
+          payload: {
+            id: 'fork-session',
+            forked_from_id: 'parent-session',
+            cwd: '/repo/fork',
+            git: { branch: 'fork-branch' }
+          }
+        },
+        {
+          timestamp: '2026-10-07T09:00:00.000Z',
+          type: 'session_meta',
+          payload: {
+            id: 'parent-session',
+            title: 'Parent chat',
+            history_mode: 'paginated',
+            cwd: '/repo/parent',
+            git: { branch: 'parent-branch' }
+          }
+        },
+        {
+          timestamp: '2026-10-07T09:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Copied prompt' }]
+          }
+        },
+        {
+          timestamp: '2026-10-07T09:00:02.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'Copied reply' }]
+          }
+        }
+      ])
+    )
+
+    const sessionStat = await stat(sessionPath)
+    const session = await parseCodexSessionFile(
+      {
+        path: sessionPath,
+        mtimeMs: sessionStat.mtimeMs,
+        modifiedAt: sessionStat.mtime.toISOString()
+      },
+      'darwin',
+      root
+    )
+
+    expect(session).toMatchObject({
+      sessionId: 'fork-session',
+      cwd: '/repo/fork',
+      branch: 'fork-branch',
+      title: 'Copied prompt',
+      messageCount: 2
+    })
+  })
+
   it('uses user-message events instead of later injected user-role records', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-last-prompt-'))
     tempRoots.push(root)
@@ -160,7 +323,6 @@ describe('parseCodexSessionFile', () => {
           }
         },
         {
-          // A /model switch mid-session writes a later turn_context.
           timestamp: '2026-07-05T10:00:03.000Z',
           type: 'turn_context',
           payload: { cwd: '/repo/app', model: 'gpt-5.5' }

@@ -1,20 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  isBackgroundRuntimeMethod,
-  RuntimeRpcCallQueueOverloadError,
-  RuntimeRpcCallQueuePool
-} from './runtime-rpc-call-queue'
+import { RuntimeRpcCallQueueOverloadError, RuntimeRpcCallQueuePool } from './runtime-rpc-call-queue'
 
 describe('runtime RPC call queue', () => {
-  it('classifies per-worktree decoration lookups as background work', () => {
-    expect(isBackgroundRuntimeMethod('github.prForBranch')).toBe(true)
-    expect(isBackgroundRuntimeMethod('hostedReview.forBranch')).toBe(true)
-    expect(isBackgroundRuntimeMethod('worktree.prefetchCreateBase')).toBe(true)
-    expect(isBackgroundRuntimeMethod('terminal.send')).toBe(false)
-    expect(isBackgroundRuntimeMethod('terminal.agentStatus')).toBe(false)
-    expect(isBackgroundRuntimeMethod('worktree.create')).toBe(false)
-  })
-
   it('limits background calls while allowing foreground runtime work through', async () => {
     const queue = new RuntimeRpcCallQueuePool(2, 1)
     const started: string[] = []
@@ -44,6 +31,75 @@ describe('runtime RPC call queue', () => {
     await expect(background2).resolves.toBe('background-2')
   })
 
+  it('runs foreground calls while worktree deletes wait, still bounding the deletes', async () => {
+    const queue = new RuntimeRpcCallQueuePool(2, 1)
+    const started: string[] = []
+    const pending: (() => void)[] = []
+    const deletes = ['rm-1', 'rm-2', 'rm-3'].map((label) =>
+      queue.enqueue('web-runtime', 'worktree.rm', async () => {
+        started.push(label)
+        await new Promise<void>((resolve) => pending.push(resolve))
+        return label
+      })
+    )
+    await vi.waitFor(() => expect(started).toEqual(['rm-1', 'rm-2']))
+
+    const listing = queue.enqueue('web-runtime', 'worktree.list', async () => 'listed')
+    await expect(listing).resolves.toBe('listed')
+    expect(started).toEqual(['rm-1', 'rm-2'])
+
+    pending.shift()?.()
+    await expect(deletes[0]).resolves.toBe('rm-1')
+    await vi.waitFor(() => expect(started).toEqual(['rm-1', 'rm-2', 'rm-3']))
+    pending.shift()?.()
+    pending.shift()?.()
+    await expect(Promise.all(deletes)).resolves.toEqual(['rm-1', 'rm-2', 'rm-3'])
+  })
+
+  it('runs foreground calls while model catalog reads wait on a host listing', async () => {
+    const queue = new RuntimeRpcCallQueuePool(8, 2)
+    const release: (() => void)[] = []
+    const waits = Array.from({ length: 8 }, () =>
+      queue.enqueue('web-runtime', 'agentSession.modelCatalog', async () => {
+        await new Promise<void>((resolve) => release.push(resolve))
+        return 'listed'
+      })
+    )
+    await vi.waitFor(() => expect(release).toHaveLength(8))
+
+    const send = queue.enqueue('web-runtime', 'agentSession.send', async () => 'sent')
+    await expect(send).resolves.toBe('sent')
+
+    for (const resolve of release) {
+      resolve()
+    }
+    await expect(Promise.all(waits)).resolves.toEqual(Array(8).fill('listed'))
+  })
+
+  it('keeps terminal input moving while byte-range reads fill their own small lane', async () => {
+    const queue = new RuntimeRpcCallQueuePool(8, 2)
+    const release: (() => void)[] = []
+    const reads = Array.from({ length: 6 }, () =>
+      queue.enqueue('web-runtime', 'files.readChunk', async () => {
+        await new Promise<void>((resolve) => release.push(resolve))
+        return 'chunk'
+      })
+    )
+    // Two at a time, however many viewers ask.
+    await vi.waitFor(() => expect(release).toHaveLength(2))
+
+    const send = queue.enqueue('web-runtime', 'terminal.send', async () => 'sent')
+    await expect(send).resolves.toBe('sent')
+    expect(release).toHaveLength(2)
+
+    for (let finished = 0; finished < 6; finished += 1) {
+      await vi.waitFor(() => expect(release.length).toBeGreaterThan(0))
+      expect(release.length).toBeLessThanOrEqual(2)
+      release.shift()?.()
+    }
+    await expect(Promise.all(reads)).resolves.toEqual(Array(6).fill('chunk'))
+  })
+
   it('frees the queue slot when a runtime call throws synchronously', async () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1)
     const first = queue.enqueue('web-runtime', 'status.get', () => {
@@ -54,6 +110,29 @@ describe('runtime RPC call queue', () => {
 
     const second = queue.enqueue('web-runtime', 'status.get', async () => 'second')
     await expect(second).resolves.toBe('second')
+  })
+
+  it('removes an aborted call before it starts', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1)
+    let releaseFirst: () => void = () => {}
+    const first = queue.enqueue('runtime-a', 'status.get', async () => {
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+    })
+    const controller = new AbortController()
+    const run = vi.fn(async () => 'cancelled')
+    const cancelled = queue.enqueue('runtime-a', 'status.get', run, 1, controller.signal)
+
+    controller.abort()
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
+    expect(run).not.toHaveBeenCalled()
+
+    releaseFirst()
+    await expect(first).resolves.toBeUndefined()
+    await expect(
+      queue.enqueue('runtime-a', 'status.get', async () => 'recovered', 1)
+    ).resolves.toBe('recovered')
   })
 
   it('preserves queued background ordering across large bursts', async () => {

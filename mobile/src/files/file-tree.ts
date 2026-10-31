@@ -1,5 +1,5 @@
-// Pure tree projection for the mobile file explorer. Mobile mirrors desktop
-// browse semantics by flattening cached files.readDir results as folders open.
+import { MEDIA_FILE_MIME_TYPES } from '../../../src/shared/media-file-extensions'
+import { compareFileNames } from '../../../src/shared/file-name-sort'
 
 export type MobileDirEntry = {
   name: string
@@ -38,6 +38,7 @@ export type FileExplorerRow = TreeNode | InlineStatusNode
 
 const DESKTOP_EXCLUDED_NAMES = new Set(['.git', 'node_modules'])
 const BINARY_EXTENSIONS = new Set([
+  ...Object.keys(MEDIA_FILE_MIME_TYPES),
   '.avif',
   '.bmp',
   '.gif',
@@ -103,6 +104,41 @@ function visitDirectory(
   }
 }
 
+/** Rows whose name contains the query, across every folder loaded so far, with their parent folders. */
+export function filterDirectoryCache(cache: DirectoryCache, query: string): TreeNode[] {
+  const needle = query.trim().toLowerCase()
+  const rows: TreeNode[] = []
+  if (needle !== '') {
+    collectMatches('', 0, cache, needle, rows)
+  }
+  return rows
+}
+
+function collectMatches(
+  relativePath: string,
+  depth: number,
+  cache: DirectoryCache,
+  needle: string,
+  rows: TreeNode[]
+): boolean {
+  const entries = (getDirectoryCacheState(cache, relativePath)?.entries ?? [])
+    .filter(shouldIncludeMobileFileExplorerEntry)
+    .sort(compareDirectoryEntries)
+  let matched = false
+  for (const entry of entries) {
+    const childPath = joinRelativePath(relativePath, entry.name)
+    const nameMatches = entry.name.toLowerCase().includes(needle)
+    const childRows: TreeNode[] = []
+    const childMatches =
+      entry.isDirectory && collectMatches(childPath, depth + 1, cache, needle, childRows)
+    if (nameMatches || childMatches) {
+      rows.push(toTreeNode(entry, childPath, depth), ...childRows)
+      matched = true
+    }
+  }
+  return matched
+}
+
 function toTreeNode(entry: MobileDirEntry, relativePath: string, depth: number): TreeNode {
   return {
     id: `${entry.isDirectory ? 'dir' : 'file'}:${relativePath}`,
@@ -118,7 +154,7 @@ function compareDirectoryEntries(a: MobileDirEntry, b: MobileDirEntry): number {
   if (a.isDirectory !== b.isDirectory) {
     return a.isDirectory ? -1 : 1
   }
-  return a.name.localeCompare(b.name)
+  return compareFileNames(a.name, b.name)
 }
 
 export function shouldIncludeMobileFileExplorerEntry(entry: MobileDirEntry): boolean {
@@ -129,9 +165,8 @@ export function getDirectoryCacheState(
   cache: DirectoryCache,
   relativePath: string
 ): DirectoryState | undefined {
-  // Why: repository paths are arbitrary object keys; inherited keys like
-  // "constructor" must not masquerade as loaded directory state.
-  return Object.prototype.hasOwnProperty.call(cache, relativePath) ? cache[relativePath] : undefined
+  // Inherited keys such as constructor must not masquerade as cached directories.
+  return Object.hasOwn(cache, relativePath) ? cache[relativePath] : undefined
 }
 
 export function joinRelativePath(parentPath: string, name: string): string {

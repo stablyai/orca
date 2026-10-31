@@ -20,8 +20,7 @@ export function isSidebarPointerDragBlocked(target: EventTarget | null, row: HTM
   if (!(target instanceof Node)) {
     return false
   }
-  // Why: Radix hover cards portal outside the row, but React still bubbles their
-  // pointer events through row handlers; text selection there must not drag rows.
+  // Portaled hover content still bubbles through React; selecting its text must not start a row drag.
   if (!row.contains(target)) {
     return true
   }
@@ -33,8 +32,7 @@ export function isSidebarPointerDragBlocked(target: EventTarget | null, row: HTM
 }
 
 export function setSidebarPointerDragDocumentStyles(enabled: boolean): void {
-  // Why: sidebar cards are click-first; the drop line/preview show drag state
-  // without replacing the normal pointer cursor while crossing targets.
+  // Keep the normal pointer cursor; the preview and insertion line already communicate dragging.
   document.body.style.userSelect = enabled ? 'none' : ''
   document.documentElement.toggleAttribute(POINTER_DRAGGING_ATTR, enabled)
 }
@@ -59,8 +57,10 @@ export function updateSidebarDragPreviewPosition(args: {
   offsetX: number
   offsetY: number
 }): void {
-  const x = args.pointerX - args.offsetX
-  const y = args.pointerY - args.offsetY
+  const nesting = args.preview.hasAttribute('data-worktree-sidebar-nesting')
+  // Keep the destination title visible while the pointer rests inside it.
+  const x = nesting ? args.pointerX + 16 : args.pointerX - args.offsetX
+  const y = nesting ? args.pointerY + 16 : args.pointerY - args.offsetY
   args.preview.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.015)`
 }
 

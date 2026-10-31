@@ -1,4 +1,4 @@
-import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/types'
+import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { MobileGitBranchCompareResult } from '../source-control/mobile-branch-compare'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import type { MobileDiffLine } from './mobile-diff-lines'
@@ -9,7 +9,8 @@ import type {
 } from './mobile-diff-review-queue'
 import type { MobileDiffReviewFileDescriptor } from './mobile-diff-review-state'
 import type { MobileHighlightedDiffLine } from './mobile-file-syntax'
-import type { MobileReviewTerminalTab } from './mobile-diff-review-rpc'
+import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
+import { translate } from '../i18n/mobile-i18n'
 
 export type ReviewScreenState =
   | { kind: 'loading' }
@@ -100,7 +101,7 @@ export function nextReviewIndexAfterMarkReviewed({
   const wrappedIndex = filteredQueue.findIndex(
     (item) => item.key !== currentItemKey && !item.isReviewed
   )
-  const targetIndex = nextIndex >= 0 ? nextIndex : wrappedIndex >= 0 ? wrappedIndex : null
+  const targetIndex = nextIndex !== -1 ? nextIndex : wrappedIndex !== -1 ? wrappedIndex : null
   if (targetIndex === null) {
     return null
   }
@@ -109,9 +110,11 @@ export function nextReviewIndexAfterMarkReviewed({
 
 export function mobileReviewScopeLabel(item: MobileDiffReviewQueueItem): string {
   if (item.scope === 'branch') {
-    return 'Branch'
+    return translate('session.diffReviewScreenModel.branch', 'Branch')
   }
-  return item.scope === 'staged' ? 'Staged' : 'Unstaged'
+  return item.scope === 'staged'
+    ? translate('session.diffReviewScreenModel.staged', 'Staged')
+    : translate('session.diffReviewScreenModel.unstaged', 'Unstaged')
 }
 
 export function mobileReviewCountLabel(count: number, singular: string, plural: string): string {

@@ -1,0 +1,359 @@
+import { endComposition } from '@/lib/ime-composition-event.test-support'
+import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
+// @vitest-environment happy-dom
+
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-agent-profiles'
+import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string) => fallback
+}))
+const actions = vi.hoisted((): { sendDisabled: boolean | null } => ({ sendDisabled: null }))
+
+vi.mock('./NativeChatComposerActions', () => ({
+  NativeChatComposerActions: (props: { sendDisabled: boolean }) => {
+    actions.sendDisabled = props.sendDisabled
+    return <div data-testid="composer-actions" />
+  }
+}))
+vi.mock('./NativeChatAutocompleteMenus', () => ({
+  NativeChatMentionMenu: () => null,
+  NativeChatPickerMenu: () => null
+}))
+vi.mock('../../store', () => {
+  const state = {
+    dictationState: 'idle',
+    settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
+    agentStatusByPaneKey: {},
+    updateSettings: vi.fn(),
+    clearNativeChatLaunchDraft: vi.fn(),
+    markNativeChatLaunchDraftAdopted: vi.fn()
+  }
+  const useAppStore = (selector: (value: typeof state) => unknown): unknown => selector(state)
+  useAppStore.getState = () => state
+  return { useAppStore }
+})
+vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+  sendRuntimePtyInput: vi.fn()
+}))
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
+}))
+vi.mock('./native-chat-runtime-send', () => ({
+  sendNativeChatMessage: vi.fn(),
+  sendNativeChatTypedCommand: vi.fn(),
+  sendNativeChatMessageVerified: vi.fn(),
+  typeNativeChatCommand: vi.fn(),
+  submitNativeChatPrompt: vi.fn()
+}))
+vi.mock('./native-chat-runtime-image-send', () => ({
+  sendNativeChatMessageWithImageAttachments: vi.fn()
+}))
+vi.mock('./claude-model-switch-confirmation', () => ({
+  createClaudeModelSwitchConfirmationObserver: vi.fn()
+}))
+vi.mock('../../../../shared/native-chat-agent-profiles', async (importOriginal) => ({
+  ...(await importOriginal<typeof nativeChatAgentProfiles>()),
+  getVerifiedNativeChatCommands: () => []
+}))
+vi.mock('@/lib/native-chat-telemetry', () => ({
+  emitNativeChatMessageSent: vi.fn(),
+  emitNativeChatPickerItemAccepted: vi.fn(),
+  emitNativeChatPickerOpened: vi.fn(),
+  emitNativeChatSendClassified: vi.fn()
+}))
+vi.mock('./use-native-chat-skills', () => ({
+  useNativeChatSkills: () => ({ status: 'ready', skills: [], error: null, retry: () => {} })
+}))
+vi.mock('../dictation/dictation-control-events', () => ({
+  dispatchDictationControl: vi.fn()
+}))
+
+import { NativeChatComposer } from './NativeChatComposer'
+import { appendNativeChatDraftCache, readNativeChatDraftCache } from './native-chat-draft-cache'
+
+type Dispatched = { handled: boolean; accepted: boolean; error: string | null }
+
+function deferred(): { promise: Promise<Dispatched>; resolve: (value: Dispatched) => void } {
+  let resolve!: (value: Dispatched) => void
+  const promise = new Promise<Dispatched>((settle) => {
+    resolve = settle
+  })
+  return { promise, resolve }
+}
+
+const PASS_THROUGH: Dispatched = { handled: false, accepted: false, error: null }
+
+function transport(
+  overrides: Partial<NativeChatStructuredComposerTransport> = {}
+): NativeChatStructuredComposerTransport {
+  return {
+    capturePresentation: () => () => true,
+    send: vi.fn(() => true),
+    dispatchCommand: vi.fn(async () => PASS_THROUGH),
+    optionsSurface: {
+      getSnapshot: () => [],
+      setOption: vi.fn(),
+      invokeAction: vi.fn(),
+      subscribe: () => () => {}
+    },
+    optionSnapshot: [],
+    onError: vi.fn(),
+    runtime: 'remote',
+    sessionId: 'session-test',
+    runtimeEnvironmentId: null,
+    ...overrides
+  }
+}
+
+function textarea(): HTMLTextAreaElement {
+  return screen.getByRole('textbox') as HTMLTextAreaElement
+}
+
+function pressEnter(input: HTMLTextAreaElement): void {
+  fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, isComposing: false })
+}
+
+let paneCounter = 0
+
+function renderComposer(structuredTransport: NativeChatStructuredComposerTransport) {
+  paneCounter += 1
+  return render(
+    <NativeChatComposer
+      terminalTabId={`tab-${paneCounter}`}
+      paneKey={`tab-${paneCounter}:structured`}
+      targetPtyId={null}
+      agent="codex"
+      structuredTransport={structuredTransport}
+    />
+  )
+}
+
+beforeEach(() => {
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      git: { discoverCommitMessageModels: vi.fn().mockResolvedValue({ success: false }) },
+      pty: { getMainBufferSnapshot: vi.fn().mockResolvedValue(null) }
+    }
+  })
+})
+
+afterEach(() => cleanup())
+
+describe('structured send racing the next IME composition', () => {
+  // Replay accepted clears after the next IME composition; otherwise settlement can restore sent text (#17359).
+  it('preserves the next composition when a typed goal is accepted', async () => {
+    const dispatch = deferred()
+    const structured = transport({
+      dispatchCommand: vi.fn(async () => PASS_THROUGH).mockReturnValueOnce(dispatch.promise),
+      threadGoal: { setObjective: vi.fn() }
+    })
+    renderComposer(structured)
+    const pane = `tab-${paneCounter}:structured`
+    const input = textarea()
+
+    changePrompt(input, '/goal 안녕')
+    pressEnter(input)
+    expect(structured.dispatchCommand).toHaveBeenCalledWith('/goal 안녕')
+
+    fireEvent.compositionStart(input)
+    changePrompt(input, '/goal 안녕하')
+
+    await act(async () => {
+      dispatch.resolve({ handled: true, accepted: true, error: null })
+      await dispatch.promise
+    })
+    expect(promptValue(input)).toBe('/goal 안녕하')
+    expect(structured.send).not.toHaveBeenCalled()
+    fireEvent.compositionEnd(input, { data: '하' })
+
+    expect(promptValue(input)).toBe('하')
+    expect(readNativeChatDraftCache(pane)).toBe('하')
+
+    await act(async () => pressEnter(input))
+    expect(structured.send).toHaveBeenLastCalledWith('하', [])
+  })
+
+  it('keeps the composed text when a mid-composition clear lands away from the caret', async () => {
+    const dispatch = deferred()
+    const structured = transport({ dispatchCommand: vi.fn(() => dispatch.promise) })
+    renderComposer(structured)
+    const input = textarea()
+
+    changePrompt(input, 'abcd')
+    pressEnter(input)
+
+    fireEvent.compositionStart(input)
+    changePrompt(input, 'ab가cd')
+
+    await act(async () => {
+      dispatch.resolve(PASS_THROUGH)
+      await dispatch.promise
+    })
+    fireEvent.compositionEnd(input, { data: '가' })
+
+    expect(promptValue(input)).toBe('가')
+  })
+
+  // Clear only after acceptance so refusals retain drafts; replay the clear at IME settlement.
+  it('keeps the draft when the send is rejected', async () => {
+    const structured = transport({ send: vi.fn(() => false) })
+    renderComposer(structured)
+    const input = textarea()
+
+    changePrompt(input, '안녕')
+    await act(async () => pressEnter(input))
+
+    expect(structured.send).toHaveBeenCalledWith('안녕', [])
+    expect(promptValue(input)).toBe('안녕')
+  })
+
+  it('keeps the draft when a rejected send races the next composition', async () => {
+    const dispatch = deferred()
+    const structured = transport({
+      dispatchCommand: vi.fn(() => dispatch.promise),
+      send: vi.fn(() => false)
+    })
+    renderComposer(structured)
+    const input = textarea()
+
+    changePrompt(input, '안녕')
+    pressEnter(input)
+
+    fireEvent.compositionStart(input)
+    changePrompt(input, '안녕하')
+
+    await act(async () => {
+      dispatch.resolve(PASS_THROUGH)
+      await dispatch.promise
+    })
+    fireEvent.compositionEnd(input, { data: '하' })
+
+    expect(promptValue(input)).toBe('안녕하')
+  })
+
+  it('keeps the draft when a handled command is rejected', async () => {
+    const structured = transport({
+      dispatchCommand: vi.fn(async () => ({ handled: true, accepted: false, error: 'nope' }))
+    })
+    renderComposer(structured)
+    const input = textarea()
+
+    changePrompt(input, '/model')
+    await act(async () => pressEnter(input))
+
+    expect(structured.onError).toHaveBeenCalledWith('nope', undefined)
+    expect(structured.send).not.toHaveBeenCalled()
+    expect(promptValue(input)).toBe('/model')
+  })
+})
+
+describe('a withdrawn message put back during an IME composition', () => {
+  // IME skips programmatic draft sync; retain returned text after its outbox entry is removed.
+  it('shows the text once the composition settles, after what was composed', () => {
+    renderComposer(transport())
+    const pane = `tab-${paneCounter}:structured`
+    const input = textarea()
+    changePrompt(input, 'abc')
+
+    fireEvent.compositionStart(input)
+    changePrompt(input, 'abc안')
+    act(() => appendNativeChatDraftCache(pane, 'withdrawn'))
+    changePrompt(input, 'abc안녕')
+    fireEvent.compositionEnd(input, { data: '안녕' })
+
+    expect(promptValue(input)).toBe('abc안녕\n\nwithdrawn')
+    expect(readNativeChatDraftCache(pane)).toBe('abc안녕\n\nwithdrawn')
+  })
+
+  it('shows the text once, however much is typed or composed after', () => {
+    renderComposer(transport())
+    const pane = `tab-${paneCounter}:structured`
+    const input = textarea()
+    changePrompt(input, 'abc')
+    fireEvent.compositionStart(input)
+    changePrompt(input, 'abc안')
+    act(() => appendNativeChatDraftCache(pane, 'withdrawn'))
+    fireEvent.compositionEnd(input, { data: '안' })
+
+    changePrompt(input, 'abc안\n\nwithdrawn!')
+    fireEvent.compositionStart(input)
+    changePrompt(input, 'abc안\n\nwithdrawn!가')
+    fireEvent.compositionEnd(input, { data: '가' })
+
+    expect(promptValue(input)).toBe('abc안\n\nwithdrawn!가')
+    expect(readNativeChatDraftCache(pane)).toBe('abc안\n\nwithdrawn!가')
+  })
+
+  // At settlement clear sent text before appending held returned text.
+  it('keeps the text when a sent message is also cleared mid-composition', async () => {
+    const dispatch = deferred()
+    const structured = transport({ dispatchCommand: vi.fn(() => dispatch.promise) })
+    renderComposer(structured)
+    const pane = `tab-${paneCounter}:structured`
+    const input = textarea()
+    changePrompt(input, '안녕')
+    pressEnter(input)
+
+    fireEvent.compositionStart(input)
+    changePrompt(input, '안녕하')
+    act(() => appendNativeChatDraftCache(pane, 'withdrawn'))
+    await act(async () => {
+      dispatch.resolve(PASS_THROUGH)
+      await dispatch.promise
+    })
+    fireEvent.compositionEnd(input, { data: '하' })
+
+    expect(promptValue(input)).toBe('하\n\nwithdrawn')
+    expect(readNativeChatDraftCache(pane)).toBe('하\n\nwithdrawn')
+  })
+})
+
+// Regression (#30159): a message ending in a composing syllable needed a second Enter.
+describe('the Enter that commits a Hangul composition', () => {
+  it('sends the message once, with its last syllable', async () => {
+    const structured = transport()
+    renderComposer(structured)
+    const input = textarea()
+
+    fireEvent.compositionStart(input)
+    changePrompt(input, '안녕하세요')
+    fireEvent.keyDown(input, { key: 'Process', keyCode: 229, isComposing: true })
+    endComposition(input, '요')
+    await act(async () => pressEnter(input))
+
+    expect(structured.send).toHaveBeenCalledOnce()
+    expect(structured.send).toHaveBeenCalledWith('안녕하세요', [])
+  })
+})
+
+describe('a structured send while the chat has one out', () => {
+  it('keeps the text in the box and Send disabled until the send settles', async () => {
+    const structured = transport({ send: vi.fn(() => false), sendOut: true })
+    const view = renderComposer(structured)
+    const input = textarea()
+    changePrompt(input, 'next one')
+    expect(actions.sendDisabled).toBe(true)
+
+    await act(async () => pressEnter(input))
+    expect(structured.send).toHaveBeenCalledWith('next one', [])
+    expect(promptValue(input)).toBe('next one')
+
+    view.rerender(
+      <NativeChatComposer
+        terminalTabId={`tab-${paneCounter}`}
+        paneKey={`tab-${paneCounter}:structured`}
+        targetPtyId={null}
+        agent="codex"
+        structuredTransport={{ ...structured, sendOut: false }}
+      />
+    )
+    expect(actions.sendDisabled).toBe(false)
+  })
+})

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handlers, ipcMainMock, isDashboardPopoutRendererMock, isTrustedUIRendererMock } =
@@ -65,17 +66,14 @@ function makeRuntime() {
 }
 
 function makeSender(id = 1) {
-  const destroyedListeners: (() => void)[] = []
+  const events = new EventEmitter()
   return {
     id,
     isDestroyed: () => false,
     send: vi.fn(),
-    once: (event: string, cb: () => void) => {
-      if (event === 'destroyed') {
-        destroyedListeners.push(cb)
-      }
-    },
-    fireDestroyed: () => destroyedListeners.forEach((cb) => cb())
+    on: events.on.bind(events),
+    removeListener: events.removeListener.bind(events),
+    fireDestroyed: () => events.emit('destroyed')
   }
 }
 
@@ -122,7 +120,8 @@ describe('registerTerminalPreviewHandlers', () => {
 
     await expect(resultPromise).resolves.toEqual({
       snapshot: { data: 'screen', cols: 80, rows: 20, seq: 6 },
-      replay: ['c']
+      // Sequence-proven suffixes retain live kitty semantics.
+      replay: [{ data: 'c', mode: 'live' }]
     })
     expect(runtime.registerRawTerminalViewSubscriber).toHaveBeenCalledWith('p1')
   })
@@ -239,6 +238,62 @@ describe('registerTerminalPreviewHandlers', () => {
     expect(sender.send).not.toHaveBeenCalled()
   })
 
+  // Image and kitty flags must share a capture boundary to avoid duplicating replayed transitions.
+  it('returns the kitty flags of the capture that produced the returned image', async () => {
+    const runtime = makeRuntime()
+    const snapshotResolvers: ((snapshot: {
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      kittyKeyboardFlags?: number
+    }) => void)[] = []
+    runtime.serializeTerminalBuffer.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          snapshotResolvers.push(resolve)
+        })
+    )
+    registerTerminalPreviewHandlers(runtime as never)
+    const sender = makeSender()
+
+    const resultPromise = handlers.get('terminalPreview:connect')!(eventFor(sender), {
+      ptyId: 'p1'
+    }) as Promise<unknown>
+    const chunk = 'x'.repeat(64 * 1024)
+    for (let index = 0; index < 5; index++) {
+      runtime.listeners[0]!(chunk)
+    }
+    // The first capture overflowed; its flags must not survive onto the second image.
+    snapshotResolvers[0]!({
+      data: 'first',
+      cols: 80,
+      rows: 20,
+      seq: 1,
+      kittyKeyboardFlags: 0
+    })
+    await vi.waitFor(() => expect(snapshotResolvers).toHaveLength(2))
+    snapshotResolvers[1]!({
+      data: 'second',
+      cols: 80,
+      rows: 20,
+      seq: 2,
+      kittyKeyboardFlags: 8
+    })
+
+    await expect(resultPromise).resolves.toEqual({
+      snapshot: {
+        data: 'second',
+        cols: 80,
+        rows: 20,
+        seq: 2,
+        kittyKeyboardFlags: 8
+      },
+      replay: []
+    })
+    expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2)
+  })
+
   it('releases output and raw-view presence on unsubscribe and sender destruction', async () => {
     const runtime = makeRuntime()
     registerTerminalPreviewHandlers(runtime as never)
@@ -287,8 +342,7 @@ describe('registerTerminalPreviewHandlers', () => {
     expect(runtime.writeTerminalPreviewInput).not.toHaveBeenCalled()
   })
 
-  // The in-window dashboard overlay hosts the preview dialog from the main
-  // renderer, which is trusted but is not the popout window.
+  // The in-window dashboard uses the trusted main renderer, not the popout.
   it('admits the trusted main renderer when it is not the popout', async () => {
     const runtime = makeRuntime()
     registerTerminalPreviewHandlers(runtime as never)
@@ -467,7 +521,6 @@ describe('registerTerminalPreviewHandlers', () => {
     expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledWith('p1', 'dashboard-popout:1')
     expect(runtime.unsubscribeResize).toHaveBeenCalledBefore(runtime.unregisterRemoteDesktopViewer)
 
-    // A release is one-shot per claim.
     handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), { ptyId: 'p1' })
     expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(1)
 

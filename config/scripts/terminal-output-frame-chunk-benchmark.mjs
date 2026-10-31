@@ -1,28 +1,13 @@
 #!/usr/bin/env node
-// Benchmark: iterateTerminalOutputFrameChunks, which every byte of remote terminal
-// output passes through on its way to a mobile/remote-desktop multiplex stream.
-//
-// The pre-fix loop was `for (const part of data)`: V8 materializes a fresh 1-2 code
-// unit string per code point, then measureClipboardTextByteLength re-walked that
-// string through codePointAt to get its UTF-8 width, and the chunk was rebuilt with
-// `chunk += part`. The gate in front of it (terminalStreamByteLengthExceeds) ran the
-// same per-code-point walk over the whole payload a second time.
-//
-// The fix: one charCodeAt scan computing UTF-8 width inline, slices for chunk text,
-// and bounded byte probes when UTF-16 length alone cannot prove fit or overflow.
-//
-// BOTH arms run the complete production path, encodeTerminalStreamText included, and
-// their emitted frames (base64 + seq + opcode) are compared before any timing, so an
-// arm that split differently or renumbered a seq cannot be reported as a win.
+// Compare old per-codepoint string/UTF-8 scans with production inline-width/slice/bounded-probe path on remote terminal output.
+// Both arms include encodeTerminalStreamText and assert identical base64/sequence/opcodes before timing.
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import nodeModule from 'node:module'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
-// terminal-stream-protocol.ts declares a TS enum, which Node's default strip-only
-// loader rejects; re-exec once with type transformation rather than re-modelling
-// the opcodes here (a hand copy could drift from the wire contract).
+// Re-exec with TS transformation for protocol enum; strip-only Node rejects it and copied opcodes could drift.
 if (!process.execArgv.includes('--experimental-transform-types')) {
   const result = spawnSync(
     process.execPath,
@@ -73,6 +58,11 @@ const CLIPBOARD_SOURCE = readFileSync(
   'utf8'
 )
 
+const UTF8_SOURCE = readFileSync(
+  new URL('../../src/shared/utf8-byte-limits.ts', import.meta.url),
+  'utf8'
+)
+
 // Match executable source markers so a stale benchmark fails instead of misleading.
 for (const [source, label, marker] of [
   [
@@ -89,7 +79,8 @@ for (const [source, label, marker] of [
   [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'const text = data.slice(chunkStart, end)'],
   [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'data.charCodeAt(index + 1)'],
   [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'export function measureClipboardTextByteLength('],
-  [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'text.codePointAt(index)']
+  [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'return measureUtf8ByteLength(text, options)'],
+  [UTF8_SOURCE, 'utf8-byte-limits.ts', 'const codePoint = readUtf8CodePointAt(text, index)']
 ]) {
   if (!source.includes(marker)) {
     throw new Error(`${label} no longer contains \`${marker}\`; this benchmark is stale`)
@@ -121,7 +112,7 @@ function previousGate(data) {
   )
 }
 
-// Pre-fix arm: the exact code that shipped, including the second full walk in the gate.
+// Baseline per-code-point chunk assembly, retaining the current UTF-8 scanner and codec.
 function* iterateBefore(data, meta) {
   const rawLength = meta?.rawLength ?? data.length
   if (meta?.transformed || rawLength !== data.length) {
@@ -203,7 +194,7 @@ function drain(iterate, data, meta) {
   let frames = 0
   let bytes = 0
   let seqSum = 0
-  for (const frame of iterate(data, meta)) {
+  for (const frame of iterate(data, meta, 'span')) {
     frames += 1
     bytes += frame.bytes.byteLength
     seqSum += frame.seq ?? 0
@@ -213,13 +204,13 @@ function drain(iterate, data, meta) {
 }
 
 function describeFrames(iterate, data, meta) {
-  const shapes = []
-  for (const frame of iterate(data, meta)) {
-    shapes.push(
+  const descriptions = []
+  for (const frame of iterate(data, meta, 'span')) {
+    descriptions.push(
       `${Buffer.from(frame.bytes).toString('base64')}|${frame.seq ?? 'u'}|${frame.opcode ?? 'u'}`
     )
   }
-  return shapes.join('\n')
+  return descriptions.join('\n')
 }
 
 const SURROGATE_PAIR = '\u{1f600}'
@@ -292,9 +283,7 @@ function median(samples) {
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
 }
 
-// Why interleaved with an alternating lead: running one arm's whole batch first lets
-// CPU frequency drift correlate with whichever arm is being measured. Elsewhere in this
-// effort that alone reported 23.3x for a real 6.7x.
+// Alternate leading arm each round to share CPU drift; batch ordering elsewhere measured 23.3x for a real 6.7x.
 function measureInterleaved(data, meta) {
   for (let index = 0; index < WARMUP; index += 1) {
     drain(iterateBefore, data, meta)
@@ -378,8 +367,7 @@ for (const fixture of fixtures) {
     throw new Error(`frames differ for ${fixture.label}`)
   }
   const frames = before.split('\n').length
-  // Guard against a fixture that never reaches the chunking loop; then both arms would
-  // just be measuring the gate and the comparison above would prove nothing about it.
+  // Require fixture to reach chunking loop; gate-only timings cannot prove chunking equivalence.
   if (fixture.data.length > TERMINAL_STREAM_CHUNK_BYTES && frames < 2) {
     throw new Error(`${fixture.label} never split; fixture does not exercise the chunk loop`)
   }

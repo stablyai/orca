@@ -5,7 +5,8 @@ const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
 
-vi.mock('../format', () => ({ printResult: vi.fn() }))
+const printResultMock = vi.hoisted(() => vi.fn())
+vi.mock('../format', () => ({ printResult: printResultMock }))
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
@@ -13,6 +14,7 @@ import { ORCHESTRATION_HANDLERS } from './orchestration'
 describe('orchestration check identity', () => {
   beforeEach(() => {
     callMock.mockReset().mockResolvedValue({ result: { messages: [], count: 0 } })
+    printResultMock.mockReset()
     getTerminalHandleMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
@@ -31,12 +33,12 @@ describe('orchestration check identity', () => {
     }
   })
 
-  const invokeCheck = (flags: Map<string, string | boolean>) =>
+  const invokeCheck = (flags: Map<string, string | boolean>, json = true) =>
     ORCHESTRATION_HANDLERS['orchestration check']({
       flags,
       client: { call: callMock },
       cwd: '/tmp/repo',
-      json: true
+      json
     } as never)
 
   it('carries the caller pane key when the environment handle may be stale', async () => {
@@ -55,6 +57,15 @@ describe('orchestration check identity', () => {
         wait: true
       })
     )
+  })
+
+  it('rejects an empty --terminal instead of consuming the ambient mailbox', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+
+    await expect(
+      invokeCheck(new Map<string, string | boolean>([['terminal', '']]))
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(callMock).not.toHaveBeenCalled()
   })
 
   it('keeps an explicit legacy terminal handle scoped to that handle', async () => {
@@ -90,5 +101,18 @@ describe('orchestration check identity', () => {
         inject: true
       })
     )
+  })
+
+  it('surfaces a stale --terminal refusal instead of an empty inbox', async () => {
+    callMock.mockRejectedValue(
+      Object.assign(new Error('Terminal term_gone has no live pane bound to a Run'), {
+        code: 'stable_pane_required'
+      })
+    )
+
+    await expect(
+      invokeCheck(new Map<string, string | boolean>([['terminal', 'term_gone']]))
+    ).rejects.toMatchObject({ code: 'stable_pane_required' })
+    expect(printResultMock).not.toHaveBeenCalled()
   })
 })

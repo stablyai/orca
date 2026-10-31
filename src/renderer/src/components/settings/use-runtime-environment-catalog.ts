@@ -1,0 +1,187 @@
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction
+} from 'react'
+import { toast } from 'sonner'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
+import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
+import { useAppStore } from '@/store'
+import {
+  isListedRemoteServer,
+  type PublicKnownRuntimeEnvironment
+} from '../../../../shared/runtime-environments'
+import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { evaluateHostDetails, type RuntimeHostDetails } from './runtime-environment-host-details'
+
+type RuntimeEnvironmentCatalog = {
+  environments: PublicKnownRuntimeEnvironment[]
+  isLoading: boolean
+  detailsByEnvironmentId: Record<string, RuntimeHostDetails>
+  setDetailsByEnvironmentId: Dispatch<SetStateAction<Record<string, RuntimeHostDetails>>>
+  mountedRef: MutableRefObject<boolean>
+  loadEnvironments: (verified?: {
+    environmentId: string
+    runtimeStatus: RuntimeStatus
+  }) => Promise<void>
+}
+
+// Retain failed probes across Settings remounts to avoid flashing Checking during re-probes.
+const lastSettledDetails = new Map<string, RuntimeHostDetails>()
+
+// Cache only failures; Connected must come from live store state.
+function isCacheableDetails(details: RuntimeHostDetails): boolean {
+  return details.status === 'error' && details.remoteControl?.state !== 'ready'
+}
+
+export function forgetCachedRuntimeHostDetails(environmentId: string): void {
+  lastSettledDetails.delete(environmentId)
+}
+
+export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
+  const savedEnvironments = useAppStore((state) => state.runtimeEnvironments)
+  const environments = useMemo(
+    () => savedEnvironments.filter(isListedRemoteServer),
+    [savedEnvironments]
+  )
+  const [isLoading, setIsLoading] = useState(false)
+  const [detailsByEnvironmentId, setDetailsByEnvironmentId] = useState<
+    Record<string, RuntimeHostDetails>
+  >(() => Object.fromEntries(lastSettledDetails))
+  useEffect(() => {
+    for (const environmentId of lastSettledDetails.keys()) {
+      if (!(environmentId in detailsByEnvironmentId)) {
+        lastSettledDetails.delete(environmentId)
+      }
+    }
+    for (const [environmentId, details] of Object.entries(detailsByEnvironmentId)) {
+      if (isCacheableDetails(details)) {
+        lastSettledDetails.set(environmentId, details)
+      } else {
+        lastSettledDetails.delete(environmentId)
+      }
+    }
+  }, [detailsByEnvironmentId])
+  const mountedRef = useMountedRef()
+
+  const loadEnvironments = useCallback(
+    async (verified?: { environmentId: string; runtimeStatus: RuntimeStatus }): Promise<void> => {
+      if (mountedRef.current) {
+        setIsLoading(true)
+      }
+      try {
+        const nextEnvironments = await window.api.runtimeEnvironments.list()
+        const visibleEnvironments = nextEnvironments.filter(isListedRemoteServer)
+        // Prune removed servers from store status so they cannot linger in sidebar pickers.
+        useAppStore.getState().setRuntimeEnvironments(nextEnvironments)
+        if (verified) {
+          await useAppStore.getState().readRuntimeHostStatusSnapshots()
+        }
+        if (mountedRef.current) {
+          setDetailsByEnvironmentId((current) => {
+            const next: Record<string, RuntimeHostDetails> = {}
+            for (const environment of visibleEnvironments) {
+              next[environment.id] =
+                verified?.environmentId === environment.id
+                  ? {
+                      status: 'ready',
+                      runtimeStatus: verified.runtimeStatus,
+                      remoteControl: verified.runtimeStatus.remoteControl ?? null,
+                      compatibility: evaluateHostDetails(verified.runtimeStatus),
+                      error: null
+                    }
+                  : (current[environment.id] ?? {
+                      status: 'loading',
+                      runtimeStatus: null,
+                      remoteControl: null,
+                      compatibility: null,
+                      error: null
+                    })
+            }
+            return next
+          })
+        }
+        await Promise.allSettled(
+          visibleEnvironments
+            .filter((environment) => environment.id !== verified?.environmentId)
+            .map(async (environment) => {
+              try {
+                const response = await window.api.runtimeEnvironments.getStatus({
+                  selector: environment.id,
+                  timeoutMs: 10_000
+                })
+                const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+                // Publish manual refreshes to sidebar pickers as well as Settings.
+                await useAppStore.getState().readRuntimeHostStatusSnapshots()
+                if (!mountedRef.current) {
+                  return
+                }
+                setDetailsByEnvironmentId((current) => ({
+                  ...current,
+                  [environment.id]: {
+                    status: 'ready',
+                    runtimeStatus,
+                    remoteControl: runtimeStatus.remoteControl ?? null,
+                    compatibility: evaluateHostDetails(runtimeStatus),
+                    error: null
+                  }
+                }))
+              } catch (error) {
+                // Record null status so sidebar pickers distinguish unreachable from unprobed.
+                const remoteControl = extractRuntimeTransportDiagnostics(error)
+                await useAppStore.getState().readRuntimeHostStatusSnapshots()
+                if (!mountedRef.current) {
+                  return
+                }
+                setDetailsByEnvironmentId((current) => ({
+                  ...current,
+                  [environment.id]: {
+                    status: 'error',
+                    runtimeStatus: null,
+                    remoteControl: remoteControl ?? null,
+                    compatibility: null,
+                    error: error instanceof Error ? error.message : String(error)
+                  }
+                }))
+              }
+            })
+        )
+      } catch (error) {
+        if (mountedRef.current) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.settings.RuntimeEnvironmentsPane.e6410d72c3',
+                  'Failed to load runtime environments.'
+                )
+          )
+        }
+      } finally {
+        if (mountedRef.current) {
+          setIsLoading(false)
+        }
+      }
+    },
+    [mountedRef]
+  )
+
+  useEffect(() => {
+    void loadEnvironments()
+  }, [loadEnvironments])
+
+  return {
+    environments,
+    isLoading,
+    detailsByEnvironmentId,
+    setDetailsByEnvironmentId,
+    mountedRef,
+    loadEnvironments
+  }
+}

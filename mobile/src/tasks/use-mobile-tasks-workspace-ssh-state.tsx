@@ -1,0 +1,230 @@
+import type { WorkspaceSparseActionsModel } from './use-mobile-tasks-workspace-sparse-actions'
+import { taskRepoClient } from './task-repo-host-routing'
+import { getDefaultSetupDecision } from '../../../src/shared/orca-hook-setup-config'
+import {
+  normalizeSetupHookTrust,
+  pickWorkspaceAgent,
+  readRepoHooksSetupCommand,
+  resolveWorkspaceAgentSelection,
+  useCallback,
+  useEffect,
+  useMemo
+} from './mobile-tasks-dependencies'
+import type {
+  RepoHooksResponse,
+  RepoSummary,
+  SetupDecision
+} from './mobile-tasks-legacy-foundation'
+import {
+  localAgentDetectionRead,
+  remoteAgentDetectionRead,
+  repoSetupHooksRead,
+  sshRepoConnectRun,
+  sshRepoStateRead
+} from './mobile-workspace-source-operations'
+
+export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsModel) {
+  const {
+    client,
+    runtimeTaskSettings,
+    setWorkspaceAgent,
+    setWorkspaceAgentOverridden,
+    setWorkspaceDetectedAgentIds,
+    setWorkspaceSshConnecting,
+    setWorkspaceSshState,
+    tasksSupported,
+    workspaceAgent,
+    workspaceAgentOverridden,
+    workspaceCreateDraft,
+    workspaceCreateRequiresSshConnection,
+    workspaceCreateSshStatus,
+    workspaceCreateTargetConnectionId,
+    workspaceCreateTargetRepo,
+    workspaceDetectedAgentIds,
+    workspaceSshState
+  } = model
+  const connectWorkspaceSshRepo = useCallback(async (): Promise<void> => {
+    if (!client || !tasksSupported || !workspaceCreateTargetConnectionId) {
+      return
+    }
+    setWorkspaceSshConnecting(true)
+    setWorkspaceSshState({
+      targetId: workspaceCreateTargetConnectionId,
+      status: 'connecting',
+      error: null,
+      reconnectAttempt: 0
+    })
+    try {
+      const reply = await sshRepoConnectRun.request(
+        client,
+        { targetId: workspaceCreateTargetConnectionId },
+        { timeoutMs: 120_000 }
+      )
+      const state = sshRepoConnectRun.interpret(reply)
+      setWorkspaceSshState(
+        state ?? {
+          targetId: workspaceCreateTargetConnectionId,
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0
+        }
+      )
+    } catch (err) {
+      setWorkspaceSshState({
+        targetId: workspaceCreateTargetConnectionId,
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Failed to connect to SSH repository.',
+        reconnectAttempt: 0
+      })
+    } finally {
+      setWorkspaceSshConnecting(false)
+    }
+  }, [client, tasksSupported, workspaceCreateTargetConnectionId])
+
+  const ensureWorkspaceSshReady = useCallback(
+    async (repo: RepoSummary): Promise<void> => {
+      if (!repo.connectionId || !client || !tasksSupported) {
+        return
+      }
+      if (
+        workspaceSshState?.targetId === repo.connectionId &&
+        workspaceSshState.status === 'connected'
+      ) {
+        return
+      }
+      const reply = await sshRepoStateRead.request(client, { targetId: repo.connectionId })
+      const state = sshRepoStateRead.interpret(reply) ?? null
+      if (state) {
+        setWorkspaceSshState(state)
+      }
+      if (state?.status !== 'connected') {
+        throw new Error(`Connect ${repo.displayName} before creating a workspace.`)
+      }
+    },
+    [client, tasksSupported, workspaceSshState]
+  )
+
+  useEffect(() => {
+    if (!tasksSupported || !workspaceCreateDraft || !client || !workspaceCreateTargetRepo) {
+      setWorkspaceDetectedAgentIds(null)
+      return
+    }
+    if (workspaceCreateTargetRepo.connectionId && workspaceCreateSshStatus !== 'connected') {
+      // Do not cache empty remote-agent detection while SSH is disconnected; probes run on that host.
+      setWorkspaceDetectedAgentIds(null)
+      return
+    }
+    let stale = false
+    setWorkspaceDetectedAgentIds(null)
+    const repoClient = taskRepoClient(client, workspaceCreateTargetRepo)
+    const detection = workspaceCreateTargetRepo.connectionId
+      ? {
+          operation: remoteAgentDetectionRead,
+          reply: remoteAgentDetectionRead.request(repoClient, {
+            connectionId: workspaceCreateTargetRepo.connectionId
+          })
+        }
+      : {
+          operation: localAgentDetectionRead,
+          reply: localAgentDetectionRead.request(repoClient, {
+            repoId: workspaceCreateTargetRepo.id
+          })
+        }
+    void detection.reply
+      .then((reply) => {
+        if (stale) {
+          return
+        }
+        const detected = detection.operation.interpret(reply)
+        setWorkspaceDetectedAgentIds(detected.accepted ? new Set(detected.value) : new Set())
+      })
+      .catch(() => {
+        if (!stale) {
+          setWorkspaceDetectedAgentIds(new Set())
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [
+    client,
+    tasksSupported,
+    workspaceCreateDraft,
+    workspaceCreateSshStatus,
+    workspaceCreateTargetRepo
+  ])
+
+  const workspaceAgentSelection = resolveWorkspaceAgentSelection({
+    selectionActive: tasksSupported && workspaceCreateDraft !== null,
+    settings: runtimeTaskSettings,
+    detectedAgentIds: workspaceDetectedAgentIds,
+    agent: workspaceAgent,
+    overridden: workspaceAgentOverridden
+  })
+  if (
+    workspaceAgentSelection.agent !== workspaceAgent ||
+    workspaceAgentSelection.overridden !== workspaceAgentOverridden
+  ) {
+    // Why: the drawer can open before SSH/local detection settles. Resolve the
+    // visible agent before commit so users do not see an unavailable override.
+    // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
+    setWorkspaceAgent(workspaceAgentSelection.agent)
+    // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
+    setWorkspaceAgentOverridden(workspaceAgentSelection.overridden)
+  }
+
+  const resolvedWorkspaceAgent = useMemo(
+    () => workspaceAgent ?? pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds),
+    [runtimeTaskSettings, workspaceAgent, workspaceDetectedAgentIds]
+  )
+  const workspaceAgentDetectionPending =
+    workspaceCreateDraft != null &&
+    workspaceCreateTargetRepo != null &&
+    !workspaceCreateRequiresSshConnection &&
+    workspaceDetectedAgentIds === null
+
+  const resolveCreateSetupDecision = useCallback(
+    async (
+      repo: RepoSummary,
+      override?: Exclude<SetupDecision, 'inherit'>
+    ): Promise<
+      | { kind: 'decision'; decision: SetupDecision; setupTrust?: RepoHooksResponse['setupTrust'] }
+      | {
+          kind: 'prompt'
+          command: string
+          source: string | null | undefined
+          setupTrust?: RepoHooksResponse['setupTrust']
+        }
+    > => {
+      if (!client || !tasksSupported) {
+        return { kind: 'decision', decision: override ?? 'inherit' }
+      }
+      const reply = await repoSetupHooksRead.request(client, { repo: `id:${repo.id}` })
+      const result = repoSetupHooksRead.interpret(reply)
+      const setupCommand = readRepoHooksSetupCommand(result)
+      const setupTrust = normalizeSetupHookTrust(result.setupTrust) ?? undefined
+      if (!setupCommand) {
+        return { kind: 'decision', decision: 'inherit' }
+      }
+      if (override) {
+        return { kind: 'decision', decision: override, setupTrust }
+      }
+      const decision = getDefaultSetupDecision(true, result.setupRunPolicy ?? 'run-by-default')
+      if (!decision) {
+        return { kind: 'prompt', command: setupCommand, source: result.source, setupTrust }
+      }
+      return { kind: 'decision', decision, setupTrust }
+    },
+    [client, tasksSupported]
+  )
+  return Object.assign(model, {
+    connectWorkspaceSshRepo,
+    ensureWorkspaceSshReady,
+    workspaceAgentSelection,
+    resolvedWorkspaceAgent,
+    workspaceAgentDetectionPending,
+    resolveCreateSetupDecision
+  })
+}
+
+export type WorkspaceSshStateModel = ReturnType<typeof useMobileTasksWorkspaceSshState>

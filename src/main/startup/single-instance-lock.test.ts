@@ -4,10 +4,13 @@ import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
+  shouldActivateDesktopForSecondInstance,
   shouldBypassSingleInstanceLock,
   shouldSkipSingleInstanceLock,
+  SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE,
   SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE,
-  SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE
+  SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE,
+  singleInstanceLockFailureMessage
 } from './single-instance-lock'
 
 type Listener = (...args: unknown[]) => void
@@ -40,9 +43,6 @@ describe('acquireSingleInstanceLock', () => {
 
     expect(acquired).toBe(false)
     expect(fake.requestSingleInstanceLock).toHaveBeenCalledTimes(1)
-    // Why: if we registered the listener on a losing process, focusing the
-    // existing window would become our job even though the primary owns
-    // that UX surface. Verify no listener was added.
     expect(fake.on).not.toHaveBeenCalled()
     expect(fake.listeners['second-instance']).toBeUndefined()
   })
@@ -56,11 +56,11 @@ describe('acquireSingleInstanceLock', () => {
     expect(acquired).toBe(true)
     expect(fake.requestSingleInstanceLock).toHaveBeenCalledTimes(1)
     expect(fake.on).toHaveBeenCalledTimes(1)
-    expect(fake.on).toHaveBeenCalledWith('second-instance', onSecondInstance)
+    expect(fake.on).toHaveBeenCalledWith('second-instance', expect.any(Function))
     expect(fake.listeners['second-instance']).toHaveLength(1)
   })
 
-  it('fires the registered callback when second-instance dispatches', () => {
+  it('forwards the second launch argv so the owner can decide whether to activate', () => {
     const onSecondInstance = vi.fn()
     const fake = makeFakeApp(true)
 
@@ -68,25 +68,68 @@ describe('acquireSingleInstanceLock', () => {
 
     const [registered] = fake.listeners['second-instance'] ?? []
     expect(registered).toBeDefined()
-    registered?.()
+    registered?.({}, ['/opt/orca/orca-linux.AppImage', '--serve'], '/home/orca')
 
     expect(onSecondInstance).toHaveBeenCalledTimes(1)
+    expect(onSecondInstance).toHaveBeenCalledWith(['/opt/orca/orca-linux.AppImage', '--serve'])
+  })
+})
+
+describe('shouldActivateDesktopForSecondInstance', () => {
+  it('ignores a duplicate serve launch but still activates for a desktop launch', () => {
+    // Supervisor serve restarts must not open desktop windows on displayless hosts (#11935).
+    const serveArgv = ['/opt/orca/orca-linux.AppImage', '--serve']
+    expect(shouldActivateDesktopForSecondInstance(serveArgv)).toBe(false)
+    expect(shouldActivateDesktopForSecondInstance(['/Applications/Orca.app/orca'])).toBe(true)
+  })
+
+  it('ignores a duplicate CLI-form serve launch the CLI redirect never rewrote', () => {
+    // Systemd uses CLI-form serve argv; flag-only detection would activate a headless server.
+    expect(
+      shouldActivateDesktopForSecondInstance([
+        '/opt/orca/squashfs-root/orca-ide',
+        'serve',
+        '--port',
+        '6768',
+        '--pairing-address',
+        '100.64.1.20'
+      ])
+    ).toBe(false)
+    expect(
+      shouldActivateDesktopForSecondInstance(['/opt/orca/orca-ide', '/home/u/serve-repo'])
+    ).toBe(true)
+  })
+
+  it('fails open when no argv is available', () => {
+    expect(shouldActivateDesktopForSecondInstance([])).toBe(true)
+    expect(shouldActivateDesktopForSecondInstance()).toBe(true)
+  })
+})
+
+describe('SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE', () => {
+  it('stays 3 because the documented systemd unit keys RestartPreventExitStatus off it', () => {
+    expect(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE).toBe(3)
   })
 })
 
 describe('shouldSkipSingleInstanceLock', () => {
-  it('keeps ordinary dev multi-instance behavior but never skips for serve', () => {
-    expect(shouldSkipSingleInstanceLock({ isDev: true, isServeMode: false, env: {} })).toBe(true)
-    expect(shouldSkipSingleInstanceLock({ isDev: true, isServeMode: true, env: {} })).toBe(false)
+  const E2E = { ORCA_E2E_USER_DATA_DIR: '/tmp/orca-e2e-userdata-1' }
+
+  it('takes the lock for dev desktop, packaged and serve launches alike', () => {
+    expect(shouldSkipSingleInstanceLock({ isDev: true, isServeMode: false, env: {} })).toBe(false)
     expect(shouldSkipSingleInstanceLock({ isDev: false, isServeMode: false, env: {} })).toBe(false)
+    expect(shouldSkipSingleInstanceLock({ isDev: true, isServeMode: true, env: {} })).toBe(false)
+    expect(shouldSkipSingleInstanceLock({ isDev: false, isServeMode: true, env: E2E })).toBe(false)
+    expect(shouldSkipSingleInstanceLock({ isDev: true, isServeMode: true, env: E2E })).toBe(false)
   })
 
-  it('lets isolated E2E exercise the production single-instance path', () => {
+  it('skips only an E2E launch on its own profile that did not ask for the lock', () => {
+    expect(shouldSkipSingleInstanceLock({ isDev: true, isServeMode: false, env: E2E })).toBe(true)
     expect(
       shouldSkipSingleInstanceLock({
         isDev: true,
         isServeMode: false,
-        env: { ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1' }
+        env: { ...E2E, ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1' }
       })
     ).toBe(false)
   })
@@ -96,10 +139,25 @@ describe('logSingleInstanceLockFailure', () => {
   it('emits a production-visible synchronous diagnostic for the early quit path', () => {
     const write = vi.fn()
 
-    logSingleInstanceLockFailure(write)
+    logSingleInstanceLockFailure({ isDevDesktop: false, userDataPath: '/profile' }, write)
 
     expect(write).toHaveBeenCalledWith(2, `${SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE}\n`)
     expect(write.mock.calls[0]?.[1]).toContain('Electron/macOS single-instance lock failure')
+  })
+
+  it('tells a second dev launch which profile is taken and how to run another copy', () => {
+    const write = vi.fn()
+    const userDataPath = '/Users/dev/Library/Application Support/orca-dev'
+
+    logSingleInstanceLockFailure({ isDevDesktop: true, userDataPath }, write)
+
+    expect(write).toHaveBeenCalledOnce()
+    const line = String(write.mock.calls[0]?.[1])
+    expect(line).toBe(`${singleInstanceLockFailureMessage({ isDevDesktop: true, userDataPath })}\n`)
+    expect(line.trimEnd()).not.toContain('\n')
+    expect(line).toContain(`the profile at ${userDataPath}`)
+    expect(line).toContain('ORCA_DEV_USER_DATA_PATH=')
+    expect(line).not.toMatch(/focus|window/i)
   })
 })
 

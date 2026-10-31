@@ -7,7 +7,7 @@ import {
   publishTerminalViewAttributesAtAppStart
 } from './terminal-appearance'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
-import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
+import { safeFit } from '@/lib/pane-manager/pane-fit'
 import { _resetTerminalViewAttributesPublisherForTest } from './terminal-view-attributes-publisher'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 
@@ -24,13 +24,6 @@ function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
     sendInputImmediate: vi.fn<(data: string) => boolean>(() => sendOk)
   }
 }
-
-describe('mode2031SequenceFor', () => {
-  it('maps dark to CSI ?997;1n and light to CSI ?997;2n', () => {
-    expect(mode2031SequenceFor('dark')).toBe('\x1b[?997;1n')
-    expect(mode2031SequenceFor('light')).toBe('\x1b[?997;2n')
-  })
-})
 
 describe('maybePushMode2031Flip', () => {
   it('does nothing when the pane has not subscribed to mode 2031', () => {
@@ -103,7 +96,6 @@ describe('maybePushMode2031Flip', () => {
   })
 
   it('leaves last-mode untouched when immediate input reports failure', () => {
-    // So a reconnect / retry will re-emit on the next appearance pass.
     const transport = fakeTransport({ sendOk: false })
     const subs = new Map([[1, true]])
     const last = new Map<number, 'dark' | 'light'>()
@@ -126,8 +118,8 @@ describe('maybePushMode2031Flip', () => {
 
     maybePushMode2031Flip(1, 'dark', transportA, subs, last)
     maybePushMode2031Flip(2, 'light', transportB, subs, last)
-    maybePushMode2031Flip(1, 'dark', transportA, subs, last) // suppressed
-    maybePushMode2031Flip(2, 'dark', transportB, subs, last) // flip
+    maybePushMode2031Flip(1, 'dark', transportA, subs, last)
+    maybePushMode2031Flip(2, 'dark', transportB, subs, last)
 
     expect(transportA.sendInputImmediate).toHaveBeenCalledTimes(1)
     expect(transportB.sendInputImmediate).toHaveBeenCalledTimes(2)
@@ -137,14 +129,30 @@ describe('maybePushMode2031Flip', () => {
 })
 describe('applyTerminalAppearance theme assignment', () => {
   // xterm rebuilds the palette on any new theme-object identity (wiping OSC color mutations), so the assignment must be value-gated.
-  function makePane(id: number): ManagedPane {
-    return { id, terminal: { options: {}, cols: 80, rows: 24 } } as unknown as ManagedPane
+  // Metric writes require a measurable pane; hidden panes defer until fit/reveal.
+  function makePane(id: number, overrides?: { measurable?: boolean }): ManagedPane {
+    const measurable = overrides?.measurable ?? true
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the pane members exercised by appearance logic.
+    return {
+      id,
+      terminal: { options: {}, cols: 80, rows: 24 },
+      container: {
+        dataset: {},
+        getBoundingClientRect: () => ({ width: measurable ? 800 : 0, height: measurable ? 600 : 0 })
+      },
+      fitAddon: {
+        proposeDimensions: () => (measurable ? { cols: 80, rows: 24 } : undefined)
+      }
+    } as unknown as ManagedPane
   }
 
   function makeManager(panes: ManagedPane[]): PaneManager {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the manager members exercised by appearance logic.
     return {
-      getPanes: () => panes,
+      // Real getPanes returns fresh wrappers around the same terminal; per-pane state must survive wrapper changes.
+      getPanes: () => panes.map((pane) => ({ ...pane })),
       setPaneLigaturesEnabled: vi.fn(),
+      setPaneInlineImagesEnabled: vi.fn(),
       setPaneStyleOptions: vi.fn()
     } as unknown as PaneManager
   }
@@ -177,6 +185,16 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.fontSize).toBe(settings.terminalFontSize + 2)
   })
 
+  it('applies regular and bold font weights independently', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, terminalFontWeight: 400, terminalFontWeightBold: 800 })
+
+    expect(pane.terminal.options.fontWeight).toBe(400)
+    expect(pane.terminal.options.fontWeightBold).toBe(800)
+  })
+
   it('still assigns a fresh theme when composed values actually change', () => {
     const pane = makePane(1)
     const settings = getDefaultSettings('/tmp')
@@ -190,8 +208,7 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.theme?.background).toBe('#102030')
   })
 
-  // #7934: contrast correction rescues invisible white text on light backgrounds but over-corrects on dark;
-  // gate by the composed theme's background luminance (either theme slot can hold either kind of theme).
+  // Contrast correction should follow composed background luminance, since either theme slot may hold light or dark (#7934).
   it('keeps xterm contrast correction on light themes', () => {
     const pane = makePane(1)
     const settings = getDefaultSettings('/tmp')
@@ -202,8 +219,7 @@ describe('applyTerminalAppearance theme assignment', () => {
   })
 
   it('applies the mild dark-background contrast floor on dark themes', () => {
-    // #10104: a floor of 3 rescues near-background body text (e.g. Antigravity's #262b30 on #1e242a)
-    // without the 4.5-floor over-brightening of vibrant ANSI colors that #7934 fixed.
+    // A floor of 3 rescues near-background text without over-brightening vibrant ANSI colors (#10104, #7934).
     const pane = makePane(1)
     const settings = getDefaultSettings('/tmp')
 
@@ -242,6 +258,45 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.minimumContrastRatio).toBe(4.5)
   })
 
+  // Contrast correction turns same-color Powerline segment seams into bright lines (#10754).
+  it('lets the user setting disable contrast correction on a dark theme', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: 1 })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+  })
+
+  it('lets the user setting override the light-background floor as well', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'light', terminalMinimumContrastRatio: 1 })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+  })
+
+  it('clamps an out-of-range user setting before it reaches xterm', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: 99 })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(21)
+  })
+
+  it('returns to the automatic floor when the user setting is cleared live', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: 1 })
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: undefined })
+    expect(pane.terminal.options.minimumContrastRatio).toBe(3)
+  })
+
   it('skips the minimumContrastRatio write on a no-op re-apply (preserves xterm contrast cache)', () => {
     const pane = makePane(1)
     let writes = 0
@@ -264,6 +319,71 @@ describe('applyTerminalAppearance theme assignment', () => {
 
     // The value-gate must not rewrite an unchanged ratio — each write clears xterm's contrast cache.
     expect(writes).toBe(writesAfterFirst)
+  })
+
+  it('defers metric options on an unmeasurable pane and lands them on the next fit', () => {
+    // Unmeasurable panes cannot fit after a metric-triggered clear/resize/refresh; defer that work.
+    let measurable = false
+    const pane = {
+      id: 1,
+      terminal: { options: {}, cols: 80, rows: 24 },
+      container: {
+        dataset: {},
+        getBoundingClientRect: () => ({ width: measurable ? 800 : 0, height: measurable ? 600 : 0 })
+      },
+      fitAddon: {
+        fit: vi.fn(),
+        proposeDimensions: () => (measurable ? { cols: 80, rows: 24 } : undefined)
+      }
+    } as unknown as ManagedPane
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, terminalFontSize: 19 })
+
+    expect(pane.terminal.options.fontSize).toBeUndefined()
+    expect(pane.terminal.options.fontFamily).toBeUndefined()
+    expect(pane.terminal.options.cursorStyle).toBeDefined()
+
+    measurable = true
+    safeFit(pane)
+
+    expect(pane.terminal.options.fontSize).toBe(19)
+    expect(pane.terminal.options.fontFamily).toContain('monospace')
+  })
+
+  it('applies only the latest deferred metric options after repeated hidden changes', () => {
+    let measurable = false
+    const writes: number[] = []
+    const options: Record<string, unknown> = {}
+    Object.defineProperty(options, 'fontSize', {
+      configurable: true,
+      enumerable: true,
+      get: () => writes.at(-1),
+      set: (value: number) => {
+        writes.push(value)
+      }
+    })
+    const pane = {
+      id: 1,
+      terminal: { options, cols: 80, rows: 24 },
+      container: {
+        dataset: {},
+        getBoundingClientRect: () => ({ width: measurable ? 800 : 0, height: measurable ? 600 : 0 })
+      },
+      fitAddon: {
+        fit: vi.fn(),
+        proposeDimensions: () => (measurable ? { cols: 80, rows: 24 } : undefined)
+      }
+    } as unknown as ManagedPane
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, terminalFontSize: 15 })
+    apply(pane, { ...settings, terminalFontSize: 21 })
+
+    measurable = true
+    safeFit(pane)
+
+    expect(writes).toEqual([21])
   })
 })
 
@@ -299,9 +419,11 @@ describe('publishTerminalViewAttributesAtAppStart', () => {
       expect(publishMock).toHaveBeenCalledTimes(1)
 
       // Identical app-global snapshot, so the publisher dedupe keeps it a single push.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the manager members exercised by appearance publication.
       const manager = {
         getPanes: () => [],
         setPaneLigaturesEnabled: vi.fn(),
+        setPaneInlineImagesEnabled: vi.fn(),
         setPaneStyleOptions: vi.fn()
       } as unknown as PaneManager
       applyTerminalAppearance(

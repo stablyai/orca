@@ -1,4 +1,4 @@
-import type { GitHubPRMergeMethod } from '../../../src/shared/types'
+import type { GitHubPRMergeMethod } from '../../../src/shared/github/pull-request-types'
 import type { GitHubPrMutationOutcome } from './github-pr-mutations'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
 
@@ -17,6 +17,10 @@ export type PrActionMutations = {
   updatePRState: (args: {
     prNumber: number
     state: 'open' | 'closed'
+    prRepo?: GitHubPrRepoSlug | null
+  }) => Promise<GitHubPrMutationOutcome>
+  markReadyForReview: (args: {
+    prNumber: number
     prRepo?: GitHubPrRepoSlug | null
   }) => Promise<GitHubPrMutationOutcome>
   requestReviewers: (args: {

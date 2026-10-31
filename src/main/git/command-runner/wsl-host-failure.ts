@@ -1,0 +1,54 @@
+import { isWslHostFailureExitCode, readWslHostDiagnostic } from '../../wsl/wsl-process-failure'
+import type { ResolvedCommand } from './wsl-command-resolution'
+
+function outputText(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+  return Buffer.isBuffer(value) ? value.toString('utf8') : ''
+}
+
+/** Decode WSL launch diagnostics from stdout, stripping UTF-16LE NULs when WSL_UTF8 was ignored. */
+export function readWslHostFailureDiagnostic(
+  error: unknown,
+  command: ResolvedCommand
+): string | null {
+  if (!command.wsl || !error || typeof error !== 'object') {
+    return null
+  }
+  const { code, status, stdout, stderr } = error as {
+    code?: unknown
+    status?: unknown
+    stdout?: unknown
+    stderr?: unknown
+  }
+  const exitCode = typeof code === 'number' ? code : typeof status === 'number' ? status : null
+  // Recognize the host launch-failure shape without reclassifying guest stderr.
+  if (!isWslHostFailureExitCode(exitCode) || outputText(stderr).trim().length > 0) {
+    return null
+  }
+  const diagnostic = readWslHostDiagnostic(outputText(stdout))
+  return diagnostic.length > 0 ? diagnostic : 'wsl.exe reported no diagnostic.'
+}
+
+/** Put WSL launch diagnostics in the message recorded by git.exec; preserve guest errors. */
+export function annotateWslHostFailure(error: unknown, command: ResolvedCommand): unknown {
+  const diagnostic = readWslHostFailureDiagnostic(error, command)
+  if (diagnostic === null || !(error instanceof Error) || !command.wsl) {
+    return error
+  }
+  const distro = command.wsl.distro
+  error.message = `wsl.exe host failure (distro "${distro}"): ${diagnostic}\n${error.message}`
+  return Object.assign(error, { wslHostFailure: true, wslDistro: distro })
+}
+
+// The WSL service's answer while a distro it failed to start is unusable; no guest ran.
+const WSL_SERVICE_UNEXPECTED = /Wsl\/Service\/E_UNEXPECTED\b/
+
+/** wsl.exe failed in the WSL service itself, which says nothing about the guest's git setup. */
+export function isTransientWslFailure(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('wslHostFailure' in error)) {
+    return false
+  }
+  return error instanceof Error && WSL_SERVICE_UNEXPECTED.test(error.message)
+}

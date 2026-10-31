@@ -105,6 +105,29 @@ describe('mobile file mutation ownership', () => {
     ])
   })
 
+  // Absent hostId captures local; explicit null refuses an unplaceable host instead of sending its write locally.
+  it('captures local ownership for a workspace whose reply records no host', async () => {
+    const { client } = clientWithResponses([
+      success({ capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY] }),
+      success({ worktree: {} })
+    ])
+
+    await expect(captureMobileFileMutationOwnership(client, 'id:worktree-1')).resolves.toEqual({
+      expectedExecutionHostId: 'local'
+    })
+  })
+
+  it('refuses a workspace whose reply names an explicit null host', async () => {
+    const { client } = clientWithResponses([
+      success({ capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY] }),
+      success({ worktree: { hostId: null } })
+    ])
+
+    await expect(captureMobileFileMutationOwnership(client, 'id:worktree-1')).rejects.toThrow(
+      "Couldn't verify the SSH connection"
+    )
+  })
+
   it('refuses older runtimes before reading or mutating workspace files', async () => {
     const { client, sendRequest } = clientWithResponses([success({ capabilities: [] })])
 

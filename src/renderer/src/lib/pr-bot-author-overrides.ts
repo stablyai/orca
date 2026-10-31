@@ -2,29 +2,28 @@ import { useMemo } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { createBotAuthorOverrideSet, normalizePRCommentAuthorLogin } from './pr-comment-audience'
-import { MAX_PR_BOT_AUTHOR_OVERRIDES } from '../../../shared/pr-bot-author-overrides'
+import {
+  createBotAuthorOverrideSet,
+  MAX_PR_BOT_AUTHOR_OVERRIDES,
+  normalizePRCommentAuthorLogin
+} from '../../../shared/pr-bot-author-overrides'
 
 let overrideUpdateQueue = Promise.resolve()
 
-/** Normalized lookup of author logins the user manually marked as bots. */
 export function usePRBotAuthorOverrides(): ReadonlySet<string> {
   const overrides = useAppStore((s) => s.settings?.prBotAuthorOverrides)
   return useMemo(() => createBotAuthorOverrideSet(overrides), [overrides])
 }
 
-/** Adds or removes a manual bot override for the given comment author. */
 export function setPRBotAuthorOverride(author: string, isBot: boolean): void {
   const normalized = normalizePRCommentAuthorLogin(author)
   if (!normalized) {
     return
   }
-  // Why: settings writes are asynchronous; serialize read-modify-write updates
-  // so marking two authors quickly cannot make the later write drop the first.
+  // Serialize async read/modify/write updates so rapid bot markings cannot lose one another.
   overrideUpdateQueue = overrideUpdateQueue
     .then(async () => {
-      // Why: the authoritative store owns the read-modify-write so concurrent
-      // desktop and paired-web clients cannot overwrite each other's updates.
+      // Keep atomic modification in the authoritative store so desktop/paired clients cannot overwrite concurrent changes.
       const settings = await window.api.settings.updatePRBotAuthorOverride({
         author: normalized,
         isBot
@@ -40,6 +39,6 @@ export function setPRBotAuthorOverride(author: string, isBot: boolean): void {
         )
       }
     })
-    // Why: one failed settings write must not poison every later override update.
+    // A failed write must not poison later override updates.
     .catch(() => undefined)
 }

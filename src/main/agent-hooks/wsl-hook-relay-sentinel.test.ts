@@ -1,11 +1,8 @@
-// Sentinel wait for the WSL relay: consuming stdout until the READY sentinel,
-// handing trailing/subsequent bytes to the mux in wire order via the microtask
-// flush, and failing (kill + reject) on overflow, close, timeout, and NUL noise.
 import { EventEmitter } from 'node:events'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/relay-protocol'
+import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/remote-exec/remote-frame-protocol'
 import {
   MAX_STARTUP_BUFFER_BYTES,
   waitForWslRelaySentinel,
@@ -21,7 +18,11 @@ function fakeChild(): FakeChild {
       resume: ReturnType<typeof vi.fn>
     }
     stderr: EventEmitter
-    stdin: EventEmitter & { write: ReturnType<typeof vi.fn> }
+    stdin: EventEmitter & {
+      write: ReturnType<typeof vi.fn>
+      destroyed: boolean
+      writable: boolean
+    }
     kill: ReturnType<typeof vi.fn>
   }
   child.stdout = Object.assign(new EventEmitter(), {
@@ -29,7 +30,18 @@ function fakeChild(): FakeChild {
     resume: vi.fn()
   })
   child.stderr = new EventEmitter()
-  child.stdin = Object.assign(new EventEmitter(), { write: vi.fn(() => true) })
+  const stdin = new EventEmitter() as EventEmitter & {
+    write: ReturnType<typeof vi.fn>
+    destroyed: boolean
+    writable: boolean
+  }
+  stdin.write = vi.fn((_data, onWritten?: (error?: Error | null) => void) => {
+    onWritten?.(null)
+    return true
+  })
+  stdin.destroyed = false
+  stdin.writable = true
+  child.stdin = stdin
   child.kill = vi.fn()
   return child as unknown as FakeChild
 }
@@ -66,8 +78,6 @@ describe('waitForWslRelaySentinel', () => {
     emitStdout(child, sentinel.subarray(0, mid))
     emitStdout(child, sentinel.subarray(mid))
     const transport = await promise
-    expect(typeof transport.write).toBe('function')
-    expect(typeof transport.onData).toBe('function')
     transport.pauseReads?.()
     transport.resumeReads?.()
     expect(child.stdout.pause).toHaveBeenCalledOnce()
@@ -95,8 +105,7 @@ describe('waitForWslRelaySentinel', () => {
     const transport = await promise
     const received: string[] = []
     transport.onData((d) => received.push(d.toString('utf8')))
-    // A real stdout 'data' event is a macrotask; the queued pending flush is a
-    // microtask and must land ahead of any subsequent direct chunk.
+    // The queued microtask must flush before the next stdout macrotask.
     await new Promise<void>((resolve) => {
       setImmediate(() => {
         emitStdout(child, 'SECOND')
@@ -113,8 +122,7 @@ describe('waitForWslRelaySentinel', () => {
     const transport = await promise
     const received: string[] = []
     transport.onData((d) => received.push(d.toString('utf8')))
-    // Nothing dispatched synchronously at registration — a second handler could
-    // still be added this tick before the first envelope flushes.
+    // Allow remaining synchronous handler registration before dispatching the first frame.
     expect(received).toEqual([])
     await Promise.resolve()
     expect(received).toEqual(['DEFER'])
@@ -150,7 +158,7 @@ describe('waitForWslRelaySentinel', () => {
   it('strips NUL bytes from the stderr failure detail', async () => {
     const child = fakeChild()
     const settled = catchStartup(waitForWslRelaySentinel(child))
-    // wsl.exe without WSL_UTF8 emits UTF-16LE — "E_FAIL" as NUL-interleaved ASCII.
+    // Older wsl.exe emits NUL-padded UTF-16LE ASCII without WSL_UTF8.
     const nulLaden = Buffer.from('E_FAIL'.split('').flatMap((c) => [c.charCodeAt(0), 0]))
     emitStderr(child, nulLaden)
     child.emit('close', 1)
@@ -166,7 +174,7 @@ describe('waitForWslRelaySentinel', () => {
     const drain = vi.fn()
     const writeMock = child.stdin.write as ReturnType<typeof vi.fn>
     writeMock.mockImplementation((_data, onWritten) => {
-      onWritten(null)
+      onWritten?.(null)
       return false
     })
     const promise = waitForWslRelaySentinel(child)
@@ -179,5 +187,16 @@ describe('waitForWslRelaySentinel', () => {
     child.stdin.emit('drain')
     expect(drain).toHaveBeenCalledOnce()
     expect(transport.supportsWriteSettlement).toBe(true)
+  })
+
+  it('swallows async stdin EPIPE after the guest dies so it is not uncaught', async () => {
+    const child = fakeChild()
+    const promise = waitForWslRelaySentinel(child)
+    emitStdout(child, RELAY_SENTINEL)
+    await promise
+    // Real pipes emit asynchronous EPIPE after a failed write.
+    expect(() => {
+      child.stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
+    }).not.toThrow()
   })
 })

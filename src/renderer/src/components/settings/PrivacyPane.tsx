@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TelemetryConsentState } from '../../../../shared/telemetry-consent-types'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { PRIVACY_URL, getConsentState, setOptIn as telemetrySetOptIn } from '../../lib/telemetry'
 import { useAppStore } from '../../store'
 import { PrivacyDiagnosticsSection } from './PrivacyDiagnosticsSection'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export type EnvBlockedReason = 'do_not_track' | 'orca_disabled' | 'ci'
 export type BlockedReason = { kind: 'env'; reason: EnvBlockedReason }
@@ -104,33 +106,23 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
             <button
               type="button"
               className="underline underline-offset-2 hover:text-foreground"
-              onClick={() => void window.api.shell.openUrl(PRIVACY_URL)}
+              onClick={(event) => openAppHttpLink(PRIVACY_URL, { event })}
             >
               {translate('auto.components.settings.PrivacyPane.77410e0566', 'Privacy policy')}
             </button>
             .
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={toggleChecked}
+        <Switch
+          checked={toggleChecked}
           aria-label={translate(
             'auto.components.settings.PrivacyPane.fe904ac984',
             'Share anonymous usage data'
           )}
           aria-describedby={blocked ? PRIVACY_PANE_BLOCKED_HELPER_ID : undefined}
           disabled={blocked !== null || inFlight}
-          onClick={handleToggle}
-          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
-            toggleChecked ? 'bg-foreground' : 'bg-muted-foreground/30'
-          } ${blocked !== null || inFlight ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              toggleChecked ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+          onCheckedChange={() => void handleToggle()}
+        />
       </div>
 
       {blocked ? <BlockedHelper blocked={blocked} id={PRIVACY_PANE_BLOCKED_HELPER_ID} /> : null}

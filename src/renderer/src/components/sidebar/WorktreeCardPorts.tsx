@@ -1,11 +1,10 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback } from 'react'
 import { Plug, Copy, ExternalLink, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import {
   canStopWorkspacePort,
   getPortOpenBrowserTooltipLabel,
@@ -41,9 +40,9 @@ export function WorktreeCardPortsTrigger({
       type="button"
       className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
       aria-label={translate(
-        'auto.components.sidebar.WorktreeCardPorts.fed49903c9',
-        '{{value0}} live {{value1}}',
-        { value0: ports.length, value1: ports.length === 1 ? 'port' : 'ports' }
+        'auto.components.sidebar.WorktreeCardPorts.livePorts',
+        '{{count}} live ports',
+        { count: ports.length, defaultValue_one: '{{count}} live port' }
       )}
       onClick={(event) => {
         event.stopPropagation()
@@ -100,20 +99,20 @@ function PortAction({
 function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const localhostLabelRoute = useLocalhostLabelRouteForPort(port)
-  const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, port.kind === 'workspace' ? port.owner.worktreeId : null)
-  )
+
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
-  const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
-  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
+  const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }),
-    [runtimeEnvironmentId, settings]
+  const runtimeTarget = useWorktreeRuntimeTarget(
+    port.kind === 'workspace' ? port.owner.worktreeId : null
   )
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel =
+    port.processName ??
+    (port.pid
+      ? `PID ${port.pid}`
+      : translate('auto.components.sidebar.WorktreeCardPorts.unknownProcess', 'Unknown process'))
   const address = addressForPort(port)
   const canStop = canStopWorkspacePort(port)
   const openBrowserLabel = translate(
@@ -127,8 +126,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
       recordFeatureInteraction('ports')
       const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
         settings,
-        // Why: keyboard activations have detail=0; only pointer clicks carry
-        // the modifier intent for the system-browser escape hatch.
+        // Only pointer clicks carry system-browser modifier intent; keyboard activation has detail zero.
         event: event.detail > 0 ? event : null,
         isMac: navigator.userAgent.includes('Mac')
       })
@@ -203,8 +201,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         )
         const refreshResult = await refreshWorkspacePortScanAfterStop({
           runtimeTarget,
-          setWorkspacePortScan,
-          setWorkspacePortScanForKey,
+          replaceWorkspacePortScans,
           getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
           setWorkspacePortScanRefreshing
         })
@@ -226,8 +223,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
       port,
       recordFeatureInteraction,
       runtimeTarget,
-      setWorkspacePortScan,
-      setWorkspacePortScanForKey,
+      replaceWorkspacePortScans,
       setWorkspacePortScanRefreshing
     ]
   )
@@ -299,8 +295,6 @@ export function WorktreeCardPortsDetails({
 
   return (
     <WorktreeCardDetailSection>
-      {/* Count lives inline after the label (not on the right, which is the action zone);
-          the "Go to Worktree" action is omitted here since the card is already scoped to its worktree. */}
       <div className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         <Plug className="size-3" />
         <span>

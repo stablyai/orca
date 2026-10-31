@@ -1,4 +1,12 @@
-import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
+import type { PathExistenceResult } from '../../shared/path-existence-batch'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type {
+  DocPreviewFileAccessRequest,
+  DocPreviewFileAccessResult,
+  DocPreviewFileChunk,
+  DocPreviewFileTarget
+} from '../../shared/doc-preview-file-access'
+import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 export type FileStat = {
@@ -6,6 +14,8 @@ export type FileStat = {
   type: 'file' | 'directory' | 'symlink'
   mtime: number
   mtimeMs?: number
+  /** Local only: SSH hosts do not report it. */
+  ctimeMs?: number
   dev?: number
   ino?: number
   nlink?: number
@@ -18,9 +28,35 @@ export type FileReadResult = {
   mimeType?: string
 }
 
+export type FileReadLimits = {
+  maxBinaryBytes?: number
+  maxTextBytes?: number
+}
+
+export type FileRangeReadResult = {
+  /** Hosts fill the requested range or reach EOF; over-cap requests throw, so short reads always mean EOF. */
+  bytes: Buffer
+  bytesRead: number
+}
+
 export type IFilesystemProvider = {
-  readDir(dirPath: string): Promise<DirEntry[]>
-  readFile(filePath: string): Promise<FileReadResult>
+  readDir(dirPath: string, options?: { followSymlinks?: boolean }): Promise<DirEntry[]>
+  readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
+  readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>
+  readDocPreviewFileChunk?(
+    request: DocPreviewFileTarget,
+    offset: number,
+    length: number
+  ): Promise<DocPreviewFileChunk>
+  /** Optional on older hosts; unsupported reads throw instead of transferring whole files per tail chunk.
+   * Position/end must be safe nonnegative offsets; length must be positive and within MAX_FILE_RANGE_READ_BYTES. */
+  readFileRange?(
+    filePath: string,
+    position: number,
+    length: number,
+    options?: { signal?: AbortSignal }
+  ): Promise<FileRangeReadResult>
+  supportsFileRangeRead?(options?: { signal?: AbortSignal }): Promise<boolean>
   readTerminalArtifact?(
     filePath: string,
     options: TerminalArtifactAccessOptions
@@ -37,6 +73,7 @@ export type IFilesystemProvider = {
   ): Promise<FileStat>
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>
   writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
+  pathsExist?(filePaths: string[]): Promise<PathExistenceResult[]>
   stat(filePath: string): Promise<FileStat>
   lstat?(filePath: string): Promise<FileStat>
   deletePath(targetPath: string, recursive?: boolean): Promise<void>
@@ -47,11 +84,27 @@ export type IFilesystemProvider = {
   renameNoClobber(oldPath: string, newPath: string): Promise<void>
   copy(source: string, destination: string): Promise<void>
   realpath(filePath: string): Promise<string>
-  search(opts: SearchOptions): Promise<SearchResult>
+  search(opts: SearchOptions, options?: { signal?: AbortSignal }): Promise<SearchResult>
   listFiles(
     rootPath: string,
-    options?: { excludePaths?: string[]; signal?: AbortSignal; maxResults?: number }
+    options?: {
+      excludePaths?: string[]
+      signal?: AbortSignal
+      maxResults?: number
+      searchQuery?: string
+      candidatePaths?: string[]
+      includeIgnored?: boolean
+      followSymlinks?: boolean
+    }
   ): Promise<string[]>
+  listMarkdownDocuments?(
+    rootPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<MarkdownDocument[]>
+  supportsQuickOpenSearch?(options?: {
+    signal?: AbortSignal
+    minimumVersion?: number
+  }): Promise<boolean>
   scanWorkspaceSpace?(
     rootPath: string,
     options?: { signal?: AbortSignal }

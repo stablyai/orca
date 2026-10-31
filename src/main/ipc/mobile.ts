@@ -1,12 +1,21 @@
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
-import { networkInterfaces } from 'node:os'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
-import { isTailnetIPv4Address } from '../../shared/tailnet-address'
+import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
+import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { DeviceEntry } from '../runtime/device-registry'
+import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
+import {
+  getDefaultPairingAddress,
+  getPairingNetworkInterfaces,
+  type DefaultRouteInterfaceLookup,
+  type NetworkInterface
+} from '../runtime/pairing-network-interfaces'
+import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
+import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
+import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
 import {
   getWebSocketPort,
   inspectWindowsMobileFirewall,
@@ -14,66 +23,13 @@ import {
   type WindowsMobileFirewallEnvironment
 } from '../runtime/windows-mobile-firewall'
 
-export type NetworkInterface = {
-  name: string
-  address: string
-}
-
-// Why: link-local IPv6 addresses (fe80::/10) require a scope/zone id to be
-// connectable and never work as a QR-advertised pairing host, so they are
-// excluded from the pickable list. The regex covers the full /10 range
-// (fe80: through febf:), not just the fe80: prefix the OS usually assigns.
-function isUsableIPv6Address(address: string): boolean {
-  return !/^fe[89ab][0-9a-f]:/i.test(address)
-}
-
-function isProxyFakeIpIPv4Address(address: string): boolean {
-  return /^198\.(?:18|19)\./.test(address)
-}
-
-// Why: the WebSocket transport advertises 0.0.0.0 as its endpoint, which isn't
-// connectable from a mobile device. We enumerate all non-internal IPv4 and
-// (non-link-local) IPv6 addresses so the user can choose which one to advertise
-// in the QR code (e.g. LAN vs Tailscale). IPv6 must be included so pairing works
-// on IPv6-only hosts (e.g. a headless `orca serve` reachable only over IPv6),
-// where an IPv4-only scan returns nothing and the UI reports "no interfaces".
-function getNetworkInterfaces(): NetworkInterface[] {
-  const result: NetworkInterface[] = []
-  const interfaces = networkInterfaces()
-  for (const [name, addrs] of Object.entries(interfaces)) {
-    if (!addrs) {
-      continue
-    }
-    for (const addr of addrs) {
-      if (addr.internal) {
-        continue
-      }
-      if (addr.family === 'IPv4') {
-        // 198.18.0.0/15 proxy fake IPs are only routable inside the desktop proxy.
-        if (isProxyFakeIpIPv4Address(addr.address)) {
-          continue
-        }
-        result.push({ name, address: addr.address })
-      } else if (addr.family === 'IPv6' && isUsableIPv6Address(addr.address)) {
-        result.push({ name, address: addr.address })
-      }
-    }
+// Only explicit this-computer intent plus a loopback address avoids widening; custom tunnel endpoints still need remote reach.
+function servesThisComputerOnly(reach: RuntimePairingReach | undefined, address: string): boolean {
+  if (reach !== 'this-computer') {
+    return false
   }
-  // Why: prefer tailnet IPv4 first (most portable across networks), then other
-  // IPv4, then IPv6 as a fallback for IPv6-only environments.
-  return result.sort((a, b) => rankAddress(a.address) - rankAddress(b.address))
-}
-
-function rankAddress(address: string): number {
-  if (isTailnetIPv4Address(address)) {
-    return 0
-  }
-  return address.includes(':') ? 2 : 1
-}
-
-function getDefaultPairingAddress(): string | null {
-  const ifaces = getNetworkInterfaces()
-  return ifaces.length > 0 ? ifaces[0]!.address : null
+  const hostname = resolveAdvertisedPairingHostname(address)
+  return hostname !== null && classifyRemotePairingHostname(hostname) === 'loopback'
 }
 
 function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
@@ -85,16 +41,13 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
   }
 }
 
-// Why: the mobile IPC handlers provide the renderer with QR code pairing data,
-// device management, and WebSocket readiness status. They depend on the
-// OrcaRuntimeRpcServer because it owns the device registry and TLS state.
-
 export type MobileHandlerDependencies = {
   firewallEnvironment?: WindowsMobileFirewallEnvironment
   openWindowsNetworkSettings?: () => Promise<void>
-  getRelayStatus?: () => RelayBrokerStatus
+  getRelayStatus?: () => MobileRelayStatusDetail
   consumePendingUnpairedDeviceAuthFailure?: (webContentsId: number) => boolean
   encodePairingQr?: (pairingUrl: string) => Promise<MobilePairingQrResult>
+  getDefaultRouteInterfaceNames?: DefaultRouteInterfaceLookup
 }
 
 export function registerMobileHandlers(
@@ -107,9 +60,17 @@ export function registerMobileHandlers(
     executablePath: process.execPath,
     systemRoot: process.env.SystemRoot
   }
-  ipcMain.handle('mobile:listNetworkInterfaces', (): { interfaces: NetworkInterface[] } => ({
-    interfaces: getNetworkInterfaces()
-  }))
+  const getDefaultRouteInterfaceNames =
+    dependencies.getDefaultRouteInterfaceNames ?? getWindowsDefaultRouteInterfaceNames
+  ipcMain.handle(
+    'mobile:listNetworkInterfaces',
+    async (): Promise<{ interfaces: NetworkInterface[] }> => ({
+      interfaces: await getPairingNetworkInterfaces(
+        rpcServer.getNetworkExposureBindHost(),
+        getDefaultRouteInterfaceNames
+      )
+    })
+  )
 
   ipcMain.handle(
     'mobile:getPairingQR',
@@ -121,11 +82,15 @@ export function registerMobileHandlers(
         rotate?: boolean
       }
     ) => {
-      // Why: allow the caller to specify which network interface address to
-      // embed in the QR code. This supports overlay networks (Tailscale,
-      // ZeroTier) where the default LAN IP isn't reachable from the phone.
-      const ip = args?.address ?? getDefaultPairingAddress()
-      if (!ip) {
+      // Explicit interfaces support overlay networks unreachable through the default LAN candidate.
+      const ip =
+        args?.address ??
+        (await getDefaultPairingAddress(
+          rpcServer.getNetworkExposureBindHost(),
+          getDefaultRouteInterfaceNames
+        ))
+      // Relay works without a direct candidate; LAN-only must refuse when none is usable.
+      if (!ip && args?.connectionMode === 'local-only') {
         return {
           available: false as const,
           reason: 'invalid_advertised_endpoint',
@@ -134,13 +99,7 @@ export function registerMobileHandlers(
         }
       }
 
-      // Why: coalesce repeated QR regenerations onto a single never-scanned
-      // pending token so the copy-button flow doesn't accumulate orphaned
-      // device credentials forever. The token graduates to a real entry when
-      // a phone actually connects (lastSeenAt > 0). When the caller passes
-      // `rotate: true` (explicit "Regenerate" intent because the prior token
-      // may have been exposed), we discard any pending token and mint a fresh
-      // one so the new QR carries a different credential.
+      // Reuse never-scanned tokens until explicit rotation; authenticated entries remain independent.
       const offer = await rpcServer.createMobilePairingOffer({
         address: ip,
         connectionMode: args?.connectionMode,
@@ -148,8 +107,7 @@ export function registerMobileHandlers(
         name: `Mobile ${new Date().toLocaleDateString()}`
       })
       if (!offer.available) {
-        // Why: surface Relay mint failures (and other pairing unavailability)
-        // so the UI can refuse a silent LAN QR under the Relay label.
+        // Preserve relay mint failures instead of silently presenting a LAN offer under the Relay label.
         return {
           available: false as const,
           reason: offer.reason,
@@ -163,9 +121,11 @@ export function registerMobileHandlers(
       return {
         available: true as const,
         qrDataUrl: qr.ok ? qr.qrDataUrl : null,
+        qrSize: qr.ok ? qr.qrSize : null,
         ...(!qr.ok ? { qrError: qr.reason } : {}),
         pairingUrl: offer.pairingUrl,
-        endpoint: offer.endpoint,
+        // Unadvertised loopback fallback points at the scanning device; omit it from UI endpoints.
+        endpoint: ip ? offer.endpoint : null,
         deviceId: offer.deviceId,
         connectionMode: offer.connectionMode
       }
@@ -174,19 +134,44 @@ export function registerMobileHandlers(
 
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
-    async (_event, args?: { address?: string; rotate?: boolean }) => {
-      const ip = args?.address ?? getDefaultPairingAddress()
+    async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
+      const ip =
+        args?.address ??
+        (await getDefaultPairingAddress(
+          rpcServer.getNetworkExposureBindHost(),
+          getDefaultRouteInterfaceNames
+        ))
       if (!ip) {
         return { available: false as const }
       }
 
-      // Why: web/desktop runtime clients need full runtime access, not the
-      // mobile allowlist used by phone QR pairing.
+      // Widen before advertising remote reach; this-computer intent must not trigger the irreversible widening (STA-2370).
+      const thisComputerOnly = servesThisComputerOnly(args?.reach, ip)
+      if (!thisComputerOnly) {
+        try {
+          await rpcServer.ensureNetworkExposure()
+        } catch (error) {
+          console.error(
+            '[mobile] Network exposure failed while creating a runtime pairing offer:',
+            error
+          )
+          // Preserve actionable widening failure guidance rather than generic unavailability.
+          return {
+            available: false as const,
+            reason: 'network_exposure_failed' as const,
+            guidance: NETWORK_EXPOSURE_FAILED_GUIDANCE
+          }
+        }
+      }
+
+      // Web/desktop runtime clients need full access instead of the phone allow-list.
       const offer = rpcServer.createPairingOffer({
         address: ip,
         rotate: args?.rotate,
         name: `Runtime ${new Date().toLocaleDateString()}`,
-        scope: 'runtime'
+        scope: 'runtime',
+        // Persist local reach so local authentication cannot expose the next launch to the LAN.
+        reach: thisComputerOnly ? 'this-computer' : 'network'
       })
       if (!offer.available) {
         return { available: false as const }
@@ -207,9 +192,7 @@ export function registerMobileHandlers(
     if (!registry) {
       return { devices: [] }
     }
-    // Why: devices with lastSeenAt === 0 were created during QR generation
-    // but never actually scanned/connected. Showing them as "paired" is
-    // misleading, so we filter them out.
+    // Never-scanned QR tokens are not paired devices.
     return {
       devices: registry
         .listDevices()
@@ -228,8 +211,7 @@ export function registerMobileHandlers(
     if (!registry) {
       return { grants: [] }
     }
-    // Why: generated web/runtime links are bearer credentials even before a
-    // client first connects, so pending runtime grants must stay revocable.
+    // Runtime links are bearer credentials immediately, so unconnected grants must remain revocable.
     return {
       grants: registry
         .listDevices()
@@ -255,13 +237,6 @@ export function registerMobileHandlers(
     return { revoked: rpcServer.revokeRuntimeAccess(args.deviceId) }
   })
 
-  ipcMain.handle('mobile:isWebSocketReady', () => {
-    return {
-      ready: rpcServer.getWebSocketEndpoint() !== null,
-      endpoint: rpcServer.getWebSocketEndpoint()
-    }
-  })
-
   ipcMain.handle('mobile:getWindowsFirewallStatus', (_event, args?: { address?: string }) => {
     const port = getWebSocketPort(rpcServer.getWebSocketEndpoint())
     return inspectWindowsMobileFirewall(port, args?.address, firewallEnvironment)
@@ -271,7 +246,7 @@ export function registerMobileHandlers(
     if (!isWindowRenderer(event)) {
       return { ok: false as const, reason: 'unsupported' as const }
     }
-    // Why: elevated inputs come from the running runtime, never the renderer.
+    // Firewall repair derives privileged inputs from runtime state, never renderer payloads.
     const port = getWebSocketPort(rpcServer.getWebSocketEndpoint())
     return repairWindowsMobileFirewall(port, firewallEnvironment)
   })
@@ -287,9 +262,10 @@ export function registerMobileHandlers(
     return true
   })
 
-  ipcMain.handle('mobile:getRelayStatus', () => ({
-    status: dependencies.getRelayStatus?.() ?? 'offline'
-  }))
+  ipcMain.handle(
+    'mobile:getRelayStatus',
+    (): MobileRelayStatusDetail => dependencies.getRelayStatus?.() ?? { status: 'offline' }
+  )
 
   ipcMain.handle('mobile:consumePendingUnpairedDeviceAuthFailure', (event) => {
     if (!isWindowRenderer(event)) {

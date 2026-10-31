@@ -1,9 +1,10 @@
-import { Markdown } from '@tiptap/markdown'
+import { createRichMarkdownExtension } from './rich-markdown-extension'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
 export function createIsolatedMarkdownExtensionForTests() {
-  return Markdown.configure({
-    marked: createRichMarkdownEditorCodec().marked,
+  const codec = createRichMarkdownEditorCodec()
+  return createRichMarkdownExtension(codec).configure({
+    marked: codec.marked,
     markedOptions: { gfm: true }
   })
 }

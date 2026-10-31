@@ -1,10 +1,4 @@
-// Live end-to-end oracle for the WSL hook relay HOST side: the real esbuild
-// bundle runs as a real child process (spawned via `node` instead of wsl.exe
-// — everything else identical), the real manager connects over the child's
-// actual stdio pipes, the real installers write through the fs bridge, and a
-// real HTTP POST in the exact Claude hook shape must land in a real
-// AgentHookServer.ingestRemote. This is the chain the Windows-rig GUI run
-// exercises minus the wsl.exe byte transport (validated separately on-rig).
+// Run the real bundle, stdio mux, installers, and HTTP ingest using node in place of wsl.exe.
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -13,6 +7,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { AgentHookServer } from './server'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
+import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem.test-fixture'
+import { codexHookService } from '../codex/hook-service'
 
 const BUNDLE_DIR = join(process.cwd(), 'out', 'relay', 'wsl')
 const BUNDLE_JS = join(BUNDLE_DIR, 'wsl-agent-hook-relay.js')
@@ -30,9 +26,7 @@ async function pickFreePort(): Promise<number> {
   return port
 }
 
-// Why skipIf: the guest is always POSIX — the bundle derives its home from
-// $HOME, which os.homedir() ignores on Windows. Windows coverage comes from
-// the live rig runs against a real distro.
+// Guest home semantics require POSIX; Windows needs a real WSL distro.
 describe.skipIf(process.platform === 'win32')(
   'WSL hook relay live host chain (real bundle over real child stdio)',
   () => {
@@ -43,7 +37,7 @@ describe.skipIf(process.platform === 'win32')(
 
     beforeAll(() => {
       if (!existsSync(BUNDLE_JS)) {
-        execFileSync(process.execPath, [join('config', 'scripts', 'build-relay.mjs')], {
+        execFileSync(process.execPath, [join('config', 'scripts', 'build-wsl-guest.mjs')], {
           cwd: process.cwd(),
           stdio: 'ignore'
         })
@@ -74,6 +68,7 @@ describe.skipIf(process.platform === 'win32')(
       const server = orcaServer
 
       const warns: string[] = []
+      const codexHome = join(fakeHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
       manager = new WslHookRelayManager({
         platform: () => 'win32',
         remoteHooksEnabled: () => true,
@@ -101,6 +96,11 @@ describe.skipIf(process.platform === 'win32')(
             envelope as Parameters<AgentHookServer['ingestRemote']>[0],
             connectionId
           ),
+        installCodex: (runtimeHomePath) =>
+          codexHookService.installRemote(createManagedHookLocalFilesystem(), fakeHome, {
+            codexHomeDir: runtimeHomePath,
+            deferTrustUntilConfigToml: true
+          }),
         managedHookSettings: () => ({
           agentCmdOverrides: {
             claude: process.execPath,
@@ -108,38 +108,32 @@ describe.skipIf(process.platform === 'win32')(
           }
         }),
         warn: (message) => warns.push(message),
-        transientRetryDelayMs: 1
+        transientRetryDelayMs: 1,
+        // A bridge terminal stays open, so no relay idles out mid-test.
+        bridgePtyPresence: { count: () => 1, onChange: () => () => {} },
+        daemonBridgeSessions: async () => 'none' as const
       })
 
-      manager.ensureForDistro('LiveDistro')
+      manager.ensureForDistro('LiveDistro', codexHome)
 
-      // Codex hooks land in the redirected managed runtime home. Waiting on
-      // this artifact (not Claude's, which is written first) keeps the
-      // assertions behind the still-running 14-agent installer loop.
-      const codexRuntimeHome = join(
-        fakeHome,
-        '.local',
-        'share',
-        'orca',
-        'codex-runtime-home',
-        'home'
-      )
-      await vi.waitFor(() => expect(existsSync(join(codexRuntimeHome, 'hooks.json'))).toBe(true), {
+      // Wait for Codex rather than the earlier Claude artifact so the installer loop reaches this assertion.
+      await vi.waitFor(() => expect(existsSync(join(codexHome, 'hooks.json'))).toBe(true), {
         timeout: 15_000
       })
-      expect(existsSync(join(fakeHome, '.claude', 'settings.json'))).toBe(true)
+      await vi.waitFor(
+        () => expect(existsSync(join(fakeHome, '.claude', 'settings.json'))).toBe(true),
+        { timeout: 15_000 }
+      )
       const claudeScript = readFileSync(
         join(fakeHome, '.orca', 'agent-hooks', 'claude-hook.sh'),
         'utf8'
       )
       expect(claudeScript).toContain('/hook/claude')
 
-      // Trust TOML is deferred so the launch-path seed is never pre-empted.
-      expect(existsSync(join(codexRuntimeHome, 'config.toml'))).toBe(false)
+      expect(existsSync(join(codexHome, 'config.toml'))).toBe(false)
       expect(existsSync(join(fakeHome, '.codex', 'hooks.json'))).toBe(false)
 
-      // Re-coordinate exactly like a hook script: read the relay-written
-      // endpoint file rather than assuming the preferred port bind won.
+      // Read the actual endpoint because the preferred port may have been occupied.
       const endpointFile = join(
         fakeHome,
         '.orca-wsl',
@@ -195,9 +189,7 @@ describe.skipIf(process.platform === 'win32')(
         { timeout: 10_000 }
       )
 
-      // Link death must be breadcrumbed and scheduled for restart — a silent
-      // mux/child death would blackhole every later envelope while the guest
-      // keeps returning 204 (the exact failure signature from the Windows rig).
+      // Link death must schedule recovery before later hook events disappear into a dead mux.
       child?.kill()
       await vi.waitFor(
         () => expect(warns.some((w) => w.includes('scheduling restart'))).toBe(true),

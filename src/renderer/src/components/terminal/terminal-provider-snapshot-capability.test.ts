@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearTerminalProviderSnapshotCapabilities,
   collectTerminalProviderSnapshotPtyIds,
+  refreshTerminalProviderSnapshotCapabilities,
   synchronizeTerminalProviderSnapshotCapabilities,
   terminalProviderHasAuthoritativeSnapshot
 } from './terminal-provider-snapshot-capability'
@@ -44,6 +45,18 @@ describe('terminal provider snapshot capabilities', () => {
     expect(terminalProviderHasAuthoritativeSnapshot('legacy')).toBe(false)
   })
 
+  it('refreshes a pre-provider false after startup services become ready', async () => {
+    await synchronizeTerminalProviderSnapshotCapabilities(['restored-pty'], async () => [
+      { id: 'restored-pty', authoritative: false }
+    ])
+    const readyResolve = vi.fn(async () => [{ id: 'restored-pty', authoritative: true }])
+
+    await refreshTerminalProviderSnapshotCapabilities(['restored-pty'], readyResolve)
+
+    expect(readyResolve).toHaveBeenCalledWith(['restored-pty'])
+    expect(terminalProviderHasAuthoritativeSnapshot('restored-pty')).toBe(true)
+  })
+
   it('caches resolved PTYs and prunes closed ones', async () => {
     const resolve = vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, authoritative: true as boolean | null }))
@@ -66,6 +79,7 @@ describe('terminal provider snapshot capabilities', () => {
         if (typeof property === 'string' && /^\d+$/.test(property)) {
           indexedReads += 1
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         return Reflect.get(target, property, receiver)
       }
     })
@@ -152,8 +166,35 @@ describe('terminal provider snapshot capabilities', () => {
     expect(terminalProviderHasAuthoritativeSnapshot('current-pty')).toBe(true)
   })
 
-  it('stops polling for a PTY whose route never resolves', async () => {
-    // Bounded retries prevent lifelong capability polling for vanished routes.
+  // Superseded startup refreshes need a zero-delay retry; null would kill the only surviving timer chain.
+  it('asks a superseded pass to re-check instead of ending its timer chain', async () => {
+    let resolveStale!: (value: { id: string; authoritative: boolean | null }[]) => void
+    const stale = new Promise<{ id: string; authoritative: boolean | null }[]>((resolve) => {
+      resolveStale = resolve
+    })
+    const first = synchronizeTerminalProviderSnapshotCapabilities(['pty-1'], () => stale, 1_000)
+    await synchronizeTerminalProviderSnapshotCapabilities(['pty-1', 'pty-2'], async () => [], 1_000)
+
+    resolveStale([{ id: 'pty-1', authoritative: true }])
+
+    await expect(first).resolves.toBe(0)
+  })
+
+  it('asks a superseded pass whose resolver rejected to re-check as well', async () => {
+    let rejectStale!: (reason: Error) => void
+    const stale = new Promise<{ id: string; authoritative: boolean | null }[]>((_, reject) => {
+      rejectStale = reject
+    })
+    const first = synchronizeTerminalProviderSnapshotCapabilities(['pty-1'], () => stale, 1_000)
+    await synchronizeTerminalProviderSnapshotCapabilities(['pty-1', 'pty-2'], async () => [], 1_000)
+
+    rejectStale(new Error('daemon unavailable'))
+
+    await expect(first).resolves.toBe(0)
+  })
+
+  it('decays polling to a slow cadence for a PTY whose route never resolves', async () => {
+    // Unknown routes stay exempt but re-askable instead of inheriting permanent eviction exemption.
     const resolve = vi.fn(async () => [{ id: 'gone-pty', authoritative: null }])
     const backoffSchedule = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]
 
@@ -168,22 +209,24 @@ describe('terminal provider snapshot capabilities', () => {
       nowMs += delayMs
       await synchronizeTerminalProviderSnapshotCapabilities(['gone-pty'], resolve, nowMs)
     }
-    const settledCallCount = resolve.mock.calls.length
+    const ladderCallCount = resolve.mock.calls.length
+    expect(ladderCallCount).toBe(backoffSchedule.length + 1)
 
-    for (let index = 1; index <= 1_000; index += 1) {
+    await synchronizeTerminalProviderSnapshotCapabilities(['gone-pty'], resolve, nowMs + 60_000)
+    expect(resolve).toHaveBeenCalledTimes(ladderCallCount)
+
+    for (let index = 1; index <= 12; index += 1) {
       await synchronizeTerminalProviderSnapshotCapabilities(
         ['gone-pty'],
         resolve,
-        nowMs + index * 60_000
+        nowMs + index * 5 * 60_000
       )
     }
-
-    expect(settledCallCount).toBe(backoffSchedule.length + 1)
-    expect(resolve).toHaveBeenCalledTimes(settledCallCount)
+    expect(resolve.mock.calls.length).toBe(ladderCallCount + 12)
     expect(terminalProviderHasAuthoritativeSnapshot('gone-pty')).toBe(false)
   })
 
-  it('stops rescheduling once an unresolvable PTY has settled', async () => {
+  it('keeps rescheduling at the slow cadence once an unresolvable PTY has decayed', async () => {
     const resolve = vi.fn(async () => [{ id: 'gone-pty', authoritative: null }])
 
     let nowMs = 1_000
@@ -197,16 +240,43 @@ describe('terminal provider snapshot capabilities', () => {
       )
     }
 
+    // Keep one slow timer so daemon recovery requires no external event.
+    expect(retryDelayMs).toBe(5 * 60_000)
+  })
+
+  // Due retries must bypass same-array identity early-outs or the hook’s unchanged-ID chain dies.
+  it('re-consults a due unknown on an identical live-set identity', async () => {
+    const livePtyIds = ['pty-1']
+    const resolve = vi
+      .fn()
+      .mockResolvedValueOnce([{ id: 'pty-1', authoritative: null }])
+      .mockResolvedValueOnce([{ id: 'pty-1', authoritative: true }])
+
+    await synchronizeTerminalProviderSnapshotCapabilities(livePtyIds, resolve, 1_000)
+    const retryDelayMs = await synchronizeTerminalProviderSnapshotCapabilities(
+      livePtyIds,
+      resolve,
+      2_000
+    )
+
+    expect(resolve).toHaveBeenCalledTimes(2)
     expect(retryDelayMs).toBeNull()
+    expect(terminalProviderHasAuthoritativeSnapshot('pty-1')).toBe(true)
   })
 
   it('re-probes an unknown PTY from scratch after it closes and a new one appears', async () => {
     const resolve = vi.fn(async () => [{ id: 'gone-pty', authoritative: null }])
 
     await synchronizeTerminalProviderSnapshotCapabilities(['gone-pty'], resolve, 1_000)
-    await synchronizeTerminalProviderSnapshotCapabilities([], resolve, 2_000)
+    // Pruning closed PTYs must stop their retry timer chain too.
+    await expect(
+      synchronizeTerminalProviderSnapshotCapabilities([], resolve, 2_000)
+    ).resolves.toBeNull()
     await synchronizeTerminalProviderSnapshotCapabilities(['gone-pty'], resolve, 2_001)
-
     expect(resolve).toHaveBeenCalledTimes(2)
+
+    // Reappearing IDs restart the fast ladder instead of inheriting leaked slow backoff.
+    await synchronizeTerminalProviderSnapshotCapabilities(['gone-pty'], resolve, 3_001)
+    expect(resolve).toHaveBeenCalledTimes(3)
   })
 })

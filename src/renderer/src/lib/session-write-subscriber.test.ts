@@ -5,9 +5,7 @@ import {
   type WorkspaceSessionWrite
 } from './session-write-subscriber'
 
-// Why: useAppStore is a module-level singleton — tests must snapshot and
-// restore the full state around each case so cross-test pollution can't mask
-// a real regression in the gate logic this suite exists to lock down.
+// Snapshot/restore the full singleton store so pollution cannot mask persistence-gate regressions.
 let initialState: AppState
 
 function makeTerminalSessionState(title: string, label = title): Partial<AppState> {
@@ -99,6 +97,24 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('writes when the gate is already open at creation, with no store tick to wake it', () => {
+    // With the gate already open, only creation-time seeding triggers the first write; unchanged catalogs no longer provide incidental store ticks.
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const storeTicks = vi.fn()
+    const unsubStoreTicks = useAppStore.subscribe(storeTicks)
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    vi.advanceTimersByTime(200)
+
+    expect(storeTicks).not.toHaveBeenCalled()
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    unsubStoreTicks()
+    cleanup()
+  })
+
   it('re-checks the hydration gate when a pending debounce fires', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
@@ -121,8 +137,7 @@ describe('createSessionWriteSubscriber', () => {
     expect(persist).toHaveBeenCalledTimes(1)
     persist.mockClear()
 
-    // setAgentStatus / setCacheTimerStartedAt mutate fields that are NOT in
-    // SESSION_RELEVANT_FIELDS — the gate must skip the timer reset entirely.
+    // Agent-status/timer fields are outside SESSION_RELEVANT_FIELDS and must not reset debounce.
     useAppStore.getState().setAgentStatus('tab-1:1', {
       state: 'working',
       prompt: 'Fix tests',
@@ -187,6 +202,25 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('persists defaultTerminalTabsAppliedByWorktreeId after markDefaultTerminalTabsApplied', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    const worktreeId = 'repo1::/wt-1'
+    useAppStore.getState().markDefaultTerminalTabsApplied(worktreeId)
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.defaultTerminalTabsAppliedByWorktreeId).toEqual({
+      [worktreeId]: true
+    })
+    cleanup()
+  })
+
   it('writes exactly once when a relevant field changes', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
@@ -242,6 +276,56 @@ describe('createSessionWriteSubscriber', () => {
     })
     vi.advanceTimersByTime(200)
 
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
+  it('schedules no session timer for one display-title bucket in a 300-worktree fleet', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const tabsByWorktree = Object.fromEntries(
+      Array.from({ length: 300 }, (_, index) => {
+        const worktreeId = `wt-${index}`
+        return [
+          worktreeId,
+          [
+            {
+              id: `tab-${index}`,
+              ptyId: `${worktreeId}@@pty-1`,
+              worktreeId,
+              title: '⠋ Codex is thinking',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        ]
+      })
+    )
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      tabsByWorktree
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+    expect(vi.getTimerCount()).toBe(0)
+
+    const changedWorktreeId = 'wt-173'
+    useAppStore.setState({
+      tabsByWorktree: {
+        ...tabsByWorktree,
+        [changedWorktreeId]: [
+          {
+            ...tabsByWorktree[changedWorktreeId][0],
+            title: '⠙ Codex is thinking'
+          }
+        ]
+      }
+    })
+
+    expect(vi.getTimerCount()).toBe(0)
+    vi.advanceTimersByTime(200)
     expect(persist).not.toHaveBeenCalled()
     cleanup()
   })
@@ -326,6 +410,42 @@ describe('createSessionWriteSubscriber', () => {
           {
             ...useAppStore.getState().tabsByWorktree['wt-1'][0],
             pendingActivationSpawn: true
+          }
+        ]
+      }
+    })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
+
+  it('ignores recovery-ledger-only changes', () => {
+    // The handoff ledger is not persisted; remount churn must not rebuild/rewrite durable payloads.
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      ...makeTerminalSessionState('bash')
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.setState({
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
+            recovery: {
+              attemptedAt: [1],
+              generation: 1,
+              outcome: 'pending',
+              startedAt: 1,
+              reason: 'reattach-unverifiable',
+              tabGeneration: 0
+            }
           }
         ]
       }
@@ -521,67 +641,6 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('updates its baseline without scheduling when shouldSchedulePersist returns false', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    let shouldSchedule = false
-    const cleanup = createSessionWriteSubscriber({
-      store: useAppStore,
-      persist,
-      shouldSchedulePersist: () => shouldSchedule
-    })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-    expect(persist).not.toHaveBeenCalled()
-
-    shouldSchedule = true
-    useAppStore.setState({ activeTabId: 'tab-1' })
-    vi.advanceTimersByTime(200)
-    expect(persist).toHaveBeenCalledTimes(1)
-    cleanup()
-  })
-
-  it('cancels a pending debounce when shouldSchedulePersist returns false', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    let shouldSchedule = true
-    const cleanup = createSessionWriteSubscriber({
-      store: useAppStore,
-      persist,
-      shouldSchedulePersist: () => shouldSchedule
-    })
-
-    useAppStore.setState({ workspaceSessionReady: true })
-    vi.advanceTimersByTime(50)
-    shouldSchedule = false
-    useAppStore.setState({ activeTabId: 'remote-tab' })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
-
-  it('re-checks shouldSchedulePersist when a pending debounce fires', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    let shouldSchedule = true
-    const cleanup = createSessionWriteSubscriber({
-      store: useAppStore,
-      persist,
-      shouldSchedulePersist: () => shouldSchedule
-    })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({ activeWorktreeId: 'wt-before-remote-pull' })
-    vi.advanceTimersByTime(50)
-    shouldSchedule = false
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
-
   it('coalesces multiple relevant mutations within a debounce window', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
@@ -641,10 +700,7 @@ describe('createSessionWriteSubscriber', () => {
 
     expect(persist).not.toHaveBeenCalled()
 
-    // Why: without this second mutation, the assertion above only proves the
-    // pending timer was cancelled — a regression where cleanup() forgot to
-    // unsub() would still pass. Mutating after cleanup verifies the listener
-    // was detached and no new timer is queued.
+    // Mutate after cleanup to prove unsubscribe; timer cancellation alone passes even with the listener still attached.
     useAppStore.setState({ activeTabId: 'tab-2' })
     vi.advanceTimersByTime(200)
     expect(persist).not.toHaveBeenCalled()

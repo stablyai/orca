@@ -3,7 +3,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexManagedAccountRuntimeSelection,
   CodexRateLimitAccountsState
-} from '../../../../shared/types'
+} from '../../../../shared/managed-account-types'
 
 type ProviderAccount =
   | ClaudeRateLimitAccountsState['accounts'][number]
@@ -21,8 +21,7 @@ export type ProviderAccountRuntimeView = {
   wslDistro?: string | null
 }
 
-// Why: sentinel for the "WSL default" distro slot; shared so the AccountsPane
-// distro Select and this active-account resolution can't drift out of sync.
+// Share the WSL default sentinel between distro selection and active-account resolution.
 export const WSL_DEFAULT_DISTRO_KEY = '__default__'
 
 export function getProviderAccountRuntime(account: ProviderAccount): {
@@ -68,8 +67,7 @@ export function providerAccountMatchesView(
   const accountView = getProviderAccountRuntime(account)
 
   if (options.remoteOwner) {
-    // Why: provider accounts belong to the Orca runtime, not its client or a
-    // downstream SSH host; a Windows runtime owns both host and WSL accounts.
+    // Account rosters belong to the runtime owner; Windows runtimes own both host and WSL slots.
     return options.ownerPlatform === 'win32' || accountView.runtime !== 'wsl'
   }
   if (runtime.runtime === 'host') {
@@ -90,8 +88,7 @@ export function providerAccountIsActiveInView(
   }
 ): boolean {
   if (options.remoteOwner) {
-    // Why: remote Windows lists host and WSL accounts in one roster; Active must
-    // follow each account's own runtime slot, not the forced host view filter.
+    // Remote Windows combines slots; resolve Active from each account’s runtime rather than host-view filtering.
     return (
       getProviderAccountActiveIdForView(selection, getProviderAccountRuntime(account)) ===
       account.id

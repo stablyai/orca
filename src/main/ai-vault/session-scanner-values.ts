@@ -1,7 +1,10 @@
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { readFile } from 'node:fs/promises'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
+import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { asRecord } from './session-scanner-record-value'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 
 export { asRecord }
 
@@ -73,11 +76,19 @@ export function extractGitBranch(value: unknown): string | null {
 }
 
 export async function readJsonObjectIfExists(
-  filePath: string
+  filePath: string,
+  signal?: AbortSignal
 ): Promise<Record<string, unknown> | null> {
   try {
-    return asRecord(JSON.parse(await readFile(filePath, 'utf-8')) as unknown)
-  } catch {
+    const parsed: unknown = JSON.parse(await wslGatedReadFile(filePath, 'utf-8', 'scan', signal))
+    return asRecord(parsed)
+  } catch (error) {
+    // Propagate cancellation so it cannot be cached as absent enrichment.
+    throwIfAiVaultScanCancelled(signal)
+    // Propagate WSL refusal as an issue; caching null can prevent retries for unchanged files.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     return null
   }
 }
@@ -129,8 +140,7 @@ export function findOpenCodeStorageRoot(filePath: string): string | null {
   return dirname(sessionRoot)
 }
 
-// Pi and OMP (a Pi fork) both store transcripts under
-// <home>/<agentHomeDirName>/agent/sessions; accept any prefix of that path.
+// Accept Pi/OMP home, agent, or sessions paths.
 export function normalizeAgentSessionsDir(
   rawValue: string,
   agentHomeDirName: '.pi' | '.omp'
@@ -151,6 +161,34 @@ export function normalizeAgentSessionsDir(
     return join(normalized, 'agent', 'sessions')
   }
   return normalized
+}
+
+function defaultPrimeAgentSessionsDir(): string {
+  return join(homedir(), '.prime', 'agent', 'sessions')
+}
+
+// Pi/Prime expand leading ~ themselves; other CLIs such as Grok treat it literally.
+function absoluteConfiguredDir(rawValue: string): string | null {
+  const expanded = rawValue === '~' ? homedir() : rawValue.replace(/^~(?=[\\/])/, homedir())
+  const normalized = expanded.replace(/[\\/]+$/, '')
+  return resolveAbsoluteDirOverride(normalized, '') || null
+}
+
+// Prime always appends sessions, even when the configured agent directory is named sessions.
+export function normalizePrimeAgentSessionsDir(rawAgentDir: string): string {
+  const agentDir = absoluteConfiguredDir(rawAgentDir.trim())
+  return agentDir ? join(agentDir, 'sessions') : defaultPrimeAgentSessionsDir()
+}
+
+// Explicit session-root overrides outrank the agent directory and are used verbatim.
+export function primeAgentSessionsDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  const sessionDir =
+    env.PRIME_AGENT_SESSION_DIR?.trim() || env.PRIME_AGENT_CODING_AGENT_SESSION_DIR?.trim()
+  if (sessionDir) {
+    return absoluteConfiguredDir(sessionDir) ?? defaultPrimeAgentSessionsDir()
+  }
+  const agentDir = env.PRIME_AGENT_CODING_AGENT_DIR?.trim()
+  return agentDir ? normalizePrimeAgentSessionsDir(agentDir) : defaultPrimeAgentSessionsDir()
 }
 
 export function clampPositiveInteger(value: number | undefined, fallback: number): number {

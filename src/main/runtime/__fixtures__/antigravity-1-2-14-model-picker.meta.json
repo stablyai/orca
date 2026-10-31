@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-30T19:09:17.386Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy 1.2.14, macOS, Google account, AGY_CLI_HIDE_ACCOUNT_INFO=1, /model picker left open",
+  "exitCode": 0
+}

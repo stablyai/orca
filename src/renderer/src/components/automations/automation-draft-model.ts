@@ -1,0 +1,69 @@
+import { getAgentCatalog } from '@/lib/agent-catalog'
+import type { AutomationPrecheck } from '../../../../shared/automations-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import {
+  hasExtraAgentArgs,
+  parseExtraAgentArgs
+} from '../../../../shared/automation-extra-agent-args'
+import type { AutomationDraft } from './AutomationEditorDialog'
+import { extraAgentArgsErrorText } from './automation-extra-agent-args-error-copy'
+
+export const AUTOMATION_DEFAULT_TIME = '09:00'
+
+export function getDefaultWorktree(worktrees: readonly Worktree[]): Worktree | null {
+  return worktrees.find((worktree) => worktree.isMainWorktree) ?? worktrees[0] ?? null
+}
+
+export function formatTimeInput(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+export function parseDraftTime(time: string): { hour: number; minute: number } {
+  const [rawHour, rawMinute] = time.split(':').map((part) => Number(part))
+  return {
+    hour: Number.isInteger(rawHour) && rawHour >= 0 && rawHour <= 23 ? rawHour : 9,
+    minute: Number.isInteger(rawMinute) && rawMinute >= 0 && rawMinute <= 59 ? rawMinute : 0
+  }
+}
+
+export function buildDraftPrecheck(draft: AutomationDraft): AutomationPrecheck | null {
+  const command = draft.precheckCommand.trim()
+  if (!command) {
+    return null
+  }
+  const rawTimeout = Number(draft.precheckTimeoutSeconds)
+  return {
+    command,
+    timeoutSeconds: Number.isFinite(rawTimeout) ? rawTimeout : 60
+  }
+}
+
+export function getAgentLabel(agentId: string): string {
+  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
+}
+
+/** The field's error, or null when the draft's extras can be saved. */
+export function getDraftExtraAgentArgsError(
+  draft: Pick<AutomationDraft, 'agentId' | 'extraAgentArgs' | 'surface'>
+): string | null {
+  if (draft.surface === 'chat' || !hasExtraAgentArgs(draft.extraAgentArgs)) {
+    return null
+  }
+  const parsed = parseExtraAgentArgs({
+    agent: draft.agentId,
+    extraAgentArgs: draft.extraAgentArgs
+  })
+  return parsed.ok ? null : extraAgentArgsErrorText(parsed)
+}
+
+/** Reuse can't carry extras; the field offers a switch instead of flipping it silently. */
+export function draftExtraAgentArgsNeedFreshSession(
+  draft: Pick<AutomationDraft, 'extraAgentArgs' | 'reuseSession' | 'workspaceMode' | 'surface'>
+): boolean {
+  return (
+    draft.surface !== 'chat' &&
+    hasExtraAgentArgs(draft.extraAgentArgs) &&
+    draft.workspaceMode === 'existing' &&
+    draft.reuseSession
+  )
+}

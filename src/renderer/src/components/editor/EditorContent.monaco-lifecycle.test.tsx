@@ -2,11 +2,26 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
+import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 
 const lifecycle = vi.hoisted(() => ({
   events: [] as string[],
   diffModelKeys: [] as string[],
+  viewStateKeys: new Array<string>(),
   models: new Map<string, { content: string; undo: string[] }>(),
+  notebookProps: [] as {
+    fileId: string
+    filePath: string
+    worktreeId: string
+    scrollCacheKey: string
+    onContentChange: (content: string) => void
+    onSave: (content: string) => Promise<boolean>
+  }[],
+  richMarkdownProps: [] as {
+    externalSshTargetId?: string
+    runtimeEnvironmentId?: string
+    worktreeId: string
+  }[],
   mountedProps: [] as {
     filePath: string
     readOnly?: boolean
@@ -34,6 +49,20 @@ vi.mock('@/lib/lazy-with-retry', async () => {
           return null
         }
       }
+      if (factory.toString().includes('/IpynbViewer.tsx')) {
+        return function MockIpynbViewer(props: (typeof lifecycle.notebookProps)[number]) {
+          lifecycle.notebookProps.push(props)
+          return null
+        }
+      }
+      if (factory.toString().includes('/RichMarkdownEditor.tsx')) {
+        return function MockRichMarkdownEditor(
+          props: (typeof lifecycle.richMarkdownProps)[number]
+        ) {
+          lifecycle.richMarkdownProps.push(props)
+          return null
+        }
+      }
       if (!factory.toString().includes('/MonacoEditor.tsx')) {
         return () => null
       }
@@ -43,7 +72,9 @@ vi.mock('@/lib/lazy-with-retry', async () => {
         readOnly?: boolean
         liveTail?: boolean
         viewStateId?: string
+        viewStateKey: string
       }) {
+        lifecycle.viewStateKeys.push(props.viewStateKey)
         /* oxlint-disable react-hooks/exhaustive-deps -- Mount-only by design: a prop-effect would hide a missing outer React remount. */
         React.useEffect(() => {
           lifecycle.events.push(`mount:${props.filePath}`)
@@ -67,8 +98,7 @@ vi.mock('@/lib/lazy-with-retry', async () => {
               retained.content = operations[0]?.text ?? retained.content
             }
           }
-          // Why: exercising the real mount reconciler makes outer key ordering
-          // observable without replacing Monaco's retained-model semantics.
+          // Use the real mount reconciler to observe key ordering with retained-model behavior intact.
           syncContentOnMount(
             {
               getModel: () => model,
@@ -95,6 +125,9 @@ vi.mock('@/store', () => ({
     (selector: (state: Record<string, unknown>) => unknown) =>
       selector({
         worktreesByRepo: {},
+        settings: {},
+        markdownRichModeSizeOverride: {},
+        setMarkdownRichModeSizeOverride: vi.fn(),
         openFile: vi.fn(),
         openMarkdownPreview: vi.fn(),
         openConflictReviewFile: vi.fn(),
@@ -154,6 +187,7 @@ function props(activeFile: OpenFile, content: string) {
     isCsv: false,
     isNotebook: false,
     mdViewMode: 'rich' as const,
+    inlineMarkdownRenderState: null,
     isChangesMode: false,
     sideBySide: false,
     pendingEditorReveal: null,
@@ -185,11 +219,36 @@ afterEach(() => {
   cleanup()
   lifecycle.events.length = 0
   lifecycle.diffModelKeys.length = 0
+  lifecycle.viewStateKeys.length = 0
   lifecycle.models.clear()
   lifecycle.mountedProps.length = 0
+  lifecycle.notebookProps.length = 0
+  lifecycle.richMarkdownProps.length = 0
 })
 
 describe('EditorContent Monaco lifecycle boundary', () => {
+  it('keeps default-pane view state separate for the same path on different runtime hosts', () => {
+    const filePath = '/repo/main.ts'
+    const worktreeId = 'repo::/repo'
+    const first = file(filePath, {
+      id: buildOwnedEditorFileId(filePath, worktreeId, 'host-a'),
+      runtimeEnvironmentId: 'host-a'
+    })
+    const second = file(filePath, {
+      id: buildOwnedEditorFileId(filePath, worktreeId, 'host-b'),
+      runtimeEnvironmentId: 'host-b'
+    })
+    const view = render(
+      <EditorContent {...props(first, 'first host')} viewStateScopeId={first.id} />
+    )
+    const firstKey = lifecycle.viewStateKeys.at(-1)
+    expect(firstKey).toBeTypeOf('string')
+
+    view.rerender(<EditorContent {...props(second, 'second host')} viewStateScopeId={second.id} />)
+
+    expect(lifecycle.viewStateKeys.at(-1)).not.toBe(firstKey)
+  })
+
   it('unmounts the prior path before reconciling a stale retained target model', () => {
     const first = file('/repo/first.ts')
     const second = file('/repo/second.ts')
@@ -215,8 +274,7 @@ describe('EditorContent Monaco lifecycle boundary', () => {
   })
 
   it('keeps the diff editor mounted when a save updates the modified content', () => {
-    // Why: saves must rotate the retained model for freshness without remounting
-    // the editor and flashing Monaco's loading placeholder.
+    // Saves refresh retained models without remounting the widget and flashing its loading placeholder.
     const diff = file('/repo/notes.ts', { mode: 'diff', diffSource: 'unstaged' })
 
     const view = render(<EditorContent {...diffProps(diff, 'first save')} />)
@@ -257,8 +315,54 @@ describe('EditorContent Monaco lifecycle boundary', () => {
 
     render(<EditorContent {...props(source, 'source content')} />)
 
-    // Why: without the pane id Monaco cannot match the handoff, so it silently leaves the request
-    // armed and a later rich-mode remount of this pane steals focus back.
+    // Missing pane IDs leave reveals armed, allowing later rich-mode remounts to steal focus.
     expect(lifecycle.mountedProps.at(0)?.viewStateId).toBe('same-pane')
+  })
+
+  it('preserves notebook save ownership and worktree routing across the extracted surface', () => {
+    const notebook = file('/repo/analysis.ipynb', { language: 'notebook' })
+    const notebookProps = props(notebook, '{"cells": []}')
+
+    render(
+      <EditorContent {...notebookProps} resolvedLanguage="notebook" isNotebook mdViewMode="rich" />
+    )
+
+    expect(lifecycle.notebookProps).toHaveLength(1)
+    expect(lifecycle.notebookProps[0]).toMatchObject({
+      fileId: notebook.id,
+      filePath: notebook.filePath,
+      worktreeId: notebook.worktreeId,
+      scrollCacheKey: `${notebook.filePath}::same-pane:notebook`,
+      onContentChange: notebookProps.handleContentChange,
+      onSave: notebookProps.handleSave
+    })
+  })
+
+  it('forwards SSH and runtime ownership to rich markdown after extraction', () => {
+    const markdown = file('/repo/notes.md', {
+      language: 'markdown',
+      externalSshTargetId: 'ssh-target',
+      runtimeEnvironmentId: 'runtime-environment'
+    })
+
+    render(
+      <EditorContent
+        {...props(markdown, '# Notes')}
+        resolvedLanguage="markdown"
+        isMarkdown
+        mdViewMode="rich"
+        inlineMarkdownRenderState={{
+          renderMode: 'rich-editor',
+          richModeUnsupportedMessage: null
+        }}
+      />
+    )
+
+    expect(lifecycle.richMarkdownProps).toHaveLength(1)
+    expect(lifecycle.richMarkdownProps[0]).toMatchObject({
+      externalSshTargetId: 'ssh-target',
+      runtimeEnvironmentId: 'runtime-environment',
+      worktreeId: markdown.worktreeId
+    })
   })
 })

@@ -1,19 +1,27 @@
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import {
-  buildWslLoginShellCommand,
-  escapeWslShCommandForWindows,
-  quotePosixShell
+  buildWslCapturedLoginShellCommand,
+  buildWslExecArgs,
+  buildWslLoginShellCommand
 } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 
 export const WSL_CODEX_AVAILABILITY_TIMEOUT_MS = 5_000
 export const WSL_CODEX_NOT_FOUND_MESSAGE = 'Codex CLI not found in the WSL login-shell PATH.'
 
-export function buildWslCodexAvailabilityArgs(distro: string): string[] {
-  const command = [buildCodexPathLookup(), '[ -n "$resolved" ]'].join('\n')
-  return buildWslCodexShellArgs(distro, command)
+/** Exits 0 only when `codex` resolves on the login PATH the runner supplies. */
+export function buildWslCodexAvailabilityScript(): string {
+  return [buildCodexPathLookup(), '[ -n "$resolved" ]'].join('\n')
 }
 
-export function buildWslCodexIdentityArgs(distro: string): string[] {
+export type WslCodexIdentityProbe = {
+  args: string[]
+  /** The `<path>\n<version>` payload, or null when the fence never appeared. */
+  readStdout: (stdout: string) => string | null
+}
+
+/** Fence off login banners; exec leaves no closing fence after the path/version payload. */
+export function buildWslCodexIdentityProbe(distro: string): WslCodexIdentityProbe {
   const command = [
     buildCodexPathLookup(),
     'if [ -z "$resolved" ]; then',
@@ -23,10 +31,18 @@ export function buildWslCodexIdentityArgs(distro: string): string[] {
     'printf \'%s\\n\' "$resolved"',
     'exec "$resolved" --version'
   ].join('\n')
-  return buildWslCodexShellArgs(distro, command)
+  const captured = buildWslCapturedLoginShellCommand(command)
+  return {
+    args: buildWslExecArgs(distro, ['sh', '-c', captured.command]),
+    readStdout: captured.readStdout
+  }
 }
 
-export function buildWslCodexAppServerArgs(distro: string, linuxHomePath: string): string[] {
+export function buildWslCodexAppServerArgs(
+  distro: string,
+  linuxHomePath: string,
+  appServerArgs: readonly string[] = ['app-server']
+): string[] {
   const command = [
     buildCodexPathLookup(),
     'if [ -z "$resolved" ]; then',
@@ -34,12 +50,16 @@ export function buildWslCodexAppServerArgs(distro: string, linuxHomePath: string
     '  exit 127',
     'fi',
     `export CODEX_HOME=${quotePosixShell(linuxHomePath)}`,
-    'exec "$resolved" app-server'
+    `exec "$resolved" ${appServerArgs.map(quotePosixShell).join(' ')}`
   ].join('\n')
   return buildWslCodexShellArgs(distro, command)
 }
 
-export function buildWslCodexLoginArgs(distro: string, linuxHomePath: string): string[] {
+export function buildWslCodexLoginArgs(
+  distro: string,
+  linuxHomePath: string,
+  options: { orcaOpensSignInLink?: boolean } = {}
+): string[] {
   const command = [
     buildCodexPathLookup(),
     'if [ -z "$resolved" ]; then',
@@ -47,24 +67,22 @@ export function buildWslCodexLoginArgs(distro: string, linuxHomePath: string): s
     '  exit 127',
     'fi',
     `export CODEX_HOME=${quotePosixShell(linuxHomePath)}`,
+    // Avoid a second tab when Orca opens the link.
+    ...(options.orcaOpensSignInLink ? ['export BROWSER=true'] : []),
     'exec "$resolved" login'
   ].join('\n')
   return buildWslCodexShellArgs(distro, command)
 }
 
 function buildCodexPathLookup(): string {
-  return buildPosixCommandPathLookupScript({ kind: 'literal', value: 'codex' })
+  // Match detection by skipping Windows mount directories when resolving the guest CLI.
+  return buildPosixCommandPathLookupScript(
+    { kind: 'literal', value: 'codex' },
+    { skipWindowsMountDirs: true }
+  )
 }
 
 function buildWslCodexShellArgs(distro: string, command: string): string[] {
-  // Why: Codex must use the distro user's configured login shell, whose PATH
-  // can differ from a hard-coded non-login bash invocation.
-  return [
-    '-d',
-    distro,
-    '--',
-    'sh',
-    '-c',
-    escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
-  ]
+  // Use the configured login shell so CLI launches inherit the user's PATH.
+  return buildWslExecArgs(distro, ['sh', '-c', buildWslLoginShellCommand(command)])
 }

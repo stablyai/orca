@@ -1,7 +1,10 @@
 import { Import, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
-import type { BrowserCookieImportSummary, BrowserSessionProfile } from '../../../../shared/types'
+import type {
+  BrowserCookieImportSummary,
+  BrowserSessionProfile
+} from '../../../../shared/browser-workspace-types'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -14,9 +17,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
+import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
+import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
 
 type DetectedBrowser = {
   family: string
@@ -80,10 +86,11 @@ export function BrowserProfileRow({
                 value1: browser?.label ?? browserFamily,
                 value2: profile.label
               }
-            )
+            ),
+        result
       )
     } else {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 
@@ -96,20 +103,19 @@ export function BrowserProfileRow({
           'auto.components.settings.BrowserProfileRow.b4c167764d',
           'Imported {{value0}} cookies from file into {{value1}}.',
           { value0: result.summary.importedCookies, value1: profile.label }
-        )
+        ),
+        result
       )
     } else if (result.reason !== 'canceled') {
-      toast.error(result.reason)
+      toast.error(browserCookieImportFailureText(result))
     }
   }
 
   const sourceLabel = profile.source
     ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
-    : null
+    : translate('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
 
-  // Why: uses div[role=button] instead of <button> to avoid nested <button>
-  // elements — the dropdown trigger and trash actions inside also render as
-  // <button>, which is invalid HTML and causes React hydration warnings.
+  // Use role=button because nested dropdown/trash buttons make a native button invalid and trigger hydration warnings.
   return (
     <div
       role="button"
@@ -136,23 +142,13 @@ export function BrowserProfileRow({
             </span>
           ) : null}
         </div>
-        {sourceLabel ? (
-          <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">
-            {translate(
-              'auto.components.settings.BrowserProfileRow.796d846483',
-              'No cookies imported'
-            )}
-          </p>
-        )}
+        <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <DropdownMenu
           onOpenChange={(open) => {
             if (open) {
-              // Why: macOS treats other browsers' profile folders as app
-              // data. Only probe them when the user opens the import menu.
+              // Probe profile folders only when import opens; macOS treats them as protected app data.
               void fetchDetectedBrowsers()
             }
           }}
@@ -173,6 +169,7 @@ export function BrowserProfileRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <BrowserCookieImportMachineNotice />
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
@@ -215,6 +212,7 @@ export function BrowserProfileRow({
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
               {translate('auto.components.settings.BrowserProfileRow.ebb78dfd6f', 'From File…')}
             </DropdownMenuItem>
+            <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
         </DropdownMenu>
         {isDefault ? (

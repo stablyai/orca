@@ -1,5 +1,7 @@
 import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
-import type { GlobalSettings, Project, Repo } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Project } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 import type { WorkspacePort } from '../../../shared/workspace-ports'
 import { browserUrlForPort } from './workspace-port-urls'
 
@@ -22,9 +24,7 @@ export function localhostWorktreeLabelRouteForPort({
     targetUrl: browserUrlForPort(port),
     projectName: projectSource.displayName,
     worktreeName: port.owner.displayName,
-    // Why: getLocalhostWorktreeHostLabel derives the slug from worktreePath ??
-    // worktreeName, so omitting it here would yield a different label than the
-    // terminal-link/runtime builders that always pass port.owner.path.
+    // Pass owner.path like terminal/runtime builders or getLocalhostWorktreeHostLabel derives a different slug.
     worktreePath: port.owner.path,
     repoId: repo.id,
     worktreeId: port.owner.worktreeId

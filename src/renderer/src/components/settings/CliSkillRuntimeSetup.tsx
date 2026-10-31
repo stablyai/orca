@@ -1,4 +1,5 @@
-import type { GlobalSettings } from '../../../../shared/types'
+// COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
   normalizeGlobalWindowsRuntimeDefault
@@ -8,16 +9,9 @@ import {
   quotePowerShellNativeArgument
 } from '../../../../shared/powershell-native-argument'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
+import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
-import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import { useAppStore } from '@/store'
-import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
-import { toast } from 'sonner'
-import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import {
-  isOrcaCliAvailableOnPath,
-  showOrcaCliRegistrationPromptToast
-} from '@/lib/agent-skill-cli-prerequisite'
 import { translate } from '@/i18n/i18n'
 
 export type LocalAgentRuntime = {
@@ -69,13 +63,7 @@ function encodeWslLoginShellScript(command: string): string {
   return btoa(binary)
 }
 
-export function getWslCliDistroRequest(
-  runtime?: LocalAgentRuntime
-): { distro: string } | undefined {
-  return runtime?.runtime === 'wsl' && runtime.wslDistro?.trim()
-    ? { distro: runtime.wslDistro.trim() }
-    : undefined
-}
+const NPX_SKILLS_ADD_COMMAND = /^npx\s+skills(?:@[\w.-]+)?\s+add\b/i
 
 export function buildSkillCommandForRuntime(
   command: string,
@@ -83,78 +71,89 @@ export function buildSkillCommandForRuntime(
   currentPlatform = getSkillCommandPlatform()
 ): string {
   const resolvedRuntime = runtime ?? LOCAL_HOST_AGENT_RUNTIME
-  const normalizedCommand = normalizeWindowsSkillUpdateCommand(
-    command,
-    resolvedRuntime,
-    currentPlatform
-  )
-  if (resolvedRuntime.runtime !== 'wsl') {
-    return wrapWindowsSkillCommandWithNpxPrerequisite(
-      normalizedCommand,
-      currentPlatform,
-      'copied-command'
-    )
+  if (resolvedRuntime.runtime === 'wsl') {
+    return forceEnglishGitMessages(command)
   }
-
-  const distroArg = resolvedRuntime.wslDistro?.trim()
-    ? ` -d ${quotePowerShellLiteral(resolvedRuntime.wslDistro.trim())}`
-    : ''
-  // Why: encoding preserves the user's configured login-shell PATH while
-  // avoiding raw multiline and nested quotes at the copy/paste boundary.
-  const encodedScript = encodeWslLoginShellScript(normalizedCommand)
-  const visibleCommand = normalizedCommand.replace(/[\r\n]+/g, ' ')
-  const shellScript = `eval "\`printf %s ${encodedScript} | base64 -d\`"`
-  const wslCommand = `wsl.exe${distroArg} -- sh -c ${quotePowerShellNativeArgument(shellScript)}`
-  // Why: scope Legacy argv parsing to this invocation so Windows PowerShell
-  // 5.1 and PowerShell 7 pass the same embedded quotes to wsl.exe.
-  return `& { $PSNativeCommandArgumentPassing = 'Legacy'; ${wslCommand} } # Runs: ${visibleCommand}`
+  if (currentPlatform === 'win32') {
+    return wrapWindowsSkillCommandWithNpxPrerequisite(command, currentPlatform, 'copied-command')
+  }
+  // A focused remote runtime may be a Windows host where `env` does not exist.
+  return isRemoteRuntimeEnvironmentFocused() ? command : forceEnglishGitMessages(command)
 }
 
-function normalizeWindowsSkillUpdateCommand(
-  command: string,
-  runtime: LocalAgentRuntime,
-  currentPlatform: NodeJS.Platform
-): string {
-  if (runtime.runtime === 'wsl' || currentPlatform !== 'win32') {
-    return command
-  }
-
+/** skills@1.7.2 falls back to fetching a pinned commit only on English git errors (#28914); `env` also works in fish/csh. */
+function forceEnglishGitMessages(command: string): string {
   const trimmedCommand = command.trim()
-  const updateMatch = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)\s+--global$/i.exec(trimmedCommand)
-  if (!updateMatch) {
-    return command
-  }
-
-  // Why: the `skills update` subcommand is currently unreliable on native
-  // Windows, while reinstalling from the same repo source is idempotent and
-  // keeps the setup affordance working.
-  return buildAgentFeatureSkillInstallCommand([updateMatch[1]])
+  return NPX_SKILLS_ADD_COMMAND.test(trimmedCommand) ? `env LC_ALL=C ${trimmedCommand}` : command
 }
 
-/**
- * Where a built skill command is going: the user's clipboard (their own shell)
- * or the setup terminal Orca spawns itself.
- */
 type SkillCommandTarget = 'copied-command' | 'orca-setup-terminal'
 
-/**
- * Re-adds the npx preflight for Orca's own setup terminal, which
- * `getAgentSkillTerminalShellOverride` forces onto powershell.exe. The copied
- * string stays bare for POSIX-family shells; only the executed one is wrapped.
- */
+/** Adapt clipboard commands for setup terminals: Windows may need npx preflight; WSL wrappers must become native bash for daemon-forced wsl.exe. */
 export function buildSkillSetupTerminalCommand(
   copiedCommand: string,
-  terminalShellOverride: string | undefined,
+  effectiveShell: string | undefined,
+  runtime?: LocalAgentRuntime,
   currentPlatform = getSkillCommandPlatform()
 ): string {
-  if (!isSetupTerminalForcedToPowerShell(terminalShellOverride)) {
+  // The created tab’s shell wins when project runtime overrides the requested shell.
+  const wslNative = isWslShellName(effectiveShell)
+    ? decodeWslSetupTerminalCommand(copiedCommand)
+    : null
+  if (wslNative) {
+    return wslNative
+  }
+  if (!isSetupTerminalForcedToPowerShell(effectiveShell)) {
     return copiedCommand
+  }
+  if (runtime?.runtime === 'wsl' && currentPlatform === 'win32') {
+    return buildPowerShellWslSkillCommand(copiedCommand, runtime)
   }
   return wrapWindowsSkillCommandWithNpxPrerequisite(
     copiedCommand,
     currentPlatform,
     'orca-setup-terminal'
   )
+}
+
+function buildPowerShellWslSkillCommand(command: string, runtime: LocalAgentRuntime): string {
+  const distroArg = runtime.wslDistro?.trim()
+    ? ` -d ${quotePowerShellLiteral(runtime.wslDistro.trim())}`
+    : ''
+  // Encode across Windows argv without losing the configured login-shell PATH.
+  const encodedScript = encodeWslLoginShellScript(command)
+  const visibleCommand = command.replace(/[\r\n]+/g, ' ')
+  // Command substitution avoids PowerShell backtick-escaping collisions (#14292/#14785) and preserves stdin that piping into sh would consume.
+  const shellScript = `sh -c "$(printf %s ${encodedScript} | base64 -d)"`
+  // Use --exec because -- expands guest-bound variable references in wsl.exe.
+  const wslCommand = `wsl.exe${distroArg} --exec sh -c ${quotePowerShellNativeArgument(shellScript)}`
+  return `& { $PSNativeCommandArgumentPassing = 'Legacy'; ${wslCommand} } # Runs: ${visibleCommand}`
+}
+
+function decodeWslSetupTerminalCommand(command: string): string | null {
+  if (
+    !command.startsWith("& { $PSNativeCommandArgumentPassing = 'Legacy'; wsl.exe") ||
+    !command.includes(' } # Runs: ')
+  ) {
+    return null
+  }
+
+  // Decode persisted wrappers from before both the --exec and pipe changes.
+  const encoded =
+    /(?:--|--exec) sh -c '(?:eval \\"`|sh -c \\"\$\()?printf %s ([A-Za-z0-9+/=]+) \| base64 -d/.exec(
+      command
+    )?.[1]
+  if (!encoded) {
+    return null
+  }
+
+  try {
+    const binary = atob(encoded)
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
 }
 
 function isSetupTerminalForcedToPowerShell(terminalShellOverride: string | undefined): boolean {
@@ -172,38 +171,29 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
   const trimmedCommand = command.trim()
   if (
     currentPlatform !== 'win32' ||
-    // Why: skill setup terminals spawn on the focused runtime environment, so a
-    // Windows client must not hand a cmd.exe command to a remote host.
+    // Never send Windows-client cmd.exe setup commands to a focused remote runtime.
     isRemoteRuntimeEnvironmentFocused() ||
-    // Why: the copied command lands in the user's configured shell, and MSYS
-    // shells rewrite cmd.exe's leading /d /s /c switches into drive paths,
-    // starting an interactive cmd session instead of running the payload.
+    // MSYS rewrites cmd.exe switches as paths; keep copied commands out of that boundary for POSIX-family shells.
     (target === 'copied-command' && isPosixFamilyWindowsShellConfigured()) ||
-    !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)
+    !NPX_SKILLS_ADD_COMMAND.test(trimmedCommand)
   ) {
     return command
   }
 
   const missingNpxGuidance =
     'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1'
-  // Why: cmd.exe is one shell-neutral boundary for PowerShell and Command
-  // Prompt, and it resolves the bare name through PATHEXT for both the
-  // preflight and the executed command, so shims such as npx.exe still count.
+  // cmd.exe provides a common PowerShell/Command Prompt boundary and PATHEXT resolution for npx shims.
   return `cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 (${missingNpxGuidance}) else (${trimmedCommand})"`
 }
 
 function isPosixFamilyWindowsShellConfigured(): boolean {
-  return (
-    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell) ===
-    'posix'
+  return ['posix', 'unix'].includes(
+    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell)
   )
 }
 
 function isRemoteRuntimeEnvironmentFocused(): boolean {
-  // Why: the terminal router also weighs how many environments are saved, but
-  // that slice has no subscriber here. Read only the focused id, which every
-  // caller re-renders on: it over-skips rather than ever handing a cmd.exe
-  // command to a remote shell.
+  // Callers track focused ID, not environment count; conservatively skip to avoid sending cmd.exe to remote shells.
   return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
 }
 
@@ -224,97 +214,10 @@ function getSkillCommandPlatform(): NodeJS.Platform {
   return 'linux'
 }
 
-export function buildSkillInstallCommandForRuntime(
-  command: string,
-  runtime: LocalAgentRuntime
-): string {
-  return buildSkillCommandForRuntime(command, runtime)
-}
-
 export function getSkillDiscoveryTargetForRuntime(
   runtime: LocalAgentRuntime
 ): { runtime: 'wsl'; wslDistro?: string | null } | undefined {
   return runtime.runtime === 'wsl'
     ? { runtime: 'wsl', wslDistro: runtime.wslDistro ?? null }
     : undefined
-}
-
-export function getAgentSkillTerminalShellOverride(
-  currentPlatform: string,
-  settings: GlobalSettings,
-  runtime: LocalAgentRuntime
-): string | undefined {
-  return getProjectAgentSkillTerminalShellOverride(
-    currentPlatform as NodeJS.Platform,
-    settings,
-    runtime
-  )
-}
-
-export async function ensureWslCliAvailableForAgentSkillTerminal(
-  runtime?: LocalAgentRuntime
-): Promise<CliInstallStatus | null> {
-  const args = getWslCliDistroRequest(runtime)
-  try {
-    const status = await window.api.cli.getWslInstallStatus(args)
-    if (!status.supported) {
-      toast.warning(
-        translate(
-          'auto.components.settings.CliSkillRuntimeSetup.775a4cfbb8',
-          'WSL shell command registration is unavailable'
-        ),
-        {
-          description:
-            status.detail ??
-            translate(
-              'auto.components.settings.CliSkillRuntimeSetup.fc0fcf72fd',
-              'Register the WSL shell command before skill setup.'
-            )
-        }
-      )
-      return status
-    }
-    if (status.pathConfigured === null) {
-      toast.warning(
-        translate(
-          'auto.components.settings.CliSkillRuntimeSetup.windowsPathUnknown',
-          'WSL shell command PATH could not be checked'
-        ),
-        { description: status.detail ?? 'Refresh CLI registration status and try again.' }
-      )
-      return status
-    }
-    if (status.state !== 'installed' || status.pathConfigured === false) {
-      await showOrcaCliRegistrationPromptToast()
-      const next = await window.api.cli.installWsl(args)
-      if (!isOrcaCliAvailableOnPath(next)) {
-        toast.warning(
-          translate(
-            'auto.components.settings.CliSkillRuntimeSetup.3728a94fb6',
-            'WSL shell command needs attention'
-          ),
-          {
-            description:
-              next.detail ??
-              translate(
-                'auto.components.settings.CliSkillRuntimeSetup.fc0fcf72fd',
-                'Register the WSL shell command before skill setup.'
-              )
-          }
-        )
-      }
-      return next
-    }
-    return status
-  } catch (error) {
-    toast.error(
-      error instanceof Error
-        ? error.message
-        : translate(
-            'auto.components.settings.CliSkillRuntimeSetup.0ed08febc5',
-            'Failed to register the WSL shell command.'
-          )
-    )
-    return null
-  }
 }

@@ -1,20 +1,11 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import type * as FsPromises from 'node:fs/promises'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from './types'
-import type * as Scanner from './scanner'
 
-const { getPathMock, writeOpens, writeGate } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata'),
-  // Why only mode 'w': the durable write also opens the directory read-only to fsync it, so counting
-  // every open would hide a regression back to multiple full-cache rewrites per scan.
-  writeOpens: { value: 0, inFlight: 0, maxConcurrent: 0 },
-  writeGate: {
-    blocked: false,
-    waiters: [] as (() => void)[]
-  }
+const { getPathMock } = vi.hoisted(() => ({
+  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
 }))
 
 vi.mock('electron', () => ({
@@ -23,43 +14,23 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('node:fs/promises', async () => {
-  const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
-  return {
-    ...actual,
-    open: (async (...args: Parameters<typeof actual.open>) => {
-      if (args[1] !== 'w') {
-        return actual.open(...args)
-      }
-      writeOpens.value += 1
-      writeOpens.inFlight += 1
-      writeOpens.maxConcurrent = Math.max(writeOpens.maxConcurrent, writeOpens.inFlight)
-      try {
-        if (writeGate.blocked) {
-          await new Promise<void>((resolve) => writeGate.waiters.push(resolve))
-        }
-        return await actual.open(...args)
-      } finally {
-        writeOpens.inFlight -= 1
-      }
-    }) as typeof actual.open
-  }
-})
-
-vi.mock('./scanner', async (importOriginal) => ({
-  ...(await importOriginal<typeof Scanner>()),
-  scanClaudeUsageFiles: vi.fn()
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanClaudeUsageFilesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 import { ClaudeUsageStore, initClaudeUsagePath } from './store'
-import { scanClaudeUsageFiles } from './scanner'
+import { scanClaudeUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
+
+function createBackingStore(): ConstructorParameters<typeof ClaudeUsageStore>[0] {
+  return {
+    getRepos: () => [],
+    getAllWorktreeMeta: () => ({})
+  }
+}
 
 function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): ClaudeUsageStore {
-  const store = new ClaudeUsageStore({
-    getRepos: () => [],
-    getAllWorktreeMeta: () => ({}),
-    getWorktreeMeta: () => undefined
-  } as never)
+  const store = new ClaudeUsageStore(createBackingStore())
 
   ;(store as unknown as { state: ClaudeUsagePersistedState }).state = {
     schemaVersion: 1,
@@ -79,6 +50,42 @@ function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): Claude
   return store
 }
 
+function createWorktreeUsageSession(worktreeId: string) {
+  const tokens = {
+    turnCount: 1,
+    inputTokens: 1000,
+    outputTokens: 500,
+    cacheReadTokens: 200,
+    cacheWriteTokens: 100,
+    cacheWrite1hTokens: 0
+  }
+  return {
+    sessionId: 'session-1',
+    firstTimestamp: '2026-04-09T15:00:00.000Z',
+    lastTimestamp: '2026-04-09T15:05:00.000Z',
+    model: 'claude-sonnet-4-6',
+    lastCwd: '/workspace/repo-a',
+    lastGitBranch: 'feature/a',
+    primaryWorktreeId: worktreeId,
+    primaryRepoId: 'repo-1',
+    totalInputTokens: 1000,
+    totalOutputTokens: 500,
+    totalCacheReadTokens: 200,
+    totalCacheWriteTokens: 100,
+    totalCacheWrite1hTokens: 0,
+    ...tokens,
+    locationBreakdown: [
+      {
+        locationKey: `worktree:${worktreeId}`,
+        projectLabel: 'Repo A',
+        repoId: 'repo-1',
+        worktreeId,
+        ...tokens
+      }
+    ]
+  }
+}
+
 describe('ClaudeUsageStore', () => {
   let tempUserData: string
 
@@ -86,14 +93,8 @@ describe('ClaudeUsageStore', () => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-claude-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initClaudeUsagePath()
-    writeOpens.value = 0
-    writeOpens.inFlight = 0
-    writeOpens.maxConcurrent = 0
-    writeGate.blocked = false
-    writeGate.waiters = []
-    vi.mocked(scanClaudeUsageFiles).mockReset()
-    vi.mocked(scanClaudeUsageFiles).mockResolvedValue({
-      processedFiles: [],
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
       sessions: [],
       dailyAggregates: []
     })
@@ -104,6 +105,17 @@ describe('ClaudeUsageStore', () => {
   afterEach(() => {
     vi.useRealTimers()
     rmSync(tempUserData, { recursive: true, force: true })
+  })
+
+  it('defaults a null legacy opt-in while invalidating the cache', () => {
+    writeFileSync(
+      join(tempUserData, 'orca-claude-usage.json'),
+      JSON.stringify({ schemaVersion: 4, scanState: { enabled: null } })
+    )
+
+    const store = new ClaudeUsageStore(createBackingStore())
+
+    expect(store.getScanState().enabled).toBe(false)
   })
 
   it('reports no data for Orca scope when only non-Orca usage exists', async () => {
@@ -123,6 +135,7 @@ describe('ClaudeUsageStore', () => {
           totalOutputTokens: 20,
           totalCacheReadTokens: 10,
           totalCacheWriteTokens: 5,
+          totalCacheWrite1hTokens: 0,
           locationBreakdown: [
             {
               locationKey: 'cwd:/outside/repo',
@@ -133,7 +146,8 @@ describe('ClaudeUsageStore', () => {
               inputTokens: 100,
               outputTokens: 20,
               cacheReadTokens: 10,
-              cacheWriteTokens: 5
+              cacheWriteTokens: 5,
+              cacheWrite1hTokens: 0
             }
           ]
         }
@@ -151,7 +165,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 100,
           outputTokens: 20,
           cacheReadTokens: 10,
-          cacheWriteTokens: 5
+          cacheWriteTokens: 5,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -181,6 +196,7 @@ describe('ClaudeUsageStore', () => {
           totalOutputTokens: 20,
           totalCacheReadTokens: 10,
           totalCacheWriteTokens: 5,
+          totalCacheWrite1hTokens: 0,
           locationBreakdown: [
             {
               locationKey: 'worktree:repo-1::/workspace/repo-a',
@@ -191,7 +207,8 @@ describe('ClaudeUsageStore', () => {
               inputTokens: 100,
               outputTokens: 20,
               cacheReadTokens: 10,
-              cacheWriteTokens: 5
+              cacheWriteTokens: 5,
+              cacheWrite1hTokens: 0
             }
           ]
         }
@@ -209,7 +226,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 100,
           outputTokens: 20,
           cacheReadTokens: 10,
-          cacheWriteTokens: 5
+          cacheWriteTokens: 5,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -235,7 +253,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 100,
           outputTokens: 20,
           cacheReadTokens: 10,
-          cacheWriteTokens: 5
+          cacheWriteTokens: 5,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -261,7 +280,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -273,6 +293,36 @@ describe('ClaudeUsageStore', () => {
     expect(
       breakdown.find((row) => row.key === 'claude-opus-4-7-20260416')?.estimatedCostUsd
     ).toBeCloseTo(36.75)
+  })
+
+  it('prices the 1-hour cache-write share above the 5-minute rate', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'claude-opus-4-7-20260416',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 400_000
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(summary.estimatedCostUsd).toBeCloseTo(38.25)
+    expect(
+      breakdown.find((row) => row.key === 'claude-opus-4-7-20260416')?.estimatedCostUsd
+    ).toBeCloseTo(38.25)
   })
 
   it('prices Claude Opus 4.8 with current Anthropic rates', async () => {
@@ -290,7 +340,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         },
         {
           day: '2026-04-09',
@@ -304,7 +355,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -336,7 +388,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         },
         {
           day: '2026-04-09',
@@ -350,7 +403,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         },
         {
           day: '2026-04-09',
@@ -364,7 +418,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -379,7 +434,7 @@ describe('ClaudeUsageStore', () => {
     ).toBeCloseTo(73.5)
     expect(
       breakdown.find((row) => row.key === 'claude-sonnet-5-thinking')?.estimatedCostUsd
-    ).toBeCloseTo(22.05)
+    ).toBeCloseTo(14.7)
   })
 
   it('prices Sonnet 5 long-context usage at flat rates', async () => {
@@ -397,15 +452,15 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 300_000,
           outputTokens: 300_000,
           cacheReadTokens: 300_000,
-          cacheWriteTokens: 300_000
+          cacheWriteTokens: 300_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
 
     const summary = await store.getSummary('orca', '30d')
 
-    // Why: Sonnet 4.6 and earlier bill above 200k at a premium; Sonnet 5 does not.
-    expect(summary.estimatedCostUsd).toBeCloseTo(6.615)
+    expect(summary.estimatedCostUsd).toBeCloseTo(4.41)
   })
 
   it('does not collapse Opus 4.5 or Sonnet 4.5 usage into Claude 5 pricing', async () => {
@@ -422,25 +477,30 @@ describe('ClaudeUsageStore', () => {
         inputTokens: 300_000,
         outputTokens: 300_000,
         cacheReadTokens: 300_000,
-        cacheWriteTokens: 300_000
+        cacheWriteTokens: 300_000,
+        cacheWrite1hTokens: 0,
+        longContext: {
+          inputTokens: 300_000,
+          outputTokens: 300_000,
+          cacheReadTokens: 300_000,
+          cacheWriteTokens: 300_000,
+          cacheWrite1hTokens: 0
+        }
       }))
     })
 
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    // Why: the 4.5 tier premium only survives if `-4-5-` never matches the `-5`
-    // family regex, so this doubles as the digit-boundary proof for both families.
     expect(
       breakdown.find((row) => row.key === 'claude-sonnet-4-5-20250929')?.estimatedCostUsd
-    ).toBeCloseTo(8.07)
-    // Why: Opus 4.5 and Opus 5 share rates today, so this pins the rate rather
-    // than the routing — it fails only if the two ever diverge.
+    ).toBeCloseTo(10.98)
+    // Opus 4.5 and 5 share rates, so this assertion cannot distinguish their routing.
     expect(
       breakdown.find((row) => row.key === 'claude-opus-4-5-20251101')?.estimatedCostUsd
     ).toBeCloseTo(11.025)
   })
 
-  it('prices unknown newer Opus 4 point releases with current Opus rates', async () => {
+  it('leaves unknown Opus point releases unpriced instead of borrowing another model', async () => {
     const store = createStoreWithState({
       dailyAggregates: [
         {
@@ -455,7 +515,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         },
         {
           day: '2026-04-09',
@@ -469,14 +530,16 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
 
     const summary = await store.getSummary('orca', '30d')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(73.5)
+    expect(summary.estimatedCostUsd).toBeNull()
+    expect(summary.hasUnpricedModels).toBe(true)
   })
 
   it('does not collapse older Opus 4.1 or base Opus 4 usage into current Opus pricing', async () => {
@@ -494,7 +557,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         },
         {
           day: '2026-04-09',
@@ -508,7 +572,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -518,7 +583,7 @@ describe('ClaudeUsageStore', () => {
     expect(summary.estimatedCostUsd).toBeCloseTo(220.5)
   })
 
-  it('prices Sonnet long-context usage with threshold rates', async () => {
+  it('prices Sonnet 4.6 long-context usage at its flat 1M-window rates', async () => {
     const store = createStoreWithState({
       dailyAggregates: [
         {
@@ -533,14 +598,15 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 300_000,
           outputTokens: 300_000,
           cacheReadTokens: 300_000,
-          cacheWriteTokens: 300_000
+          cacheWriteTokens: 300_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
 
     const summary = await store.getSummary('orca', '30d')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(8.07)
+    expect(summary.estimatedCostUsd).toBeCloseTo(6.615)
   })
 
   it('returns automation usage for a single matching worktree session', async () => {
@@ -553,36 +619,7 @@ describe('ClaudeUsageStore', () => {
         lastScanCompletedAt: 2,
         lastScanError: null
       },
-      sessions: [
-        {
-          sessionId: 'session-1',
-          firstTimestamp: '2026-04-09T15:00:00.000Z',
-          lastTimestamp: '2026-04-09T15:05:00.000Z',
-          model: 'claude-sonnet-4-6',
-          lastCwd: '/workspace/repo-a',
-          lastGitBranch: 'feature/a',
-          primaryWorktreeId: worktreeId,
-          primaryRepoId: 'repo-1',
-          turnCount: 1,
-          totalInputTokens: 1000,
-          totalOutputTokens: 500,
-          totalCacheReadTokens: 200,
-          totalCacheWriteTokens: 100,
-          locationBreakdown: [
-            {
-              locationKey: `worktree:${worktreeId}`,
-              projectLabel: 'Repo A',
-              repoId: 'repo-1',
-              worktreeId,
-              turnCount: 1,
-              inputTokens: 1000,
-              outputTokens: 500,
-              cacheReadTokens: 200,
-              cacheWriteTokens: 100
-            }
-          ]
-        }
-      ]
+      sessions: [createWorktreeUsageSession(worktreeId)]
     })
     const refreshMock = vi.fn().mockResolvedValue({
       enabled: true,
@@ -617,64 +654,47 @@ describe('ClaudeUsageStore', () => {
     expect(refreshMock).toHaveBeenCalledWith(false)
   })
 
-  it('persists setEnabled via async durable write without leaving tmp files', async () => {
-    const store = createStoreWithState({
-      schemaVersion: 5,
-      scanState: {
-        enabled: false,
-        lastScanStartedAt: null,
-        lastScanCompletedAt: null,
-        lastScanError: null
-      }
+  it('forces one scan per run and stops re-forcing after a failed attempt', async () => {
+    const completedAt = Date.parse('2026-04-09T15:06:00.000Z')
+    const scanError = 'EMFILE: too many open files'
+    const failedScanState = (lastScanStartedAt: number) => ({
+      enabled: true,
+      lastScanStartedAt,
+      lastScanCompletedAt: completedAt - 60_000,
+      lastScanError: scanError
     })
-
-    await store.setEnabled(true)
-
-    expect(writeOpens.value).toBe(1)
-    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
-    const persisted = JSON.parse(
-      readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')
-    )
-    expect(persisted.scanState.enabled).toBe(true)
-    // Pretty-print preserved for human inspection of the analytics cache.
-    expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
-  })
-
-  it('vetoes a stale concurrent async write so the newer snapshot wins', async () => {
-    const store = createStoreWithState({
-      schemaVersion: 5,
-      scanState: {
-        enabled: true,
-        lastScanStartedAt: null,
-        lastScanCompletedAt: null,
-        lastScanError: null
-      }
-    })
-    const internals = store as unknown as {
-      writeToDisk: () => Promise<void>
-      state: ClaudeUsagePersistedState
+    const scanStateResult = {
+      enabled: true,
+      isScanning: false,
+      lastScanStartedAt: completedAt - 60_000,
+      lastScanCompletedAt: completedAt - 60_000,
+      lastScanError: scanError,
+      hasAnyClaudeData: false
+    }
+    const request = {
+      worktreeId: 'repo-1::/workspace/repo-a',
+      terminalSessionId: 'tab-1',
+      startedAt: completedAt - 120_000,
+      completedAt
     }
 
-    writeGate.blocked = true
-    const first = internals.writeToDisk()
-    await vi.waitFor(() => expect(writeGate.waiters.length).toBe(1))
+    const beforeAttempt = createStoreWithState({
+      scanState: failedScanState(completedAt - 60_000)
+    })
+    const beforeRefresh = vi.spyOn(beforeAttempt, 'refresh').mockResolvedValue(scanStateResult)
+    await beforeAttempt.getAutomationRunUsage(request)
 
-    internals.state.scanState.enabled = false
-    writeGate.blocked = false
-    const second = internals.writeToDisk()
-    writeGate.waiters.splice(0).forEach((resolve) => resolve())
-    await Promise.all([first, second])
+    expect(beforeRefresh).toHaveBeenCalledWith(true)
 
-    expect(
-      JSON.parse(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).scanState
-        .enabled
-    ).toBe(false)
-    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
-    // Serialized, so the superseded write can be skipped safely rather than racing the newer one.
-    expect(writeOpens.maxConcurrent).toBe(1)
+    const afterAttempt = createStoreWithState({ scanState: failedScanState(completedAt + 1000) })
+    const afterRefresh = vi.spyOn(afterAttempt, 'refresh').mockResolvedValue(scanStateResult)
+    const usage = await afterAttempt.getAutomationRunUsage(request)
+
+    expect(afterRefresh).toHaveBeenCalledWith(false)
+    expect(usage.unavailableReason).toBe('scan_failed')
   })
 
-  it('persists a successful refresh with one full-cache write', async () => {
+  it('hands Claude scans the worker-owned source cache and persists a compact report', async () => {
     const store = createStoreWithState({
       schemaVersion: 5,
       scanState: {
@@ -686,26 +706,69 @@ describe('ClaudeUsageStore', () => {
     })
 
     await store.refresh(true)
+    await store.flush()
 
-    // Why exactly one: scan start used to rewrite the whole 20 MB cache before any result changed.
-    expect(writeOpens.value).toBe(1)
-    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
-    expect(
-      JSON.parse(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).scanState
-    ).toMatchObject({
-      lastScanStartedAt: new Date('2026-04-09T12:00:00.000-04:00').getTime(),
-      lastScanCompletedAt: new Date('2026-04-09T12:00:00.000-04:00').getTime(),
-      lastScanError: null
+    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], {
+      path: join(tempUserData, 'orca-claude-usage-sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: '[]',
+      reuse: false
     })
+    const persisted = readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')
+    expect(persisted).not.toContain('\n')
+    expect(JSON.parse(persisted)).not.toHaveProperty('processedFiles')
   })
 
-  it('sweeps a usage temp file orphaned by a crash between write and rename', async () => {
-    const orphan = join(tempUserData, 'orca-claude-usage.json.999.1.abc.tmp')
-    writeFileSync(orphan, '{}')
+  it('joins a scan that is already in flight when the run finished before it started', async () => {
+    const worktreeId = 'repo-1::/workspace/repo-a'
+    const store = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+    // Prime the worktree fingerprint so an unforced refresh can return early.
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
+      sessions: [],
+      dailyAggregates: []
+    })
+    await store.refresh(true)
 
-    createStoreWithState({})
-    await vi.waitFor(() =>
-      expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
-    )
+    const completedAt = Date.now() + 10_000
+    vi.setSystemTime(new Date(completedAt + 1_000))
+
+    let startScan = () => {}
+    let finishScan = () => {}
+    const scanStarted = new Promise<void>((resolve) => {
+      startScan = resolve
+    })
+    const scanFinished = new Promise<void>((resolve) => {
+      finishScan = resolve
+    })
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockImplementationOnce(async () => {
+      startScan()
+      await scanFinished
+      return {
+        sessions: [createWorktreeUsageSession(worktreeId)],
+        dailyAggregates: []
+      }
+    })
+
+    const inFlight = store.refresh(true)
+    await scanStarted
+
+    const usage = store.getAutomationRunUsage({
+      worktreeId,
+      terminalSessionId: 'session-1',
+      startedAt: completedAt - 60_000,
+      completedAt
+    })
+    finishScan()
+    await inFlight
+
+    expect((await usage).status).toBe('known')
+    expect((await usage).providerSessionId).toBe('session-1')
   })
 })

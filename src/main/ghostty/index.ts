@@ -1,24 +1,16 @@
 import { readFile, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
-import type { GlobalSettings, GhosttyImportPreview } from '../../shared/types'
+import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
 import type { Store } from '../persistence'
 import { findGhosttyConfigPaths } from './discovery'
 import { parseGhosttyConfig } from './parser'
 import { mapGhosttyToOrca } from './mapper'
 import { resolveGhosttyThemeColors } from './theme-resolution'
 
-// Why: defensive upper bound on the Ghostty config size we're willing to read
-// into memory on the main process. Real configs are a few KB; anything past
-// this is almost certainly a symlink mistake or a pathological file and we
-// would rather surface an error than OOM the main process.
+// Bound config reads to avoid loading arbitrarily large files into main.
 const MAX_CONFIG_BYTES = 1_000_000
 
-// Why: mapGhosttyToOrca creates new object instances for nested values like
-// terminalColorOverrides. A reference comparison (!==) would always report
-// them as changed even when the contents are identical. The stringifier sorts
-// keys at every object depth so persisted settings whose storage preserves a
-// different key order compare equal. Arrays keep their ordering (meaningful
-// for list-valued settings).
+// Compare nested values structurally with sorted keys while preserving meaningful array order.
 function stableStringify(v: unknown): string {
   if (v === null || typeof v !== 'object') {
     return JSON.stringify(v)
@@ -69,10 +61,7 @@ function usesConditionalThemePair(themeName: string): boolean {
     .some((part) => part.startsWith('light:') || part.startsWith('dark:'))
 }
 
-// Why: `theme = <name>` is how most Ghostty configs pick their colors, so
-// dropping it silently loses the entire palette. Resolve the referenced theme
-// file and merge its colors as defaults: explicit config keys win, and config
-// palette entries are appended after the theme's so per-index overrides apply.
+// Theme colors are defaults; explicit config colors and palette entries take precedence.
 async function applyThemeReference(parsed: Record<string, string | string[]>): Promise<string[]> {
   const rawTheme = parsed['theme']
   if (rawTheme === undefined) {
@@ -107,29 +96,37 @@ export async function previewGhosttyImport(store: Store): Promise<GhosttyImportP
   }
 
   const parsed: Record<string, string | string[]> = {}
+  const readPaths: string[] = []
+  let firstError: string | null = null
   for (const configPath of configPaths) {
     let content: string
     try {
       const info = await stat(configPath)
       if (info.size > MAX_CONFIG_BYTES) {
-        return {
-          found: false,
-          diff: {},
-          unsupportedKeys: [],
-          error: `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
+        if (firstError === null) {
+          firstError = `Config file is too large to import (${info.size} bytes, limit ${MAX_CONFIG_BYTES}).`
         }
+        continue
       }
       content = await readFile(configPath, 'utf-8')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not read config file'
-      return {
-        found: false,
-        diff: {},
-        unsupportedKeys: [],
-        error: `Could not read config: ${message}`
+      if (firstError === null) {
+        firstError = `Could not read config: ${message}`
       }
+      continue
     }
     mergeParsedConfig(parsed, parseGhosttyConfig(content))
+    readPaths.push(configPath)
+  }
+
+  if (readPaths.length === 0) {
+    return {
+      found: false,
+      diff: {},
+      unsupportedKeys: [],
+      error: firstError ?? 'Could not read config'
+    }
   }
 
   const themeUnsupportedKeys = await applyThemeReference(parsed)
@@ -153,8 +150,8 @@ export async function previewGhosttyImport(store: Store): Promise<GhosttyImportP
 
   return {
     found: true,
-    configPath: configPaths[0],
-    configPaths,
+    configPath: readPaths[0],
+    configPaths: readPaths,
     diff: actualDiff,
     unsupportedKeys
   }
