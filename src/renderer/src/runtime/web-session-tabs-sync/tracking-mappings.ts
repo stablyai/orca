@@ -1,4 +1,3 @@
-import type { WebSessionTabsSyncState } from './state'
 import {
   hostSessionGroupIdByLocalKey,
   hostSessionTabIdByLocalKey,
@@ -51,7 +50,7 @@ export function setHostSessionTabIdMapping(
 }
 
 export function resolveHostSessionTabIdForWebSessionTab(
-  _state: WebSessionTabsSyncState,
+  _state: unknown,
   args: { environmentId: string; worktreeId: string; tabId: string }
 ): string | null {
   return (

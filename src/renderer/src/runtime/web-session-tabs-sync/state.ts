@@ -1,3 +1,4 @@
+import type { WorkspacePresentationIndex } from '../../store/workspace-presentation-index'
 import type { AppState } from '../../store'
 import type { RetiredTerminalTabSweepState } from '../../store/slices/retired-terminal-tab-state-sweep'
 import type {
@@ -238,6 +239,7 @@ export type WebSessionTabsSyncState = Pick<
       | 'localOnlyScrollbackByTabId'
       | 'pendingStartupByTabId'
       | 'runtimePaneTitlesByTabId'
+      | 'workspacePresentations'
     >
   >
 
@@ -267,7 +269,7 @@ export type WebSessionTabsBatchRecordKey =
 
 export type WebSessionOpenFilesIndex = {
   source: readonly OpenFile[]
-  byWorktree: Map<string, OpenFile[]>
+  byWorktree: WorkspacePresentationIndex<OpenFile[]>
 }
 export type WebSessionTabsBatchContext = {
   changedAgentPaneKeys?: Set<string>

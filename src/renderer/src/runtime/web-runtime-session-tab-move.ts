@@ -1,3 +1,5 @@
+import { workspaceCommandAddress, workspaceProtocolPlacement } from './workspace-command-address'
+import { workspacePresentationFor } from '@/store/workspace-source-state'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   RuntimeMobileSessionTabMove,
@@ -29,6 +31,10 @@ export async function moveWebRuntimeSessionTab(
     null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
+  }
+  // The caller already reduced this outer move through U; source panes/groups did not move.
+  if (workspacePresentationFor(useAppStore.getState(), args.worktreeId)) {
+    return true
   }
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
@@ -176,7 +182,18 @@ function hostBackedIndex(
 export async function resolveHostTabDropTarget(
   environmentId: string,
   args: { worktreeId: string; tabId: string; targetGroupId: string; index?: number }
-): Promise<{ targetGroupId: string; index?: number }> {
+): Promise<{ targetGroupId?: string; index?: number }> {
+  const state = useAppStore.getState()
+  if (workspacePresentationFor(state, args.worktreeId)) {
+    const address = workspaceCommandAddress(state, args.worktreeId, args.tabId)
+    return workspaceProtocolPlacement(
+      state,
+      environmentId,
+      address?.workspaceId ?? args.worktreeId,
+      args.targetGroupId
+    )
+  }
+
   const { targetGroup, targetHostGroupId, resolveHostBackedTabId } = await hostDropResolvers(
     environmentId,
     args.worktreeId,

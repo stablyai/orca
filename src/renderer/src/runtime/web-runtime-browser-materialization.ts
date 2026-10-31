@@ -1,3 +1,4 @@
+import { findBrowserWorkspaceForRemotePage } from './web-session-tabs-sync/mirrored-browser-tabs'
 import type { AppState } from '@/store/types'
 
 type BrowserMaterializationState = Pick<
@@ -15,24 +16,10 @@ export function hasMaterializedWebRuntimeBrowserPage(
   remotePageId: string,
   expectedGroupId?: string
 ): boolean {
-  return (state.browserTabsByWorktree[worktreeId] ?? []).some((workspace) => {
-    const hasRemotePage = (state.browserPagesByWorkspace[workspace.id] ?? []).some((page) => {
-      const handle = state.remoteBrowserPageHandlesByPageId[page.id]
-      // Staged handles are optimistic guesses, not proof the host published the page.
-      return (
-        handle?.environmentId === environmentId &&
-        handle.remotePageId === remotePageId &&
-        handle.staged !== true
-      )
-    })
-    if (!hasRemotePage) {
-      return false
-    }
-    return (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
-      (tab) =>
-        tab.contentType === 'browser' &&
-        tab.entityId === workspace.id &&
-        (!expectedGroupId || tab.groupId === expectedGroupId)
-    )
-  })
+  const found = findBrowserWorkspaceForRemotePage(state, worktreeId, environmentId, remotePageId)
+  return Boolean(
+    found?.unifiedTab &&
+    state.remoteBrowserPageHandlesByPageId[found.page.id]?.staged !== true &&
+    (!expectedGroupId || found.unifiedTab.groupId === expectedGroupId)
+  )
 }

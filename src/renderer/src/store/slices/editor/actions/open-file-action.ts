@@ -1,3 +1,4 @@
+import { workspaceReadState } from '../../../workspace-source-state'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
@@ -39,7 +40,11 @@ export function createOpenFileAction(
     if (
       linkIntent &&
       scratch.editorItemTargetGroupId &&
-      !isLiveEditorOpenGroup(get(), editorItemWorktreeId, scratch.editorItemTargetGroupId)
+      !isLiveEditorOpenGroup(
+        workspaceReadState(get()),
+        editorItemWorktreeId,
+        scratch.editorItemTargetGroupId
+      )
     ) {
       return { fileId: scratch.editorItemFileId, result: null }
     }
@@ -74,9 +79,9 @@ export function createOpenFileAction(
         })
       }
       // Why: openWorkspaceEditorItem falls back to the file id when no tab exists; that is not a view.
-      const view = (get().unifiedTabsByWorktree?.[editorItemWorktreeId] ?? []).find(
-        (tab) => tab.id === shownId && tab.entityId === scratch.editorItemFileId
-      )
+      const view = (
+        workspaceReadState(get()).unifiedTabsByWorktree?.[editorItemWorktreeId] ?? []
+      ).find((tab) => tab.id === shownId && tab.entityId === scratch.editorItemFileId)
       settled.result = view
         ? { fileId: scratch.editorItemFileId, viewStateId: view.id, groupId: view.groupId }
         : null

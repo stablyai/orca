@@ -4,7 +4,7 @@ import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   structuredAgentSessionOwnerForTab,
-  structuredAgentSessionTargetForHost
+  structuredAgentSessionTargetForTab
 } from './structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 
@@ -21,7 +21,7 @@ export function resolveStructuredChatTabName(
   state: AppState
 ): StructuredChatTabName {
   const owner = structuredAgentSessionOwnerForTab(state, tab)
-  const target = structuredAgentSessionTargetForHost(owner)
+  const target = structuredAgentSessionTargetForTab(state, tab)
   const name = target
     ? getStructuredAgentSessionStatusFeed(target).getNamingSnapshot().get(tab.entityId)
         ?.conversationName

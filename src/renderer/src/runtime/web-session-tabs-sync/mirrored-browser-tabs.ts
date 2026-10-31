@@ -1,3 +1,6 @@
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { workspacePresentationFor } from '@/store/workspace-source-state'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsResult
@@ -14,7 +17,13 @@ import { buildBrowserUnifiedTab } from './tab-builders'
 import { isReadyBrowserTab } from './terminal-surfaces'
 
 export function findBrowserWorkspaceForRemotePage(
-  state: WebSessionTabsSyncState,
+  state: Pick<
+    WebSessionTabsSyncState,
+    | 'browserTabsByWorktree'
+    | 'browserPagesByWorkspace'
+    | 'remoteBrowserPageHandlesByPageId'
+    | 'unifiedTabsByWorktree'
+  >,
   worktreeId: string,
   environmentId: string,
   remotePageId: string
@@ -24,7 +33,20 @@ export function findBrowserWorkspaceForRemotePage(
     const pages = state.browserPagesByWorkspace[workspace.id] ?? []
     for (const page of pages) {
       const handle = state.remoteBrowserPageHandlesByPageId[page.id]
-      if (handle?.environmentId === environmentId && handle.remotePageId === remotePageId) {
+      const framed =
+        isFrameDrawnServerWorkspace(environmentId, worktreeId) &&
+        page.id === remotePageId &&
+        (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+          (tab) =>
+            tab.contentType === 'browser' &&
+            tab.entityId === workspace.id &&
+            tab.worktreeId === worktreeId &&
+            tab.executionHostId === toRuntimeExecutionHostId(environmentId)
+        )
+      if (
+        (handle?.environmentId === environmentId && handle.remotePageId === remotePageId) ||
+        framed
+      ) {
         return {
           workspace,
           page,
@@ -149,6 +171,7 @@ export function buildMirroredBrowserTabs(
         ? (existing.unifiedTab?.groupId ?? recordedClientGroupId)
         : (recordedClientGroupId ?? existingClientGroupId)
     const clientGroupId =
+      !workspacePresentationFor(state, snapshot.worktree) &&
       preferredClientGroupId &&
       clientGroupIds.has(preferredClientGroupId) &&
       (renderedGroupIds.size === 0 || renderedGroupIds.has(preferredClientGroupId))

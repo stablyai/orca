@@ -1,3 +1,4 @@
+import { restoreWorkspacePresentationGroup } from '../../../shared/workspace-presentation-intent'
 import { editWorkspacePresentationDocuments } from '../../../shared/workspace-presentation-documents'
 import type { AppState } from './types'
 import {
@@ -12,8 +13,7 @@ import {
   workspaceEntityKey,
   tabPresentation,
   sourceTabPresentation,
-  isWorkspacePresentationKey,
-  type WorkspacePresentation
+  isWorkspacePresentationKey
 } from '../../../shared/workspace-presentation'
 export function workspaceSourceClaims(
   state: AppState,
@@ -22,8 +22,13 @@ export function workspaceSourceClaims(
 ) {
   const raw = rawWorkspaceState(state)
   const saved = workspacePresentationFor(state, workspaceId)
+  const ownSource = saved?.baseline.find(
+    ({ source }) => source.workspaceId === tab.worktreeId
+  )?.source
   const entity = workspaceEntityKey(
-    tabPresentation(tab, tab.executionHostId ?? saved?.anchor.hostId ?? 'local').entity
+    ownSource
+      ? sourceTabPresentation(tab, ownSource).entity
+      : tabPresentation(tab, tab.executionHostId ?? saved?.anchor.hostId ?? 'local').entity
   )
   const sources = saved?.baseline.map(({ source }) => source) ?? [
     { hostId: tab.executionHostId ?? 'local', workspaceId: tab.worktreeId }
@@ -33,71 +38,6 @@ export function workspaceSourceClaims(
       (candidate) => workspaceEntityKey(sourceTabPresentation(candidate, source).entity) === entity
     )
   )
-}
-
-function restoreGroupPlacement(
-  original: WorkspacePresentation['layout'],
-  current: WorkspacePresentation['layout'],
-  groupId: string
-): WorkspacePresentation['layout'] {
-  const contains = (node: WorkspacePresentation['layout'], id: string): boolean =>
-    Boolean(
-      node &&
-      (node.type === 'leaf'
-        ? node.groupId === id
-        : contains(node.first, id) || contains(node.second, id))
-    )
-  if (contains(current, groupId)) {
-    return current
-  }
-  const leaf = { type: 'leaf' as const, groupId }
-  if (!current) {
-    return leaf
-  }
-  const parent = (node: WorkspacePresentation['layout']): WorkspacePresentation['layout'] => {
-    if (!node || node.type === 'leaf') {
-      return undefined
-    }
-    if (
-      (node.first.type === 'leaf' && node.first.groupId === groupId) ||
-      (node.second.type === 'leaf' && node.second.groupId === groupId)
-    ) {
-      return node
-    }
-    return parent(node.first) ?? parent(node.second)
-  }
-  const previous = parent(original)
-  if (previous?.type === 'split') {
-    const sibling =
-      previous.first.type === 'leaf' && previous.first.groupId === groupId
-        ? previous.second
-        : previous.first
-    const anchor = (node: typeof sibling): string | undefined =>
-      node.type === 'leaf'
-        ? contains(current, node.groupId)
-          ? node.groupId
-          : undefined
-        : (anchor(node.first) ?? anchor(node.second))
-    const id = anchor(sibling)
-    if (id) {
-      const insert = (node: NonNullable<typeof current>): NonNullable<typeof current> =>
-        node.type === 'leaf'
-          ? node.groupId === id
-            ? {
-                ...previous,
-                first:
-                  previous.first.type === 'leaf' && previous.first.groupId === groupId
-                    ? leaf
-                    : node,
-                second:
-                  previous.first.type === 'leaf' && previous.first.groupId === groupId ? node : leaf
-              }
-            : node
-          : { ...node, first: insert(node.first), second: insert(node.second) }
-      return insert(current)
-    }
-  }
-  return { type: 'split', direction: 'horizontal', first: current, second: leaf }
 }
 
 /** A failed close restores its own placement after the existing ordered live-source readback. */
@@ -153,7 +93,7 @@ export function failedWorkspaceTabCloseRestore(
         .filter((entry) => entry.id !== group.id || entry.tabOrder.some((id) => id !== live.id))
         .map((entry) => entry.id)
     )
-    const layout = restoreGroupPlacement(
+    const layout = restoreWorkspacePresentationGroup(
       saved.layout,
       prunePresentationLayout(current.layout, retainedGroups),
       group.id
@@ -172,4 +112,67 @@ export function failedWorkspaceTabCloseRestore(
       set(workspaceSourceWrite({ workspacePresentations: documents }, { documents: [key] }))
     }
   }
+}
+
+/** A real native close retracts every admitted contribution of that physical conversation. */
+export function retireWorkspaceNativeClaims(
+  state: AppState,
+  workspaceId: string,
+  tab: AppState['unifiedTabsByWorktree'][string][number]
+): Partial<AppState> {
+  const claims = workspaceSourceClaims(state, workspaceId, tab).filter(
+    (source) => source.workspaceId !== tab.worktreeId
+  )
+  if (!claims.length) {
+    return {}
+  }
+  const unifiedTabsByWorktree = { ...state.unifiedTabsByWorktree }
+  const groupsByWorktree = { ...state.groupsByWorktree }
+  const layoutByWorktree = { ...state.layoutByWorktree }
+  const activeGroupIdByWorktree = { ...state.activeGroupIdByWorktree }
+  for (const source of claims) {
+    const before = unifiedTabsByWorktree[source.workspaceId] ?? []
+    const entity = workspaceEntityKey(sourceTabPresentation(tab, source).entity)
+    const removed = new Set(
+      before
+        .filter(
+          (candidate) =>
+            workspaceEntityKey(sourceTabPresentation(candidate, source).entity) === entity
+        )
+        .map((candidate) => candidate.id)
+    )
+    unifiedTabsByWorktree[source.workspaceId] = before.filter(
+      (candidate) => !removed.has(candidate.id)
+    )
+    const groups = (groupsByWorktree[source.workspaceId] ?? []).map((group) => {
+      const tabOrder = group.tabOrder.filter((id) => !removed.has(id))
+      return {
+        ...group,
+        tabOrder,
+        activeTabId:
+          group.activeTabId && removed.has(group.activeTabId)
+            ? (tabOrder[0] ?? null)
+            : group.activeTabId,
+        recentTabIds: group.recentTabIds?.filter((id) => !removed.has(id))
+      }
+    })
+    const retained = groups.filter((group) => group.tabOrder.length)
+    groupsByWorktree[source.workspaceId] = retained.length ? retained : groups.slice(0, 1)
+    const ids = new Set(groupsByWorktree[source.workspaceId].map((group) => group.id))
+    const layout = prunePresentationLayout(layoutByWorktree[source.workspaceId], ids)
+    if (layout) {
+      layoutByWorktree[source.workspaceId] = layout
+    } else {
+      delete layoutByWorktree[source.workspaceId]
+    }
+    if (!ids.has(activeGroupIdByWorktree[source.workspaceId])) {
+      const next = groupsByWorktree[source.workspaceId][0]?.id
+      if (next) {
+        activeGroupIdByWorktree[source.workspaceId] = next
+      } else {
+        delete activeGroupIdByWorktree[source.workspaceId]
+      }
+    }
+  }
+  return { unifiedTabsByWorktree, groupsByWorktree, layoutByWorktree, activeGroupIdByWorktree }
 }

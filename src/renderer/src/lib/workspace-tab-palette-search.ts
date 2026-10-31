@@ -1,3 +1,4 @@
+import type { WorkspacePresentationDocuments } from '../../../shared/workspace-presentation'
 import type { OpenFile } from '@/store/slices/editor'
 import type { PaletteDocument } from '../../../shared/palette-match/palette-document'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
@@ -51,6 +52,7 @@ export const TERMINAL_TYPE_SEARCH_ALIASES = ['terminal tab', 'terminal'] as cons
 type WorkspaceTabPaletteActiveTabType = WorkspaceVisibleTabType
 
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
+  workspacePresentations?: WorkspacePresentationDocuments
   worktrees: readonly Worktree[]
   ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
   repoMap: ReadonlyMap<string, { displayName?: string | null }>

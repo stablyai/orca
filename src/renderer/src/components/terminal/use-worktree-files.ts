@@ -1,20 +1,10 @@
-import { strictWorktreeIdentityKey } from '../../../../shared/workspace-presentation'
-import { useMemo } from 'react'
+import { useAppStore } from '@/store'
+import { workspaceAdmittedFiles } from '@/store/workspace-admitted-files'
 import type { OpenFile } from '@/store/slices/editor'
 
-export function useWorktreeFiles(
-  openFiles: readonly OpenFile[],
-  renderedActiveWorktreeId: string | null
-): OpenFile[] {
-  return useMemo(
-    () =>
-      renderedActiveWorktreeId
-        ? openFiles.filter(
-            (file) =>
-              strictWorktreeIdentityKey(file.worktreeId) ===
-              strictWorktreeIdentityKey(renderedActiveWorktreeId)
-          )
-        : [],
-    [openFiles, renderedActiveWorktreeId]
+export function useWorktreeFiles(renderedActiveWorktreeId: string | null): OpenFile[] {
+  return useAppStore((state) =>
+    renderedActiveWorktreeId ? workspaceAdmittedFiles(state, renderedActiveWorktreeId) : EMPTY_FILES
   )
 }
+const EMPTY_FILES: OpenFile[] = []

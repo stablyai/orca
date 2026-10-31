@@ -45,6 +45,24 @@ describe('stopMissingWorktreeTerminals', () => {
     expect(runtime.stopTerminalsForWorktree).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['/srv/cafe\u0301', '/srv/caf\u00e9'],
+    ['\\\\wsl.localhost\\Ubuntu\\srv\\cafe\u0301', '\\\\wsl$\\ubuntu\\srv\\caf\u00e9']
+  ])('stops a genuinely missing byte-distinct owner %s', async (oldPath, livePath) => {
+    const omitted = `repo-1::${oldPath}`
+    const runtime = createRuntime()
+    const result = await stopMissingWorktreeTerminals(
+      localRepo,
+      [omitted],
+      [`repo-1::${livePath}`],
+      { runtime, getLocalProvider: () => null }
+    )
+    expect(result.stoppedWorktreeIds).toEqual([omitted])
+    expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(omitted, {
+      resolvedWorktreeId: omitted
+    })
+  })
+
   it('stops only locally owned worktrees absent from the authoritative scan', async () => {
     const deletedId = 'repo-1::/workspace/deleted'
     const survivingId = 'repo-1::/workspace/surviving'

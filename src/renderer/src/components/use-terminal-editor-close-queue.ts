@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { workspaceFileDisplayId } from '@/store/workspace-admitted-files'
 import { useAppStore } from '../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
@@ -6,7 +7,21 @@ import { isPinnedActiveEditorTab } from './terminal-workspace-model'
 import { selectWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import type { TerminalEditorCloseFoundation } from './use-terminal-editor-close-foundation'
 
-export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFoundation) {
+export function useTerminalEditorCloseQueue(
+  controller: Pick<
+    TerminalEditorCloseFoundation,
+    | 'activeWorktreeId'
+    | 'closeFile'
+    | 'closedReactionsRef'
+    | 'inFlightSaveFileIdRef'
+    | 'pendingEditorCloseQueueRef'
+    | 'proceedToNativeWindowClose'
+    | 'setActiveFile'
+    | 'setActiveTabType'
+    | 'setSaveDialogFileId'
+    | 'windowCloseAfterDirtyRef'
+  >
+) {
   const {
     activeWorktreeId,
     closeFile,
@@ -82,11 +97,12 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     if (nextFileId) {
       const state = useAppStore.getState()
       const file = state.openFiles.find((candidate) => candidate.id === nextFileId)
-      if (file && file.worktreeId !== state.activeWorktreeId) {
-        selectWorkspaceSurface(state, file.worktreeId)
+      const displayId = file ? workspaceFileDisplayId(state, file) : state.activeWorktreeId
+      if (displayId && displayId !== state.activeWorktreeId) {
+        selectWorkspaceSurface(state, displayId)
       }
-      setActiveFile(nextFileId)
-      setActiveTabType('editor', file?.worktreeId ?? state.activeWorktreeId)
+      setActiveFile(nextFileId, displayId ?? undefined)
+      setActiveTabType('editor', displayId)
       setSaveDialogFileId(nextFileId)
       return
     }

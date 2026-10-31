@@ -1,4 +1,4 @@
-import { worktreeIdentityKey } from '../../../../../../shared/worktree/id'
+import { strictWorktreeIdentityKey } from '../../../../../../shared/workspace-presentation'
 import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
@@ -21,10 +21,10 @@ export async function teardownMissingWorktreeTerminalsBestEffort(
     return
   }
   const detectedIds = new Set(
-    detected.worktrees.map((worktree) => worktreeIdentityKey(worktree.id))
+    detected.worktrees.map((worktree) => strictWorktreeIdentityKey(worktree.id))
   )
   const missingIds = knownWorktreeIds.filter(
-    (worktreeId) => !detectedIds.has(worktreeIdentityKey(worktreeId))
+    (worktreeId) => !detectedIds.has(strictWorktreeIdentityKey(worktreeId))
   )
   if (missingIds.length === 0) {
     return

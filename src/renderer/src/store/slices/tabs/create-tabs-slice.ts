@@ -1,3 +1,5 @@
+import { presentationActionSet } from '../../workspace-presentation-actions'
+import { workspaceReadState } from '../../workspace-source-state'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { TabsSlice } from './tabs-slice-contract'
@@ -23,10 +25,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   ...createTabsCloseActions(set, get),
   ...createTabsBulkCloseActions(set, get),
   ...createTabsLabelActions(set, get),
-  ...createTabsGroupActions(set, get),
-  ...createTabsMoveActions(set, get),
-  ...createTabsDropActions(set, get),
-  ...createTabsSplitRatioActions(set),
-  ...createTabsDragPreviewActions(set),
+  ...createTabsGroupActions(presentationActionSet(set), () => workspaceReadState(get())),
+  ...createTabsMoveActions(presentationActionSet(set), () => workspaceReadState(get())),
+  ...createTabsDropActions(presentationActionSet(set), () => workspaceReadState(get())),
+  ...createTabsSplitRatioActions(presentationActionSet(set)),
+  ...createTabsDragPreviewActions(presentationActionSet(set)),
   ...createTabsSessionActions(set, get)
 })

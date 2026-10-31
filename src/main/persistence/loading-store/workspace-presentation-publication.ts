@@ -12,6 +12,12 @@ import {
   reconcileWorkspacePresentation
 } from '../../../shared/workspace-presentation-reconcile'
 
+export type PresentationState = Pick<
+  PersistedState,
+  'workspaceSession' | 'workspaceSessionsByHostId'
+> &
+  WorkspacePresentationDocuments
+
 type Index = {
   documents: Map<WorkspacePresentationKey, WorkspacePresentation>
   hosts: Map<ExecutionHostId, Map<string, Set<WorkspacePresentationKey>>>
@@ -20,18 +26,18 @@ type Index = {
   pending: Set<WorkspacePresentationKey>
 }
 const journals = new WeakMap<
-  PersistedState,
+  PresentationState,
   Set<Map<WorkspacePresentationKey, WorkspacePresentation | undefined>>
 >()
-function recordBefore(state: PersistedState, key: WorkspacePresentationKey): void {
+function recordBefore(state: PresentationState, key: WorkspacePresentationKey): void {
   for (const journal of journals.get(state) ?? []) {
     if (!journal.has(key)) {
       journal.set(key, state[key])
     }
   }
 }
-const indexes = new WeakMap<PersistedState, Index>()
-function indexFor(state: PersistedState): Index {
+const indexes = new WeakMap<PresentationState, Index>()
+function indexFor(state: PresentationState): Index {
   let index = indexes.get(state)
   if (!index) {
     index = {
@@ -122,7 +128,7 @@ function updateIndex(
   }
 }
 export function writeWorkspacePresentation(
-  state: PersistedState,
+  state: PresentationState,
   key: WorkspacePresentationKey,
   document: WorkspacePresentation | undefined
 ): void {
@@ -136,7 +142,7 @@ export function writeWorkspacePresentation(
   updateIndex(index, key, document)
 }
 export function storedWorkspacePresentations(
-  state: PersistedState,
+  state: PresentationState,
   keys?: readonly string[]
 ): WorkspacePresentationDocuments {
   const index = indexFor(state)
@@ -150,7 +156,7 @@ export function storedWorkspacePresentations(
     : Object.fromEntries(index.documents)
 }
 /** Literal source selectors can address client placement without becoming membership aliases. */
-export function storedWorkspacePresentationFor(state: PersistedState, workspace: string) {
+export function storedWorkspacePresentationFor(state: PresentationState, workspace: string) {
   const index = indexFor(state)
   const keys = index.workspaces.get(workspace)
   if (keys?.size !== 1) {
@@ -162,7 +168,7 @@ export function storedWorkspacePresentationFor(state: PersistedState, workspace:
 }
 /** One reconciliation per affected document in the source write's existing profile transaction. */
 export function reconcileStoredWorkspacePresentations(
-  state: PersistedState,
+  state: PresentationState,
   hostId?: ExecutionHostId
 ): string[] {
   const index = indexFor(state)
@@ -236,7 +242,7 @@ export function reconcileStoredWorkspacePresentations(
   return dirty
 }
 /** Conditional receipts restore only this mutation, leaving later owner edits intact. */
-export function presentationMutation(state: PersistedState) {
+export function presentationMutation(state: PresentationState) {
   const before = new Map<WorkspacePresentationKey, WorkspacePresentation | undefined>()
   let active = journals.get(state)
   if (!active) {

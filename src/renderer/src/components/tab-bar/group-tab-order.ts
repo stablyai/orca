@@ -1,3 +1,4 @@
+import { workspaceAdmittedFiles } from '@/store/workspace-admitted-files'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../../store/types'
 import { reconcileTabOrder } from './reconcile-order'
@@ -154,8 +155,7 @@ export function getActiveTabNavOrder(
   ids: ActiveTabNavOrderIds = {}
 ): VisibleTabRef[] {
   const terminalIds = ids.terminalIds ?? (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
-  const editorIds =
-    ids.editorIds ?? state.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
+  const editorIds = ids.editorIds ?? workspaceAdmittedFiles(state, worktreeId).map((f) => f.id)
   const browserIds =
     ids.browserIds ?? (state.browserTabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
   const simulatorIds =

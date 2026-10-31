@@ -1,3 +1,4 @@
+import { settleBrowserPresentation } from './browser-presentation-settlement'
 import { collectCollidingRetractionPaneKeys } from './retraction-pane-ownership'
 import type { WebSessionTabsSyncState } from './state'
 import type { applyActiveStateUpdates } from './apply-active-state'
@@ -188,5 +189,15 @@ export function buildWebSessionTabsFinalPatch(
       ? { activeTabTypeByWorktree: nextActiveTabTypeByWorktree }
       : {})
   }
+  Object.assign(
+    patch,
+    settleBrowserPresentation(
+      state,
+      patch,
+      worktreeId,
+      context.presentationPlacements,
+      context.honorSnapshotActiveFocus ? context.nextActiveUnifiedTabId : null
+    )
+  )
   return Object.keys(patch).length === 0 ? state : patch
 }

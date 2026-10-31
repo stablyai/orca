@@ -1,3 +1,4 @@
+import { workspaceReadState } from '../../workspace-source-state'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { findGroupForTab, findTabAndWorktree } from '../tab-group-state'
 
@@ -7,7 +8,7 @@ export function createTabsBulkCloseActions(
 ): Pick<TabsSlice, 'closeOtherTabs' | 'closeTabsToRight' | 'closeTabsToLeft'> {
   return {
     closeOtherTabs: (tabId) => {
-      const state = get()
+      const state = workspaceReadState(get())
       const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
       if (!found) {
         return []
@@ -27,7 +28,7 @@ export function createTabsBulkCloseActions(
     },
 
     closeTabsToRight: (tabId) => {
-      const state = get()
+      const state = workspaceReadState(get())
       const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
       if (!found) {
         return []
@@ -56,7 +57,7 @@ export function createTabsBulkCloseActions(
     },
 
     closeTabsToLeft: (tabId) => {
-      const state = get()
+      const state = workspaceReadState(get())
       const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
       if (!found) {
         return []

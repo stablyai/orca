@@ -4,7 +4,9 @@ import { mergeFetchedWorktrees } from './worktrees/listing/fetched-worktree-merg
 // @vitest-environment happy-dom
 import { createElement, useEffect } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
-import { useStore } from 'zustand'
+import { useStore, createStore } from 'zustand'
+import type { AppState } from '../types'
+import { withWorkspaceComposition } from '../workspace-composition'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../index'
 import {
@@ -154,7 +156,7 @@ describe('source ownership through readers and commands', () => {
     const other = 'other::/repo'
     store.setState({
       unifiedTabsByWorktree: {
-        ...store.getState().unifiedTabsByWorktree,
+        ...before.unifiedTabsByWorktree,
         [other]: [makeUnifiedTab({ id: 'other', worktreeId: other })]
       }
     })
@@ -166,8 +168,11 @@ describe('source ownership through readers and commands', () => {
     store
       .getState()
       .moveUnifiedTabToGroup(C1, 'right', { activate: true, recordInteraction: false })
-    expect(before.unifiedTabsByWorktree[O][0].groupId).toBe('left')
-    expect(rawWorkspaceState(store.getState()).unifiedTabsByWorktree[O][0].groupId).toBe('right')
+    expect(before.unifiedTabsByWorktree[O][0].groupId).toBe('source')
+    expect(rawWorkspaceState(store.getState()).unifiedTabsByWorktree[O][0].groupId).toBe('source')
+    expect(store.getState().unifiedTabsByWorktree[D].find((tab) => tab.id === C1)?.groupId).toBe(
+      'right'
+    )
   })
   it('keeps source-local close and retraction separate from same-host duplicate claims and unrelated hosts', () => {
     const store = seed()
@@ -277,7 +282,7 @@ describe('source ownership through readers and commands', () => {
                 id: 'browser-tab',
                 entityId: 'browser',
                 worktreeId: O,
-                groupId: 'left',
+                groupId: 'source',
                 contentType: 'browser'
               })
             ]
@@ -613,4 +618,140 @@ describe('bounded discovery and isolated read subscriptions', () => {
     expect(recentlyRenamedWorktreeIdExpiry.size).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
+})
+
+it('keeps exact source ownership after physical rename, a new-source frame, repeated notification and real native close', async () => {
+  const store = seed()
+  vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+  const N = 'r::C:/renamed'
+  store.getState().migrateWorktreeIdentity(D, N)
+  const renamed = store.getState()
+  expect(rawWorkspaceState(renamed).unifiedTabsByWorktree[O]?.map((tab) => tab.entityId)).toEqual([
+    'chat1'
+  ])
+  expect(rawWorkspaceState(renamed).unifiedTabsByWorktree[N]?.map((tab) => tab.entityId)).toEqual([
+    'chat2'
+  ])
+  expect(
+    Object.values(renamed.workspacePresentations ?? {}).some(
+      (saved) => saved?.displayWorkspaceId === D
+    )
+  ).toBe(false)
+  applyStructuredSessionTabSnapshots([frame(N, 'chat2', 3)])
+  store.getState().migrateWorktreeIdentity(D, N)
+  expect(
+    store
+      .getState()
+      .unifiedTabsByWorktree[N]?.map((tab) => tab.id)
+      .sort()
+  ).toEqual([C1, C2])
+  expect(store.getState().layoutByWorktree[N]).toEqual(split)
+  store.getState().closeUnifiedTab(C1)
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(closeStructuredAgentSession).toHaveBeenCalledWith({ kind: 'local' }, 'chat1')
+  expect(callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'session.tabs.close', {
+    worktree: `id:${O}`,
+    tabId: 'agent-session:chat1',
+    reason: 'user'
+  })
+  expect(store.getState().unifiedTabsByWorktree[N]?.map((tab) => tab.entityId)).toEqual(['chat2'])
+})
+
+it('qualifies an actual reordered drop by its members when another workspace uses the same group ID', () => {
+  const store = seed()
+  const other = 'other::/repo'
+  const foreign = makeUnifiedTab({
+    id: 'foreign',
+    entityId: 'foreign',
+    worktreeId: other,
+    groupId: 'right'
+  })
+  store.setState((raw) => ({
+    groupsByWorktree: {
+      [other]: [
+        makeTabGroup({
+          id: 'right',
+          worktreeId: other,
+          tabOrder: ['foreign'],
+          activeTabId: 'foreign'
+        })
+      ],
+      ...raw.groupsByWorktree
+    },
+    unifiedTabsByWorktree: { [other]: [foreign], ...raw.unifiedTabsByWorktree }
+  }))
+  expect(store.getState().dropUnifiedTab(C1, { groupId: 'right' })).toBe(true)
+  store.getState().reorderUnifiedTabs('right', [C2, C1], { recordInteraction: false })
+  expect(
+    store.getState().groupsByWorktree[D].find((group) => group.id === 'right')?.tabOrder
+  ).toEqual([C2, C1])
+  expect(
+    rawWorkspaceState(store.getState()).unifiedTabsByWorktree[O].map((tab) => tab.entityId)
+  ).toEqual(['chat1'])
+  expect(rawWorkspaceState(store.getState()).groupsByWorktree[other][0].tabOrder).toEqual([
+    'foreign'
+  ])
+})
+
+it('keeps direct functional writes and action reducers raw while explicit outer creation/placement stays in U', () => {
+  const store = seed()
+  const raw = rawWorkspaceState(store.getState())
+  store.setState((current) => {
+    expect(current.unifiedTabsByWorktree[O]).toBe(raw.unifiedTabsByWorktree[O])
+    expect(current.unifiedTabsByWorktree[D].map((tab) => tab.entityId)).toEqual(['chat2'])
+    return { activeFileId: null }
+  })
+  const commandReads: (() => AppState)[] = []
+  const commandStore = createStore<AppState>()(
+    withWorkspaceComposition((set, get, api) => {
+      commandReads.push(get, api.getState)
+      return {
+        ...raw,
+        setActiveTabType: () =>
+          set((current) => {
+            expect(current.unifiedTabsByWorktree[D].map((tab) => tab.entityId)).toEqual(['chat2'])
+            expect(api.getState()).toBe(current)
+            return { activeFileId: 'command' }
+          })
+      }
+    })
+  )
+  commandStore.setState({ workspacePresentations: raw.workspacePresentations })
+  commandStore.getState().setActiveTabType('editor', D)
+  for (const get of commandReads) {
+    expect(get().unifiedTabsByWorktree[O]).toBe(raw.unifiedTabsByWorktree[O])
+  }
+  commandStore.setState((current) => ({ ...current, activeFileId: 'replacement' }), true)
+  expect(rawWorkspaceState(commandStore.getState()).activeFileId).toBe('replacement')
+  expect(
+    rawWorkspaceState(commandStore.getState()).unifiedTabsByWorktree[D].map((tab) => tab.entityId)
+  ).toEqual(['chat2'])
+  expect(
+    commandStore
+      .getState()
+      .unifiedTabsByWorktree[D].map((tab) => tab.entityId)
+      .sort()
+  ).toEqual(['chat1', 'chat2'])
+  const outerGroupId = store.getState().createEmptySplitGroup(D, 'left', 'right')
+  const outerGroup = store
+    .getState()
+    .groupsByWorktree[D].find((group) => group.id === outerGroupId)!
+  const created = store.getState().createUnifiedTab(D, 'agent-session', {
+    id: 'new',
+    entityId: 'new',
+    targetGroupId: outerGroup.id,
+    agentSessionAgent: 'codex'
+  })
+  expect(created.groupId).toBe(outerGroup.id)
+  expect(
+    rawWorkspaceState(store.getState()).unifiedTabsByWorktree[D].find((tab) => tab.id === 'new')
+      ?.groupId
+  ).not.toBe(outerGroup.id)
+  expect(rawWorkspaceState(store.getState()).unifiedTabsByWorktree[O]).toBe(
+    raw.unifiedTabsByWorktree[O]
+  )
+  expect(store.getState().unifiedTabsByWorktree[D].find((tab) => tab.id === 'new')?.groupId).toBe(
+    outerGroup.id
+  )
 })

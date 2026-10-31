@@ -1,3 +1,4 @@
+import { workspaceReadState, workspacePresentationFor } from '../../../workspace-source-state'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
@@ -47,7 +48,11 @@ export function createOpenFileMutations(
         const file = s.openFiles.find((f) => f.id === fileId)
         const worktreeId = file?.worktreeId
         // Floating/background activation stays workspace-local or violates agent-auto-ack’s global-selection invariant.
-        const scopeWorktreeId = targetWorktreeId ?? worktreeId ?? s.activeWorktreeId
+        const scopeWorktreeId =
+          targetWorktreeId ??
+          (worktreeId && workspacePresentationFor(s, worktreeId)?.displayWorkspaceId) ??
+          worktreeId ??
+          s.activeWorktreeId
         return {
           ...(scopeWorktreeId === s.activeWorktreeId ? { activeFileId: fileId } : {}),
           activeFileIdByWorktree: worktreeId
@@ -55,10 +60,13 @@ export function createOpenFileMutations(
             : s.activeFileIdByWorktree
         }
       })
-      const state = get()
+      const state = workspaceReadState(get())
       const worktreeId =
         targetWorktreeId ??
-        state.openFiles.find((file) => file.id === fileId)?.worktreeId ??
+        (() => {
+          const id = state.openFiles.find((file) => file.id === fileId)?.worktreeId
+          return id ? (workspacePresentationFor(state, id)?.displayWorkspaceId ?? id) : undefined
+        })() ??
         state.activeWorktreeId
       if (!worktreeId) {
         return

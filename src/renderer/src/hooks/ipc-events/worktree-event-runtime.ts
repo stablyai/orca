@@ -33,7 +33,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
 
-import { worktreeIdentityKey } from '../../../../shared/worktree/id'
+import { strictWorktreeIdentityKey } from '../../../../shared/workspace-presentation'
 import {
   recentlyRenamedWorktreeIdExpiry,
   rememberWorktreeRename
@@ -198,10 +198,10 @@ export function createWorktreeEventRuntime(
     if (!after) {
       return
     }
-    const afterIdentityKeys = new Set([...after].map(worktreeIdentityKey))
+    const afterIdentityKeys = new Set([...after].map(strictWorktreeIdentityKey))
     const removed: string[] = []
     for (const id of before) {
-      if (afterIdentityKeys.has(worktreeIdentityKey(id))) {
+      if (afterIdentityKeys.has(strictWorktreeIdentityKey(id))) {
         continue
       }
       // A recently renamed worktree's old/new id isn't a deletion — its state moved to the new id; the list just lags.

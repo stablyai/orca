@@ -1,3 +1,5 @@
+import { workspaceCommandAddress } from '@/runtime/workspace-command-address'
+import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/web-runtime-browser-client-target-group'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
@@ -22,7 +24,7 @@ export function useTabGroupCreationCommands({
 }: {
   groupId: string
   worktreeId: string
-  worktreeState: TabGroupWorktreeSnapshot
+  worktreeState: Pick<TabGroupWorktreeSnapshot, 'mobileEmulatorEnabled'>
 }) {
   const createTab = useAppStore((state) => state.createTab)
   const setActiveTab = useAppStore((state) => state.setActiveTab)
@@ -69,7 +71,12 @@ export function useTabGroupCreationCommands({
         if (!source) {
           return
         }
-        const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+        const address = workspaceCommandAddress(state, worktreeId, sourceUnifiedTabId)
+        const sourceWorkspaceId = address?.workspaceId ?? worktreeId
+        const runtimeEnvironmentId =
+          address?.target?.kind === 'environment'
+            ? address.target.environmentId
+            : runtimeEnvironmentIdOrLocalUnlessTwin(state, sourceWorkspaceId)
         const browserAvailability = getClientCreationActionPolicy(state, worktreeId)[
           'managed-browser'
         ]
@@ -81,11 +88,15 @@ export function useTabGroupCreationCommands({
           browserWorkspaceHasRemoteOwner(state, source.id, runtimeEnvironmentId)
         ) {
           const created = await createWebRuntimeSessionBrowserTab({
-            worktreeId,
+            worktreeId: sourceWorkspaceId,
             environmentId: runtimeEnvironmentId,
             url: source.url,
             profileId: source.sessionProfileId,
-            targetGroupId: groupId,
+            ...resolveWebRuntimeBrowserClientTargetGroup(
+              state,
+              { workspaceId: worktreeId, targetGroupId: groupId },
+              runtimeEnvironmentId ?? ''
+            ),
             clientAfterTabId: sourceUnifiedTabId
           })
           if (created) {

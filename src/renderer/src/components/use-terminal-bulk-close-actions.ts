@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { workspaceAdmittedFiles } from '@/store/workspace-admitted-files'
 import { useAppStore } from '../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
@@ -68,14 +69,17 @@ export function useTerminalBulkCloseActions(
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
           closeTab(id)
         } else if (
-          state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
+          workspaceAdmittedFiles(state, activeWorktreeId).some(
+            (file) => file.id === (unifiedTab?.entityId ?? id)
+          )
         ) {
           // Why fresh state: an earlier view of the same record may have just closed.
-          if (needsSavePromptOnClose(useAppStore.getState(), id)) {
-            dirtyFileIds.push(id)
+          const fileId = unifiedTab?.entityId ?? id
+          if (needsSavePromptOnClose(useAppStore.getState(), fileId)) {
+            dirtyFileIds.push(fileId)
             continue
           }
-          closeFile(id)
+          closeFile(fileId)
         } else if (
           (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
         ) {
@@ -112,7 +116,13 @@ export function useTerminalBulkCloseActions(
       }
       const tabs = state.unifiedTabsByWorktree[activeWorktreeId] ?? []
       const pinnedIds = new Set(tabs.flatMap((tab) => (tab.isPinned ? [tab.id, tab.entityId] : [])))
-      return ids.filter((id) => !pinnedIds.has(id))
+      const admitted = new Set([
+        ...tabs.flatMap((tab) => [tab.id, tab.entityId]),
+        ...workspaceAdmittedFiles(state, activeWorktreeId).map((file) => file.id),
+        ...(state.tabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id),
+        ...(state.browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id)
+      ])
+      return ids.filter((id) => admitted.has(id) && !pinnedIds.has(id))
     },
     [activeWorktreeId]
   )
@@ -142,12 +152,8 @@ export function useTerminalBulkCloseActions(
       'editors',
       () => {
         const state = useAppStore.getState()
-        return state.openFiles
-          .filter(
-            (file) =>
-              file.worktreeId === activeWorktreeId &&
-              !isPinnedEditorFileTab(state, activeWorktreeId, file.id)
-          )
+        return workspaceAdmittedFiles(state, activeWorktreeId)
+          .filter((file) => !isPinnedEditorFileTab(state, activeWorktreeId, file.id))
           .map((file) => file.id)
       },
       (fileIds) => {

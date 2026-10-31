@@ -2,7 +2,13 @@ import { hasWorkspacePresentationDocuments } from '../../../shared/workspace-pre
 import type { AppState } from './types'
 import { WorkspacePresentationIndex } from './workspace-presentation-index'
 import { deriveActiveSurfaceForWorktree } from './slices/tabs/tabs-surface'
-import { rawStates, bindingIndexes, documentChanges } from './workspace-source-state'
+import {
+  rawStates,
+  bindingIndexes,
+  documentChanges,
+  readViews,
+  documentIndexes
+} from './workspace-source-state'
 import {
   isWorkspacePresentationKey,
   type WorkspacePresentationDocuments,
@@ -67,6 +73,9 @@ export function createWorkspaceCompositionView() {
       }
     }
     indexedDocuments = documents
+    if (documents) {
+      documentIndexes.set(documents, index)
+    }
   }
   type Composed = ReturnType<typeof composeWorkspacePresentation> & {
     terminals: AppState['tabsByWorktree'][string]
@@ -126,6 +135,8 @@ export function createWorkspaceCompositionView() {
       return known
     }
     indexDocuments(raw.workspacePresentations)
+    readViews.set(raw, project)
+    bindingIndexes.set(raw, index)
     const bindingIndex = index
     const composedRows = new Map<WorkspacePresentation, Composed>()
     const composedRow = (saved: WorkspacePresentation): Composed => {
@@ -238,12 +249,32 @@ export function createWorkspaceCompositionView() {
           }
         : {}
     }
-    const nextSurfaceInputs = [projection, raw.activeWorktreeId, raw.openFiles]
+    const id = raw.activeWorktreeId
+    const activeSaved = id ? documentFor(id) : undefined
+    const active = activeSaved ? composedRow(activeSaved) : undefined
+    const nextSurfaceInputs = [
+      id,
+      active?.tabs,
+      active?.groups,
+      active?.activeGroupId,
+      active?.layout,
+      active?.terminals,
+      active?.browsers,
+      raw.openFiles,
+      id && raw.activeFileIdByWorktree[id],
+      id && raw.activeBrowserTabIdByWorktree[id],
+      id && raw.activeTabIdByWorktree[id],
+      id && raw.activeTabTypeByWorktree[id]
+    ]
     if (nextSurfaceInputs.some((value, at) => value !== surfaceInputs[at])) {
       surfaceInputs = nextSurfaceInputs
       activeSurface =
         raw.activeWorktreeId && documentFor(raw.activeWorktreeId)
-          ? deriveActiveSurfaceForWorktree({ ...raw, ...projection }, raw.activeWorktreeId)
+          ? (() => {
+              const surfaceState = { ...raw, ...projection }
+              bindingIndexes.set(surfaceState, bindingIndex)
+              return deriveActiveSurfaceForWorktree(surfaceState, raw.activeWorktreeId ?? '')
+            })()
           : {}
     }
     previousRaw = raw
@@ -257,10 +288,14 @@ export function createWorkspaceCompositionView() {
 
   return {
     project,
+    presentationIndex: () => index,
     indexDocuments,
     documentKey: (id: string) => index.get(id),
     acknowledgeSettlement: (documents: WorkspacePresentationDocuments | undefined) => {
       indexedDocuments = documents
+      if (documents) {
+        documentIndexes.set(documents, index)
+      }
     }
   }
 }

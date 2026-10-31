@@ -1,3 +1,4 @@
+import { workspaceSourceOccurrence } from '@/store/workspace-source-state'
 import { toast } from 'sonner'
 import type { AppState } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -37,7 +38,8 @@ export type TerminalPaneTabDetachStore = Pick<
   | 'syncPaneDetachPtyOwnership'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
->
+> &
+  Partial<Pick<AppState, 'workspacePresentations' | 'unifiedTabsByWorktree'>>
 
 type TerminalPaneTabDetachManager = {
   getPanes: () => readonly { id: number }[]
@@ -143,14 +145,16 @@ async function moveLeafToNewTab(
     return null
   }
 
+  const source = workspaceSourceOccurrence(initialStore, args.sourceTabId, args.worktreeId)
+  const sourceWorkspaceId = source?.tab.worktreeId ?? args.worktreeId
   const livePtyId = args.livePtyId ?? persistedPtyId ?? null
   const paneMoveHost =
     !ORCA_LAYOUT_OWNER_IS_MAIN && livePtyId !== null && isWebTerminalSurfaceTabId(args.sourceTabId)
-      ? await resolvePaneMoveHost(args.worktreeId)
+      ? await resolvePaneMoveHost(args.worktreeId, args.sourceTabId)
       : null
   args.persistLayoutSnapshot()
   const request: TerminalLeafMoveRequest = {
-    worktreeId: args.worktreeId,
+    worktreeId: sourceWorkspaceId,
     sourceTabId: args.sourceTabId,
     // Why: a mirrored host tab's local id derives from the host id, so the next snapshot finds this tab.
     targetTabId: paneMoveHost
@@ -161,8 +165,8 @@ async function moveLeafToNewTab(
   }
   if (paneMoveHost) {
     const placement = await resolveHostTabDropTarget(paneMoveHost, {
-      worktreeId: args.worktreeId,
-      tabId: request.targetTabId,
+      worktreeId: sourceWorkspaceId,
+      tabId: request.sourceTabId,
       targetGroupId: args.targetGroupId,
       ...(args.targetIndex !== undefined ? { index: args.targetIndex } : {})
     })
@@ -271,7 +275,7 @@ function applyMove(
       store: afterCreateStore,
       tabId: tab.id,
       targetIndex: args.targetIndex,
-      worktreeId,
+      worktreeId: args.worktreeId,
       mainPlaced: mainMoved
     })
   }
@@ -296,7 +300,7 @@ function applyMove(
     })
   }
   afterCreateStore.setActiveTab(tab.id)
-  afterCreateStore.setActiveTabType('terminal', worktreeId)
+  afterCreateStore.setActiveTabType('terminal', args.worktreeId)
 
   return { tab, leafId, ptyId }
 }

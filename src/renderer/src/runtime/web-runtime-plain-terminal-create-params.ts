@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { workspaceProtocolPlacement } from './workspace-command-address'
 import { SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
 import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
@@ -29,10 +31,17 @@ export async function buildPlainCreateTerminalParams(
   environmentId: string,
   args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<Record<string, unknown>> {
+  const placement = workspaceProtocolPlacement(
+    useAppStore.getState(),
+    environmentId,
+    args.worktreeId,
+    args.targetGroupId,
+    args.afterTabId
+  )
   return {
     worktree: toRuntimeWorktreeSelector(args.worktreeId),
-    afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
-    targetGroupId: args.targetGroupId,
+    afterTabId: placement.afterTabId ? toHostSessionTabId(placement.afterTabId) : undefined,
+    targetGroupId: placement.targetGroupId,
     ...(await resolveCreateTerminalShellParams(environmentId, args)),
     cwd: args.cwd,
     ...(args.env ? { env: args.env } : {}),

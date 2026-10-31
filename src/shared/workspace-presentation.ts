@@ -172,6 +172,18 @@ export function tabPresentation(tab: Tab, hostId: ExecutionHostId): WorkspaceTab
     }
   }
 }
+/** Only row-qualified physical/transport aliases belong to this source. */
+export function workspaceSourceOwnsTab(
+  tab: Pick<Tab, 'executionHostId'>,
+  source: WorkspaceSourceRef
+): boolean {
+  return (
+    !tab.executionHostId ||
+    tab.executionHostId === source.hostId ||
+    tab.executionHostId === source.executionHostId
+  )
+}
+
 export function sourceTabPresentation(
   tab: Tab,
   source: WorkspaceSourceRef
@@ -220,7 +232,9 @@ export function sourceBaseline(
   }
   const baseline = {
     source,
-    tabs: (tabs ?? []).map((tab) => sourceTabPresentation(tab, source)),
+    tabs: (tabs ?? [])
+      .filter((tab) => workspaceSourceOwnsTab(tab, source))
+      .map((tab) => sourceTabPresentation(tab, source)),
     groups: groups ?? [],
     layout,
     activeGroupId: active

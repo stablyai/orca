@@ -1,3 +1,4 @@
+import { workspaceReadState } from '../../workspace-source-state'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
@@ -36,7 +37,7 @@ export function createBrowserTabActions(
 > {
   return {
     createBrowserTab: (worktreeId, url, options) => {
-      options?.validateLinkPlacement?.(get())
+      options?.validateLinkPlacement?.(workspaceReadState(get()))
       assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
       const workspaceId = createBrowserUuid()
       const browserPageId = options?.browserPageId
@@ -97,7 +98,7 @@ export function createBrowserTabActions(
 
       const drawHere = (): void => {
         set((s) => {
-          options?.validateLinkPlacement?.(s)
+          options?.validateLinkPlacement?.(workspaceReadState(s))
           return {
             browserTabsByWorktree: {
               ...s.browserTabsByWorktree,
@@ -177,7 +178,7 @@ export function createBrowserTabActions(
     },
 
     openNewBrowserTabInActiveWorkspace: async (groupId, splitDirection) => {
-      const state = get()
+      const state = workspaceReadState(get())
       // Why: the invoking group owns its workspace; global selection may already point elsewhere.
       const worktreeId =
         findGroupAndWorktree(state.groupsByWorktree, groupId, state.activeWorktreeId ?? undefined)

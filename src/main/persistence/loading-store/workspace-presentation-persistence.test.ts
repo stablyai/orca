@@ -1,3 +1,4 @@
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { admittedWindowPresentationCommit } from '../../ipc/workspace-presentation-window-commit'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -415,4 +416,35 @@ describe('profile-owned source and presentation checkpoint', () => {
     store.setWorkspaceSession(removed)
     expect(view(store).tabs.map((tab) => tab.entityId)).toEqual(['chat2'])
   })
+})
+
+it('migrates the actual main physical source and exact presentation in one checkpoint before a cold reopen', async () => {
+  const { store, directory } = await setup()
+  const N = 'repo-local::C:/renamed'
+  store.migrateWorktreeIdentity(hostWorktreeTarget({ id: D, hostId: 'local' }), N)
+  await store.flushPendingOrThrowAsync()
+  expect(store.getWorkspaceSession().unifiedTabs?.[O]?.map((tab) => tab.entityId)).toEqual([
+    'chat1'
+  ])
+  expect(store.getWorkspaceSession().unifiedTabs?.[N]?.map((tab) => tab.entityId)).toEqual([
+    'chat2'
+  ])
+  expect(store.getWorkspacePresentations()[key]).toBeUndefined()
+  await store.freezeWritesAsync()
+  const reopened = await openTopologyStore(directory)
+  stores.push(reopened)
+  const movedKey = workspacePresentationKey('window', { hostId: 'local', workspaceId: N })
+  const saved = reopened.getWorkspacePresentations()[movedKey]!
+  expect(saved).toMatchObject({
+    displayWorkspaceId: N,
+    anchor: { workspaceId: N },
+    layout: split,
+    activeGroupId: 'left'
+  })
+  expect(saved.tabs.map((tab) => [tab.entity.entityId, tab.groupId, tab.customLabel])).toEqual([
+    ['chat1', 'left', 'Saved name'],
+    ['chat2', 'right', null]
+  ])
+  expect(saved.baseline.map((base) => base.source.workspaceId)).toEqual([O, N])
+  expect(saved.groups.every((group) => group.worktreeId === N)).toBe(true)
 })

@@ -1,3 +1,4 @@
+import { workspacePresentationFor } from '@/store/workspace-source-state'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
 import {
@@ -6,7 +7,14 @@ import {
 } from './web-runtime-session-workspace-routing'
 
 export function selectWebRuntimeSessionWorktree(worktreeId: string, environmentId: string): void {
-  useAppStore.getState().setActiveWorktree(worktreeId, toRuntimeExecutionHostId(environmentId))
+  const state = useAppStore.getState()
+  const saved = workspacePresentationFor(state, worktreeId)
+  state.setActiveWorktree(
+    saved?.displayWorkspaceId ?? worktreeId,
+    saved
+      ? (saved.anchor.executionHostId ?? saved.anchor.hostId)
+      : toRuntimeExecutionHostId(environmentId)
+  )
 }
 
 export type WebRuntimeSessionWorkspaceSelectionRollback = {
@@ -43,10 +51,12 @@ export function selectWebRuntimeSessionBrowserWorktree(
   environmentId: string
 ): void {
   const state = useAppStore.getState()
-  if (
-    state.activeWorktreeId !== worktreeId ||
-    state.activeWorkspaceExecutionHostId !== toRuntimeExecutionHostId(environmentId)
-  ) {
-    state.setActiveWorktree(worktreeId, toRuntimeExecutionHostId(environmentId))
+  const saved = workspacePresentationFor(state, worktreeId)
+  const displayId = saved?.displayWorkspaceId ?? worktreeId
+  const hostId = saved
+    ? (saved.anchor.executionHostId ?? saved.anchor.hostId)
+    : toRuntimeExecutionHostId(environmentId)
+  if (state.activeWorktreeId !== displayId || state.activeWorkspaceExecutionHostId !== hostId) {
+    state.setActiveWorktree(displayId, hostId)
   }
 }

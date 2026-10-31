@@ -1,3 +1,4 @@
+import { preparePresentationSourceCommand } from '../loading-store/workspace-presentation-source-command'
 // Apply routed-partition commands first while carrying in-memory editor views through saved-session loads.
 
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
@@ -85,7 +86,12 @@ export function commitLayoutCommand(
   context: TerminalTopologyCommitContext,
   run: LayoutCommandRun = {}
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
-  const changes = hostIds.map((hostId) => changeIn(hostId, command, context, run.live))
+  const prepared = hostIds.map((hostId) =>
+    preparePresentationSourceCommand(context.state, command, hostId)
+  )
+  const changes = hostIds.map((hostId, at) =>
+    changeIn(hostId, prepared[at].command, context, run.live)
+  )
   const routed = changes[0]?.change.value
   if (!routed) {
     return { value: { ok: false, code: 'workspace_not_found' }, persist: false }
@@ -98,6 +104,9 @@ export function commitLayoutCommand(
   if (effects) {
     run.noteEffects?.(effects)
   }
+  if (routed.ok) {
+    prepared[0]?.settle(routed)
+  }
   return written(routed, routed.ok ? changes.filter(({ change }) => change.value.ok) : [], context)
 }
 
@@ -106,12 +115,16 @@ export function commitLayoutCommandsAcrossPartitions(
   batches: readonly { hostId: ExecutionHostId; command: LayoutCommand }[],
   context: TerminalTopologyCommitContext
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
-  const changes = batches.map(({ hostId, command }) => changeIn(hostId, command, context))
+  const prepared = batches.map(({ hostId, command }) =>
+    preparePresentationSourceCommand(context.state, command, hostId)
+  )
+  const changes = batches.map(({ hostId }, at) => changeIn(hostId, prepared[at].command, context))
   const refused = changes.find(({ change }) => !change.value.ok)?.change.value
   const first = changes[0]?.change.value
   if (refused || !first) {
     return { value: refused ?? { ok: false, code: 'workspace_not_found' }, persist: false }
   }
+  prepared.forEach((command, at) => command.settle(changes[at].change.value))
   return written(first, changes, context)
 }
 

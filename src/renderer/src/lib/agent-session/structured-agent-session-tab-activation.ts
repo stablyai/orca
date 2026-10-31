@@ -1,3 +1,5 @@
+import { workspaceCommandAddress } from '@/runtime/workspace-command-address'
+import { workspacePresentationFor } from '@/store/workspace-source-state'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../worktree-runtime-owner'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { useAppStore } from '@/store/index'
@@ -5,8 +7,8 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import {
-  executionHostIdForStructuredTarget,
-  structuredAgentSessionOwnerForTab
+  structuredAgentSessionTargetForTab,
+  structuredAgentSessionTargetMatches
 } from '@/runtime/structured-agent-session-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type { Tab } from '../../../../shared/tab-types'
@@ -15,15 +17,19 @@ export function findStructuredAgentSessionTab(
   unifiedTabsByWorktree: Readonly<Record<string, readonly Tab[]>>,
   args: { workspaceId: string; sessionId: string; target?: RuntimeClientTarget }
 ): Tab | null {
+  const workspaceId =
+    workspacePresentationFor(useAppStore.getState(), args.workspaceId)?.displayWorkspaceId ??
+    args.workspaceId
   return (
-    unifiedTabsByWorktree[args.workspaceId]?.find(
+    unifiedTabsByWorktree[workspaceId]?.find(
       (candidate) =>
-        candidate.worktreeId === args.workspaceId &&
         candidate.contentType === 'agent-session' &&
         candidate.entityId === args.sessionId &&
         (!args.target ||
-          structuredAgentSessionOwnerForTab(useAppStore.getState(), candidate) ===
-            executionHostIdForStructuredTarget(args.target))
+          structuredAgentSessionTargetMatches(
+            structuredAgentSessionTargetForTab(useAppStore.getState(), candidate),
+            args.target
+          ))
     ) ?? null
   )
 }
@@ -34,13 +40,20 @@ export function activateStructuredAgentSessionTab(args: {
   target?: RuntimeClientTarget
 }): boolean {
   const state = useAppStore.getState()
+  args = {
+    ...args,
+    worktreeId:
+      workspacePresentationFor(state, args.worktreeId)?.displayWorkspaceId ?? args.worktreeId
+  }
   const tab = (state.unifiedTabsByWorktree[args.worktreeId] ?? []).find(
     (candidate) =>
       candidate.id === args.tabId &&
       candidate.contentType === 'agent-session' &&
       (!args.target ||
-        structuredAgentSessionOwnerForTab(state, candidate) ===
-          executionHostIdForStructuredTarget(args.target))
+        structuredAgentSessionTargetMatches(
+          structuredAgentSessionTargetForTab(state, candidate),
+          args.target
+        ))
   )
   if (!tab) {
     return false
@@ -49,7 +62,14 @@ export function activateStructuredAgentSessionTab(args: {
   state.activateTab(tab.id, { worktreeId: args.worktreeId })
   state.setActiveTabType('agent-session', args.worktreeId)
   requestNativeChatComposerFocus(tab.id)
-  activateStructuredAgentSessionTabOnOwner(args.worktreeId, tab.entityId, args.target)
+  const address = workspaceCommandAddress(state, args.worktreeId, tab.id)
+  if (address) {
+    activateStructuredAgentSessionTabOnOwner(
+      address.workspaceId,
+      address.tab.entityId,
+      args.target ?? address.target ?? undefined
+    )
+  }
   return true
 }
 
@@ -60,9 +80,12 @@ export function activateStructuredAgentSessionTabOnOwner(
   target?: RuntimeClientTarget,
   options?: { callerOnly?: boolean }
 ): void {
-  const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktreeId)
+  const state = useAppStore.getState()
+  const address = workspaceCommandAddress(state, worktreeId, sessionId)
+  worktreeId = address?.workspaceId ?? worktreeId
+  const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   void callRuntimeRpc(
-    target ?? runtimeTargetForOwnerEnvironment(environmentId),
+    target ?? address?.target ?? runtimeTargetForOwnerEnvironment(environmentId),
     'session.tabs.activate',
     {
       worktree: toRuntimeWorktreeSelector(worktreeId),

@@ -1,5 +1,6 @@
 import { landsOnEmptiedWorktree, emptiedWorktreeLandingPatch } from './empty-worktree-landing'
 export { landOnEmptiedWorktree } from './empty-worktree-landing'
+import { retireWorkspaceNativeClaims } from '../../workspace-presentation-close'
 import { failedWorkspaceTabCloseRestore, workspaceSourceClaims } from '../../workspace-composition'
 import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
@@ -132,6 +133,9 @@ export function createTabsCloseActions(
       const closeHere = (): void =>
         settleAttentionRemovedBy(set, get, () =>
           set((current) => {
+            if (tab.contentType === 'agent-session') {
+              current = { ...current, ...retireWorkspaceNativeClaims(current, worktreeId, tab) }
+            }
             const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter((item) => {
               if (item.id === tabId) {
                 retireRemovedNativeChatDraftPositions([item], [])

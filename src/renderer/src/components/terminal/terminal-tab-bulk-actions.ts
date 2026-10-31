@@ -1,4 +1,5 @@
-import { strictWorktreeIdentityKey } from '../../../../shared/workspace-presentation'
+import { workspaceCommandAddress } from '@/runtime/workspace-command-address'
+import { workspaceAdmittedFiles } from '@/store/workspace-admitted-files'
 import {
   hasUnroutableTerminalWorktreeOwner,
   resolveTerminalWorktreeRoute
@@ -45,10 +46,11 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
     }
     if (closeHostTerminalTabs) {
       // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
+      const address = workspaceCommandAddress(state, activeWorktreeId, tab.id)
       closeLocalTerminalTabState(tab.id, { remoteCloseOwnedByHost: true })
       void closeWebRuntimeSessionTab({
-        worktreeId: activeWorktreeId,
-        tabId: tab.id,
+        worktreeId: address?.workspaceId ?? activeWorktreeId,
+        tabId: address?.tab.id ?? tab.id,
         environmentId: runtimeEnvironmentId,
         reason: 'user'
       })
@@ -68,10 +70,7 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
     return
   }
   const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-  const currentEditorFiles = state.openFiles.filter(
-    (file) =>
-      strictWorktreeIdentityKey(file.worktreeId) === strictWorktreeIdentityKey(activeWorktreeId)
-  )
+  const currentEditorFiles = workspaceAdmittedFiles(state, activeWorktreeId)
   const runtimeEnvironmentId = resolveTerminalWorktreeRoute(
     state,
     activeWorktreeId
@@ -96,10 +95,11 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
     if (terminalIdSet.has(id)) {
       if (closeHostTerminalTabs) {
         // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
+        const address = workspaceCommandAddress(state, activeWorktreeId, id)
         closeLocalTerminalTabState(id, { remoteCloseOwnedByHost: true })
         void closeWebRuntimeSessionTab({
-          worktreeId: activeWorktreeId,
-          tabId: id,
+          worktreeId: address?.workspaceId ?? activeWorktreeId,
+          tabId: address?.tab.id ?? id,
           environmentId: runtimeEnvironmentId,
           reason: 'user'
         })

@@ -1,3 +1,5 @@
+import { findBrowserWorkspaceForRemotePage } from './web-session-tabs-sync/mirrored-browser-tabs'
+import { noteStagedBrowserTabHandedToFrames } from '@/lib/staged-browser-frame-handover'
 import { useAppStore } from '../store'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -109,19 +111,14 @@ function findWorkspaceIdForRemotePage(args: {
   worktreeId: string
   remotePageId: string
 }): string | null {
-  const state = useAppStore.getState()
-  for (const workspace of state.browserTabsByWorktree[args.worktreeId] ?? []) {
-    for (const page of state.browserPagesByWorkspace[workspace.id] ?? []) {
-      const handle = state.remoteBrowserPageHandlesByPageId[page.id]
-      if (
-        handle?.environmentId === args.environmentId &&
-        handle.remotePageId === args.remotePageId
-      ) {
-        return workspace.id
-      }
-    }
-  }
-  return null
+  return (
+    findBrowserWorkspaceForRemotePage(
+      useAppStore.getState(),
+      args.worktreeId,
+      args.environmentId,
+      args.remotePageId
+    )?.workspace.id ?? null
+  )
 }
 
 /** Rehome staging to the host-minted page ID for snapshot adoption; return null when tracking has ended. */
@@ -136,6 +133,23 @@ export function rehomeStagedWebRuntimeBrowserTab(
   const mirrored = findWorkspaceIdForRemotePage(args)
   if (mirrored !== null && mirrored !== staged.workspaceId) {
     // Snapshot already mirrored this page under host IDs; keeping staging would duplicate it.
+    const state = useAppStore.getState()
+    const stagedTab = state.unifiedTabsByWorktree[args.worktreeId]?.find(
+      (tab) => tab.entityId === staged.workspaceId
+    )
+    const actual = state.unifiedTabsByWorktree[args.worktreeId]?.find(
+      (tab) => tab.entityId === mirrored
+    )
+    if (stagedTab && actual) {
+      const group = state.groupsByWorktree[args.worktreeId]?.find(
+        (group) => group.id === stagedTab.groupId
+      )
+      state.moveUnifiedTabToGroup(actual.id, stagedTab.groupId, {
+        activate: group?.activeTabId === stagedTab.id,
+        recordInteraction: false
+      })
+    }
+    noteStagedBrowserTabHandedToFrames(staged.workspaceId, args.remotePageId)
     discardStagedWebRuntimeBrowserTab(staged)
     return null
   }

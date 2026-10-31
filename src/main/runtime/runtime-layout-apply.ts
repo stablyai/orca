@@ -44,6 +44,21 @@ export async function applyWindowLayoutCommand(
   if (command.type === 'renameTabs') {
     return renameTabs(store, hostIdsFor, command)
   }
+  const occurrenceId =
+    'tabId' in command
+      ? command.tabId
+      : command.type === 'closeTabs'
+        ? command.tabIds[0]
+        : 'browserTabId' in command
+          ? command.browserTabId
+          : undefined
+  const address = occurrenceId
+    ? store.getWorkspaceSourceAddress?.(command.workspace, occurrenceId)
+    : undefined
+  if (address) {
+    command = { ...command, workspace: address.workspace }
+  }
+
   if (
     isWslMoveWorkspaceSessionFrozen(command.workspace) ||
     // Refuse a dropped target write before source gives up its tab.
@@ -154,7 +169,9 @@ async function renameTabs(
 ): Promise<LayoutApplyReply> {
   const untitled: UntitledTab[] = []
   const byHost = new Map<ExecutionHostId, CommandOf<'renameTab'>[]>()
-  for (const rename of renameTabCommandsOf(command)) {
+  for (const original of renameTabCommandsOf(command)) {
+    const address = store.getWorkspaceSourceAddress?.(original.workspace, original.tabId)
+    const rename = address ? { ...original, workspace: address.workspace } : original
     const { workspace, tabId } = rename
     const [hostId] = hostIdsFor(workspace, tabId)
     if (isWslMoveWorkspaceSessionFrozen(workspace)) {

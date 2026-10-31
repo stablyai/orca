@@ -1,45 +1,78 @@
+import {
+  sourceTabPresentation,
+  workspaceEntityKey,
+  workspaceSourceOwnsTab
+} from '../../../shared/workspace-presentation'
+import type { Tab } from '../../../shared/tab-types'
 import type { AppState } from './types'
 import type { WorkspaceSessionSnapshot } from '../lib/workspace-session'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type {
   WorkspacePresentationDocuments,
-  WorkspacePresentation
+  WorkspacePresentation,
+  WorkspaceSourceRef
 } from '../../../shared/workspace-presentation'
 import type { WorkspacePresentationIndex } from './workspace-presentation-index'
 export type WorkspaceCompositionState = { workspacePresentations?: WorkspacePresentationDocuments }
+export const readViews = new WeakMap<object, (raw: AppState) => AppState>()
+export function workspaceReadState(state: AppState): AppState {
+  const raw = rawWorkspaceState(state)
+  return readViews.get(raw)?.(raw) ?? state
+}
 export const rawStates = new WeakMap<object, AppState>()
+export const documentIndexes = new WeakMap<object, WorkspacePresentationIndex>()
 export const bindingIndexes = new WeakMap<object, WorkspacePresentationIndex>()
 export function workspacePresentationFor(
   state: { workspacePresentations?: WorkspacePresentationDocuments },
   workspaceId: string
 ): WorkspacePresentation | undefined {
-  const key = bindingIndexes.get(state)?.get(workspaceId)
+  const key = (
+    bindingIndexes.get(state) ??
+    (state.workspacePresentations && documentIndexes.get(state.workspacePresentations))
+  )?.get(workspaceId)
   return key ? state.workspacePresentations?.[key] : undefined
 }
-export function workspaceSourceTab(
-  state: {
-    unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
-    workspacePresentations?: WorkspacePresentationDocuments
-  },
+type SourceTabState = {
+  unifiedTabsByWorktree?: Record<string, readonly Tab[] | undefined>
+  workspacePresentations?: WorkspacePresentationDocuments
+}
+
+/** Resolve the actual host-qualified occurrence, never an outer group or lexical path alias. */
+export function workspaceSourceOccurrence(
+  state: SourceTabState,
   tabId: string,
   workspaceId: string
 ) {
   const raw = rawStates.get(state)
   const tabs = raw?.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree ?? {}
-  const exact = tabs[workspaceId]?.find((tab) => tab.id === tabId || tab.entityId === tabId)
-  if (exact) {
-    return exact
-  }
-  const view = raw ? workspacePresentationFor(state, workspaceId) : undefined
-  for (const { source } of view?.baseline ?? []) {
-    const found = tabs[source.workspaceId]?.find(
-      (tab) => tab.id === tabId || tab.entityId === tabId
-    )
-    if (found) {
-      return found
+  const presentation = workspacePresentationFor(state, workspaceId)
+  const placement = presentation?.tabs.find(
+    (tab) => tab.id === tabId || tab.entity.entityId === tabId
+  )
+  if (presentation) {
+    for (const { source } of presentation.baseline) {
+      const tab = tabs[source.workspaceId]?.find(
+        (candidate) =>
+          workspaceSourceOwnsTab(candidate, source) &&
+          (candidate.id === tabId || candidate.entityId === tabId) &&
+          (!placement ||
+            workspaceEntityKey(sourceTabPresentation(candidate, source).entity) ===
+              workspaceEntityKey(placement.entity))
+      )
+      if (tab) {
+        return { tab, source, presentation }
+      }
     }
+    return undefined
   }
-  return undefined
+  const tab = tabs[workspaceId]?.find((tab) => tab.id === tabId || tab.entityId === tabId)
+  const source: WorkspaceSourceRef | undefined = tab
+    ? { hostId: tab.executionHostId ?? 'local', workspaceId: tab.worktreeId }
+    : undefined
+  return tab && source ? { tab, source, presentation: undefined } : undefined
+}
+export function workspaceSourceTab(state: SourceTabState, tabId: string, workspaceId: string) {
+  return workspaceSourceOccurrence(state, tabId, workspaceId)?.tab
 }
 type WriteScope = {
   sources?: readonly string[]
@@ -93,7 +126,10 @@ export function workspaceSourceGroup(
   const groups = (raw?.groupsByWorktree ?? state.groupsByWorktree)?.[workspaceId] ?? []
   return (
     groups.find((group) => group.id === groupId)?.id ??
-    (raw?.activeGroupIdByWorktree ?? state.activeGroupIdByWorktree)?.[workspaceId] ??
+    groups.find(
+      (group) =>
+        group.id === (raw?.activeGroupIdByWorktree ?? state.activeGroupIdByWorktree)?.[workspaceId]
+    )?.id ??
     groups[0]?.id
   )
 }

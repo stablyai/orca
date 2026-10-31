@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { workspaceReadState } from '../../../workspace-source-state'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
@@ -87,8 +88,10 @@ export function applyOpenFileToState(
           runtimeEnvironmentId,
           reusableOpenFileModes
         )
+  const presentation = workspaceReadState(s)
   const linkPlacement =
-    linkIntent && resolveEditorLinkOpenPlacement(s, worktreeId, linkIntent, id, file.mode)
+    linkIntent &&
+    resolveEditorLinkOpenPlacement(presentation, worktreeId, linkIntent, id, file.mode)
   if (linkPlacement?.kind === 'refused') {
     scratch.refused = true
     return s
@@ -100,7 +103,8 @@ export function applyOpenFileToState(
   // Why: resolve the target group up-front so preview replacement is scoped to it (group B open must not evict group A's preview).
   const requestedGroupId =
     linkPlacement?.kind === 'group' ? linkPlacement.groupId : options?.targetGroupId
-  const targetGroupId = resolveEditorOpenTargetGroupId(s, worktreeId, requestedGroupId) ?? undefined
+  const targetGroupId =
+    resolveEditorOpenTargetGroupId(presentation, worktreeId, requestedGroupId) ?? undefined
   scratch.editorItemTargetGroupId = targetGroupId
   const activeResult =
     options?.selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
@@ -182,7 +186,11 @@ export function applyOpenFileToState(
   // Why: scope preview replacement to worktreeId + targetGroupId so link clicks in group B don't evict group A's previews.
   let newFiles = s.openFiles
   if (isPreview) {
-    const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+    const replaceablePreviewId = getReplaceablePreviewFileId(
+      presentation,
+      worktreeId,
+      targetGroupId
+    )
     const existingPreviewIdx = s.openFiles.findIndex((f) => f.id === replaceablePreviewId)
     if (existingPreviewIdx !== -1) {
       const replacedPreview = s.openFiles[existingPreviewIdx]

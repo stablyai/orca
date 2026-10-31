@@ -22,7 +22,6 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     groupsByWorktree,
     hydrationSucceeded,
     layoutByWorktree,
-    openFiles,
     renderedActiveWorktreeId,
     tabsByWorktree,
     workspaceSessionReady
@@ -62,7 +61,7 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     ensureWorktreeRootGroup(activeWorktreeId)
   }, [activeWorktreeId, ensureWorktreeRootGroup])
 
-  const worktreeFiles = useWorktreeFiles(openFiles, renderedActiveWorktreeId)
+  const worktreeFiles = useWorktreeFiles(renderedActiveWorktreeId)
   const worktreeBrowserTabs = renderedActiveWorktreeId
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
     : []

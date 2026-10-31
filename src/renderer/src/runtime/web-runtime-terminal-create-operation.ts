@@ -1,8 +1,8 @@
+import { workspaceProtocolPlacement } from './workspace-command-address'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { agentProviderSessionForHostEnsure } from './agent-session-ensure-provider-session'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
@@ -65,6 +65,13 @@ export async function createWebRuntimeSessionTerminalResult(
       }
     }
   }
+  const sourcePlacement = workspaceProtocolPlacement(
+    useAppStore.getState(),
+    environmentId,
+    args.worktreeId,
+    args.targetGroupId,
+    args.afterTabId
+  )
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
@@ -74,10 +81,7 @@ export async function createWebRuntimeSessionTerminalResult(
     selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
     workspaceSelectionRollback = {
       previous,
-      applied: {
-        worktreeId: args.worktreeId,
-        executionHostId: toRuntimeExecutionHostId(environmentId)
-      }
+      applied: readActiveWorkspaceSelection()
     }
   }
   let hostCreated = false
@@ -175,8 +179,10 @@ export async function createWebRuntimeSessionTerminalResult(
             method: 'session.tabs.createTerminal',
             params: {
               worktree: toRuntimeWorktreeSelector(args.worktreeId),
-              afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
-              targetGroupId: args.targetGroupId,
+              afterTabId: sourcePlacement.afterTabId
+                ? toHostSessionTabId(sourcePlacement.afterTabId)
+                : undefined,
+              targetGroupId: sourcePlacement.targetGroupId,
               command: args.command,
               cwd: args.cwd,
               ...(args.env ? { env: args.env } : {}),
@@ -211,13 +217,13 @@ export async function createWebRuntimeSessionTerminalResult(
       createdLeafId = legacyAlreadyPlacedInGroup
         ? created.terminal.leafId
         : createdTerminalLeafId(created.terminal)
-      if (args.targetGroupId && createdTabId && !legacyAlreadyPlacedInGroup) {
+      if (sourcePlacement.targetGroupId && createdTabId && !legacyAlreadyPlacedInGroup) {
         await callEnvironment({
           method: 'session.tabs.move',
           params: {
             worktree: toRuntimeWorktreeSelector(args.worktreeId),
             tabId: createdTabId,
-            targetGroupId: args.targetGroupId,
+            targetGroupId: sourcePlacement.targetGroupId,
             kind: 'move-to-group'
           },
           timeoutMs: 15_000

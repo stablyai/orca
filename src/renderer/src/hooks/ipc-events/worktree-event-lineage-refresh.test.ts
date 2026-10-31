@@ -97,6 +97,33 @@ describe('remote worktree event lineage refresh', () => {
     expect(store.getState().removeWorkspaceSpaceWorktrees).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['/srv/cafe\u0301', '/srv/caf\u00e9'],
+    ['/srv/gone', '/srv/kept'],
+    ['\\\\wsl.localhost\\Ubuntu\\srv\\cafe\u0301', '\\\\wsl$\\ubuntu\\srv\\caf\u00e9']
+  ])('cleans the actually omitted owner %s while retaining %s', async (oldPath, retainedPath) => {
+    const omitted = `repo1::${oldPath}`
+    const retained = `repo1::${retainedPath}`
+    const old = makeWorktree({ id: omitted, repoId: 'repo1', path: oldPath })
+    const listed = makeWorktree({ ...old, id: retained, path: retainedPath })
+    store.setState({
+      worktreesByRepo: { repo1: [old] },
+      fetchWorktrees: vi.fn(async () => {
+        store.setState({
+          detectedWorktreesByRepo: { repo1: makeDetectedResult('repo1', [listed]) }
+        })
+        return true
+      })
+    })
+    const { worktreeChangeRefreshQueue: queue } = createWorktreeEventRuntime(unsubs, () => false)
+    queue.enqueue({ repoId: 'repo1', executionHostId: 'local' })
+    await flushPromises()
+    expect(store.getState().purgeWorktreeTerminalState).toHaveBeenCalledWith([
+      { id: omitted, hostId: 'local' }
+    ])
+    expect(store.getState().removeWorkspaceSpaceWorktrees).toHaveBeenCalledWith([omitted])
+  })
+
   it('downloads zero lineage copies for a 25-repository order save, then refreshes structural changes', async () => {
     const { worktreeChangeRefreshQueue: queue } = createWorktreeEventRuntime(unsubs, () => false)
     for (let index = 0; index < 25; index += 1) {

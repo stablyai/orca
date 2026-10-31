@@ -1,4 +1,5 @@
-import { rawWorkspaceState, workspaceSourceWrite } from '@/store/workspace-composition'
+import { rawWorkspaceState } from '@/store/workspace-composition'
+import { workspaceLayoutFrameSourceStore } from './workspace-layout-frame-source-store'
 // Layout-owner windows draw main’s locally owned, held workspaces; paired servers remain mirror-owned. Local tab changes stay drawn until main answers (layout-owner-drawn-tab-holds). Records frames apply binding/title deltas directly and rebuild other changed workspaces from store. Startup/reopen/new/whole workspaces use full save/Loader builds (E2a/E2b).
 
 import { showFramePatch, withMovedTabsSelected } from '@/store/slices/tabs/moved-tab-selection'
@@ -88,12 +89,7 @@ export function openWorkspaceLayoutFrameSync(
   const show = (patch: LayoutFrameBuildPatch, rebuiltWorkspaces?: readonly string[]): void => {
     selectionsTaken.push(
       ...showFramePatch(
-        {
-          ...store,
-          getState: () => rawWorkspaceState(store.getState()),
-          setState: (sourcePatch) =>
-            store.setState(workspaceSourceWrite(sourcePatch, { sources: rebuiltWorkspaces }))
-        },
+        workspaceLayoutFrameSourceStore(store, source.target, rebuiltWorkspaces),
         patch,
         rebuiltWorkspaces
       )

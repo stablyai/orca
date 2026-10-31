@@ -44,12 +44,13 @@ export type OpenTabSearchEntryState = Pick<
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
-> & {
-  executionHostId: ExecutionHostId
-  generatedTitlesEnabled: boolean
-  repo: Pick<Repo, 'connectionId' | 'displayName' | 'executionHostId' | 'id'> | null
-  worktree: Worktree
-}
+> &
+  Partial<Pick<AppState, 'workspacePresentations'>> & {
+    executionHostId: ExecutionHostId
+    generatedTitlesEnabled: boolean
+    repo: Pick<Repo, 'connectionId' | 'displayName' | 'executionHostId' | 'id'> | null
+    worktree: Worktree
+  }
 
 export type OpenTabSearchBrowserPageState = Pick<
   OpenTabSearchEntryState,
@@ -152,6 +153,7 @@ export function selectOpenTabSearchEntryState(
     folderWorkspaces: selectFolderWorkspaces(state),
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     groupsByWorktree: state.groupsByWorktree,
+    workspacePresentations: state.workspacePresentations,
     openFiles: state.openFiles,
     repo,
     tabsByWorktree: state.tabsByWorktree,
@@ -211,6 +213,7 @@ export function buildOpenTabSearchEntries(
       ...scope,
       unifiedTabsByWorktree: state.unifiedTabsByWorktree,
       tabsByWorktree: state.tabsByWorktree,
+      workspacePresentations: state.workspacePresentations,
       openFiles: state.openFiles,
       agentStatusByPaneKey: agentState.agentStatusByPaneKey,
       retainedAgentsByPaneKey: agentState.retainedAgentsByPaneKey,

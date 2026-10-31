@@ -28,11 +28,11 @@ import {
   findAmbiguousWorktreeIds,
   findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
-  hasOpenFileExecutionHostEvidence,
-  isOpenFileOwnedByWorktree,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
-import type { OpenFile } from '@/store/slices/editor'
+import { workspaceAdmittedFiles } from '@/store/workspace-admitted-files'
+import { workspacePresentationFor, workspaceSourceOccurrence } from '@/store/workspace-source-state'
+import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { isWorkspaceTabContentType } from './workspace-tab-palette-content-type'
 
@@ -97,6 +97,7 @@ function isCurrentWorkspaceTab({
 }
 
 export function buildSearchableWorkspaceTabEntries({
+  workspacePresentations,
   worktrees,
   ownershipWorktrees,
   repoMap,
@@ -124,15 +125,6 @@ export function buildSearchableWorkspaceTabEntries({
 }: BuildSearchableWorkspaceTabsOptions): SearchableWorkspaceTab[] {
   const entries: SearchableWorkspaceTab[] = []
   const seenTabIdentities = new Set<string>()
-  const openFilesById = new Map<string, OpenFile[]>()
-  for (const file of openFiles) {
-    const bucket = openFilesById.get(file.id)
-    if (bucket) {
-      bucket.push(file)
-    } else {
-      openFilesById.set(file.id, [file])
-    }
-  }
   const agentIndex = buildAgentMetadataTabIndex({
     agentStatusByPaneKey,
     retainedAgentsByPaneKey,
@@ -172,17 +164,27 @@ export function buildSearchableWorkspaceTabEntries({
       terminalTabs.set(terminalTab.id, terminalTabs.has(terminalTab.id) ? null : terminalTab)
     }
 
+    const sourceState = { workspacePresentations, unifiedTabsByWorktree }
+    const presentation = workspacePresentationFor(sourceState, worktree.id)
+    const files = workspaceAdmittedFiles(
+      { workspacePresentations, openFiles, worktreesByRepo: { [worktree.repoId]: [worktree] } },
+      worktree.id
+    )
+    const filesById = new Map(files.map((file) => [file.id, file]))
     const unifiedTabs = unifiedTabsByWorktree[worktree.id] ?? []
     const duplicateTabIds = findDuplicateIds(unifiedTabs)
     for (const rawTab of unifiedTabs) {
       if (
         duplicateTabIds.has(rawTab.id) ||
         !isWorkspaceTabContentType(rawTab.contentType) ||
-        !isUnifiedTabOwnedByWorktree(rawTab, worktree, ambiguousWorktreeIds)
+        !(presentation
+          ? isExecutionHostAliasForWorktree(presentation.anchor.hostId, worktree) &&
+            workspaceSourceOccurrence(sourceState, rawTab.id, worktree.id)
+          : isUnifiedTabOwnedByWorktree(rawTab, worktree, ambiguousWorktreeIds))
       ) {
         continue
       }
-      const tab = rawTab as Tab & { contentType: WorkspaceTabContentType }
+      const tab = { ...rawTab, contentType: rawTab.contentType }
       const tabIdentity = JSON.stringify([
         getUnifiedTabPaletteExecutionHostId(tab, worktree) ?? null,
         tab.id
@@ -265,18 +267,7 @@ export function buildSearchableWorkspaceTabEntries({
         })
         continue
       }
-      const files = openFilesById.get(tab.entityId)
-      if (files?.length !== 1) {
-        continue
-      }
-      const file = files.find(
-        (candidate) =>
-          candidate.worktreeId === worktree.id &&
-          (!(
-            hasOpenFileExecutionHostEvidence(candidate) || ambiguousWorktreeIds.has(worktree.id)
-          ) ||
-            isOpenFileOwnedByWorktree(candidate, worktree))
-      )
+      const file = filesById.get(tab.entityId)
       if (!file) {
         continue
       }

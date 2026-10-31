@@ -1,3 +1,4 @@
+import { workspaceCommandAddress } from './workspace-command-address'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   RuntimeMobileSessionTabCloseResult,
@@ -157,6 +158,16 @@ async function callWebRuntimeSessionTabMethod(
     replay?: true
   }
 ): Promise<WebRuntimeSessionTabCloseOutcome> {
+  const address = workspaceCommandAddress(useAppStore.getState(), args.worktreeId, args.tabId)
+  if (address) {
+    args = {
+      ...args,
+      worktreeId: address.workspaceId,
+      tabId: address.tab.id,
+      environmentId:
+        address.target?.kind === 'environment' ? address.target.environmentId : args.environmentId
+    }
+  }
   const environmentId = resolveTabEnvironmentId(args.environmentId)
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     if (environmentId && method === 'session.tabs.close' && args.reason === 'user') {

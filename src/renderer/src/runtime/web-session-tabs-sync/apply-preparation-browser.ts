@@ -164,9 +164,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
       (removedEditorFileIds.has(file.id) || mirroredEditorFileIds.has(file.id)))
   const replacedOpenFileCount = worktreeOpenFiles.filter(isReplacedOpenFile).length
   // Both consumers are worktree-scoped; use surviving IDs without walking global files.
-  const nextWorktreeOpenFileIds = new Set<string>(
-    worktreeOpenFiles.filter((file) => !isReplacedOpenFile(file)).map((file) => file.id)
-  )
+  const retainedWorktreeOpenFiles = worktreeOpenFiles.filter((file) => !isReplacedOpenFile(file))
+  const nextWorktreeOpenFileIds = new Set<string>(retainedWorktreeOpenFiles.map((file) => file.id))
   for (const fileId of mirroredEditorFileIds) {
     nextWorktreeOpenFileIds.add(fileId)
   }
@@ -181,7 +180,10 @@ export function prepareWebSessionTabsSnapshotBrowser(
     const next = [...retained, ...mirroredOpenFiles]
     return sameOpenFiles(state.openFiles, next) ? state.openFiles : next
   })()
-  advanceWebSessionOpenFilesIndex(batchContext, nextOpenFiles, worktreeId)
+  advanceWebSessionOpenFilesIndex(batchContext, nextOpenFiles, worktreeId, [
+    ...retainedWorktreeOpenFiles,
+    ...mirroredOpenFiles
+  ])
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'agent-session') {
       if (

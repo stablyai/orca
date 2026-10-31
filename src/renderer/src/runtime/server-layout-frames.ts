@@ -1,6 +1,7 @@
 // Capable paired main draws workspace layout from frames, with exactly one writer at a time (H5). Gate mirror on snapshot; stream loss returns ownership with a fresh snapshot. session.tabs still supplies handles/status. Hand desktop-only editors over before gating.
 
 import { useAppStore } from '@/store'
+import { rawWorkspaceState } from '@/store/workspace-source-state'
 import type { AppState } from '@/store/types'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import {
@@ -126,7 +127,7 @@ function openServerFrames(
   /** The server may hold none of this window's reports: a new stream or control socket. */
   const reportCurrent = (): void => {
     if (live) {
-      viewReport.update(store.getState().activeGroupIdByWorktree, gated)
+      viewReport.update(rawWorkspaceState(store.getState()).activeGroupIdByWorktree, gated)
     }
   }
   const reportAgain = (): void => {
@@ -204,7 +205,7 @@ function openServerFrames(
   let routing: unknown[] = []
   const stopRouting = store.subscribe((state) => {
     if (live) {
-      viewReport.update(state.activeGroupIdByWorktree, gated, applyingFrames)
+      viewReport.update(rawWorkspaceState(state).activeGroupIdByWorktree, gated, applyingFrames)
     }
     const next = routingInputs(state)
     if (sameValues(next, routing)) {

@@ -1,3 +1,6 @@
+import { sourceTabPresentation } from '../../../shared/workspace-presentation'
+import { workspacePresentationFor, workspaceSourceOccurrence } from '@/store/workspace-source-state'
+import { workspaceAdmittedFiles } from '@/store/workspace-admitted-files'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
@@ -45,6 +48,7 @@ type WorkspaceTabPaletteActivationState = Pick<
   | 'setActiveTabType'
   | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
+  | 'workspacePresentations'
 >
 
 function validateTarget(
@@ -65,6 +69,8 @@ function validateTarget(
   if (!group) {
     return 'missing-group'
   }
+  const presented = workspacePresentationFor(state, result.worktreeId)
+  const source = workspaceSourceOccurrence(state, result.tabId, result.worktreeId)
   const tabs = (state.unifiedTabsByWorktree[result.worktreeId] ?? []).filter(
     (candidate) => candidate.id === result.tabId
   )
@@ -72,23 +78,28 @@ function validateTarget(
     (candidate) =>
       candidate.entityId === result.entityId &&
       candidate.groupId === result.groupId &&
-      candidate.worktreeId === result.worktreeId &&
       candidate.contentType === result.contentType &&
-      isUnifiedTabOwnedByWorktree(candidate, worktree, ambiguousWorktreeIds)
+      (presented
+        ? source?.tab.entityId === candidate.entityId &&
+          sourceTabPresentation(source.tab, source.source).entity.hostId ===
+            (candidate.executionHostId ?? 'local')
+        : isUnifiedTabOwnedByWorktree(candidate, worktree, ambiguousWorktreeIds))
   )
   if (tabs.length !== 1 || !tab) {
     return 'missing-tab'
   }
   if (result.contentType !== 'terminal') {
-    const files = state.openFiles.filter((file) => file.id === result.entityId)
-    if (files.length !== 1 || files[0].worktreeId !== result.worktreeId) {
+    const files = workspaceAdmittedFiles(state, result.worktreeId).filter(
+      (file) => file.id === result.entityId
+    )
+    if (files.length !== 1) {
       return 'missing-file'
     }
     const file = files[0]
     // A hostless file falls back to local ownership, which only decides the match when IDs collide.
     const requiresOwnershipCheck =
       hasOpenFileExecutionHostEvidence(file) || ambiguousWorktreeIds.has(worktree.id)
-    if (requiresOwnershipCheck && !isOpenFileOwnedByWorktree(file, worktree)) {
+    if (!presented && requiresOwnershipCheck && !isOpenFileOwnedByWorktree(file, worktree)) {
       return 'missing-file'
     }
   }
@@ -137,7 +148,7 @@ export function activateWorkspaceTabPaletteResult(
     return { status: 'activated' }
   }
 
-  state.setActiveFile(result.entityId)
+  state.setActiveFile(result.entityId, result.worktreeId)
   // setActiveFile may pick an editor tab for the same entity instead of this diff.
   state.activateTab(result.tabId, { worktreeId: result.worktreeId })
   state.setActiveTabType('editor', result.worktreeId)

@@ -1,4 +1,4 @@
-import { strictWorktreeIdentityKey } from '../../../../shared/workspace-presentation'
+import { workspacePresentationFor, workspaceSourceOccurrence } from '@/store/workspace-source-state'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
@@ -18,12 +18,9 @@ export function activateRetainedAgentRow(worktreeId: string, tabId: string, pane
     return
   }
   const state = useAppStore.getState()
-  const nativeTab = state.unifiedTabsByWorktree[worktreeId]?.find(
-    (tab) =>
-      tab.id === tabId &&
-      strictWorktreeIdentityKey(tab.worktreeId) === strictWorktreeIdentityKey(worktreeId) &&
-      tab.contentType === 'agent-session'
-  )
+  worktreeId = workspacePresentationFor(state, worktreeId)?.displayWorkspaceId ?? worktreeId
+  const occurrence = workspaceSourceOccurrence(state, tabId, worktreeId)
+  const nativeTab = occurrence?.tab.contentType === 'agent-session' ? occurrence.tab : undefined
   const target = nativeTab ? structuredAgentSessionTargetForTab(state, nativeTab) : null
   const layout = state.terminalLayoutsByTabId[tabId]
   const hasLiveTerminal =

@@ -1,13 +1,13 @@
 import type { WorkspacePresentationKey } from '../../../shared/workspace-presentation'
 
-type Node = { value?: WorkspacePresentationKey; children: ReadonlyMap<string, Node> }
-const EMPTY: Node = { children: new Map() }
+type Node<T> = { value?: T; children: ReadonlyMap<string, Node<T>> }
+const EMPTY: Node<never> = { children: new Map() }
 
 /** Persistent radix path: one binding edit copies its key's path, never all workspace bindings. */
-export class WorkspacePresentationIndex {
-  constructor(private readonly root: Node = EMPTY) {}
+export class WorkspacePresentationIndex<T = WorkspacePresentationKey> {
+  constructor(private readonly root: Node<T> = EMPTY) {}
 
-  get(key: string): WorkspacePresentationKey | undefined {
+  get(key: string): T | undefined {
     let node = this.root
     for (const char of key) {
       const child = node.children.get(char)
@@ -19,20 +19,17 @@ export class WorkspacePresentationIndex {
     return node.value
   }
 
-  delete(key: string): WorkspacePresentationIndex {
+  delete(key: string): WorkspacePresentationIndex<T> {
     return this.update(key, undefined)
   }
 
-  set(key: string, value: WorkspacePresentationKey): WorkspacePresentationIndex {
+  set(key: string, value: T): WorkspacePresentationIndex<T> {
     return this.update(key, value)
   }
 
-  private update(
-    key: string,
-    value: WorkspacePresentationKey | undefined
-  ): WorkspacePresentationIndex {
+  private update(key: string, value: T | undefined): WorkspacePresentationIndex<T> {
     const chars = [...key]
-    const put = (node: Node, at: number): Node => {
+    const put = (node: Node<T>, at: number): Node<T> => {
       if (at === chars.length) {
         return node.value === value ? node : { ...node, value }
       }
@@ -51,6 +48,6 @@ export class WorkspacePresentationIndex {
       return { ...node, children }
     }
     const root = put(this.root, 0)
-    return root === this.root ? this : new WorkspacePresentationIndex(root)
+    return root === this.root ? this : new WorkspacePresentationIndex<T>(root)
   }
 }

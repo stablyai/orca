@@ -1,3 +1,5 @@
+import { presentationActionSet } from '../../workspace-presentation-actions'
+import { workspaceReadState, workspaceSourceTab } from '../../workspace-source-state'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import {
   findTabAndWorktree,
@@ -73,12 +75,13 @@ export function createTabsFocusActions(
   _set: TabsSliceSet,
   get: TabsSliceGet
 ): Pick<TabsSlice, 'getTab' | 'getActiveTab' | 'findTabForEntityInGroup' | 'activateTab'> {
-  const set = _set
+  const set = presentationActionSet(_set)
+  const read = () => workspaceReadState(get())
   return {
-    getTab: (tabId) => findTabAndWorktree(get().unifiedTabsByWorktree, tabId)?.tab ?? null,
+    getTab: (tabId) => findTabAndWorktree(read().unifiedTabsByWorktree, tabId)?.tab ?? null,
 
     getActiveTab: (worktreeId) => {
-      const state = get()
+      const state = read()
       const groupId = state.activeGroupIdByWorktree[worktreeId]
       const group = (state.groupsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === groupId
@@ -95,7 +98,7 @@ export function createTabsFocusActions(
 
     findTabForEntityInGroup: (worktreeId, groupId, entityId, contentType) =>
       findTabByEntityInGroup(
-        get().unifiedTabsByWorktree,
+        read().unifiedTabsByWorktree,
         worktreeId,
         groupId,
         entityId,
@@ -103,6 +106,21 @@ export function createTabsFocusActions(
       ),
 
     activateTab: (tabId, opts) => {
+      const source = opts?.worktreeId
+        ? workspaceSourceTab(get(), tabId, opts.worktreeId)
+        : get().getTab(tabId)
+      if (source && !opts?.preservePreview && source.isPreview) {
+        _set((state) => ({
+          unifiedTabsByWorktree: {
+            ...state.unifiedTabsByWorktree,
+            [source.worktreeId]: state.unifiedTabsByWorktree[source.worktreeId].map((tab) =>
+              tab.id === source.id
+                ? withPreviewOnActivation(tab, false, endsPreviewHere(state, source.worktreeId))
+                : tab
+            )
+          }
+        }))
+      }
       const promoted: Tab[] = []
       set((state) => {
         const scopedWorktreeId = opts?.worktreeId

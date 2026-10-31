@@ -1,4 +1,9 @@
-import { rawWorkspaceState, workspaceSourceWrite } from '../../workspace-composition'
+import {
+  rawWorkspaceState,
+  workspaceSourceWrite,
+  workspaceReadState,
+  workspacePresentationFor
+} from '../../workspace-composition'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
@@ -61,18 +66,36 @@ export function createTabsSessionActions(
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         return
       }
-      const patch = projectWorktreeTabModelReconciliations(get(), worktreeIds)
+      const raw = get()
+      const ids = [
+        ...new Set(
+          worktreeIds.flatMap(
+            (id) =>
+              workspacePresentationFor(raw, id)?.baseline.map(
+                (base) => base.source.workspaceId
+              ) ?? [id]
+          )
+        )
+      ]
+      const patch = projectWorktreeTabModelReconciliations(raw, ids)
       if (Object.keys(patch).length > 0) {
         set(patch)
       }
     },
 
     reconcileWorktreeTabModel: (worktreeId) => {
-      const reconciliation = projectWorktreeTabModelReconciliation(get(), worktreeId)
-      // Switch point: the counts only; main's frames draw the tab bar.
-      if (!ORCA_LAYOUT_OWNER_IS_MAIN && Object.keys(reconciliation.patch).length > 0) {
-        set(reconciliation.patch)
+      const raw = get()
+      const sources = workspacePresentationFor(raw, worktreeId)?.baseline.map(
+        (base) => base.source.workspaceId
+      ) ?? [worktreeId]
+      const patch = projectWorktreeTabModelReconciliations(raw, sources)
+      if (!ORCA_LAYOUT_OWNER_IS_MAIN && Object.keys(patch).length > 0) {
+        set(patch)
       }
+      const reconciliation = projectWorktreeTabModelReconciliation(
+        workspaceReadState(get()),
+        worktreeId
+      )
       return {
         renderableTabCount: reconciliation.renderableTabCount,
         activeRenderableTabId: reconciliation.activeRenderableTabId

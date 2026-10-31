@@ -1,3 +1,4 @@
+import { storedWorkspaceSourceAddress } from './workspace-presentation-source-command'
 import { applyWorkspacePresentationCommand } from './workspace-presentation-command'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import {
@@ -71,6 +72,14 @@ export class SessionSnapshotOperations {
   applyWorkspacePresentationCommand(command: LayoutCommand) {
     const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
     return applyWorkspacePresentationCommand(runtime, scheduling, command)
+  }
+
+  getWorkspaceSourceAddress(workspace: string, tabId: string) {
+    return storedWorkspaceSourceAddress(
+      this[sessionSnapshotOperationsContext].runtime.state,
+      workspace,
+      tabId
+    )
   }
 
   getWorkspacePresentations(keys?: readonly string[]) {

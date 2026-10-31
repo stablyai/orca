@@ -1,3 +1,4 @@
+import { workspacePresentationFor } from '@/store/workspace-source-state'
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { prepareWebSessionTabsSnapshotUnified } from './apply-preparation-unified'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
@@ -38,6 +39,16 @@ export function prepareWebSessionTabsSnapshotGroups(
     reservedEmptyPreviewFallbackTabId
   } = base
   const currentGroups = state.groupsByWorktree[worktreeId] ?? []
+  const presentationPlacements = workspacePresentationFor(state, worktreeId)
+    ? mirroredBrowserTabs.flatMap((entry) => {
+        const groupId = peekWebSessionBrowserPlacementGroup({
+          environmentId,
+          worktreeId,
+          remotePageId: entry.remotePageId
+        })
+        return groupId ? [{ tabId: entry.unifiedTab.id, groupId }] : []
+      })
+    : []
   const clientGroupIdByLocalTabId = new Map(
     mirroredBrowserTabs.flatMap((entry) =>
       entry.clientGroupId ? [[entry.unifiedTab.id, entry.clientGroupId]] : []
@@ -69,7 +80,9 @@ export function prepareWebSessionTabsSnapshotGroups(
       )
     )
     // Client placement intent repairs early adoption/lagging groups, but the row’s current clientGroupId wins after user moves.
-    const placementMoves = mirroredBrowserTabs.flatMap((entry) => {
+    const placementMoves = (
+      workspacePresentationFor(state, worktreeId) ? [] : mirroredBrowserTabs
+    ).flatMap((entry) => {
       const recordedGroupId = peekWebSessionBrowserPlacementGroup({
         environmentId,
         worktreeId,
@@ -86,7 +99,7 @@ export function prepareWebSessionTabsSnapshotGroups(
         worktreeId,
         hostTabId: parentTabId
       })
-      if (recordedGroupId) {
+      if (recordedGroupId && !workspacePresentationFor(state, worktreeId)) {
         placementMoves.push({
           tabId: toWebTerminalSurfaceTabId(parentTabId),
           groupId: recordedGroupId
@@ -218,6 +231,7 @@ export function prepareWebSessionTabsSnapshotGroups(
   return {
     ...base,
     currentGroups,
+    presentationPlacements,
     clientGroupIdByLocalTabId,
     clientOwnedPlacement,
     nextGroups,

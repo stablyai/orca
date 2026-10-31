@@ -1,3 +1,4 @@
+import { workspaceReadState } from '../../../workspace-source-state'
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
@@ -24,6 +25,7 @@ export function openWorkspaceEditorItem(
   /** Where in its group a reopened tab goes back to. */
   index?: number
 ): string {
+  state = workspaceReadState(state)
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
     const existing = state.findTabForEntityInGroup?.(

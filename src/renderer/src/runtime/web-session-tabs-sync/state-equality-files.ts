@@ -1,3 +1,4 @@
+import { WorkspacePresentationIndex } from '../../store/workspace-presentation-index'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
@@ -30,16 +31,16 @@ export function sameOpenFiles(a: readonly OpenFile[], b: readonly OpenFile[]): b
   return a.every((file, index) => openFileEqual(file, b[index]!))
 }
 
-const openFileIndexes = new WeakMap<readonly OpenFile[], Map<string, OpenFile[]>>()
-function indexedOpenFiles(files: readonly OpenFile[]): Map<string, OpenFile[]> {
+const openFileIndexes = new WeakMap<readonly OpenFile[], WorkspacePresentationIndex<OpenFile[]>>()
+function indexedOpenFiles(files: readonly OpenFile[]): WorkspacePresentationIndex<OpenFile[]> {
   let index = openFileIndexes.get(files)
   if (!index) {
-    index = new Map()
+    index = new WorkspacePresentationIndex<OpenFile[]>()
     for (const file of files) {
       const id = file.worktreeId
       const bucket = index.get(id) ?? []
       bucket.push(file)
-      index.set(id, bucket)
+      index = index.set(id, bucket)
     }
     openFileIndexes.set(files, index)
   }
@@ -66,16 +67,16 @@ export function webSessionOpenFilesForWorktree(
 export function advanceWebSessionOpenFilesIndex(
   batchContext: WebSessionTabsBatchContext | undefined,
   nextOpenFiles: readonly OpenFile[],
-  _worktreeId: string
+  worktreeId: string,
+  bucket: OpenFile[]
 ): void {
   const index = batchContext?.openFilesIndex
   if (!batchContext || !index || index.source === nextOpenFiles) {
     return
   }
-  batchContext.openFilesIndex = {
-    source: nextOpenFiles,
-    byWorktree: indexedOpenFiles(nextOpenFiles)
-  }
+  const byWorktree = index.byWorktree.set(worktreeId, bucket)
+  openFileIndexes.set(nextOpenFiles, byWorktree)
+  batchContext.openFilesIndex = { source: nextOpenFiles, byWorktree }
 }
 
 export function tabEqual(a: Tab, b: Tab): boolean {

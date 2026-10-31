@@ -4,6 +4,7 @@ import {
   prunePresentationLayout,
   sourceBaseline,
   sourceTabPresentation,
+  workspaceSourceOwnsTab,
   workspaceEntityKey,
   type WorkspacePresentation,
   type WorkspaceSourceBaseline,
@@ -248,14 +249,23 @@ export function composeWorkspacePresentation(
       Number(b.baseline.source.workspaceId === saved.displayWorkspaceId) -
       Number(a.baseline.source.workspaceId === saved.displayWorkspaceId)
   )) {
-    for (const tab of tabs) {
+    for (const tab of tabs.filter((tab) => workspaceSourceOwnsTab(tab, baseline.source))) {
       const key = workspaceEntityKey(sourceTabPresentation(tab, baseline.source).entity)
       if (!raw.has(key)) {
         raw.set(key, tab)
       }
     }
   }
-  const tabs = saved.tabs.flatMap((placement) => {
+  const livePlacements = reconcileWorkspacePresentation(
+    saved,
+    sources.map(({ baseline, tabs }) => ({
+      ...baseline,
+      tabs: tabs
+        .filter((tab) => workspaceSourceOwnsTab(tab, baseline.source))
+        .map((tab) => sourceTabPresentation(tab, baseline.source))
+    }))
+  )
+  const tabs = livePlacements.tabs.flatMap((placement) => {
     const tab = raw.get(workspaceEntityKey(placement.entity))
     if (!tab) {
       return []
@@ -265,5 +275,10 @@ export function composeWorkspacePresentation(
       { ...tab, ...view, executionHostId: placement.entity.hostId, worktreeId: tab.worktreeId }
     ]
   })
-  return { tabs, groups: saved.groups, layout: saved.layout, activeGroupId: saved.activeGroupId }
+  return {
+    tabs,
+    groups: livePlacements.groups,
+    layout: livePlacements.layout,
+    activeGroupId: livePlacements.activeGroupId
+  }
 }

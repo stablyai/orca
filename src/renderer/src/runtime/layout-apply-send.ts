@@ -1,3 +1,5 @@
+import { workspaceProtocolPlacement } from './workspace-command-address'
+import { isPresentationOnlyCommand } from '../../../shared/workspace-presentation-intent'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { workspacePresentationFor, workspaceSourceTab } from '@/store/workspace-composition'
 // Store-free so store slices can send; `layout-owner-command` reads the store for other callers.
@@ -84,12 +86,7 @@ export function sendLayoutApply(
   handlers: LayoutApplyHandlers
 ): boolean {
   const presentation = workspacePresentationFor(state, worktreeId)
-  if (
-    presentation &&
-    (command.type === 'moveTab' ||
-      command.type === 'splitGroup' ||
-      command.type === 'setGroupRatios')
-  ) {
+  if (presentation && isPresentationOnlyCommand(command)) {
     if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
       return false
     }
@@ -111,12 +108,34 @@ export function sendLayoutApply(
   const sourceTab = sourceTabId ? workspaceSourceTab(state, sourceTabId, worktreeId) : undefined
   if (sourceTab) {
     worktreeId = sourceTab.worktreeId
-    if (command.type === 'movePaneToNewTab' || command.type === 'createTerminalTab') {
+    if (
+      !presentation &&
+      (command.type === 'movePaneToNewTab' || command.type === 'createTerminalTab')
+    ) {
       command = { ...command, groupId: sourceTab.groupId }
     }
   }
   // Use mirror ownership, never server focus: hostless rows are local. Twins retain local-main handling rather than choosing either host, matching terminal creation.
   const environmentId = runtimeEnvironmentIdUnlessTwin(state, worktreeId)
+  if (
+    presentation &&
+    environmentId &&
+    'groupId' in command &&
+    command.type !== 'moveTabToWorkspace'
+  ) {
+    const placement = workspaceProtocolPlacement(
+      state,
+      environmentId,
+      worktreeId,
+      command.groupId,
+      'afterTabId' in command ? command.afterTabId : undefined
+    )
+    command = {
+      ...command,
+      groupId: placement.targetGroupId,
+      ...('afterTabId' in command ? { afterTabId: placement.afterTabId } : {})
+    }
+  }
   // A paired server's workspace: its main takes the intent when its frames draw the workspace.
   const server = environmentId
     ? serverLayoutApplyFor(environmentId, worktreeId, command, state)

@@ -2,6 +2,8 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import { refreshLocalRuntimeCapabilities } from '../local-runtime-capabilities'
 import {
   isCurrentLocalStructuredSessionGeneration,
+  localSourceAddressRevision,
+  isCurrentLocalSourceAddress,
   latchLocalStructuredSessionRestore,
   localStructuredSessionGeneration
 } from './inventory-generation-fence'
@@ -53,6 +55,7 @@ export function refreshLocalStructuredSessionTabs(
   options: { authoritative?: boolean } = {}
 ): Promise<RuntimeMobileSessionTabsResult[]> {
   // Capture request order before IPC: a reply that began before a close cannot retire its fence.
+  const addressRevision = localSourceAddressRevision()
   const authoritativeInventory = beginStructuredAgentSessionAuthoritativeInventory()
   // Explicit authority can start cleanup before IPC; ordinary refreshes wait for host affirmation or failed retries churn RPCs.
   if (options.authoritative) {
@@ -74,11 +77,17 @@ export function refreshLocalStructuredSessionTabs(
         )
       }
       if (isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
-        applyStructuredSessionTabSnapshots(snapshots, undefined, {
-          ...options,
-          authoritative: options.authoritative === true || result.authoritative === true,
-          authoritativeInventory
-        })
+        applyStructuredSessionTabSnapshots(
+          snapshots.filter((snapshot) =>
+            isCurrentLocalSourceAddress(snapshot.worktree, addressRevision)
+          ),
+          undefined,
+          {
+            ...options,
+            authoritative: options.authoritative === true || result.authoritative === true,
+            authoritativeInventory
+          }
+        )
       }
       return snapshots
     })
@@ -92,12 +101,16 @@ export async function refreshLocalStructuredSessionWorktreeTabs(
 ): Promise<RuntimeMobileSessionTabsResult | null> {
   // Structured chat can be switched off mid-call, which wipes the mirror; a late answer must not re-seed it.
   const expectedGeneration = localStructuredSessionGeneration()
+  const addressRevision = localSourceAddressRevision()
   const snapshot = await callRuntimeRpc<RuntimeMobileSessionTabsResult>(
     { kind: 'local' },
     'session.tabs.list',
     { worktree: toRuntimeWorktreeSelector(worktreeId) }
   )
-  if (!isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
+  if (
+    !isCurrentLocalStructuredSessionGeneration(expectedGeneration) ||
+    !isCurrentLocalSourceAddress(worktreeId, addressRevision)
+  ) {
     return null
   }
   applyStructuredSessionTabSnapshots([snapshot], undefined, options)

@@ -1,8 +1,9 @@
+import { workspaceReadState } from '@/store/workspace-source-state'
 import type { AppState } from '@/store/types'
 import type { Tab } from '../../../shared/tab-types'
 import {
-  executionHostIdForStructuredTarget,
   legacyStructuredChatRenameOwner,
+  structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForTab
 } from './structured-agent-session-owner'
 
@@ -13,7 +14,7 @@ export function captureStructuredChatRename(get: () => AppState, tab: Tab) {
   const state = get()
   const target = structuredAgentSessionTargetForTab(state, tab)
   const retainAlias = legacyStructuredChatRenameOwner(state, tab) === null
-  const owner = target ? executionHostIdForStructuredTarget(target) : tab.executionHostId
+  const owner = structuredAgentSessionOwnerForTab(state, tab)
   const alias = tab.customLabel ?? null
   const key = JSON.stringify([tab.worktreeId, tab.id])
   let pending = intents.get(get)
@@ -25,7 +26,9 @@ export function captureStructuredChatRename(get: () => AppState, tab: Tab) {
   const intent = {}
   slots.set(key, intent)
   const currentTab = () =>
-    get().unifiedTabsByWorktree[tab.worktreeId]?.find((entry) => entry.id === tab.id)
+    workspaceReadState(get()).unifiedTabsByWorktree[tab.worktreeId]?.find(
+      (entry) => entry.id === tab.id
+    )
   const current = () => {
     const entry = currentTab()
     return (

@@ -4,6 +4,30 @@ import type { StructuredSessionTabPublicationVersion } from '../local-structured
 
 // Track publisher generation, accepted per-worktree publications and one-shot restore. Every async entry rechecks its starting generation so reset fences in-flight responses.
 let syncGeneration = 0
+let sourceAddressRevision = 0
+const retiredSourceAddresses = new Map<string, number>()
+
+export function localSourceAddressRevision(): number {
+  return sourceAddressRevision
+}
+export function isCurrentLocalSourceAddress(workspace: string, revision: number): boolean {
+  return (retiredSourceAddresses.get(workspace) ?? 0) <= revision
+}
+
+export function retireLocalSourceAddress(workspace: string): void {
+  retiredSourceAddresses.set(workspace, ++sourceAddressRevision)
+  const version = localStructuredSessionVersionByWorktree.get(workspace)
+  const history = localStructuredSessionEpochHistoryByWorktree.get(workspace)
+  const epoch = version?.publicationEpoch ?? history?.current
+  if (epoch) {
+    localStructuredSessionEpochHistoryByWorktree.set(workspace, {
+      current: null,
+      retired: [...new Set([...(history?.retired ?? []), epoch])].slice(-8)
+    })
+  }
+  localStructuredSessionVersionByWorktree.delete(workspace)
+}
+
 let restorePromise: Promise<void> | null = null
 
 export const localStructuredSessionVersionByWorktree = new Map<
@@ -34,6 +58,8 @@ export function latchLocalStructuredSessionRestore(start: () => Promise<void>): 
 
 export function retireLocalStructuredSessionGeneration(): void {
   syncGeneration += 1
+  retiredSourceAddresses.clear()
+  sourceAddressRevision = 0
   clearRetiredEpochRepairs()
   restorePromise = null
   localStructuredSessionVersionByWorktree.clear()

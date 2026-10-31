@@ -1,3 +1,4 @@
+import { workspaceProtocolPlacement } from './workspace-command-address'
 import type { BrowserPageCreationPlacement } from '../../../shared/browser-client-host-placement'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { BrowserTabCreateResult } from '../../../shared/runtime-types'
@@ -48,6 +49,13 @@ export async function createWebRuntimeSessionBrowserTab(
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
+  const sourcePlacement = workspaceProtocolPlacement(
+    useAppStore.getState(),
+    environmentId,
+    args.worktreeId,
+    args.targetGroupId,
+    args.clientAfterTabId
+  )
   const context = createWebRuntimeBrowserCreationContext(args, environmentId)
   let stagedWorkspaceId: string | undefined
   let materializedPageId: string | undefined
@@ -95,7 +103,9 @@ export async function createWebRuntimeSessionBrowserTab(
           // today's behavior, which is also what keeps their targetGroupId placement working.
           navigation: 'caller',
           // Why: place the new browser in the clicked split group so the host snapshot is authoritative for it (no left-snap).
-          ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
+          ...(sourcePlacement.targetGroupId
+            ? { targetGroupId: sourcePlacement.targetGroupId }
+            : {}),
           // Why: web clients need the local tab now; waiting for host webview registration makes the workspace appear to close.
           waitForRegistration: args.waitForRegistration ?? false
         },

@@ -1,3 +1,4 @@
+import { reduceStoredPresentationCommand } from '../loading-store/workspace-presentation-command'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type {
   CommandOf,
@@ -20,11 +21,24 @@ export function applyLayoutRenames(
   return traced(
     'apply_layout',
     () => {
-      const changes = batches.map(({ hostId, renames }) => ({
-        hostId,
-        change: applyRenamesToSession(hostId, context.getSession(hostId), renames)
-      }))
-      const refused = changes.flatMap(({ change }) => change.value)
+      const refused: { rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[] = []
+      let presentationChanged = false
+      const changes = batches.map(({ hostId, renames }) => {
+        const raw = renames.filter((rename) => {
+          const outcome = reduceStoredPresentationCommand(context.state, rename)
+          if (!outcome) {
+            return true
+          }
+          if (!outcome.ok) {
+            refused.push({ rename, code: outcome.code })
+          } else {
+            presentationChanged = true
+          }
+          return false
+        })
+        return { hostId, change: applyRenamesToSession(hostId, context.getSession(hostId), raw) }
+      })
+      refused.push(...changes.flatMap(({ change }) => change.value))
       const restores = changes.flatMap(({ hostId, change }) =>
         change.session
           ? [
@@ -37,7 +51,7 @@ export function applyLayoutRenames(
             ]
           : []
       )
-      return restores.length === 0
+      return restores.length === 0 && !presentationChanged
         ? { value: refused, persist: false }
         : { value: refused, rollback: () => restores.forEach((restore) => restore()) }
     },

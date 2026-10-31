@@ -5,7 +5,9 @@ import { useAppStore } from '@/store'
 import { getStructuredAgentSessionTabs } from '@/components/native-chat/structured-agent-session-tabs'
 import {
   structuredAgentSessionOwnerInputs,
-  structuredAgentSessionTargetForHost
+  structuredAgentSessionTargetForHost,
+  structuredAgentSessionTargetForTab,
+  executionHostIdForStructuredTarget
 } from './structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import {
@@ -34,14 +36,22 @@ export function getStructuredChatTabNames(): StructuredChatTabNames {
   const next = new Map(
     getStructuredAgentSessionTabs(state.unifiedTabsByWorktree).map((tab) => {
       const value = resolveStructuredChatTabName(tab, state)
-      const target = structuredAgentSessionTargetForHost(value.owner)
-      if (value.owner && target) {
-        nextMaps.set(value.owner, getStructuredAgentSessionStatusFeed(target).getNamingSnapshot())
+      const target = structuredAgentSessionTargetForTab(state, tab)
+      if (target) {
+        nextMaps.set(
+          executionHostIdForStructuredTarget(target),
+          getStructuredAgentSessionStatusFeed(target).getNamingSnapshot()
+        )
       }
       return [tab, value] as const
     })
   )
-  const owners = new Set([...next.values()].map((value) => value.owner))
+  const owners = new Set(
+    [...next.keys()].flatMap((tab) => {
+      const target = structuredAgentSessionTargetForTab(state, tab)
+      return target ? [executionHostIdForStructuredTarget(target)] : []
+    })
+  )
   for (const owner of nextMaps.keys()) {
     if (!owners.has(owner)) {
       nextMaps.delete(owner)
@@ -77,7 +87,13 @@ function observe(): () => void {
     }
   }
   const reconcile = () => {
-    const owners = new Set([...getStructuredChatTabNames().values()].map((value) => value.owner))
+    const state = useAppStore.getState()
+    const owners = new Set(
+      [...getStructuredChatTabNames().keys()].flatMap((tab) => {
+        const target = structuredAgentSessionTargetForTab(state, tab)
+        return target ? [executionHostIdForStructuredTarget(target)] : []
+      })
+    )
     for (const [owner, stop] of feeds) {
       if (!owners.has(owner)) {
         stop()

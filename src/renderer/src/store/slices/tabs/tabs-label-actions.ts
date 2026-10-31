@@ -1,8 +1,8 @@
+import { presentationActionSet } from '../../workspace-presentation-actions'
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
-import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { findTabAndWorktree, patchTab, updateGroup } from '../tab-group-state'
+import { findTabAndWorktree, findGroupAndWorktree, patchTab, updateGroup } from '../tab-group-state'
 import {
   applyTabOrderSortValues,
   dedupeTabOrder,
@@ -10,6 +10,7 @@ import {
   reorderProjectedTabOrder
 } from '../../../../../shared/workspace-layout/tab-order'
 import {
+  launchAgentOf,
   mirrorTabPinnedToHost,
   mirrorTabViewModeToHost,
   patchTerminalTabRow
@@ -38,6 +39,7 @@ export function createTabsLabelActions(
   | 'pinTab'
   | 'unpinTab'
 > {
+  const editPresentation = presentationActionSet(set)
   function setTabViewModeHere(tabId: string, mode: 'terminal' | 'chat'): void {
     set((state) => {
       const tabPatch = patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode })
@@ -52,14 +54,6 @@ export function createTabsLabelActions(
       }
     })
     mirrorTabViewModeToHost(get(), tabId, mode)
-  }
-
-  // Why: launchAgent lives on the legacy terminal tab (keyed by entityId); toggle telemetry attributes by it.
-  function launchAgentOf(state: AppState, worktreeId: string, entityId: string): TuiAgent | null {
-    return (
-      (state.tabsByWorktree[worktreeId] ?? []).find((terminal) => terminal.id === entityId)
-        ?.launchAgent ?? null
-    )
   }
 
   /** `to`: the mode main switched to, which a frame may already show. */
@@ -162,37 +156,38 @@ export function createTabsLabelActions(
     reorderUnifiedTabs: (groupId, tabIds, opts) => {
       let reordered = false
       const changes: { worktreeId: string; from: string[]; to: string[] }[] = []
-      set((state) => {
-        for (const [worktreeId, groups] of Object.entries(state.groupsByWorktree)) {
-          const group = groups.find((candidate) => candidate.id === groupId)
-          if (!group) {
-            continue
-          }
-          // Projected orders own placement; only complete local orders own membership.
-          const nextTabOrder = opts?.projectedMoveTabId
-            ? reorderProjectedTabOrder(group.tabOrder, tabIds, opts.projectedMoveTabId)
-            : dedupeTabOrder(tabIds)
-          if (nextTabOrder === group.tabOrder) {
-            return state
-          }
-          reordered = true
-          changes.push({ worktreeId, from: group.tabOrder, to: nextTabOrder })
-          const orderMap = new Map(nextTabOrder.map((id, index) => [id, index]))
-          return {
-            groupsByWorktree: {
-              ...state.groupsByWorktree,
-              [worktreeId]: updateGroup(groups, { ...group, tabOrder: nextTabOrder })
-            },
-            unifiedTabsByWorktree: {
-              ...state.unifiedTabsByWorktree,
-              [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => {
-                const sortOrder = orderMap.get(tab.id)
-                return sortOrder === undefined ? tab : { ...tab, sortOrder }
-              })
-            }
+      editPresentation((state) => {
+        const memberId = opts?.projectedMoveTabId ?? tabIds[0]
+        const member = memberId ? findTabAndWorktree(state.unifiedTabsByWorktree, memberId) : null
+        const found = findGroupAndWorktree(state.groupsByWorktree, groupId, member?.worktreeId)
+        if (!found) {
+          return state
+        }
+        const { worktreeId, group } = found
+        const groups = state.groupsByWorktree[worktreeId]
+        // Projected orders own placement; only complete local orders own membership.
+        const nextTabOrder = opts?.projectedMoveTabId
+          ? reorderProjectedTabOrder(group.tabOrder, tabIds, opts.projectedMoveTabId)
+          : dedupeTabOrder(tabIds)
+        if (nextTabOrder === group.tabOrder) {
+          return state
+        }
+        reordered = true
+        changes.push({ worktreeId, from: group.tabOrder, to: nextTabOrder })
+        const orderMap = new Map(nextTabOrder.map((id, index) => [id, index]))
+        return {
+          groupsByWorktree: {
+            ...state.groupsByWorktree,
+            [worktreeId]: updateGroup(groups, { ...group, tabOrder: nextTabOrder })
+          },
+          unifiedTabsByWorktree: {
+            ...state.unifiedTabsByWorktree,
+            [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => {
+              const sortOrder = orderMap.get(tab.id)
+              return sortOrder === undefined ? tab : { ...tab, sortOrder }
+            })
           }
         }
-        return state
       })
       // Switch point: main takes the window's new order unless the caller already asked it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && !opts?.layoutOwnerHandled) {
@@ -226,7 +221,9 @@ export function createTabsLabelActions(
 
     setTabCustomLabel: (tabId, label, opts) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? state)
+      editPresentation(
+        (state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? state
+      )
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -234,7 +231,7 @@ export function createTabsLabelActions(
 
     setUnifiedTabColor: (tabId, color, opts) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? state)
+      editPresentation((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? state)
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -243,7 +240,7 @@ export function createTabsLabelActions(
     pinTab: (tabId, opts) => {
       const exists = get().getTab(tabId) !== null
       const before = findTabAndWorktree(get().unifiedTabsByWorktree, tabId)?.tab
-      set((state) => {
+      editPresentation((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
           return state
@@ -271,7 +268,7 @@ export function createTabsLabelActions(
             [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
           },
           // Reconciliation derives pin from terminal rows; mirror it there or host echoes unpin during the round trip.
-          ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: true }),
+          ...patchTerminalTabRow(get().tabsByWorktree, tabId, { isPinned: true }),
           groupsByWorktree: {
             ...state.groupsByWorktree,
             [worktreeId]: updateGroup(groups, { ...group, tabOrder })
@@ -289,7 +286,7 @@ export function createTabsLabelActions(
 
     unpinTab: (tabId, opts) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => {
+      editPresentation((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {
           return state
@@ -311,7 +308,7 @@ export function createTabsLabelActions(
             ...state.unifiedTabsByWorktree,
             [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
           },
-          ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: false }),
+          ...patchTerminalTabRow(get().tabsByWorktree, tabId, { isPinned: false }),
           groupsByWorktree: {
             ...state.groupsByWorktree,
             [worktreeId]: updateGroup(groups, { ...group, tabOrder })

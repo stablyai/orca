@@ -1,3 +1,5 @@
+import { preparePresentationSourceCommand } from '../loading-store/workspace-presentation-source-command'
+import type { WorkspacePresentationDocuments } from '../../../shared/workspace-presentation'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -107,11 +109,20 @@ export function admitPane(
         ) {
           return { value: 'tab_closed', persist: false }
         }
-        return commitPaneChange(
-          hostId,
-          admitPaneToSession(hostId, context.getSession(hostId), admission),
-          context
-        )
+        const prepared = preparePresentationSourceCommand(context.state, admission, hostId)
+        const addressed = {
+          ...admission,
+          workspace: prepared.command.workspace,
+          ...(admission.type === 'createTerminalTab' &&
+          prepared.command.type === 'createTerminalTab'
+            ? { groupId: prepared.command.groupId, split: undefined }
+            : {})
+        }
+        const change = admitPaneToSession(hostId, context.getSession(hostId), addressed)
+        if (change.value === 'admitted') {
+          prepared.settle({ ok: true, result: { tabId: admission.tabId } })
+        }
+        return commitPaneChange(hostId, change, context)
       }
     ),
     (outcome) => (outcome === 'admitted' || outcome === 'exists' ? undefined : outcome)
@@ -209,7 +220,8 @@ export function traced<T>(
 type TopologyState = Pick<
   PersistedState,
   'workspaceSession' | 'workspaceSessionsByHostId' | 'ui' | 'sshRemotePtyLeases'
->
+> &
+  WorkspacePresentationDocuments
 
 export type TerminalTopologyCommitContext = {
   state: TopologyState

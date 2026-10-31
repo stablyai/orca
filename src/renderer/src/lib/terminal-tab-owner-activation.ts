@@ -1,3 +1,4 @@
+import { workspaceCommandAddress } from '@/runtime/workspace-command-address'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
@@ -12,7 +13,11 @@ export function activateTerminalTabOnOwner(
   leafId: string | null
 ): void {
   const state = useAppStore.getState()
-  const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+  const address = workspaceCommandAddress(state, worktreeId, tabId)
+  const environmentId =
+    address?.target?.kind === 'environment'
+      ? address.target.environmentId
+      : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return
   }
@@ -32,7 +37,11 @@ export function activateBrowserTabOnOwner(
   browserWorkspaceId: string
 ): void {
   const state = useAppStore.getState()
-  const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+  const address = workspaceCommandAddress(state, worktreeId, unifiedTabId)
+  const environmentId =
+    address?.target?.kind === 'environment'
+      ? address.target.environmentId
+      : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (
     !environmentId ||
     !isWebRuntimeSessionActive(environmentId) ||

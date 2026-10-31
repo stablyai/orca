@@ -1,3 +1,9 @@
+import { renameWorkspacePresentations } from '../../../shared/workspace-presentation-intent'
+import {
+  isWorkspacePresentationKey,
+  readWorkspacePresentations
+} from '../../../shared/workspace-presentation'
+import { writeWorkspacePresentation } from './workspace-presentation-publication'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
 import type { DiffCommentBaseMutation } from '../../../shared/diff-comment-mutation'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
@@ -262,7 +268,17 @@ export class MetadataLineageOperations {
       newWorktreeId,
       target.hostId
     )
-    if (legacyChanged || canonicalChanged) {
+    const renamed = renameWorkspacePresentations(
+      readWorkspacePresentations(state),
+      { hostId: target.hostId, workspaceId: target.id },
+      newWorktreeId
+    )
+    for (const key of renamed.keys) {
+      if (isWorkspacePresentationKey(key)) {
+        writeWorkspacePresentation(state, key, renamed.documents[key])
+      }
+    }
+    if (legacyChanged || canonicalChanged || renamed.keys.length) {
       // Legacy identity moves also touch sessions, lineage, mobile selections and UI state.
       scheduleSave(
         this[metadataLineageOperationsContext].scheduling,

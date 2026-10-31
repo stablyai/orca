@@ -52,7 +52,7 @@ export type WindowLayoutCommand =
       type: 'movePaneToNewTab'
       tabId: string
       leafId: string
-      groupId: string
+      groupId?: string
       index?: number
       windowDetach: { ptyId: string | null; startupCwd?: string }
     }
@@ -98,7 +98,7 @@ export type WindowLayoutCommand =
       tabId: string
       sessionId: string
       agent: string
-      groupId: string
+      groupId?: string
       afterTabId?: string
       index?: number
       createdAt?: number
@@ -108,7 +108,7 @@ export type WindowLayoutCommand =
   | {
       type: 'openSimulatorTab'
       tabId: string
-      groupId: string
+      groupId?: string
       afterTabId?: string
       index?: number
       createdAt?: number

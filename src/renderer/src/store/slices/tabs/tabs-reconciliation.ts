@@ -1,3 +1,4 @@
+import { workspaceAdmittedFiles } from '../../workspace-admitted-files'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { AppState } from '../../types'
 import type { Tab } from '../../../../../shared/tab-types'
@@ -102,9 +103,7 @@ export function projectWorktreeTabModelReconciliation(
   // Batch index avoids O(workspaces × openFiles) rescanning.
   const liveEditorIds: ReadonlySet<string> = batch
     ? (batch.liveEditorIdsByWorktree.get(worktreeId) ?? EMPTY_LIVE_EDITOR_IDS)
-    : new Set(
-        state.openFiles.filter((file) => file.worktreeId === worktreeId).map((file) => file.id)
-      )
+    : new Set(workspaceAdmittedFiles(state, worktreeId).map((file) => file.id))
   const liveBrowserIds = new Set(
     (state.browserTabsByWorktree[worktreeId] ?? []).map((browserTab) => browserTab.id)
   )

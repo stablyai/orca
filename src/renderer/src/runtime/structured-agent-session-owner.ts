@@ -1,4 +1,7 @@
-import { workspacePresentationRouteInputs } from '@/store/workspace-composition'
+import {
+  workspacePresentationFor,
+  workspacePresentationRouteInputs
+} from '@/store/workspace-composition'
 import { workspacePresentationKey } from '../../../shared/workspace-presentation'
 import {
   selectDetectedWorktreesByRepo,
@@ -64,6 +67,14 @@ export function structuredAgentSessionTargetForTab(
   if (direct || !tab.executionHostId) {
     return direct
   }
+  const presentation = workspacePresentationFor(state, tab.worktreeId)
+  const source = presentation?.baseline.find(
+    ({ source }) =>
+      source.workspaceId === tab.worktreeId && source.executionHostId === tab.executionHostId
+  )?.source
+  if (source) {
+    return structuredAgentSessionTargetForHost(source.hostId)
+  }
   // A drawing row can name an SSH execution host and a distinct runtime transport.
   for (const owner of ['window', 'main'] as const) {
     const key = workspacePresentationKey(owner, {
@@ -81,6 +92,17 @@ export function structuredAgentSessionTargetForTab(
     }
   }
   return null
+}
+
+export function structuredAgentSessionTargetMatches(
+  left: RuntimeClientTarget | null,
+  right: RuntimeClientTarget
+): boolean {
+  return (
+    left?.kind === right.kind &&
+    (left.kind === 'local' ||
+      (right.kind === 'environment' && left.environmentId === right.environmentId))
+  )
 }
 
 /** The host recorded for an existing chat, as a string a store selector can compare. */

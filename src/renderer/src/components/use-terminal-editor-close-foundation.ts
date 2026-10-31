@@ -9,7 +9,7 @@ import { runWithWindowCloseCheckpointScope } from './window-close-request-coordi
 import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
 
 export function useTerminalEditorCloseFoundation(
-  controller: TerminalWorkspaceProjectionController
+  controller: Pick<TerminalWorkspaceProjectionController, 'openFiles'>
 ) {
   const { openFiles } = controller
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)

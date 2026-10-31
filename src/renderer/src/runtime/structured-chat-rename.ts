@@ -1,3 +1,4 @@
+import { workspaceReadState } from '@/store/workspace-source-state'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
@@ -7,6 +8,7 @@ import { callRuntimeRpc } from './runtime-rpc-client'
 import { supportsStructuredAgentSessionRename } from './structured-agent-session-client'
 import {
   structuredAgentSessionTargetForHost,
+  structuredAgentSessionTargetForTab,
   structuredAgentSessionOwnerForTab,
   legacyStructuredChatRenameOwner,
   executionHostIdForStructuredTarget
@@ -92,7 +94,7 @@ async function submitRename(
     get,
     tab,
     tab.customLabel ?? null,
-    executionHostIdForStructuredTarget(target),
+    tab.executionHostId ?? executionHostIdForStructuredTarget(target),
     structuredAgentSessionOwnerForTab,
     action.current
   )
@@ -109,7 +111,10 @@ export async function uploadLegacyStructuredChatRename(
   alias: string,
   name: string
 ): Promise<boolean> {
-  const target = structuredAgentSessionTargetForHost(legacyStructuredChatRenameOwner(get(), tab))
+  const owner = legacyStructuredChatRenameOwner(get(), tab)
+  const target =
+    structuredAgentSessionTargetForHost(owner) ??
+    (owner === tab.executionHostId ? structuredAgentSessionTargetForTab(get(), tab) : null)
   if (!target || !(await supportsStructuredAgentSessionRename(target))) {
     return false
   }
@@ -127,7 +132,7 @@ export async function uploadLegacyStructuredChatRename(
     get,
     tab,
     alias,
-    executionHostIdForStructuredTarget(target),
+    tab.executionHostId ?? executionHostIdForStructuredTarget(target),
     legacyStructuredChatRenameOwner
   )
 }
@@ -146,7 +151,7 @@ async function dropLegacyAlias(
   }
   const state = get()
   const matches = () => {
-    const latest = get()
+    const latest = workspaceReadState(get())
     const current = latest.unifiedTabsByWorktree[tab.worktreeId]?.find(
       (entry) => entry.id === tab.id
     )

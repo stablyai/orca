@@ -1,3 +1,4 @@
+import { createPresentedTabsActions } from './tabs-presentation-creation'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
@@ -25,8 +26,12 @@ import { selectFolderWorkspaces } from '../../workspace-record-selectors'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
-  get: TabsSliceGet
+  get: TabsSliceGet,
+  sourceOnly = false
 ): Pick<TabsSlice, 'createUnifiedTab' | 'createUnifiedTabInSplit'> {
+  if (!sourceOnly) {
+    return createPresentedTabsActions(set, get)
+  }
   return {
     createUnifiedTab: (worktreeId, contentType, init) => {
       const id = init?.id ?? createBrowserUuid()

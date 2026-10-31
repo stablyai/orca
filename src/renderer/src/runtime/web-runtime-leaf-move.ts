@@ -1,3 +1,4 @@
+import { workspaceCommandAddress } from './workspace-command-address'
 import type { TerminalLeafMoveRequest } from '../../../shared/terminal-leaf-move'
 import { SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
 import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
@@ -15,12 +16,16 @@ import {
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
 
 /** The runtime that commits this worktree's pane moves itself; null keeps the move in this window. */
-export async function resolvePaneMoveHost(worktreeId: string): Promise<string | null> {
-  const environmentId = runtimeEnvironmentIdUnlessTwin(
-    useAppStore.getState(),
-    worktreeId,
-    'move a pane to a new tab on its host'
-  )
+export async function resolvePaneMoveHost(
+  worktreeId: string,
+  tabId?: string
+): Promise<string | null> {
+  const state = useAppStore.getState()
+  const address = tabId ? workspaceCommandAddress(state, worktreeId, tabId) : undefined
+  const environmentId =
+    address?.target?.kind === 'environment'
+      ? address.target.environmentId
+      : runtimeEnvironmentIdUnlessTwin(state, worktreeId, 'move a pane to a new tab on its host')
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return null
   }
@@ -39,15 +44,20 @@ export async function moveWebRuntimeLeafToNewTab(
   environmentId: string,
   request: TerminalLeafMoveRequest,
   /** The drop's group and position as the host names them; an older host ignores them and appends. */
-  placement: { targetGroupId: string; index?: number }
+  placement: { targetGroupId?: string; index?: number }
 ): Promise<HostPaneMoveOutcome> {
+  const address = workspaceCommandAddress(
+    useAppStore.getState(),
+    request.worktreeId,
+    request.sourceTabId
+  )
   let response: Awaited<ReturnType<ReturnType<typeof captureRuntimeEnvironmentCall>>>
   try {
     response = await captureRuntimeEnvironmentCall(environmentId)({
       method: 'session.tabs.movePaneToNewTab',
       params: {
-        worktree: toRuntimeWorktreeSelector(request.worktreeId),
-        sourceTabId: toHostSessionTabId(request.sourceTabId),
+        worktree: toRuntimeWorktreeSelector(address?.workspaceId ?? request.worktreeId),
+        sourceTabId: toHostSessionTabId(address?.tab.id ?? request.sourceTabId),
         targetTabId: toHostSessionTabId(request.targetTabId),
         leafId: request.leafId,
         ...placement
@@ -84,11 +94,16 @@ async function hostHoldsMovedPane(
   environmentId: string,
   request: TerminalLeafMoveRequest
 ): Promise<boolean | null> {
+  const address = workspaceCommandAddress(
+    useAppStore.getState(),
+    request.worktreeId,
+    request.sourceTabId
+  )
   try {
     const listed: unknown = unwrapRuntimeRpcResult(
       await captureRuntimeEnvironmentCall(environmentId)({
         method: 'session.tabs.list',
-        params: { worktree: toRuntimeWorktreeSelector(request.worktreeId) },
+        params: { worktree: toRuntimeWorktreeSelector(address?.workspaceId ?? request.worktreeId) },
         timeoutMs: 15_000
       })
     )
@@ -135,9 +150,18 @@ export async function settleHostPaneMove(
     await revertRefusedPaneMove(environmentId, request)
     return
   }
-  await refreshWebRuntimeSessionTabsSnapshot(environmentId, request.worktreeId, {
-    acceptCurrentSnapshot: true
-  })
+  const address = workspaceCommandAddress(
+    useAppStore.getState(),
+    request.worktreeId,
+    request.sourceTabId
+  )
+  await refreshWebRuntimeSessionTabsSnapshot(
+    environmentId,
+    address?.workspaceId ?? request.worktreeId,
+    {
+      acceptCurrentSnapshot: true
+    }
+  )
 }
 
 /**
@@ -163,7 +187,16 @@ async function revertRefusedPaneMove(
     remoteCloseOwnedByHost: true,
     localPtyTeardownOwnedExternally: true
   })
-  await refreshWebRuntimeSessionTabsSnapshot(environmentId, request.worktreeId, {
-    acceptCurrentSnapshot: true
-  })
+  const address = workspaceCommandAddress(
+    useAppStore.getState(),
+    request.worktreeId,
+    request.sourceTabId
+  )
+  await refreshWebRuntimeSessionTabsSnapshot(
+    environmentId,
+    address?.workspaceId ?? request.worktreeId,
+    {
+      acceptCurrentSnapshot: true
+    }
+  )
 }
