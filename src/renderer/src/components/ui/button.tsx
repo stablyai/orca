@@ -32,8 +32,6 @@ const buttonVariants = cva(
         'icon-xs': "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8',
         'icon-lg': 'size-10',
-        // The chat composer's Send, Stop and Queue/Steer buttons.
-        'icon-round': 'size-8 rounded-full',
         chip: "h-4 gap-0.5 rounded px-0.5 text-[10px] leading-none has-[>svg]:px-0.5 [&_svg:not([class*='size-'])]:size-2.5"
       }
     },

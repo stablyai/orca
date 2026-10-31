@@ -36,9 +36,6 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
-const platform = vi.hoisted(() => ({ isMac: true }))
-vi.mock('./native-chat-shortcut', () => ({ isMacPlatform: () => platform.isMac }))
-
 vi.mock('./NativeChatSessionOptionPickers', () => ({
   NativeChatSessionOptionPickers: () => <div data-testid="session-option-pickers" />
 }))
@@ -50,7 +47,6 @@ import { dispatchDictationControl } from '../dictation/dictation-control-events'
 afterEach(() => {
   cleanup()
   voice.dictationState = 'idle'
-  platform.isMac = true
   vi.clearAllMocks()
 })
 
@@ -103,130 +99,6 @@ describe('NativeChatComposerActions', () => {
     rerender(<NativeChatComposerActions {...props} sendDisabled={false} isStopping />)
 
     expect(screen.getByRole('button', { name: 'Stopping…' }).hasAttribute('disabled')).toBe(true)
-  })
-
-  it('beside Stop, says what Enter does mid-turn and names Cmd+Enter only when it differs', () => {
-    const onSend = vi.fn()
-    const onStop = vi.fn()
-    const props = {
-      attachDisabled: false,
-      dictationDisabled: false,
-      sendDisabled: false,
-      isWorking: true,
-      isDictating: false,
-      isDictationHoldMode: false,
-      onAttach: vi.fn(),
-      onDictationToggle: vi.fn(),
-      onDictationHoldStart: vi.fn(),
-      onDictationHoldEnd: vi.fn(),
-      onSend,
-      onStop,
-      sessionOptionsSurface: null,
-      sessionOptionsSnapshot: []
-    }
-    const { rerender, container } = render(<NativeChatComposerActions {...props} />)
-    expect(
-      screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))
-    ).toEqual(['Attach file', 'Start dictation', 'Stop the agent'])
-
-    rerender(
-      <NativeChatComposerActions
-        {...props}
-        followUp={{ action: 'queue', offersChoice: true, held: false }}
-      />
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Queue message' }))
-    expect(onSend).toHaveBeenCalledExactlyOnceWith()
-    expect(onStop).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Stop the agent' })).toBeTruthy()
-    expect(container.textContent).toContain('Queue for after this turn⏎')
-    expect(container.textContent).toContain('Send into the running turn⌘+⏎')
-
-    rerender(
-      <NativeChatComposerActions
-        {...props}
-        followUp={{ action: 'steer', offersChoice: false, held: false }}
-      />
-    )
-    expect(screen.getByRole('button', { name: 'Steer message' })).toBeTruthy()
-    expect(container.textContent).toContain('Send into the running turn⏎')
-    expect(container.textContent).not.toContain('Queue for after this turn')
-  })
-
-  it('a Cmd-click on the follow-up control sends the other way, only when that differs', () => {
-    const onSend = vi.fn()
-    const props = {
-      attachDisabled: false,
-      dictationDisabled: false,
-      sendDisabled: false,
-      isWorking: true,
-      isDictating: false,
-      isDictationHoldMode: false,
-      onAttach: vi.fn(),
-      onDictationToggle: vi.fn(),
-      onDictationHoldStart: vi.fn(),
-      onDictationHoldEnd: vi.fn(),
-      onSend,
-      onStop: vi.fn(),
-      sessionOptionsSurface: null,
-      sessionOptionsSnapshot: [],
-      followUp: { action: 'queue' as const, offersChoice: true, held: false }
-    }
-    const { rerender, container } = render(<NativeChatComposerActions {...props} />)
-    expect(container.textContent).toContain('Send into the running turn⌘+⏎/⌘+Click')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Queue message' }))
-    expect(onSend).toHaveBeenLastCalledWith()
-    // Holding the modifier shows what a click does now.
-    fireEvent.keyDown(window, { key: 'Meta', metaKey: true })
-    fireEvent.click(screen.getByRole('button', { name: 'Steer message' }), { metaKey: true })
-    expect(onSend).toHaveBeenLastCalledWith({ alternate: true })
-    fireEvent.keyUp(window, { key: 'Meta', metaKey: false })
-    expect(screen.getByRole('button', { name: 'Queue message' })).toBeTruthy()
-
-    rerender(
-      <NativeChatComposerActions
-        {...props}
-        followUp={{ action: 'queue', offersChoice: false, held: false }}
-      />
-    )
-    fireEvent.keyDown(window, { key: 'Meta', metaKey: true })
-    fireEvent.click(screen.getByRole('button', { name: 'Queue message' }), { metaKey: true })
-    expect(onSend).toHaveBeenLastCalledWith()
-    expect(onSend).toHaveBeenCalledTimes(3)
-  })
-
-  it('a Ctrl-click sends the other way off the Mac, and a Cmd-click there does not', () => {
-    platform.isMac = false
-    const onSend = vi.fn()
-    const { container } = render(
-      <NativeChatComposerActions
-        attachDisabled={false}
-        dictationDisabled={false}
-        sendDisabled={false}
-        isWorking
-        isDictating={false}
-        isDictationHoldMode={false}
-        onAttach={vi.fn()}
-        onDictationToggle={vi.fn()}
-        onDictationHoldStart={vi.fn()}
-        onDictationHoldEnd={vi.fn()}
-        onSend={onSend}
-        onStop={vi.fn()}
-        sessionOptionsSurface={null}
-        sessionOptionsSnapshot={[]}
-        followUp={{ action: 'queue', offersChoice: true, held: false }}
-      />
-    )
-    expect(container.textContent).toContain('Send into the running turnCtrl+Enter/Ctrl+Click')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Queue message' }), { metaKey: true })
-    expect(onSend).toHaveBeenLastCalledWith()
-    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
-    fireEvent.click(screen.getByRole('button', { name: 'Steer message' }), { ctrlKey: true })
-    expect(onSend).toHaveBeenLastCalledWith({ alternate: true })
-    fireEvent.keyUp(window, { key: 'Control', ctrlKey: false })
-    expect(screen.getByRole('button', { name: 'Queue message' })).toBeTruthy()
   })
 
   it('marks the streaming Stop control as the critical hit target', () => {

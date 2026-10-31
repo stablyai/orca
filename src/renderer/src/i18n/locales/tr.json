@@ -19074,11 +19074,6 @@
       },
       "composer": {
         "send": "Gönder",
-        "queueMessage": "Mesajı sıraya al",
-        "steerMessage": "Mesajı yönlendir",
-        "queueHint": "Bu turdan sonrası için sıraya al",
-        "steerHint": "Çalışan tura gönder",
-        "clickKey": "Tıkla",
         "noPty": "Canlı terminal yok, yeniden bağlanmak için geri geçin.",
         "locked": "Giriş başka bir cihaz tarafından tutuluyor.",
         "placeholder": "Bir şey sorun; dosyalara başvurmak için @, komutlar için / kullanın",

@@ -16,7 +16,6 @@ import type {
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
-import type { NativeChatSendFollowUp } from '../../../../shared/native-chat-follow-up-behavior'
 import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
 
@@ -49,8 +48,6 @@ export type NativeChatStructuredComposerTransport = {
   sendOut?: boolean
   /** Send is held for this reason, which the disabled button says. */
   sendBlockedReason?: string
-  /** Mid-turn on a host that queues: what Enter does, and whether Cmd/Ctrl+Enter would differ. */
-  sendFollowUp?: NativeChatSendFollowUp
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]

@@ -1,8 +1,7 @@
 import { memo } from 'react'
-import { ArrowUp, CircleAlert, CornerDownRight, ListEnd, Mic, Plus, Square } from 'lucide-react'
+import { ArrowUp, CircleAlert, Mic, Plus, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type {
@@ -14,19 +13,7 @@ import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePi
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
-import type {
-  NativeChatComposerSendIntent,
-  NativeChatOptionPickerRequest
-} from './native-chat-composer-types'
-import type {
-  NativeChatFollowUpBehavior,
-  NativeChatSendFollowUp
-} from '../../../../shared/native-chat-follow-up-behavior'
-import { isMacPlatform } from './native-chat-shortcut'
-import { usePlatformModifierHeld } from './use-platform-modifier-held'
-
-/** `held`: the idle Send would be disabled here, so this control is too, with the same reason. */
-export type NativeChatComposerFollowUp = NativeChatSendFollowUp & { held: boolean }
+import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 
 export type NativeChatComposerActionsProps = {
   editSession?: { cancel: () => void }
@@ -40,15 +27,13 @@ export type NativeChatComposerActionsProps = {
   isWorking: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean
-  /** Mid-turn: a send control beside Stop, so the user sees what Enter does. */
-  followUp?: NativeChatComposerFollowUp
   isDictating: boolean
   isDictationHoldMode: boolean
   onAttach: () => void
   onDictationToggle: () => void
   onDictationHoldStart: () => void
   onDictationHoldEnd: () => void
-  onSend: (intent?: NativeChatComposerSendIntent) => void
+  onSend: () => void
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
@@ -72,7 +57,6 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   draftNotSaved,
   isWorking,
   isStopping = false,
-  followUp,
   isDictating,
   isDictationHoldMode,
   onAttach,
@@ -132,8 +116,8 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
       onMouseDown={(event) => event.preventDefault()}
       onClick={handleCriticalAction}
       variant={stops ? 'secondary' : 'default'}
-      size="icon-round"
-      className="pointer-coarse:size-10"
+      size="icon"
+      className="size-8 rounded-full pointer-coarse:size-10"
     >
       {stops ? <Square className="size-3.5 fill-current" /> : <ArrowUp className="size-4" />}
     </Button>
@@ -227,138 +211,23 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
             {translate('common.cancel', 'Cancel')}
           </Button>
         ) : null}
-        {followUp && stops && !editSession ? (
-          <NativeChatFollowUpSendButton
-            followUp={followUp}
-            reason={followUp.held ? (sendBlockedReason ?? null) : null}
-            onSend={onSend}
-          />
-        ) : null}
-        <HeldSendReason reason={sendReason}>{sendButton}</HeldSendReason>
+        {sendReason ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* A disabled button gets no pointer events, so the wrapper carries the hover. */}
+              <span className="inline-flex">{sendButton}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {sendReason}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          sendButton
+        )}
       </div>
     </div>
   )
 })
-
-const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
-
-/** A click sends as Enter does and, when it would differ, a Cmd/Ctrl-click as Cmd/Ctrl+Enter does. */
-function NativeChatFollowUpSendButton({
-  followUp,
-  reason,
-  onSend
-}: {
-  followUp: NativeChatComposerFollowUp
-  reason: string | null
-  onSend: (intent?: NativeChatComposerSendIntent) => void
-}): React.JSX.Element {
-  const label = {
-    queue: translate('components.native-chat.composer.queueMessage', 'Queue message'),
-    steer: translate('components.native-chat.composer.steerMessage', 'Steer message')
-  }
-  const hint = {
-    queue: translate('components.native-chat.composer.queueHint', 'Queue for after this turn'),
-    steer: translate('components.native-chat.composer.steerHint', 'Send into the running turn')
-  }
-  const alternate: NativeChatFollowUpBehavior = followUp.action === 'queue' ? 'steer' : 'queue'
-  const isMac = isMacPlatform()
-  const offersChoice = followUp.offersChoice && !followUp.held
-  // While the modifier is held, the button shows what a click would do now.
-  const shown = usePlatformModifierHeld(offersChoice, isMac) ? alternate : followUp.action
-  const Icon = FOLLOW_UP_ICON[shown]
-  const click = translate('components.native-chat.composer.clickKey', 'Click')
-  const modifier = isMac ? '⌘' : 'Ctrl'
-  const button = (
-    <Button
-      type="button"
-      aria-label={reason ?? label[shown]}
-      disabled={followUp.held}
-      // A press keeps focus in the draft, and a double-click's second press sends nothing more.
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={(event) => {
-        if (event.detail > 1) {
-          return
-        }
-        if (offersChoice && (isMac ? event.metaKey : event.ctrlKey)) {
-          onSend({ alternate: true })
-        } else {
-          onSend()
-        }
-      }}
-      size="icon-round"
-      className="pointer-coarse:size-10"
-    >
-      <Icon className="size-4" />
-    </Button>
-  )
-  // Held, it reads as the idle Send does: the reason when there is one, otherwise nothing.
-  if (followUp.held) {
-    return <HeldSendReason reason={reason}>{button}</HeldSendReason>
-  }
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        <span className="flex flex-col gap-1">
-          <span className="flex items-center justify-between gap-2">
-            <span>{hint[followUp.action]}</span>
-            <FollowUpKeys keys={[isMac ? '⏎' : 'Enter']} click={offersChoice ? [click] : null} />
-          </span>
-          {offersChoice ? (
-            <span className="flex items-center justify-between gap-2">
-              <span>{hint[alternate]}</span>
-              <FollowUpKeys keys={[modifier, isMac ? '⏎' : 'Enter']} click={[modifier, click]} />
-            </span>
-          ) : null}
-        </span>
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-/** One way to send: its keys and, when a click differs from another way, the click too. */
-function FollowUpKeys({
-  keys,
-  click
-}: {
-  keys: string[]
-  click: string[] | null
-}): React.JSX.Element {
-  if (!click) {
-    return <ShortcutKeyCombo keys={keys} />
-  }
-  return (
-    <span className="inline-flex items-center gap-1">
-      <ShortcutKeyCombo keys={keys} />
-      <span className="text-xs text-muted-foreground">/</span>
-      <ShortcutKeyCombo keys={click} />
-    </span>
-  )
-}
-
-/** A disabled send control that says why, when the user can do something about it. */
-function HeldSendReason({
-  reason,
-  children
-}: {
-  reason: string | null
-  children: React.JSX.Element
-}): React.JSX.Element {
-  if (!reason) {
-    return children
-  }
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {/* A disabled button gets no pointer events, so the wrapper carries the hover. */}
-        <span className="inline-flex">{children}</span>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {reason}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
 
 function DraftNotSavedIcon({ shown }: { shown: boolean }): React.JSX.Element | null {
   if (!shown) {

@@ -147,7 +147,6 @@ export function PositionField({
     notices: [],
     imageAttachments: [],
     sendButtonDisabled: true,
-    sendHeld: true,
     isWorking: false,
     attachDisabled: true,
     dictationDisabled: true,

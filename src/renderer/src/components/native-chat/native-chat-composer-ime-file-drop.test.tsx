@@ -162,7 +162,6 @@ function ComposerProbe({
           notices={notices}
           imageAttachments={attachments.imageAttachments}
           sendButtonDisabled={false}
-          sendHeld={false}
           isWorking={false}
           attachDisabled={disabled}
           dictationDisabled

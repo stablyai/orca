@@ -19398,11 +19398,6 @@
       },
       "composer": {
         "send": "Send",
-        "queueMessage": "Queue message",
-        "steerMessage": "Steer message",
-        "queueHint": "Queue for after this turn",
-        "steerHint": "Send into the running turn",
-        "clickKey": "Click",
         "noPty": "No live terminal — toggle back to reconnect.",
         "locked": "Input is held by another device.",
         "placeholder": "Ask anything, @ to mention files, / for commands",
