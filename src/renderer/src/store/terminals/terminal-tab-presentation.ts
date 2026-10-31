@@ -134,8 +134,13 @@ export function createTerminalTabPresentationActions(
         if (!currentTab?.launchAgent) {
           return s
         }
-        const { launchAgent: _launchAgent, ...tabWithoutLaunchAgent } = currentTab
+        const {
+          launchAgent: _launchAgent,
+          launchAgentLeafId: _launchAgentLeafId,
+          ...tabWithoutLaunchAgent
+        } = currentTab
         void _launchAgent
+        void _launchAgentLeafId
         const nextTabs = [...tabs]
         nextTabs[tabIndex] = tabWithoutLaunchAgent
         scheduleRuntimeGraphSync()

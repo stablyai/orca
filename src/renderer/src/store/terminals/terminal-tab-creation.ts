@@ -86,6 +86,7 @@ export function createTerminalTabCreationActions(
             : undefined
         // Why: name the first pane at creation so the saved layout is never empty; the pane mounts and spawns into this leaf.
         const initialLeafId = requestedInitialLeafId ?? createBrowserUuid()
+        const launchAgentLeafId = options?.launchAgent ? initialLeafId : undefined
         const shouldActivate = options?.activate !== false
         const nextOrdinal = getNextTerminalOrdinal(existing)
         const defaultTitle = `Terminal ${nextOrdinal}`
@@ -117,6 +118,7 @@ export function createTerminalTabCreationActions(
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
           ...(options?.agentLaunchPane ? { agentLaunchPane: options.agentLaunchPane } : {}),
+          ...(launchAgentLeafId ? { launchAgentLeafId } : {}),
           // Tag click-driven spawn so bind cannot reorder Recent/Smart via activity/sortEpoch.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
         }
