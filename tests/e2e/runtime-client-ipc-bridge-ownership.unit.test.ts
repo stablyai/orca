@@ -1,16 +1,17 @@
 import type { TerminalResidentLegacySource } from '../../src/renderer/src/components/terminal-pane/terminal-resident-legacy-source'
 import type { TerminalSemanticResident } from '../../src/renderer/src/components/terminal-pane/terminal-semantic-residents'
-import { expect, it, vi } from 'vitest'
+import { expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { useAppStore } from '@/store'
 import { TerminalSnapshotConsumption } from '../../src/shared/terminal-snapshot-consumption'
 import { TerminalSnapshotObserver } from '../../src/shared/terminal-snapshot-observer'
 import { TerminalSnapshotState } from '../../src/shared/terminal-snapshot-state'
 import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
-import { getTerminalSemanticResident } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
+import {
+  getTerminalSemanticResident,
+  _resetTerminalSideEffectFactConsumersForTest
+} from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
 import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
-import { afterEach, beforeEach } from 'vitest'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { _resetTerminalSideEffectFactConsumersForTest } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
 import { createHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
 
 const initialState = useAppStore.getState()

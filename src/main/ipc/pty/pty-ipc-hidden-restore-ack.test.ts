@@ -1,6 +1,5 @@
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { onTestFinished } from 'vitest'
-import { describe, expect, it, vi } from 'vitest'
+import { onTestFinished, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './register-handlers'
 

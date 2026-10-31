@@ -1,6 +1,6 @@
 import { registerPtyConnectionForegroundHostRoutingTests } from './pty-connection-foreground-host-routing.spec'
 import type * as IpcPtyTransportModule from './pty-transport'
-import { foregroundSemantics } from './pty-connection-test-store-fixtures'
+import { foregroundSemantics, createInitialStoreState } from './pty-connection-test-store-fixtures'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -25,7 +25,6 @@ import {
   type StoreState
 } from './pty-connection-test-store-state'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals

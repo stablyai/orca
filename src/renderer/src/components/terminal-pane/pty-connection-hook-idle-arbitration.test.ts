@@ -113,7 +113,7 @@ function admitConnectedTransport(
     const result = await connect?.(args)
     const id = typeof result === 'string' ? result : result?.id
     if (id) {
-      options.onSourceAdmitted?.(id, typeof result === 'object' ? result.incarnationId : undefined)
+      options.onSourceAdmitted?.(id, typeof result === 'object' ? result?.incarnationId : undefined)
     }
     return result ?? null
   })

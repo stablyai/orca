@@ -101,8 +101,8 @@ describe('shell showing through a hibernation kill', () => {
     connectPanePty(...args)
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()
-    const { getTerminalSemanticResident, observeTerminalSemanticResidentExit } =
-      await import('./terminal-semantic-residents')
+    const { getTerminalSemanticResident } = await import('./terminal-semantic-residents')
+    const { observeTerminalSemanticResidentExit } = await import('./pty-shutdown-exit-deferral')
     const resident = getTerminalSemanticResident(ptyId)
     if (!resident) {
       throw new Error('Expected connect/admission to publish E before effects')

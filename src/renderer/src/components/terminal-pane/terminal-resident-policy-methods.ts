@@ -3,13 +3,16 @@ import { captureTerminalFactSubject, type TerminalFactSubject } from './terminal
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { useAppStore } from '@/store'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
-import type { TerminalResidentBinding, TerminalResidentServices } from './terminal-resident-binding'
+import type {
+  TerminalResidentBinding,
+  TerminalResidentServices,
+  TerminalResidentPresentation
+} from './terminal-resident-binding'
 import type { TerminalResidentPolicyContext } from './terminal-resident-policy-context'
 import type { TerminalResidentPolicy } from './terminal-resident-registry'
 import type { TerminalResidentLegacySource } from './terminal-resident-legacy-source'
 import type { createTerminalResidentStatusCallbacks } from './terminal-resident-attention-callbacks'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
-import type { TerminalResidentPresentation } from './terminal-resident-binding'
 import type { AgentInterruptInputIntent } from '../../../../shared/agent-interrupt-intent'
 import { isPassiveTerminalInputReport } from './terminal-passive-input-report'
 import type { PtyTransport } from './pty-transport-types'

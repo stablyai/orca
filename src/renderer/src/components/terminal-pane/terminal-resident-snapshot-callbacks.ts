@@ -42,6 +42,12 @@ export function createTerminalResidentSnapshotCallbacks(
       return
     }
     switch (fact.kind) {
+      case '2031-subscribe':
+      case '2031-unsubscribe':
+      case 'pr-link':
+      case 'program-facet':
+      case 'title':
+        return
       case 'command-started':
         captureCommand(effect.commandOrdinal)
         context.foreground.handleCommandStarted()

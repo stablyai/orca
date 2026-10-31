@@ -160,7 +160,14 @@ export function terminalEffectKey(fact: TerminalTransientFact): TerminalEffectKe
     case '2031-unsubscribe':
     case 'pr-link':
       return null
-    default:
+    case 'agent-exited':
+    case 'agent-idle':
+    case 'agent-working':
+    case 'bell':
+    case 'command-code-done':
+    case 'command-code-working':
+    case 'command-finished':
+    case 'command-started':
       return fact.kind
   }
 }

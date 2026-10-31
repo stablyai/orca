@@ -1,3 +1,4 @@
+export { observeTerminalSemanticResidentExit } from './pty-shutdown-exit-deferral'
 import type { RuntimeClientEventInstallation } from '@/runtime/runtime-client-events'
 import { createTerminalResidentSourceAdmissions } from './terminal-resident-source-admission'
 import { captureTerminalFactSubject } from './terminal-fact-subject'
@@ -33,7 +34,6 @@ import {
 } from './terminal-semantic-residents'
 export {
   getTerminalSemanticResident,
-  observeTerminalSemanticResidentExit,
   retireTerminalSemanticResident,
   retireTerminalSemanticResidentsForTab,
   type TerminalSemanticResident

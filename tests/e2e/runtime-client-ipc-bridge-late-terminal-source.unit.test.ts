@@ -1,14 +1,19 @@
 import type { TerminalResidentLegacySource } from '../../src/renderer/src/components/terminal-pane/terminal-resident-legacy-source'
 import type { TerminalSemanticResident } from '../../src/renderer/src/components/terminal-pane/terminal-semantic-residents'
-import { afterEach, beforeEach } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { _resetTerminalSideEffectFactConsumersForTest } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
+import {
+  _resetTerminalSideEffectFactConsumersForTest,
+  getTerminalSemanticResident,
+  dispatchTerminalSideEffectBatch,
+  retireTerminalSemanticResident
+} from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
+import type { RuntimeClientEventBridgeHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
 import { createHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
 
 import { TerminalSnapshotConsumption } from '../../src/shared/terminal-snapshot-consumption'
 import { TerminalSnapshotObserver } from '../../src/shared/terminal-snapshot-observer'
 import { getDefaultSettings } from '../../src/shared/constants'
-import { expect, it, vi } from 'vitest'
 import * as terminalNotifications from '../../src/renderer/src/components/terminal-pane/use-notification-dispatch'
 import { AGENT_DONE_QUIET_MS } from '../../src/shared/agent-transitions'
 import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from '../../src/renderer/src/components/terminal-pane/agent-task-complete-policy'
@@ -16,12 +21,6 @@ import { useAppStore } from '@/store'
 import { TerminalSnapshotState } from '../../src/shared/terminal-snapshot-state'
 import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
-import {
-  getTerminalSemanticResident,
-  dispatchTerminalSideEffectBatch,
-  retireTerminalSemanticResident
-} from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
-import type { RuntimeClientEventBridgeHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
 
 function measuredConsumption(resident: TerminalSemanticResident): TerminalSnapshotConsumption {
   const value: unknown = Object.getOwnPropertyDescriptor(resident, 'consumption')?.value

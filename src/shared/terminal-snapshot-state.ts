@@ -98,6 +98,8 @@ export class TerminalSnapshotState {
           observedAt
         }
         break
+      case 'bell':
+        break
       case 'pr-link':
         this.state.recentPrLinks = [
           ...this.state.recentPrLinks.filter((link) => link.url !== fact.url),

@@ -235,7 +235,9 @@ export function createTerminalInputPolicy(services: {
     const flush = (): boolean | Promise<boolean> => {
       const results = Array.from(writers, (writer) => writer.flushPending())
       return results.some((result) => result instanceof Promise)
-        ? Promise.all(results).then((values) => values.some(Boolean))
+        ? Promise.all(results.map((result) => Promise.resolve(result))).then((values) =>
+            values.some(Boolean)
+          )
         : results.some(Boolean)
     }
     if (pendingWrites.size === 0) {

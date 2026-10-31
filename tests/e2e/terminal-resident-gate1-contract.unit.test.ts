@@ -5,7 +5,11 @@ import { TerminalResidentRegistry } from '../../src/renderer/src/components/term
 import { createTerminalResidentPolicy } from '../../src/renderer/src/components/terminal-pane/terminal-resident-policy'
 import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-fixtures'
 import { makePaneKey } from '../../src/shared/stable-pane-id'
-import { LEAF_1 } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-pane-fixtures'
+import {
+  LEAF_1,
+  createPane,
+  createManager
+} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-pane-fixtures'
 import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-state'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import {
@@ -13,10 +17,6 @@ import {
   restoreTerminalTestGlobals
 } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-environment'
 import { createTerminalKeyboardRuntime } from '../../src/renderer/src/components/terminal-pane/terminal-keyboard-runtime'
-import {
-  createPane,
-  createManager
-} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-pane-fixtures'
 import { createTerminalLayoutActions } from '@/store/terminals/terminal-layout-state'
 import { foregroundAgentForActions } from '../../src/shared/agent-status-identity'
 import { hasCtrlEnterCsiUAuthorityForPane } from '../../src/renderer/src/components/terminal-pane/terminal-ctrl-enter'

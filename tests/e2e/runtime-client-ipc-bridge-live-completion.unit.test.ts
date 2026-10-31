@@ -1,12 +1,14 @@
 import type { TerminalSemanticResident } from '../../src/renderer/src/components/terminal-pane/terminal-semantic-residents'
-import { afterEach, beforeEach } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { _resetTerminalSideEffectFactConsumersForTest } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
+import {
+  _resetTerminalSideEffectFactConsumersForTest,
+  getTerminalSemanticResident
+} from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
 import { createHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
 
 import { TerminalSnapshotConsumption } from '../../src/shared/terminal-snapshot-consumption'
 import { getDefaultSettings } from '../../src/shared/constants'
-import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import * as terminalNotifications from '../../src/renderer/src/components/terminal-pane/use-notification-dispatch'
 import { AGENT_DONE_QUIET_MS } from '../../src/shared/agent-transitions'
@@ -14,7 +16,6 @@ import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from '../../src/renderer
 import { COMMAND_CODE_OUTPUT_DONE_SETTLE_MS } from '../../src/renderer/src/components/terminal-pane/command-code-done-settle'
 import { TerminalSnapshotState } from '../../src/shared/terminal-snapshot-state'
 import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
-import { getTerminalSemanticResident } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
 import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
 import type { RuntimeClientEventBridgeHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
 

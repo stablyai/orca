@@ -3,13 +3,15 @@ import { TerminalSnapshotConsumption } from '../../../../shared/terminal-snapsho
 import { TerminalSnapshotState } from '../../../../shared/terminal-snapshot-state'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
 import type { AgentStatus } from '../../../../shared/agent-detection'
-import type { TerminalTransientFact } from '../../../../shared/terminal-transient-observation'
+import type {
+  TerminalTransientFact,
+  TerminalTransientObservation
+} from '../../../../shared/terminal-transient-observation'
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
 
 import type { TerminalSideEffectFact } from '../../../../shared/terminal-side-effect-facts'
 
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
-import type { TerminalTransientObservation } from '../../../../shared/terminal-transient-observation'
 import { parseTerminalGitHubPRUrl } from '../../../../shared/terminal-github-pr-link-detector'
 
 export abstract class OrcaRuntimeWithTerminalSnapshotApplication extends OrcaRuntimeWithScheduleWaitBlockedCheck {
@@ -246,7 +248,13 @@ export abstract class OrcaRuntimeWithTerminalSnapshotApplication extends OrcaRun
         }
         this.recordTerminalSideEffectFact(ptyId, fact, projected)
         return
-      default:
+      case '2031-subscribe':
+      case '2031-unsubscribe':
+      case 'agent-idle':
+      case 'agent-working':
+      case 'bell':
+      case 'command-code-done':
+      case 'command-code-working':
         this.recordTerminalSideEffectFact(ptyId, fact, projected)
     }
   }

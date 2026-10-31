@@ -1,6 +1,6 @@
 import type { PendingStreamDataBatch, StreamQueueEntry } from './daemon-stream-keep-tail-drop'
 import { Socket } from 'node:net'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type MockInstance } from 'vitest'
 import { DaemonTransientReader } from './daemon-transient-reader'
 import { attachStreamEventReader } from './daemon-client-ndjson-readers'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
@@ -112,7 +112,7 @@ describe('complete terminal state delivery', () => {
       }
       let visited = 0
       const nativeFilter = Array.prototype.filter
-      let spy: ReturnType<typeof vi.spyOn> | undefined
+      let spy: MockInstance<typeof Array.prototype.filter> | undefined
       try {
         sink.install(state.snapshot(), 'incarnation', () => state.snapshot())
         for (let index = 0; index < size; index++) {
