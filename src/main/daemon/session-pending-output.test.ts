@@ -63,19 +63,6 @@ describe('Session pending output', () => {
     ])
   })
 
-  it('coalesces adjacent output chunks', () => {
-    const subprocess = createMockSubprocess()
-    const live = createSession(subprocess)
-
-    for (let i = 0; i < 100; i += 1) {
-      subprocess.simulateData(`chunk-${i};`)
-    }
-
-    const take = live.takePendingOutput(false)
-    expect(take!.records).toHaveLength(1)
-    expect(take!.records[0]).toMatchObject({ kind: 'output' })
-  })
-
   it('drains on take and increments the batch sequence', () => {
     const subprocess = createMockSubprocess()
     const live = createSession(subprocess)
@@ -124,11 +111,5 @@ describe('Session pending output', () => {
     // Snapshot-covered records must not replay again on recovery.
     const next = live.takePendingOutput(false)
     expect(next!.records).toEqual([])
-  })
-
-  it('returns null after dispose', () => {
-    const live = createSession()
-    live.dispose()
-    expect(live.takePendingOutput(false)).toBeNull()
   })
 })

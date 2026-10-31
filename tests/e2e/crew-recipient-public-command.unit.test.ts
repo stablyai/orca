@@ -1,3 +1,4 @@
+import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partial-fixture'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../src/main/runtime/orchestration/worker-terminal-auto-release-scheduler'
 import { resolveOrcaSessionParty } from '../../src/main/runtime/orchestration/orchestration-party'
 import {
@@ -567,18 +568,35 @@ it('keeps a new ordinary terminal occupant distinct from its lost historical ses
   }
 })
 
-it('keeps the genuine settled worker Dispatch preferred and sends its published address as a same-resource follow-up', async () => {
+it.each([
+  {
+    name: 'keeps the genuine settled worker Dispatch preferred and sends its published address as a same-resource follow-up',
+    from: 'term_coord',
+    target: 'term_worker'
+  },
+  {
+    name: 'sends the advertised settled helper Dispatch from its active delegated worker in place',
+    from: 'term_worker',
+    target: 'term_helper'
+  }
+])('$name', async ({ from, target }) => {
   const f = ordinaryCrewCommandFixture()
   try {
+    const terminalCount = from === 'term_worker' ? 2 : 1
+    if (from === 'term_worker') {
+      Object.defineProperty(f.runtime, 'store', {
+        value: partialRuntimeStore({ getSettings: () => ({ nestedWorkerMaxDepth: 3 }) })
+      })
+    }
     vi.mocked(f.runtime.getOrchestrationDispatchAuthority).mockImplementation((handle) =>
-      handle === 'term_worker'
+      ['term_worker', target].includes(handle)
         ? {
             runtimeId: f.runtime.getRuntimeId(),
             terminalHandle: handle,
-            ptyId: 'pty_term_worker',
+            ptyId: `pty_${handle}`,
             worktreeId: 'folder-worker-host',
-            paneKey: WORKER_PANE,
-            processIncarnation: 'process:term_worker',
+            paneKey: f.panes.get(handle)!,
+            processIncarnation: `process:${handle}`,
             launchTokenHash: null,
             hostScope: { kind: 'local', hostId: 'local' }
           }
@@ -619,11 +637,8 @@ it('keeps the genuine settled worker Dispatch preferred and sends its published 
       worktreeId: 'folder-worker-host',
       worktreePath: '/tmp',
       branch: 'fixture',
-      tabId: handle === 'term_worker' ? 'tab_worker' : 'tab_coord',
-      leafId:
-        handle === 'term_worker'
-          ? WORKER_PANE.split(':')[1]!
-          : f.panes.get('term_coord')!.split(':')[1]!,
+      tabId: f.panes.get(handle)!.split(':')[0]!,
+      leafId: f.panes.get(handle)!.split(':')[1]!,
       title: 'worker',
       connected: true,
       writable: true,
@@ -634,12 +649,12 @@ it('keeps the genuine settled worker Dispatch preferred and sends its published 
       rendererGraphEpoch: 1
     }))
     const create = vi.spyOn(f.runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term_worker',
+      handle: target,
       worktreeId: 'folder-worker-host',
       title: 'worker'
     })
     vi.spyOn(f.runtime, 'waitForTerminal').mockResolvedValue({
-      handle: 'term_worker',
+      handle: target,
       condition: 'tui-idle',
       satisfied: true,
       status: 'running',
@@ -647,14 +662,27 @@ it('keeps the genuine settled worker Dispatch preferred and sends its published 
     })
     vi.spyOn(f.runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     const prompt = vi.spyOn(f.runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
-      handle: 'term_worker',
+      handle: target,
       accepted: true,
       bytesWritten: 1
     })
     vi.spyOn(f.runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
     vi.spyOn(f.runtime, 'getExactWorkerProviderSession').mockReturnValue(null)
     await f.command('term_coord', 'run-create', [['objective', 'genuine worker follow-up']])
-    await f.command('term_coord', 'worker-start', [
+    if (from === 'term_worker') {
+      create.mockResolvedValueOnce({
+        handle: 'term_worker',
+        worktreeId: 'folder-worker-host',
+        title: 'worker'
+      })
+      await f.command('term_coord', 'worker-start', [
+        ['spec', 'active delegated worker'],
+        ['agent', 'codex'],
+        ['worktree', 'id:folder-worker-host']
+      ])
+      expect(f.db.getCurrentRunForPane(WORKER_PANE)).toBeUndefined()
+    }
+    await f.command(from, 'worker-start', [
       ['spec', 'initial work'],
       ['agent', 'codex'],
       ['worktree', 'id:folder-worker-host']
@@ -665,11 +693,11 @@ it('keeps the genuine settled worker Dispatch preferred and sends its published 
     const resource = f.db.getWorkerTerminalResourceByOwner(started.dispatchId)
     expect(f.db.getWorkerDispatch(started.dispatchId)?.state).toBe('ready')
     expect(resource).toMatchObject({
-      terminal_handle: 'term_worker',
-      process_incarnation: 'process:term_worker',
+      terminal_handle: target,
+      process_incarnation: `process:${target}`,
       owner_dispatch_id: started.dispatchId
     })
-    expect(create).toHaveBeenCalledTimes(1)
+    expect(create).toHaveBeenCalledTimes(terminalCount)
     expect(
       f.db.settleWorkerReport({
         taskId: started.taskId,
@@ -678,29 +706,35 @@ it('keeps the genuine settled worker Dispatch preferred and sends its published 
         result: 'initial work done'
       }).action
     ).toBe('settled')
-    const snapshot = f.runtime.getOrchestrationCrewSnapshot('term_coord')
+    if (from === 'term_worker') {
+      const creatorId = f.db.getDispatchContextById(started.dispatchId)?.creator_dispatch_id
+      expect(f.db.getWorkerDispatch(creatorId!)?.state).toBe('ready')
+      expect(f.db.getDispatchContextById(creatorId!)?.assignee_handle).toBe('term_worker')
+      expect(f.db.getRunMailboxOwnerIdsForHandle(target)).toEqual([])
+    }
+    const snapshot = f.runtime.getOrchestrationCrewSnapshot(from)
     const row = snapshot.sections.managing.find(
-      (item) => item.openTarget?.kind === 'terminal' && item.openTarget.handle === 'term_worker'
+      (item) => item.openTarget?.kind === 'terminal' && item.openTarget.handle === target
     )
     expect(row).toMatchObject({
       role: 'worker',
       task: { state: 'completed' },
-      openTarget: { kind: 'terminal', handle: 'term_worker' }
+      openTarget: { kind: 'terminal', handle: target }
     })
-    expect(JSON.parse(row!.partyKey)).toEqual([expect.any(String), 'term_worker'])
+    expect(JSON.parse(row!.partyKey)).toEqual([expect.any(String), target])
     expect.soft(row?.sendAddress).toBe(`dispatch:${started.dispatchId}`)
     if (!row?.sendAddress) {
       throw new Error('genuine settled worker action missing')
     }
     const beforePrompts = prompt.mock.calls.length
-    await f.command('term_coord', 'send', [
+    await f.command(from, 'send', [
       ['to', row.sendAddress],
       ['subject', 'same worker follow-up'],
       ['body', 'follow-up body']
     ])
     const receipt = f.receipts.findLast((entry) => entry.method === 'orchestration.send')?.result
     process.stdout.write(
-      `Crew genuine follow-up ${JSON.stringify({ started, resource, snapshot, capturedAddress: row.sendAddress, receipt, creates: create.mock.calls.length, prompts: prompt.mock.calls.slice(beforePrompts) })}\n`
+      `Crew genuine follow-up ${JSON.stringify({ from, target, started, resource, snapshot, capturedAddress: row.sendAddress, receipt, creates: create.mock.calls.length, prompts: prompt.mock.calls.slice(beforePrompts) })}\n`
     )
     expect
       .soft(receipt)
@@ -716,16 +750,23 @@ it('keeps the genuine settled worker Dispatch preferred and sends its published 
       })
       .parse(linked)
     expect(f.db.getWorkerDispatch(followUp.id)?.state).toBe('ready')
+    if (from === 'term_worker') {
+      const creator = f.db.getDispatchContextById(started.dispatchId)!.creator_dispatch_id
+      expect(f.db.getDispatchContextById(followUp.id)?.creator_dispatch_id).toBe(creator)
+      expect(f.db.getTask(followUp.task_id)?.parent_id).toBe(
+        f.db.getDispatchContextById(creator!)?.task_id
+      )
+    }
     expect(f.db.getTask(followUp.task_id)?.spec).toContain('follow-up body')
     expect(f.db.getWorkerTerminalResourceByOwner(followUp.id)).toMatchObject({
       id: resource!.id,
       owner_dispatch_id: followUp.id,
-      terminal_handle: 'term_worker',
-      process_incarnation: 'process:term_worker'
+      terminal_handle: target,
+      process_incarnation: `process:${target}`
     })
-    expect(create).toHaveBeenCalledTimes(1)
+    expect(create).toHaveBeenCalledTimes(terminalCount)
     expect(prompt.mock.calls.slice(beforePrompts)).toHaveLength(1)
-    expect(prompt.mock.calls.at(-1)?.[0]).toBe('term_worker')
+    expect(prompt.mock.calls.at(-1)?.[0]).toBe(target)
   } finally {
     f.close()
   }

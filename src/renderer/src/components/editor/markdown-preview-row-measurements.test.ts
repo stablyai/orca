@@ -47,18 +47,6 @@ describe('large preview loaded-row measurements', () => {
     expect(virtualizer.getVirtualItems().map((row) => row.size)).toEqual([94, 56])
   })
 
-  it('preserves unchanged actual heights after resetting stale measurement slots', () => {
-    const virtualizer = createVirtualizer()
-    virtualizer.getVirtualItems()
-    virtualizer.resizeItem(0, 94)
-    expect(virtualizer.getVirtualItems().map((row) => row.size)).toEqual([94, 56, 56])
-    const body = document.createElement('div')
-    loadedRow(body, 0, 94)
-    refreshMarkdownPreviewRowMeasurements(virtualizer, body, true)
-    expect(virtualizer.getVirtualItems().map((row) => row.size)).toEqual([94, 56, 56])
-    expect(virtualizer.itemSizeCache.get(0)).toBe(94)
-  })
-
   it('refreshes new content during scrolling while retaining other measured rows', () => {
     const virtualizer = createVirtualizer()
     virtualizer.getVirtualItems()

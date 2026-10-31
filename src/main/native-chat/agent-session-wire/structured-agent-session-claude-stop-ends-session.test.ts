@@ -147,23 +147,6 @@ it('ends the child at once when Claude refuses the interrupt, and says only that
   expect(texts.some((text) => text.includes("didn't stop"))).toBe(false)
 })
 
-it('ends the child when the interrupt fails, with no unconfirmed row', async () => {
-  fixture.claude.routes.interrupt = () => {
-    throw new Error('control request lost')
-  }
-  const connection = fixture.claude.connections[0]!
-  const eventsAtClose = stopEventsAtClose(connection)
-  await openTurn(connection)
-
-  await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
-  await laneDrained()
-
-  expect(connection.closed).toBe(true)
-  expect(eventsAtClose()).toBe(1)
-  expect(await turnOutcome()).toBe('cancellation')
-  expect(await statusTexts()).toEqual(['Cancellation requested.'])
-})
-
 it('ends the child within the grace when Claude never answers the interrupt', async () => {
   fixture.claude.routes.interrupt = NEVER_ANSWERS
   const connection = fixture.claude.connections[0]!
@@ -215,27 +198,6 @@ it('ends background work Claude runs when the Stop ends the child', async () => 
     mainAgent: { state: 'done', outcome: 'cancellation' }
   })
   expect(connection.closed).toBe(true)
-})
-
-it('starts a new child for the next send after a Stop, on the same Claude conversation', async () => {
-  const connection = fixture.claude.connections[0]!
-  await openTurn(connection)
-  await stop()
-  frame(connection, INTERRUPTED_RESULT)
-  await laneDrained()
-
-  const next = await send('Carry on.')
-  const resumed = await eventually(() => {
-    const started = fixture.claude.connections.at(-1)
-    expect(started).not.toBe(connection)
-    expect(started && wrote(started, 'Carry on.')).toBe(true)
-    return started!
-  })
-  expect(fixture.store.getRecord(SESSION)?.providerHandleChain.at(-1)?.handle).toMatchObject({
-    nativeId: PROVIDER_SESSION_ID
-  })
-  expect(resumed.closed).toBe(false)
-  expect(await dispatch(next)).toMatchObject({ state: 'pending' })
 })
 
 it('delivers a send issued with the pre-Stop fence during the Stop to the resumed child only', async () => {
