@@ -182,259 +182,261 @@ async function checkWindowsFolderPicker(
   await cdp.detach()
 }
 
-test('adds a WSL distro as a host, adds a project on it, and runs a terminal there', async ({
-  orcaPage,
-  electronApp
-}, testInfo) => {
-  test.setTimeout(240_000)
-  await waitForSessionReady(orcaPage)
-  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
-  // Starts with only a WSL 1 distro; Ubuntu is "imported" while the add dialog is open.
-  const distrosDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-distros-'))
-  const distrosFile = path.join(distrosDir, 'distros.json')
-  writeFileSync(distrosFile, JSON.stringify([LEGACY_DISTRO]))
-  const connectLogFile = path.join(distrosDir, 'connects.log')
-  const desktop = await launchDesktopWithFakeWslPairing(offer.pairingUrl, testInfo, {
-    distrosFile,
-    connectLogFile
-  })
-  const projectPath = createGitProject()
-  const cleanupDirs: string[] = []
-  try {
-    const { page } = desktop
-    await setWslHostsEnabled(page, true)
+// THROWAWAY repro (do not merge): 5 attempts per run, run twice without the #34607 prompt wait.
+for (const attempt of [1, 2, 3, 4, 5]) {
+  test(`adds a WSL distro as a host, adds a project on it, and runs a terminal there #${attempt}`, async ({
+    orcaPage,
+    electronApp
+  }, testInfo) => {
+    test.setTimeout(240_000)
+    await waitForSessionReady(orcaPage)
+    const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+    // Starts with only a WSL 1 distro; Ubuntu is "imported" while the add dialog is open.
+    const distrosDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-wsl-distros-'))
+    const distrosFile = path.join(distrosDir, 'distros.json')
+    writeFileSync(distrosFile, JSON.stringify([LEGACY_DISTRO]))
+    const connectLogFile = path.join(distrosDir, 'connects.log')
+    const desktop = await launchDesktopWithFakeWslPairing(offer.pairingUrl, testInfo, {
+      distrosFile,
+      connectLogFile
+    })
+    const projectPath = createGitProject()
+    const cleanupDirs: string[] = []
+    try {
+      const { page } = desktop
+      await setWslHostsEnabled(page, true)
 
-    await openSidebarProjectDialog(page)
-    const addProject = page.getByRole('dialog', { name: /Add a project/i })
-    await addProject.getByRole('combobox').click()
-    await page.locator('[cmdk-item]').filter({ hasText: 'Add remote host' }).click()
-    await page.getByRole('button', { name: /Add WSL distro/ }).click()
+      await openSidebarProjectDialog(page)
+      const addProject = page.getByRole('dialog', { name: /Add a project/i })
+      await addProject.getByRole('combobox').click()
+      await page.locator('[cmdk-item]').filter({ hasText: 'Add remote host' }).click()
+      await page.getByRole('button', { name: /Add WSL distro/ }).click()
 
-    const addHost = page.getByRole('dialog', { name: 'Add WSL distro' })
-    await expect(addHost).toBeVisible()
-    await expect(addHost.getByRole('combobox')).toContainText('Choose a distro')
-    writeFileSync(distrosFile, JSON.stringify([UBUNTU_DISTRO, LEGACY_DISTRO]))
-    await addHost.getByRole('button', { name: 'Refresh' }).click()
-    // Only Ubuntu can be added (Legacy is WSL 1), so it is preselected.
-    await expect(addHost.getByRole('combobox')).toContainText('Ubuntu')
-    await settleAnimations(page)
-    await page.screenshot({ path: testInfo.outputPath('wsl-add-host-dialog.png') })
+      const addHost = page.getByRole('dialog', { name: 'Add WSL distro' })
+      await expect(addHost).toBeVisible()
+      await expect(addHost.getByRole('combobox')).toContainText('Choose a distro')
+      writeFileSync(distrosFile, JSON.stringify([UBUNTU_DISTRO, LEGACY_DISTRO]))
+      await addHost.getByRole('button', { name: 'Refresh' }).click()
+      // Only Ubuntu can be added (Legacy is WSL 1), so it is preselected.
+      await expect(addHost.getByRole('combobox')).toContainText('Ubuntu')
+      await settleAnimations(page)
+      await page.screenshot({ path: testInfo.outputPath('wsl-add-host-dialog.png') })
 
-    await addHost.getByRole('button', { name: 'Add host' }).click()
-    await expect(addHost).toBeHidden({ timeout: 60_000 })
-    await expect
-      .poll(
-        () =>
+      await addHost.getByRole('button', { name: 'Add host' }).click()
+      await expect(addHost).toBeHidden({ timeout: 60_000 })
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              (environmentId) =>
+                window.__store
+                  ?.getState()
+                  .runtimeEnvironments.find((environment) => environment.id === environmentId)
+                  ?.orcadDeployment?.kind ?? null,
+              WSL_ENVIRONMENT_ID
+            ),
+          { timeout: 30_000 }
+        )
+        .toBe('wsl')
+
+      // The add-project dialog stays open under the add-host dialog, as it does for SSH hosts.
+      const picker = addProject.getByRole('combobox')
+      await picker.click()
+      const hostRow = page.locator('[cmdk-item]').filter({ hasText: WSL_HOST_LABEL })
+      await expect(hostRow).toContainText('WSL distro', { timeout: 60_000 })
+      await expect(hostRow).toContainText('Connected', { timeout: 60_000 })
+      await settleAnimations(page)
+      await page.screenshot({ path: testInfo.outputPath('wsl-host-row.png') })
+      await hostRow.click()
+      await expect(picker).toContainText(WSL_HOST_LABEL)
+
+      const dialog = page.getByRole('dialog', { name: /Add a project/i })
+      await dialog.getByRole('button', { name: /Browse folder|Browse host/i }).click()
+      const browse = page.getByRole('dialog', { name: /Browse host filesystem/i })
+      await expect(browse).toBeVisible()
+      // Off Windows, Browse keeps the in-app browser; C8's Windows picker is checked further down.
+      await settleAnimations(page)
+      await page.screenshot({ path: testInfo.outputPath('wsl-browse-in-app.png') })
+      await browse.getByRole('button', { name: /^Cancel$/i }).click()
+      const manual = page.getByRole('dialog', { name: /Open host project/i })
+      await manual.locator('#server-project-path').fill(projectPath)
+      await manual.getByRole('button', { name: /Add Git Project/i }).click()
+      await expect(manual).toBeHidden({ timeout: 60_000 })
+
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              (repoPath) =>
+                window.__store?.getState().repos.find((repo) => repo.path === repoPath)
+                  ?.executionHostId ?? null,
+              projectPath
+            ),
+          { timeout: 60_000 }
+        )
+        .toBe(`runtime:${encodeURIComponent(WSL_ENVIRONMENT_ID)}`)
+
+      // Matched by repo: the worktree path may be reported under its realpath (/private/var on macOS).
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              ({ repoPath, environmentId }) => {
+                const state = window.__store?.getState()
+                const repo = state?.repos.find((entry) => entry.path === repoPath)
+                const worktree = repo
+                  ? state?.allWorktrees().find((entry) => entry.repoId === repo.id)
+                  : undefined
+                if (!state || !worktree) {
+                  return false
+                }
+                state.setActiveWorktree(worktree.id, `runtime:${encodeURIComponent(environmentId)}`)
+                return true
+              },
+              { repoPath: projectPath, environmentId: WSL_ENVIRONMENT_ID }
+            ),
+          { timeout: 60_000 }
+        )
+        .toBe(true)
+      await ensureTerminalVisible(page, 30_000)
+      await waitForActiveTerminalManager(page, 30_000)
+      const ptyId = await waitForActivePanePtyId(page, 30_000)
+      expect(ptyId).toMatch(/^remote:/)
+      await focusActiveTerminalInput(page)
+      await page.keyboard.type("printf 'WSL_HOST_TERMINAL_%s\\n' ready")
+      await page.keyboard.press('Enter')
+      await waitForTerminalOutput(page, 'WSL_HOST_TERMINAL_ready', 30_000)
+      await page.screenshot({ path: testInfo.outputPath('wsl-host-terminal.png') })
+
+      await checkWindowsFolderPicker(desktop, projectPath, testInfo)
+
+      // The "distro's orcad" is the HUB, so what it still runs is what a real distro would.
+      const hubRuntime = new RuntimeClient(
+        await electronApp.evaluate(({ app }) => app.getPath('userData'))
+      )
+      // Live shells only: the hub may keep a pty-less tab record for a moment after its shell ends.
+      const hubTerminalsIn = async (dir: string): Promise<number> => {
+        const listed = await hubRuntime.call<{
+          terminals: { worktreeId: string; ptyId: string | null }[]
+        }>('terminal.list')
+        return listed.result.terminals.filter(
+          (terminal) => terminal.ptyId !== null && terminal.worktreeId.includes(path.basename(dir))
+        ).length
+      }
+      const hubHasRepo = async (dir: string): Promise<boolean> => {
+        const listed = await hubRuntime.call<{ repos: { path: string }[] }>('repo.list')
+        return listed.result.repos.some((repo) => repo.path.endsWith(path.basename(dir)))
+      }
+
+      // Removing the project ends its shell on the host and drops it from the host's own catalog,
+      // so re-adding the host cannot bring it back.
+      expect(await hubTerminalsIn(projectPath)).toBeGreaterThan(0)
+      await page.evaluate(
+        async ({ repoPath, environmentId }) => {
+          const state = window.__store?.getState()
+          const repo = state?.repos.find((entry) => entry.path === repoPath)
+          if (state && repo) {
+            await state.removeProject(repo.id, {
+              hostId: `runtime:${encodeURIComponent(environmentId)}`,
+              errorFeedback: 'toast'
+            })
+          }
+        },
+        { repoPath: projectPath, environmentId: WSL_ENVIRONMENT_ID }
+      )
+      await expect.poll(() => hubTerminalsIn(projectPath), { timeout: 30_000 }).toBe(0)
+      await expect.poll(() => hubHasRepo(projectPath), { timeout: 30_000 }).toBe(false)
+
+      // A shell only the host knows of: no desktop pane ever opened it. Why not a removed project's
+      // orphan: repo.rm now ends the project's shells on the host itself (#29964).
+      const hostOnlyPath = realpathSync(createGitProject())
+      cleanupDirs.push(hostOnlyPath)
+      await hubRuntime.call('repo.add', { path: hostOnlyPath })
+      await hubRuntime.call('terminal.create', { worktree: `path:${hostOnlyPath}` })
+      expect(await hubTerminalsIn(hostOnlyPath)).toBeGreaterThan(0)
+
+      // Experiment off: the host stays listed so its projects never seem to vanish, but turned off.
+      await setWslHostsEnabled(page, false)
+      await openSidebarProjectDialog(page)
+      await page
+        .getByRole('dialog', { name: /Add a project/i })
+        .getByRole('combobox')
+        .click()
+      const offRow = page.locator('[cmdk-item]').filter({ hasText: WSL_HOST_LABEL })
+      await expect(offRow).toContainText('Turned off in Settings → Experimental')
+      await expect(offRow.getByRole('button', { name: 'Turn on' })).toBeVisible()
+      await expect(offRow.getByRole('button', { name: 'Connect' })).toHaveCount(0)
+      await settleAnimations(page)
+      await page.screenshot({ path: testInfo.outputPath('wsl-host-row-turned-off.png') })
+      await page.keyboard.press('Escape')
+      const addProjectAgain = page.getByRole('dialog', { name: /Add a project/i })
+      await expect(offRow).toBeHidden()
+      await page.keyboard.press('Escape')
+      await expect(addProjectAgain).toBeHidden()
+
+      await page.evaluate(() => {
+        const state = window.__store?.getState()
+        state?.openSettingsPage()
+        state?.openSettingsTarget({ pane: 'servers', repoId: null })
+      })
+      // A WSL host is listed only as a WSL host, never among the generic remote servers.
+      await expect(page.getByText('No saved servers', { exact: true })).toBeVisible()
+      const section = page.locator('[data-settings-section="wsl-hosts"]')
+      await section.scrollIntoViewIfNeeded()
+      await expect(section).toContainText('WSL hosts are turned off in Settings → Experimental')
+      await expect(section.getByRole('button', { name: 'Connect' })).toBeDisabled()
+      await settleAnimations(page)
+      await section.screenshot({ path: testInfo.outputPath('wsl-hosts-settings-turned-off.png') })
+
+      // Remove asks first, with WSL-specific copy, then drops the host.
+      await setWslHostsEnabled(page, true)
+      await section.getByRole('button', { name: `More actions for ${WSL_HOST_LABEL}` }).click()
+      await page.getByRole('menuitem', { name: 'Remove…' }).click()
+      const confirm = page.getByRole('dialog', { name: `Remove ${WSL_HOST_LABEL}?` })
+      await expect(confirm).toContainText(
+        'ends its open terminals and stops Orca’s server in that distro'
+      )
+      await expect(confirm).toContainText('Files in the distro are untouched.')
+      await settleAnimations(page)
+      await page.screenshot({ path: testInfo.outputPath('wsl-host-remove-confirm.png') })
+      await confirm.getByRole('button', { name: 'Remove host' }).click()
+      await expect(confirm).toBeHidden({ timeout: 30_000 })
+      // Closed by handle, so the host-only shell ends too, and nothing is reported left running.
+      await expect.poll(() => hubTerminalsIn(hostOnlyPath), { timeout: 30_000 }).toBe(0)
+      await expect(
+        page.getByText(/something in the distro is still running|didn’t remove the host yet/)
+      ).toHaveCount(0)
+      await expect
+        .poll(() =>
           page.evaluate(
             (environmentId) =>
               window.__store
                 ?.getState()
-                .runtimeEnvironments.find((environment) => environment.id === environmentId)
-                ?.orcadDeployment?.kind ?? null,
+                .runtimeEnvironments.some((environment) => environment.id === environmentId) ??
+              true,
             WSL_ENVIRONMENT_ID
-          ),
-        { timeout: 30_000 }
-      )
-      .toBe('wsl')
-
-    // The add-project dialog stays open under the add-host dialog, as it does for SSH hosts.
-    const picker = addProject.getByRole('combobox')
-    await picker.click()
-    const hostRow = page.locator('[cmdk-item]').filter({ hasText: WSL_HOST_LABEL })
-    await expect(hostRow).toContainText('WSL distro', { timeout: 60_000 })
-    await expect(hostRow).toContainText('Connected', { timeout: 60_000 })
-    await settleAnimations(page)
-    await page.screenshot({ path: testInfo.outputPath('wsl-host-row.png') })
-    await hostRow.click()
-    await expect(picker).toContainText(WSL_HOST_LABEL)
-
-    const dialog = page.getByRole('dialog', { name: /Add a project/i })
-    await dialog.getByRole('button', { name: /Browse folder|Browse host/i }).click()
-    const browse = page.getByRole('dialog', { name: /Browse host filesystem/i })
-    await expect(browse).toBeVisible()
-    // Off Windows, Browse keeps the in-app browser; C8's Windows picker is checked further down.
-    await settleAnimations(page)
-    await page.screenshot({ path: testInfo.outputPath('wsl-browse-in-app.png') })
-    await browse.getByRole('button', { name: /^Cancel$/i }).click()
-    const manual = page.getByRole('dialog', { name: /Open host project/i })
-    await manual.locator('#server-project-path').fill(projectPath)
-    await manual.getByRole('button', { name: /Add Git Project/i }).click()
-    await expect(manual).toBeHidden({ timeout: 60_000 })
-
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            (repoPath) =>
-              window.__store?.getState().repos.find((repo) => repo.path === repoPath)
-                ?.executionHostId ?? null,
-            projectPath
-          ),
-        { timeout: 60_000 }
-      )
-      .toBe(`runtime:${encodeURIComponent(WSL_ENVIRONMENT_ID)}`)
-
-    // Matched by repo: the worktree path may be reported under its realpath (/private/var on macOS).
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            ({ repoPath, environmentId }) => {
-              const state = window.__store?.getState()
-              const repo = state?.repos.find((entry) => entry.path === repoPath)
-              const worktree = repo
-                ? state?.allWorktrees().find((entry) => entry.repoId === repo.id)
-                : undefined
-              if (!state || !worktree) {
-                return false
-              }
-              state.setActiveWorktree(worktree.id, `runtime:${encodeURIComponent(environmentId)}`)
-              return true
-            },
-            { repoPath: projectPath, environmentId: WSL_ENVIRONMENT_ID }
-          ),
-        { timeout: 60_000 }
-      )
-      .toBe(true)
-    await ensureTerminalVisible(page, 30_000)
-    await waitForActiveTerminalManager(page, 30_000)
-    const ptyId = await waitForActivePanePtyId(page, 30_000)
-    expect(ptyId).toMatch(/^remote:/)
-    // Why: keys typed before the shell's first prompt can be dropped; its prompt names the project folder.
-    await waitForTerminalOutput(page, path.basename(projectPath), 30_000)
-    await focusActiveTerminalInput(page)
-    await page.keyboard.type("printf 'WSL_HOST_TERMINAL_%s\\n' ready")
-    await page.keyboard.press('Enter')
-    await waitForTerminalOutput(page, 'WSL_HOST_TERMINAL_ready', 30_000)
-    await page.screenshot({ path: testInfo.outputPath('wsl-host-terminal.png') })
-
-    await checkWindowsFolderPicker(desktop, projectPath, testInfo)
-
-    // The "distro's orcad" is the HUB, so what it still runs is what a real distro would.
-    const hubRuntime = new RuntimeClient(
-      await electronApp.evaluate(({ app }) => app.getPath('userData'))
-    )
-    // Live shells only: the hub may keep a pty-less tab record for a moment after its shell ends.
-    const hubTerminalsIn = async (dir: string): Promise<number> => {
-      const listed = await hubRuntime.call<{
-        terminals: { worktreeId: string; ptyId: string | null }[]
-      }>('terminal.list')
-      return listed.result.terminals.filter(
-        (terminal) => terminal.ptyId !== null && terminal.worktreeId.includes(path.basename(dir))
-      ).length
-    }
-    const hubHasRepo = async (dir: string): Promise<boolean> => {
-      const listed = await hubRuntime.call<{ repos: { path: string }[] }>('repo.list')
-      return listed.result.repos.some((repo) => repo.path.endsWith(path.basename(dir)))
-    }
-
-    // Removing the project ends its shell on the host and drops it from the host's own catalog,
-    // so re-adding the host cannot bring it back.
-    expect(await hubTerminalsIn(projectPath)).toBeGreaterThan(0)
-    await page.evaluate(
-      async ({ repoPath, environmentId }) => {
-        const state = window.__store?.getState()
-        const repo = state?.repos.find((entry) => entry.path === repoPath)
-        if (state && repo) {
-          await state.removeProject(repo.id, {
-            hostId: `runtime:${encodeURIComponent(environmentId)}`,
-            errorFeedback: 'toast'
-          })
-        }
-      },
-      { repoPath: projectPath, environmentId: WSL_ENVIRONMENT_ID }
-    )
-    await expect.poll(() => hubTerminalsIn(projectPath), { timeout: 30_000 }).toBe(0)
-    await expect.poll(() => hubHasRepo(projectPath), { timeout: 30_000 }).toBe(false)
-
-    // A shell only the host knows of: no desktop pane ever opened it. Why not a removed project's
-    // orphan: repo.rm now ends the project's shells on the host itself (#29964).
-    const hostOnlyPath = realpathSync(createGitProject())
-    cleanupDirs.push(hostOnlyPath)
-    await hubRuntime.call('repo.add', { path: hostOnlyPath })
-    await hubRuntime.call('terminal.create', { worktree: `path:${hostOnlyPath}` })
-    expect(await hubTerminalsIn(hostOnlyPath)).toBeGreaterThan(0)
-
-    // Experiment off: the host stays listed so its projects never seem to vanish, but turned off.
-    await setWslHostsEnabled(page, false)
-    await openSidebarProjectDialog(page)
-    await page
-      .getByRole('dialog', { name: /Add a project/i })
-      .getByRole('combobox')
-      .click()
-    const offRow = page.locator('[cmdk-item]').filter({ hasText: WSL_HOST_LABEL })
-    await expect(offRow).toContainText('Turned off in Settings → Experimental')
-    await expect(offRow.getByRole('button', { name: 'Turn on' })).toBeVisible()
-    await expect(offRow.getByRole('button', { name: 'Connect' })).toHaveCount(0)
-    await settleAnimations(page)
-    await page.screenshot({ path: testInfo.outputPath('wsl-host-row-turned-off.png') })
-    await page.keyboard.press('Escape')
-    const addProjectAgain = page.getByRole('dialog', { name: /Add a project/i })
-    await expect(offRow).toBeHidden()
-    await page.keyboard.press('Escape')
-    await expect(addProjectAgain).toBeHidden()
-
-    await page.evaluate(() => {
-      const state = window.__store?.getState()
-      state?.openSettingsPage()
-      state?.openSettingsTarget({ pane: 'servers', repoId: null })
-    })
-    // A WSL host is listed only as a WSL host, never among the generic remote servers.
-    await expect(page.getByText('No saved servers', { exact: true })).toBeVisible()
-    const section = page.locator('[data-settings-section="wsl-hosts"]')
-    await section.scrollIntoViewIfNeeded()
-    await expect(section).toContainText('WSL hosts are turned off in Settings → Experimental')
-    await expect(section.getByRole('button', { name: 'Connect' })).toBeDisabled()
-    await settleAnimations(page)
-    await section.screenshot({ path: testInfo.outputPath('wsl-hosts-settings-turned-off.png') })
-
-    // Remove asks first, with WSL-specific copy, then drops the host.
-    await setWslHostsEnabled(page, true)
-    await section.getByRole('button', { name: `More actions for ${WSL_HOST_LABEL}` }).click()
-    await page.getByRole('menuitem', { name: 'Remove…' }).click()
-    const confirm = page.getByRole('dialog', { name: `Remove ${WSL_HOST_LABEL}?` })
-    await expect(confirm).toContainText(
-      'ends its open terminals and stops Orca’s server in that distro'
-    )
-    await expect(confirm).toContainText('Files in the distro are untouched.')
-    await settleAnimations(page)
-    await page.screenshot({ path: testInfo.outputPath('wsl-host-remove-confirm.png') })
-    await confirm.getByRole('button', { name: 'Remove host' }).click()
-    await expect(confirm).toBeHidden({ timeout: 30_000 })
-    // Closed by handle, so the host-only shell ends too, and nothing is reported left running.
-    await expect.poll(() => hubTerminalsIn(hostOnlyPath), { timeout: 30_000 }).toBe(0)
-    await expect(
-      page.getByText(/something in the distro is still running|didn’t remove the host yet/)
-    ).toHaveCount(0)
-    await expect
-      .poll(() =>
-        page.evaluate(
-          (environmentId) =>
-            window.__store
-              ?.getState()
-              .runtimeEnvironments.some((environment) => environment.id === environmentId) ?? true,
-          WSL_ENVIRONMENT_ID
+          )
         )
-      )
-      .toBe(false)
-    // The project that lived on the host is no longer active, and nothing starts for the host
-    // again, though its rows still point at it (the respawn loop after removal).
-    expect(
-      await page.evaluate(() => window.__store?.getState().activeWorktreeId ?? null)
-    ).toBeNull()
-    const connectsAfterRemoval = fakeWslConnects(connectLogFile)
-    expect(connectsAfterRemoval).toContain('Ubuntu')
-    await new Promise((resolve) => setTimeout(resolve, 3_000))
-    expect(fakeWslConnects(connectLogFile)).toEqual(connectsAfterRemoval)
-  } finally {
-    await desktop.dispose()
-    rmSync(projectPath, { recursive: true, force: true })
-    rmSync(distrosDir, { recursive: true, force: true })
-    for (const dir of cleanupDirs) {
-      rmSync(dir, { recursive: true, force: true })
+        .toBe(false)
+      // The project that lived on the host is no longer active, and nothing starts for the host
+      // again, though its rows still point at it (the respawn loop after removal).
+      expect(
+        await page.evaluate(() => window.__store?.getState().activeWorktreeId ?? null)
+      ).toBeNull()
+      const connectsAfterRemoval = fakeWslConnects(connectLogFile)
+      expect(connectsAfterRemoval).toContain('Ubuntu')
+      await new Promise((resolve) => setTimeout(resolve, 3_000))
+      expect(fakeWslConnects(connectLogFile)).toEqual(connectsAfterRemoval)
+    } finally {
+      await desktop.dispose()
+      rmSync(projectPath, { recursive: true, force: true })
+      rmSync(distrosDir, { recursive: true, force: true })
+      for (const dir of cleanupDirs) {
+        rmSync(dir, { recursive: true, force: true })
+      }
     }
-  }
-})
+  })
+}
 
 test('a build without the WSL host server files says so instead of failing an add', async ({
   orcaPage

@@ -128,100 +128,103 @@ async function expectRenderedLink(page: Page, worktreeId: string, url: string): 
     .toMatch(/^cookie:/)
 }
 
-test('a managed SSH terminal link opens in the Orca Browser through the SSH host', async (// oxlint-disable-next-line no-empty-pattern -- Owns app launch.
-{}, testInfo) => {
-  test.setTimeout(5 * 60_000)
-  const target = startDockerSshHostTarget(testInfo)
-  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE! })
-  let app: ElectronApplication | null = null
-  try {
-    startSshRemoteOnlyBrowserFixture(target)
-    // The first launch only creates the profile the SSH host is saved into.
-    const first = await session.launch()
-    app = first.app
-    await waitForSessionReady(first.page)
-    await session.close(first.app)
-    app = null
-    const seeded = seedRelayEraProfile(
-      session.userDataDir,
-      {
-        label: `orcad terminal link E2E ${Date.now()}`,
-        host: target.host,
-        port: target.port,
-        username: 'root',
-        identityFile: target.identityFile,
-        identitiesOnly: true,
-        relayGracePeriodSeconds: 1
-      },
-      { repoPath: DOCKER_SSH_HOST_REMOTE_REPO_PATH, folderPath: '/tmp' }
-    )
-    const launched = await session.launch()
-    app = launched.app
-    const page = launched.page
-    await waitForSessionReady(page)
-    await convertAndRetain(page, session.userDataDir, seeded)
-    const environmentId = await managedEnvironmentId(page, seeded.targetId)
-    await activateManagedWorkspace(page, seeded.worktreeId, environmentId)
-    await page.evaluate(() =>
-      window.__store?.getState().updateSettings({
-        openLinksInApp: true,
-        terminalLinkClickBehavior: 'actions'
-      })
-    )
-    const tabId = await openTerminalTab(page, seeded.worktreeId)
-
-    // The link action popover offers the Orca Browser for a managed server's pane.
-    const popoverUrl = `${SSH_REMOTE_ONLY_ORIGIN}/echo/popover`
-    await printLink(page, tabId, SSH_REMOTE_ONLY_ORIGIN, '/echo/popover')
-    const popoverPoint = await terminalLinkPoint(page, tabId, popoverUrl)
-    await page.mouse.move(popoverPoint.x, popoverPoint.y)
-    await page.mouse.click(popoverPoint.x, popoverPoint.y)
-    const popover = page.locator('[data-terminal-link-action-popover]')
-    await expect(popover).toBeVisible()
-    await expect(popover.getByRole('button').filter({ hasText: 'System Browser' })).toBeVisible()
-    const orcaBrowser = popover.getByRole('button').filter({ hasText: 'Orca Browser' })
-    await expect(orcaBrowser).toBeVisible()
-    await page.screenshot({ path: testInfo.outputPath('managed-terminal-link-popover.png') })
-    await orcaBrowser.click()
-    await expect
-      .poll(() => browserTabUrls(page, seeded.worktreeId), { timeout: 30_000 })
-      .toContain(popoverUrl)
-    // Only the SSH host resolves this origin, so the request proves the page egressed there.
-    await expect
-      .poll(() => readSshRemoteOnlyRequests(target).map((request) => request.path), {
-        timeout: 60_000,
-        message: 'the Orca Browser page never reached the SSH host'
-      })
-      .toContain('/echo/popover')
-    await expectRenderedLink(page, seeded.worktreeId, popoverUrl)
-
-    // Cmd/Ctrl-click opens a remote localhost dev-server URL straight into the Orca Browser.
-    const modifierUrl = `http://localhost:${SSH_REMOTE_ONLY_PORT}/echo/modifier`
-    await printLink(page, tabId, `http://localhost:${SSH_REMOTE_ONLY_PORT}`, '/echo/modifier')
-    const modifierPoint = await terminalLinkPoint(page, tabId, modifierUrl)
-    await page.mouse.move(modifierPoint.x, modifierPoint.y)
-    await page.keyboard.down('ControlOrMeta')
-    await page.mouse.click(modifierPoint.x, modifierPoint.y)
-    await page.keyboard.up('ControlOrMeta')
-    await expect
-      .poll(() => browserTabUrls(page, seeded.worktreeId), { timeout: 30_000 })
-      .toContain(modifierUrl)
-    await expect
-      .poll(() => readSshRemoteOnlyRequests(target).map((request) => request.path), {
-        timeout: 60_000,
-        message: 'the Cmd/Ctrl-clicked localhost link never reached the SSH host'
-      })
-      .toContain('/echo/modifier')
-    await expectRenderedLink(page, seeded.worktreeId, modifierUrl)
-    await page.screenshot({ path: testInfo.outputPath('managed-terminal-link-opened.png') })
-  } finally {
+// THROWAWAY repro (do not merge): 5 attempts per run, run twice.
+for (const attempt of [1, 2, 3, 4, 5]) {
+  test(`a managed SSH terminal link opens in the Orca Browser through the SSH host #${attempt}`, async (// oxlint-disable-next-line no-empty-pattern -- Owns app launch.
+  {}, testInfo) => {
+    test.setTimeout(5 * 60_000)
+    const target = startDockerSshHostTarget(testInfo)
+    const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE! })
+    let app: ElectronApplication | null = null
     try {
-      if (app) {
-        await session.close(app)
-      }
-      await session.dispose()
+      startSshRemoteOnlyBrowserFixture(target)
+      // The first launch only creates the profile the SSH host is saved into.
+      const first = await session.launch()
+      app = first.app
+      await waitForSessionReady(first.page)
+      await session.close(first.app)
+      app = null
+      const seeded = seedRelayEraProfile(
+        session.userDataDir,
+        {
+          label: `orcad terminal link E2E ${Date.now()}`,
+          host: target.host,
+          port: target.port,
+          username: 'root',
+          identityFile: target.identityFile,
+          identitiesOnly: true,
+          relayGracePeriodSeconds: 1
+        },
+        { repoPath: DOCKER_SSH_HOST_REMOTE_REPO_PATH, folderPath: '/tmp' }
+      )
+      const launched = await session.launch()
+      app = launched.app
+      const page = launched.page
+      await waitForSessionReady(page)
+      await convertAndRetain(page, session.userDataDir, seeded)
+      const environmentId = await managedEnvironmentId(page, seeded.targetId)
+      await activateManagedWorkspace(page, seeded.worktreeId, environmentId)
+      await page.evaluate(() =>
+        window.__store?.getState().updateSettings({
+          openLinksInApp: true,
+          terminalLinkClickBehavior: 'actions'
+        })
+      )
+      const tabId = await openTerminalTab(page, seeded.worktreeId)
+
+      // The link action popover offers the Orca Browser for a managed server's pane.
+      const popoverUrl = `${SSH_REMOTE_ONLY_ORIGIN}/echo/popover`
+      await printLink(page, tabId, SSH_REMOTE_ONLY_ORIGIN, '/echo/popover')
+      const popoverPoint = await terminalLinkPoint(page, tabId, popoverUrl)
+      await page.mouse.move(popoverPoint.x, popoverPoint.y)
+      await page.mouse.click(popoverPoint.x, popoverPoint.y)
+      const popover = page.locator('[data-terminal-link-action-popover]')
+      await expect(popover).toBeVisible()
+      await expect(popover.getByRole('button').filter({ hasText: 'System Browser' })).toBeVisible()
+      const orcaBrowser = popover.getByRole('button').filter({ hasText: 'Orca Browser' })
+      await expect(orcaBrowser).toBeVisible()
+      await page.screenshot({ path: testInfo.outputPath('managed-terminal-link-popover.png') })
+      await orcaBrowser.click()
+      await expect
+        .poll(() => browserTabUrls(page, seeded.worktreeId), { timeout: 30_000 })
+        .toContain(popoverUrl)
+      // Only the SSH host resolves this origin, so the request proves the page egressed there.
+      await expect
+        .poll(() => readSshRemoteOnlyRequests(target).map((request) => request.path), {
+          timeout: 60_000,
+          message: 'the Orca Browser page never reached the SSH host'
+        })
+        .toContain('/echo/popover')
+      await expectRenderedLink(page, seeded.worktreeId, popoverUrl)
+
+      // Cmd/Ctrl-click opens a remote localhost dev-server URL straight into the Orca Browser.
+      const modifierUrl = `http://localhost:${SSH_REMOTE_ONLY_PORT}/echo/modifier`
+      await printLink(page, tabId, `http://localhost:${SSH_REMOTE_ONLY_PORT}`, '/echo/modifier')
+      const modifierPoint = await terminalLinkPoint(page, tabId, modifierUrl)
+      await page.mouse.move(modifierPoint.x, modifierPoint.y)
+      await page.keyboard.down('ControlOrMeta')
+      await page.mouse.click(modifierPoint.x, modifierPoint.y)
+      await page.keyboard.up('ControlOrMeta')
+      await expect
+        .poll(() => browserTabUrls(page, seeded.worktreeId), { timeout: 30_000 })
+        .toContain(modifierUrl)
+      await expect
+        .poll(() => readSshRemoteOnlyRequests(target).map((request) => request.path), {
+          timeout: 60_000,
+          message: 'the Cmd/Ctrl-clicked localhost link never reached the SSH host'
+        })
+        .toContain('/echo/modifier')
+      await expectRenderedLink(page, seeded.worktreeId, modifierUrl)
+      await page.screenshot({ path: testInfo.outputPath('managed-terminal-link-opened.png') })
     } finally {
-      cleanupDockerSshHostTarget(target)
+      try {
+        if (app) {
+          await session.close(app)
+        }
+        await session.dispose()
+      } finally {
+        cleanupDockerSshHostTarget(target)
+      }
     }
-  }
-})
+  })
+}
