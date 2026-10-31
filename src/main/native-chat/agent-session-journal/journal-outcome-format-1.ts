@@ -256,13 +256,15 @@ type StoredMarks = Omit<Marks, 'latestStop'> & {
   latestStop: { sequence: number; event: JournalStopEvent } | null
 }
 type Scalars = z.output<typeof outcomeFormat1StoredScalars>
-export type OutcomeFormat1DeclaresEveryKey = StorageDeclaresAll<
-  | {
+export type OutcomeFormat1DeclaresEveryKey = [
+  StorageDeclaresAll<
+    {
       [F in Collection]: UndeclaredStorageKeys<
         StoredIn<F>,
         z.output<(typeof outcomeFormat1Stored)[F]>
       >
     }[Collection]
-  | UndeclaredStorageKeys<StoredMarks, Scalars['queuePauseMarks']>
-  | UndeclaredStorageKeys<JournalHistoryOrigin, Scalars['historyOrigin']>
->
+  >,
+  StorageDeclaresAll<UndeclaredStorageKeys<StoredMarks, Scalars['queuePauseMarks']>>,
+  StorageDeclaresAll<UndeclaredStorageKeys<JournalHistoryOrigin, Scalars['historyOrigin']>>
+]
