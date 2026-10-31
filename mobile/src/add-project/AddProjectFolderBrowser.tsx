@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   list: {
     maxHeight: 320,
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card
+    borderRadius: radii.surface
   },
   row: {
     flexDirection: 'row',

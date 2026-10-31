@@ -38,7 +38,7 @@ export const addProjectStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md,
     paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
     fontSize: TEXT_INPUT_FONT_SIZE,
@@ -49,7 +49,7 @@ export const addProjectStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -73,7 +73,7 @@ export const addProjectStyles = StyleSheet.create({
   cancelButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   submitButton: {
     flexDirection: 'row',
@@ -82,7 +82,7 @@ export const addProjectStyles = StyleSheet.create({
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   buttonPressed: {
     opacity: 0.7

@@ -91,13 +91,10 @@ export function useHostWorktreeActions(args: {
   }, [setNewWorktreeInitialRepoId, setNewWorktreeVisible])
   // Older hosts refuse the phone's repo.add/create/clone, so + keeps opening New Workspace directly there.
   const addProjectSupported = hostCapabilities.includes(MOBILE_ADD_PROJECT_RUNTIME_CAPABILITY)
-  const openCreateMenu = useCallback(() => {
-    if (addProjectSupported) {
-      setShowAddProject(true)
-    } else {
-      setNewWorktreeVisible(true)
-    }
-  }, [addProjectSupported, setNewWorktreeVisible, setShowAddProject])
+  const openCreateMenu = useCallback(
+    () => (addProjectSupported ? setShowAddProject : setNewWorktreeVisible)(true),
+    [addProjectSupported, setNewWorktreeVisible, setShowAddProject]
+  )
   const closeAddProject = useCallback(() => setShowAddProject(false), [setShowAddProject])
 
   const updateLocalPins = useCallback(
