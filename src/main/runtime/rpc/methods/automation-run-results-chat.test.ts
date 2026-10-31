@@ -6,6 +6,7 @@ import {
   eventually
 } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 import {
+  HOST_TEST_LOCATION,
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   HOST_TEST_THREAD
@@ -27,6 +28,13 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import { RpcDispatcher } from '../dispatcher'
 import { AUTOMATION_RUN_RESULT_METHODS } from './automation-run-results'
+import { AGENT_LAUNCH_METHODS } from './agent-launch'
+import {
+  methodNamed,
+  rpcContext,
+  runtimeStub,
+  setAgentLaunchRecordStore
+} from './agent-launch.test-fixture'
 
 const hostRef = vi.hoisted((): { current: StructuredAgentSessionHost | null } => ({
   current: null
@@ -37,7 +45,84 @@ vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-regist
 
 afterEach(() => {
   hostRef.current = null
+  setAgentLaunchRecordStore(null)
   vi.restoreAllMocks()
+})
+
+it('attributes fresh-launch chat reports through the launch receipt first-message id', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW)
+  const rig = await createQueuedMessageTestRig()
+  hostRef.current = rig.host
+  setAgentLaunchRecordStore(rig.store)
+  installFakeAppEnvironment({ getPath: () => rig.root })
+  const sessionId = 'codex_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d'
+  const run = {
+    ...buildProfileStateCutoverFixture('/fixture').automationRuns[0],
+    sessionKind: 'chat' as const,
+    chatSessionId: sessionId,
+    status: 'dispatched' as const,
+    createdAt: HOST_TEST_NOW,
+    dispatchedAt: HOST_TEST_NOW
+  }
+  const launchRuntime = {
+    ...runtimeStub(),
+    resolveStructuredAgentSessionCreateIntent: vi.fn(async (params: { envelope: unknown }) => ({
+      envelope: params.envelope,
+      location: HOST_TEST_LOCATION,
+      provider: 'codex',
+      agent: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+      runtimeKind: 'native'
+    })),
+    publishStructuredAgentSessionTab: vi.fn(async () => {})
+  }
+  const launch = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
+  const runtime = new OrcaRuntimeService()
+  vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue()
+  vi.spyOn(runtime, 'listAutomationRuns').mockReturnValue([run])
+  const record = vi.spyOn(runtime, 'recordAutomationRunReport').mockResolvedValue({ ok: true, run })
+  const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_RUN_RESULT_METHODS })
+  try {
+    const operationId = automationRunOperationId(run, 'fresh-launch')
+    const result = await launch.handler(
+      launch.params.parse({
+        agent: 'codex',
+        target: { kind: 'existing', worktree: 'id:wt-7' },
+        sessionId,
+        operationId,
+        presentation: 'background',
+        prompt: { text: 'Run the automation', delivery: 'submit' }
+      }),
+      rpcContext(launchRuntime, { caller: AUTOMATION_AGENT_CALLER })
+    )
+    expect(result.outcome).toMatchObject({ kind: 'structured', sessionId })
+    if (result.prompt?.outcome !== 'journaled') {
+      throw new Error('Expected a journaled launch prompt')
+    }
+    const messageId = result.prompt.messageId
+    expect(messageId).not.toBe(operationId)
+    expect(messageId).not.toBe(automationRunOperationId(run, 'reuse-send'))
+    expect(
+      rig.store.getOperationRow(rpcCallerOperationKey(AUTOMATION_AGENT_CALLER), operationId)
+    ).toMatchObject({ outcome: { status: 'succeeded', launch: result } })
+    await eventually(async () =>
+      expect((await rig.host.journalSnapshot(sessionId)).submissions).toContainEqual(
+        expect.objectContaining({ clientMessageId: messageId, handedOverAt: expect.any(Number) })
+      )
+    )
+    expect(
+      await dispatcher.dispatch({
+        id: 'report',
+        authToken: 'token',
+        method: 'automation.reportFailure',
+        params: { message: 'Fresh launch failure' },
+        orchestrationCompatibilityEvidence: { agentSessionId: sessionId }
+      })
+    ).toMatchObject({ ok: true, result: { runId: run.id } })
+    expect(record.mock.lastCall?.[0].id).toBe(run.id)
+  } finally {
+    await rig.dispose()
+  }
 })
 
 it('attributes overlapping chat reports to submitted prompts and retains them across human turns', async () => {
@@ -48,7 +133,7 @@ it('attributes overlapping chat reports to submitted prompts and retains them ac
   const runtime = new OrcaRuntimeService()
   vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue()
   const base = buildProfileStateCutoverFixture('/fixture').automationRuns[0]
-  const runs = ['A', 'B'].map((id, index) => ({
+  const runs = ['A', 'B', 'C'].map((id, index) => ({
     ...base,
     id,
     sessionKind: 'chat' as const,
@@ -136,6 +221,17 @@ it('attributes overlapping chat reports to submitted prompts and retains them ac
       expect((await rig.submission(bSubmission))?.handedOverAt).toBeDefined()
     )
     await rig.settleAccepted(bSubmission, 'B')
+    expect(await report()).toMatchObject({ ok: true, result: { runId: 'B' } })
+    expect(record.mock.lastCall?.[0].id).toBe('B')
+
+    expect(await send(2)).toMatchObject({ ok: true, value: { submission: expect.anything() } })
+    const cMessage = automationRunOperationId(runs[2], 'reuse-send')
+    await eventually(async () =>
+      expect((await rig.submission(cMessage))?.handedOverAt).toBeDefined()
+    )
+    expect(await report()).toMatchObject({ ok: true, result: { runId: 'C' } })
+    await rig.settleRejected(cMessage, 'Provider refused the newer run')
+    expect(await rig.submission(cMessage)).toMatchObject({ dispatchState: 'rejected' })
     expect(await report()).toMatchObject({ ok: true, result: { runId: 'B' } })
     expect(record.mock.lastCall?.[0].id).toBe('B')
 
