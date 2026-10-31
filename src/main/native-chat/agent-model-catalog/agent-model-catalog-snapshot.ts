@@ -1,7 +1,11 @@
+import {
+  agentModelCatalogReadRecords,
+  agentModelCatalogScopedRecord
+} from './agent-model-catalog-read-scope'
+import { onLiveAccount } from './agent-model-catalog-running-account'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
 import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
 import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
@@ -66,7 +70,7 @@ export function agentModelCatalogRequestKey(
   deps: AgentModelCatalogServiceDeps,
   params: AgentModelCatalogReadParams
 ): string {
-  const record = params.sessionId ? deps.getConversation(params.sessionId) : undefined
+  const record = agentModelCatalogScopedRecord(deps, params)
   const inWorkspace =
     record &&
     !params.workspace &&
@@ -111,11 +115,14 @@ export function agentModelCatalogMemoryBinding(
   bindings: ReadonlyMap<string, AgentModelCatalogBinding>,
   capture: (params: AgentModelCatalogReadParams) => string
 ): AgentModelCatalogBinding | undefined {
+  if (!agentModelCatalogReadRecords(deps, params)) {
+    return
+  }
   const held = bindings.get(agentModelCatalogRequestKey(deps, params))
   if (held?.current() && held.identity === capture(params)) {
     return held
   }
-  const record = params.sessionId ? deps.getConversation(params.sessionId) : undefined
+  const record = agentModelCatalogScopedRecord(deps, params)
   if (!record || record.provider !== params.agent || !deps.drivesRecord(record)) {
     return
   }
@@ -173,6 +180,9 @@ export function createAgentModelCatalogSnapshot(
   stopped: () => boolean
 ) {
   return (params: AgentModelCatalogReadParams): AgentSessionModelCatalogResult => {
+    if (params.records === null || params.operation?.current() === false) {
+      return { origin: 'unknown' }
+    }
     const bound = binding(params)
     if (stopped() || !bound) {
       return {
@@ -277,32 +287,20 @@ export function retireAgentModelCatalogRequests(
   }
 }
 
-/** The invocation-qualified binding may differ from a live listing's account key. */
-export function expireAgentModelCatalogBoundFailure(
-  deps: AgentModelCatalogServiceDeps,
-  bindings: ReadonlyMap<string, AgentModelCatalogBinding>,
-  record: AgentSessionRecord,
-  source?: () => boolean
-): void {
-  const bound = bindings.get(
-    agentModelCatalogRequestKey(deps, {
-      agent: record.provider,
-      sessionId: record.sessionId,
-      inSessionWorkspace: true
-    })
-  )
-  if (bound?.current() && source?.() !== false) {
-    deps.store.expireFailure(bound.fingerprint)
-  }
-}
-
 export function agentModelCatalogSessionPeek(
   deps: AgentModelCatalogServiceDeps,
   binding: (params: AgentModelCatalogReadParams) => AgentModelCatalogBinding | undefined
 ) {
   return (sessionId: string, verifiedOnly?: boolean) => {
     const record = deps.getConversation(sessionId)
-    const bound = record && binding({ agent: record.provider, sessionId, inSessionWorkspace: true })
+    const bound =
+      record &&
+      binding({
+        agent: record.provider,
+        sessionId,
+        inSessionWorkspace: true,
+        records: { record, scoped: onLiveAccount(deps, record), savedOnly: false }
+      })
     const entry = bound ? deps.store.observation(bound.fingerprint) : null
     return entry && (!verifiedOnly || deps.store.verified(entry)) ? entry : null
   }

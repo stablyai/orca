@@ -6,6 +6,7 @@ import {
   agentModelCatalogResultFromEntry
 } from './agent-model-catalog-entry'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
+import { agentModelCatalogScopedRecord } from './agent-model-catalog-read-scope'
 import type {
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps
@@ -50,6 +51,8 @@ export function readAccountList(
 ): AgentSessionModelCatalogResult {
   if (
     result.origin !== 'unknown' ||
+    params.records === null ||
+    params.operation?.current() === false ||
     params.savedOnly ||
     params.verifiedOnly ||
     params.legacy ||
@@ -57,7 +60,7 @@ export function readAccountList(
   ) {
     return result
   }
-  const record = params.sessionId ? deps.getConversation(params.sessionId) : undefined
+  const record = agentModelCatalogScopedRecord(deps, params)
   const base = record
     ? record.provider === params.agent &&
       deps.drivesRecord(record) &&

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { hostTestCatalogReadOperation } from './structured-agent-session-host-test-data'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
 import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
@@ -103,6 +104,7 @@ it('pairs the latest saved input with its report only after the resting read com
   const catalog =
     Promise.withResolvers<Awaited<ReturnType<NonNullable<typeof host.modelCatalog>['read']>>>()
   host.modelCatalog = {
+    captureRead: hostTestCatalogReadOperation,
     read: () => {
       entered.resolve()
       return catalog.promise
