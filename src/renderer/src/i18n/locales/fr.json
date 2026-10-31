@@ -13192,7 +13192,8 @@
           "oneDescription": "Publié par {{value0}}. Il ne sera pas mis à jour tant que vous ne l’aurez pas vérifié.",
           "manyDescription": "Elles ne seront pas installées tant que vous ne les aurez pas vérifiées.",
           "review": "Vérifier",
-          "dismiss": "Ignorer"
+          "dismiss": "Ignorer",
+          "movedInstalled": "Il reste désactivé jusqu’à ce que vous l’examiniez."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Assurez-vous de faire confiance à ce dossier",

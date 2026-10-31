@@ -12985,7 +12985,8 @@
           "oneDescription": "發佈者：{{value0}}。在你審查之前不會更新。",
           "manyDescription": "在你審查之前不會更新。",
           "review": "審查",
-          "dismiss": "關閉"
+          "dismiss": "關閉",
+          "movedInstalled": "在你審查之前會保持關閉。"
         },
         "PluginThemeUseNow": {
           "assignedLight": "已將 {{value0}} 設為淺色主題",

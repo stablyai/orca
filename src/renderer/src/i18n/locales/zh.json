@@ -12680,7 +12680,8 @@
           "oneDescription": "发布者：{{value0}}。在你审核之前不会更新。",
           "manyDescription": "在你审核之前不会更新。",
           "review": "审核",
-          "dismiss": "关闭"
+          "dismiss": "关闭",
+          "movedInstalled": "在你审查之前会保持关闭。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "请确认你信任此文件夹",

@@ -4,7 +4,7 @@ import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
 import type { Store } from '../persistence'
-import { applyPluginConsent, applyPluginEnablement } from './plugin-enablement'
+import { applyPluginConsent, applyPluginEnablement, revokePluginConsent } from './plugin-enablement'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginService } from './plugin-service'
 
@@ -161,5 +161,26 @@ describe('applyPluginEnablement', () => {
       { disabledPlugins: [pluginKey] },
       { notifyListeners: true }
     )
+  })
+})
+
+describe('revokePluginConsent', () => {
+  it('drops only this plugin’s approval, leaves it enabled, and stops it running', async () => {
+    const harness = createStore()
+    harness.store.updateSettings({
+      pluginConsents: { [pluginKey]: 'sha256-old', 'samples.other': 'sha256-other' }
+    })
+    const pluginService = createPluginService(() => 'sha256-old')
+    await revokePluginConsent({ store: harness.store, pluginService, pluginKey })
+    expect(harness.getSettings().pluginConsents).toEqual({ 'samples.other': 'sha256-other' })
+    expect(harness.getSettings().disabledPlugins).not.toContain(pluginKey)
+    expect(pluginService.reconcileActivationState).toHaveBeenCalledOnce()
+  })
+
+  it('writes nothing when the plugin had no approval', async () => {
+    const harness = createStore()
+    const pluginService = createPluginService(() => 'sha256-old')
+    await revokePluginConsent({ store: harness.store, pluginService, pluginKey })
+    expect(harness.updateSettings).not.toHaveBeenCalled()
   })
 })

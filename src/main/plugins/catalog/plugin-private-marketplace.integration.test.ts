@@ -131,7 +131,8 @@ describe('private Git marketplace integration', () => {
     const installer = new PluginMarketplaceInstaller({
       marketplace,
       userDataPath,
-      hostVersion: '1.4.0'
+      hostVersion: '1.4.0',
+      revokeConsent: async () => undefined
     })
 
     const preview = await installer.preview(registered.id, pluginKey)

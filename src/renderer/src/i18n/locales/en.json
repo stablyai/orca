@@ -13421,7 +13421,8 @@
           "oneDescription": "Published by {{value0}}. It won’t update until you review it.",
           "manyDescription": "They won’t update until you review them.",
           "review": "Review",
-          "dismiss": "Dismiss"
+          "dismiss": "Dismiss",
+          "movedInstalled": "It stays off until you review it."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Make sure you trust this folder",

@@ -295,17 +295,27 @@ describe('plugin auto-update', () => {
     expect(updater.getState()).toEqual({ updated: {}, needsReview: { [KEY]: '1.1.0' } })
   })
 
-  it('marks an update from a moved repository for review', async () => {
-    const { updater, install } = setup({
-      officialCatalog: true,
-      repository: 'https://example.com/someone-else/demo.git'
-    })
-    await updater.run()
-    expect(install).not.toHaveBeenCalled()
-    expect(updater.getState().needsReview).toEqual({ [KEY]: '1.1.0' })
-    expect(updater.getHeldForReview()).toEqual({
-      [KEY]: { version: '1.1.0', reason: 'repository' }
-    })
+  it('marks an update from a moved repository for review, content-only plugins too', async () => {
+    const theme = (version: string): PluginManifest =>
+      pluginManifestSchema.parse({
+        ...manifest(version),
+        main: undefined,
+        capabilities: [],
+        contributes: { themes: [{ id: 'dusk', title: 'Dusk', path: 'dusk.json' }] }
+      })
+    for (const versions of [{}, { previous: theme('1.0.0'), next: theme('1.1.0') }]) {
+      const { updater, install } = setup({
+        officialCatalog: true,
+        repository: 'https://example.com/someone-else/demo.git',
+        ...versions
+      })
+      await updater.run()
+      expect(install).not.toHaveBeenCalled()
+      expect(updater.getState().needsReview).toEqual({ [KEY]: '1.1.0' })
+      expect(updater.getHeldForReview()).toEqual({
+        [KEY]: { version: '1.1.0', reason: 'repository' }
+      })
+    }
   })
 
   it('skips disabled, unapproved, development, blocked plugins and the manual policy', async () => {

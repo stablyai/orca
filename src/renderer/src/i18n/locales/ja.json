@@ -12680,7 +12680,8 @@
           "oneDescription": "公開元: {{value0}}。確認するまで更新されません。",
           "manyDescription": "確認するまで更新されません。",
           "review": "確認",
-          "dismiss": "閉じる"
+          "dismiss": "閉じる",
+          "movedInstalled": "確認するまでオフのままです。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "このフォルダーを信頼できることを確認してください",

@@ -9486,7 +9486,8 @@
           "oneDescription": "Publicado por {{value0}}. Não será atualizado até você revisar.",
           "manyDescription": "Não serão atualizadas até você revisá-las.",
           "review": "Revisar",
-          "dismiss": "Dispensar"
+          "dismiss": "Dispensar",
+          "movedInstalled": "Ele fica desativado até você revisá-lo."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Confirme que você confia nesta pasta",

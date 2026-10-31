@@ -12968,7 +12968,8 @@
           "oneDescription": "Publicado por {{value0}}. No se actualizará hasta que lo revises.",
           "manyDescription": "No se actualizarán hasta que las revises.",
           "review": "Revisar",
-          "dismiss": "Descartar"
+          "dismiss": "Descartar",
+          "movedInstalled": "Seguirá desactivado hasta que lo revises."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Asegúrate de que confías en esta carpeta",

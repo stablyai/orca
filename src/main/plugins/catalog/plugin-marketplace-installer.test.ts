@@ -13,6 +13,8 @@ import { PluginImageCache } from '../plugin-image-cache'
 import { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 
+const revokeConsent = vi.fn(async (_pluginKey: string) => undefined)
+
 const git = vi.hoisted(
   (): {
     checkout: ReturnType<typeof vi.fn>
@@ -151,7 +153,8 @@ async function setup(
       marketplace: service,
       userDataPath: root,
       hostVersion: pluginHostVersion('1.4.0'),
-      ...(imageCache ? { imageCache } : {})
+      ...(imageCache ? { imageCache } : {}),
+      revokeConsent
     }),
     sourceId: added.id
   }
@@ -171,6 +174,7 @@ beforeEach(() => {
   git.icon = false
   git.paths = null
   telemetry.track.mockReset()
+  revokeConsent.mockClear()
   git.checkout.mockReset()
   git.checkout.mockImplementation(
     async ({ destination, path }: { destination: string; path?: string }) => {
@@ -445,6 +449,7 @@ describe('PluginMarketplaceInstaller', () => {
     const respelled = await installer.install(respelledPreview)
     expect(respelled).toMatchObject({ ok: true })
     expect(respelled).not.toHaveProperty('repositoryMoved')
+    expect(revokeConsent).not.toHaveBeenCalled()
 
     git.pluginUrl = 'https://github.com/someone-else/notes.git'
     git.marketplaceCommit = 'd'.repeat(40)
@@ -452,9 +457,37 @@ describe('PluginMarketplaceInstaller', () => {
     git.payload = 'moved'
     const movedPreview = await installer.previewInstalledUpdate('community.notes')
     expect(movedPreview).toMatchObject({ repositoryMoved: true })
+    // Install links and catalog cards preview through `preview`, which must flag the move too.
+    await expect(installer.preview(sourceId, 'community.notes')).resolves.toMatchObject({
+      repositoryMoved: true
+    })
     await expect(installer.install(movedPreview)).resolves.toMatchObject({
       ok: true,
       repositoryMoved: true
+    })
+    expect(revokeConsent).toHaveBeenCalledExactlyOnceWith('community.notes')
+  })
+
+  it('drops the approval before a moved repository publishes, and installs nothing if it cannot', async () => {
+    const { root, marketplace: service, installer, sourceId } = await setup()
+    await installer.install(await installer.preview(sourceId, 'community.notes'))
+    git.pluginUrl = 'https://github.com/someone-else/notes.git'
+    git.marketplaceCommit = 'd'.repeat(40)
+    await service.refreshSource(sourceId)
+    git.commit = 'b'.repeat(40)
+    const moved = await installer.preview(sourceId, 'community.notes')
+    const pluginsDir = join(root, 'plugins')
+    revokeConsent.mockImplementationOnce(async () => {
+      // The previous release must still be the published one when approval is dropped.
+      expect((await readPluginLockfile(pluginsDir)).plugins['community.notes']).toMatchObject({
+        resolvedCommit: 'a'.repeat(40)
+      })
+      throw new Error('settings unavailable')
+    })
+
+    await expect(installer.install(moved)).rejects.toThrow('settings unavailable')
+    expect((await readPluginLockfile(pluginsDir)).plugins['community.notes']).toMatchObject({
+      resolvedCommit: 'a'.repeat(40)
     })
   })
 

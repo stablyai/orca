@@ -407,6 +407,45 @@ describe('PluginUpdateAllDialog', () => {
     expect(container.querySelector('[data-plugin-update="a"]')?.textContent).toContain('Updated')
   })
 
+  it('opens a lone content-only update from a moved repository to its own review', async () => {
+    const installMarketplacePlugin = vi.fn(({ pluginKey }: { pluginKey: string }) =>
+      Promise.resolve({ ok: true, pluginKey, consentFingerprint: 'f', needsReview: true })
+    )
+    const consent = vi.fn().mockResolvedValue([])
+    installApi({
+      previewMarketplaceUpdate: vi.fn(() =>
+        Promise.resolve({
+          ...preview('a', []),
+          source: { kind: 'git', url: 'https://example.com/someone-else/theme.git', ref: 'main' },
+          repositoryMoved: true as const
+        })
+      ),
+      installMarketplacePlugin,
+      consent
+    })
+    const theme = entry('a', [])
+    theme.installed!.source = {
+      kind: 'marketplace',
+      reference: 'https://example.com/acme/theme.git',
+      resolvedCommit: 'r0',
+      contentHash: 'h0'
+    }
+    const container = await renderDialog([theme])
+
+    // Same access, so only the source line explains why this one asks again.
+    expect(container.querySelector('h2')?.textContent).toBe('Review update to a')
+    expect(container.textContent).toContain(
+      'New source: https://example.com/someone-else/theme.git (was https://example.com/acme/theme.git)'
+    )
+    expect(installMarketplacePlugin).not.toHaveBeenCalled()
+    await act(async () => button(container, 'Approve & update')?.click())
+    expect(consent).toHaveBeenCalledWith({
+      pluginKey: 'a',
+      reviewedFingerprint: 'f',
+      decision: 'approve'
+    })
+  })
+
   it('never approves bytes other than the ones it reviewed', async () => {
     const consent = vi.fn().mockResolvedValue([])
     installApi({

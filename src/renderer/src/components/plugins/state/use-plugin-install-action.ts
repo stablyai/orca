@@ -132,6 +132,8 @@ export function usePluginInstallAction({
         setPhase(pluginKey, { kind: 'installing' })
       }
       const execution = listing.release?.execution ?? pluginExecutionProfile(preview.manifest)
+      // Why: an installed copy came from another repository; what replaces it waits for review.
+      const moved = preview.repositoryMoved === true
       try {
         const result = await window.api.plugins.installMarketplacePlugin({
           marketplaceSourceId: preview.marketplaceSourceId,
@@ -140,7 +142,7 @@ export function usePluginInstallAction({
           resolvedCommit: preview.resolvedCommit,
           ...(isFromInstallLink?.(pluginKey) ? { fromInstallLink: true as const } : {}),
           // Why the fingerprint: main turns on only the exact bytes this preview showed.
-          ...(execution === 'data'
+          ...(execution === 'data' && !moved
             ? { enableIfData: true as const, expectedFingerprint: preview.consentFingerprint }
             : {})
         })
@@ -151,6 +153,7 @@ export function usePluginInstallAction({
         // reviewed on the page after install rather than approved unseen.
         if (
           approve &&
+          !moved &&
           execution !== 'data' &&
           preview.manifest.contributes.vmRecipes.length === 0
         ) {
@@ -167,6 +170,23 @@ export function usePluginInstallAction({
         }
         await onInstalled(pluginKey)
         setPhase(pluginKey, null)
+        if (moved) {
+          toast.warning(
+            translate(
+              'auto.components.settings.PluginUpdateReviewToast.movedTitle',
+              '{{value0}} {{value1}} comes from a different repository',
+              { value0: preview.manifest.name, value1: preview.manifest.version }
+            ),
+            {
+              duration: PLUGIN_ACTION_TOAST_DURATION_MS,
+              description: translate(
+                'auto.components.settings.PluginUpdateReviewToast.movedInstalled',
+                'It stays off until you review it.'
+              )
+            }
+          )
+          return
+        }
         const { themes, iconThemes, terminalThemes } = preview.manifest.contributes
         const themed = themes.length + iconThemes.length + terminalThemes.length > 0
         // Why: a click to install a theme should show it at once; its toast offers Switch back.

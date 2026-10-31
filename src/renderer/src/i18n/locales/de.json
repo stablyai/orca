@@ -13162,7 +13162,8 @@
           "oneDescription": "Veröffentlicht von {{value0}}. Es wird erst aktualisiert, wenn du es prüfst.",
           "manyDescription": "Sie werden erst aktualisiert, wenn du sie prüfst.",
           "review": "Prüfen",
-          "dismiss": "Schließen"
+          "dismiss": "Schließen",
+          "movedInstalled": "Es bleibt aus, bis du es prüfst."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} als helles Design festgelegt",

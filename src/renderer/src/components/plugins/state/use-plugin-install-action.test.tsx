@@ -15,7 +15,7 @@ import {
 import type { PluginInstallTrustPrompt } from '../presentation/plugin-install-trust'
 import { usePluginInstallAction } from './use-plugin-install-action'
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), warning: vi.fn() } }))
 vi.mock('./plugin-theme-apply', () => ({ applyPluginThemesNow: vi.fn() }))
 import { toast } from 'sonner'
 import { applyPluginThemesNow } from './plugin-theme-apply'
@@ -103,6 +103,7 @@ beforeEach(() => {
   asked.length = 0
   answer = true
   vi.mocked(toast.success).mockClear()
+  vi.mocked(toast.warning).mockClear()
   vi.mocked(applyPluginThemesNow).mockReset().mockResolvedValue(false)
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -116,6 +117,35 @@ beforeEach(() => {
 })
 
 describe('usePluginInstallAction', () => {
+  it('leaves an install link’s replacement from a moved repository off and unapproved', async () => {
+    const codeListing = {
+      ...listing,
+      release: { ...listing.release!, execution: 'declarative' as const }
+    }
+    const movedCode = { ...codePreview, repositoryMoved: true as const }
+    for (const [target, moved, approve] of [
+      [listing, { ...preview, repositoryMoved: true as const }, undefined],
+      [codeListing, movedCode, { preview: movedCode }]
+    ] as const) {
+      const { hook, fetchPreview, onInstalled } = setup(() => true)
+      fetchPreview.mockResolvedValue({ ok: true, preview: moved })
+      vi.mocked(window.api.plugins.installMarketplacePlugin).mockResolvedValue(installResult(false))
+      await act(async () => hook.current?.install(target, approve))
+      expect(window.api.plugins.installMarketplacePlugin).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({ enableIfData: true })
+      )
+      expect(window.api.plugins.consent).not.toHaveBeenCalled()
+      expect(applyPluginThemesNow).not.toHaveBeenCalled()
+      expect(hook.current?.phaseOf(listing.pluginKey)).toBeNull()
+      expect(onInstalled).toHaveBeenCalledWith(listing.pluginKey)
+      expect(toast.warning).toHaveBeenLastCalledWith(
+        'Dusk 1.0.0 comes from a different repository',
+        expect.objectContaining({ description: 'It stays off until you review it.' })
+      )
+      expect(toast.success).not.toHaveBeenCalled()
+    }
+  })
+
   it('labels an install from a page an install link opened, and only that one', async () => {
     const { hook } = setup((pluginKey) => pluginKey === listing.pluginKey)
     await act(async () => hook.current?.install(listing))

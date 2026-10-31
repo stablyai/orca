@@ -12680,7 +12680,8 @@
           "oneDescription": "게시자: {{value0}}. 검토하기 전까지 업데이트되지 않습니다.",
           "manyDescription": "검토하기 전까지 업데이트되지 않습니다.",
           "review": "검토",
-          "dismiss": "닫기"
+          "dismiss": "닫기",
+          "movedInstalled": "검토할 때까지 꺼진 상태로 유지됩니다."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "이 폴더를 신뢰하는지 확인하세요",
