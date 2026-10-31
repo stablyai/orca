@@ -54,8 +54,11 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
   const pendingTerminalImeCandidateKeyReleases = createTerminalImePendingCandidateKeyReleases()
   const isMac = navigator.userAgent.includes('Mac')
   // Android/ChromeOS UAs also contain "Linux"; scope the candidate-key policy to desktop Linux.
+  // HarmonyOS PC ArkWeb is desktop Chromium without "Linux" in its UA and commits IME text as insertText.
   const isLinux =
-    !isMac && navigator.userAgent.includes('Linux') && !/Android|CrOS/.test(navigator.userAgent)
+    !isMac &&
+    ((navigator.userAgent.includes('Linux') && !/Android|CrOS/.test(navigator.userAgent)) ||
+      isOpenHarmonyDesktopUserAgent(navigator.userAgent))
   const isIosWeb = isCurrentPlatformIosWeb()
   const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
   const imeComposerPlaceholderMask = installTerminalImeComposerPlaceholderMask(pane.terminal)
@@ -185,6 +188,11 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
   pane.terminal.attachCustomKeyEventHandler((event) =>
     kittyOrphanKeyupGuard.filter(event, resolveXtermKeyEvent(event), getKittyKeyboardFlags())
   )
+}
+
+function isOpenHarmonyDesktopUserAgent(userAgent: string): boolean {
+  // ArkWeb's UA leads with its device type; only PC (2-in-1) has a physical-keyboard IME.
+  return /\(PC;[^)]*\bOpenHarmony\b/i.test(userAgent)
 }
 
 export type { PaneInputContext }

@@ -28,13 +28,13 @@ export type LinuxPaneReplayResult = {
 
 const disposables: IDisposable[] = []
 
-/** Pins a desktop Linux UA, stubs the canvas xterm measures with, and tears panes down. */
-export function useLinuxPaneTestEnvironment(): void {
+/** Pins a desktop UA (Linux by default), stubs the canvas xterm measures with, and tears panes down. */
+export function useLinuxPaneTestEnvironment(userAgent: string = LINUX_UA): void {
   let originalUserAgent: PropertyDescriptor | undefined
 
   beforeEach(() => {
     originalUserAgent = Object.getOwnPropertyDescriptor(navigator, 'userAgent')
-    Object.defineProperty(navigator, 'userAgent', { configurable: true, value: LINUX_UA })
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, value: userAgent })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm only calls measureText while measuring cells in happy-dom.
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
       measureText: () => ({ width: 10 })
