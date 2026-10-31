@@ -154,10 +154,9 @@ export class JournalOutcomeFold {
 
   /** Applies the latest values over `baseline` (the folded input prefix) or over the scalars alone:
    * a deletion removes, a prefix-ordinal value replaces in place, and every other value takes its
-   * canonical place after the prefix. Each record was admitted as format 1 on read. A prefix-ordinal
-   * value the prefix does not hold is still the key's newest value and is appended rather than
-   * refusing the chat; that can only happen if the prefix is read differently from how it was
-   * written, which the marker's rule forbids (`JOURNAL_OUTCOME_MARKER_VERSION`). */
+   * canonical place after the prefix. Each record was admitted as format 1 on read. A live
+   * prefix-ordinal value must name a key the prefix holds; this detects missing keys, not value or
+   * order drift. */
   finish(
     sessionId: string,
     epoch: string,
@@ -181,6 +180,13 @@ export class JournalOutcomeFold {
       const ordered = [...entries.values()].sort((a, b) => (a.ordinal < b.ordinal ? -1 : 1))
       for (const value of ordered) {
         decodingOutcome(() => {
+          if (
+            !value.deleted &&
+            value.ordinal === JOURNAL_PREFIX_ORDINAL &&
+            !decode.has(field, value.entryKey)
+          ) {
+            throw new JournalOutcomeDecodeError('missing journal outcome prefix key')
+          }
           if (value.deleted || value.ordinal !== JOURNAL_PREFIX_ORDINAL) {
             decode.remove(field, value.entryKey)
           }

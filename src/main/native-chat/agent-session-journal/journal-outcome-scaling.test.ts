@@ -650,6 +650,7 @@ it('runs a sweep pass with nothing to retire without reading history at N and 10
   const measure = async (size: number) => {
     const { database } = outcomeChat(size, `idle-${size}`)
     const sweeper = new JournalOutcomeSweeper({ database: () => database, delay: async () => {} })
+    await sweeper.pass()
     const watched = watch(database)
     await sweeper.pass()
     sweeper.stop()

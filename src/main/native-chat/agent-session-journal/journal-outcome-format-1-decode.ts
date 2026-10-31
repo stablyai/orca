@@ -12,12 +12,14 @@ import {
 
 type JournalStateDecode = {
   entry: (path: string, entry: unknown) => void
+  has: (path: string, key: unknown) => boolean
   remove: (path: string, key: unknown) => void
   finish: () => JournalReducerState
 }
 
 type Target = {
   set: (entry: unknown) => void
+  has: (key: unknown) => boolean
   remove: (key: unknown) => void
 }
 
@@ -44,6 +46,7 @@ export function decodeOutcomeFormat1Onto(
   }
   return {
     entry: (path, entry) => target(path).set(entry),
+    has: (path, key) => target(path).has(key),
     remove: (path, key) => target(path).remove(key),
     finish: () => state
   }
@@ -109,6 +112,7 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
   const map = <K, V>(target: Map<K, V>, isKey: (key: unknown) => key is K): Target => {
     const admitted = z.custom<[K, V]>()
     return {
+      has: (key) => isKey(key) && target.has(key),
       set: (entry) => {
         const [key, value] = admitted.parse(entry)
         target.set(key, value)
@@ -122,6 +126,7 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
   }
   const member = z.custom<[string, string]>()
   const set = (target: Set<string>): Target => ({
+    has: (key) => isString(key) && target.has(key),
     set: (entry) => {
       target.add(member.parse(entry)[0])
     },
@@ -138,6 +143,7 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
     [
       'items',
       {
+        has: (key) => isString(key) && items.has(key),
         set: (entry) => {
           const value = item.parse(entry)
           items.set(value.itemId, value)
@@ -160,6 +166,7 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
     [
       'itemEchoes',
       {
+        has: (key) => isString(key) && state.itemEchoes.has(key),
         set: (entry) => {
           const value = echo.parse(entry)
           state.itemEchoes.set(value[0], value[1])

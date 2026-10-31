@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import {
-  closeTestJournalHostDatabases,
+  createTrackedJournalOpener,
   openTestJournalHostDatabase,
   liveTestJournalRows
 } from './journal-host-database-test-support'
@@ -27,6 +27,7 @@ import {
 let root: string
 let database: JournalHostDatabase
 const rigs: ReturnType<typeof projectionWriter>[] = []
+const journals = createTrackedJournalOpener()
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcome-prefix-'))
   database = openTestJournalHostDatabase(root)
@@ -38,7 +39,7 @@ afterEach(async () => {
     await rig.queue.drain()
   }
   vi.restoreAllMocks()
-  await closeTestJournalHostDatabases()
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 const item = (seq: number, itemId = 'stream'): JournalRow => ({
@@ -101,21 +102,53 @@ it("keeps an existing chat's rows byte for byte, starts its records after one ap
   expect(read(7)).toEqual([8, 9, 10])
 })
 
-it('keeps a record that updated a prefix key when a later prefix fold no longer yields that key', async () => {
+it('refuses a live prefix-position record whose key the deliberately changed prefix no longer holds, without writing', async () => {
   seedProjectionRows(database, [projectionEpochRow, item(2, 'a'), item(3, 'b')])
   const rig = projectionWriter(database, restoreJournal(database.db, sessionId)!.state)
   rigs.push(rig)
   await rig.writer.enqueue((seq, ts) => ({ ...item(seq, 'b'), ts }))
   await rig.writer.enqueue((seq, ts) => ({ ...item(seq, 'c'), ts }))
-  // A later reducer reads the old row for b as another item: the prefix no longer holds b.
+  expectProjectionMatches(database, rig.state())
+  expect([...restoreJournal(database.db, sessionId)!.state.items.keys()]).toEqual(['a', 'b', 'c'])
+  // Synthetic damage: reread the prefix with b renamed, while its saved outcome still claims b.
   database.db
     .prepare('UPDATE journal_rows SET row_json = ? WHERE session_id = ? AND seq = 3')
     .run(JSON.stringify({ ...item(3, 'renamed'), revision: 3 }), sessionId)
+  const saved = () =>
+    database.db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+      .all()
+      .map(({ name }) => [name, database.db.prepare(`SELECT * FROM "${String(name)}"`).all()])
+  const before = saved()
   const restored = restoreJournal(database.db, sessionId)
-  expect(restored).toMatchObject({ newer: null, damage: null })
-  // b keeps its newest value, appended after the prefix and before the tail's own keys.
-  expect([...restored!.state.items.keys()]).toEqual(['a', 'renamed', 'b', 'c'])
-  expect(restored!.state.items.get('b')).toEqual(rig.state().items.get('b'))
+  expect(restored).toMatchObject({
+    newer: null,
+    damage: { sequence: 1, cause: 'unparseable-row' }
+  })
+  await expect(
+    journals.open({
+      stateDirectory: root,
+      identity: {
+        sessionId,
+        workspaceId: 'ws',
+        hostId: 'host',
+        agent: 'codex',
+        providerHandle: codexProviderHandle('thread-1')
+      },
+      now: () => 10_000,
+      mintEpoch: () => 'unexpected-new-epoch'
+    })
+  ).rejects.toMatchObject({
+    refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
+  })
+  expect(saved()).toEqual(before)
+  // A real storage-read failure still throws instead of becoming content damage.
+  database.db.exec('ALTER TABLE journal_outcomes RENAME TO temporarily_unavailable_outcomes')
+  try {
+    expect(() => restoreJournal(database.db, sessionId)).toThrow(/no such table/)
+  } finally {
+    database.db.exec('ALTER TABLE temporarily_unavailable_outcomes RENAME TO journal_outcomes')
+  }
 })
 
 it('fences opens and every writer before mutation, while the old parser refuses the founding row', async () => {
