@@ -1,15 +1,12 @@
 import { isDeepStrictEqual } from 'node:util'
-import { terminalCreateFeatureRequirement } from '../agent-launch-feature-requirement'
-import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
-import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { defineMethod, defineStreamingMethod } from '../core'
 import {
-  CreateTerminalTab,
   SessionTabsUnsubscribe,
   WorktreeTabSelector
 } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
+import { SESSION_TAB_CREATE_TERMINAL_METHOD } from './session-tab-create-terminal-method'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 import {
   listSessionTabsInventory,
@@ -21,9 +18,7 @@ import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { createSessionTabsStoppedScreenOnce } from './session-tabs-stopped-screen-once'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
-import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
-import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { createSessionTabsTabDeltaEncoder } from '../../../../shared/session-tabs-tab-delta'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 
@@ -54,59 +49,7 @@ export const SESSION_TAB_METHODS = [
   }),
   ...SESSION_TAB_MUTATION_METHODS,
   ...SESSION_TAB_CLOSE_METHODS,
-  defineMethod({
-    name: 'session.tabs.createTerminal',
-    requires: terminalCreateFeatureRequirement,
-    permission: 'workspace',
-    params: CreateTerminalTab,
-    handler: async (params, context) => {
-      const { runtime, signal, clientKind, pairedDeviceId, clientCapabilities } = context
-      if (params.command) {
-        await assertLegacyAiVaultResumeCommandAllowed(params.command, () =>
-          runtime.ensureStructuredAgentSessionHost()
-        )
-      }
-      return runtime.createMobileSessionTerminal(params.worktree, {
-        ...(params.sourceChatFork ? { sourceChatFork: params.sourceChatFork } : {}),
-        terminalImageViewerSupported: terminalImageViewerSupported(context),
-        afterTabId: params.afterTabId,
-        targetGroupId: params.targetGroupId,
-        command: params.command,
-        ...(params.shell ? { shellOverride: params.shell } : {}),
-        cwd: params.cwd,
-        ...(params.env ? { env: params.env } : {}),
-        ...(params.envToDelete ? { envToDelete: params.envToDelete } : {}),
-        startupCommandDelivery: params.startupCommandDelivery,
-        agent: params.agent,
-        ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),
-        ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
-        ...(params.launchToken ? { launchToken: params.launchToken } : {}),
-        ...(params.resumeProviderSession
-          ? { resumeProviderSession: params.resumeProviderSession }
-          : {}),
-        ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
-        ...(params.viewMode ? { viewMode: params.viewMode } : {}),
-        activate: params.activate,
-        select: params.select,
-        clientNavigationId: pairedDeviceId,
-        navigation: resolveRuntimeNavigationTarget({
-          navigation: params.navigation,
-          clientKind
-        }),
-        clientMutationId: params.clientMutationId,
-        ...(pairedDeviceId
-          ? {
-              supportsSplitGroupPlacement:
-                clientCapabilities?.includes(
-                  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
-                ) === true
-            }
-          : {}),
-        // Cancel surface waits on disconnect rather than timing out and rolling back a live tab (#7718).
-        signal
-      })
-    }
-  }),
+  SESSION_TAB_CREATE_TERMINAL_METHOD,
   defineStreamingMethod({
     name: 'session.tabs.subscribe',
     permission: 'workspace',
