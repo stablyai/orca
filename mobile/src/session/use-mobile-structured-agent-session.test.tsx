@@ -195,10 +195,14 @@ describe('useMobileStructuredAgentSession', () => {
   let listener: ((value: unknown) => void) | null = null
   const onSendError = vi.fn()
   const unsubscribe = vi.fn()
+  const unsubscribePreference = vi.fn()
   const sendRequest = vi.fn(defaultSendRequest)
   const subscribe = vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
-    listener = onData
-    return unsubscribe
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+      return unsubscribe
+    }
+    return unsubscribePreference
   })
   const client: RpcClient = {
     sendRequest,
@@ -337,13 +341,17 @@ describe('useMobileStructuredAgentSession', () => {
         sendRequest.mock.calls.filter(([method]) => method === 'agentSession.hold')
       ).toHaveLength(1)
     )
-    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() =>
+      expect(
+        subscribe.mock.calls.filter(([method]) => method === 'agentSession.subscribe')
+      ).toHaveLength(1)
+    )
 
     // Reconnect must acquire the connection-scoped hold before replaying the stream.
     await act(async () => {
       renderer?.update(createElement(Harness, { connected: false }))
     })
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect([unsubscribe.mock.calls.length, unsubscribePreference.mock.calls.length]).toEqual([1, 1])
     await act(async () => {
       renderer?.update(createElement(Harness, { connected: true }))
     })
@@ -353,19 +361,28 @@ describe('useMobileStructuredAgentSession', () => {
         sendRequest.mock.calls.filter(([method]) => method === 'agentSession.hold')
       ).toHaveLength(2)
     )
-    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() =>
+      expect(
+        subscribe.mock.calls.filter(([method]) => method === 'agentSession.subscribe')
+      ).toHaveLength(2)
+    )
     const holdOrders = sendRequest.mock.calls
       .map((call, index) =>
         call[0] === 'agentSession.hold' ? sendRequest.mock.invocationCallOrder[index] : null
       )
       .filter((order): order is number => order !== null)
-    const subscribeOrders = subscribe.mock.invocationCallOrder
+    const subscribeOrders = subscribe.mock.calls.flatMap(([method], index) =>
+      method === 'agentSession.subscribe' ? [subscribe.mock.invocationCallOrder[index]] : []
+    )
     const secondHoldOrder = holdOrders[1]
     const secondSubscribeOrder = subscribeOrders[1]
     if (secondHoldOrder === undefined || secondSubscribeOrder === undefined) {
       throw new Error('reconnect calls were not recorded')
     }
     expect(secondHoldOrder).toBeLessThan(secondSubscribeOrder)
+    await act(async () => renderer?.unmount())
+    renderer = null
+    expect([unsubscribe.mock.calls.length, unsubscribePreference.mock.calls.length]).toEqual([2, 2])
   })
 
   it('sends with the shared structured mutation envelope after the stream fence lands', async () => {

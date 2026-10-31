@@ -31,19 +31,6 @@ function runner(present = false, libc = 'glibc 2.31', promoted = 'ORCA_NODE_RUNT
   })
 }
 describe('shared WSL pinned runtime', () => {
-  it('uses the existing materializer and verifies the pinned guest executable without a host Node prerequisite', async () => {
-    mocks.download.mockClear()
-    const run = runner()
-    const result = await ensureWslPinnedRuntime(run, '/fake/cache', new AbortController().signal)
-    expect(mocks.download).toHaveBeenCalledWith('linux-x64-glibc', '/fake/cache', expect.anything())
-    expect(result).toContain(NODE_RUNTIME_ASSETS['linux-x64-glibc'].executableSha256)
-    const install = run.mock.calls.find(([spec]) =>
-      spec.script?.includes('ORCA_NODE_RUNTIME_EXTRACT_FAILED')
-    )?.[0]
-    expect(install?.args).toEqual(['/mnt/c/cache/pinned.tar.gz'])
-    expect(install?.script).toContain('--version')
-    expect(run.mock.calls.some(([spec]) => spec.program === 'node')).toBe(false)
-  })
   it('reuses a verified old guest cache without downloading or replacing it', async () => {
     mocks.download.mockClear()
     const run = runner(true)

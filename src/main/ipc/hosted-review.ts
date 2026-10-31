@@ -14,7 +14,8 @@ import {
   getHostedReviewCreationEligibility
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
-import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import { hostedReviewForBranchReply } from '../../shared/hosted-review'
+import { readHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
 import {
@@ -115,10 +116,10 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     // Sidebar cards and the checks panel poll this for every provider; gh/glab in WSL boot it (E9).
     // Only an explicit Refresh may start a stopped distro; admissionTier is priority only, and
     // the visible scheduler sends 'interactive' for the selected card on a timer.
-    const review = await guardWslUncPathAccess(
+    const read = await guardWslUncPathAccess(
       repo.path,
       () =>
-        getHostedReviewForBranch({
+        readHostedReviewForBranch({
           repoPath: repo.path,
           executionHostId: getStoredRepoExecutionHostId(repo),
           branch: args.branch,
@@ -131,10 +132,12 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
           currentHeadOid: args.currentHeadOid ?? null,
           ...(args.active === true ? { active: true } : {}),
           ...(args.force === true ? { force: true } : {}),
+          ...(args.userRefresh === true ? { userRefresh: true } : {}),
           localGitExecOptions: localGitOptions
         }),
       { wake: args.wakeWslDistro === true, wslDistro: localGitOptions.wslDistro }
     )
+    const review = read.review
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
       stats.record({
         type: 'pr_created',
@@ -143,7 +146,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
         meta: { prNumber: review.number, prUrl: review.url }
       })
     }
-    return review
+    return hostedReviewForBranchReply(read, args.reportReadOutcome)
   })
 
   ipcMain.handle(

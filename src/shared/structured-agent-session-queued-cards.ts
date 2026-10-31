@@ -150,6 +150,14 @@ export function structuredAgentSessionQueueEnabled(
   )
 }
 
+/** A send's alternate (Cmd/Ctrl+Enter, the phone's hold menu) does the other thing, only while the agent works and no Stop is ending its turn. */
+export function structuredAgentSessionFollowUpsQueue(
+  followUpsQueue: boolean,
+  send: { alternate?: boolean; isWorking: boolean; stopping: boolean }
+): boolean {
+  return send.alternate && send.isWorking && !send.stopping ? !followUpsQueue : followUpsQueue
+}
+
 /** A returned card, or one whose own send failed, needs the person; the rest wait their turn. */
 export function queuedMessageCardNeedsAttention(
   card: Pick<QueuedMessageCard, 'state' | 'pausedReason'>
@@ -170,12 +178,12 @@ export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
   return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
 }
 
-/** The card Cmd/Ctrl+Enter steers: the newest one, unless it is a command, which never steers. */
-export function newestSteerableQueuedMessageCard(
+/** The card Cmd/Ctrl+Shift+Enter steers: the head only, never one behind it. */
+export function headSteerableQueuedMessageCard(
   cards: readonly QueuedMessageCard[]
 ): QueuedMessageCard | null {
-  const newest = cards.at(-1)
-  return newest && !newest.command && newest.hold !== 'sending' ? newest : null
+  const head = cards[0]
+  return head && head.hold !== 'sending' && queuedMessageCardSteers(head) ? head : null
 }
 
 /** The card's line: its text, or for a card of images alone, the image's name or their count. */
