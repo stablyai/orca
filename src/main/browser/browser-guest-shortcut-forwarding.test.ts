@@ -476,6 +476,31 @@ describe('setupGuestShortcutForwarding', () => {
     })
   })
 
+  it('does not arm a Plugins double tap during composition', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      isLocalRenderer: () => true,
+      getKeybindings: () => ({ 'view.plugins': ['DoubleTap+Shift'] })
+    })
+    const input = {
+      key: 'Shift',
+      code: 'ShiftLeft',
+      shift: true,
+      meta: false,
+      control: false,
+      alt: false
+    }
+    triggerBeforeInput({ ...input, isComposing: true })
+    triggerBeforeInput({ ...input, type: 'keyUp', isComposing: true })
+    expect(triggerBeforeInput(input)).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalled()
+    triggerBeforeInput({ ...input, type: 'keyUp' })
+    expect(triggerBeforeInput(input)).toHaveBeenCalledOnce()
+    expect(rendererSendMock).toHaveBeenCalledOnce()
+  })
+
   it('resets guest double-tap detection on blur', () => {
     setupGuestShortcutForwarding({
       browserTabId,

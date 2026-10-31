@@ -223,7 +223,11 @@ export function useGlobalKeybindings(args: {
       ) {
         return
       }
-      if (matchShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
+      if (
+        input.key !== 'Dead' &&
+        matchShortcut('view.plugins') &&
+        handlers.get('view.plugins')?.()
+      ) {
         return
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {

@@ -94,7 +94,9 @@ export function setupGuestShortcutForwarding(args: {
       return
     }
 
-    if (input.type === 'keyDown' || input.type === 'keyUp') {
+    if (input.isComposing || input.key === 'Dead' || input.key === 'Process') {
+      doubleTapDetector.reset()
+    } else if (input.type === 'keyDown' || input.type === 'keyUp') {
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: input.type,
