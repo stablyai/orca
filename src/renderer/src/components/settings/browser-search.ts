@@ -7,7 +7,7 @@ import { getBrowserProfileScopeSearchEntry } from './browser-profile-scope-searc
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
 import {
   getBrowserLinkRoutingDescription,
-  getLinkRoutingBackgroundSearchEntry,
+  getLinkRoutingPlacementSearchEntries,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
 } from './browser-link-routing-copy'
@@ -65,6 +65,7 @@ export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPla
   ]
 }
 
+/** Search entries for the Browser pane, in the index order BrowserPane reads them by. */
 export function getBrowserPaneSearchEntries(
   platform: BrowserShortcutPlatform = { isMac: isMacUserAgent() }
 ): SettingsSearchEntry[] {
@@ -298,6 +299,6 @@ export function getBrowserPaneSearchEntries(
     getBrowserUserAgentSearchEntry(),
     getBrowserSitePermissionsSearchEntry(),
     getBrowserProfileScopeSearchEntry(),
-    getLinkRoutingBackgroundSearchEntry()
+    ...getLinkRoutingPlacementSearchEntries()
   ]
 }

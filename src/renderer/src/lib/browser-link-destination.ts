@@ -186,6 +186,7 @@ export function currentBrowserLinkMatch(
     : null
 }
 
+/** Picks where a link opens: a reusable matching page, a visible browser, then the source pane (split beside it unless the user opted out). */
 export function selectBrowserLinkDestination(
   state: AppState,
   destination: BrowserLinkDestination,
@@ -287,7 +288,12 @@ export function selectBrowserLinkDestination(
         : focusedGroupId && liveGroups.has(focusedGroupId)
           ? focusedGroupId
           : [...liveGroups][0]
-    if (sourceGroupId && groups.find((group) => group.id === sourceGroupId)?.activeTabId) {
+    // Opting out of the split restores the pre-#31844 rule: the link becomes a tab in the source pane.
+    if (
+      sourceGroupId &&
+      state.settings?.openLinksInAppSplitBeside !== false &&
+      groups.find((group) => group.id === sourceGroupId)?.activeTabId
+    ) {
       return {
         status: 'ready',
         split: { sourceGroupId, splitDirection: 'right', activate: false },

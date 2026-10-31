@@ -13,6 +13,7 @@ import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
 import { BrowserLinkRoutingModifierSetting } from './BrowserLinkRoutingModifierSetting'
 import { BrowserLinkRoutingBackgroundSetting } from './BrowserLinkRoutingBackgroundSetting'
+import { BrowserLinkRoutingSplitBesideSetting } from './BrowserLinkRoutingSplitBesideSetting'
 import { BrowserTerminalLinkActionsSetting } from './BrowserTerminalLinkActionsSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
@@ -56,6 +57,7 @@ function cancelBrowserSessionCookieScrollFrames(frameIds: MutableRefObject<numbe
   frameIds.current = []
 }
 
+/** Settings → Browser pane; each row renders only while it matches the settings search query. */
 export function BrowserPane({
   settings,
   updateSettings,
@@ -125,6 +127,7 @@ export function BrowserPane({
   const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
+  const showLinkRoutingSplitBeside = matchesSettingsSearch(searchQuery, [browserSearchEntries[14]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -284,6 +287,10 @@ export function BrowserPane({
 
       {showLinkRoutingBackground ? (
         <BrowserLinkRoutingBackgroundSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
+      {showLinkRoutingSplitBeside ? (
+        <BrowserLinkRoutingSplitBesideSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showTerminalLinkActions ? (
