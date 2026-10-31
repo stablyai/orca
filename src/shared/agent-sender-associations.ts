@@ -8,10 +8,7 @@ export type AgentSenderAssociation = {
 export type AgentSenderPublication = {
   associations: readonly AgentSenderAssociation[]
   peerFingerprint?: string
-  federation: readonly {
-    dispatchId: string
-    peerFingerprint: string
-    homePeerFingerprint: string
-  }[]
+  /** This host's principal as each paired execution peer authenticates it; one per peer. */
+  principals: readonly { peerFingerprint: string; homePeerFingerprint: string }[]
   attachments: readonly (AgentSenderAssociation & { homePeerFingerprint: string })[]
 }

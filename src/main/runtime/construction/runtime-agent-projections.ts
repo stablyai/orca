@@ -24,15 +24,23 @@ export function createRuntimeAgentProjections(
         return db
       }
       historyChecked = true
-      return host.getExistingOrchestrationDb()
+      try {
+        return host.getExistingOrchestrationDb()
+      } catch (error) {
+        // Display bookkeeping must not surface an open failure; orchestration's own use reports it.
+        console.warn('[runtime] Sender identity history unavailable', error)
+        return null
+      }
     },
     peerFingerprint: () => {
       const key = host.getE2EEPublicKey()
       return key ? fingerprintOrchestrationPeer(key) : undefined
     },
-    homePeerFingerprint: (environmentId) => {
+    principal: (environmentId) => {
       try {
-        return host.resolveOrchestrationWorkerServer(environmentId).homePeerFingerprint
+        const { peerFingerprint, homePeerFingerprint } =
+          host.resolveOrchestrationWorkerServer(environmentId)
+        return homePeerFingerprint ? { peerFingerprint, homePeerFingerprint } : undefined
       } catch {
         return undefined
       }

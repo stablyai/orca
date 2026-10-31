@@ -23,15 +23,33 @@ export type LocatedAgentSender = AgentSenderAssociation & { host: string; tab?: 
 const EMPTY: AgentSenderPublications = Object.freeze({})
 const key = (host: string, address: string) => JSON.stringify([host, address])
 
+/** A host publishes once any frame carries the field; a frame without it changes only its own
+ *  scope when it removes that worktree, so capability never follows which scopes have rows. */
 export function agentSenderPublicationPatch(
   state: State,
   host: string,
   scope: string,
-  publication: AgentSenderPublication | undefined
+  publication: AgentSenderPublication | undefined,
+  removed = false
 ): Partial<State> {
   const source = state.agentSenderPublicationsByHost ?? EMPTY
-  const scopes = source[host] ?? {}
-  if (scope !== '*' && scopes['*'] && publication) {
+  const scopes = source[host]
+  if (!publication) {
+    // The whole-host result is the only statement that a host does not publish.
+    if (scope === '*' && scopes) {
+      const next = { ...source }
+      delete next[host]
+      return { agentSenderPublicationsByHost: next }
+    }
+    // A whole-host result is replaced only by the next one; a chat inventory's removal can't speak for terminals.
+    if (!removed || !scopes?.[scope] || scopes['*']) {
+      return {}
+    }
+    const next = { ...scopes }
+    delete next[scope]
+    return { agentSenderPublicationsByHost: { ...source, [host]: next } }
+  }
+  if (scope !== '*' && scopes?.['*']) {
     const previous = scopes['*']
     const current = {
       ...previous,
@@ -54,19 +72,12 @@ export function agentSenderPublicationPatch(
     }
     scope = '*'
   }
-  if (!publication) {
-    if (!source[host]) {
-      return {}
-    }
-    const next = { ...source }
-    delete next[host]
-    return { agentSenderPublicationsByHost: next }
-  }
-  if (JSON.stringify(scopes[scope]) === JSON.stringify(publication)) {
+  if (JSON.stringify(scopes?.[scope]) === JSON.stringify(publication)) {
     return {}
   }
-  const next = { ...scopes, [scope]: publication }
-  return { agentSenderPublicationsByHost: { ...source, [host]: next } }
+  return {
+    agentSenderPublicationsByHost: { ...source, [host]: { ...scopes, [scope]: publication } }
+  }
 }
 
 let cache:
@@ -149,11 +160,8 @@ function senderIndex(state: AppState) {
   const publications = Object.entries(state.agentSenderPublicationsByHost ?? EMPTY)
   const execution = new Map<string, { host: string; publication: AgentSenderPublication }[]>()
   for (const [host, scopes] of publications) {
-    const values = scopes['*'] ? [scopes['*']] : Object.values(scopes)
-    if (values.length) {
-      hosts.add(host)
-    }
-    for (const publication of values) {
+    hosts.add(host)
+    for (const publication of scopes['*'] ? [scopes['*']] : Object.values(scopes)) {
       if (publication.peerFingerprint) {
         const bucket = execution.get(publication.peerFingerprint) ?? []
         bucket.push({ host, publication })
@@ -169,20 +177,25 @@ function senderIndex(state: AppState) {
     const paneKey = actual ?? row.paneKey
     return { ...row, host, paneKey, tab: chatTabs.get(key(host, paneKey)) }
   }
-  const attachments = new Map<string, LocatedAgentSender | null>()
+  // Execution rows grouped by (execution peer, home principal that attached them).
+  const attachments = new Map<string, Map<string, LocatedAgentSender | null>>()
   for (const [peer, values] of execution) {
     for (const { host, publication } of values) {
       for (const row of publication.attachments) {
         visits++
         const location = locate(host, row)
         if (location) {
-          unique(attachments, key(peer, key(row.homePeerFingerprint, row.address)), location)
+          const principal = key(peer, row.homePeerFingerprint)
+          const bucket = attachments.get(principal) ?? new Map()
+          attachments.set(principal, bucket)
+          unique(bucket, row.address, location)
         }
       }
     }
   }
   for (const [host, scopes] of publications) {
-    for (const publication of scopes['*'] ? [scopes['*']] : Object.values(scopes)) {
+    const values = scopes['*'] ? [scopes['*']] : Object.values(scopes)
+    for (const publication of values) {
       for (const row of publication.associations) {
         visits++
         const location = locate(host, row)
@@ -190,14 +203,20 @@ function senderIndex(state: AppState) {
           unique(index, key(host, row.address), location)
         }
       }
-      for (const route of publication.federation) {
+    }
+    // Principals repeat in every scope of a host; join each peer once.
+    const principals = new Set(
+      values.flatMap((publication) =>
+        publication.principals.map((p) => key(p.peerFingerprint, p.homePeerFingerprint))
+      )
+    )
+    for (const principal of principals) {
+      for (const [address, location] of attachments.get(principal) ?? []) {
         visits++
-        const address = `dispatch:${route.dispatchId}`
-        const location = attachments.get(
-          key(route.peerFingerprint, key(route.homePeerFingerprint, address))
-        )
         if (location) {
           unique(index, key(host, address), location)
+        } else {
+          index.set(key(host, address), null)
         }
       }
     }

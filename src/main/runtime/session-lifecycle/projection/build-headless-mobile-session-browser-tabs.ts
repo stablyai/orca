@@ -273,7 +273,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
-    const result = this.toMobileSessionTabsResult(snapshot)
+    const result = this.toMobileSessionTabsFrame(snapshot)
     const changeSequence = ++this.mobileSessionTabsChangeSequence
     for (const subscription of this.mobileSessionTabListeners) {
       subscription.listener(

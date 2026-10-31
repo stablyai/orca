@@ -31,9 +31,15 @@ export function projectSessionTabsForClient(
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
 ): RuntimeMobileSessionTabsResult {
+  // Phones draw no agent message cards, so they never pay for sender identity.
+  const { agentSenderAssociations: _desktopOnly, ...phone } = snapshot
   return projectSessionTabBrowserPlacements(
     projectSessionTabFileHosts(
-      projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+      projectSessionTabAgentStatus(
+        clientKind === 'mobile' ? phone : snapshot,
+        clientKind,
+        clientCapabilities
+      ),
       clientKind
     ),
     clientCapabilities

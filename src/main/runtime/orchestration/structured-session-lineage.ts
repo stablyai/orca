@@ -13,6 +13,8 @@ export type AgentSessionRecordReader = {
   listRecords: () => AgentSessionConversationView[]
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
+  /** Replaced on each committed store write; absent on readers that cannot say. */
+  generation?: () => object
 }
 
 /** Null until the agent-session host is installed; callers that must see records ensure it first. */
@@ -25,11 +27,13 @@ export function conversationRecordReader(store: {
   getConversation: AgentSessionRecordReader['getRecord']
   listConversations: AgentSessionRecordReader['listRecords']
   getVisibleSessionTabIndex: NonNullable<AgentSessionRecordReader['getVisibleSessionTabIndex']>
+  stateGeneration?: () => object
 }): AgentSessionRecordReader {
   return {
     getRecord: store.getConversation,
     listRecords: store.listConversations,
-    getVisibleSessionTabIndex: store.getVisibleSessionTabIndex
+    getVisibleSessionTabIndex: store.getVisibleSessionTabIndex,
+    ...(store.stateGeneration ? { generation: store.stateGeneration } : {})
   }
 }
 

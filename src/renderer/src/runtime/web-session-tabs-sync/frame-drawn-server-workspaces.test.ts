@@ -150,7 +150,7 @@ describe('frame-drawn server workspaces', () => {
   it('keeps a repeated sender publication and unchanged frame status as a no-op', () => {
     const snapshot = {
       ...shell('a', 2),
-      agentSenderAssociations: { associations: [], federation: [], attachments: [] }
+      agentSenderAssociations: { associations: [], principals: [], attachments: [] }
     }
     const previous = frameDrawnStore()
     const store = merge(previous, applyWebSessionTabsSnapshot(previous, snapshot, ENV, NOW))

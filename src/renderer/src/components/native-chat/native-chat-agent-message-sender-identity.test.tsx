@@ -243,7 +243,7 @@ it('uses the same published /clear successor for the live sender label', () => {
         worktreeId: SENDER
       }
     ],
-    federation: [],
+    principals: [],
     attachments: []
   })
   render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)

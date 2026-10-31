@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import type {
   AgentSenderAssociation,
   AgentSenderPublication
@@ -13,67 +12,127 @@ import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orch
 import { createCanonicalSessionPaneResolver } from './orchestration/structured-session-lineage'
 import { structuredWorkerHostScope } from './structured-worker-identity'
 import {
-  resolveWorkerLineage,
-  type WorkerLineage
-} from './orchestration/db/dispatch-context/worker-follow-up-lineage'
-import type { DispatchContextRow } from './orchestration/types'
-import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
+  readAgentSenderGeneration,
+  readAgentSenderHistory,
+  readAgentSenderMail,
+  type AgentSenderHistory,
+  type AgentSenderPrincipal
+} from './runtime-agent-sender-history'
 import type { OrchestrationDb } from './orchestration/db'
 
 type Dependencies = RuntimeAgentOrchestrationDependencies & {
   peerFingerprint(): string | undefined
-  homePeerFingerprint(environmentId: string): string | undefined
+  /** This host's principal as the paired environment authenticates it, and that peer's key. */
+  principal(environmentId: string): AgentSenderPrincipal | undefined
 }
-const mailSchema = z.array(z.object({ address: z.string(), paneKey: z.string() }))
-const remoteSchema = z.array(
-  z.object({
-    dispatchId: z.string(),
-    homePeerFingerprint: z.string(),
-    paneKey: z.string().nullable(),
-    handle: z.string().nullable()
-  })
-)
-const federationSchema = z.array(
-  z.object({ dispatchId: z.string(), peerFingerprint: z.string(), environmentId: z.string() })
-)
+type Scope = AgentSenderPublication & {
+  associations: AgentSenderAssociation[]
+  attachments: (AgentSenderAssociation & { homePeerFingerprint: string })[]
+}
 
-/** Identity history is batched once per database revision, independently of live status publication. */
+/** Identity history is read once per identity write, independently of live status publication. */
 export class RuntimeAgentSenderAssociations {
   private database: OrchestrationDb | null = null
   private revision = ''
-  private lineageReads = 0
+  private failedRevision = ''
+  private mailRevision = ''
+  private historyReads = 0
+  private readonly work = { lineageReads: 0 }
+  private mailReads = 0
   workForTest() {
-    return { lineageReads: this.lineageReads }
+    return {
+      historyReads: this.historyReads,
+      lineageReads: this.work.lineageReads,
+      mailReads: this.mailReads
+    }
   }
-  private history: ReturnType<RuntimeAgentSenderAssociations['readHistory']> | undefined
-  private key = ''
+  private history: AgentSenderHistory | undefined
+  private mail = new Map<string, { address: string; paneKey: string }>()
+  private mailSequence = 0
+  private key: unknown[] = []
   private publication: AgentSenderPublication = {
     associations: [],
-    federation: [],
+    principals: [],
     attachments: []
   }
-  private scoped = new Map<
-    string,
-    AgentSenderPublication & {
-      associations: AgentSenderAssociation[]
-      attachments: (AgentSenderAssociation & { homePeerFingerprint: string })[]
-    }
-  >()
+  private scoped = new Map<string, Scope>()
+  private framed = new Map<string, AgentSenderPublication>()
   constructor(private readonly deps: Dependencies) {}
 
+  /** Display bookkeeping: a failure keeps the last good publication and never fails a caller. */
   build(worktreeId?: string): AgentSenderPublication {
+    try {
+      this.refresh()
+    } catch (error) {
+      console.warn('[runtime] Sender identity publication failed', error)
+    }
+    return worktreeId ? this.scope(worktreeId) : this.publication
+  }
+
+  /** The scope a client frame carries; remembered so a refresh republishes only changed worktrees. */
+  buildForFrame(worktreeId: string): AgentSenderPublication {
+    const scope = this.build(worktreeId)
+    this.framed.set(worktreeId, scope)
+    return scope
+  }
+
+  /** Worktrees whose scope differs from the one their last frame carried; an unframed one has no stale client. */
+  changedScopes(worktreeIds: Iterable<string>): string[] {
+    this.build()
+    return [...worktreeIds].filter((id) => {
+      const framed = this.framed.get(id)
+      return framed !== undefined && framed !== this.scope(id)
+    })
+  }
+
+  private scope(worktreeId: string): Scope {
+    let scoped = this.scoped.get(worktreeId)
+    if (!scoped) {
+      scoped = { ...this.hostFields(this.publication), associations: [], attachments: [] }
+      this.scoped.set(worktreeId, scoped)
+    }
+    return scoped
+  }
+
+  private hostFields(publication: AgentSenderPublication) {
+    return {
+      principals: publication.principals,
+      ...(publication.peerFingerprint ? { peerFingerprint: publication.peerFingerprint } : {})
+    }
+  }
+
+  private refresh(): void {
     const db = this.deps.getDb()
-    const revision = db
-      ? JSON.stringify([
-          db.db.prepare('SELECT total_changes() AS n').get(),
-          db.db.pragma('data_version')
-        ])
-      : ''
-    if (db !== this.database || revision !== this.revision) {
-      this.database = db
-      this.revision = revision
-      this.history = db ? this.readHistory(db) : undefined
-      this.key = ''
+    if (!db) {
+      this.database = null
+      this.history = undefined
+      this.mail.clear()
+    } else {
+      const generation = readAgentSenderGeneration(db, db !== this.database)
+      if (db !== this.database) {
+        this.database = db
+        this.revision = ''
+        this.failedRevision = ''
+      }
+      if (generation.history !== this.revision && generation.history !== this.failedRevision) {
+        try {
+          this.historyReads++
+          this.history = readAgentSenderHistory(db, this.deps.principal, this.work)
+          this.mail.clear()
+          this.mailSequence = 0
+          this.mailRevision = ''
+          this.revision = generation.history
+          this.failedRevision = ''
+        } catch (error) {
+          // The last good history stays indexed; the next identity write retries.
+          this.failedRevision = generation.history
+          throw error
+        }
+      }
+      if (generation.mail !== this.mailRevision) {
+        this.readMail(db)
+        this.mailRevision = generation.mail
+      }
     }
     const panes = new Map<string, AgentSenderAssociation>()
     const handles = new Map<string, AgentSenderAssociation>()
@@ -91,200 +150,137 @@ export class RuntimeAgentSenderAssociations {
       }
     }
     for (const pty of this.deps.getPtys()) {
-      terminal(this.deps.issuePtyHandle(pty), this.deps.paneOf(pty).paneKey, pty.worktreeId)
+      const paneKey = this.deps.paneOf(pty).paneKey
+      if (paneKey) {
+        terminal(this.deps.issuePtyHandle(pty), paneKey, pty.worktreeId)
+      }
     }
     const records = this.deps.getSessionRecords()
+    const peerFingerprint = this.deps.peerFingerprint()
+    // The record store's state is replaced on each committed write; a reader without it is listed.
+    const recordGeneration = records?.generation
+      ? records.generation()
+      : JSON.stringify([
+          records?.listRecords().map((r) => [r.sessionId, r.location, r.conversationCommand]),
+          records?.getVisibleSessionTabIndex?.()
+        ])
+    const key = [
+      this.revision,
+      this.mailRevision,
+      JSON.stringify([...handles.values()]),
+      recordGeneration,
+      peerFingerprint
+    ]
+    if (key.length === this.key.length && key.every((value, i) => value === this.key[i])) {
+      return
+    }
+    this.key = key
+    const associations = [...handles.values()]
     const sessions = records?.listRecords() ?? []
     const visibility = records?.getVisibleSessionTabIndex?.()
-    const peerFingerprint = this.deps.peerFingerprint()
-    const federation = this.history?.federation ?? []
-    const key = JSON.stringify([
-      this.revision,
-      [...handles.values()],
-      sessions.map((r) => [r.sessionId, r.location, r.conversationCommand]),
-      visibility,
-      peerFingerprint,
-      federation
-    ])
-    if (key !== this.key) {
-      this.key = key
-      const associations = [...handles.values()]
-      const resolve = createCanonicalSessionPaneResolver(records)
-      const visible = visibility?.present ? new Set(visibility.sessionIds) : null
-      const sessionRows = new Map<string, AgentSenderAssociation>()
-      const byPane = new Map(
-        sessions.map((r) => [
-          structuredAgentSessionPaneKey(structuredAgentSessionTabId(r.sessionId), r.sessionId),
-          r
-        ])
-      )
-      for (const record of sessions) {
-        const paneKey = resolve(record.sessionId)
-        const destination = byPane.get(paneKey)
-        const sessionId = destination?.sessionId
-        if (
-          !destination ||
-          !sessionId ||
-          !structuredWorkerHostScope(destination.location) ||
-          (visible && !visible.has(sessionId))
-        ) {
-          continue
-        }
-        const row = {
-          address: `orca_session_id:${record.sessionId}`,
-          paneKey,
-          worktreeId: destination.location.workspaceId,
-          sessionId
-        }
-        sessionRows.set(record.sessionId, row)
-        associations.push(row)
-      }
-      const locate = (paneKey: string | null, handle: string | null, session?: string | null) =>
-        session
-          ? sessionRows.get(session)
-          : ((paneKey ? panes.get(paneKey) : undefined) ??
-            (handle ? handles.get(handle) : undefined))
-      for (const alias of this.history?.aliases ?? []) {
-        const row = locate(alias.paneKey, alias.handle, alias.sessionId)
-        if (row && !isStructuredWorkerHandle(alias.address)) {
-          associations.push({ ...row, address: alias.address })
-        }
-      }
-      const attachments = (this.history?.remote ?? []).flatMap((attachment) => {
-        const row = locate(attachment.paneKey, attachment.handle)
-        return row
-          ? [
-              {
-                ...row,
-                address: `dispatch:${attachment.dispatchId}`,
-                homePeerFingerprint: attachment.homePeerFingerprint
-              }
-            ]
-          : []
-      })
-      const publication = {
-        associations,
-        federation,
-        attachments,
-        ...(peerFingerprint ? { peerFingerprint } : {})
-      }
-      if (JSON.stringify(publication) !== JSON.stringify(this.publication)) {
-        this.publication = publication
-        this.scoped.clear()
-        const worktrees = new Set([...associations, ...attachments].map((r) => r.worktreeId))
-        for (const id of worktrees) {
-          this.scoped.set(id, { ...publication, associations: [], attachments: [] })
-        }
-        for (const row of associations) {
-          this.scoped.get(row.worktreeId)?.associations.push(row)
-        }
-        for (const row of attachments) {
-          this.scoped.get(row.worktreeId)?.attachments.push(row)
-        }
-      }
-    }
-    if (!worktreeId) {
-      return this.publication
-    }
-    let scoped = this.scoped.get(worktreeId)
-    if (!scoped) {
-      scoped = {
-        ...this.publication,
-        associations: [],
-        attachments: []
-      }
-      this.scoped.set(worktreeId, scoped)
-    }
-    return scoped
-  }
-
-  private readHistory(db: OrchestrationDb) {
-    const dispatchRows = db.db.prepare('SELECT * FROM dispatch_contexts').all()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: private complete schema rows feed the lineage resolver, never the public projection.
-    const dispatches = dispatchRows as DispatchContextRow[]
-    const resourceRows = db.db
-      .prepare('SELECT * FROM worker_terminal_resources ORDER BY updated_at')
-      .all()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: complete resource schema rows are the existing lineage resolver's private inputs.
-    const resources = resourceRows as WorkerTerminalResourceRow[]
-    const byId = new Map(dispatches.map((r) => [r.id, r]))
-    const followUps = new Map(
-      dispatches
-        .filter((r) => r.follow_up_of_dispatch_id)
-        .map((r) => [r.follow_up_of_dispatch_id, r])
+    const resolve = createCanonicalSessionPaneResolver(records)
+    const visible = visibility?.present ? new Set(visibility.sessionIds) : null
+    const sessionRows = new Map<string, AgentSenderAssociation>()
+    const byPane = new Map(
+      sessions.map((r) => [
+        structuredAgentSessionPaneKey(structuredAgentSessionTabId(r.sessionId), r.sessionId),
+        r
+      ])
     )
-    const owned = new Map(resources.map((r) => [r.owner_dispatch_id, r]))
-    const former = new Map<string, WorkerTerminalResourceRow>()
-    for (const row of resources) {
-      for (const id of z.array(z.string()).parse(JSON.parse(row.prior_owner_dispatch_ids))) {
-        former.set(id, row)
-      }
-    }
-    const reader = {
-      db: db.db,
-      getDispatchContextById: (id: string) => {
-        this.lineageReads++
-        return byId.get(id)
-      },
-      getWorkerTerminalResourceByOwner: (id: string) => owned.get(id),
-      getWorkerTerminalResourceFormerlyOwnedBy: (id: string) => former.get(id)
-    }
-    const aliases: {
-      address: string
-      paneKey: string | null
-      handle: string | null
-      sessionId?: string | null
-    }[] = []
-    const lineages = new Map<string, WorkerLineage>()
-    for (const dispatch of dispatches) {
-      const lineage = resolveWorkerLineage(reader, dispatch.id, (id) => followUps.get(id), lineages)
-      if (!lineage) {
+    for (const record of sessions) {
+      const paneKey = resolve(record.sessionId)
+      const destination = byPane.get(paneKey)
+      const sessionId = destination?.sessionId
+      if (
+        !destination ||
+        !sessionId ||
+        !structuredWorkerHostScope(destination.location) ||
+        (visible && !visible.has(sessionId))
+      ) {
         continue
       }
-      const { latest, resource } = lineage
-      const location = {
-        paneKey: resource?.pane_key ?? latest.assignee_pane_key,
-        handle: resource?.terminal_handle ?? latest.assignee_handle,
-        sessionId: latest.assignee_orca_session_id
+      const row = {
+        address: `orca_session_id:${record.sessionId}`,
+        paneKey,
+        worktreeId: destination.location.workspaceId,
+        sessionId
       }
-      aliases.push({ ...location, address: `dispatch:${dispatch.id}` })
-      if (dispatch.assignee_handle && !isStructuredWorkerHandle(dispatch.assignee_handle)) {
-        aliases.push({ ...location, address: dispatch.assignee_handle })
+      sessionRows.set(record.sessionId, row)
+      associations.push(row)
+    }
+    const locate = (paneKey: string | null, handle: string | null, session?: string | null) =>
+      session
+        ? sessionRows.get(session)
+        : ((paneKey ? panes.get(paneKey) : undefined) ?? (handle ? handles.get(handle) : undefined))
+    const workers = this.history?.aliases ?? []
+    const workersByAddress = new Map(workers.map((alias) => [alias.address, alias]))
+    const mail = [...this.mail.values()].map(
+      (row) => workersByAddress.get(row.address) ?? { ...row, handle: null }
+    )
+    for (const alias of [...workers, ...mail]) {
+      const row = locate(alias.paneKey, alias.handle, alias.sessionId)
+      if (row && !isStructuredWorkerHandle(alias.address)) {
+        associations.push({ ...row, address: alias.address })
       }
     }
-    const workersByAddress = new Map(aliases.map((alias) => [alias.address, alias]))
-    for (const mail of mailSchema.parse(
-      db.db
-        .prepare(
-          'SELECT DISTINCT from_handle AS address, sender_pane_key AS paneKey FROM messages WHERE sender_pane_key IS NOT NULL'
-        )
-        .all()
-    )) {
-      const worker = workersByAddress.get(mail.address)
-      aliases.push(worker ?? { ...mail, handle: null })
-    }
-    const remote = remoteSchema.parse(
-      db.db
-        .prepare(
-          'SELECT dispatch_id AS dispatchId, home_peer_fingerprint AS homePeerFingerprint, pane_key AS paneKey, terminal_handle AS handle FROM remote_dispatch_attachments'
-        )
-        .all()
-    )
-    const routes = federationSchema.parse(
-      db.db
-        .prepare(
-          'SELECT dispatch_id AS dispatchId, peer_fingerprint AS peerFingerprint, environment_id AS environmentId FROM federated_dispatches'
-        )
-        .all()
-    )
-    const principals = new Map<string, string | undefined>()
-    const federation = routes.flatMap(({ environmentId, ...route }) => {
-      if (!principals.has(environmentId)) {
-        principals.set(environmentId, this.deps.homePeerFingerprint(environmentId))
-      }
-      const homePeerFingerprint = principals.get(environmentId)
-      return homePeerFingerprint ? [{ ...route, homePeerFingerprint }] : []
+    const attachments = (this.history?.remote ?? []).flatMap((attachment) => {
+      const row = locate(attachment.paneKey, attachment.handle)
+      return row
+        ? [
+            {
+              ...row,
+              address: `dispatch:${attachment.dispatchId}`,
+              homePeerFingerprint: attachment.homePeerFingerprint
+            }
+          ]
+        : []
     })
-    return { aliases, remote, federation }
+    this.publish({
+      associations,
+      principals: this.history?.principals ?? [],
+      attachments,
+      ...(peerFingerprint ? { peerFingerprint } : {})
+    })
+  }
+
+  private publish(next: Scope): void {
+    if (JSON.stringify(next) === JSON.stringify(this.publication)) {
+      return
+    }
+    this.publication = next
+    const host = this.hostFields(next)
+    const scopes = new Map<string, Scope>()
+    const scopeOf = (worktreeId: string) => {
+      let scope = scopes.get(worktreeId)
+      if (!scope) {
+        scope = { ...host, associations: [], attachments: [] }
+        scopes.set(worktreeId, scope)
+      }
+      return scope
+    }
+    for (const id of this.scoped.keys()) {
+      scopeOf(id)
+    }
+    for (const row of next.associations) {
+      scopeOf(row.worktreeId).associations.push(row)
+    }
+    for (const row of next.attachments) {
+      scopeOf(row.worktreeId).attachments.push(row)
+    }
+    // An unchanged worktree keeps its scope object, so its clients get no frame.
+    for (const [id, scope] of scopes) {
+      const previous = this.scoped.get(id)
+      if (!previous || JSON.stringify(previous) !== JSON.stringify(scope)) {
+        this.scoped.set(id, scope)
+      }
+    }
+  }
+
+  private readMail(db: OrchestrationDb): void {
+    this.mailReads++
+    for (const { sequence, address, paneKey } of readAgentSenderMail(db, this.mailSequence)) {
+      this.mail.set(JSON.stringify([address, paneKey]), { address, paneKey })
+      this.mailSequence = Math.max(this.mailSequence, sequence)
+    }
   }
 }

@@ -43,9 +43,12 @@ export function useAgentMessageSenderView(
       if (!owner) {
         return undefined
       }
-      return hasAgentSenderPublication(state, owner)
-        ? selectAgentSenderAssociation(state, owner, identity, dispatchId)
-        : locateLegacyAgentMessageSender(state, identity, owner)
+      if (!hasAgentSenderPublication(state, owner)) {
+        return locateLegacyAgentMessageSender(state, identity, owner)
+      }
+      const located = selectAgentSenderAssociation(state, owner, identity, dispatchId)
+      // A located chat's own tab names its agent for cards saved before the agent kind was.
+      return located && { ...located, agentType: located.tab?.agentSessionAgent }
     },
     [address, sessionId, handle, chatWorktreeId, stableTarget, dispatchId]
   )

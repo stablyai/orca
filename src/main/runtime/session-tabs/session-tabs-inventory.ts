@@ -130,9 +130,9 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     RestoreLivePairedRendererSessionOwnedMobileTerminalsMethods['restoreLivePairedRendererSessionOwnedMobileTerminals']
   >
 
-  protected abstract toMobileSessionTabsResult(
-    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsResult']>
-  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsResult']>
+  protected abstract toMobileSessionTabsFrame(
+    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrame']>
+  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrame']>
 
   protected abstract waitForSessionTabsInventoryPublication(
     ...args: Parameters<
@@ -236,7 +236,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(null)
     const snapshots = [...this.mobileSessionTabsByWorktree.values()].map((snapshot) =>
       this.projectMobileSessionTabsForClient(
-        this.toMobileSessionTabsResult(snapshot),
+        this.toMobileSessionTabsFrame(snapshot),
         clientNavigationId
       )
     )

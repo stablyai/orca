@@ -16,6 +16,7 @@ import {
   mintStructuredWorkerPaneKey
 } from './structured-worker-identity'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
+import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventory'
 
 const dbs: OrchestrationDb[] = []
 afterEach(() => {
@@ -156,7 +157,7 @@ it('publishes plain chats and canonical /clear successors without credential han
   expect(JSON.stringify(projection.build())).not.toContain(credentialPane)
 })
 it.each([100, 1000])(
-  'batches provenance reads for %i panes and reuses identity on status-only updates',
+  'does no history work for heartbeats, read marks, receipts or status at %i dispatches',
   (n) => {
     const { db, projection, dispatch, leaves } = harness(n)
     const chain = Array.from({ length: n }, (_, i) => dispatch(i))
@@ -165,25 +166,82 @@ it.each([100, 1000])(
         .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
         .run(chain[i - 1].id, chain[i].id)
     }
-    const reads = vi.spyOn(db.db, 'prepare')
     const first = projection.build()
-    expect(first.associations).toHaveLength(n * 3)
-    const historyReads = () =>
-      reads.mock.calls.filter(([sql]) =>
-        /FROM (dispatch_contexts|worker_terminal_resources|messages|remote_dispatch_attachments|federated_dispatches)/.test(
-          sql
-        )
-      ).length
-    expect(historyReads()).toBe(5)
-    expect(projection.workForTest().lineageReads).toBeLessThanOrEqual(n * 3)
+    const other = projection.buildForFrame('other')
+    expect(first.associations.some((r) => r.address === `dispatch:${chain[0].id}`)).toBe(true)
+    const settled = projection.workForTest()
+    expect(settled.historyReads).toBe(1)
+    const sent = db.insertMessage({
+      from: 'term_old_0',
+      to: 'recipient',
+      subject: 'heartbeat',
+      type: 'heartbeat'
+    })
+    db.recordHeartbeat(chain[n - 1].id, new Date().toISOString())
+    db.db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(sent.id)
     leaves[0].lastOutputAt = 100
     expect(projection.build()).toBe(first)
-    expect(projection.build('workspace').associations).toHaveLength(n * 3)
-    expect(historyReads()).toBe(5)
+    expect(projection.build('other')).toBe(other)
+    expect(projection.workForTest()).toEqual(settled)
+    // New mail reads only the rows after the last one seen, never the dispatch history again.
+    db.insertMessage({
+      from: 'term_mailer',
+      to: 'recipient',
+      subject: 'update',
+      senderPaneKey: pane('tab-1')
+    })
+    expect(projection.build().associations.some((r) => r.address === 'term_mailer')).toBe(true)
+    expect(projection.workForTest()).toMatchObject({
+      historyReads: 1,
+      mailReads: settled.mailReads + 1
+    })
+    // A worktree whose scope didn't change keeps its object, so its clients get no frame.
+    expect(projection.changedScopes(['other', 'workspace'])).toEqual([])
+    expect(projection.build('other')).toBe(other)
   }
 )
 
-it('publishes authenticated execution attachments separately from home-qualified routes', () => {
+it('publishes the scope a frame carried and reports only worktrees whose scope changed', () => {
+  const { projection, dispatch } = harness(1)
+  const workspace = projection.buildForFrame('workspace')
+  const other = projection.buildForFrame('other')
+  dispatch(0)
+  expect(projection.changedScopes(['workspace', 'other', 'never-framed'])).toEqual(['workspace'])
+  expect(projection.build('other')).toBe(other)
+  expect(projection.build('workspace')).not.toBe(workspace)
+})
+
+it('tolerates malformed history rows and keeps the last good publication when a read fails', () => {
+  const { db, projection, dispatch } = harness(3)
+  const worker = dispatch(0)
+  db.db
+    .prepare(
+      `INSERT INTO worker_terminal_resources (id, origin_dispatch_id, owner_dispatch_id, pane_key, terminal_handle, prior_owner_dispatch_ids)
+       VALUES ('resource', ?, ?, ?, 'term_old_0', 'not json')`
+    )
+    .run(worker.id, worker.id, pane('tab-0'))
+  const good = projection.build()
+  expect(good.associations.some((r) => r.address === `dispatch:${worker.id}`)).toBe(true)
+  const reads = projection.workForTest().historyReads
+  const prepare = db.db.prepare.bind(db.db)
+  vi.spyOn(db.db, 'prepare').mockImplementation((sql: string) => {
+    if (sql === 'SELECT * FROM dispatch_contexts') {
+      throw new Error('disk I/O error')
+    }
+    return prepare(sql)
+  })
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  dispatch(1)
+  expect(projection.build()).toBe(good)
+  // The failed revision isn't retried until the next identity write, and isn't marked indexed.
+  expect(projection.build()).toBe(good)
+  expect(projection.workForTest().historyReads).toBe(reads + 1)
+  vi.mocked(db.db.prepare).mockRestore()
+  dispatch(2)
+  expect(projection.build().associations.some((r) => r.address === 'term_old_2')).toBe(true)
+})
+
+it('publishes one principal per paired peer and execution attachments, never per-dispatch routes', () => {
   const { db, projection } = harness()
   db.createRemoteDispatchAttachment({
     dispatchId: 'federated',
@@ -207,19 +265,16 @@ it('publishes authenticated execution attachments separately from home-qualified
     setupState: 'skipped',
     effects: []
   })
-  db.db
-    .prepare(
-      'INSERT INTO federated_dispatches (dispatch_id, environment_id, environment_name, peer_fingerprint, protocol_version) VALUES (?, ?, ?, ?, ?)'
-    )
-    .run('federated', 'remote', 'Remote', 'execution-peer', 1)
+  const route = db.db.prepare(
+    'INSERT INTO federated_dispatches (dispatch_id, environment_id, environment_name, peer_fingerprint, protocol_version) VALUES (?, ?, ?, ?, ?)'
+  )
+  for (const id of ['federated', 'second', 'third']) {
+    route.run(id, 'remote', 'Remote', 'execution-peer', 1)
+  }
   const publicRows = projection.build('workspace')
   expect(publicRows.peerFingerprint).toBe(fingerprintOrchestrationPeer('execution-key'))
-  expect(publicRows.federation).toEqual([
-    {
-      dispatchId: 'federated',
-      peerFingerprint: 'execution-peer',
-      homePeerFingerprint: 'paired-home'
-    }
+  expect(publicRows.principals).toEqual([
+    { peerFingerprint: 'execution-peer', homePeerFingerprint: 'paired-home' }
   ])
   expect(publicRows.attachments).toEqual([
     {
@@ -230,4 +285,23 @@ it('publishes authenticated execution attachments separately from home-qualified
     }
   ])
   expect(publicRows.associations.some((row) => row.address === 'dispatch:federated')).toBe(false)
+})
+
+it('sends desktop clients the sender scope and strips it from phone frames', () => {
+  const frame = {
+    worktree: 'workspace',
+    publicationEpoch: 'host',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: [],
+    agentSenderAssociations: { associations: [], principals: [], attachments: [] }
+  }
+  expect(projectSessionTabsForClient(frame, 'mobile', undefined)).not.toHaveProperty(
+    'agentSenderAssociations'
+  )
+  expect(projectSessionTabsForClient(frame, 'runtime', undefined).agentSenderAssociations).toEqual(
+    frame.agentSenderAssociations
+  )
 })
