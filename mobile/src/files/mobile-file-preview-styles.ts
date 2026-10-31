@@ -64,15 +64,6 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  imageScrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md
-  },
-  image: {
-    backgroundColor: colors.bgBase
-  },
   editContainer: {
     flex: 1,
     backgroundColor: colors.bgBase,

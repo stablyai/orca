@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { PanZoomSize } from './pan-zoom-view'
+import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
 import { PanZoomImageDialog } from './PanZoomImageDialog'
 import { useSvgObjectUrl } from './use-svg-object-url'
 

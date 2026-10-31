@@ -1000,6 +1000,12 @@
       "title": "出了点问题",
       "tryAgain": "重试",
       "home": "首页"
+    },
+    "svgPreview": {
+      "drawFailed": "无法绘制此 SVG",
+      "label": "{{title}} 图形",
+      "previewDrawing": "预览图形",
+      "viewSource": "查看 SVG 源代码"
     }
   },
   "connection": {

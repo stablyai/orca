@@ -1000,6 +1000,12 @@
       "title": "發生錯誤",
       "tryAgain": "再試一次",
       "home": "首頁"
+    },
+    "svgPreview": {
+      "drawFailed": "無法繪製此 SVG",
+      "label": "{{title}} 圖形",
+      "previewDrawing": "預覽圖形",
+      "viewSource": "檢視 SVG 原始碼"
     }
   },
   "connection": {

@@ -1047,6 +1047,12 @@
       "title": "Une erreur est survenue",
       "tryAgain": "Réessayer",
       "home": "Accueil"
+    },
+    "svgPreview": {
+      "drawFailed": "Impossible d’afficher ce SVG",
+      "label": "Dessin {{title}}",
+      "previewDrawing": "Aperçu du dessin",
+      "viewSource": "Afficher la source SVG"
     }
   },
   "connection": {

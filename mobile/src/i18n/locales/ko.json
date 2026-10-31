@@ -1000,6 +1000,12 @@
       "title": "문제가 발생했습니다",
       "tryAgain": "다시 시도",
       "home": "홈"
+    },
+    "svgPreview": {
+      "drawFailed": "이 SVG를 그릴 수 없습니다",
+      "label": "{{title}} 그림",
+      "previewDrawing": "그림 미리보기",
+      "viewSource": "SVG 소스 보기"
     }
   },
   "connection": {
