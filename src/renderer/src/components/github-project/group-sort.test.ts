@@ -301,6 +301,52 @@ describe('sortRows', () => {
 })
 
 describe('groupRows', () => {
+  it.each([singleSelectField, iterationField])(
+    'treats blank $kind payloads as missing when grouping and sorting',
+    (field) => {
+      const value: GitHubProjectRow['fieldValuesByFieldId'][string] =
+        field.kind === 'single-select'
+          ? {
+              kind: 'single-select',
+              fieldId: field.id,
+              optionId: 'opt_a',
+              name: ' ',
+              color: 'GRAY'
+            }
+          : {
+              kind: 'iteration',
+              fieldId: field.id,
+              iterationId: 'iter_1',
+              title: ' ',
+              startDate: '2026-01-01',
+              duration: 14
+            }
+      const populated =
+        value.kind === 'single-select'
+          ? { ...value, name: 'Todo' }
+          : { ...value, title: 'Sprint 1' }
+      const rows = [
+        makeRow('blank', 0, { [field.id]: value }),
+        makeRow('populated', 1, { [field.id]: populated }),
+        makeRow('missing', 2, {})
+      ]
+      for (const direction of ['ASC', 'DESC'] as const) {
+        const view = { ...makeView(field, { field, direction }), groupByFields: [field] }
+        const table = makeTable(view, rows)
+        expect(sortRows(table, rows).map((row) => row.id)).toEqual([
+          'populated',
+          'blank',
+          'missing'
+        ])
+        expect(
+          groupRows(table, rows)
+            .at(-1)
+            ?.rows.map((row) => row.id)
+        ).toEqual(['blank', 'missing'])
+      }
+    }
+  )
+
   it('groups a present-but-empty user list with the missing-value rows', () => {
     const view = { ...makeView(assigneesField), groupByFields: [assigneesField] }
     const rows = [

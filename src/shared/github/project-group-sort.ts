@@ -23,7 +23,7 @@ export const EMPTY_PROJECT_GROUP_KEY = '__empty__'
 type ProjectFieldValue = GitHubProjectRow['fieldValuesByFieldId'][string]
 
 /** False for anything that renders as an empty cell — absent, or present with a blank payload. */
-function hasNonEmptyFieldValue(value: ProjectFieldValue | undefined): boolean {
+function hasNonEmptyFieldValue(value: ProjectFieldValue | undefined): value is ProjectFieldValue {
   if (!value) {
     return false
   }
@@ -36,9 +36,11 @@ function hasNonEmptyFieldValue(value: ProjectFieldValue | undefined): boolean {
       return value.text.trim().length > 0
     case 'date':
       return value.date.trim().length > 0
-    case 'iteration':
-    case 'number':
     case 'single-select':
+      return value.name.trim().length > 0
+    case 'iteration':
+      return value.title.trim().length > 0
+    case 'number':
       return true
   }
 }
