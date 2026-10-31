@@ -86,9 +86,11 @@ relays answer terminal color queries without the plugin loaded.
 ## Icon themes
 
 `contributes.iconThemes` points at a JSON file that maps files and folders to SVG icons. Paths
-are relative to the plugin root. The map names match VS Code's file icon themes, so you can
-port a Material-style theme by copying the entries you want. Large themes such as Material
-have far more than the 512-mapping limit, so pick the most common names.
+are relative to the plugin root. The map names match the common JSON file icon theme format.
+To port such a theme, keep the keys you want and replace each value: those themes map a key
+to an icon definition ID, while Orca needs the SVG file's path, which is that definition's
+`iconPath`. Large themes have far more entries than the 512-mapping limit, so pick the most
+common names.
 
 ```json
 {
@@ -111,19 +113,21 @@ have far more than the 512-mapping limit, so pick the most common names.
 - `icons` holds the generic `file`, `folder` and `folder-open` icons.
 - For a file, Orca checks `fileNames`, then the longest matching `fileExtensions` key (so
   `d.ts` beats `ts`), then `icons.file`.
-- For a folder, Orca checks `folderNames` against the folder's own name, not its path. An open
-  folder checks `folderNamesExpanded` first. If that has no entry, it falls back to the
-  folder's `folderNames` icon and then to `folder-open`. `folderNames` and
-  `folderNamesExpanded` need Orca releases after 1.4.245. Older releases ignore them and show
-  the generic folder icons.
+- For a folder, Orca matches the folder's own name, not its path. A closed folder checks
+  `folderNames`, then `icons.folder`. An open folder checks `folderNamesExpanded`, then
+  `icons["folder-open"]`, then falls back like a closed folder. If you set `folder-open`, give
+  each named folder an expanded icon too, or it shows the generic open folder when expanded.
+  Orca releases up to 1.4.245 ignore `folderNames` and `folderNamesExpanded`. They show only
+  the generic icons, and an open folder without `folder-open` gets Orca's built-in icon.
 - Keys are case-insensitive. Two keys that differ only in case are refused. Name keys can't
-  contain `/` or `\`.
+  contain `/` or `\`, so keys qualified by a parent folder (`src/components`) are not
+  supported.
 - These icons appear in the file explorer, Source Control, diff and conflict file trees, tabs,
   Quick Open, search results and the remote folder browser.
 - The theme file can be at most 64 KiB. A theme can have at most 512 mappings across all maps
   and 512 distinct SVGs. Each SVG can be at most 64 KiB, and all of a theme's SVGs together at
   most 4 MiB. An SVG painted only with `currentColor` takes the row's text color. Any other SVG
   keeps its own colors.
-- `rootFolder`, `rootFolderNames`, `languageIds` and VS Code's font icons aren't supported.
+- `rootFolder`, `rootFolderNames`, `languageIds` and font icons aren't supported.
   Orca's explorer has no workspace-root row for a root icon. `pnpm validate:plugin` flags these
   keys, and Orca skips them at runtime.

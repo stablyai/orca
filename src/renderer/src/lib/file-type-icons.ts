@@ -98,8 +98,9 @@ export function getPluginFileTypeIconIndex(
   )
 }
 
-/** The active plugin icon theme's icon index for a folder path's last segment: its expanded
- *  icon when open, its name icon, then the generic folder slot. */
+/** The active plugin icon theme's icon index for a folder path's last segment. Open folders try
+ *  the expanded name icon, the generic open icon, then fall back like closed ones: the name
+ *  icon, then the generic folder icon. */
 export function getPluginFolderIconIndex(
   theme: ActivePluginIconTheme | null,
   folderPath: string | undefined,
@@ -109,9 +110,13 @@ export function getPluginFolderIconIndex(
     return null
   }
   const name = getFilename(folderPath).toLowerCase()
-  const named = name
-    ? ((open ? ownIconIndex(theme.folderNamesExpanded, name) : null) ??
-      ownIconIndex(theme.folderNames, name))
-    : null
-  return named ?? ownIconIndex(theme.icons, open ? 'folder-open' : 'folder')
+  const named = (entries: Partial<Record<string, number>>) =>
+    name ? ownIconIndex(entries, name) : null
+  return (
+    (open
+      ? (named(theme.folderNamesExpanded) ?? ownIconIndex(theme.icons, 'folder-open'))
+      : null) ??
+    named(theme.folderNames) ??
+    ownIconIndex(theme.icons, 'folder')
+  )
 }

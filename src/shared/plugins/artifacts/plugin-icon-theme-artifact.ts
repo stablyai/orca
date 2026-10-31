@@ -67,7 +67,7 @@ function pluginIconThemeArtifactSchema(strictness: PluginArtifactStrictness) {
     ).default({}),
     fileNames: nameMap(entryNameSchema),
     fileExtensions: nameMap(fileExtensionSchema),
-    // Why VS Code's names: Material-style themes port by copying these maps unchanged.
+    // Why these names: popular file icon themes use them, so ports keep their keys.
     folderNames: nameMap(entryNameSchema),
     folderNamesExpanded: nameMap(entryNameSchema)
   }

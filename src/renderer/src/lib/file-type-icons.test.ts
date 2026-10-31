@@ -96,8 +96,14 @@ describe('getPluginFolderIconIndex', () => {
     expect(getPluginFolderIconIndex(theme, undefined, true)).toBe(1)
   })
 
-  it('keeps a collapsed name icon open when the theme has no expanded one', () => {
-    expect(getPluginFolderIconIndex(theme, 'docs', true)).toBe(4)
+  it('prefers the generic open icon over a collapsed name icon when open', () => {
+    expect(getPluginFolderIconIndex(theme, 'docs', true)).toBe(1)
+  })
+
+  it('falls back to closed icons when the theme has no open ones', () => {
+    const closedOnly = iconTheme({ icons: { folder: 0 }, folderNames: { docs: 4 } })
+    expect(getPluginFolderIconIndex(closedOnly, 'docs', true)).toBe(4)
+    expect(getPluginFolderIconIndex(closedOnly, 'other', true)).toBe(0)
   })
 
   it('matches the last segment of a compacted or Windows path', () => {

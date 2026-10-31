@@ -23,8 +23,8 @@ it('loads the selected icon theme and drops it when its plugin goes away', async
     icons: { folder: 0, file: 1 },
     fileNames: {},
     fileExtensions: {},
-    folderNames: {},
-    folderNamesExpanded: {}
+    folderNames: { src: 0, broken: 1 },
+    folderNamesExpanded: { src: 0, broken: 1 }
   }
   let listed = [metadata]
   const listeners: ((event: PluginChangeEvent) => void)[] = []
@@ -42,14 +42,14 @@ it('loads the selected icon theme and drops it when its plugin goes away', async
   const store = await import('./plugin-icon-themes')
 
   renderHook(() => store.usePluginIconThemeActivation(metadata.id))
-  // The unusable second SVG gets no rule, so its slot falls back to the built-in icon.
+  // The unusable second SVG gets no rule, so its mappings fall back to the built-in icon.
   await waitFor(() =>
     expect(store.useActivePluginIconTheme.getState().theme).toEqual({
       icons: { folder: 0 },
       fileNames: {},
       fileExtensions: {},
-      folderNames: {},
-      folderNamesExpanded: {}
+      folderNames: { src: 0 },
+      folderNamesExpanded: { src: 0 }
     })
   )
 
