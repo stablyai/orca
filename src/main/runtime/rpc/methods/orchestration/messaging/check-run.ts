@@ -3,7 +3,7 @@ import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcContext } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { formatCheckBanners } from '../../../../orchestration/formatter'
+import { formatMessageBanner } from '../../../../orchestration/formatter'
 import { deliveryReceipt, exposeMessages, handsOverBatch } from './mailbox-message-receipt'
 import { interruptedAcknowledgedCheck } from '../routing'
 import { routeAllMailboxPages } from '../schemas'
@@ -119,7 +119,7 @@ export async function checkRunMailbox(args: {
     if (params.format || params.inject) {
       return {
         ...result,
-        formatted: formatCheckBanners(messages, params.compatibilityCliCommand),
+        formatted: messages.map(formatMessageBanner).join('\n\n'),
         runId: run.id
       }
     }
@@ -132,7 +132,7 @@ export async function checkRunMailbox(args: {
     count: messages.length,
     acknowledged: acknowledged ?? null,
     ...(params.format || params.inject
-      ? { formatted: formatCheckBanners(messages, params.compatibilityCliCommand) }
+      ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
       : {})
   })
   const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
@@ -141,8 +141,7 @@ export async function checkRunMailbox(args: {
       mailbox: { runId: run.id },
       batch,
       acknowledged,
-      format: params.format === true || params.inject === true,
-      cliCommand: params.compatibilityCliCommand
+      format: params.format === true || params.inject === true
     })
   // The receipt commits with the take, so --retry-request can always replay a handed-over batch.
   const takeDelivery = (wakeTypes?: MessageType[]) =>

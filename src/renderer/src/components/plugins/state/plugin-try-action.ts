@@ -15,32 +15,7 @@ import { openPluginNewFileFromSettings } from '../page/PluginContributionActionN
 import { openPluginPanelFromSettings } from '../page/PluginContributionActionPanel'
 import { languageDisplayName } from '../presentation/plugin-contributions'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
-
-// Why built in: catalog grammars ship no sample, and an empty file shows no highlighting.
-const SYNTAX_SAMPLES: Readonly<Record<string, string>> = {
-  '.gleam':
-    'import gleam/io\n\n// Greets whoever runs it.\npub fn main() -> Nil {\n  let count = 3\n  io.println("Hello from Gleam!")\n}\n',
-  '.prisma':
-    '// A user table.\nmodel User {\n  id    Int     @id @default(autoincrement())\n  email String  @unique\n  name  String?\n}\n',
-  '.nix':
-    '{ pkgs ? import <nixpkgs> { } }:\n\n# A development shell.\npkgs.mkShell {\n  packages = [ pkgs.nodejs ];\n  shellHook = "echo ready";\n}\n',
-  '.gd':
-    'extends Node2D\n\n# Moves right every frame.\nvar speed := 120.0\n\nfunc _process(delta: float) -> void:\n\tposition.x += speed * delta\n',
-  '.tex':
-    '\\documentclass{article}\n\n% A tiny document.\n\\begin{document}\n\\section{Hello}\nInline math: $e^{i\\pi} + 1 = 0$.\n\\end{document}\n'
-}
-
-export function pluginSyntaxSample(
-  syntaxes: readonly { extensions: readonly string[] }[]
-): { extension: string; content: string } | null {
-  for (const extension of syntaxes.flatMap((syntax) => syntax.extensions)) {
-    const content = SYNTAX_SAMPLES[extension.toLowerCase()]
-    if (content) {
-      return { extension, content }
-    }
-  }
-  return null
-}
+import { pluginSyntaxSample } from './plugin-syntax-samples'
 
 /** Runs `act` over the workspace Settings came from, or says why it can't. */
 function fromSettingsToWorkspace(act: () => void): void {

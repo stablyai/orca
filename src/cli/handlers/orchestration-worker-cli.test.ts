@@ -374,7 +374,7 @@ describe('orchestration worker-start CLI contract', () => {
     })
 
     expect(printedText()).toContain(
-      'Warning: The assignment was stopped without closing its unsupervised terminal process.'
+      'warning="The assignment was stopped without closing its unsupervised terminal process."'
     )
   })
 

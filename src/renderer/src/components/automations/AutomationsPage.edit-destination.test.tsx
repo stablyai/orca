@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 
 import {
   addRuntimeProject,
@@ -93,7 +94,7 @@ describe('AutomationsPage edit fencing', () => {
 
   it('fences the save even when the record cannot be re-read', async () => {
     const automation = makeAutomation({ id: 'a-1' })
-    mocks.state.settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
+    mocks.state.settings = { ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT }
     const { setLocalRuntimeCapabilitiesForTests } =
       await import('@/runtime/local-runtime-capabilities')
     setLocalRuntimeCapabilitiesForTests(null)

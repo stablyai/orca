@@ -1,7 +1,7 @@
 import type { MessageType, OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { formatCheckBanners } from '../../../../orchestration/formatter'
+import { formatMessageBanner } from '../../../../orchestration/formatter'
 import { exposeMessages } from './mailbox-message-receipt'
 import { staleDelivery } from '../../../../orchestration/db/messages/role-mailbox-delivery'
 import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
@@ -53,7 +53,7 @@ export async function checkDirectMailbox(args: {
       db.markAsRead(messages.map((message) => message.id))
     }
     if (params.format || params.inject) {
-      const formatted = formatCheckBanners(visibleMessages, params.compatibilityCliCommand)
+      const formatted = visibleMessages.map(formatMessageBanner).join('\n\n')
       return { messages: exposeMessages(visibleMessages), formatted, count: visibleMessages.length }
     }
     return { messages: exposeMessages(visibleMessages), count: visibleMessages.length }

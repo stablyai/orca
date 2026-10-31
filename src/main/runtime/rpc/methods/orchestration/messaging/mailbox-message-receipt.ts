@@ -1,7 +1,6 @@
 import type { MessageRow } from '../../../../orchestration/types'
 import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages/role-mailbox-delivery'
-import { formatCheckBanners } from '../../../../orchestration/formatter'
-import type { OrchestrationCliCommand } from '../../../../orchestration/cli-command'
+import { formatMessageBanner } from '../../../../orchestration/formatter'
 
 // Hide read/sequence, pointer_* and sender_pane_key: they are runtime delivery plumbing, not caller mailbox truth.
 const INTERNAL_MESSAGE_COLUMNS = [
@@ -35,7 +34,6 @@ export function deliveryReceipt(args: {
   batch: MailboxDeliveryBatch | undefined
   acknowledged: string | undefined
   format: boolean
-  cliCommand?: OrchestrationCliCommand
 }) {
   const { batch } = args
   return {
@@ -50,7 +48,7 @@ export function deliveryReceipt(args: {
     cancelled: false,
     connectionLost: false,
     ...(args.format
-      ? { formatted: formatCheckBanners(batch?.messages ?? [], args.cliCommand) }
+      ? { formatted: batch?.messages.map(formatMessageBanner).join('\n\n') ?? '' }
       : {})
   }
 }

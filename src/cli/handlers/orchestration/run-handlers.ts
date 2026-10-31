@@ -1,4 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
+import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
 import {
   getOptionalPositiveIntegerFlag,
@@ -32,13 +33,14 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     if (unboundRunId && unboundRunId !== result.result.run.id) {
       result.result.next = olderRuntimeUnboundRunNext(unboundRunId)
     }
-    printOrchestrationResult(
-      result,
-      { flags, json },
-      {
-        fields: (r) => ({ ...runFields(r.run), next: r.next }),
-        fullText: (r) => withReceiptNext(`Run ${r.run.id} created and bound: ${r.run.objective}`, r)
-      }
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (r) => ({ ...runFields(r.run), next: r.next })
+      })
+      return
+    }
+    printResult(result, json, (r) =>
+      withReceiptNext(`Run ${r.run.id} created and bound: ${r.run.objective}`, r)
     )
   },
 
@@ -51,14 +53,11 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       from,
       ...(flags.has('takeover-legacy') ? { takeoverLegacy: true } : {})
     })
-    printOrchestrationResult(
-      result,
-      { flags, json },
-      {
-        fields: (r) => runFields(r.run),
-        fullText: (r) => `Using Run ${r.run.id}: ${r.run.objective}`
-      }
-    )
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, { fields: (r) => runFields(r.run) })
+      return
+    }
+    printResult(result, json, (r) => `Using Run ${r.run.id}: ${r.run.objective}`)
   },
 
   'orchestration run-current': async ({ flags, client, cwd, json }) => {
@@ -66,16 +65,16 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{
       run: { id: string; objective: string } | null
     }>('orchestration.runCurrent', { from })
-    printOrchestrationResult(
-      result,
-      { flags, json },
-      {
-        fields: (r) => (r.run ? runFields(r.run) : { runId: null }),
-        fullText: (r) =>
-          r.run
-            ? `${r.run.id} ${r.run.objective}`
-            : `No Run is bound to this ${from === undefined ? 'session' : 'terminal'}.`
-      }
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (r) => (r.run ? runFields(r.run) : { runId: null })
+      })
+      return
+    }
+    printResult(result, json, (r) =>
+      r.run
+        ? `${r.run.id} ${r.run.objective}`
+        : `No Run is bound to this ${from === undefined ? 'session' : 'terminal'}.`
     )
   },
 
@@ -90,20 +89,29 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
         (flags.has('full') ? ORCHESTRATION_RUN_PAGE_LIMIT : RUN_LIST_DEFAULT_LIMIT),
       cursor: getOptionalStringFlag(flags, 'cursor')
     })
-    printOrchestrationResult(
-      result,
-      { flags, json },
-      {
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
         fields: (r) => ({
           runs: r.runs.map((run) => {
             const { runId, ...rest } = runFields(run)
             return { id: runId, ...rest }
           }),
           nextCursor: r.nextCursor ?? undefined
-        }),
-        fullText: formatRunList
-      }
-    )
+        })
+      })
+      return
+    }
+    printResult(result, json, (r) => {
+      const rows =
+        r.runs.length === 0
+          ? 'No Runs found.'
+          : r.runs
+              .map(
+                (run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
+              )
+              .join('\n')
+      return r.nextCursor ? `${rows}\nMore Runs: --cursor ${r.nextCursor}` : rows
+    })
   },
 
   'orchestration run-show': async ({ flags, client, json }) => {
@@ -123,41 +131,26 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       ...(removed ? { removed: true } : {}),
       ...(cursor ? { cursor } : {})
     })
-    const runLine = (run: { id: string; objective: string; legacy: number }): string =>
-      `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`
-    printOrchestrationResult(
-      result,
-      { flags, json },
-      {
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
         fields: (r) => ({ ...runFields(r.run), removedWork: r.removedWork }),
         text: (_, r) =>
           removed
             ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
-            : runLine(r.run) + formatRunRemovedWorkLine(r.run.id, r.removedWork),
-        fullText: (r) =>
-          removed
-            ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
-            : `${runLine(r.run)}\n` +
-              `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}` +
-              `${formatRunRemovedWorkLine(r.run.id, r.removedWork)}`
-      }
+            : `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}${formatRunRemovedWorkLine(r.run.id, r.removedWork)}`
+      })
+      return
+    }
+    printResult(result, json, (r) =>
+      removed
+        ? formatRemovedWorkListing(r.run.id, r.removedWork, cursor)
+        : `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
+          `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}` +
+          `${formatRunRemovedWorkLine(r.run.id, r.removedWork)}`
     )
   }
 }
 
 function runFields(run: { id: string; objective: string; legacy?: number }) {
   return { runId: run.id, objective: run.objective, legacy: run.legacy ? true : undefined }
-}
-
-function formatRunList(r: {
-  runs: { id: string; objective: string; legacy: number }[]
-  nextCursor: string | null
-}): string {
-  const rows =
-    r.runs.length === 0
-      ? 'No Runs found.'
-      : r.runs
-          .map((run) => `${run.id}${run.legacy ? ' [legacy, inspect only]' : ''} ${run.objective}`)
-          .join('\n')
-  return r.nextCursor ? `${rows}\nMore Runs: --cursor ${r.nextCursor}` : rows
 }

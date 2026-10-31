@@ -14,8 +14,6 @@ export type MessageFormattingAuthority =
 export type MessageFormattingOptions = {
   authority?: MessageFormattingAuthority
   supportedActionHints?: readonly string[]
-  /** The CLI the reader runs, so its Reply hint is runnable as printed. */
-  cliCommand?: OrchestrationCliCommand
 }
 
 function resolveAuthority(
@@ -93,20 +91,11 @@ export function formatMessageBanner(
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
         ? ''
         : ` --from ${msg.to_handle}`
-    lines.push(
-      `[Reply: ${options.cliCommand ?? 'orca'} orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`
-    )
+    lines.push(`[Reply: orca orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`)
   }
   lines.push(SEPARATOR)
 
   return lines.join('\n')
-}
-
-export function formatCheckBanners(
-  messages: MessageRow[],
-  cliCommand: OrchestrationCliCommand | undefined
-): string {
-  return messages.map((message) => formatMessageBanner(message, { cliCommand })).join('\n\n')
 }
 
 // One wrapper marks the message block boundary while leaving each banner independently parseable.

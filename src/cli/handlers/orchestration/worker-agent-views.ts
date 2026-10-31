@@ -56,39 +56,36 @@ type WorkerShowFields = {
   next?: string
 }
 
-export function workerShowView(
-  fullText: (value: WorkerShowResult) => string
-): OrchestrationAgentView<WorkerShowResult, WorkerShowFields> {
-  return {
-    fields: (value) => {
-      const wait = value.observation?.agentWait
-      return {
-        dispatchId: value.dispatch?.id ?? value.worker.dispatchId ?? 'unknown',
-        taskId: value.dispatch?.taskId,
-        runId: value.dispatch?.runId ?? value.projection?.runId,
-        state: value.worker.state,
-        stage: value.worker.stage,
-        liveness: value.projection?.liveness.verdict,
-        terminal:
-          value.worker.agentTerminalHandle ?? value.terminalResource?.terminalHandle ?? undefined,
-        // The projection's accounting state matches worker-list; releaseState is the raw column.
-        terminalState:
-          value.projection?.resource?.terminalState ??
-          value.terminalResource?.releaseState ??
-          undefined,
-        workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
-        attention: nonEmpty(value.projection?.attention?.categories),
-        waitingOnHuman: wait
-          ? `${wait.reason ?? 'interactive prompt'} (via ${wait.source})`
-          : undefined,
-        lastError: value.worker.lastError ?? undefined,
-        autoReleaseAt: value.autoReleaseAt ?? undefined,
-        next: value.projection
-          ? renderOrchestrationArgv(value.projection.nextAction.argv)
-          : undefined
-      }
-    },
-    fullText
+export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerShowFields> = {
+  fields: (value) => {
+    const wait = value.observation?.agentWait
+    return {
+      dispatchId: value.dispatch?.id ?? value.worker.dispatchId ?? 'unknown',
+      taskId: value.dispatch?.taskId,
+      runId: value.dispatch?.runId ?? value.projection?.runId,
+      state: value.worker.state,
+      stage: value.worker.stage,
+      liveness: value.projection?.liveness.verdict,
+      terminal:
+        value.worker.agentTerminalHandle ?? value.terminalResource?.terminalHandle ?? undefined,
+      // The projection's accounting state matches worker-list; releaseState is the raw column.
+      terminalState:
+        value.projection?.resource?.terminalState ??
+        value.terminalResource?.releaseState ??
+        undefined,
+      workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
+      attention: nonEmpty(value.projection?.attention?.categories),
+      // Silence means checked and clear; an older host or unreadable pane never evaluated it.
+      waitingOnHuman:
+        value.observation === undefined || !('agentWait' in value.observation)
+          ? 'unknown'
+          : wait
+            ? `${wait.reason ?? 'interactive prompt'} (via ${wait.source})`
+            : undefined,
+      lastError: value.worker.lastError ?? undefined,
+      autoReleaseAt: value.autoReleaseAt ?? undefined,
+      next: value.projection ? renderOrchestrationArgv(value.projection.nextAction.argv) : undefined
+    }
   }
 }
 
@@ -140,56 +137,49 @@ type WorkerListFields = {
 
 type ScopedWorkerList = WorkerListResult & { scope: WorkerListRunScope }
 
-export function workerListView(
-  fullText: (value: ScopedWorkerList) => string
-): OrchestrationAgentView<ScopedWorkerList, WorkerListFields> {
-  return {
-    fields: (value) => ({
-      workers: value.workers.map((worker) => {
-        const projection = worker.projection
-        return {
-          dispatchId: worker.dispatchId,
-          taskId: worker.taskId,
-          state: worker.workerState,
-          outcome:
-            projection?.outcome && projection.outcome !== worker.workerState
-              ? projection.outcome
-              : undefined,
-          liveness: projection?.liveness.verdict,
-          agent: projection?.provider
-            ? `${projection.provider.id}${projection.provider.model ? `/${projection.provider.model}` : ''}`
+export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerListFields> = {
+  fields: (value) => ({
+    workers: value.workers.map((worker) => {
+      const projection = worker.projection
+      return {
+        dispatchId: worker.dispatchId,
+        taskId: worker.taskId,
+        state: worker.workerState,
+        outcome:
+          projection?.outcome && projection.outcome !== worker.workerState
+            ? projection.outcome
             : undefined,
-          terminal: worker.agentTerminalHandle ?? undefined,
-          terminalState: worker.terminalState ?? undefined,
-          // Older runtimes send no projection; the terminal resource row still names both.
-          workspace: projection?.workspace?.id ?? worker.resource?.worktreeId ?? undefined,
-          host: projection?.host.id,
-          attention: nonEmpty(projection?.attention?.categories),
-          autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
-          next: projection ? renderOrchestrationArgv(projection.nextAction.argv) : undefined
-        }
-      }),
-      scope: value.scope,
-      nextCursor: (value.page?.hasMore && value.page.nextCursor) || undefined,
-      warnings: nonEmpty(workerListWarnings(value))
+        liveness: projection?.liveness.verdict,
+        agent: projection?.provider
+          ? `${projection.provider.id}${projection.provider.model ? `/${projection.provider.model}` : ''}`
+          : undefined,
+        terminal: worker.agentTerminalHandle ?? undefined,
+        terminalState: worker.terminalState ?? undefined,
+        // Older runtimes send no projection; the terminal resource row still names both.
+        workspace: projection?.workspace?.id ?? worker.resource?.worktreeId ?? undefined,
+        host: projection?.host.id,
+        attention: nonEmpty(projection?.attention?.categories),
+        autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
+        next: projection ? renderOrchestrationArgv(projection.nextAction.argv) : undefined
+      }
     }),
-    fullText,
-    // A host that did not answer leaves the inventory unconfirmed, not empty.
-    failure: (value) => {
-      const [first, ...rest] = value.partialHostErrors ?? []
-      return first
-        ? {
-            code: 'worker_inventory_incomplete',
-            // Newly classified as a failure; --full keeps the exit 0 scripts saw.
-            fullExitCode: 0,
-            message: `worker observations from ${[first, ...rest].map((error) => error.name).join(', ')} are incomplete (${first.code})`
-          }
-        : undefined
-    }
+    scope: value.scope,
+    nextCursor: (value.page?.hasMore && value.page.nextCursor) || undefined,
+    warnings: nonEmpty(workerListWarnings(value))
+  }),
+  // A host that did not answer leaves the inventory unconfirmed, not empty.
+  failure: (value) => {
+    const [first, ...rest] = value.partialHostErrors ?? []
+    return first
+      ? {
+          code: 'worker_inventory_incomplete',
+          message: `worker observations from ${[first, ...rest].map((error) => error.name).join(', ')} are incomplete (${first.code})`
+        }
+      : undefined
   }
 }
 
-export function workerListWarnings(value: WorkerListResult): string[] {
+function workerListWarnings(value: WorkerListResult): string[] {
   return [
     ...(value.warnings ?? []),
     ...(value.partialHostErrors ?? []).map(

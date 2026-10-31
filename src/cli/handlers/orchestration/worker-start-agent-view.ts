@@ -1,10 +1,5 @@
-import {
-  renderOrchestrationArgv,
-  resolveOrcaCommandsInText,
-  type OrchestrationAgentView
-} from './agent-view'
-import { withReceiptNext } from './receipt-next-text'
-import { formatWorkerStart, type WorkerStartReceipt } from './worker-output'
+import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
+import type { WorkerStartReceipt } from './worker-output'
 
 type LaunchChoice = {
   agent?: string | null
@@ -36,7 +31,6 @@ type WorkerStartFields = {
   taskId: string
   runId?: string
   runCreated?: true
-  objective?: string
   state: string
   agent?: string
   model?: string
@@ -67,7 +61,6 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         taskId: value.taskId,
         runId: value.runId ?? value.run?.id,
         runCreated: value.run?.created ? true : undefined,
-        objective: value.run?.created ? value.run.objective : undefined,
         state: value.state,
         agent: effective?.agent ?? requested?.agent ?? undefined,
         // Null unless requested or chosen by a fallback.
@@ -89,11 +82,10 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         next: unobserved
           ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
           : value.recovery
-            ? resolveOrcaCommandsInText(value.recovery)
-            : value.next && resolveOrcaCommandsInText(value.next)
+            ? value.recovery
+            : value.next
       }
     },
-    fullText: (value) => withReceiptNext(formatWorkerStart(value), value),
     failure: (value) =>
       value.state === 'ready'
         ? undefined
@@ -102,7 +94,6 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
               // The worker is likely starting; a non-zero exit reads as a failure to retry.
               level: 'warning',
               exitCode: 0,
-              fullExitCode: 1,
               code: 'turn_start_unobserved',
               message: "task typed in; the worker may still be starting. Don't resend."
             }

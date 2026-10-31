@@ -1,4 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
+import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
 import { getOptionalJsonFlag, getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { callOrchestrationMutation } from './mutation-request'
@@ -14,14 +15,16 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       options: getOptionalJsonFlag(flags, 'options'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
-    printOrchestrationResult(
+    // The row echoes the question and options the caller just sent.
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, { fields: (value) => gateReceipt(value.gate) })
+      return
+    }
+    printResult(
       result,
-      { flags, json },
-      {
-        fields: (value) => value,
-        fullText: (value) =>
-          `Gate ${value.gate.id} created for task ${value.gate.task_id} [${value.gate.status}]`
-      }
+      json,
+      (value) =>
+        `Gate ${value.gate.id} created for task ${value.gate.task_id} [${value.gate.status}]`
     )
   },
 
@@ -33,14 +36,11 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       resolution: getRequiredStringFlag(flags, 'resolution'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })
-    printOrchestrationResult(
-      result,
-      { flags, json },
-      {
-        fields: (value) => value,
-        fullText: (value) => `Gate ${value.gate.id} resolved: ${value.gate.resolution}`
-      }
-    )
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, { fields: (value) => gateReceipt(value.gate) })
+      return
+    }
+    printResult(result, json, (value) => `Gate ${value.gate.id} resolved: ${value.gate.resolution}`)
   },
 
   'orchestration gate-list': async ({ flags, client, cwd, json }) => {
@@ -59,20 +59,21 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
       run,
       from
     })
-    printOrchestrationResult(
-      result,
-      { flags, json },
-      {
-        fields: (value) => value,
-        fullText: (value) => {
-          if (value.gates.length === 0) {
-            return 'No gates found.'
-          }
-          return value.gates
-            .map((gate) => `${gate.id} task=${gate.task_id} [${gate.status}] "${gate.question}"`)
-            .join('\n')
-        }
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, { fields: (value) => value })
+      return
+    }
+    printResult(result, json, (value) => {
+      if (value.gates.length === 0) {
+        return 'No gates found.'
       }
-    )
+      return value.gates
+        .map((gate) => `${gate.id} task=${gate.task_id} [${gate.status}] "${gate.question}"`)
+        .join('\n')
+    })
   }
+}
+
+function gateReceipt(gate: { id: string; task_id: string; status: string }) {
+  return { gateId: gate.id, taskId: gate.task_id, status: gate.status }
 }

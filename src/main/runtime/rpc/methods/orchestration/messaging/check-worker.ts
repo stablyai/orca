@@ -2,7 +2,7 @@ import type { MessageRow, MessageType, OrchestrationDb } from '../../../../orche
 import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages/role-mailbox-delivery'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { formatCheckBanners } from '../../../../orchestration/formatter'
+import { formatMessageBanner } from '../../../../orchestration/formatter'
 import { acknowledgedOnlyReceipt, deliveryReceipt, exposeMessages } from './mailbox-message-receipt'
 import { routeAllMailboxPages } from '../schemas'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
@@ -201,7 +201,7 @@ export async function checkWorkerMailbox(args: {
   }
   const formatted = (messages: MessageRow[]) =>
     params.format || params.inject
-      ? { formatted: formatCheckBanners(messages, params.compatibilityCliCommand) }
+      ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
       : {}
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const readPeek = () => db.getUnreadMessages(address, typeFilter)
@@ -210,8 +210,7 @@ export async function checkWorkerMailbox(args: {
       mailbox: mailboxIdentity,
       batch,
       acknowledged: acknowledged?.delivery.id ?? args.runAcknowledged,
-      format: params.format === true || params.inject === true,
-      cliCommand: params.compatibilityCliCommand
+      format: params.format === true || params.inject === true
     })
   // The receipt commits with the take, so --retry-request can always replay a handed-over batch.
   const takeDelivery = (wakeTypes?: MessageType[]) => {

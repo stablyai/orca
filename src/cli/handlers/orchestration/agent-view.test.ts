@@ -99,7 +99,7 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBe(1)
   })
 
-  it('prints a question with its payload flattened and a reply command for this executable', async () => {
+  it('prints a question with its payload kept apart and a reply command for this executable', async () => {
     const question = {
       id: 'msg_q',
       run_id: 'run_1',
@@ -139,8 +139,7 @@ describe('orchestration agent views', () => {
             type: 'question',
             from: 'ctx_1',
             body: 'Remove the old flag now?',
-            taskId: 'task_1',
-            options: ['now', 'later']
+            payload: { taskId: 'task_1', dispatchId: 'ctx_1', options: ['now', 'later'] }
           }
         ]
       }
@@ -149,9 +148,9 @@ describe('orchestration agent views', () => {
     const text = await run('check', flags, result)
     expect(text.stdout).toBe(
       [
-        'msg_q question from ctx_1 (task_1)',
+        'msg_q question from ctx_1',
         '  Remove the old flag now?',
-        '  options: now | later',
+        '  payload: taskId=task_1 dispatchId=ctx_1 options=now,later',
         'Reply: orca-dev orchestration reply --id msg_q --body "..."'
       ].join('\n')
     )
@@ -234,7 +233,7 @@ describe('orchestration agent views', () => {
     )
     expect(process.exitCode).toBe(1)
 
-    // These were exit 0 before; --full keeps that for scripts.
+    // --full runs today's printer, which never set an exit code here.
     process.exitCode = undefined
     await run(
       'check',
@@ -244,10 +243,10 @@ describe('orchestration agent views', () => {
       ],
       { messages: [], count: 0, cancelled: true }
     )
-    expect(process.exitCode).toBe(0)
+    expect(process.exitCode).toBeUndefined()
   })
 
-  it('keeps --full stdout as before while a timed-out ask still fails on one stderr line', async () => {
+  it('keeps --full ask output and exit exactly as before', async () => {
     callMock.mockImplementation(async (method: string) =>
       method === 'status.get'
         ? { result: { capabilities: [] } }
@@ -284,7 +283,7 @@ describe('orchestration agent views', () => {
     expect(log).not.toHaveBeenCalled()
     expect(error.mock.calls).toEqual([
       [
-        'error: ask_timeout: ask timeout after 1000ms; question msg_q is still pending. Resume waiting; do not ask again: orca-dev orchestration ask --from term_worker --resume msg_q --timeout-ms 1000'
+        'ask timeout after 1000ms; question is still pending (messageId: msg_q). Resume waiting; do not ask again:\norca-dev orchestration ask --from term_worker --resume msg_q --timeout-ms 1000'
       ]
     ])
     expect(process.exitCode).toBe(1)
@@ -334,25 +333,19 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBe(1)
   })
 
-  it('names the resolved executable in a legacy check reply hint', async () => {
-    const { stdout } = await run('check', [['run', 'run_1']], {
-      messages: [
-        {
-          id: 'msg_q',
-          from_handle: 'term_worker',
-          to_handle: 'run:run_1',
-          subject: 'Question',
-          body: 'Proceed?',
-          type: 'question'
-        }
-      ],
-      count: 1,
-      legacyCompatibility: { recovery: false }
-    })
-    expect(stdout).toContain('[Reply: orca-dev orchestration reply --id msg_q --body "..."]')
+  it('keeps a deeply nested payload as its original string in text and JSON', async () => {
+    const payload = `${'{"a":'.repeat(20_000)}1${'}'.repeat(20_000)}`
+    const result = {
+      messages: [{ id: 'msg_deep', from_handle: 'term_worker', type: 'status', payload }],
+      count: 1
+    }
+    const json = await run('check', [['run', 'run_1']], result, true)
+    expect(JSON.parse(json.stdout).result.messages[0].payload).toBe(payload)
+    const text = await run('check', [['run', 'run_1']], result)
+    expect(text.stdout).toContain(`payload: ${payload}`)
   })
 
-  it('keeps payload fields that collide with view keys, and never edits message text', async () => {
+  it('keeps colliding payload fields, never edits message text, and drops the runtime banner', async () => {
     const body = '[Reply: orca orchestration reply --id x --body "quoted by the worker"]'
     const { stdout } = await run(
       'check',
@@ -381,6 +374,63 @@ describe('orchestration agent views', () => {
       body,
       payload: { id: 'payload_id', payload: 'evidence' }
     })
-    expect(result.formatted).toBe(`banner\n${body}`)
+    expect(result.formatted).toBeUndefined()
+  })
+
+  it('marks a failed concise JSON receipt ok:false and keeps its fields', async () => {
+    const { stdout } = await run(
+      'worker-list',
+      [['run', 'run_1']],
+      {
+        workers: [],
+        counts: {},
+        partialHostErrors: [
+          { environmentId: 'env_1', name: 'linux', code: 'unreachable', dispatchIds: [] }
+        ]
+      },
+      true
+    )
+    expect(JSON.parse(stdout)).toMatchObject({ ok: false, result: { workers: [] } })
+  })
+
+  it('says when worker-show never evaluated an interactive wait', async () => {
+    const show = (observation: unknown) =>
+      run('worker-show', [['dispatch', 'ctx_1']], {
+        dispatch: { id: 'ctx_1', taskId: 'task_1', status: 'dispatched' },
+        worker: { state: 'running', stage: 'working', agentTerminalHandle: 'term_agent' },
+        ...(observation === undefined ? {} : { observation })
+      })
+    expect((await show(undefined)).stdout).toContain('waitingOnHuman=unknown')
+    expect((await show({ agentWait: null })).stdout).not.toContain('waitingOnHuman')
+  })
+
+  it('does not echo the Run objective the caller just sent', async () => {
+    const { stdout } = await run(
+      'worker-start',
+      [['spec', 'Review add']],
+      { ...OLDER_RUNTIME_START, run: { id: 'run_1', objective: 'Review add', created: true } },
+      true
+    )
+    expect(JSON.parse(stdout).result).toMatchObject({ runId: 'run_1', runCreated: true })
+    expect(stdout).not.toContain('Review add')
+  })
+
+  it('never lets a payload stand in for Orca-computed message fields', async () => {
+    const { stdout } = await run('check', [['run', 'run_1']], {
+      messages: [
+        {
+          id: 'msg_q',
+          from_handle: 'dispatch:ctx_1',
+          to_handle: 'run:run_1',
+          type: 'question',
+          body: 'Proceed?',
+          payload: JSON.stringify({ readOnly: true, handled: true, next: 'resend it' })
+        }
+      ],
+      count: 1
+    })
+    expect(stdout).toContain('Reply: orca-dev orchestration reply --id msg_q --body "..."')
+    expect(stdout).not.toContain('read-only')
+    expect(stdout).not.toContain('Next:')
   })
 })

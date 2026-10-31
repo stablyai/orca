@@ -17,8 +17,8 @@ export type CliErrorContext = {
   repoSelector?: string
   /** True when --environment, --pairing-code, --host runtime:, or their env vars chose a server. */
   remoteServerSelected?: boolean
-  /** Orchestration failures also print one `error: <code>: <message>` line; `full` keeps the pretty envelope. */
-  orchestrationOutput?: 'concise' | 'full'
+  /** Concise orchestration failures: compact JSON plus one `error: <code>: <message>` stderr line. */
+  conciseOrchestration?: boolean
 }
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
@@ -131,18 +131,18 @@ function formatRuntimeUnavailableError(message: string, data: unknown): string {
 
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
   const selector = contextRecovery(cliErrorCode(error), context)
-  const orchestration = context.orchestrationOutput
+  const concise = context.conciseOrchestration
   if (json) {
     const response = cliErrorJsonResponse(error, context, selector)
     console.log(
-      orchestration === 'concise'
+      concise
         ? JSON.stringify({ ok: false, error: response.error })
         : JSON.stringify(response, null, 2)
     )
-    if (orchestration) {
+    if (concise) {
       console.error(formatOrchestrationErrorLine(response.error.code, response.error.message))
     }
-  } else if (orchestration) {
+  } else if (concise) {
     // Recovery detail goes to stdout so stderr stays the one-line failure.
     const [first = '', ...detail] = formatCliError(error, context).split('\n')
     if (detail.length > 0) {

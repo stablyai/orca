@@ -178,7 +178,10 @@ export class AcpStructuredOptions {
         // Fall back to the running session's menu when the advertised menu is empty.
         ...(advertised && (advertised.efforts.length > 0 || model.id !== currentModel)
           ? advertised
-          : sessionMenu)
+          : sessionMenu),
+        ...(advertised?.declaredDefaultEffort !== undefined
+          ? { declaredDefaultEffort: advertised.declaredDefaultEffort }
+          : {})
       }
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]

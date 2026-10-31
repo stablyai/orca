@@ -1,6 +1,6 @@
 import type { HandlerContext } from '../../dispatch'
-import { formatOrchestrationErrorLine } from '../../cli-error'
 import { printResult } from '../../format'
+import { formatOrchestrationErrorLine } from '../../cli-error'
 import { renderCommand } from '../../orchestration-mutation-recovery'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import type { RuntimeRpcSuccess } from '../../runtime-client'
@@ -13,64 +13,60 @@ export type OrchestrationFailure = {
   code: string
   message: string
   exitCode?: number
-  /** --full keeps the exit code scripts saw before the concise view. */
-  fullExitCode?: number
   level?: 'error' | 'warning'
 }
 
-/** What one command prints by default: the same small fields as one-line JSON or plain text. */
+/** What one command prints by default; --full skips it and runs today's printer instead. */
 export type OrchestrationAgentView<TResult, TFields extends AgentViewFields> = {
   fields: (result: TResult) => TFields
   /** Defaults to the shared field text; only prose (messages, answers) needs its own. */
   text?: (fields: TFields, result: TResult) => string
-  /** Today's text, printed by --full. */
-  fullText: (result: TResult) => string
   failure?: (result: TResult) => OrchestrationFailure | undefined
 }
 
 export function printOrchestrationResult<TResult, TFields extends AgentViewFields>(
   response: RuntimeRpcSuccess<TResult>,
-  ctx: Pick<HandlerContext, 'flags' | 'json'>,
+  json: boolean,
   view: OrchestrationAgentView<TResult, TFields>
 ): void {
-  if (ctx.flags.has('full')) {
-    printResult(response, ctx.json, view.fullText)
-  } else {
-    printOrchestrationFields(ctx.json, view.fields(response.result), (fields) =>
-      view.text ? view.text(fields, response.result) : formatAgentFieldsText(fields)
-    )
-  }
   const failure = view.failure?.(response.result)
+  printOrchestrationFields(
+    json,
+    view.fields(response.result),
+    (fields) => (view.text ? view.text(fields, response.result) : formatAgentFieldsText(fields)),
+    !failure || failure.exitCode === 0
+  )
   if (failure) {
-    reportOrchestrationFailure(
-      ctx.flags.has('full') && failure.fullExitCode !== undefined
-        ? { ...failure, exitCode: failure.fullExitCode }
-        : failure
-    )
+    reportOrchestrationFailure(failure)
   }
 }
 
-export function printOrchestrationFields<TFields extends AgentViewFields>(
+function printOrchestrationFields<TFields extends AgentViewFields>(
   json: boolean,
   fields: TFields,
-  text: (fields: TFields) => string
+  text: (fields: TFields) => string,
+  // A failed outcome reads ok:false even though its fields still describe what happened.
+  ok = true
 ): void {
-  console.log(json ? JSON.stringify({ ok: true, result: withNextLast(fields) }) : text(fields))
+  // Runtime next steps name `orca`; this is the one place they get the executable in use.
+  const resolved: TFields =
+    typeof fields.next === 'string'
+      ? { ...fields, next: resolveOrcaCommandsInText(fields.next) }
+      : fields
+  console.log(json ? JSON.stringify({ ok, result: withNextLast(resolved) }) : text(resolved))
 }
 
-/** Small receipts whose result already is the agent's fields; JSON only loses the envelope. */
+/** Receipts whose text is the same in both modes; --full is today's printResult, unchanged. */
 export function printOrchestrationReceipt<TResult extends AgentViewFields>(
   response: RuntimeRpcSuccess<TResult>,
   ctx: Pick<HandlerContext, 'flags' | 'json'>,
-  text: (result: TResult) => string,
-  failure?: (result: TResult) => OrchestrationFailure | undefined
+  text: (result: TResult) => string
 ): void {
-  printOrchestrationResult(response, ctx, {
-    fields: (result) => result,
-    text: (_, result) => text(result),
-    fullText: text,
-    failure
-  })
+  if (ctx.flags.has('full')) {
+    printResult(response, ctx.json, text)
+  } else {
+    printOrchestrationFields(ctx.json, response.result, text)
+  }
 }
 
 export function reportOrchestrationFailure(failure: OrchestrationFailure): void {
@@ -99,7 +95,8 @@ export function formatAgentFieldsText(fields: AgentViewFields): string {
   return withReceiptNext([head.join(' '), ...rows].filter(Boolean).join('\n') || 'none', { next })
 }
 
-function formatFieldPairs(fields: AgentViewFields, prefix = ''): string {
+/** `name=value` pairs with no `Next:` line, for sender-written data. */
+export function formatFieldPairs(fields: AgentViewFields, prefix = ''): string {
   return Object.entries(fields)
     .filter(([, value]) => value !== undefined)
     .map(([key, value]) =>
@@ -135,8 +132,7 @@ function withNextLast(fields: AgentViewFields): AgentViewFields {
   return { ...rest, next }
 }
 
-/** Commands printed by the runtime name `orca`; show the executable this agent actually runs. */
-export function resolveOrcaCommandsInText(text: string): string {
+function resolveOrcaCommandsInText(text: string): string {
   const executable = resolveOrchestrationCliExecutable()
   if (executable === 'orca') {
     return text
