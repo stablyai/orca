@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import { PLUGIN_TEMPLATE_NAMES, type PluginTemplateName } from './plugin-template-names'
+import type { PluginTemplate, PluginTemplateInput } from './plugin-template-files'
 import { renderPluginTemplate } from './plugin-templates'
 
 export type PluginCreateResult = {
@@ -52,11 +53,22 @@ export async function createPluginFromTemplate(input: {
   id?: string
   name?: string
 }): Promise<PluginCreateResult> {
+  const written = await writePluginFolder(input, (identity) =>
+    renderPluginTemplate(input.template, identity)
+  )
+  return { ...written, template: input.template }
+}
+
+/** Renders a plugin for the folder's identity into an empty folder, with the same guarantees. */
+export async function writePluginFolder(
+  input: { dir: string; publisher?: string; id?: string; name?: string },
+  render: (identity: PluginTemplateInput) => PluginTemplate
+): Promise<Omit<PluginCreateResult, 'template'>> {
   const dir = resolve(input.dir)
   const id = input.id ?? pluginIdFromFolder(dir)
   const publisher = input.publisher ?? 'your-github-user'
   const name = input.name ?? (titleFromId(id) || id)
-  const template = renderPluginTemplate(input.template, { publisher, id, name })
+  const template = render({ publisher, id, name })
   const manifest = parsePluginManifest(JSON.parse(template.files['orca-plugin.json']))
   if (!manifest.ok) {
     throw new PluginCreateError(
@@ -70,7 +82,7 @@ export async function createPluginFromTemplate(input: {
     await mkdir(dirname(target), { recursive: true })
     await writeFile(target, template.files[file], { flag: 'wx' })
   }
-  return { path: dir, template: input.template, pluginKey: `${publisher}.${id}`, files }
+  return { path: dir, pluginKey: `${publisher}.${id}`, files }
 }
 
 export const PLUGIN_TEMPLATE_LIST = PLUGIN_TEMPLATE_NAMES.map((name) => ({

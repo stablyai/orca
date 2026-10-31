@@ -28,6 +28,25 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['plugin', 'import-vscode-theme'],
+    summary: 'Convert a VS Code color theme into an Orca theme plugin',
+    usage:
+      'orca plugin import-vscode-theme <theme.json|extension dir> <dir> [--publisher <name>] [--id <id>] [--name <display name>] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'source', 'dir', 'publisher', 'id', 'name'],
+    positionalArgs: ['source', 'dir'],
+    notes: [
+      'Reads one theme file or every color theme a VS Code extension folder contributes, and writes an app theme for each plus a terminal palette from its terminal.ansi* colors.',
+      'Workbench colors map to Orca tokens by a fixed table; tokenColors carry over, include files are flattened, and semanticTokenColors and descendant scope selectors are dropped with a warning.',
+      'Writes into a new or empty folder, never overwrites, and checks the result like `orca plugin validate`. Themes are content only: loading them never needs approval.',
+      "Check the original theme's license before publishing the converted plugin.",
+      EXIT_CODES_NOTE
+    ],
+    examples: [
+      'orca plugin import-vscode-theme ./tokyo-night ./tokyo-night-orca --publisher acme',
+      'orca plugin import-vscode-theme ./OneDark-Pro.json ./one-dark-orca --json'
+    ]
+  },
+  {
     path: ['plugin', 'validate'],
     summary: 'Check a plugin folder, manifest or catalog the way Orca will load it',
     usage: 'orca plugin validate <dir|orca-plugin.json|orca-catalog.json> [--json]',

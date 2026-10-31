@@ -48,6 +48,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Plugins:',
   '  plugin create             Scaffold a plugin from a template',
+  '  plugin import-vscode-theme  Convert a VS Code color theme into a plugin',
   '  plugin validate           Check a plugin folder, manifest or catalog',
   '  plugin inspect            Show what a plugin would get and its content hash',
   '  plugin list               List plugins on the Orca host',

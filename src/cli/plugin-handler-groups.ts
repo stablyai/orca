@@ -4,7 +4,7 @@ import type { HandlerGroup } from './handler-group-manifest'
 export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'plugin-authoring',
-    keys: ['plugin create', 'plugin validate', 'plugin inspect'],
+    keys: ['plugin create', 'plugin import-vscode-theme', 'plugin validate', 'plugin inspect'],
     load: async () => (await import('./handlers/plugin-authoring.js')).PLUGIN_AUTHORING_HANDLERS
   },
   {
