@@ -84,6 +84,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 const defaultStoreState = {
+  unifiedTabsByWorktree: {},
   updateWorktreeMeta: vi.fn(),
   setWorktreesPinnedAndReveal: vi.fn(),
   workspaceStatuses: [],
@@ -111,13 +112,17 @@ vi.mock('@/store', () => ({
   )
 }))
 
-vi.mock('@/store/selectors', () => ({
-  useAllWorktrees: () => [],
-  useRepoById: (repoId?: string) =>
-    repoId ? { id: repoId, name: repoId, displayName: repoId } : undefined,
-  useRepoMap: () => new Map(),
-  useWorktreeMap: () => new Map()
-}))
+vi.mock('@/store/selectors', () => {
+  const emptyWorktrees: never[] = []
+  const emptyMap = new Map()
+  return {
+    getAllWorktreesFromState: () => emptyWorktrees,
+    useRepoById: (repoId?: string) =>
+      repoId ? { id: repoId, name: repoId, displayName: repoId } : undefined,
+    getRepoMapFromState: () => emptyMap,
+    getWorktreeMapFromState: () => emptyMap
+  }
+})
 
 vi.mock('./ProjectGroupNameDialog', () => ({
   ProjectGroupNameDialog: () => null

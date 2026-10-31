@@ -1,48 +1,16 @@
 import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE } from '../shared/managed-data-account-shell'
-import { getPowerShellCodexShellLaunchPreflight } from '../shared/codex-shell-function'
-import { getPowerShellClaudeShellFunction } from '../shared/claude-shell-function'
+import { getPowerShellAgentWrappers } from '../shared/powershell-agent-wrappers'
 export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
-/**
- * Why every PTY site delivers this payload as `-EncodedCommand` and keeps doing so.
- *
- * An MDE report named the base64 a contributing "suspicious PowerShell" signal and
- * pointed at VS Code as the counter-example. VS Code and its forks actually ship
- * `["-noexit","-command",'try { . "{0}\\...\\shellIntegration.ps1" } catch {}']` -- a
- * one-liner that dot-sources a *file*, not inline script. Dot-sourcing is
- * execution-policy gated; inline text is not. Measured on Windows 11:
- *
- *   policy        dot-source .ps1   -Command inline   -EncodedCommand
- *   Restricted    blocked           runs              runs
- *   AllSigned     blocked           runs              runs
- *   RemoteSigned  runs              runs              runs
- *
- * So VS Code's shape silently drops OSC 133 -- and with it foreground-process and
- * exit-code tracking -- on exactly the locked-down fleets MDE runs on; its `catch {}`
- * is that failure being swallowed.
- *
- * Inline `-Command` does carry this payload intact through node-pty/ConPTY (verified
- * on powershell.exe 5.1 and pwsh 7.6.5), so the switch is feasible; it is declined
- * because it costs more signal than it removes. No PTY site spells `-ExecutionPolicy
- * Bypass`, so base64 is the whole of what would go, and AMSI and script-block logging
- * decode it anyway -- nothing is hidden from MDE today. What would change is the
- * process command line, which would then carry `$ExecutionContext.SessionState.
- * LanguageMode`, a `function Global:prompt` override and `[char]27`-assembled control
- * sequences in clear text: higher-signal for command-line heuristics than an opaque
- * token with no `Bypass` beside it.
- *
- * The payload is also not static -- providers/windows-shell-args.ts appends the PTY
- * cwd and the queued startup command. #7978 had to move cmd.exe startup commands off
- * `/K` to stdin because node-pty's argv escaping mangled their quotes; PowerShell
- * never needed that workaround, because `-EncodedCommand` is quoting-proof.
- */
+// Inline scripts work under Restricted/AllSigned policies that block dot-sourced files.
+// EncodedCommand preserves quoting for appended cwd/startup commands; AMSI and script logging still decode it.
 const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerShell.
 # Profiles have already loaded normally by the time -EncodedCommand runs.
 # Restore managed ownership before the shell-integration compatibility guard.
 if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }
 ${MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE}
-if ($env:ORCA_MIMOCODE_HOME) { $env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME }
+if ($env:ORCA_MIMOCODE_CONFIG_DIR) { $env:MIMOCODE_CONFIG_DIR = $env:ORCA_MIMOCODE_CONFIG_DIR }
 if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
 
 if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
@@ -59,7 +27,7 @@ if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
     } catch { Write-Error $_ -ErrorAction Continue }
 
 ${getPowerShellOmpShellWrapper()}
-${getPowerShellCodexShellLaunchPreflight() + getPowerShellClaudeShellFunction()}
+${getPowerShellAgentWrappers()}
 
     $Global:__OrcaOsc133State = @{
         OriginalPrompt = $function:prompt
@@ -91,6 +59,19 @@ ${getPowerShellCodexShellLaunchPreflight() + getPowerShellClaudeShellFunction()}
         $result
     }
 
+    # Local ConPTY delivers real Alt+Left/Right (#29177); mirror Alt+B/F so Emacs-mode word motion survives.
+    if ($Global:__OrcaOsc133State.HasPSReadLine) {
+        & {
+            $bound = Get-PSReadLineKeyHandler -Bound -ErrorAction SilentlyContinue
+            foreach ($pair in ('LeftArrow', 'b'), ('RightArrow', 'f')) {
+                $source = $bound | Where-Object Key -ceq "Alt+$($pair[1])" | Select-Object -First 1
+                if ($source -and -not ($bound | Where-Object Key -eq "Alt+$($pair[0])")) {
+                    try { Set-PSReadLineKeyHandler -Chord "Alt+$($pair[0])" -Function $source.Function } catch {}
+                }
+            }
+        }
+    }
+
     if ($Global:__OrcaOsc133State.HasPSReadLine -and
         $null -ne $Global:__OrcaOsc133State.OriginalReadLine) {
         function Global:PSConsoleHostReadLine {
@@ -102,8 +83,19 @@ ${getPowerShellCodexShellLaunchPreflight() + getPowerShellClaudeShellFunction()}
 }
 `
 
+// Strip comments and indentation to leave command-line space for appended startup commands (no multi-line strings).
+const POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD = POWERSHELL_OSC133_BOOTSTRAP.replace(
+  /^[ \t]*#.*\n/gm,
+  ''
+).replace(/^[ \t]+/gm, '')
+
 export function getPowerShellOsc133Bootstrap(): string {
-  return POWERSHELL_OSC133_BOOTSTRAP
+  return POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD
+}
+
+// Startup commands run before the first prompt, which suppresses 133;D; mark them like typed commands.
+export function getPowerShellOsc133StartupCommandMark(): string {
+  return 'if (Test-Path variable:global:__OrcaOsc133State) { [Console]::Write("$([char]27)]133;C$([char]7)"); $Global:__OrcaOsc133State.HasSeenPrompt = $true }'
 }
 
 export function isPowerShellExecutableName(shellName: string): boolean {

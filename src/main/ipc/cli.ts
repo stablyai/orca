@@ -4,15 +4,23 @@ import { resolveAppImageCacheKey } from '../cli/appimage-extracted-root'
 import { CliInstaller } from '../cli/cli-installer'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import {
+  forgetWslCliRegistration,
   recordWslCliRegistrationInstalled,
   recordWslCliRegistrationRemoved
 } from '../cli/wsl-cli-registration-registry'
 import { WslCliInstaller } from '../cli/wsl-cli-installer'
-import { unreachableWslCliStatus, WslCliUnreachableError } from '../cli/wsl-cli-status'
+import {
+  deletedDistroWslCliStatus,
+  notRunningWslCliStatus,
+  unreachableWslCliStatus,
+  WslCliUnreachableError
+} from '../cli/wsl-cli-status'
 import { runSerializedWslCliRegistrationOperation } from '../cli/wsl-cli-registration-operation'
 import { getCanonicalUserDataPath } from '../persistence'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getDefaultWslDistro } from '../wsl'
+import { blockedWslDistroForExec, runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
+import { isWslDistroNotFoundFailure } from '../wsl/wsl-distro-unsupported'
 import { resolveAppImageRuntimeIdentity } from '../appimage-runtime-identity'
 
 const APPIMAGE_REPAIR_RETRY_MS = 30_000
@@ -61,10 +69,7 @@ async function persistWslCliRegistration(
   try {
     await operation()
   } catch (error) {
-    // Why: the WSL file operation already succeeded; advisory metadata must
-    // not turn that success into a false Settings failure. The atomic write
-    // left the prior registry intact, and repair is disk-authoritative, so a
-    // stale entry self-corrects on the next startup probe.
+    // Advisory metadata failure must not invalidate the completed WSL write; startup repair reads authoritative disk state.
     console.warn(
       `[wsl-cli] Failed to persist ${action} registration metadata:`,
       error instanceof Error ? error.message : String(error)
@@ -76,8 +81,7 @@ async function hydrateLocalShellPathForCli(force = false): Promise<void> {
   if (process.platform === 'win32') {
     return
   }
-  // Why: CLI registration must match `which orca` in the user's terminal, not
-  // the sparse PATH a GUI-launched Electron process inherited from launchd.
+  // Match terminal PATH rather than the sparse environment inherited by GUI Electron.
   const hydration = await hydrateShellPath(force ? { force: true } : undefined)
   if (hydration.ok) {
     mergePathSegments(hydration.segments)
@@ -94,7 +98,7 @@ export function registerCliHandlers(): void {
     await hydrateLocalShellPathForCli()
     const installer = new CliInstaller()
     const status = await installer.getStatus()
-    // Why: an AppImage update replaces the outer file while the managed symlink still targets the prior extracted payload.
+    // AppImage updates replace the outer file while managed links can retain the old extracted payload.
     const repairKey = resolveStaleAppImageRepairKey(status)
     if (!repairKey || installer.isAppImageRegistrationOwnedBySibling(status)) {
       return status
@@ -140,21 +144,29 @@ export function registerCliHandlers(): void {
 
   ipcMain.handle(
     'cli:getWslInstallStatus',
-    async (_event, args?: { distro?: string | null }): Promise<CliInstallStatus> => {
-      // Why: status is a read-only probe; queuing it behind a long-running
-      // repair/install would hang the Settings spinner for its duration, and
-      // Settings re-polls, so a rare transient read self-corrects.
+    async (
+      _event,
+      args?: { distro?: string | null; wakeWslDistro?: boolean }
+    ): Promise<CliInstallStatus> => {
+      // Keep status reads independent of long repairs; re-polling corrects transient state.
       const distro = resolveWslCliDistro(args)
-      try {
-        return await new WslCliInstaller({ distro }).getStatus()
-      } catch (error) {
-        // Why: a cold or busy distro is a retryable state for the Settings row,
-        // not a raw IPC rejection (#29497).
-        if (distro && error instanceof WslCliUnreachableError) {
-          return unreachableWslCliStatus(distro)
+      const readStatus = async (): Promise<CliInstallStatus> => {
+        // Opening Settings must not start a stopped distro (E9); its refresh button wakes it.
+        const blocked = await blockedWslDistroForExec(distro)
+        if (blocked) {
+          return notRunningWslCliStatus(blocked.distro, blocked.state)
         }
-        throw error
+        try {
+          return await new WslCliInstaller({ distro }).getStatus()
+        } catch (error) {
+          // Cold/busy distros are retryable Settings states, not raw IPC failures (#29497).
+          if (distro && error instanceof WslCliUnreachableError) {
+            return unreachableWslCliStatus(distro)
+          }
+          throw error
+        }
       }
+      return args?.wakeWslDistro ? runAsWslExecUserAct(distro, readStatus) : readStatus()
     }
   )
 
@@ -180,7 +192,20 @@ export function registerCliHandlers(): void {
     async (_event, args?: { distro?: string | null }): Promise<CliInstallStatus> => {
       const distro = resolveWslCliDistro(args)
       return runWslCliRegistrationOperation(distro, async () => {
-        const status = await new WslCliInstaller({ distro }).remove()
+        let status: CliInstallStatus
+        try {
+          status = await new WslCliInstaller({ distro }).remove()
+        } catch (error) {
+          if (!distro || !isWslDistroNotFoundFailure(error)) {
+            throw error
+          }
+          // Nothing is left inside a deleted distro; only Orca's bookkeeping still names it.
+          await persistWslCliRegistration(
+            () => forgetWslCliRegistration(getCanonicalUserDataPath(), distro),
+            'remove'
+          )
+          return deletedDistroWslCliStatus(distro)
+        }
         if (distro && status.state === 'not_installed') {
           await persistWslCliRegistration(
             () => recordWslCliRegistrationRemoved(getCanonicalUserDataPath(), distro),

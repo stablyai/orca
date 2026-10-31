@@ -15,6 +15,23 @@ describe('mobile endpoint hysteresis', () => {
     expect(policy.recordDirectSuccess(60_000)).toBe(false)
     expect(policy.recordDirectSuccess(75_000)).toBe(false)
     expect(policy.recordDirectSuccess(90_000)).toBe(true)
+
+    const insufficientSamples = new MobileEndpointHysteresis(0, options)
+    expect(insufficientSamples.recordDirectSuccess(60_000)).toBe(false)
+    expect(insufficientSamples.recordDirectSuccess(90_000)).toBe(false)
+    expect(insufficientSamples.recordDirectSuccess(90_000)).toBe(true)
+
+    const shortObservation = new MobileEndpointHysteresis(0, options)
+    expect(shortObservation.recordDirectSuccess(60_000)).toBe(false)
+    expect(shortObservation.recordDirectSuccess(60_001)).toBe(false)
+    expect(shortObservation.recordDirectSuccess(60_002)).toBe(false)
+    expect(shortObservation.recordDirectSuccess(90_000)).toBe(true)
+
+    const shortDwell = new MobileEndpointHysteresis(0, options)
+    expect(shortDwell.recordDirectSuccess(0)).toBe(false)
+    expect(shortDwell.recordDirectSuccess(15_000)).toBe(false)
+    expect(shortDwell.recordDirectSuccess(30_000)).toBe(false)
+    expect(shortDwell.recordDirectSuccess(60_000)).toBe(true)
   })
 
   it('resets progress and observes cooldown after a failure', () => {

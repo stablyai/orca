@@ -13,7 +13,7 @@ import {
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -30,7 +30,6 @@ afterEach(() => {
   }
 })
 
-/** One tab with leftovers a full load-and-save rewrite would drop or renumber. */
 async function storeWithLeftovers(): Promise<Store> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-pane-admission-'))
   directories.push(directory)
@@ -88,7 +87,6 @@ describe('a runtime pane in a layout-owner build', () => {
     const record = { ...split, newLeafId: NEW_LEAF }
     await store.admitTerminalPane(admission)
 
-    // Main still holds it: the window's record changes nothing.
     await store.applyLayoutCommand(record)
     expect(leafIds(root(store))).toEqual([LEAF, NEW_LEAF])
 

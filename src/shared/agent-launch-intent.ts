@@ -1,26 +1,13 @@
-/**
- * What a caller asks for when it wants an agent running somewhere, independent of which surface
- * asked and of whether the answer turns out to be a structured session or a terminal.
- *
- * Every launch surface builds one of these: the renderer's agent tabs and workspace creates,
- * mobile's create sheet and new-tab button, `orchestration.workerStart`, and the CLI. The host
- * resolves it once — settings default plus per-launch feasibility from
- * `structured-native-chat-launch-route` — so no surface carries its own copy of that decision.
- *
- * The intent deliberately does NOT name a mode. A caller states what it wants to happen, not how
- * to deliver it; picking structured vs terminal is the host's job and is reported back in the
- * receipt rather than requested here.
- */
+/** One launch intent for desktop/mobile/CLI/orchestration; the host resolves settings and per-launch feasibility once and reports the created surface. */
 
 import type { TuiAgent } from './tui-agent'
+import type { AgentLaunchSurface } from './agent-launch-surface'
 
 /** How a launch's initial text reaches the agent. */
 export type AgentLaunchPromptDelivery =
   /** Sent as the agent's first turn once it is ready. */
   | 'submit'
-  /** Left unsent for the user to edit and send. Historically this forced a terminal, because a
-   *  draft lived in the TUI's input and chat only mirrored it; a structured session accepts one
-   *  directly, so it no longer decides the route. */
+  /** Unsent text for editing; structured sessions accept drafts directly, so this no longer forces a terminal. */
   | 'draft'
 
 export type AgentLaunchPrompt = {
@@ -28,87 +15,52 @@ export type AgentLaunchPrompt = {
   delivery: AgentLaunchPromptDelivery
 }
 
-/**
- * Where the agent lands.
- *
- * `create-worktree` is part of the intent rather than a separate call the caller makes first,
- * because the route cannot be settled before the workspace exists: `agentSession.createSupport`
- * can only answer for a workspace the host can resolve. Splitting the two is exactly what made
- * every new-worktree launch a terminal — the worktree was created agent-first, so the structured
- * branch below it was unreachable.
- */
+/** Create the workspace inside launch: structured support cannot be resolved before it exists, and agent-first creation bypassed that route. */
 export type AgentLaunchTarget =
   /** A workspace that already exists, addressed by any selector the runtime resolves. */
   | {
       kind: 'existing'
       worktree: string
-      /** The workspace root the host resolved for that selector. Host-set, never accepted from a
-       *  caller: it decides whether a requested `cwd` names the root or somewhere else. */
+      /** Host-resolved workspace root; never caller-set because it determines whether cwd is outside the root. */
       workspacePath?: string
-      /** The workspace's SSH connection, `null` when local. Host-set, like `workspacePath`: it
-       *  decides whether the window can read the agent's transcript, so which view the tab opens in. */
+      /** Host-resolved SSH connection; transcript accessibility decides which view opens. */
       connectionId?: string | null
     }
-  /** A worktree this launch creates. `create` is the `worktree.create` request minus its agent
-   *  fields — the launch owns those, so a caller cannot set a startup agent behind the router. */
+  /** Launch owns agent fields; create params cannot bypass its router with a startup agent. */
   | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
   /** A folder workspace this launch creates. `create` is the `folderWorkspace.create` request. */
   | { kind: 'create-folder-workspace'; create: Readonly<Record<string, unknown>> }
 
-/** An existing terminal the caller wants reused rather than a fresh surface. Always resolves to a
- *  terminal agent: a running PTY keeps its execution transport. */
+/** A reused PTY retains its execution transport and always resolves to a terminal agent. */
 export type AgentLaunchReusedTerminal = { handle: string }
 
 export type AgentLaunchIntent = {
   agent: TuiAgent
   target: AgentLaunchTarget
   prompt?: AgentLaunchPrompt
-  /** Seeded launch options: narrowed to what a structured create accepts, and read as the model,
-   *  effort and mode preferences of a terminal launch. */
+  /** Structured create options also supply terminal model/effort/mode preferences. */
   sessionOptions?: Readonly<Record<string, unknown>>
+  chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: AgentLaunchReusedTerminal
-  /**
-   * Per-call replacement for the user's configured launch arguments, as a saved launch recipe
-   * carries. Tri-state and must stay so: absent means "use the settings default", `null` means the
-   * caller explicitly wants none, and collapsing the two would make a recipe that clears its args
-   * silently inherit whatever the settings happen to hold.
-   *
-   * Deliberately NOT a route input. Structured chat reads the execution host's saved Arguments;
-   * per-call overrides remain terminal-only and the host reports that in `warning`.
-   */
+  /** Tri-state arguments: absent uses defaults, null explicitly clears them. Overrides remain terminal-only; structured chat uses host settings and reports a warning. */
   agentArgs?: string | null
-  /**
-   * Where the agent starts, when that is not the workspace root — a resumed session's recorded
-   * subdirectory is the case that needs it.
-   *
-   * Unlike `agentArgs` this one DOES decide the route: only a terminal can be started somewhere
-   * other than its workspace, so a launch carrying one downgrades with `tui_launch_command` rather
-   * than running a structured session in the wrong directory.
-   */
+  /** An outside-workspace cwd forces a terminal via tui_launch_command; structured sessions cannot start in another directory. */
   cwd?: string
-  /**
-   * Which surface the user acted on, for the `agent_started` telemetry triple. Never read as
-   * behaviour — the host derives the other two members of that triple and this one is the only part
-   * it cannot know.
-   */
+  /** Caller-only UI source for agent_started telemetry; never affects launch behavior. */
   launchSource?: string
-  /** The `tabId:leafId` a terminal launch creates its pane under, for a caller that places its own
-   *  tabs. Not a route input; refused when that pane is already live. */
+  /** Caller-placed tab's pane identity; not a route input, and refused if already live. */
   paneKey?: string
-  /** The caller-minted id of the chat session a structured launch creates. Not a route input;
-   *  refused when that session already exists. */
+  /** Caller-minted chat identity; not a route input, and refused if already present. */
   sessionId?: string
   /** Account routing env for a terminal agent (`agent.launch`'s `accountEnv`). Not a route input. */
   accountEnv?: Readonly<Record<string, string>>
   /** `agent.launch`'s `nativeChatDefault`: the caller's chat default in place of the host's own. */
   nativeChatDefault?: boolean
+  /** `agent.launch`'s `surface`: the user's pick for this launch, ahead of either default. */
+  surface?: AgentLaunchSurface
 }
 
-/**
- * Where in the workspace's tab layout a new tab goes: a group, the tab it follows (a host tab id; a
- * terminal's tab is the tab half of its pane key), or both. Never fails a launch: a group that is
- * gone falls back to the anchor's group, then to the active one.
- */
+/** Placement cannot fail a launch: missing groups fall back to the anchor's group, then the active group. */
 export type AgentLaunchPlacement = { groupId?: string; afterTabId?: string }
 
 /** Whether the caller's own view moves to the new tab. Never names another viewer's screen. */
@@ -127,62 +79,27 @@ export type AgentLaunchOutcome =
       kind: 'structured'
       sessionId: string
       handle: string
-      /** The host-owned id of the tab that shows this chat: the tab half of the reserved `paneKey`
-       *  when one was sent, else the one the host gave its tab. Identity, not placement, like the
-       *  terminal arm's `paneKey`. Absent from hosts that predate it. */
+      /** Host-owned chat tab identity, derived from a reserved pane or minted; absent on older hosts. Placement stays client-owned. */
       tabId?: string
     }
   | {
       kind: 'terminal'
       handle: string
-      /**
-       * The pane the host minted for this agent, as `tabId:leafId` — read it with `parsePaneKey`.
-       *
-       * Identity, not placement. The host already mints this pair, bakes it into the PTY's
-       * environment and hands it to its own reveal; a client that draws its own tabs previously had
-       * no way to learn it, because a `term_*` handle is a main-side mapping the renderer cannot
-       * resolve. Where that pane goes — which group, what order, whether it takes focus — stays
-       * with the client and never rides this wire.
-       *
-       * One field rather than a `tabId`/`leafId` pair, because the key already carries both and two
-       * copies of one fact can disagree.
-       *
-       * Absent when this launch minted no pane, such as a reused terminal that was already running,
-       * or when the runtime could not report the pane it created.
-       */
+      /** Host-minted tabId:leafId identity lets clients resolve the created pane; placement stays client-owned. Absent for reused PTYs or runtimes unable to report it. */
       paneKey?: string
     }
-/**
- * What became of the launch text.
- *
- * An enum rather than a boolean because "not delivered" and "handed to a surface that delivers it
- * out of band" are different answers, and a caller deciding whether to resend needs to tell them
- * apart. A receipt may under-claim — reporting a delivery it cannot vouch for as `not-delivered` is
- * a wasted resend, while over-claiming loses the text silently.
- */
+/** Report delivery precisely: under-claiming risks a resend, while over-claiming silently loses the prompt. */
 export type AgentLaunchPromptOutcome = AgentLaunchPromptDisposal['outcome']
 
-/** `messageId` hangs off the `journaled` arm rather than sitting optional beside all three: a
- *  producer must not be able to claim the text was committed and then not say where. */
+/** A journaled result must name its committed message; other delivery outcomes have none. */
 export type AgentLaunchPromptDisposal =
   /** Committed to the session's transcript, which `messageId` names. */
   | { outcome: 'journaled'; messageId: string }
-  /**
-   * Handed to a terminal agent, either on the launch command that started it or as a bracketed
-   * paste into its live PTY. No `messageId`, because a terminal keeps no transcript to name a row
-   * in: what the agent does with the text is observable only in the pane. The caller must NOT
-   * resend — a second paste arrives as a second turn, which is worse than the wasted resend
-   * `not-delivered` costs.
-   */
+  /** Handed to a launch command/live PTY; no journal row exists. Never resend or the agent receives a second turn. */
   | { outcome: 'handed-to-terminal' }
   /** Not delivered by this call; the caller still owns the text. */
   | { outcome: 'not-delivered' }
-  /**
-   * Only ever replayed, never a live answer: the host recorded the running agent, then stopped
-   * before the delivery reported back, so the text may or may not have arrived. The caller must not
-   * resend. Sent only to a caller advertising `agent.launch.prompt-unconfirmed.v1`; every other
-   * caller is refused with `agent_session_operation_unknown` instead.
-   */
+  /** Replay only: the host stopped mid-delivery, so never resend. Requires agent.launch.prompt-unconfirmed.v1; older clients receive agent_session_operation_unknown. */
   | { outcome: 'unconfirmed' }
 
 export type AgentLaunchPromptReceipt = {
@@ -193,17 +110,7 @@ export type AgentLaunchResult = {
   outcome: AgentLaunchOutcome
   /** The workspace the agent runs in, resolved or created. */
   worktreeId: string
-  /**
-   * The launch completed but something in it did not: a startup terminal that failed to spawn,
-   * untracked files that could not be copied. `worktree.create` returns this at the top level and
-   * mobile already surfaces it, so a launch that drops it lands the user on a workspace that is
-   * quietly incomplete.
-   *
-   * Top level rather than on the outcome, and deliberately the ONLY place a launch warning lives:
-   * it is produced by the create as often as by the surface, it applies to a structured session
-   * and a terminal alike, and a reader should not have to branch on `outcome.kind` to discover
-   * that the workspace it just opened is missing something.
-   */
+  /** Keep partial workspace/surface failures in one top-level warning for both launch modes; callers must surface incomplete creation. */
   warning?: string
   /** Why the outcome is what it is — always populated, so a downgrade is never silent. */
   receipt: AgentLaunchModeReceipt
@@ -215,10 +122,11 @@ export type AgentLaunchResult = {
 
 export type AgentLaunchMode = 'structured' | 'terminal'
 
-/** Why a launch ran in the mode it did. `user_default` is the preference being honoured; every
- *  other member is a reason the preference could not be applied to this launch. */
+/** Why a launch ran in the mode it did. `user_default` is the preference being honoured and
+ *  `requested` the caller's explicit pick; every other member is a reason a chat could not run. */
 export type AgentLaunchModeReason =
   | 'user_default'
+  | 'requested'
   | 'remote_execution_host'
   | 'reused_terminal'
   | 'agent_without_structured_session'
@@ -230,26 +138,21 @@ export type AgentLaunchModeReason =
   | 'wsl_execution_runtime'
   | 'codex_on_windows'
   | 'structured_unsupported_on_host'
+  | 'chat_runtime_not_installed'
 
 /** Restates `WorkerStartModeReceipt` in surface-neutral terms so orchestration's receipt and a
  *  mobile or renderer launch report the same vocabulary. */
 export type AgentLaunchModeReceipt = {
   /** The mode the launch actually ran in. */
   mode: AgentLaunchMode
-  /** The user's settings default for a new agent tab. */
+  /** The caller's explicit pick, else the user's settings default for a new agent tab. */
   preferred: AgentLaunchMode
   reason: AgentLaunchModeReason
   /** One sentence, always present, so a fallback is never silent. */
   detail: string
 }
 
-/**
- * Narrows a launch result read back from durable storage.
- *
- * Lives beside the type rather than in the store so the two cannot drift: a field added above and
- * not checked here is a field a replay can hand back unvalidated. Every optional field is checked
- * when present and ignored when absent, so a row written by an older host still reads.
- */
+/** Validate durable replay fields beside their types; absent optional fields remain compatible with older stored rows. */
 export function isAgentLaunchResult(value: unknown): value is AgentLaunchResult {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -312,9 +215,7 @@ function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
     return false
   }
   return outcome.kind === 'terminal'
-    ? // Checked when present, ignored when absent: a row written before this field existed, or by a
-      // runtime that minted no pane, still reads. Deliberately not parsed — a read-side shape rule
-      // stricter than the write side turns one odd row into a refused replay.
+    ? // Accept optional pane identity without stricter parsing than the writer; older/no-pane outcomes must replay.
       outcome.paneKey === undefined || typeof outcome.paneKey === 'string'
     : outcome.kind === 'structured' &&
         typeof outcome.sessionId === 'string' &&
@@ -341,8 +242,7 @@ function isAgentLaunchPromptDelivery(value: unknown): value is AgentLaunchPrompt
   return value === 'submit' || value === 'draft'
 }
 
-/** The agent fields a create payload must not carry: the launch owns placement, and a caller that
- *  sets one of these would route itself around the host's decision. */
+/** Create payloads cannot carry agent fields that bypass the host's launch router. */
 export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [
   'startupAgent',
   'startupCommand',
@@ -351,13 +251,10 @@ export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [
   'startupLaunchConfig',
   'startupEnv',
   'startupCommandDelivery',
-  // The launch carries its own; a create's copy would be a second, possibly contradicting, answer.
   'launchSource'
 ] as const
 
-/** Strips the reserved agent fields from a create payload. Callers migrating from
- *  `worktree.create` pass their existing params; this keeps a stale `startupAgent` from
- *  re-creating the agent-first path the router exists to replace. */
+/** Strip legacy startup fields so migrating create callers cannot recreate the agent-first route. */
 export function withoutReservedAgentCreateFields<Create extends Readonly<Record<string, unknown>>>(
   create: Create
 ): Create {

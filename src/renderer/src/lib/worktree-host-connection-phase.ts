@@ -2,7 +2,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import {
   selectRuntimeAwareSshConnectionGeneration,
   selectRuntimeAwareSshStatus
@@ -62,9 +62,7 @@ function derivePhase(
   if (isConnectingSshStatus(publishedStatus)) {
     return 'connecting'
   }
-  // Why: startup restoration dials the targets that were live at shutdown; until it publishes,
-  // a missing entry means "not dialed yet", not "disconnected". Restoration finishing (or
-  // degrading) ends this on its own.
+  // Missing startup SSH state means not dialed yet until restoration finishes or degrades.
   if (
     environmentId === null &&
     !state.terminalStartupRestorationReady &&
@@ -87,7 +85,8 @@ export function resolveWorktreeHostConnection(
   }
   const environmentId =
     environmentIdOverride === undefined
-      ? getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      ? // This phase reads only SSH state; its twin reads the direct connection.
+        runtimeEnvironmentIdUnlessTwin(state, worktreeId)
       : environmentIdOverride
   const publishedStatus = selectRuntimeAwareSshStatus(state, environmentId, targetId)
   const generation = selectRuntimeAwareSshConnectionGeneration(state, environmentId, targetId)

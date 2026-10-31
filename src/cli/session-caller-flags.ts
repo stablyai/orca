@@ -1,15 +1,4 @@
-/**
- * An agent session is its own orchestration caller. A flag that names the caller may restate that
- * session, but one naming anyone else is refused before any effect — never dropped, never allowed
- * to win. Against a host that predates session callers this is the only guard: such a host
- * would honor the flag as the caller, which is how a chat consumed a sibling's mail (#21097).
- *
- * Whether `--from`/`--terminal` names the caller or a target is declared on the command's spec
- * (`identityFlagRoles`) and checked once, here, at the CLI entry, so a handler cannot forget it.
- *
- * A `/clear`ed chat keeps its lineage root's address, which only the host's records can place, so
- * a session address that is not this session's own spelling goes to the host's canonical-id check.
- */
+// Fence caller flags before dispatch: older hosts would let a session act as another caller.
 
 import type { CommandSpec, IdentityFlag } from './command-spec'
 import { RuntimeClientError } from './runtime/types'
@@ -48,10 +37,7 @@ export function refuseConflictingSessionCallerFlags(
 
 const IDENTITY_FLAGS: readonly IdentityFlag[] = ['from', 'terminal']
 
-/**
- * The session's own spellings, plus the handle a structured worker session was minted. Plain
- * strings: this runs at the CLI entry for every command, before the address codec's module graph.
- */
+// Avoid loading the address codec graph at CLI entry for every command.
 function namesInjectedSession(value: string, sessionId: string, env: NodeJS.ProcessEnv): boolean {
   return (
     value === sessionId ||
@@ -60,7 +46,7 @@ function namesInjectedSession(value: string, sessionId: string, env: NodeJS.Proc
   )
 }
 
-/** A session address only the host can place: this session's `/clear` root, or someone else. */
+/** Only the host can distinguish this session's /clear lineage root from another caller. */
 export function sessionAddressForHost(
   value: string,
   sessionId: string,

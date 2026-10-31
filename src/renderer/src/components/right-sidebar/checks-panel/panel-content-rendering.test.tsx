@@ -10,8 +10,14 @@ vi.mock('../SourceControlAgentActionDialog', () => ({ SourceControlAgentActionDi
 
 import { ChecksPanelActiveContent } from './active-content'
 import { ChecksPanelEmptyContent } from './empty-content'
+import { getHostedReviewManualRefreshError } from '../github-refresh-error-copy'
+import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('checks panel concrete content', () => {
   it('renders the no-workspace empty state with its guidance', () => {
@@ -89,11 +95,125 @@ describe('checks panel concrete content', () => {
       suppressedGitHubPR: 42
     } as ChecksPanelEmptyContentModel
 
-    render(<ChecksPanelEmptyContent model={model} />)
+    const { rerender } = render(<ChecksPanelEmptyContent model={model} />)
 
     expect(screen.getByText('No pull request found')).toBeTruthy()
     expect(screen.queryByText('Pull request unlinked')).toBeNull()
+    rerender(
+      <ChecksPanelEmptyContent
+        model={{ ...model, manualRefreshError: getHostedReviewManualRefreshError('gitlab') }}
+      />
+    )
+    expect(screen.getByText('Refresh failed')).toBeTruthy()
+    expect(screen.getByText("Couldn't refresh from GitLab. Try again.")).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy()
   })
+
+  it.each([
+    [
+      'rate limited',
+      { status: 'error', errorType: 'rate_limited' },
+      'GitHub refresh paused',
+      'Orca will retry at',
+      true
+    ],
+    [
+      'signed out',
+      { status: 'error', errorType: 'auth' },
+      'GitHub authentication failed',
+      'Check the GitHub login',
+      false
+    ]
+  ] as const)(
+    'keeps the classified GitHub empty state over a manual failure (%s)',
+    (_name, refresh, title, nextStep, retryDisabled) => {
+      const now = Date.parse('2026-10-30T12:00:00Z')
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(now)
+      const model: ChecksPanelEmptyContentModel = {
+        activeReview: null,
+        activeWorktree: makeWorktree({ id: 'worktree-1', repoId: 'repo-1' }),
+        activeWorktreeId: 'worktree-1',
+        branch: 'without-pr',
+        checksPanelHasHardRefreshError: false,
+        checksPanelReviewLookup: 'unknown',
+        checksPanelReviewLookupResult: { state: 'unknown', openReviewUrl: null },
+        confirmedReadiness: { confirmed: false, needsPush: false },
+        conflictOperation: 'unknown',
+        createComposerOpen: false,
+        createPrError: null,
+        createPrPushFirst: false,
+        detachedHeadDisplay: null,
+        emptyRefreshing: false,
+        gitStatusInputs: { hasUncommittedChanges: false, remoteStatus: undefined },
+        gitStatusProbeErrorContextKey: null,
+        handleCancelGeneratePullRequestFields: vi.fn(),
+        handleCreatePullRequest: vi.fn(),
+        handleGeneratePullRequestFields: vi.fn(),
+        handleLinkSuppressedPullRequest: vi.fn(),
+        handlePrBaseChange: vi.fn(),
+        handlePrTitleChange: vi.fn(),
+        handlePublishBranch: vi.fn(),
+        handleRefresh: vi.fn(async () => {}),
+        handleSyncBranch: vi.fn(),
+        hardRefreshError: null,
+        hostedReviewCreateCopy: localizedHostedReviewCopy('github'),
+        hostedReviewCreateProvider: 'github',
+        hostedReviewCreation: null,
+        isCreatingPr: false,
+        isFolder: false,
+        isGitHubReviewContext: true,
+        isPublishingBranch: false,
+        isRemoteOperationActive: false,
+        isSyncingBranch: false,
+        linkedGitLabMR: null,
+        linkedPR: null,
+        linkedReviewNumber: null,
+        manualRefreshError: getHostedReviewManualRefreshError('github'),
+        panelContextKey: 'worktree-1::without-pr',
+        prAiGenerationEnabled: false,
+        prBase: '',
+        prBaseQuery: '',
+        prBaseResults: [],
+        prBaseSearchError: null,
+        prBaseSearchPending: false,
+        prBody: '',
+        prDraft: false,
+        prGenerateDisabled: false,
+        prGenerateDisabledReason: undefined,
+        prGenerateError: null,
+        prGenerating: false,
+        prNumber: null,
+        prRefreshState: {
+          ...refresh,
+          reason: 'manual',
+          updatedAt: now,
+          nextAutoRetryAt: now + 600_000,
+          retryDisabledUntil: retryDisabled ? now + 600_000 : undefined
+        },
+        prRepoDefaultBaseRef: null,
+        prStackedCreationSupported: false,
+        prTitle: '',
+        publishActionHasUncommittedChanges: false,
+        publishActionRemoteStatus: undefined,
+        setEmptyRefreshing: vi.fn(),
+        setPrBaseQuery: vi.fn(),
+        setPrBaseResults: vi.fn(),
+        setPrBody: vi.fn(),
+        setPrDraft: vi.fn(),
+        sourceControlAiActionsVisible: false,
+        stackParentReview: null,
+        suppressedGitHubPR: null
+      }
+
+      const { container } = render(<ChecksPanelEmptyContent model={model} />)
+
+      expect(container.textContent).toContain(title)
+      expect(container.textContent).toContain(nextStep)
+      expect(container.textContent).not.toContain('Refresh failed')
+      expect(container.textContent).not.toContain('Try again')
+    }
+  )
 
   it('renders the active review header and empty check/comment sections with accessible actions', () => {
     const model = {
@@ -115,6 +235,7 @@ describe('checks panel concrete content', () => {
       activeWorktreeId: 'worktree-1',
       agentComposerState: null,
       aiActionDisabledReason: undefined,
+      fixChecksDisabledReason: undefined,
       canTargetPRComments: false,
       checks: [],
       checksError: null,
@@ -127,7 +248,6 @@ describe('checks panel concrete content', () => {
       commentsLoading: false,
       commentsSelectionClearRequest: null,
       conflictDetailsRefreshing: false,
-      consumeClaimedCommentResolutionAfterDeliveryRef: { current: vi.fn() },
       detachedHeadDisplay: null,
       editingTitle: false,
       getGitLabProjectRef: vi.fn(() => null),
@@ -136,12 +256,11 @@ describe('checks panel concrete content', () => {
       handleDeleteComment: vi.fn(),
       handleEditComment: vi.fn(),
       handleFixChecksWithAI: vi.fn(),
-      handleLaunchAborted: vi.fn(),
-      handleLaunchAccepted: vi.fn(),
       handleLinkAnotherReview: vi.fn(),
       handleLoadCheckDetails: vi.fn(),
       handleOpenPR: vi.fn(),
       handleRefresh: vi.fn(),
+      manualRefreshError: null,
       handleOpenStackPR: vi.fn(),
       handleReplyToComment: vi.fn(),
       handleResolve: vi.fn(),
@@ -174,7 +293,7 @@ describe('checks panel concrete content', () => {
       titleSaving: false
     } satisfies ChecksPanelActiveContentModel
 
-    render(<ChecksPanelActiveContent model={model} />)
+    const { rerender } = render(<ChecksPanelActiveContent model={model} />)
 
     expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
     expect(screen.getByText('No checks configured')).toBeTruthy()
@@ -183,5 +302,30 @@ describe('checks panel concrete content', () => {
     expect(screen.getByRole('button', { name: '#42' }).getAttribute('title')).toContain(
       'Open on GitHub'
     )
+    const failedModel = {
+      ...model,
+      checksError: 'Previous detail error',
+      commentsError: 'Previous detail error',
+      manualRefreshError: getHostedReviewManualRefreshError('gitlab'),
+      activeReview: { ...model.activeReview, provider: 'gitlab' as const },
+      isRefreshing: true
+    }
+    rerender(<ChecksPanelActiveContent model={failedModel} />)
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('alert').textContent).toBe("Couldn't refresh from GitLab. Try again.")
+    expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
+    expect(screen.queryByText('Previous detail error')).toBeNull()
+    rerender(
+      <ChecksPanelActiveContent
+        model={{
+          ...failedModel,
+          activeReview: model.activeReview,
+          prRefreshState: { status: 'error', errorType: 'network', reason: 'manual', updatedAt: 1 }
+        }}
+      />
+    )
+    // The classified GitHub line says more than the manual failure, so it is the one shown.
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('alert').textContent).toContain('GitHub is unreachable right now')
   })
 })

@@ -1,16 +1,9 @@
-// The process's one durable agent-session record store, opened on its own.
-//
-// The launch ledger lives in this store, and admitting a launch is the first thing every replay-safe
-// `agent.launch` does — a terminal launch included. Reaching the store used to mean installing the
-// whole chat host (provider adapters, the host, the model catalog) first. The store is opened here
-// instead and the chat host, when something needs it, is built on this same instance: the store is
-// a single writer, so a second copy of it would diverge.
-//
-// Known edges, both reachable only once quit has begun (stop has no other production caller): a
-// stop whose host teardown fails empties the slot while that host still holds its store open, so a
-// later admission would open a second one; and a store opened after stop is closed by nothing but
-// process exit.
+// Launch admission opens the single-writer store before chat-host installation; both must reuse this instance.
+// Quit-only edge: failed host teardown can leave its connection open after releasing the slot; a post-stop open lasts until exit.
 
+import { existsSync } from 'node:fs'
+import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
+import { journalDatabaseHoldsAgentSessions } from '../native-chat/agent-session-journal/journal-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { openStructuredAgentSessionJournalDatabase } from './structured-agent-session-journal-open'
@@ -20,6 +13,7 @@ export type AgentSessionRecordStoreLocation = {
   stateDirectory: string
   hostId: string
   logger: StructuredAgentSessionLogger
+  legacySessionTabIds: readonly string[]
 }
 
 export type OpenedAgentSessionRecordStore = {
@@ -30,17 +24,31 @@ export type OpenedAgentSessionRecordStore = {
 type RecordStoreSlot = {
   stateDirectory: string
   opened: Promise<OpenedAgentSessionRecordStore>
-  /** Set once `opened` resolves, so a reader that must not wait can ask without awaiting. */
+  /** Nonawaiting readers can inspect the store only after open resolves. */
   store?: AgentSessionRecordStore
 }
 
 let opening: RecordStoreSlot | null = null
+const pendingDatabaseClose = new Set<JournalHostDatabase>()
+
+/** Keep failed standalone/open-failure closes owned until a later stop or open retries them. */
+export async function closeAgentSessionRecordStoreDatabase(
+  database?: JournalHostDatabase
+): Promise<void> {
+  if (database) {
+    pendingDatabaseClose.add(database)
+  }
+  for (const pending of pendingDatabaseClose) {
+    await pending.close()
+    pendingDatabaseClose.delete(pending)
+  }
+}
 
 export function openAgentSessionRecordStoreOnce(
   location: AgentSessionRecordStoreLocation
 ): Promise<OpenedAgentSessionRecordStore> {
   if (opening) {
-    // Loud rather than a silent second store: one process serves one profile.
+    // One process serves one profile; refuse location changes instead of opening a divergent second writer.
     if (opening.stateDirectory !== location.stateDirectory) {
       return Promise.reject(new Error('agent_session_record_store_location_changed'))
     }
@@ -54,7 +62,7 @@ export function openAgentSessionRecordStoreOnce(
         return opened
       },
       (error: unknown) => {
-        // A failed open must not poison the slot: the next caller retries.
+        // Failed opens must leave the next caller able to retry.
         if (opening === slot) {
           opening = null
         }
@@ -66,7 +74,6 @@ export function openAgentSessionRecordStoreOnce(
   return slot.opened
 }
 
-/** The store when it is already open; null while it opens or before anything asked for it. */
 export function peekOpenedAgentSessionRecordStore(): AgentSessionRecordStore | null {
   return opening?.store ?? null
 }
@@ -74,22 +81,43 @@ export function peekOpenedAgentSessionRecordStore(): AgentSessionRecordStore | n
 async function openRecordStore(
   location: AgentSessionRecordStoreLocation
 ): Promise<OpenedAgentSessionRecordStore> {
+  await closeAgentSessionRecordStoreDatabase()
   const journalDatabase = openStructuredAgentSessionJournalDatabase(location)
   try {
     return {
       journalDatabase,
-      store: AgentSessionRecordStore.open({ journalDatabase, hostId: location.hostId })
+      store: AgentSessionRecordStore.open({
+        journalDatabase,
+        hostId: location.hostId,
+        legacySessionTabIds: location.legacySessionTabIds
+      })
     }
   } catch (error) {
-    journalDatabase.close()
+    await closeAgentSessionRecordStoreDatabase(journalDatabase)
     throw error
   }
 }
 
-/** Empties the slot and hands back what it held, for whoever closes its database: the chat host's
- *  teardown when one was built on it, the caller otherwise. */
+/** Transfer ownership of the open slot to chat-host teardown or the caller that will close it. */
 export async function releaseAgentSessionRecordStore(): Promise<OpenedAgentSessionRecordStore | null> {
   const released = opening
   opening = null
   return released ? released.opened.catch(() => null) : null
+}
+
+/** Whether this profile holds a structured chat: a record or tab in the journal database. */
+export function hasPersistedStructuredAgentSessionStore(
+  stateDirectory: string,
+  fileExists: (path: string) => boolean = existsSync
+): boolean {
+  const databasePath = journalDatabasePath(stateDirectory)
+  if (!fileExists(databasePath)) {
+    return false
+  }
+  try {
+    return journalDatabaseHoldsAgentSessions(databasePath)
+  } catch {
+    // A database that cannot be read cannot say it is empty.
+    return true
+  }
 }

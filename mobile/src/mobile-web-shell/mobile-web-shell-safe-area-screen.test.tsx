@@ -20,7 +20,7 @@ vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'
 vi.mock('expo-router', mocks['expo-router'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
 vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
-vi.mock('../transport/client-context', mocks['../transport/client-context'])
+vi.mock('../transport/host-client-hooks', mocks['../transport/host-client-hooks'])
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
 vi.mock('./use-mobile-web-shell-session', mocks['./use-mobile-web-shell-session'])
 
@@ -45,10 +45,7 @@ beforeEach(() => {
   harness.resetScreenDependencies(dependencies)
 })
 
-/**
- * Every page pads for the system bars itself and gets the whole window, like a native screen: it
- * paints under both bars and its SafeAreaViews pad by the insets `init` carries.
- */
+// Give the page the whole window; its SafeAreaViews pad from init insets like native screens.
 describe('a page that owns its safe area', () => {
   async function openPage(sessionId: string) {
     dependencies.client = createFakeRpcClient()
@@ -66,7 +63,6 @@ describe('a page that owns its safe area', () => {
       })
     return { tree, root, initInsets }
   }
-  // A `ready` that declares nothing: every page the shell serves reads the insets.
   const ownedPage = openPage
   const WINDOW = { top: 44, right: 0, bottom: 8, left: 0 }
 

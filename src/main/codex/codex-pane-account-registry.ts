@@ -14,15 +14,7 @@ export type {
   CodexPaneHomeRoute
 } from './codex-pane-account-registry-types'
 
-/**
- * Remembers which Codex account each live PTY was launched under.
- *
- * Why: `CODEX_HOME` is baked into a PTY's environment at spawn and can never be
- * changed afterwards, so a shell keeps launching Codex against the account that
- * was selected when the terminal opened. The daemon keeps those shells alive
- * across app restarts, so without an on-disk record Orca forgets a pane is on
- * the old account and the user is stuck there with no prompt to escape it.
- */
+// Daemon PTYs retain spawn-time CODEX_HOME across app restarts; persist attribution for restart prompts.
 
 let cachedRegistry: CodexPaneAccountRegistryFile | null = null
 let cachedRegistryIsAuthoritative = true
@@ -31,13 +23,7 @@ function getRegistryPath(): string {
   return join(getOrcaUserDataPath(), 'codex-pane-accounts.json')
 }
 
-/**
- * `null` means the registry could not be READ. That is not the same as "no
- * panes are attributed", and it must never be cached: the old `catch { return
- * null }` collapsed both into an empty registry, so one unreadable read erased
- * every pane's account attribution AND pinned that erasure in `cachedRegistry`
- * for the rest of the process, surviving the file becoming readable again.
- */
+// Return uncached null on read errors; treating unreadable state as empty would erase attribution.
 function readRegistryOrNull(): CodexPaneAccountRegistryFile | null {
   if (cachedRegistry) {
     return cachedRegistry
@@ -52,9 +38,7 @@ function readRegistryOrNull(): CodexPaneAccountRegistryFile | null {
     cachedRegistry = parseRegistry(null)
     return cachedRegistry
   }
-  // Why: a corrupt registry still degrades to empty and IS cached — rebuilding
-  // unparseable state is the intent, and re-reading it every call would only
-  // repeat the parse failure.
+  // Cache salvaged/corrupt parse results; rereading unchanged bytes cannot recover more state.
   const parsedRegistry = parseRegistryJson(rawRegistry)
   cachedRegistryIsAuthoritative = isAuthoritativeRegistry(parsedRegistry)
   cachedRegistry = parseRegistry(parsedRegistry)
@@ -72,7 +56,7 @@ function parseRegistryJson(rawRegistry: string): unknown {
   }
 }
 
-/** Read-only callers: an unreadable registry reports no attribution, uncached. */
+// Callers may read pending mutations while the disk registry is unavailable.
 function readRegistry(): CodexPaneAccountRegistryFile {
   mutations.flush()
   if (!cachedRegistry) {
@@ -148,7 +132,7 @@ function isPaneAccountRecord(value: unknown): value is CodexPaneAccountRecord {
   )
 }
 
-// Why: older builds wrote 'custom-home' for a shared-home pane with a pane-local CODEX_HOME.
+// Older builds called shared-home panes with pane-local CODEX_HOME 'custom-home'.
 function readPaneHomeRoute(value: unknown): CodexPaneHomeRoute | undefined {
   if (value === 'custom-home') {
     return 'shared-home'
@@ -174,8 +158,7 @@ function writeRegistry(registry: CodexPaneAccountRegistryFile): boolean {
     cachedRegistryIsAuthoritative = true
     return true
   } catch (error) {
-    // Why: this record only powers a restart hint; losing it must never break a
-    // terminal spawn or a PTY teardown — including when the cleanup itself fails.
+    // Restart-hint persistence failures must not break PTY spawn/teardown, including cleanup failures.
     console.warn('[codex-pane-accounts] Failed to persist pane account registry:', error)
     try {
       rmSync(temporaryPath, { force: true })
@@ -189,26 +172,15 @@ const mutations = new CodexPaneAccountRegistryMutations({
   write: writeRegistry
 })
 
-/**
- * Records the account a PTY launched under. Pass null to forget a pinned pane.
- */
 export function recordCodexPaneAccount(ptyId: string, record: CodexPaneAccountRecord | null): void {
-  // Why: the spawn attribution is one-shot. Retain it while the registry is
-  // unreadable, then merge it with the recovered file instead of dropping it
-  // or rebuilding from an empty stand-in.
+  // Retain one-shot spawn attribution during read failures, then merge it into recovered state.
   mutations.record(ptyId, record)
 }
 
-/**
- * Drops a PTY's record once it exits.
- */
 export function forgetCodexPaneAccount(ptyId: string): void {
   recordCodexPaneAccount(ptyId, null)
 }
 
-/**
- * Returns the account a PTY launched under, or null when it was never recorded.
- */
 export function getCodexPaneAccount(ptyId: string): CodexPaneAccountRecord | null {
   return readRegistry().panes[ptyId] ?? null
 }
@@ -219,14 +191,7 @@ export function isCodexPaneHomeRouteProvenAwayFromSharedHome(
   return route === 'real-home' || route === 'account-home' || route === 'wsl-home'
 }
 
-/**
- * Reports the lane each given PTY launched from, omitting panes with no record.
- *
- * Why the renderer needs this: an account switch has to know which panes the
- * change could have stranded, and this key was written from the shell, cwd and
- * distro the spawn actually resolved. Re-deriving it from current settings
- * answers for a launch that never happened once the user edits those settings.
- */
+// Use actual spawn lanes for account-switch prompts; edited settings no longer describe retained panes.
 export function listRecordedCodexPaneLanes(ptyIds: readonly string[]): Record<string, string> {
   const registry = readRegistryOrThrow()
   const lanesByPtyId: Record<string, string> = {}
@@ -239,7 +204,7 @@ export function listRecordedCodexPaneLanes(ptyIds: readonly string[]): Record<st
   return lanesByPtyId
 }
 
-/** Reads restart-authoritative records without mapping an unavailable file to no attribution. */
+/** Restart decisions require authoritative attribution, not an unavailable-file fallback. */
 export function listRecordedCodexPaneAccounts(
   ptyIds: readonly string[]
 ): ReadonlyMap<string, CodexPaneAccountRecord> {
@@ -254,7 +219,6 @@ export function listRecordedCodexPaneAccounts(
   return records
 }
 
-/** True when a retained host pane may still read the retired shared CODEX_HOME. */
 export function hasRecordedLegacySharedCodexPane(): boolean {
   return Object.values(readRegistry().panes).some(
     (record) =>
@@ -263,7 +227,6 @@ export function hasRecordedLegacySharedCodexPane(): boolean {
   )
 }
 
-/** True when a retained WSL pane may still read the retired per-distro runtime home. */
 export function hasRecordedLegacyWslCodexPane(selectionKey: string): boolean {
   const registry = readRegistryOrThrow()
   return (
@@ -285,7 +248,6 @@ function wslSelectionKeysMatch(left: string, right: string): boolean {
   )
 }
 
-/** True when startup should reconcile a retained legacy WSL record with daemon inventory. */
 export function hasAnyRecordedLegacyWslCodexPane(): boolean {
   const registry = readRegistry()
   return (
@@ -298,7 +260,6 @@ export function hasAnyRecordedLegacyWslCodexPane(): boolean {
   )
 }
 
-/** True when startup may need to repair hooks for a retained managed host pane. */
 export function hasRecordedManagedHostCodexPane(): boolean {
   return Object.values(readRegistry().panes).some(
     (record) =>
@@ -309,11 +270,9 @@ export function hasRecordedManagedHostCodexPane(): boolean {
   )
 }
 
-/** Drops records whose daemon PTYs are authoritatively absent. */
+/** livePtyIds must be authoritative daemon inventory. */
 export function reconcileCodexPaneAccountsWithLivePtys(livePtyIds: readonly string[]): void {
-  // Why: this deletes every pane not in the live list. Against an empty stand-in
-  // it is a no-op, but the write it guards would still persist that stand-in
-  // over the real file, so refuse rather than reconcile a registry nobody read.
+  // Never persist an empty stand-in over a registry we could not read.
   mutations.flush()
   const registry = readRegistryOrNull()
   if (!registry) {

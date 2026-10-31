@@ -5,6 +5,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { markGitHubHostedReviewReadyForReview } from './hosted-review-github-actions'
 import { markGitLabHostedReviewReadyForReview } from './hosted-review-gitlab-actions'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function useReadyHostedReviewAction({
   reviewNumber,
@@ -44,8 +45,9 @@ export function useReadyHostedReviewAction({
             prRepo: githubPR?.prRepo ?? null
           })
       if (!result.ok) {
-        setActionError(result.error)
-        toast.error(result.error)
+        const message = codeHostErrorText(result)
+        setActionError(message)
+        toast.error(message)
         return
       }
       toast.success(
@@ -58,7 +60,13 @@ export function useReadyHostedReviewAction({
       await onRefreshReview()
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : `Failed to mark ${reviewLabel} ready for review`
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.right.sidebar.HostedReviewActions.markReadyFailed',
+              'Failed to mark {{review}} ready for review',
+              { review: reviewLabel }
+            )
       setActionError(message)
       toast.error(message)
     } finally {

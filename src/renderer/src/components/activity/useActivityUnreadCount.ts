@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
+import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
@@ -24,23 +24,18 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
   let count = 0
   const seenPaneKeys = new Set<string>()
 
-  // Why no worktree.isUnread here: Activity lists only agent threads, so a worktree
-  // unread would light a badge with no row to read and no way to clear it.
+  // Workspace unread flags have no Activity row to clear and must not light this badge.
   const countEntry = (entry: AgentStatusEntry, ackAt: number, live = false): void => {
-    // Why: "Clear completed" hides events at or before the pane's cutoff from the feed,
-    // so a hidden event must not keep the badge lit; treat the cutoff like an ack floor.
+    // Treat Clear completed’s per-pane cutoff as an acknowledgement floor so hidden events cannot keep the badge lit.
     const clearedAt = source.activityClearedAtByPaneKey?.[entry.paneKey] ?? 0
     const mutedAt = Math.max(ackAt, clearedAt)
-    // Why: Activity feed surfaces historical done/blocked/waiting events
-    // from stateHistory, so the titlebar badge must mirror that event count.
+    // Mirror the feed’s historical done/blocked/waiting event count.
     for (const history of entry.stateHistory) {
       if (isHistoricalActivityState(history.state) && mutedAt < history.startedAt) {
         count += 1
       }
     }
-    // Why: a session-boundary done is an idle connect (STA-3386), not an event to read.
-    // Why 'working' only: a monitoring turn surfaces through the live snapshot, never as an
-    // unread event, so counting it here would light the badge with no unread row to clear.
+    // Session-boundary idle connects (STA-3386) and monitoring snapshots create no unread events, so counting either would leave a badge with no row to clear.
     if (
       (isHistoricalActivityState(entry.state) ||
         (live && freshActivityLiveAgentState(entry, now) === 'working')) &&
@@ -83,9 +78,7 @@ export function useActivityUnreadCount(): number {
     activityClearedAtByPaneKey
   } = useAppStore(
     useShallow((state) => ({
-      // Why not the status map: the receipt is keyed on stateStartedAt, so same-turn heartbeats
-      // cannot change the count. The live reducer bumps this epoch on state/turn changes and when
-      // a stale entry revives; the freshness scheduler bumps it at the stale boundary.
+      // Same-turn heartbeats preserve receipts; reducer/freshness epoch changes cover turn/state changes, stale revival and expiry.
       agentStatusEpoch: state.agentStatusEpoch,
       migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
       retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,

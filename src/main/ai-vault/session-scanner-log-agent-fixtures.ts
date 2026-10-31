@@ -6,15 +6,6 @@ import {
 } from './session-scanner-test-fixtures'
 import { jsonlBody, type AgentVaultRoots } from './session-scanner-vault-roots'
 
-// The agents whose session is an append-only JSONL log the CLI writes a record
-// at a time. Split from the document-shaped agents purely by file size; the two
-// halves are called together and neither is meaningful alone.
-
-/**
- * Write one append-only transcript per log-shaped agent.
- * @param roots - The scan roots to write under.
- * @returns The transcript paths OMP and Prime Agent resume by.
- */
 export async function writeLogAgentFixtures(
   roots: AgentVaultRoots
 ): Promise<{ ompSessionFile: string; primeAgentSessionFile: string }> {
@@ -46,7 +37,6 @@ export async function writeLogAgentFixtures(
     ])
   )
 
-  // CodeBuddy writes its own message-record shape under its own root.
   await mkdir(join(roots.codebuddyProjectsDir, 'project'), { recursive: true })
   await writeFile(
     join(roots.codebuddyProjectsDir, 'project', 'codebuddy-session.jsonl'),

@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { connect, type Socket } from 'node:net'
 import { randomBytes } from 'node:crypto'
 import { RelayFrameBuffer } from '../../../shared/relay-frame-buffer'
@@ -20,10 +21,7 @@ import {
 } from './scrcpy-video-frame-parser'
 import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 
-// A live scrcpy session validated against a real emulator. The connection
-// handshake (dummy byte, 64-byte device name, codec meta) and the server option
-// set are coupled to the pinned scrcpy server version; pure video framing is
-// unit-tested, while this orchestration is exercised live via probes.
+// Handshake and server options must match the pinned scrcpy protocol version.
 
 const DEVICE_NAME_BYTES = 64
 const DUMMY_BYTE = 1
@@ -46,13 +44,10 @@ export type ScrcpyStreamOptions = {
 }
 
 function newScid(): string {
-  // scrcpy parses scid as a SIGNED 32-bit hex int, so mask to 31 bits and pad to
-  // 8 hex digits to match the server's own %08x format.
+  // scrcpy expects a signed 32-bit scid formatted as eight hex digits.
   return (randomBytes(4).readUInt32BE(0) & 0x7fffffff).toString(16).padStart(8, '0')
 }
 
-// A live scrcpy session: owns the server process, the adb tunnel, and the video
-// + control sockets. Created via ScrcpyStreamSession.start().
 export class ScrcpyStreamSession {
   private server: ChildProcess | null = null
   private videoSocket: Socket | null = null
@@ -119,9 +114,10 @@ export class ScrcpyStreamSession {
 
   private spawnServer(): void {
     const { sdk, serial, maxSize } = this.options
-    // The server is long-running, so spawn it directly rather than via the
-    // request/response command runner.
-    this.server = spawn(sdk.adb, startScrcpyServerArgs(serial, { scid: this.scid, maxSize }), {
+    // The command runner's timeout is unsuitable for the long-running server.
+    this.server = spawnProcess({
+      program: sdk.adb,
+      args: startScrcpyServerArgs(serial, { scid: this.scid, maxSize }),
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let serverLog = ''
@@ -145,16 +141,13 @@ export class ScrcpyStreamSession {
     this.openVideoSocket(0)
   }
 
-  // adb accepts the forwarded TCP connection before the server's abstract socket
-  // exists (then resets it), so retry until the server actually delivers bytes
-  // (the dummy byte). Only then is the connection real; connect control after.
+  // adb can accept TCP before scrcpy is ready; require its dummy byte before connecting control.
   private openVideoSocket(attempt: number): void {
     if (this.closed) {
       return
     }
     const socket = connect(this.port, '127.0.0.1')
-    // A failed connect emits both 'error' and 'close'; settle once so retries
-    // (and post-delivery close) don't fan out into exponential connection storms.
+    // error and close can both fire; settle once to avoid duplicate retry chains.
     let settled = false
     const retry = (): void => {
       if (settled || this.closed) {
@@ -184,8 +177,7 @@ export class ScrcpyStreamSession {
     })
     socket.once('error', retry)
     socket.once('close', retry)
-    // adb may accept the forwarded TCP connection but never deliver if the server
-    // stalls; a short idle timeout retries instead of hanging the connect forever.
+    // Retry accepted connections that never deliver the readiness byte.
     socket.setTimeout(2000, retry)
   }
 
@@ -232,9 +224,7 @@ export class ScrcpyStreamSession {
       shouldResolveReady = true
       buffer.discard(12)
     }
-    // The parser throws on a desynced stream (e.g. an absurd frame size); catch
-    // it here so it fails the session via the normal teardown path rather than
-    // surfacing as an unhandled exception in this socket 'data' listener.
+    // Route malformed frames through session teardown instead of throwing from the data listener.
     let frames: ScrcpyVideoFrame[]
     try {
       frames = parseScrcpyVideoFrames(buffer)

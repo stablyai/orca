@@ -166,8 +166,7 @@ export function SettingsSidebar({
     [settings, systemPrefersDark]
   ) as CSSProperties | undefined
   const setupActive = activeSectionId === 'setup-guide'
-  // Why: "Hide from sidebar" only hides the top-left app sidebar prompt;
-  // Settings should remain a stable place to reopen the checklist.
+  // Hiding the app-sidebar prompt must not remove Settings’ stable checklist entry.
   const showSetupGuideTopRow =
     setupGuideProgress.ready && setupGuideProgress.doneCount < setupGuideProgress.total
   const navItemClassName = (isActive: boolean): string =>

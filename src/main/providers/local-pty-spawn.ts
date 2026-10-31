@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import { JCODE_RUNTIME_DIR_ENV_KEY } from '../../shared/jcode-runtime-dir'
-import { prewarmJcodeDaemon } from '../jcode/daemon-prewarm'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
 import { finalizeLocalPtySpawnEnvironment } from './local-pty-finalize-environment'
 import { normalizeLocalCallerSessionId } from './local-pty-launch-helpers'
 import { createLocalPtyLaunchPlan, DeferredLocalPtyLaunchPlan } from './local-pty-launch-plan'
+import { holdPassiveRestoreOfStoppedWslDistro } from '../daemon/daemon-wsl-passive-restore-hold'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import { validateWorkingDirectory, WorkingDirectoryValidationAbortedError } from './local-pty-utils'
 import { allocatePtyId, ptyShutdownOperations } from './local-pty-provider-state'
@@ -44,18 +44,12 @@ export async function spawnLocalPty(
   if (args.attachOnly) {
     throw new SessionNotFoundError(args.sessionId ?? '')
   }
-  // Why: the jcode runtime dir is stamped into the spawn env by the pty:spawn
-  // handler and the runtime env builder; create it async here at the provider
-  // chokepoint both paths pass through, keeping the sync spawn path free of
-  // filesystem syscalls.
   const jcodeRuntimeDir = args.env?.[JCODE_RUNTIME_DIR_ENV_KEY]
   if (jcodeRuntimeDir) {
     try {
       await mkdir(jcodeRuntimeDir, { recursive: true })
     } catch {
-      // Why non-fatal: the dir is stamped on every local pane, so an EACCES on a
-      // shared /tmp/orca-jcode or a read-only TMPDIR would otherwise stop a plain
-      // shell from opening. Drop the variable and let jcode use its own default.
+      // Runtime-dir failure must not block ordinary shells; let jcode choose its own default.
       delete args.env?.[JCODE_RUNTIME_DIR_ENV_KEY]
     }
   }
@@ -69,11 +63,14 @@ export async function spawnLocalPty(
       plan = plan.finish(available)
     }
     throwIfCanceled()
+    // Daemon-off (the daemon failed to start) a restore spawns here: same E9 hold as the daemon's.
+    await holdPassiveRestoreOfStoppedWslDistro(args, plan.launchWslDistro ?? undefined)
+    throwIfCanceled()
     if (args.prevalidatedCwd !== plan.validationCwd) {
       try {
         await validateWorkingDirectory(plan.validationCwd, cancellation)
       } catch (error) {
-        // Why: an abandoned probe keeps running for other waiters; report the spawn's own cancel.
+        // Shared validation may continue for other waiters; surface this spawn cancellation independently.
         if (error instanceof WorkingDirectoryValidationAbortedError) {
           throwIfCanceled()
         }
@@ -96,16 +93,6 @@ export async function spawnLocalPty(
       plan,
       env: finalEnv
     })
-    // Why here rather than beside the mkdir above: the daemon inherits this env, and
-    // only finalEnv carries the hook port and token that buildPtyHostEnv adds — the
-    // managed hook script exits without them, so a daemon warmed from the raw spawn
-    // env would report no lifecycle events at all.
-    prewarmJcodeDaemon({
-      launchAgent: args.launchAgent,
-      runtimeDir: finalEnv[JCODE_RUNTIME_DIR_ENV_KEY],
-      cwd: args.cwd,
-      env: finalEnv
-    })
 
     const fallbackHistory = historyResult?.historyDir ? historyResult : undefined
     const [spawn] = await Promise.all([loadLocalPtyRuntimeSpawn(), prepareMacosTccLoginShell()])
@@ -117,7 +104,7 @@ export async function spawnLocalPty(
         }
       }
       checkCanceled()
-      // Why: another same-id request can win while this one awaits preflight; attach before launching a redundant shell.
+      // Preflight can yield to a same-id winner; attach before creating another shell.
       const concurrentWinner = reattachId ? reattachLocalPty(id, args.cols, args.rows) : null
       if (concurrentWinner) {
         return concurrentWinner
@@ -133,7 +120,7 @@ export async function spawnLocalPty(
         signal: args.signal ? AbortSignal.any([args.signal, cancellation]) : cancellation,
         getShellReadyConfig: plan.getFallbackShellReadyConfig,
         preLaunchEnv: plan.primaryPreLaunchEnv,
-        // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).
+        // Correct fallback HISTFILE before spawn; zsh_history cannot serve a bash fallback.
         onBeforeFallbackSpawn: fallbackHistory
           ? (env, fallbackShell) => updateHistoryEnvForFallback(env, fallbackShell, fallbackHistory)
           : undefined,
@@ -152,7 +139,7 @@ export async function spawnLocalPty(
       }
       args.onPtySpawnCommitted?.()
       plan.shellPath = spawnResult.shellPath
-      // Why: a Windows fallback embeds its startup command in argv; honor the winning shell's delivery flag to avoid a double write.
+      // The winning Windows fallback may embed startup in argv; its flag prevents duplicate stdin delivery.
       if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
         plan.startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
       }

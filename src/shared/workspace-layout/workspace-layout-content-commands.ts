@@ -1,11 +1,16 @@
-// Opening editor, browser and agent-session tabs: the tab and its content record in one apply.
-
-import type { EditorTabView } from '../editor-tab-view-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { applied, refuse, workspaceOrEmpty, type Applied } from './workspace-layout-command-steps'
 import type { CommandOf, LayoutContext } from './workspace-layout-command-types'
+import { editorOpenFileId } from './workspace-layout-editor-open-file-id'
+import { sameEditorFile } from './workspace-layout-editor-tab-file'
 import { admitsInitialSurface } from './workspace-layout-initial-surface'
-import type { LayoutContentTab, LayoutTab, WorkspaceLayoutModel } from './workspace-layout-model'
+import type { LayoutEditorView } from './layout-editor-view'
+import type {
+  LayoutContentTab,
+  LayoutEditorFile,
+  LayoutTab,
+  WorkspaceLayoutModel
+} from './workspace-layout-model'
 import { withWorkspace } from './workspace-layout-removal'
 import { placeContentTab, promotePreviewTab } from './workspace-layout-tab-commands'
 
@@ -22,11 +27,7 @@ function contentTab(
   }
 }
 
-/**
- * An open tab for the same file in the target group is returned instead of a second one; a
- * non-preview open pins it. Another group's tab for the file does not count: a file opened in a
- * second split gets its own tab there, as the window does.
- */
+/** Reuse the same file in the target group, updating its record and pinning nonpreview opens. Other split groups may keep their own tab for that file. */
 export function openEditorTab(
   model: WorkspaceLayoutModel,
   command: CommandOf<'openEditorTab'>,
@@ -34,11 +35,24 @@ export function openEditorTab(
 ): Applied {
   const key = command.workspace
   const workspace = model.workspaces[key]
+  const fileId =
+    command.fileId ??
+    (command.file
+      ? editorOpenFileId(workspace ?? { worktreeId: key, tabs: [] }, command.file)
+      : undefined)
+  if (!fileId) {
+    return refuse('invalid_params')
+  }
   const sameFile = (tab: LayoutTab): boolean =>
-    tab.entityId === command.fileId && tab.kind === command.contentType
+    tab.entityId === fileId && tab.kind === command.contentType
   const drawn = drawnTabOpen(model, key, command.tabId, sameFile, true)
   if (drawn) {
-    return drawn
+    // The same tab sent again: an open that rewrote its record or view (a conflict open) updates both.
+    if (!drawn.ok || !command.tabId) {
+      return drawn
+    }
+    const next = withEditorFile(drawn.model, key, command.file)
+    return applied(withEditorView(next, key, command.tabId, command.view), drawn.result)
   }
   if (
     command.groupId &&
@@ -64,35 +78,42 @@ export function openEditorTab(
             tabId: existing.id
           })
         : applied(model)
-    const next = pinned.ok ? pinned.model : model
+    const next = withEditorFile(pinned.ok ? pinned.model : model, key, command.file)
     return applied(withEditorView(next, key, existing.id, command.view), { tabId: existing.id })
   }
   const tab = contentTab(context, {
     ...(command.tabId ? { id: command.tabId } : {}),
     ...(command.createdAt !== undefined ? { createdAt: command.createdAt } : {}),
     kind: command.contentType,
-    entityId: command.fileId,
+    entityId: fileId,
     ...(command.preview ? { isPreview: true } : {})
   })
   const placed = placeContentTab(target, key, tab, command, context)
-  let next = placed.model
-  const file = command.file
-  if (file) {
-    const workspace = next.workspaces[key]!
-    const files = (workspace.editorFiles ?? []).filter((entry) => entry.filePath !== file.filePath)
-    next = withWorkspace(next, key, { ...workspace, editorFiles: [...files, file] })
-  }
+  const next = withEditorFile(placed.model, key, command.file)
   return applied(withEditorView(next, key, tab.id, command.view), {
     tabId: tab.id,
     refused: placed.refused
   })
 }
 
+function withEditorFile(
+  model: WorkspaceLayoutModel,
+  key: string,
+  file: LayoutEditorFile | undefined
+): WorkspaceLayoutModel {
+  if (!file) {
+    return model
+  }
+  const workspace = model.workspaces[key]!
+  const files = (workspace.editorFiles ?? []).filter((entry) => !sameEditorFile(entry, file))
+  return withWorkspace(model, key, { ...workspace, editorFiles: [...files, file] })
+}
+
 function withEditorView(
   model: WorkspaceLayoutModel,
   key: string,
   tabId: string,
-  view: EditorTabView | undefined
+  view: LayoutEditorView | undefined
 ): WorkspaceLayoutModel {
   if (!view) {
     return model
@@ -145,10 +166,7 @@ export function openBrowserTab(
   )
 }
 
-/**
- * The same open again (a window's create resent) changes nothing; an id another tab or page holds
- * refuses it. Null when every id is free.
- */
+/** Resent drawn opens are idempotent; reject IDs held by another tab/page, and return null when free. */
 function takenBrowserTabIds(
   model: WorkspaceLayoutModel,
   key: string,
@@ -213,11 +231,7 @@ export function openAgentSessionTab(
   })
 }
 
-/**
- * An open naming a tab id: the same open again (a tab a window drew, then sent twice or saved
- * first) changes nothing; with `refuseTaken`, an id another tab holds refuses it. Null when the
- * open goes ahead.
- */
+/** Drawn tab IDs make resent or already-saved opens idempotent; refuseTaken rejects IDs held by another tab. Null proceeds with creation. */
 export function drawnTabOpen(
   model: WorkspaceLayoutModel,
   key: string,

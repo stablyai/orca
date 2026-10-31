@@ -22,7 +22,7 @@ import {
 
 export type ServeInstallParkResult =
   | { kind: 'parked' }
-  /** `unregistered` keeps today's refusal; the others name supervisors that did not cooperate. */
+  /** Unregistered blockers retain the existing refusal; other reasons identify uncooperative supervisors. */
   | { kind: 'refused'; reason: 'unregistered' | 'unresponsive' | 'busy'; pids: number[] }
 
 type ParkDeps = {
@@ -45,7 +45,7 @@ async function writeRecordDurably(dir: string, record: ServeParkRecord): Promise
   const handle = await open(temporary, 'w', 0o600)
   try {
     await handle.writeFile(JSON.stringify(record))
-    // Why fsync: supervisors trust this record after the installer is gone, even across a panic.
+    // Supervisors trust this record after installer exit and across system crashes; fsync before acknowledgement.
     await handle.sync()
   } finally {
     await handle.close()
@@ -89,10 +89,7 @@ async function readBundleIdentity(bundle: string): Promise<string> {
   }
 }
 
-/**
- * Before a desktop install: ask registered `orca serve --supervise` services to stop their server
- * and hold. Any blocker that is not such a server is refused exactly as before.
- */
+/** Park registered serve supervisors before desktop install; refuse other blockers. */
 export async function parkServeSupervisorsForInstall(
   executable: string,
   blockers: number[],
@@ -182,14 +179,14 @@ export async function commitServeSupervisorPark(
   if (!activePark) {
     return
   }
-  // Why re-list: a server another supervisor started after the acks would block ShipIt.
+  // Re-list: a server started after acknowledgements would block ShipIt.
   const blockers = await listBlockers().catch(() => null)
   if (blockers === null || blockers.length > 0) {
     await releaseServeSupervisorPark()
     throw new Error('An Orca server started again before the install began.')
   }
   if (now() + COMMIT_DEADLINE_MARGIN_MS >= activePark.record.parkDeadlineAt) {
-    // Why throw: supervisors may already have restarted servers that would block ShipIt.
+    // Expired holds may have restarted servers that block ShipIt; abort installation.
     await releaseServeSupervisorPark()
     throw new Error('Paused Orca serve services resumed before the install began.')
   }

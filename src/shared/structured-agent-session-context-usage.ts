@@ -1,7 +1,4 @@
-// The context window a structured session reads from its own journal's turn
-// rows. Facts are written only to the open or newest turn and each write
-// replaces its namesake, so the newest row carrying a part holds its current
-// value. Nothing is held outside the journal, so a restart replays the same answer.
+// Turn rows persist context facts across restart; writes target open/newest turns and replace their namesake, so newest facts win.
 
 import {
   contextTokensFromUsage,
@@ -30,7 +27,7 @@ export type StructuredAgentContextUsage = {
 
 type ContextFactSource = Pick<AgentJournalRenderItem, 'sequence' | 'body'>
 
-/** The newest of each part these rows carry, in any order; a part none of them carries is absent. */
+/** Resolve each newest fact independently in any iteration order; missing parts stay absent. */
 export function latestStructuredAgentContextFacts(
   items: Iterable<ContextFactSource>,
   minimumSequence = 0
@@ -61,12 +58,7 @@ export function latestStructuredAgentContextFacts(
   return { ...(used ? { used: used.fact } : {}), ...(window ? { window: window.fact } : {}) }
 }
 
-/**
- * The ring's reading of the loaded rows, with `wholeJournal` (the host's answer
- * over every row) filling any part they lack. The loaded window reaches the live
- * head, so a part found in it is newer than the host's; the host's covers only
- * rows older than the window.
- */
+/** Loaded rows reach the live head and outrank wholeJournal; use the host answer only for missing parts from older rows. */
 export function selectStructuredAgentContextUsage(
   items: readonly AgentJournalRenderItem[],
   wholeJournal?: AgentSessionContextUsage,

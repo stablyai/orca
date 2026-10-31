@@ -1,16 +1,17 @@
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
 import {
   buildJiraIssueSummaryPrompt,
   sanitizeGeneratedJiraIssueSummary,
   type JiraIssueSummaryGenerationContext,
   type JiraIssueSummaryGenerationResult
-} from '../../shared/jira-issue-summary-generation'
+} from '../../shared/jira/jira-issue-summary-generation'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../shared/text-generation-failure-copy'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
 import { cancelLocalGeneration } from './source-control-generation-lanes'
-import { runLocalPlanForAgent } from './source-control-local-generation'
-import { runRemoteSourceControlPlan } from './source-control-remote-generation'
-import { commandBackslashMode } from './source-control-text-generation-requests'
+import { runGenerationRequest } from './agent-generation-request'
 import type {
   CommitMessageGenerationTarget,
   SpawnSourceControlAgent
@@ -24,36 +25,28 @@ export async function generateJiraIssueSummaryFromContext(
   spawnAgent: SpawnSourceControlAgent = spawnSourceControlAgent
 ): Promise<JiraIssueSummaryGenerationResult> {
   const prompt = buildJiraIssueSummaryPrompt(context)
-  const planned = planCommitMessageGeneration(
-    { ...params, backslash: commandBackslashMode(target) },
-    prompt
-  )
-  if (!planned.ok) {
-    return { success: false, error: planned.error }
-  }
-  const result =
-    target.kind === 'remote'
-      ? await runRemoteSourceControlPlan({
-          plan: planned.plan,
-          target,
-          emptyResultName: 'summary',
-          operation: 'jira-issue-summary'
-        })
-      : await runLocalPlanForAgent({
-          agentId: params.agentId,
-          plan: planned.plan,
-          target,
-          emptyResultName: 'summary',
-          operation: 'jira-issue-summary',
-          spawnAgent
-        })
+  const result = await runGenerationRequest({
+    params,
+    prompt,
+    target,
+    spawnAgent,
+    operation: 'jira-issue-summary'
+  })
   if (!result.success) {
-    return { success: false, error: result.error, canceled: result.canceled }
+    return {
+      success: false,
+      error: result.error,
+      canceled: result.canceled,
+      ...textGenerationFailureCodeFields(result)
+    }
   }
   const summary = sanitizeGeneratedJiraIssueSummary(result.rawOutput)
   return summary
     ? { success: true, summary, agentLabel: result.agentLabel }
-    : { success: false, error: 'Generated summary was empty after sanitization.' }
+    : {
+        success: false,
+        ...textGenerationFailure('jiraSummaryEmptyAfterSanitization')
+      }
 }
 
 export function cancelGenerateJiraIssueSummaryLocal(cwd: string): void {

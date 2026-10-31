@@ -1,6 +1,4 @@
-// Pure, clock-injected breaker over descendant process counts. Each scope is one
-// terminal's process tree (today: one agent per PTY); the host total covers them all.
-// Why per scope: a per-agent OS ceiling can later act on exactly the scope that tripped.
+// Clock-injected per-terminal descendant scopes permit future per-agent OS limits; host totals cover all scopes.
 
 export type ProcessGrowthSample = {
   atMs: number
@@ -58,11 +56,7 @@ function growthRate(previous: number | undefined, current: number, elapsedMs: nu
   return previous === undefined || elapsedMs <= 0 ? 0 : ((current - previous) * 1000) / elapsedMs
 }
 
-/**
- * Folds one sample into the state. Only sustained growth trips: a high total is load,
- * not a storm, and one long sampling interval is never enough evidence on its own.
- * `unknown` never trips and never clears a streak.
- */
+/** Trip only sustained growth, never high load or one long interval. Unknown samples neither trip nor clear streaks. */
 export function evaluateProcessGrowth(
   state: ProcessGrowthState,
   sample: ProcessGrowthSample,

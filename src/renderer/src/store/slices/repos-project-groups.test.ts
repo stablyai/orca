@@ -714,8 +714,7 @@ describe('project group store routing', () => {
     expect(folderWorkspacesList).toHaveBeenCalled()
     expect(reposList).toHaveBeenCalled()
     expect(store.getState().projectGroups).toEqual([{ ...projectGroup, executionHostId: 'local' }])
-    // Why: the repos slice stamps fetched repos with their owning execution
-    // host so multi-host routing never has to guess (multi-host design).
+    // Stamp repo owner on ingest/update so multi-host mutation routing never guesses.
     expect(store.getState().repos).toEqual([{ ...importedRepo, executionHostId: 'local' }])
   })
 
@@ -849,17 +848,17 @@ describe('project group store routing', () => {
     const store = createTestStore()
     store.setState({ repos: [remoteRepo], projectGroups: [projectGroup] })
 
-    await expect(
-      store.getState().moveProjectToGroup(remoteRepo.id, projectGroup.id, 3)
-    ).resolves.toBe(true)
+    await expect(store.getState().moveProjectToGroup(remoteRepo, projectGroup.id, 3)).resolves.toBe(
+      true
+    )
 
     expect(projectGroupsMoveProject).toHaveBeenCalledWith({
       projectId: remoteRepo.id,
       groupId: projectGroup.id,
-      order: 3
+      order: 3,
+      hostId: 'local'
     })
-    // Why: the repos slice stamps updated repos with their owning execution
-    // host so multi-host routing never has to guess (multi-host design).
+    // Stamp repo owner on ingest/update so multi-host mutation routing never guesses.
     expect(store.getState().repos).toEqual([{ ...movedRepo, executionHostId: 'local' }])
   })
 

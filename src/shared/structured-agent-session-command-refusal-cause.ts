@@ -1,11 +1,11 @@
 import {
   isAgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
-} from './agent-session-conversation-command'
+} from './agent-session/agent-session-conversation-command'
 import { readWholeAgentSessionFailureFact } from './agent-session-failure'
 import type { StructuredAgentSessionCommandRefusalCause } from './structured-agent-session-composer'
 
-/** The host's refusal reasons whose words name something a chat shows. */
+/** Host refusal reasons that map to visible chat conditions. */
 const CAUSE_OF_HOST_REFUSAL: Partial<Record<string, StructuredAgentSessionCommandRefusalCause>> = {
   turnActive: 'working',
   messagesUnsettled: 'working',
@@ -13,8 +13,7 @@ const CAUSE_OF_HOST_REFUSAL: Partial<Record<string, StructuredAgentSessionComman
   backgroundTasksRunning: 'background'
 }
 
-/** What a host's refusal of a command waits on, as a chat shows it; undefined for any other
- *  failure, or one this build can't read whole. */
+/** Map only fully readable host refusals; other failures have no waiting condition. */
 export function structuredAgentSessionCommandHostRefusalCause(
   result: AgentSessionConversationCommandResult
 ): StructuredAgentSessionCommandRefusalCause | undefined {

@@ -1,6 +1,14 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectNoWindowStart,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { UUID_RE } from './pty-connection-test-constants'
 import {
@@ -13,6 +21,8 @@ import {
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
+import type { AgentStatusSlice } from '@/store/slices/agent-status/agent-status-slice-contract'
+import { normalizeLaunchConfigRegistrationMetadata } from '@/store/slices/agent-status/agent-status-launch-config'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import {
   installTerminalTestGlobals,
@@ -28,6 +38,9 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
   function createDeps(overrides: Record<string, unknown> = {}) {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
+
+  /** Main's frame binding tab-1's pane 2. */
+  const bindLeaf2 = bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
@@ -47,6 +60,7 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      ;(await mainLayoutApplyTransport()).reset()
     })
 
     afterEach(async () => {
@@ -118,6 +132,15 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes the agent; the window only attaches to the cold-restored terminal and paints it.
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionId: 'lost-pty', attachOnlyView: true })
+        )
+        expectNoWindowStart(transport, mockStoreState)
+        expect(transport.sendInput).not.toHaveBeenCalled()
+        return
+      }
       const reattachArgs = transport.connect.mock.calls.find(
         ([args]) => args.sessionId === 'lost-pty'
       )?.[0]
@@ -129,7 +152,8 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'codex-session-1'",
+          command:
+            "codex '--model' 'gpt-5' '--reasoning-effort' 'high' '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
           env: expect.objectContaining({
             CODEX_PROFILE: 'captured',
             ORCA_PANE_KEY: paneKey,
@@ -195,6 +219,17 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const launchConfig = { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
+      const registerLaunchConfig: AgentStatusSlice['registerAgentLaunchConfig'] = (
+        key,
+        config,
+        metadata
+      ) => {
+        mockStoreState.agentLaunchConfigByPaneKey[key] = {
+          launchConfig: config,
+          identity: normalizeLaunchConfigRegistrationMetadata(key, metadata)
+        }
+      }
+      mockStoreState.registerAgentLaunchConfig.mockImplementation(registerLaunchConfig)
       mockStoreState = {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
@@ -303,11 +338,21 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main resumes from the live entry; the window only attaches and paints.
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionId: 'lost-pty', attachOnlyView: true })
+        )
+        expectNoWindowStart(transport, mockStoreState)
+        expect(transport.sendInput).not.toHaveBeenCalled()
+        return
+      }
       expect(transport.sendInput).not.toHaveBeenCalled()
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex '--model' 'gpt-5-mini' 'resume' 'codex-session-1'",
+          command:
+            "codex '--model' 'gpt-5-mini' '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
           env: expect.objectContaining({
             ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
           })
@@ -386,6 +431,16 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         await flushAsyncTicks(20)
         await vi.advanceTimersByTimeAsync(70)
 
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          // Main's start carries the one resume; the window's one connect is an attach.
+          expect(transport.connect).toHaveBeenCalledTimes(1)
+          expect(transport.connect).toHaveBeenCalledWith(
+            expect.objectContaining({ sessionId: retainedPtyId, attachOnlyView: true })
+          )
+          expectNoWindowStart(transport, mockStoreState)
+          expect(mockStoreState.tabsByWorktree['wt-1']).toHaveLength(1)
+          return
+        }
         expect(transport.connect).toHaveBeenCalledTimes(1)
         expect(transport.attach).not.toHaveBeenCalled()
         const options = transport.connect.mock.calls[0]?.[0] as {
@@ -474,6 +529,14 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       await flushAsyncTicks(20)
       await vi.advanceTimersByTimeAsync(70)
 
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // Main picks the resume recipe; the window neither builds nor registers one.
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionId: 'lost-pty', attachOnlyView: true })
+        )
+        expectNoWindowStart(transport, mockStoreState)
+        return
+      }
       expect(mockStoreState.getAgentLaunchConfigForStatusEntry).toHaveBeenCalledWith(
         expect.objectContaining({ paneKey, agentType: 'codex' })
       )
@@ -481,7 +544,7 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         expect.objectContaining({
           sessionId: 'lost-pty',
           // Neither stale recipe applies, and settings defaults never stand in for a recorded one.
-          command: "codex 'resume' 'codex-session-1'"
+          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'"
         })
       )
       expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
@@ -555,6 +618,7 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: { [LEAF_2]: staleSessionId }
       })
+      await mainStartsPaneAs({ ptyId: 'pty-main', bind: bindLeaf2, transport })
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(10)
@@ -563,6 +627,16 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         1,
         expect.objectContaining({ sessionId: staleSessionId })
       )
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // A missing reattach asks main to start and preserve the resume record; the window cannot spawn its own shell.
+        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        expect(transport.connect).toHaveBeenLastCalledWith(
+          expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+        )
+        expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+        expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+        return
+      }
       expect(transport.connect).toHaveBeenNthCalledWith(
         2,
         expect.not.objectContaining({ sessionId: expect.any(String) })

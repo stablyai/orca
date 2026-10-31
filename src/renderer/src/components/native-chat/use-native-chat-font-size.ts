@@ -4,6 +4,7 @@ import { writeNativeChatFontSize } from './native-chat-font-size-write'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '../../store'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useNativeChatFontSize(
   enabled: boolean,
@@ -32,7 +33,7 @@ export function useNativeChatFontSize(
       e.stopPropagation()
       void writeNativeChatFontSize(action)
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [enabled, rootRef])
 }

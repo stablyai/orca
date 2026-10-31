@@ -7,6 +7,8 @@ import type { ExecutionHostId } from '../execution-host'
 import type { PRGroupKey } from '../workspace-view/workspace-pr-groups'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+/** A row's own registration of its repo; the same repo id can be registered on several hosts. */
+export type RepoOfWorktree = (worktree: Worktree) => Repo | undefined
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
 
 export function getPinnedWorktreeDisplayPolicy(
@@ -38,6 +40,12 @@ export type GroupHeaderRow = {
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
   hostId?: ExecutionHostId
+  /** A project checked out on several hosts: each host's own registration, one header per host section. */
+  hostRepos?: ReadonlyMap<ExecutionHostId, Repo>
+  /** On a host copy: the project's anchor registration, which project order keys on; `repo` is this host's. */
+  anchorRepo?: Repo
+  /** An earlier host section already drew this header; order and drag key on that first copy. */
+  repeated?: true
   hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
   hostWorktreeIds?: ReadonlyMap<ExecutionHostId, readonly string[]>
   worktreeIds?: readonly string[]
@@ -107,10 +115,7 @@ export type FolderWorkspaceRow = {
   groupDepth: number
 }
 
-/** Minimal shape planSidebarRows needs for an in-flight create. Deliberately not the
- *  full PendingWorktreeCreation: row identity depends only on which creates
- *  exist and their repo, so callers can subscribe on this stable shape and keep
- *  progress-field churn (phase/loaderVisible) from rebuilding the whole list. */
+/** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */
 export type PendingCreationRef = { creationId: string; repoId: string }
 
 export type Row =
@@ -120,3 +125,8 @@ export type Row =
   | NewExternalWorktreesInboxRow
   | PendingCreationRow
   | FolderWorkspaceRow
+
+/** The registration a project header reorders by, or none for a repeated copy. */
+export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {
+  return row.repeated ? undefined : (row.anchorRepo ?? row.repo)
+}

@@ -19,8 +19,7 @@ export type LegacyRelayBridgeApi = {
   }) => Promise<LegacyRelayBridgeAttachResult>
   write: (args: { ptyId: string; data: string }) => void
   resize: (args: { ptyId: string; cols: number; rows: number }) => void
-  detach: (args: { ptyId: string }) => void
-  /** Stops the shell its closed tab ran. */
+  detach: (args: { ptyId: string; acquisitionId: number }) => void
   close: (args: { ptyId: string }) => Promise<LegacyRelayBridgeCloseResult>
   setOutputPaused: (args: { ptyId: string; paused: boolean }) => void
   onPanes: (callback: (panes: LegacyRelayBridgedPane[]) => void) => () => void

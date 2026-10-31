@@ -12,14 +12,11 @@ import {
   type AutomationHostStatusTone
 } from './automation-host-status-descriptors'
 
-/**
- * Host identity and status chips. The two health axes render as two chips and
- * never merge: a host can be freshly loaded and disconnected at the same time.
- */
+/** Keep host load and connectivity as independent health chips: freshly loaded data can belong to a disconnected host. */
 
 type BadgeStyle = { variant: React.ComponentProps<typeof Badge>['variant']; className?: string }
 
-// `Badge` has no muted variant and this design does not add one — quiet reads as outline + muted text.
+// Use outline plus muted text for quiet chips; Badge has no muted variant.
 const TONE_STYLE: Record<AutomationHostStatusTone, BadgeStyle> = {
   neutral: { variant: 'outline' },
   quiet: { variant: 'outline', className: 'text-muted-foreground' },

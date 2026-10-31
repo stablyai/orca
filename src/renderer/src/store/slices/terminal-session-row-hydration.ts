@@ -9,12 +9,7 @@ import {
 } from '../../../../shared/workspace-layout/legacy-terminal-row-claims'
 import { clearTransientTerminalState } from './terminal-helpers'
 
-/**
- * A persisted session describes the same terminals twice: as canonical unified tabs and as
- * legacy per-worktree terminal rows. Hydration keeps every row that still owns a PTY nothing
- * else can reattach to, drops rows the canonical mount fully subsumes, and strips the shared
- * PTYs off rows it only partially subsumes.
- */
+/** Canonical/unified and legacy rows may share PTYs: retain uniquely owned panes, drop fully subsumed rows and strip shared PTYs from partial overlaps. */
 
 type CanonicalTerminals = CanonicalPtyOwners & {
   quickCommandLabelByTabId: Map<string, string>
@@ -25,11 +20,7 @@ export type WorkspaceTerminalRowHydration = {
   rows: TerminalTab[]
   /** PTYs a retained row must give up because a canonical row already owns them. */
   releasedPtyIdsByTabId: Map<string, Set<string>>
-  /**
-   * The PTY a retained row still owns after the release, so reconnect can anchor on it. Hydration
-   * nulls `tab.ptyId`, and orphan detection ignores layout bindings, so a row that gave up its
-   * tab-level PTY has no liveness left and the sweep deletes it before its own pane reattaches.
-   */
+  /** Anchor the retained row’s remaining PTY for reconnect; hydration clears tab.ptyId and orphan sweep ignores leaf bindings, so otherwise it deletes the row before reattach. */
   reconnectPtyIdByRetainedTabId: Map<string, string>
   /** Rows dropped as pure canonical duplicates; they are never retired, so callers clean up after them. */
   subsumedTabIds: string[]
@@ -42,7 +33,8 @@ export type WorkspaceTerminalRowHydration = {
 export function hydrateWorkspaceTerminalRows(
   session: WorkspaceSessionState,
   worktreeId: string,
-  rows: readonly TerminalTab[]
+  rows: readonly TerminalTab[],
+  liveTitleTabIds?: Pick<ReadonlySet<string>, 'has'>
 ): WorkspaceTerminalRowHydration {
   const canonical = readCanonicalTerminals(session, worktreeId, rows)
   const releasedPtyIdsByTabId = new Map<string, Set<string>>()
@@ -74,7 +66,9 @@ export function hydrateWorkspaceTerminalRows(
   return {
     rows: retained
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
-      .map((row, index) => restoreCanonicalMetadata(row, index, canonical)),
+      .map((row, index) =>
+        restoreCanonicalMetadata(row, index, canonical, liveTitleTabIds?.has(row.id) ?? false)
+      ),
     releasedPtyIdsByTabId,
     reconnectPtyIdByRetainedTabId,
     subsumedTabIds,
@@ -133,13 +127,15 @@ function readCanonicalTerminals(
 function restoreCanonicalMetadata(
   row: TerminalTab,
   index: number,
-  canonical: CanonicalTerminals
+  canonical: CanonicalTerminals,
+  titleIsLive: boolean
 ): TerminalTab {
   const quickCommandLabel =
     row.quickCommandLabel?.trim() || canonical.quickCommandLabelByTabId.get(row.id)
   const aiVaultTitle = row.aiVaultTitle ?? canonical.aiVaultTitleByTabId.get(row.id)
   return {
     ...clearTransientTerminalState(row, index),
+    ...(titleIsLive ? { title: row.title } : {}),
     ...(quickCommandLabel ? { quickCommandLabel } : {}),
     ...(aiVaultTitle ? { aiVaultTitle } : {}),
     sortOrder: index,

@@ -20,16 +20,12 @@ export type RestoredStatusDeadTerminalSweepDeps = {
   /** Targeted provider liveness: true live, false absent, null when it cannot prove either. */
   probePtyLiveness: (ptyId: string) => Promise<boolean | null>
   isLocalExecutionHost: (worktreeId: string | undefined) => boolean
-  /** PTY bound to this pane in the current session, if it has one. */
   getBoundPtyIdForPaneKey: (paneKey: string) => string | undefined
-  /** PTY this pane was bound to when the session was last persisted; covers panes
-   *  whose surviving daemon session has not been reattached yet. */
+  /** Covers surviving daemon PTYs not yet reattached to the current session. */
   getPersistedPtyIdForPaneKey: (paneKey: string) => string | undefined
 }
 
-/** A terminal that dies while Orca is down never reaches the PTY-exit teardown, so its restored
- *  row would claim work forever. Stand in for that exit: retire restored rows whose local PTY
- *  the provider proves absent, through the same path an observed exit takes. */
+/** Retire restored local rows only when the provider proves their PTY absent. */
 export async function retireRestoredStatusesWithDeadTerminals(
   deps: RestoredStatusDeadTerminalSweepDeps
 ): Promise<number> {
@@ -37,7 +33,7 @@ export async function retireRestoredStatusesWithDeadTerminals(
   const isProvenAbsent = async (ptyId: string): Promise<boolean> => {
     let probe = probesByPtyId.get(ptyId)
     if (!probe) {
-      // Why: a probe that throws is unverifiable, never evidence the terminal died.
+      // A failed probe cannot prove the terminal died.
       probe = deps.probePtyLiveness(ptyId).catch(() => null)
       probesByPtyId.set(ptyId, probe)
     }
@@ -45,7 +41,7 @@ export async function retireRestoredStatusesWithDeadTerminals(
   }
   const candidates = deps.server.listUnconfirmedRestoredStatuses().filter(
     (row) =>
-      // Why: only a local pane's PTY lives in this machine's provider.
+      // Only local PTYs belong to this provider.
       isLocalHookConnectionId(row.connectionId) && deps.isLocalExecutionHost(row.worktreeId)
   )
   const probed = await Promise.all(
@@ -55,22 +51,20 @@ export async function retireRestoredStatusesWithDeadTerminals(
       return { row, boundPtyId, absent: ptyId !== undefined && (await isProvenAbsent(ptyId)) }
     })
   )
-  // Why: a pane can report, or cold restore can rebind its PTY, while the probes are in flight.
+  // Rows and PTY bindings can change while probes are in flight.
   const stillRestored = new Set(deps.server.listUnconfirmedRestoredStatuses())
   const ended = probed.filter(
     ({ row, boundPtyId, absent }) =>
       absent && stillRestored.has(row) && deps.getBoundPtyIdForPaneKey(row.paneKey) === boundPtyId
   )
-  // Why: the conversation outlived its terminal, so keep it resumable.
+  // Preserve conversations that outlived their terminals for resume.
   return deps.server.reconcileEndedProcessForPaneKeys(
     ended.map(({ row }) => row.paneKey),
     { preserveResumeIdentity: true }
   )
 }
 
-/** Index the persisted terminal layouts as `paneKey -> ptyId`. Layout leaves are
- *  the only persisted binding that carries a stable pane key, so tab-level PTY ids
- *  (legacy numeric panes) are deliberately skipped. */
+/** Only layout leaves persist stable pane keys; skip legacy tab-level PTY bindings. */
 export function indexPersistedPaneKeyPtyIds(
   layoutsByTabId: Record<string, { ptyIdsByLeafId?: Record<string, string> } | undefined>
 ): Map<string, string> {
@@ -135,8 +129,4 @@ export function resolveAgentWorkspaceExecutionHostId(
   }
   const repo = deps.getRepo(getRepoIdFromWorktreeId(worktreeId))
   return repo ? resolveDeclaredExecutionHost(repo) : null
-}
-
-export function isLocalExecutionHost(hostId: string | null | undefined): boolean {
-  return parseExecutionHostId(hostId)?.kind === 'local'
 }

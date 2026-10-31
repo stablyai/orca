@@ -1,12 +1,4 @@
-// Why: when a Project row's `content.repository` does not match any
-// registered Orca repo, the main `GitHubItemDialog` cannot be used in
-// repo-backed mode — it requires a `repoPath` for label/assignee pickers
-// and conversation details. Per design doc §Dialog editing from Project
-// rows, the dialog for unknown-repo rows is allowed to be a simplified
-// surface (conversation + title/body/labels/assignees/comments) with
-// Files, Checks, and review-thread tabs hidden. This component is that
-// simplified surface; it also routes every write through slug-addressed
-// mutation helpers and patches the Project table cache on success.
+// For unregistered row repos, use slug-addressed edits and Project-cache updates without repo-backed Files, Checks or review threads.
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import React from 'react'
 import * as VisuallyHidden from 'radix-ui/visually-hidden'

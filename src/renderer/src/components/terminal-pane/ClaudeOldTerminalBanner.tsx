@@ -4,8 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
+import { paneClaudeTarget } from './terminal-pane-claude-target'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { OldTerminalDialog } from './OldTerminalDialog'
 import { openTerminalBesideTab } from './open-terminal-beside-tab'
@@ -14,8 +13,7 @@ import { PaneBannerLearnMore, PaneTopWarningBanner } from './PaneTopWarningBanne
 // Why module scope: a pane remounts on tab switches, and Dismiss must hold for the app session.
 const dismissedPtyIds = new Set<string>()
 
-// Why a selection, not just saved accounts: with System default selected, this terminal already
-// matches a new one. A key, so a switch asks again whether this terminal runs another account.
+// System default already matches new terminals; key explicit selections so account switches recheck old shells.
 function selectedClaudeAccountKey(state: AppState): string | null {
   const settings = state.settings
   if (!settings || settings.claudeManagedAccounts.length === 0) {
@@ -25,28 +23,6 @@ function selectedClaudeAccountKey(state: AppState): string | null {
   const host = selection?.host ?? settings.activeClaudeManagedAccountId ?? null
   const wsl = Object.entries(selection?.wsl ?? {}).filter(([, id]) => id)
   return host || wsl.length > 0 ? JSON.stringify([host, wsl]) : null
-}
-
-type PaneClaudeTarget = { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
-
-/** The runtime a pane's shell runs in; null when its tab or workspace is unknown. */
-function paneClaudeTarget(tabId: string): PaneClaudeTarget | null {
-  const state = useAppStore.getState()
-  const tab = Object.values(state.unifiedTabsByWorktree)
-    .flat()
-    .find((candidate) => candidate.contentType === 'terminal' && candidate.entityId === tabId)
-  if (!tab) {
-    return null
-  }
-  if (tab.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return { runtime: 'host' }
-  }
-  const worktree = state.allWorktrees().find((candidate) => candidate.id === tab.worktreeId)
-  if (!worktree) {
-    return null
-  }
-  const wslDistro = resolvePaneWslDistro(state, worktree.id, worktree.path)
-  return wslDistro ? { runtime: 'wsl', wslDistro } : { runtime: 'host' }
 }
 
 function useOpenedBeforeClaudeAccounts(

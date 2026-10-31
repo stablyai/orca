@@ -5,7 +5,7 @@ import {
 } from './folder-workspace-lanes'
 import type { ProjectGroup } from '../project-group-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
-import { getEffectiveProjectGroupManualRank } from '../project-groups'
+import { getDistinctProjectGroups, getEffectiveProjectGroupManualRank } from '../project-groups'
 import { getProjectGroupHeaderKey } from './group-keys'
 import { appendOrderedGroups } from './group-sections'
 import { compareCodePoints, compareSidebarText } from './text-order'
@@ -50,9 +50,7 @@ export function appendProjectGroupSections(
         compareRecentRank(getRecentRank(left), getRecentRank(right))
       )
     }
-    // Manual: within a Project Group, projects order by their per-group rank
-    // (projectGroupOrder), falling back to global repoOrder when unset so drag
-    // midpoint commits and the rendered order stay aligned.
+    // Use projectGroupOrder with repoOrder fallback so drag midpoint ranks match rendered order.
     return [...entries].sort((left, right) => {
       const leftRank = getEffectiveProjectGroupManualRank(left[1].repo, repoOrder)
       const rightRank = getEffectiveProjectGroupManualRank(right[1].repo, repoOrder)
@@ -61,8 +59,7 @@ export function appendProjectGroupSections(
   }
 
   const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
-  // Membership already decided by getRenderableFolderWorkspaces in planSidebarRows, so
-  // repo grouping no longer owns the filter — it only groups and orders (#15362).
+  // Folder membership is already resolved above grouping; only group/order here (#15362).
   const folderWorkspacesByProjectGroupId = new Map<string, RenderableFolderWorkspace[]>()
   for (const pair of folderWorkspaces) {
     const groupId = pair.folderWorkspace.projectGroupId
@@ -76,7 +73,8 @@ export function appendProjectGroupSections(
     )
   }
   const childGroupsByParentId = new Map<string | null, ProjectGroup[]>()
-  for (const group of projectGroups) {
+  // Why distinct: membership is id-keyed, so a same-id copy's header would sit empty (#30045).
+  for (const group of getDistinctProjectGroups(projectGroups)) {
     const parentId =
       group.parentGroupId && projectGroupsById.has(group.parentGroupId) ? group.parentGroupId : null
     const children = childGroupsByParentId.get(parentId) ?? []
@@ -137,8 +135,7 @@ export function appendProjectGroupSections(
     if (projectGroupId === null || projectGroupsById.has(projectGroupId)) {
       continue
     }
-    // Why: startup can have repos from hosts whose project-group metadata was
-    // not fetched yet; missing metadata must not make those repos disappear.
+    // Keep repos visible while host project-group metadata is still loading.
     remainingRepoEntries.push(...entries)
   }
   appendOrderedGroups(
@@ -152,7 +149,7 @@ export function appendProjectGroupSections(
 export function getProjectGroupOccurrencePaths(projectGroups: readonly ProjectGroup[]) {
   const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
   const paths = new Map<string, OccurrenceSectionPath>()
-  for (const group of projectGroups) {
+  for (const group of getDistinctProjectGroups(projectGroups)) {
     const pending: ProjectGroup[] = []
     const seen = new Set<string>()
     let current: ProjectGroup | undefined = group

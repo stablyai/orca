@@ -5,7 +5,6 @@ import {
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
 import { seedClaudeSubagentRosterFromSnapshots } from './agent-hook-listener/providers/claude-roster-state'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -18,8 +17,7 @@ function claudeEvent(
   return normalizeHookPayload(state, 'claude', { paneKey, payload }, 'production')
 }
 
-// A fresh listener state is what Orca has after a restart: the lead-turn cache is in-memory only,
-// so a session that outlived the app reports its next child event with no cached lead.
+// Restarts lose the in-memory lead cache while surviving sessions can still emit child hooks.
 describe('Claude child lifecycle events with no cached lead state', () => {
   it('makes no status claim from an unknown start-less SubagentStop', () => {
     const state = createHookListenerState()
@@ -286,11 +284,10 @@ describe('Claude child lifecycle events with no cached lead state', () => {
 
     const stopped = claudeEvent(state, paneKey, {
       hook_event_name: 'Stop',
-      background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
-        id: `finished-${index}`,
-        type: 'subagent',
-        status: 'completed'
-      }))
+      background_tasks: [
+        { id: 'finished-0', type: 'subagent', status: 'completed' },
+        { id: 'unreadable', status: 'completed' }
+      ]
     })
 
     expect(stopped).toMatchObject({

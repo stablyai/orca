@@ -8,6 +8,8 @@ import {
   replaceLeaf
 } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-order'
+import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { ownsGlobalSelection } from '../../global-selection-owner'
 
 type SplitGroupState = Pick<
@@ -59,28 +61,72 @@ export function createTabsGroupActions(
   'ensureWorktreeRootGroup' | 'focusGroup' | 'closeEmptyGroup' | 'createEmptySplitGroup'
 > {
   return {
-    ensureWorktreeRootGroup: (worktreeId) => {
+    ensureWorktreeRootGroup: (worktreeId, orderSlot) => {
       const existingGroups = get().groupsByWorktree[worktreeId] ?? []
-      if (existingGroups.length > 0) {
+      if (!orderSlot && existingGroups.length > 0) {
         return get().activeGroupIdByWorktree[worktreeId] ?? existingGroups[0].id
       }
 
-      const groupId = workspaceRootGroupId(worktreeId)
-      set((state) => ({
-        // Why: a zero-tab worktree still needs a canonical root group so new tabs and splits land in a deterministic place.
-        groupsByWorktree: {
-          ...state.groupsByWorktree,
-          [worktreeId]: [{ id: groupId, worktreeId, activeTabId: null, tabOrder: [] }]
-        },
-        layoutByWorktree: {
-          ...state.layoutByWorktree,
-          [worktreeId]: { type: 'leaf', groupId }
-        },
-        activeGroupIdByWorktree: {
-          ...state.activeGroupIdByWorktree,
-          [worktreeId]: groupId
+      let groupId = workspaceRootGroupId(worktreeId)
+      set((state) => {
+        const groups = state.groupsByWorktree[worktreeId] ?? []
+        const reserved =
+          orderSlot && groups.find((group) => group.tabOrder.includes(orderSlot.tabId))
+        if (reserved) {
+          groupId = reserved.id
+          return state
         }
-      }))
+        const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+        const placement = resolveUnifiedTabCreatePlacement({
+          groups,
+          tabs,
+          activeGroupId: state.activeGroupIdByWorktree[worktreeId],
+          targetGroupId: orderSlot?.targetGroupId,
+          lookupWorktrees: () => []
+        })
+        const group =
+          groups.find((entry) => entry.id === placement.groupId) ??
+          groups[0] ??
+          emptySplitGroup(worktreeId, groupId)
+        groupId = group.id
+        let tabOrder = group.tabOrder
+        if (orderSlot) {
+          const { tabId, precedingTabIds } = orderSlot
+          const preceding = new Set(precedingTabIds)
+          const anchor = tabOrder.findLast((id) => preceding.has(id))
+          tabOrder = insertTabIdIntoOrder(tabOrder, tabs, tabId, false, anchor)
+          if (!anchor && precedingTabIds.length === 0) {
+            tabOrder.splice(tabOrder.indexOf(tabId), 1)
+            const firstUnpinned = tabOrder.findIndex(
+              (id) => !tabs.find((tab) => tab.id === id)?.isPinned
+            )
+            tabOrder.splice(firstUnpinned === -1 ? tabOrder.length : firstUnpinned, 0, tabId)
+          }
+        }
+        // A new root and its first order member must become observable together.
+        const nextGroup = { ...group, tabOrder }
+        return {
+          groupsByWorktree: {
+            ...state.groupsByWorktree,
+            [worktreeId]: groups.length
+              ? groups.map((entry) => (entry.id === groupId ? nextGroup : entry))
+              : [nextGroup]
+          },
+          layoutByWorktree: {
+            ...state.layoutByWorktree,
+            [worktreeId]: (orderSlot && state.layoutByWorktree[worktreeId]) || {
+              type: 'leaf',
+              groupId
+            }
+          },
+          activeGroupIdByWorktree: groups.length
+            ? state.activeGroupIdByWorktree
+            : {
+                ...state.activeGroupIdByWorktree,
+                [worktreeId]: groupId
+              }
+        }
+      })
       return groupId
     },
 
@@ -93,8 +139,7 @@ export function createTabsGroupActions(
               ...state.activeGroupIdByWorktree,
               [worktreeId]: groupId
             }
-        // Why: focusing a group surfaces its active terminal tab, so dismiss the tab-level bell.
-        // Why (activeWorktree guard below): only when the group is in the active worktree, else the unseen tab's bell is swallowed.
+        // Only surface tabs of the active workspace; focusing an unseen group must not consume its bell.
         if (state.activeWorktreeId !== worktreeId) {
           if (groupAlreadyFocused) {
             return state
@@ -128,7 +173,8 @@ export function createTabsGroupActions(
       const group = (state.groupsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === groupId
       )
-      if (!group || group.tabOrder.length > 0) {
+      const realIds = new Set((state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
+      if (!group || group.tabOrder.some((id) => realIds.has(id))) {
         return false
       }
       set((current) => {

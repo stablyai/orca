@@ -2,13 +2,12 @@ import { app, powerMonitor } from 'electron'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
-import { createDesktopRelayServiceInstaller } from '../runtime/relay/desktop-relay-service-installer'
+import { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'
+import { createDesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
 import { publishDesktopRelayStatus } from './main-process-relay-status'
 import { mainProcessState as state } from './main-process-state'
 
-// Registers the on-demand Relay installer and starts the first install, which
-// waits for the persisted proxy itself, so it can run before the proxy lands.
+// Register before proxy readiness; the installer waits before its first request.
 export function startDesktopRelayService(runtimeRpc: OrcaRuntimeRpcServer): void {
   const installer = createDesktopRelayServiceInstaller({
     runtimeRpc,
@@ -32,8 +31,7 @@ export function startDesktopRelayService(runtimeRpc: OrcaRuntimeRpcServer): void
   })
   state.desktopRelayInstaller = installer
   runtimeRpc.setMobileRelayPairingProviderInstaller(() => installer.ensure())
-  // Why: sleeping past relay-token expiry kills the broker with no retry
-  // timer; resume is the moment that state becomes recoverable.
+  // Sleep can expire the token with no retry timer; resume is the recovery opportunity.
   powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
   void installer.ensure()
 }

@@ -17,7 +17,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -144,10 +144,8 @@ describe('live profile authority admission', () => {
 
   it('migrates once, loads admitted state and reopens worker-acknowledged writes', async () => {
     const input = options()
-    writeFileSync(
-      input.dataFile,
-      JSON.stringify(buildProfileStateCutoverFixture(join(input.dataFile, '..')))
-    )
+    const source = buildProfileStateCutoverFixture(join(input.dataFile, '..'))
+    writeFileSync(input.dataFile, JSON.stringify(source))
     const { store, migrated, backend } = await open(input)
     expect({ migrated, backend }).toEqual({ migrated: true, backend: 'sqlite' })
     store.updateSettings({ theme: 'dark' })
@@ -156,7 +154,7 @@ describe('live profile authority admission', () => {
     const reopened = await open(input)
     expect(reopened.migrated).toBe(false)
     expect(reopened.store.getSettings().theme).toBe('dark')
-    expect(readState(input).automationRuns).toHaveLength(1)
+    expect(readState(input).automationRuns).toMatchObject(source.automationRuns)
   })
 
   it('never adopts a competing revision between bootstrap and worker readiness', async () => {

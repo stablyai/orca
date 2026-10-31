@@ -48,8 +48,7 @@ describe('timer delay policy', () => {
     expect(parsePositiveSafeIntegerText(raw)).toBeNull()
   })
 
-  // Values the CLI's own Number() coercion accepts must parse to the same
-  // budget here, or the caller's timer expires before the CLI's does.
+  // Match the CLI’s Number coercion or this timer can expire before the CLI’s own timeout.
   it.each([
     ['+1000', 1_000],
     ['1000.0', 1_000],

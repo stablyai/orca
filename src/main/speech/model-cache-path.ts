@@ -59,9 +59,7 @@ export function getSpeechModelCacheDirCandidates(
     .filter((modelsDir) => !hasNonAsciiCharacters(modelsDir))
     .map((modelsDir) => ({ modelsDir, migrationSourceDir: requestedModelsDir }))
 
-  // Why: sherpa-onnx 1.12.x cannot load model files from non-ASCII Windows
-  // paths. Try ASCII shared caches first, but keep the requested path as a
-  // last fallback so cache setup failures do not prevent the app from opening.
+  // sherpa-onnx 1.12.x needs ASCII Windows paths; retain the requested path if shared caches fail.
   return [...candidates, { modelsDir: requestedModelsDir, migrationSourceDir: null }]
 }
 
@@ -79,8 +77,7 @@ async function copyMissingCacheEntry(sourcePath: string, targetPath: string): Pr
     return
   }
 
-  // Why: copy to a temp path and atomically rename so an interrupted migration
-  // never leaves a truncated model file that passes existence-only validation.
+  // Atomic promotion prevents interrupted copies from passing existence-only validation.
   const tempPath = `${targetPath}.partial`
   await cp(sourcePath, tempPath, { force: true })
   await rename(tempPath, targetPath)

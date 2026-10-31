@@ -1,0 +1,9 @@
+# Run from the repository root: `pnpm lint:ast-grep` and `pnpm test:ast-grep`.
+# Rule ids are per language, so each rule file holds a TypeScript and a TSX document.
+ruleDirs:
+  - ast-grep/rules
+testConfigs:
+  - testDir: ast-grep/rule-tests
+# The TypeScript grammar parses plain JavaScript; TSX would misread `<T>(x) => x` generics.
+languageGlobs:
+  typescript: ['*.js', '*.mjs', '*.cjs']

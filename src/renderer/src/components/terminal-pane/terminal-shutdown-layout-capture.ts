@@ -3,7 +3,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
-import { collectLeafIds } from './terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
@@ -45,8 +45,7 @@ function fitsSessionScrollbackByteLimit(serialized: string): boolean {
   return isUtf8ByteLengthWithinLimit(serialized, MAX_BUFFER_BYTES)
 }
 
-// Why bounded: a plain row bisection costs ~13 full serializes per over-limit pane (~250ms at the
-// 5k scrollback default, ~700ms at 50k), and force-park pays it synchronously per evicted pane.
+// Bound full-serialize probes because force-park pays their scrollback-sized cost synchronously per pane.
 const MAX_SCROLLBACK_FIT_PROBES = 4
 
 /** Largest tail of `pane` that fits the session byte cap, found in a few interpolation probes. */
@@ -60,13 +59,11 @@ function serializeWithinSessionScrollbackByteLimit(
   let fitRows = 0
   let fitBytes = 0
   let best: string | null = null
-  // Why the extra probes before the first fit: returning '' would drop the whole pane, and those
-  // probes shrink geometrically, so they cost less in total than a bisection's upper-half passes.
+  // Geometrically shrinking pre-fit probes avoid dropping all history without bisection’s repeated large serializes.
   for (let probe = 0; probe < MAX_SCROLLBACK_FIT_PROBES || best === null; probe += 1) {
     const anchorRows = best === null ? overRows : fitRows
     const anchorBytes = best === null ? overBytes : fitBytes
-    // Bytes grow ~linearly with rows, so a secant step lands on the exact fit for uniform
-    // scrollback; the midpoint floor stops it creeping when dense recent rows sit above sparse old ones.
+    // Secant fits uniform density quickly; midpoint floor prevents creeping on dense tails above sparse history.
     const estimate = Math.floor((anchorRows * MAX_BUFFER_BYTES) / Math.max(anchorBytes, 1))
     const midpoint = Math.floor((fitRows + overRows) / 2)
     const rows = Math.min(Math.max(Math.min(estimate, midpoint), fitRows + 1), overRows - 1)
@@ -102,19 +99,15 @@ export function captureTerminalShutdownLayout({
   if (captureBuffers) {
     for (const pane of panes) {
       try {
-        // Why: non-focused panes may have renderer-throttled PTY bytes queued;
-        // push them into xterm before taking the shutdown scrollback snapshot.
+        // Drain throttled output before capture so hidden/nonfocused panes retain queued bytes.
         flushTerminalOutput(pane.terminal)
         const leafId = pane.leafId
         let scrollback = pane.terminal.options.scrollback ?? 10_000
-        // Why serializeWithAbsoluteCursor: these buffers replay into fresh
-        // xterms on session restore, and SerializeAddon's relative cursor
-        // restore lands one column short after a wrap-pending final row.
+        // Absolute cursor restore avoids SerializeAddon’s one-column-short relative restore after wrap-pending rows.
         let serialized = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
           scrollback
         })
-        // Why: SSH sleep keeps this string in session JSON; cap by UTF-8
-        // bytes so non-ASCII scrollback cannot bypass the intended bound.
+        // Cap persisted SSH sleep history by UTF-8 bytes so non-ASCII cannot bypass the limit.
         if (!fitsSessionScrollbackByteLimit(serialized) && scrollback > 1) {
           serialized = serializeWithinSessionScrollbackByteLimit(pane, serialized, scrollback)
         }
@@ -148,8 +141,7 @@ export function captureTerminalShutdownLayout({
     }
     const priorPtyId = existingLayout.ptyIdsByLeafId?.[pane.leafId]
     if (transport && priorPtyId) {
-      // Why: shutdown can capture during the post-remount attach gap where
-      // each pane has a transport but the deferred PTY ID is still null.
+      // Retain prior PTY IDs during post-remount attach gaps where transports exist but IDs are pending.
       preservedPtyIdsByLeafId[pane.leafId] = priorPtyId
     }
   }
@@ -175,9 +167,7 @@ export function captureTerminalShutdownLayout({
   } = existingLayout
   return {
     ...structure,
-    // Why: shutdown snapshots can otherwise persist focus on a mounted pane whose
-    // transport was already cleared during PTY exit/reconnect cleanup. Unlike
-    // scrollback, PTY bindings only preserve prior ids during a live attach gap.
+    // Do not persist focus on exited/reconnecting cleared transports; only live attach gaps preserve prior PTY bindings.
     activeLeafId: resolveTerminalLayoutActiveLeafId({
       root: structure.root,
       activeLeafId: structure.activeLeafId,

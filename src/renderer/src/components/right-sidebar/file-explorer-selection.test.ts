@@ -76,11 +76,11 @@ describe('file explorer selection', () => {
       node('/repo/c.ts', 'c.ts')
     ]
 
-    expect(formatFileExplorerPathsForClipboard(rows, 'absolute')).toBe(
+    expect(formatFileExplorerPathsForClipboard(rows, 'absolute', 'local')).toBe(
       '/repo/b.ts\n/repo/a.ts\n/repo/c.ts'
     )
-    expect(formatFileExplorerPathsForClipboard(rows, 'relative')).toBe('b.ts\na.ts\nc.ts')
-    expect(formatFileExplorerPathsForClipboard(rows, 'name')).toBe('b.ts\na.ts\nc.ts')
+    expect(formatFileExplorerPathsForClipboard(rows, 'relative', 'local')).toBe('b.ts\na.ts\nc.ts')
+    expect(formatFileExplorerPathsForClipboard(rows, 'name', 'local')).toBe('b.ts\na.ts\nc.ts')
   })
 
   it('copies file names without directory prefixes', () => {
@@ -89,8 +89,10 @@ describe('file explorer selection', () => {
       node('/repo/src/lib.ts', 'src/lib.ts')
     ]
 
-    expect(formatFileExplorerPathsForClipboard(rows, 'name')).toBe('index.ts\nlib.ts')
-    expect(formatFileExplorerPathsForClipboard(rows, 'relative')).toBe('src/index.ts\nsrc/lib.ts')
+    expect(formatFileExplorerPathsForClipboard(rows, 'name', 'local')).toBe('index.ts\nlib.ts')
+    expect(formatFileExplorerPathsForClipboard(rows, 'relative', 'local')).toBe(
+      'src/index.ts\nsrc/lib.ts'
+    )
   })
 
   it('applies legacy path cleanup across the selected set', () => {

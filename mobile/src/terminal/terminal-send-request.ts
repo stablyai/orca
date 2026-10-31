@@ -7,14 +7,14 @@ type TerminalSendParams = {
   readonly client?: { readonly id: string; readonly type: 'mobile' }
 }
 
-// Why: keystroke sends must never park in the connect wait — parked sends replay into the PTY after reconnect (#6713).
+// Never park keystrokes during connect waits; they would replay stale input into the PTY after reconnect.
 export const TERMINAL_INPUT_SEND_OPTIONS: SendRequestOptions = { failWhenDisconnected: true }
 
 export function buildTerminalSendParams(args: {
   terminal: string
   text: string
   enter: boolean
-  // Why: presence-lock take-floor; marks this phone active so multi-mobile contention resolves to the last actor.
+  // Take the input floor so multi-phone contention follows the latest actor.
   deviceToken: string | null
 }): TerminalSendParams {
   return {

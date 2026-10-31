@@ -9,36 +9,30 @@ import {
   type WriteSettlement
 } from '../../../shared/pty-write-settlement'
 
-const LEAF = {
-  tabId: 'tab-1',
-  leafId: 'leaf-1',
+const TERMINAL = {
   ptyId: 'pty-1',
-  writable: true,
+  handle: 'term-1',
+  paneKeys: ['tab-1:leaf-1'],
   lastAgentStatus: 'idle' as const,
-  lastAgentStatusObservedLive: true,
-  lastOscTitle: null
+  lastAgentStatusObservedLive: true
 }
 
-function pointerDeps(db: OrchestrationDb, writePty: () => WriteSettlement) {
+function pointerDeps(
+  db: OrchestrationDb,
+  writePty: (ptyId: string, data: string) => WriteSettlement
+) {
   return {
     mailboxOwner: { resolve: () => 'run:run-1' },
-    deliveryTarget: { resolveTerminalHandle: () => 'term-1', deferForAbsenceProbe: () => false },
+    deliveryTarget: { resolveTerminal: () => TERMINAL, deferForAbsenceProbe: () => false },
     getDb: () => db,
-    getLeaf: () => LEAF,
-    getLeafKey: () => 'tab-1:leaf-1',
-    getLiveLeafForHandle: () => LEAF,
-    // These cases exercise staging and Enter phases, not the idle gate; the pane is settled.
+    getTerminal: () => TERMINAL,
+    // Hold the pane settled to isolate staging and Enter phases from the idle gate.
     isAgentSettledForDelivery: () => true,
     getMessageWaiters: () => undefined,
-    getTabTitle: () => null,
     getCliCommand: () => 'orca' as const,
-    getTerminalHandleForLeafKey: () => 'term-1',
-    resolveSubmitTarget: () => ({
-      leaf: LEAF,
-      terminalHandle: 'term-1',
-      processIncarnation: 'inc-1'
-    }),
+    resolveSubmitTarget: () => ({ terminal: TERMINAL, processIncarnation: 'inc-1' }),
     isLeafPtyProvenAbsent: async () => false,
+    isPtyAwaitingUserInput: () => false,
     redriveMailbox: vi.fn(),
     writePty
   }
@@ -48,11 +42,10 @@ function stageArgs(db: OrchestrationDb, state: OrchestrationMailboxPointerState)
   return {
     deps: pointerDeps(db, () => WRITE_ACCEPTED),
     state,
-    leaf: LEAF,
+    terminal: TERMINAL,
     mailboxHandle: 'run:run-1',
     newestSequence: 1,
     enterDelayMs: 5,
-    leafKey: 'tab-1:leaf-1',
     settle: (ptyId: string, flight: never) => state.settleFlight(ptyId, flight),
     redrive: vi.fn()
   }
@@ -67,7 +60,6 @@ describe('mailbox pointer staging watermark', () => {
       to: 'run:run-1',
       subject: 's'
     })
-    // A concurrent flight already owns the reservation, so this claim cannot succeed.
     expect(
       db.stageMailboxPointerEnter([message.id], { ptyId: 'other-pty', processIncarnation: 'inc-x' })
     ).toBe(true)
@@ -186,28 +178,45 @@ describe('mailbox pointer staging watermark', () => {
     })
 
     const writePty = vi.fn(() => WRITE_ACCEPTED)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps delivery reads.
     const delivery = new OrchestrationMailboxPointerDelivery<never>({
       ...pointerDeps(contended, writePty),
-      redriveMailbox: (handle: string) => delivery.deliver(LEAF, { mailboxHandle: handle })
+      redriveMailbox: (handle: string) => delivery.deliver(TERMINAL, { mailboxHandle: handle })
     } as never)
 
-    delivery.deliver(LEAF, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
+    delivery.deliver(TERMINAL, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
     await new Promise((resolve) => setImmediate(resolve))
     expect(writePty).not.toHaveBeenCalled()
 
-    // Newer mail must still reach the agent; a leaked watermark used to park it forever.
     db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'run:run-1', subject: 'second' })
-    delivery.deliver(LEAF, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
+    delivery.deliver(TERMINAL, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
     await new Promise((resolve) => setImmediate(resolve))
 
     expect(writePty.mock.calls.length).toBeGreaterThan(0)
     db.close()
   })
+
+  // Why: a pointer left unsubmitted in Cursor's composer stacks up and rides along with the user's next prompt.
+  it('submits the pointer with Enter for a Cursor Agent pane', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
+    const writePty = vi.fn((_ptyId: string, _data: string) => WRITE_ACCEPTED)
+    const state = new OrchestrationMailboxPointerState()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps the staging path reads.
+    stageOrchestrationMailboxPointer({
+      ...stageArgs(db, state),
+      deps: pointerDeps(db, writePty),
+      messages: [{ id: message.id, type: 'status', sequence: 1 }]
+    } as never)
+
+    await vi.waitFor(() => expect(writePty).toHaveBeenLastCalledWith('pty-1', '\r'))
+    expect(writePty.mock.calls[0]?.[1]).toContain('You have 1 orchestration message')
+    db.close()
+  })
 })
 
 describe('retiring a pty mid-delivery', () => {
-  // Why: an Enter that was already written may have landed. Releasing it would send the same
-  // mail a second time, so only phases that provably never submitted become redeliverable.
+  // Only provably unsubmitted phases may retry; an attempted Enter may already have landed.
   it('leaves an attempted Enter at its phase instead of making it redeliverable', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
@@ -221,14 +230,13 @@ describe('retiring a pty mid-delivery', () => {
     try {
       const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
       const delivery = new OrchestrationMailboxPointerDelivery(pointerDeps(db, writePty) as never)
-      delivery.deliver(LEAF, { mailboxHandle: 'run:run-1' })
+      delivery.deliver(TERMINAL, { mailboxHandle: 'run:run-1' })
 
-      // Settle the pointer write, so the pane reaches WRITE_ATTEMPTED and arms the Enter.
       settlements[0]?.(WRITE_ACCEPTED)
       await vi.advanceTimersByTimeAsync(0)
       expect(db.getMessageById(message.id)?.pointer_enter_pending).toBe(2)
 
-      // Fire the Enter but never settle it: this is the ambiguous state.
+      // Attempt Enter without settling it to create an ambiguous handoff.
       await vi.advanceTimersByTimeAsync(600)
       expect(db.getMessageById(message.id)?.pointer_enter_pending).toBe(3)
 
@@ -256,7 +264,7 @@ describe('retiring a pty mid-delivery', () => {
     try {
       const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
       const delivery = new OrchestrationMailboxPointerDelivery(pointerDeps(db, writePty) as never)
-      delivery.deliver(LEAF, { mailboxHandle: 'run:run-1' })
+      delivery.deliver(TERMINAL, { mailboxHandle: 'run:run-1' })
       settlements[0]?.(WRITE_ACCEPTED)
       await vi.advanceTimersByTimeAsync(0)
       expect(db.getMessageById(message.id)?.pointer_enter_pending).toBe(2)

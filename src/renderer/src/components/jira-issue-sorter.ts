@@ -1,6 +1,6 @@
 import type { JiraListColumnId } from './jira-list-columns'
-import type { JiraIssue, JiraPriority } from '../../../shared/jira-types'
-import { compareNumericLocaleText } from '@/lib/locale-text-collators'
+import type { JiraIssue, JiraPriority } from '../../../shared/jira/jira-types'
+import { compareNumericLocaleText } from '../../../shared/locale-text-collators'
 
 export type JiraIssueSortColumn = JiraListColumnId
 

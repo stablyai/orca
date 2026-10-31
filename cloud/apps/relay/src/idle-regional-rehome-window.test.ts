@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayDatabase } from './database.js'
-import { IDLE_REHOME_DECISION_WINDOW } from './idle-regional-rehome-selection.js'
 import { openIdleRehomeTestDatabase } from './idle-regional-rehome-test-database.js'
 
 // One source cell and three targets, so a poll has to rank targets per host
@@ -176,22 +175,33 @@ describe('idle regional rehome candidate window', () => {
   it('reads a bounded window of decisions however many hosts are eligible', async () => {
     const { store, database, safety } = await setup()
     await seedHost(store, identity)
-    await cloneHosts(database, identity, IDLE_REHOME_DECISION_WINDOW + 200)
-    const query = vi.spyOn(database, 'query')
-    await store.selectIdleRegionalRehomeCandidates(safety)
-    const calls = query.mock.calls.map((call) => call[0])
-    const window = calls.findIndex((sql) => /FROM relay_region_decisions\s*$/m.test(sql))
-    expect(window).toBeGreaterThanOrEqual(0)
-    expect(query.mock.calls[window]![1]!.at(-1)).toBe(IDLE_REHOME_DECISION_WINDOW)
-    // No statement pages by OFFSET any more: that was the cost that grew with the rollout.
-    expect(calls.some((sql) => /OFFSET/i.test(sql))).toBe(false)
+    await cloneHosts(database, identity, 700)
+    const query = database.query.bind(database)
+    const decisionRows: number[] = []
+    vi.spyOn(database, 'query').mockImplementation(async (sql, params) => {
+      const rows = await query(sql, params)
+      if (/^SELECT user_id, relay_host_id FROM relay_region_decisions/.test(sql)) {
+        decisionRows.push(rows.length)
+      }
+      return rows
+    })
+    const first = await store.selectIdleRegionalRehomeCandidates(safety)
+    const next = await store.selectIdleRegionalRehomeCandidates(safety)
+    expect(decisionRows.length).toBeGreaterThan(0)
+    for (const count of decisionRows) {
+      expect(count).toBeLessThanOrEqual(500)
+    }
+    expect(first).toHaveLength(102)
+    expect(next).toHaveLength(102)
+    const firstKeys = new Set(first.map((c) => `${c.userId}/${c.targetCellId}`))
+    expect(next.every((c) => !firstKeys.has(`${c.userId}/${c.targetCellId}`))).toBe(true)
   })
 
-  it('keeps the window\'s last host when a decision turns eligible between the two reads', async () => {
+  it("keeps the window's last host when a decision turns eligible between the two reads", async () => {
     const { store, database, safety, now } = await setup()
     await seedHost(store, identity)
     // Exactly one full window, whose last key in sort order is the seeded host.
-    await cloneHosts(database, identity, IDLE_REHOME_DECISION_WINDOW - 1)
+    await cloneHosts(database, identity, 499)
     await database.query(
       "UPDATE relay_assignment_activity_leases SET expires_at = ? WHERE user_id LIKE 'clone-%'",
       [now - 1]
@@ -225,6 +235,7 @@ describe('idle regional rehome candidate window', () => {
       return rows
     })
     const candidates = await store.selectIdleRegionalRehomeCandidates(safety)
+    expect(inserted).toBe(true)
     expect(candidates.map((candidate) => candidate.userId)).toEqual([
       identity.userId,
       identity.userId,
@@ -237,20 +248,24 @@ describe('idle regional rehome candidate window', () => {
     await seedHost(store, identity)
     await cloneHosts(database, identity, 120)
     const seen = new Set<string>()
-    let pages = 0
     let wrapped = false
-    // 121 hosts x 3 targets is 363 candidates, so the page cap has to be hit
-    // several times before the window runs out and the cursor wraps.
     for (let poll = 0; poll < 20 && !wrapped; poll++) {
       const page = await store.selectIdleRegionalRehomeCandidates(safety)
-      pages += 1
-      const before = seen.size
-      for (const candidate of page) seen.add(`${candidate.userId}/${candidate.targetCellId}`)
-      if (seen.size === before && page.length > 0) wrapped = true
-      if (page.length < 3) wrapped = true
+      expect(page.length).toBeGreaterThan(0)
+      expect(page.length).toBeLessThanOrEqual(102)
+      for (const candidate of page) {
+        const key = `${candidate.userId}/${candidate.targetCellId}`
+        if (seen.has(key)) {
+          expect(seen.size).toBe(363)
+          wrapped = true
+        } else {
+          expect(wrapped).toBe(false)
+          seen.add(key)
+        }
+      }
     }
-    expect(pages).toBeGreaterThan(1)
-    expect(seen.size).toBe(121 * 3)
+    expect(seen.size).toBe(363)
+    expect(wrapped).toBe(true)
   })
 
   it('does not stall on a host the window found but the join rejected', async () => {

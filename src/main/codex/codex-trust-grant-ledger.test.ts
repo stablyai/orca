@@ -77,7 +77,6 @@ describe('codex trust grant ledger', () => {
     mkdirSync(dirname(getCodexTrustGrantLedgerPath()), { recursive: true })
     writeFileSync(getCodexTrustGrantLedgerPath(), 'not-json{{{')
     expect(readCodexTrustGrantLedgerHome(home)).toBeNull()
-    // Why: a corrupt file must not block recording the next verified grant.
     writeCodexTrustGrantLedgerHome(home, { binary: null, entries: {} })
     expect(readCodexTrustGrantLedgerHome(home)).not.toBeNull()
   })

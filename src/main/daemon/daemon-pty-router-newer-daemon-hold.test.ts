@@ -30,8 +30,7 @@ describe('DaemonPtyRouter newer-daemon hold', () => {
     expect(current.spawn).not.toHaveBeenCalled()
   })
 
-  // Why the agent-shaped spawn: the mobile refresh and runtime controller re-materialize a known
-  // session id with its agent command through this same router call.
+  // Mobile and runtime restore can re-materialize an existing ID with its agent command.
   it('refuses an agent-launching re-materialize of that id the same way', async () => {
     const { current, router } = setup({ holding: true, restorable: ['newer-session'] })
     await expect(

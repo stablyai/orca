@@ -1,5 +1,4 @@
-// Prune rules for view records (design §1.4): what a save keeps of a record, and what a removed
-// workspace takes with it. Reads never need these; they fall back (workspace-layout-views.ts).
+// Prune view references on save or workspace removal; reads use workspace-layout-views fallbacks.
 
 import {
   getWorktreeIdFromHostIdentity,
@@ -7,6 +6,7 @@ import {
 } from '../worktree/host-qualified-identity'
 import { filterRecord, withoutKey } from './stored-record-fields'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
+import { editorFileKey, holdsEditorFileId } from './workspace-layout-editor-tab-file'
 import type {
   LayoutTerminalTab,
   WorkspaceLayout,
@@ -24,7 +24,7 @@ function terminalTabs(workspace: WorkspaceLayout): LayoutTerminalTab[] {
 function clearMissingIds(
   byWorkspace: Record<string, string | null> | undefined,
   workspaces: Workspaces,
-  ids: (workspace: WorkspaceLayout) => readonly string[]
+  holds: (workspace: WorkspaceLayout, id: string) => boolean
 ): Record<string, string | null> | undefined {
   if (!byWorkspace) {
     return undefined
@@ -32,10 +32,15 @@ function clearMissingIds(
   return Object.fromEntries(
     Object.entries(byWorkspace).map(([key, id]) => {
       const workspace = workspaces[key]
-      return [key, id === null || !workspace || ids(workspace).includes(id) ? id : null]
+      return [key, id === null || !workspace || holds(workspace, id) ? id : null]
     })
   )
 }
+
+const holdsId =
+  (ids: (workspace: WorkspaceLayout) => readonly string[]) =>
+  (workspace: WorkspaceLayout, id: string): boolean =>
+    ids(workspace).includes(id)
 
 /** Keeps a held workspace's entries for ids it still has; other workspaces are untouched. */
 function keepHeldIds<T>(
@@ -54,18 +59,14 @@ function keepHeldIds<T>(
 
 const tabIds = (workspace: WorkspaceLayout): string[] => workspace.tabs.map((tab) => tab.id)
 const groupIds = (workspace: WorkspaceLayout): string[] => workspace.groups.map((group) => group.id)
-const filePaths = (workspace: WorkspaceLayout): string[] =>
-  workspace.editorFiles?.map((file) => file.filePath) ?? []
+const fileKeys = (workspace: WorkspaceLayout): string[] =>
+  workspace.editorFiles?.map(editorFileKey) ?? []
 const browserTabIds = (workspace: WorkspaceLayout): string[] =>
   workspace.browserTabs?.map((tab) => tab.id) ?? []
 const terminalTabIds = (workspace: WorkspaceLayout): string[] =>
   terminalTabs(workspace).map((tab) => tab.entityId)
 
-/**
- * What a save keeps of a view record, given the model of the same partition: entries naming a
- * group, tab, pane, file or browser tab the model no longer holds are dropped or reset the way
- * today's writer resets them, so the Serializer writes the same disk fields either way.
- */
+/** Drop/reset references to removed entities in held workspaces, matching existing persisted selection fields. */
 export function pruneViewRecord(
   record: LayoutViewRecord,
   layout: WorkspaceLayoutModel
@@ -113,7 +114,7 @@ export function pruneViewRecord(
     groups,
     lastFocusedAt: keepHeldIds(record.lastFocusedAt, workspaces, tabIds),
     panes,
-    editorDrafts: keepHeldIds(record.editorDrafts, workspaces, filePaths)
+    editorDrafts: keepHeldIds(record.editorDrafts, workspaces, fileKeys)
   }
   if (activeGroups) {
     pruned.activeGroupIdByWorktree = filterRecord(
@@ -125,30 +126,27 @@ export function pruneViewRecord(
     pruned.activeTabIdByWorktree = clearMissingIds(
       record.activeTabIdByWorktree,
       workspaces,
-      terminalTabIds
+      holdsId(terminalTabIds)
     )
   }
   if (record.activeFileIdByWorktree) {
     pruned.activeFileIdByWorktree = clearMissingIds(
       record.activeFileIdByWorktree,
       workspaces,
-      filePaths
+      holdsEditorFileId
     )
   }
   if (record.activeBrowserTabIdByWorktree) {
     pruned.activeBrowserTabIdByWorktree = clearMissingIds(
       record.activeBrowserTabIdByWorktree,
       workspaces,
-      browserTabIds
+      holdsId(browserTabIds)
     )
   }
   return pruned
 }
 
-/**
- * A workspace left the catalog: its selection goes with it, field for field as the Store's owner
- * removal drops it from a stored session today. `workspace` is its layout before the removal.
- */
+/** Remove a departed workspace’s selection using its layout before removal, matching Store ownership cleanup. */
 export function removeWorkspaceFromView(
   record: LayoutViewRecord,
   workspaceKey: string,

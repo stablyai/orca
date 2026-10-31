@@ -23,11 +23,7 @@ function uncPath(guestPath: string): string {
   return `\\\\wsl.localhost\\${DISTRO}${guestPath.replaceAll('/', '\\')}`
 }
 
-/**
- * Enumeration and deletion stay server-side in the distro for the same reason
- * install does: node's `fs` over a `\\wsl$` path applies Windows semantics to
- * POSIX symlinks and permissions.
- */
+/** Keep enumeration/deletion in the distro; Node over UNC applies Windows symlink/permission semantics. */
 describe.runIf(RUN_REAL_WSL)('real WSL skill deletion primitives', () => {
   let guestRoot = ''
   let skillsRoot = ''
@@ -40,7 +36,6 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill deletion primitives', () => {
     skillsRoot = `${guestRoot}/home/.agents/skills`
     await runWsl('mkdir', '-p', `${skillsRoot}/demo`, `${guestRoot}/home/.codex/skills/demo`)
     await runWsl('sh', '-c', `printf '%s' 'x' > ${skillsRoot}/demo/SKILL.md`)
-    // An alias-dir in another provider root, and an alias-file inside a real one.
     await runWsl('mkdir', '-p', `${guestRoot}/home/.claude/skills`)
     await runWsl('ln', '-sT', `${skillsRoot}/demo`, `${guestRoot}/home/.claude/skills/demo`)
     await runWsl(
@@ -49,7 +44,6 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill deletion primitives', () => {
       `${skillsRoot}/demo/SKILL.md`,
       `${guestRoot}/home/.codex/skills/demo/SKILL.md`
     )
-    // Deliberately differs only by case, to prove POSIX case-sensitivity.
     await runWsl('mkdir', '-p', `${guestRoot}/home/.agents/Skills`)
   })
 

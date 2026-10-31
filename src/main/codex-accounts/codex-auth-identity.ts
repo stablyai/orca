@@ -9,8 +9,7 @@ export type CodexAuthIdentity = {
 
 type CodexAuthOwnershipIdentity = Omit<CodexAuthIdentity, 'workspaceLabel'>
 
-// Why: stale shared-home PTYs can write after an account switch, so read-back
-// needs a positive claim match instead of trusting the selected path alone.
+// Stale shared-home PTYs can write after a switch; require positive identity before read-back.
 export function codexAuthMatchesManagedAccount(
   runtimeAuthContents: string,
   account: CodexManagedAccount,
@@ -60,28 +59,30 @@ export function codexAuthMatchesManagedAccount(
   )
 }
 
-// Why: an unreadable managed home cannot be compared byte-for-byte, so only the
-// account record itself can rule that home out as the credential's owner.
+// An unreadable home remains a possible owner unless its account record contradicts the credential.
 export function codexAuthCouldBelongToManagedAccount(
   runtimeAuthContents: string,
   account: CodexManagedAccount
 ): boolean {
   const identity = readCodexAuthIdentity(runtimeAuthContents)
-  return (
-    !identity ||
-    !identityContradictsSelection(
-      {
-        email: normalizeField(account.email),
-        providerAccountId: normalizeField(account.providerAccountId),
-        workspaceAccountId: normalizeField(account.workspaceAccountId)
-      },
-      identity
-    )
+  return !identity || !codexAuthIdentityContradictsAccount(identity, account)
+}
+
+export function codexAuthIdentityContradictsAccount(
+  identity: CodexAuthIdentity,
+  account: CodexManagedAccount
+): boolean {
+  return identityContradictsSelection(
+    {
+      email: normalizeField(account.email),
+      providerAccountId: normalizeField(account.providerAccountId),
+      workspaceAccountId: normalizeField(account.workspaceAccountId)
+    },
+    identity
   )
 }
 
-// Why: the shared mirror may still hold managed credentials; only the same
-// positively identified system account may ever be read back to ~/.codex.
+// Only positively matched system credentials may be read back from the shared mirror to ~/.codex.
 export function codexAuthMatchesSystemDefaultIdentity(
   runtimeAuthContents: string,
   systemDefaultAuthContents: string
@@ -130,8 +131,7 @@ export function codexAuthMatchesSystemDefaultIdentity(
   )
 }
 
-// Why: identity proves ownership, not ordering. Missing expiry/issue claims
-// cannot prove that candidate bytes should replace the baseline credential.
+// Ownership alone cannot prove freshness; missing expiry and issue claims leave ordering unknown.
 export function compareCodexAuthFreshness(
   candidateAuthContents: string,
   baselineAuthContents: string
@@ -167,8 +167,7 @@ export function readCodexAuthIdentity(contents: string): CodexAuthIdentity | nul
   const payload = idToken ? parseJwtPayload(idToken) : null
   const authClaims = readRecordClaim(payload, 'https://api.openai.com/auth')
   const profileClaims = readRecordClaim(payload, 'https://api.openai.com/profile')
-  // Why: normalize before the fallback chains, not after — a blank tokens.account_id
-  // must fall through to the JWT claims rather than ending the chain on an empty string.
+  // Normalize blank account IDs before fallback because empty strings are not nullish.
   const tokenAccountId = normalizeField(
     readStringClaim(tokens, 'account_id') ?? readStringClaim(tokens, 'accountId')
   )
@@ -303,9 +302,7 @@ function identityFieldMatches(selectedField: string | null, runtimeField: string
   return !selectedField || Boolean(runtimeField && selectedField === runtimeField)
 }
 
-// Why: only a claim both sides carry can rule an account out — a credential with
-// no identity claims (api key, PAT, bedrock) contradicts nothing. A ChatGPT
-// rename leaves the record email stale, so a matching account id outranks it.
+// Only shared claims can conflict; matching provider IDs outweigh email changes after a rename.
 function identityContradictsSelection(
   selected: CodexAuthOwnershipIdentity,
   identity: CodexAuthOwnershipIdentity

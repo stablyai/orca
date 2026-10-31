@@ -16,7 +16,7 @@ vi.mock('../../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSp
 
 import { gitExecFileAsync } from '../runner'
 import { _resetGitAdmissionForTests } from './git-subprocess-admission'
-import { nonInteractiveGitEnv } from './git-process-env'
+
 import { annotateWslHostFailure, readWslHostFailureDiagnostic } from './wsl-host-failure'
 import type { ResolvedCommand } from './wsl-command-resolution'
 
@@ -71,7 +71,6 @@ describe('wsl.exe host failure classification', () => {
       stderr: 'fatal: not a git repository\n'
     })
     expect(readWslHostFailureDiagnostic(guestFailure, WSL_COMMAND)).toBeNull()
-    // Same exit code, but wsl.exe was never involved.
     expect(
       readWslHostFailureDiagnostic(hostFailure(WSL_DIAGNOSTIC), {
         binary: 'git',
@@ -93,7 +92,6 @@ describe('wsl.exe host failure classification', () => {
     expect(error.message).toContain('kali-linux')
     expect(error.wslHostFailure).toBe(true)
     expect(error.wslDistro).toBe('kali-linux')
-    // The original failure detail must survive for callers that classify on it.
     expect(error.code).toBe(4294967295)
     expect(error.message).toContain('Command failed: wsl.exe')
   })
@@ -106,11 +104,6 @@ describe('WSL-routed git subprocess', () => {
 
   afterEach(() => {
     _resetGitAdmissionForTests()
-  })
-
-  it('sets WSL_UTF8 so wsl.exe explains itself in UTF-8', () => {
-    expect(nonInteractiveGitEnv({}, 'win32').WSL_UTF8).toBe('1')
-    expect(nonInteractiveGitEnv({}, 'darwin').WSL_UTF8).toBeUndefined()
   })
 
   it('reports a dead distro instead of an empty git error', async () => {

@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
-import { buildWorktreeComparator, buildWorktreeSortLabels, type SortBy } from './smart-sort'
-import { IDLE, type SmartClass, type WorktreeAttention } from './smart-attention'
+import {
+  buildWorktreeComparator,
+  buildWorktreeSortLabels,
+  type SortBy
+} from '../../../../shared/sidebar-list/smart-sort'
+import {
+  IDLE,
+  type SmartClass,
+  type WorktreeAttention
+} from '../../../../shared/sidebar-list/smart-attention'
 import { buildDesktopWorkspaceRowFactReader } from './desktop-workspace-row-facts'
 import { countActiveWorkspaceFilters } from '../../../../shared/workspace-view/workspace-row-filters'
 import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -12,8 +20,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 
-// Parity with the sidebar's own filter chain and comparator as they stood before the shared
-// Workspace options evaluator, over every combination of the filter toggles.
+// Compare the shared evaluator against the previous sidebar filter/comparator over every filter combination.
 
 const repos: Repo[] = [
   { id: 'git', path: '/git', displayName: 'Git', badgeColor: '#000', addedAt: 0 },

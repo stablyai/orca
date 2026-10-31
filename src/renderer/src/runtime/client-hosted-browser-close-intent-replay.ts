@@ -1,5 +1,5 @@
 import { callRuntimeRpc } from './runtime-rpc-client'
-import { hasRuntimeRpcErrorCode } from './runtime-rpc-result'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import {
   listClientHostedBrowserCloseIntents,
   type ClientHostedBrowserCloseIntentsByEnvironment
@@ -31,18 +31,10 @@ export type ClientHostedBrowserCloseIntentReplayStore = {
   ) => void
 }
 
-/**
- * Re-issues the closes an environment never heard.
- *
- * Deliberately the same `browser.tabClose` a live close sends -- there is no replay method and no
- * new wire state, so an old runtime settles these exactly as it settles an ordinary close. An
- * intent clears on success or on a definitive page-unknown answer; a transport failure leaves it,
- * because "we could not ask" must never read as "it is gone".
- */
+/** Replay ordinary browser.tabClose for old-runtime compatibility. Clear on success/definitive unknown; transport failure proves no absence, so retain intent. */
 export async function replayClientHostedBrowserCloseIntents(
   environmentId: string,
-  // Why passed rather than imported: this runs from a store slice, and reaching back into the
-  // store from here closes an import cycle that leaves the slice factories undefined at load.
+  // Inject instead of importing the store; this runs from slices and an import cycle leaves factories undefined.
   store: ClientHostedBrowserCloseIntentReplayStore
 ): Promise<void> {
   const trimmed = environmentId.trim()

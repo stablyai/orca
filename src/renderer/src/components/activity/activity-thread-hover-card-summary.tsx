@@ -3,11 +3,13 @@ import { Cloud, Copy, FolderGit2, GitBranch, Laptop, LocateFixed, Server } from 
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { translate } from '@/i18n/i18n'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
 import { cn } from '@/lib/utils'
 import {
   getExecutionHostLabel,
@@ -97,7 +99,12 @@ export function ActivityThreadHoverCardSummary({
       return
     }
     try {
-      await window.api.ui.writeClipboardText(worktree.path)
+      const owner = getWorktreeRowLocalPathOpenOwner(
+        useAppStore.getState(),
+        worktree,
+        repo?.connectionId
+      )
+      await window.api.ui.writeClipboardText(formatClipboardFilePath(worktree.path, owner))
       toast.success(
         translate(
           'auto.components.activity.ActivityThreadHoverCard.pathCopied',
@@ -112,7 +119,7 @@ export function ActivityThreadHoverCardSummary({
         )
       )
     }
-  }, [worktree.path])
+  }, [repo?.connectionId, worktree])
 
   return (
     <>
@@ -120,7 +127,7 @@ export function ActivityThreadHoverCardSummary({
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="inline-flex shrink-0">
-              <AgentIcon agent={agentTypeToIconAgent(thread.agentType)} size={14} />
+              <AgentTypeIcon agentType={thread.agentType} size={14} />
             </span>
             <span className="truncate text-[12px] font-semibold text-foreground">
               {formatAgentTypeLabel(thread.agentType)}

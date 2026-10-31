@@ -11,8 +11,7 @@ const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 const EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID: AppState['runtimePaneTitlesByTabId'] = {}
 
-// The agent send picker forces its target workspace visible, but only while a running
-// agent there can actually receive the message.
+// Force the picker’s target workspace visible only while a running agent there can receive the message.
 export function useAgentSendTargetWorktreeId(): string | null {
   const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
   // Why: eligibility only matters while the picker is open; when closed, don't subscribe to wake-time layout churn.

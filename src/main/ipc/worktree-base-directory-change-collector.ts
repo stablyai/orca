@@ -1,11 +1,9 @@
-import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import {
   classifyWorktreeBaseChange,
   type WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
 import {
   EMPTY_HEAD_IDENTITY_SCOPE,
-  FULL_HEAD_IDENTITY_SCOPE,
   mergeHeadIdentityScopes,
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
@@ -16,7 +14,6 @@ type WorktreeBaseWatcherEvent = {
 }
 
 export type WorktreeBaseCollectedChanges = {
-  overflow: boolean
   structureRepoIds: string[]
   gitStatusRepoIds: string[]
   headIdentityRepoIds: string[]
@@ -48,20 +45,6 @@ function emptyBuckets(): ChangeBuckets {
   }
 }
 
-// Why: overflow means every event in the window was lost, so the scope must be
-// stated as FULL here rather than left to a downstream `?? FULL` on an absent
-// field — a caller that forwards this object must not read it as "nothing moved".
-function overflowChanges(): WorktreeBaseCollectedChanges {
-  return {
-    overflow: true,
-    structureRepoIds: [],
-    gitStatusRepoIds: [],
-    headIdentityRepoIds: [],
-    headIdentityScope: FULL_HEAD_IDENTITY_SCOPE,
-    gitStatusScope: FULL_HEAD_IDENTITY_SCOPE
-  }
-}
-
 function addMatchingChange(
   target: WorktreeBaseWatchTarget,
   event: WorktreeBaseWatcherEvent,
@@ -86,7 +69,6 @@ function addMatchingChange(
 
 function toCollectedChanges(buckets: ChangeBuckets): WorktreeBaseCollectedChanges {
   return {
-    overflow: false,
     structureRepoIds: [...buckets.structureRepoIds],
     gitStatusRepoIds: [...buckets.gitStatusRepoIds],
     headIdentityRepoIds: [...buckets.headIdentityRepoIds],
@@ -102,27 +84,6 @@ export function collectLocalWorktreeBaseChanges(
   const buckets = emptyBuckets()
   for (const event of events) {
     addMatchingChange(target, event, buckets)
-  }
-  return toCollectedChanges(buckets)
-}
-
-export function collectRemoteWorktreeBaseChanges(
-  target: WorktreeBaseWatchTarget,
-  events: FsChangeEvent[]
-): WorktreeBaseCollectedChanges {
-  const buckets = emptyBuckets()
-  for (const event of events) {
-    if (event.kind === 'overflow') {
-      return overflowChanges()
-    }
-    if (event.kind === 'rename') {
-      if (event.oldAbsolutePath) {
-        addMatchingChange(target, { type: 'delete', path: event.oldAbsolutePath }, buckets)
-      }
-      addMatchingChange(target, { type: 'create', path: event.absolutePath }, buckets)
-      continue
-    }
-    addMatchingChange(target, { type: event.kind, path: event.absolutePath }, buckets)
   }
   return toCollectedChanges(buckets)
 }

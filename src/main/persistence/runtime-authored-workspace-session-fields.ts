@@ -1,19 +1,7 @@
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 
-/**
- * Keeps session fields the renderer persist snapshot does not author across a full write.
- *
- * A session write replaces the stored object. Zustand-built payloads omit runtime-owned
- * client-hosted pages and terminal close records, and they omit-when-empty the write-once
- * default-terminal-tab marker. Without this, those slices vanish on the next desktop write and
- * only show up missing after restart.
- *
- * Callers do not opt in: the Store applies this inside setLocalWorkspaceSession and
- * setHostWorkspaceSession, so the before-unload stage path inherits it too.
- *
- * A runtime clearing client-hosted pages writes an empty map, not `undefined`. The default-tab
- * marker is write-once: omission means "never stamped", not "never applied".
- */
+// Renderer snapshots omit runtime-owned fields; Store must preserve them, including before-unload writes.
 function unionWriteOnceDefaultTerminalTabsApplied(
   next: WorkspaceSessionState,
   prior: WorkspaceSessionState | null | undefined
@@ -30,6 +18,35 @@ function unionWriteOnceDefaultTerminalTabsApplied(
   return { ...next, defaultTerminalTabsAppliedByWorktreeId: merged }
 }
 
+/** Preserve omitted incarnations on unchanged bindings or restart loses older-daemon generation proof (#30486). */
+function keepPtyIncarnationsForUnchangedBindings(
+  next: WorkspaceSessionState,
+  prior: WorkspaceSessionState | null | undefined
+): WorkspaceSessionState {
+  const priorIncarnations = prior?.terminalPtyIncarnationsByPaneKey
+  if (!prior || !priorIncarnations) {
+    return next
+  }
+  const incoming = next.terminalPtyIncarnationsByPaneKey
+  // Incoming writes may supply incarnations for only some panes.
+  const kept: Record<string, string> = {}
+  for (const [paneKey, incarnationId] of Object.entries(priorIncarnations)) {
+    const parsed = parsePaneKey(paneKey)
+    if (!parsed || (incoming && Object.hasOwn(incoming, paneKey))) {
+      continue
+    }
+    const bindingOf = (session: WorkspaceSessionState): string | undefined =>
+      session.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId]
+    const priorPtyId = bindingOf(prior)
+    if (priorPtyId !== undefined && bindingOf(next) === priorPtyId) {
+      kept[paneKey] = incarnationId
+    }
+  }
+  return Object.keys(kept).length > 0
+    ? { ...next, terminalPtyIncarnationsByPaneKey: { ...kept, ...incoming } }
+    : next
+}
+
 export function preserveRuntimeAuthoredWorkspaceSessionFields(
   next: WorkspaceSessionState,
   prior: WorkspaceSessionState | null | undefined
@@ -44,7 +61,7 @@ export function preserveRuntimeAuthoredWorkspaceSessionFields(
       clientHostedBrowserPagesByWorktree: prior.clientHostedBrowserPagesByWorktree
     }
   }
-  // Why: close records are main's alone (its close transaction); a renderer save never carries them.
+  // Renderer saves omit main-owned close records.
   if (
     next.closedTerminalTabTombstonesByTabId === undefined &&
     prior?.closedTerminalTabTombstonesByTabId !== undefined
@@ -54,7 +71,7 @@ export function preserveRuntimeAuthoredWorkspaceSessionFields(
       closedTerminalTabTombstonesByTabId: prior.closedTerminalTabTombstonesByTabId
     }
   }
-  // Why union: persist snapshots omit this write-once map (empty Zustand slice, omit-when-empty
-  // payload). Treating omission as "never applied" re-spawns default terminals on every attach.
+  // Union write-once markers or omitted renderer maps would respawn defaults on every attach.
+  result = keepPtyIncarnationsForUnchangedBindings(result, prior)
   return unionWriteOnceDefaultTerminalTabsApplied(result, prior)
 }

@@ -1,11 +1,14 @@
-import { evaluateOrcadActivation, type OrcadActivationVerdict } from './orcad-activation-gate'
-import { orcadActivationTransactionRoot } from './orcad-activation-transaction'
-import type { OrcadReadinessParse } from './orcad-remote-launch'
+import {
+  evaluateOrcadActivation,
+  type OrcadActivationVerdict
+} from '../managed-server/activation/orcad-activation-gate'
+import { orcadActivationTransactionRoot } from '../managed-server/activation/orcad-activation-transaction'
+import type { OrcadReadinessParse } from '../managed-server/install/orcad-remote-launch'
 import {
   launchOrcadAndAwaitReadiness,
   type OrcadRemoteExecTarget
-} from './orcad-remote-runtime-control'
-import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
+} from '../managed-server/install/orcad-remote-runtime-control'
+import { isUnconfirmedSshCommandTermination } from './remote-exec/remote-exec-command'
 
 type CandidateLaunchTarget = Parameters<typeof launchOrcadAndAwaitReadiness>[0] &
   OrcadRemoteExecTarget & {
@@ -16,10 +19,7 @@ type CandidateLaunchTarget = Parameters<typeof launchOrcadAndAwaitReadiness>[0] 
     port: number
   }
 
-/**
- * Starts one slot and judges its readiness. An unconfirmed SSH termination rethrows: it says
- * nothing about the candidate, so it must never read as a rejected one.
- */
+/** Rethrow unconfirmed SSH cleanup: it provides no candidate evidence and must never mean rejection. */
 export async function launchAndJudgeOrcadSlot(
   options: CandidateLaunchTarget,
   slot: { remoteInstallDir: string; fullVersion: string; buildHash: string }

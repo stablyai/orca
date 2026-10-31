@@ -1,13 +1,7 @@
+import { getCellHeight, getCellWidth, getTotalScale } from './cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
-import { getCellHeight } from './fit-scale'
-import { getCellWidth, getTotalScale } from './viewport-transform'
 
-/**
- * A client point in the grid's own frame, which is where pan, cells and overlays are measured.
- *
- * The one place a clientX/clientY meets an origin: the window's is 0,0 in the WebView, and on the
- * page the host sits below the session header, so an unmapped point lands rows low.
- */
+// Subtract the host origin before grid mapping; embedded terminals sit below headers while native windows start at zero.
 export function viewportPoint(scope: TerminalDocumentScope, clientX: number, clientY: number) {
   const frame = scope.viewportRect()
   return { x: clientX - frame.left, y: clientY - frame.top }

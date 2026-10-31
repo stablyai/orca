@@ -1,9 +1,14 @@
+import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
+import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
+import { resolveHostStructuredAgentLaunchEnvironment } from '../structured-agent-launch-support'
 import { resolveStructuredCodexAccountKind } from '../structured-agent-account-home'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { collectRuntimeWorktreeAgentSources } from '../runtime-worktree-agent-sources'
 import { OrcaRuntimeWithWorktreePsDependencies } from './workspace-process-listing-dependencies'
 import { DEFAULT_WORKTREE_PS_LIMIT } from '../orca-runtime-postlude'
 import type { RuntimeWorktreePsResult } from '../../../shared/runtime-types'
+import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from '../runtime-worktree-ps-summaries'
 import {
   buildRuntimeWorktreeSummaryPathIndex,
@@ -15,10 +20,9 @@ import {
 } from '../runtime-worktree-ps-activity'
 import { applyRuntimeWorktreePsUnverifiableTerminals } from '../runtime-worktree-ps-unverifiable-terminals'
 import { attachRuntimeWorktreeAgentRows } from '../runtime-worktree-agent-rows'
+import { attachRuntimeWorktreeAgentRowWaits } from '../runtime-worktree-agent-row-waits'
 import { compareWorktreePs } from '../runtime-worktree-status-projection'
 import type { Repo } from '../../../shared/repo-types'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../structured-agent-session-runtime'
 import {
@@ -37,15 +41,15 @@ import { createStructuredChatNamingHandler } from '../../native-chat/structured-
 import { structuredChatNamingDeps } from '../structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { chatWorkerTurnStopReporter } from '../orchestration/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../worktree-listing-host-scope'
 import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
 } from '../structured-worker-custody'
-import { resolveTuiAgentLaunchEnv } from '../../../shared/tui-agent-launch-defaults'
 import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
-import { nativeChatShellEnvironmentPolicy } from '../../../shared/native-chat-shell-environment'
+import { nativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
 import { claudeStructuredAuthPolicyForSettings } from '../../claude-accounts/claude-structured-auth-policy'
 import { resolveStructuredAgentCommand } from '../../native-chat/structured-agent-command-resolution'
 import { structuredAgentConfiguredArgs } from '../../native-chat/structured-agent-configured-args'
@@ -56,39 +60,28 @@ import {
   runtimeVisibleRepos,
   withoutHiddenHosts
 } from '../runtime-visible-catalog'
-import { isStructuredAttentionWorkspaceHidden } from '../structured-attention-hidden-workspace'
+import { isWorkspaceNotificationMuted } from '../workspace-notification-mute'
+import { WorkerAutoReleaseActivity } from '../orchestration/worker-auto-release-activity'
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktreePsDependencies {
+  protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
+    () => this._orchestrationDb
+  )
+
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
-    sourceDefaultsSupported = true
+    sourceDefaultsSupported = true,
+    includeAgentWait = false
   ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
-    const resolvedWorktreeSnapshot = await this.listResolvedWorktreeSnapshot()
-    const visibilitySettings = this.store?.getSettings()
-    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
-      resolvedWorktreeSnapshot.worktrees,
-      sourceDefaultsSupported,
-      visibilitySettings
+    const { worktrees: resolvedWorktrees, platformByRepoId } = this.visibleResolvedWorktreeSnapshot(
+      await this.listResolvedWorktreeSnapshot(),
+      sourceDefaultsSupported
     )
-    const hiddenRepos = runtimeHiddenRepos(this.store)
-    const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter(
-      (worktree) =>
-        !hiddenRepos.hasWorktree(worktree) &&
-        this.isRuntimeWorktreeVisible(
-          worktree,
-          visibilitySourceMatchersByRepoId.get(worktree.repoId),
-          sourceDefaultsSupported,
-          visibilitySettings
-        )
-    )
-    // Why: worktree.ps backs the mobile sidebar, so it must use the same
-    // host-owned imported-worktree visibility gate as worktree.list/desktop.
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
-    const platformByRepoId = resolvedWorktreeSnapshot.platformByRepoId
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
       resolvedWorktrees,
@@ -101,7 +94,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     )
     const session = this.store?.getWorkspaceSession?.()
     const countedPtyIds = new Set<string>()
-    const workingTerminalEvidenceByWorktreeId = applyRuntimeWorktreePsTerminalActivity({
+    const terminalTitleEvidenceByWorktreeId = applyRuntimeWorktreePsTerminalActivity({
       freshPtyLiveness,
       countedPtyIds,
       leaves: this.leaves.values(),
@@ -109,6 +102,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       tabs: this.tabs,
       session,
       getPaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
+      paneOf: (pty) => this.paneOfPty(pty),
       getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId),
       getSummary
     })
@@ -126,42 +120,65 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         repoById,
         ptysById: this.ptysById,
         tabs: this.tabs,
+        paneOf: (pty) => this.paneOfPty(pty),
         getTerminalHandlesForPty: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
         getSummary
       })
+    const rowSources = collectRuntimeWorktreeAgentSources({
+      mirroredWorktreeIdByTabId,
+      connectedPtyEvidence,
+      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
+      readStructuredSummary: getStructuredAgentSessionHost()?.readStatusSummary
+    })
     attachRuntimeWorktreeAgentRows({
       summaries,
-      workingTerminalEvidenceByWorktreeId,
-      rowSources: collectRuntimeWorktreeAgentSources({
-        mirroredWorktreeIdByTabId,
-        connectedPtyEvidence,
-        // Structured sessions are in here too: the host publishes them into the same store.
-        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
-        readStructuredSummary: getStructuredAgentSessionHost()?.readStatusSummary
-      }),
+      terminalTitleEvidenceByWorktreeId,
+      rowSources,
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
-      getSummary
+      getSummary,
+      conversationName: this.orchestrationSenderNames.agentRowNamer()
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
-    // Why: the same cap starvation as worktree.list — a host whose rows all sort last gets no
-    // page at all, which is indistinguishable from it having no workspaces (#18104).
-    return buildWorktreeListingPage(
+    // Apply per-host pagination so hosts sorting last cannot disappear behind a global cap (#18104).
+    const page = buildWorktreeListingPage(
       sorted,
       limit,
       withoutHiddenHosts(this.listKnownExecutionHostIds(), runtimeHiddenHostIds(this.store))
     )
+    return includeAgentWait ? attachRuntimeWorktreeAgentRowWaits(page, rowSources, this) : page
   }
 
-  /** The agent's configured env, with the account a desktop that owns this host's accounts chose
-   *  laid over it, as its own launches here carry. */
-  protected structuredAgentLaunchEnv(
-    agent: StructuredAgentId,
-    settings: Pick<GlobalSettings, 'agentDefaultEnv'>
-  ) {
+  /** Match desktop visibility, including imported worktrees, through the worktree.list gate. */
+  protected visibleResolvedWorktreeSnapshot(
+    snapshot: ResolvedWorktreeSnapshot,
+    sourceDefaultsSupported = true
+  ): ResolvedWorktreeSnapshot {
+    const visibilitySettings = this.store?.getSettings()
+    const sourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
+      snapshot.worktrees,
+      sourceDefaultsSupported,
+      visibilitySettings
+    )
+    const hiddenRepos = runtimeHiddenRepos(this.store)
+    const repos = this.store?.getRepos() ?? []
+    const repoOwners = createRepoRowExecutionHostLookup(repos)
     return {
-      ...resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-      ...this.accounts.hostLaunchEnvFor(agent)
+      ...snapshot,
+      worktrees: snapshot.worktrees.filter((worktree) => {
+        const owner = resolveWorktreeHostRouting(repos, worktree, repoOwners)
+        if (owner.kind === 'ambiguous' || hiddenRepos.hasWorktree(worktree)) {
+          return false
+        }
+        return this.isRuntimeWorktreeVisible(
+          worktree,
+          owner.kind === 'resolved'
+            ? sourceMatchersByRepoId.get(getRepoHostIdentityForParts(worktree.repoId, owner.hostId))
+            : undefined,
+          sourceDefaultsSupported,
+          visibilitySettings
+        )
+      })
     }
   }
 
@@ -169,7 +186,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     return this.store?.getRepos() ?? []
   }
 
-  /** What a client may list: the desktop's visible rows, never a retained source. */
+  /** Exclude retained migration sources from client listings. */
   listVisibleRepos(): Repo[] {
     return runtimeVisibleRepos(this.store)
   }
@@ -186,24 +203,29 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     })
   }
 
-  /** The durable record store alone, without the chat host: launch admission needs only its
-   *  ledger. A host installed later is built on this same store. */
+  isWorkspaceNotificationMuted(workspaceId: string): boolean {
+    const store = this.store
+    return (
+      !!store &&
+      isWorkspaceNotificationMuted(
+        { store, resolvedWorktrees: this.resolvedWorktrees.peek()?.worktrees ?? null },
+        workspaceId
+      )
+    )
+  }
+
+  /** Admission needs only the ledger; a later chat host must reuse this store. */
   async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
     const { store } = await openAgentSessionRecordStoreOnce({
       stateDirectory: getProfileUserDataPath(),
+      legacySessionTabIds: this.legacyStructuredSessionTabIds,
       hostId: LOCAL_EXECUTION_HOST_ID,
       logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
     })
     return store
   }
 
-  /**
-   * Installs the structured agent-session host on first use. Lazy for the same
-   * reason the orchestration DB is: the profile's user-data path is not final
-   * until the app is ready, and a runtime nobody drives a chat session on never
-   * builds the chat host. The record store it sits on may already be open, from
-   * a launch's admission.
-   */
+  /** Defer host creation until profile paths are final and chat is used; reuse an admission-opened record store. */
   async ensureStructuredAgentSessionHost(): Promise<void> {
     const logger = createStructuredAgentSessionLogger()
     const nameChat = createStructuredChatNamingHandler(
@@ -215,6 +237,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
             return { path: target.worktree.path, executionHostId: target.executionHostId }
           },
           getAgentEnvResolvers: () => this.getCommitMessageAgentEnvironmentResolvers(),
+          resolveNamingEnvironment: (agent) =>
+            resolveHostStructuredAgentLaunchEnvironment(agent, this.requireStore().getSettings()),
           workerTaskTitle: (record) =>
             structuredWorkerOpenTaskTitle(this.getOrchestrationDbIfAvailable?.() ?? null, record),
           retitleOpenTab: (workspaceId, sessionId) =>
@@ -225,12 +249,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     )
     await installStructuredAgentSessionHost({
       stateDirectory: getProfileUserDataPath(),
+      legacySessionTabIds: this.legacyStructuredSessionTabIds,
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,
-      // The host's local trace file (the desktop's or orcad's own), plus the console.
       logger,
-      // Resolves folder workspaces as well as git worktrees, so a chat session
-      // in a plain folder lands in the folder rather than failing to resolve.
+      // Resolve plain folder workspaces as well as git worktrees.
       resolveWorkspacePath: async (workspaceId) =>
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
       resolveClaudeCommand: (options) =>
@@ -239,7 +262,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
       resolveLaunchArgs: (agent) =>
         structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
-      // Wired only here, so a test runtime never runs a real `claude --version`.
+      // Production-only wiring prevents test runtimes from probing a real Claude CLI.
       claudeCliFlags: claudeCliFlagSupport,
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
@@ -262,10 +285,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       ...(this.prepareCodexCatalogProbeHomeFn
         ? { prepareCodexCatalogProbeHome: this.prepareCodexCatalogProbeHomeFn }
         : {}),
-      // Structured chat has no agent CLI hooks, so this projection is what the first-work
-      // workspace rename listens to instead of `agentStatus:set`.
+      onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
+      // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {
         this.onStructuredSessionStatusForMail(summary)
+        this.workerAutoReleaseActivity.observeChat(summary)
         nameChat(summary, options)
         void maybeAutoRenameWorkspaceOnFirstStructuredTurn(
           summary,
@@ -274,26 +298,20 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         )
       },
       ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
-      // A closed chat settles the Dispatch it was working, as a closed terminal does.
+      conversationNaming: nameChat,
       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
+      assertNoTerminalWriter: (record) => this.assertStructuredChatAcquireAdmissible(record),
       attentionDelivery: createStructuredAttentionMobileDelivery({
         readNotificationSettings: () => this.requireStore().getSettings().notifications,
         readWorkspaceLabels: (scope) =>
           readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
-        isWorkspaceHidden: (scope) =>
-          isStructuredAttentionWorkspaceHidden(
-            {
-              store: this.requireStore(),
-              resolvedWorktrees: this.resolvedWorktrees.peek()?.worktrees ?? null
-            },
-            scope
-          ),
+        isWorkspaceMuted: (scope) => this.isWorkspaceNotificationMuted(scope.workspaceId),
         dispatch: (event) => this.mobileNotifications.dispatch(event),
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
         now: () => Date.now()
       }),
-      // Read per sweep tick from the orchestration database: a worker whose dispatch is open keeps
-      // its agent running. No database answers no.
+      onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
+      // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
     })

@@ -1,19 +1,18 @@
-// Fake children answer the host-awaited protocol open immediately.
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
-import type {
-  StructuredAgentSessionAdapter,
-  StructuredAgentSessionLifecycleEvent
-} from './structured-agent-session-adapter'
+type InstantStartAdapter = Omit<StructuredAgentSessionAdapter, 'open'> &
+  Partial<Pick<StructuredAgentSessionAdapter, 'open'>>
 
-export function startsWhenPublished<A extends StructuredAgentSessionAdapter>(
+export function startsWhenPublished<A extends InstantStartAdapter>(
   adapter: A,
-  _host: () => { handleAdapterEvent(event: StructuredAgentSessionLifecycleEvent): Promise<void> }
-): A {
-  let generations = 0
+  _host: () => unknown
+): A & StructuredAgentSessionAdapter {
   const acquire: StructuredAgentSessionAdapter['acquire'] = async (input) => {
     const acquired = await adapter.acquire(input)
-    const acquisitionGeneration = acquired.acquisitionGeneration ?? `instant-start-${++generations}`
-    return { ...acquired, acquisitionGeneration, providerChildPhase: 'starting' as const }
+    if (!acquired.acquisitionGeneration) {
+      throw new Error('test provider did not publish its generation')
+    }
+    return acquired
   }
   return {
     ...adapter,

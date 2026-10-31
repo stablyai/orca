@@ -1,11 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
 
-/**
- * Re-reads the cloud auth status whenever a surface that renders it mounts. The
- * store caches the startup value, so without this a session revoked since launch
- * still reads as connected. The cached value stays rendered while the fetch runs.
- */
+/** Refresh cached auth on surface mount so post-launch revocation appears; retain the cached display while fetching. */
 export function useOrcaProfileAuthStatusRefresh(): void {
   const fetchAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   useEffect(() => {

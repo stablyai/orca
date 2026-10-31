@@ -59,8 +59,7 @@ describe('browser client page metadata publisher', () => {
     expect(publish).toHaveBeenCalledTimes(1)
   })
 
-  // Why a throwing revision is not hypothetical: nextRevision throws whenever the page it counts
-  // for has been detached, which is exactly what a pane teardown racing an in-flight publish does.
+  // nextRevision throws after detach, so pane teardown can fail before publish even starts.
   it('keeps publishing after the revision counter throws', async () => {
     const publish = vi.fn().mockResolvedValue({ status: 'published', accepted: true })
     let revision = 0
@@ -116,8 +115,7 @@ describe('browser client page metadata publisher', () => {
     })
   })
 
-  // Why a rejection needs its own case: a publish that never reaches the runtime rejects rather
-  // than answering, so the reported-outcome path and the thrown path are different code.
+  // Transport rejection exercises a separate path from a runtime-declined outcome.
   it('reports a publish that threw on its way out', async () => {
     const onUnpublished = vi.fn()
     let revision = 0

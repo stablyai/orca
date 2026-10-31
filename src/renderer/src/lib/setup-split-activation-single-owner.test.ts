@@ -4,18 +4,21 @@ import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { registerTerminalPresentationIpcBridge } from '@/hooks/ipc-events/terminal-presentation-ipc-bridge'
 import { getDefaultSettings } from '../../../shared/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { gateWorktreeAgentActivation } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent.test-fixture'
 
-/**
- * Conditional old-host reconstruction, not proof of STA-9417: a host-created worktree with a
- * split of the (unmounted) primary tab, then the first activation of that worktree. When main's
- * split reveal does not reach the window, the activation sweep mints a second tab for the setup
- * PTY, so two saved panes own one terminal and one of them freezes.
- */
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
+/** Model old-host lost split reveal: first activation of an unmounted host-created setup split can mint a second tab for the same PTY and freeze one pane. Conditional reconstruction, not proof of STA-9417. */
 
 const initialState = useAppStore.getState()
 const TAB_B = 'b3f1c1de-5e0f-4a51-9d0c-7a8e2a9f6b11'
@@ -142,6 +145,7 @@ function stubHost(
           listener = next
           return () => {}
         },
+        onLaunchRecipe: () => () => {},
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: vi.fn()
       }
@@ -257,30 +261,33 @@ describe('old-host split of an unmounted tab, then first activation', () => {
     await runScenario(false)
   })
 
-  // The window alone, as above; the odd runs mint the duplicate.
-  it.fails('stays duplicate-free across 8 create-then-activate cycles, with or without the reveal', async () => {
-    let duplicates = 0
-    for (let run = 0; run < 8; run++) {
-      const worktree = makeWorktree()
-      const primaryPtyId = `${worktree.id}@@primary-${run}`
-      const setupPtyId = `${worktree.id}@@setup-${run}`
-      useAppStore.setState(initialState, true)
-      useAppStore.setState(baseState())
-      const host = stubHost(primaryPtyId, setupPtyId)
-      registerTerminalPresentationIpcBridge([])
-      seedRevealedPrimaryTab(worktree.id, primaryPtyId)
-      // Odd runs lose the reveal, as the natural repro did.
-      if (run % 2 === 0) {
-        host.reveal()(setupSplitReveal(`reveal-${run}`, worktree.id, setupPtyId))
+  // The window alone, as above; the odd runs mint the duplicate. Main owning the create fixes it.
+  ;(ORCA_LAYOUT_OWNER_IS_MAIN ? it : it.fails)(
+    'stays duplicate-free across 8 create-then-activate cycles, with or without the reveal',
+    async () => {
+      let duplicates = 0
+      for (let run = 0; run < 8; run++) {
+        const worktree = makeWorktree()
+        const primaryPtyId = `${worktree.id}@@primary-${run}`
+        const setupPtyId = `${worktree.id}@@setup-${run}`
+        useAppStore.setState(initialState, true)
+        useAppStore.setState(baseState())
+        const host = stubHost(primaryPtyId, setupPtyId)
+        registerTerminalPresentationIpcBridge([])
+        seedRevealedPrimaryTab(worktree.id, primaryPtyId)
+        // Odd runs lose the reveal, as the natural repro did.
+        if (run % 2 === 0) {
+          host.reveal()(setupSplitReveal(`reveal-${run}`, worktree.id, setupPtyId))
+        }
+        await activateFirstTime(worktree.id)
+        duplicates += [...ownersByPty(worktree.id).values()].filter(
+          (owners) => owners.length > 1
+        ).length
+        duplicates += (useAppStore.getState().tabsByWorktree[worktree.id] ?? []).length - 1
       }
-      await activateFirstTime(worktree.id)
-      duplicates += [...ownersByPty(worktree.id).values()].filter(
-        (owners) => owners.length > 1
-      ).length
-      duplicates += (useAppStore.getState().tabsByWorktree[worktree.id] ?? []).length - 1
+      expect(duplicates).toBe(0)
     }
-    expect(duplicates).toBe(0)
-  })
+  )
 
   it('rejects a split into a tab it lacks without switching to that workspace', () => {
     const worktree = makeWorktree()

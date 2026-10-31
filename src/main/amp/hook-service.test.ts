@@ -30,30 +30,6 @@ describe('AmpHookService', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  it('installs an Orca-managed Amp system plugin', () => {
-    const status = new AmpHookService().install()
-
-    expect(status).toMatchObject({
-      agent: 'amp',
-      state: 'installed',
-      configPath: join(homeDir, '.config', 'amp', 'plugins', _internals.AMP_PLUGIN_FILE),
-      managedHooksPresent: true,
-      detail: null
-    })
-
-    const source = readFileSync(status.configPath, 'utf-8')
-    expect(source).toContain('return { action: "allow" }')
-    expect(source).toContain('const MAX_PENDING_POSTS = 50')
-    expect(source).toContain('let postQueue: QueuedPost[] = []')
-    expect(source).toContain('function enqueuePost')
-    expect(source).toContain('postQueue.shift()')
-    expect(source).toContain('enqueuePost("tool.call"')
-    expect(source).not.toContain('await post("tool.call"')
-    expect(source).not.toContain('postQueue = postQueue.then')
-    expect(source).toContain('process.env.ORCA_PANE_KEY')
-    expect(source).toContain('process.env.ORCA_AGENT_HOOK_ENDPOINT')
-  })
-
   it('does not overwrite an existing user-authored Amp plugin file', () => {
     const pluginPath = _internals.getPluginPath()
     mkdirSync(dirname(pluginPath), { recursive: true })

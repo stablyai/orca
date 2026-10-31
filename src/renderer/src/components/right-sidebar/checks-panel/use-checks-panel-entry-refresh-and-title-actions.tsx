@@ -10,6 +10,7 @@ import type { ChecksPanelControllerState } from './use-checks-panel-controller-s
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import type { ChecksPanelPollingState } from './use-checks-panel-polling'
 import type { ChecksPanelReviewDataState } from './use-checks-panel-review-data'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type ChecksPanelEntryRefreshAndTitleActionsInput = Pick<
   ChecksPanelContextState,
@@ -101,7 +102,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       if (!repo || !branch || !activeWorktreeId) {
         return
       }
-      // Why: tab entry is automatic UI, not a user refresh; keep coordinator rate-limit guards and only force panes already proven stale.
+      // Tab entry is automatic: preserve rate-limit guards and force only panes already known stale.
       if (isGitLabReviewContext) {
         void fetchHostedReviewForBranch(repo.path, branch, {
           force: true,
@@ -114,6 +115,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
           linkedAzureDevOpsPR,
           linkedGiteaPR
         })
+        // Entering the tab is a user act: it may start a stopped WSL distro (E9).
         if (activeGitLabReview) {
           void fetchGitLabDetails()
         }
@@ -121,7 +123,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       }
       enqueueGitHubPRRefresh(activeWorktreeId, 'active', 80)
       if (options.refreshChecks) {
-        void fetchChecks({ force: true })
+        void fetchChecks({ force: true, wakeWslDistro: true })
       }
       if (options.refreshComments) {
         void fetchComments({ force: true })
@@ -148,7 +150,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     ]
   )
 
-  // Why: force a freshness check on each Checks-tab entry so externally-changed PRs appear without waiting for the cache TTL. See docs/refresh-on-checks-tab.md.
+  // Check freshness on tab entry to catch external changes before TTL expiry; see docs/refresh-on-checks-tab.md.
   const entryKey =
     isPanelVisible && repo && !isFolder && branch
       ? `${activeWorktreeId ?? ''}::${activeGitLabReview ? hostedReviewCacheKey : prCacheKey}`
@@ -156,7 +158,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
   const lastEntryKeyRef = useRef<string>('')
   useEffect(() => {
     if (!entryKey) {
-      // Reset on hide so reopening the same PR re-evaluates freshness; a prevKey !== currentKey check alone would miss close-and-reopen.
+      // Reset on hide so closing/reopening the same PR still reevaluates freshness.
       lastEntryKeyRef.current = ''
       return
     }
@@ -183,7 +185,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     const refreshComments =
       prNumber !== null && (commentsFetchedAt === undefined || commentsFetchedAt < cutoff)
 
-    // Reset polling attention state so the forced fetch establishes a fresh baseline instead of colliding with the previous PR's backoff.
+    // Reset the previous PR's backoff so this forced fetch establishes its own baseline.
     pollIntervalRef.current = 30_000
     prevChecksRef.current = ''
     handleEntryRefresh({ refreshChecks, refreshComments })
@@ -202,18 +204,20 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     if (!repo || !branch) {
       return
     }
+    // The read must start after the write rather than join an older poll; its failure is not the write's.
     if (activeReview?.provider === 'gitlab') {
       const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
         branch,
+        userRefresh: true,
         linkedGitHubPR: linkedPR,
         fallbackGitHubPR: fallbackGitHubPRNumber,
         linkedGitLabMR,
         linkedBitbucketPR,
         linkedAzureDevOpsPR,
         linkedGiteaPR
-      })
+      }).catch(() => null)
       const refreshedGitLabReview =
         refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
       if (refreshedGitLabReview) {
@@ -236,13 +240,14 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       repoPath: repo.path,
       repoId: repo.id,
       branch,
+      userRefresh: true,
       linkedGitHubPR: linkedPR,
       fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
       linkedGitLabMR,
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
       linkedGiteaPR
-    })
+    }).catch(() => null)
   }, [
     activeGitLabReview,
     activeReview?.provider,
@@ -307,7 +312,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
           updates: { title: nextTitle }
         })
         if (!result.ok) {
-          toast.error(result.error)
+          toast.error(codeHostErrorText(result))
           return
         }
         await refreshHostedReviewAfterMutation()

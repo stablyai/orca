@@ -136,9 +136,7 @@ async function refreshParentPrChecksCandidate(
       staleWhileRevalidate: true
     })
     if (!review) {
-      // Why: the existing hosted-review API can collapse provider errors and
-      // successful misses into null. Keep null neutral so the overview neither
-      // claims "No PR" nor overstates that a provider failed.
+      // This API conflates misses and provider errors as null; keep it neutral rather than claiming absence or failure.
       return { kind: 'unavailable' }
     }
     if (review.provider === 'github') {

@@ -48,6 +48,7 @@ async function rig(bodies: ('hang' | 'whole')[]) {
     new ManagedRuntimeInstallation('agent', runtime, {
       dataDirectory,
       findExternal: async () => false,
+      fence: (work) => work(),
       fetcher
     })
   const phase = async (installation: ManagedRuntimeInstallation) =>
@@ -77,7 +78,6 @@ it('installs only when asked, with progress, cancel, retry, and a status read fr
   })
   expect(await readdir(root)).toEqual(['1.0'])
 
-  // Whole files without a receipt looped as damaged; Install now rewrites it, with no download.
   await rm(join(root, '1.0', RUNTIME_RELEASE_RECEIPT))
   expect(await installation.status()).toMatchObject({ damaged: true })
   const rewrite = installation.install()
@@ -124,7 +124,11 @@ it('repairs a damaged copy when Install is clicked again', async () => {
   installation.install()
   await vi.waitFor(async () => expect(await phase(installation)).toBe('succeeded'))
   await writeFile(join(root, '1.0', 'server'), 'cut')
-  expect(await installation.status()).toMatchObject({ installedVersion: null, damaged: true })
+  expect(await installation.status()).toMatchObject({
+    installedVersion: null,
+    damaged: true,
+    canRemove: true
+  })
 
   installation.install()
   await vi.waitFor(async () => expect(await phase(installation)).toBe('succeeded'))

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
@@ -8,7 +8,7 @@ import {
   beginWebRuntimeWakeTerminalRespawn,
   endWebRuntimeWakeTerminalRespawn
 } from '@/runtime/web-runtime-wake-terminal-respawn'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { toast } from 'sonner'
@@ -35,7 +35,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
-      : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     return
   }
@@ -72,8 +72,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
       return
     }
     if (hostTerminalTabCount === null && !opts?.startup) {
-      // Why: the host has not listed this workspace yet; its first real answer seeds the terminal if
-      // empty. Delete this capability check once every supported host advertises it.
+      // Unlisted hosts cannot answer yet; their first real list seeds emptiness. Keep the capability gate until all supported hosts advertise it.
       void runtimeEnvironmentSupportsCapability(
         runtimeEnvironmentId,
         SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY
@@ -115,26 +114,30 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
 
   const startup = opts?.startup
   // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
-  void createWebRuntimeSessionTerminal({
-    worktreeId,
-    environmentId: runtimeEnvironmentId,
-    ...(startup
-      ? {
-          command: startup.command,
-          ...(startup.env ? { env: startup.env } : {}),
-          ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
-          ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
-          ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
-          ...(startup.startupCommandDelivery
-            ? { startupCommandDelivery: startup.startupCommandDelivery }
-            : {})
-        }
-      : launchAgent
-        ? { agent: launchAgent }
-        : {}),
-    activate: opts?.activate !== false,
-    selectWorktree: false
-  })
+  void createWebRuntimeSessionTerminal(
+    {
+      worktreeId,
+      environmentId: runtimeEnvironmentId,
+      ...(startup
+        ? {
+            command: startup.command,
+            ...(startup.env ? { env: startup.env } : {}),
+            ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+            ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
+            ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
+            ...(startup.startupCommandDelivery
+              ? { startupCommandDelivery: startup.startupCommandDelivery }
+              : {})
+          }
+        : launchAgent
+          ? { agent: launchAgent }
+          : {}),
+      activate: opts?.activate !== false,
+      selectWorktree: false
+    },
+    // This flow toasts every failure itself, including a disconnected host.
+    { notifyFailure: false }
+  )
     .then((outcome) => {
       if (outcome.status === 'failed') {
         toast.error(outcome.message, {

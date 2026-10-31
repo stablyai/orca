@@ -4,24 +4,6 @@
   "family": "worktree.home-catalog",
   "namedDeltas": [],
   "values": {
-    "0809e2178d5a": {
-      "name": "info",
-      "ordinal": 3,
-      "value": {
-        "host-1": {
-          "activeCount": 1,
-          "countsProvenAt": 1767225600000,
-          "hostId": "host-1",
-          "lastActiveWorktree": {
-            "displayName": "One",
-            "repo": "Repo",
-            "status": "working",
-            "worktreeId": "w-1"
-          },
-          "totalWorktrees": 2
-        }
-      }
-    },
     "0c5e517bcdb4": {
       "name": "worktree.ps#1",
       "ordinal": 1,
@@ -51,6 +33,41 @@
           "category": "Error",
           "message": "transport failure",
           "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "0d02c4637af4": {
+      "name": "info",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "activeCount": 2,
+          "attention": [
+            {
+              "branch": {
+                "$rpc": "undefined"
+              },
+              "displayName": "One",
+              "dotStatus": "working",
+              "lastOutputAt": {
+                "$rpc": "undefined"
+              },
+              "repo": "Repo",
+              "workingMode": {
+                "$rpc": "undefined"
+              },
+              "worktreeId": "w-1"
+            }
+          ],
+          "countsProvenAt": 1767225600000,
+          "hostId": "host-1",
+          "lastActiveWorktree": {
+            "displayName": "One",
+            "repo": "Repo",
+            "status": "working",
+            "worktreeId": "w-1"
+          },
+          "totalWorktrees": 2
         }
       }
     },
@@ -89,6 +106,22 @@
         }
       }
     },
+    "1d0a5fbc1e3b": {
+      "name": "info",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "activeCount": 0,
+          "attention": [],
+          "countsProvenAt": 1767225600000,
+          "hostId": "host-1",
+          "lastActiveWorktree": {
+            "$rpc": "null"
+          },
+          "totalWorktrees": 0
+        }
+      }
+    },
     "2b2ff73e3290": {
       "name": "worktree.ps#1",
       "ordinal": 1,
@@ -124,35 +157,6 @@
             "ok": false
           }
         }
-      }
-    },
-    "2fb25a9212b1": {
-      "name": "info",
-      "ordinal": 3,
-      "value": {
-        "host-1": {
-          "activeCount": 0,
-          "countsProvenAt": 1767225600000,
-          "hostId": "host-1",
-          "lastActiveWorktree": {
-            "$rpc": "null"
-          },
-          "totalWorktrees": 0
-        }
-      }
-    },
-    "39b7354b00f4": {
-      "host-1": {
-        "activeCount": 1,
-        "countsProvenAt": 1767225600000,
-        "hostId": "host-1",
-        "lastActiveWorktree": {
-          "displayName": "One",
-          "repo": "Repo",
-          "status": "working",
-          "worktreeId": "w-1"
-        },
-        "totalWorktrees": 2
       }
     },
     "3b32328e5154": {
@@ -272,6 +276,37 @@
         }
       }
     },
+    "87aae336d391": {
+      "host-1": {
+        "activeCount": 2,
+        "attention": [
+          {
+            "branch": {
+              "$rpc": "undefined"
+            },
+            "displayName": "One",
+            "dotStatus": "working",
+            "lastOutputAt": {
+              "$rpc": "undefined"
+            },
+            "repo": "Repo",
+            "workingMode": {
+              "$rpc": "undefined"
+            },
+            "worktreeId": "w-1"
+          }
+        ],
+        "countsProvenAt": 1767225600000,
+        "hostId": "host-1",
+        "lastActiveWorktree": {
+          "displayName": "One",
+          "repo": "Repo",
+          "status": "working",
+          "worktreeId": "w-1"
+        },
+        "totalWorktrees": 2
+      }
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
@@ -381,6 +416,18 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
     },
+    "abea2b7ff9d3": {
+      "host-1": {
+        "activeCount": 0,
+        "attention": [],
+        "countsProvenAt": 1767225600000,
+        "hostId": "host-1",
+        "lastActiveWorktree": {
+          "$rpc": "null"
+        },
+        "totalWorktrees": 0
+      }
+    },
     "b7bbf0d88929": {
       "name": "worktree.ps#1",
       "ordinal": 1,
@@ -429,17 +476,6 @@
           },
           "totalWorktrees": 0
         }
-      }
-    },
-    "d0ec31ab66d5": {
-      "host-1": {
-        "activeCount": 0,
-        "countsProvenAt": 1767225600000,
-        "hostId": "host-1",
-        "lastActiveWorktree": {
-          "$rpc": "null"
-        },
-        "totalWorktrees": 0
       }
     },
     "d1800200eda0": {
@@ -543,8 +579,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "39b7354b00f4",
-          "effects": ["0809e2178d5a"]
+          "state": "87aae336d391",
+          "effects": ["0d02c4637af4"]
         }
       },
       {
@@ -579,8 +615,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "d0ec31ab66d5",
-          "effects": ["2fb25a9212b1"]
+          "state": "abea2b7ff9d3",
+          "effects": ["1d0a5fbc1e3b"]
         }
       },
       {
@@ -591,8 +627,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "d0ec31ab66d5",
-          "effects": ["2fb25a9212b1"]
+          "state": "abea2b7ff9d3",
+          "effects": ["1d0a5fbc1e3b"]
         }
       },
       {
@@ -603,8 +639,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "d0ec31ab66d5",
-          "effects": ["2fb25a9212b1"]
+          "state": "abea2b7ff9d3",
+          "effects": ["1d0a5fbc1e3b"]
         }
       },
       {

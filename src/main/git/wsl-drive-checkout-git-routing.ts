@@ -6,11 +6,7 @@ import {
 } from './wsl-linked-worktree-git-routing'
 import { pendingWslWindowsCheckoutGitConfig } from './wsl-windows-checkout-git-probe'
 
-/**
- * Settles the per-checkout routing a WSL git command on a Windows drive reads synchronously at
- * spawn — which Git owns a linked worktree, and whether Windows Git wrote the checkout — or null
- * when the command is not one.
- */
+/** Settle checkout ownership and Windows-Git config before synchronous routing; null means no drive-checkout command. */
 export function pendingWslDriveCheckoutGitRouting(
   args: readonly string[],
   options: {

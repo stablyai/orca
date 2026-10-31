@@ -1,8 +1,4 @@
-/**
- * A worker-start that fails counts toward the Task's circuit breaker, so a coordinator retrying a
- * start that can never succeed (an agent stuck at an interactive prompt) stops at the third failure
- * instead of launching one more live agent every time.
- */
+/** Failed worker starts must advance the circuit breaker instead of spawning indefinitely. */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
@@ -123,12 +119,20 @@ describe('failed worker starts and the circuit breaker', () => {
     expect(() => start(taskId, third)).toThrow(/will not retry it again/)
   })
 
-  it('starts a fresh count for a new start that is not a retry', () => {
+  it('starts a fresh count after explicitly reopening a circuit-broken Task', () => {
     const taskId = newTask()
-    const [failed] = failedStarts(taskId, 1)
-    db.transitionLifecycle({ entity: 'task', id: taskId, from: 'failed', to: 'ready' })
+    const [, , third] = failedStarts(taskId, 3)
+    expect(() => start(taskId, third)).toThrow(/will not retry it again/)
+    db.updateTaskStatus(taskId, 'ready')
+    expect(() => start(taskId, third)).toThrow(/will not retry it again/)
 
-    expect(db.getDispatchContextById(failed)?.failure_count).toBe(1)
-    expect(db.getDispatchContextById(start(taskId))?.failure_count).toBe(0)
+    expect(db.getDispatchContextById(start(taskId))).toMatchObject({
+      task_id: taskId,
+      failure_count: 0
+    })
+    expect(db.getDispatchContextById(third)).toMatchObject({
+      status: 'circuit_broken',
+      failure_count: 3
+    })
   })
 })

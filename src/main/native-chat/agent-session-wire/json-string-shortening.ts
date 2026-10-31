@@ -1,15 +1,11 @@
-// Fits a JSON value under a byte budget by cutting its long strings to one common length: the
-// longest length that fits, so short strings keep everything and long ones keep what room allows.
-//
-// Shortening never touches an identifier (`id` or a key ending in `Id`): a reader keys and answers
-// by them. A bounded payload's `head` is cut and flagged through its own `truncated` field; any
-// other string ends in `…`, the mark the chat already draws for text it did not show in full.
+// Fit long strings to one common length; preserve identifiers because readers key and answer by them.
+// Mark clipped heads with truncated and other strings with an ellipsis.
 
 import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-journal-types'
 
 const ELLIPSIS = '…'
 const ELLIPSIS_BYTES = Buffer.byteLength(ELLIPSIS, 'utf8')
-/** Strings this short are left alone: cutting them saves little and reads as noise. */
+// Tiny cuts save little and add visual noise.
 const KEEP_AT_LEAST = 64
 
 export function jsonBytes(value: unknown): number {
@@ -31,17 +27,12 @@ function isBoundedPayload(value: unknown): value is AgentJournalBoundedPayload {
   )
 }
 
-/** The first `length` UTF-16 units of `text`, never splitting a surrogate pair. */
 function headOf(text: string, length: number): string {
   const last = text.charCodeAt(length - 1)
   return text.slice(0, last >= 0xd800 && last <= 0xdbff ? length - 1 : length)
 }
 
-/**
- * `value` with every shortenable string over `length` cut to it; `value` itself when none is. A
- * string is cut only when that removes more units than its mark adds bytes, so a smaller `length`
- * never yields a larger value: every unit is at least one byte, and the mark is three.
- */
+/** Cut only when savings exceed marker bytes, preserving monotonic size for binary search. */
 function cutLongStrings<T>(value: T, length: number): T {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `cutTo` keeps every key and shape and only shortens strings.
   return cutTo(value, length, '') as T
@@ -84,8 +75,7 @@ function longestStringLength(value: unknown): number {
   )
 }
 
-/** `value` within `maxBytes`, or null when cutting every long string to `KEEP_AT_LEAST` is not
- *  enough. `value` itself when it already fits; never modified. */
+/** Return a fitted copy, the original if it fits, or null when minimum-length strings still exceed budget. */
 export function shortenJsonStringsToFit<T>(value: T, maxBytes: number): T | null {
   if (jsonBytes(value) <= maxBytes) {
     return value
@@ -94,7 +84,7 @@ export function shortenJsonStringsToFit<T>(value: T, maxBytes: number): T | null
   if (jsonBytes(at(KEEP_AT_LEAST)) > maxBytes) {
     return null
   }
-  // The longest common length that fits; `low` always fits, `high` never does.
+  // Search the longest common fit; low fits and high does not.
   let low = KEEP_AT_LEAST
   let high = longestStringLength(value)
   while (high - low > 1) {

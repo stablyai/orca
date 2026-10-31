@@ -56,11 +56,7 @@ async function readDirectoryOrNull<TEntry>(
   }
 }
 
-/**
- * Scans one directory tree with a fixed worker pool. Directory frames retain
- * the source arrays returned by readdir, but never allocate one promise or
- * queued closure per entry; only the configured workers own live entry jobs.
- */
+/** Retain readdir arrays, but only workers own live entry jobs; never allocate a promise or queued closure per entry. */
 export async function scanWorkspaceSpaceEntryTree<TEntry>(
   options: WorkspaceSpaceEntryTraversalOptions<TEntry>
 ): Promise<WorkspaceSpaceEntryScan> {
@@ -113,8 +109,7 @@ export async function scanWorkspaceSpaceEntryTree<TEntry>(
     onAbort()
   }
 
-  // Why: once every entry is dispatched the listing is dead weight, so drop it
-  // and hand its charge back before the walk descends any further.
+  // Release exhausted listings before descending so dead arrays do not consume the budget.
   const retireFrame = (frame: DirectoryFrame<TEntry>): void => {
     if (frame.retired) {
       return

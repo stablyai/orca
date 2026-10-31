@@ -1,5 +1,5 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
@@ -54,9 +54,7 @@ export function getPaneKeyTabId(paneKey: string): string | null {
     return parsed.tabId
   }
 
-  // Why: older hydrated snapshots can still carry `tabId:numericPaneId`.
-  // Delete readiness only needs tab ownership, so preserve the conservative
-  // "workspace is in use" signal instead of treating the row as deletable.
+  // Legacy numeric pane keys still establish tab ownership and must conservatively block deletion.
   const separatorIndex = paneKey.indexOf(':')
   if (
     separatorIndex <= 0 ||

@@ -1,23 +1,29 @@
-// Which restored draft images are known to be gone. A paste in Orca's paste folder asks main
-// whether it is still kept, which holds only for a file really inside that folder; a file a paired
-// server stored for the chat is that server's to check, which its claim at send does; any other
-// image goes through the existing existence check (the workspace's read rules locally, the host
-// over SSH).
+// Restored store images are checked only with affirmative execution-host ownership.
 
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
+import { chatImageAccess } from '@/lib/local-file-access'
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
+import {
+  records,
+  restoredImageChecks,
+  restoredImageKey,
+  NO_IMAGE_CHECKS,
+  notifyScope,
+  type DraftImageCheck
+} from './native-chat-composer-draft-memory'
 import type { NativeChatComposerDraftImage } from './native-chat-composer-draft-storage'
 import {
   isKeptLocalPaste,
+  structuredAgentSessionIdOfDraftScope,
   readNativeChatComposerDraft,
-  isNativeChatComposerDraftUnverified,
-  markNativeChatComposerDraftVerified,
   unavailableNativeChatComposerDraftImage,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 
-/** Ids of images whose file is gone. One that cannot be checked (no read permission for that
- *  path, host not connected) counts as present: the send's own check still guards it. */
+/** Mark only proven missing files; unavailable permissions/hosts remain unknown and send-time validation still guards them. */
 export async function findMissingNativeChatComposerDraftImages(
   images: readonly NativeChatComposerDraftImage[]
 ): Promise<Set<string>> {
@@ -40,11 +46,12 @@ export async function findMissingNativeChatComposerDraftImages(
   }
   await Promise.all(
     checkable
-      .filter((image) => !isKeptLocalPaste(image) && !isAgentSessionAttachmentStorePath(image.path))
+      .filter((image) => !isKeptLocalPaste(image))
       .map(async (image) => {
         try {
           const exists = await pathExists({
             filePath: image.path,
+            ...(isAgentSessionAttachmentStorePath(image.path) ? { access: chatImageAccess() } : {}),
             ...(image.connectionId ? { connectionId: image.connectionId } : {})
           })
           if (!exists) {
@@ -58,55 +65,163 @@ export async function findMissingNativeChatComposerDraftImages(
   return missing
 }
 
-const checking = new Set<string>()
-
-/** Once per restored draft: an image whose file is gone comes back as one to attach again. */
-export async function verifyRestoredNativeChatComposerDraftImages(scopeKey: string): Promise<void> {
-  if (!isNativeChatComposerDraftUnverified(scopeKey) || checking.has(scopeKey)) {
-    return
+function localStoreAuthority(
+  state: AppState,
+  scopeKey: string,
+  checks: readonly DraftImageCheck[]
+): string | null {
+  if (
+    structuredAgentSessionIdOfDraftScope(scopeKey) === null ||
+    !checks.some(
+      ({ image }) => isAgentSessionAttachmentStorePath(image.path) && !image.connectionId
+    )
+  ) {
+    return null
   }
-  checking.add(scopeKey)
-  try {
-    await replaceMissingImages(scopeKey)
-  } finally {
-    checking.delete(scopeKey)
-    markNativeChatComposerDraftVerified(scopeKey)
-  }
+  const stored = readNativeChatComposerDraft(scopeKey).owner
+  const current = resolveNativeChatDraftOwner(state, scopeKey)
+  return (stored ?? current)?.executionHostId === 'local' &&
+    (!current || current.executionHostId === 'local')
+    ? JSON.stringify([stored, current])
+    : null
 }
 
-async function replaceMissingImages(scopeKey: string): Promise<void> {
-  const checked = readNativeChatComposerDraft(scopeKey).images
-  const missing = await findMissingNativeChatComposerDraftImages(checked)
-  if (missing.size === 0) {
+function checkAuthority(image: NativeChatComposerDraftImage, local: string | null): string | null {
+  return isAgentSessionAttachmentStorePath(image.path)
+    ? image.connectionId
+      ? null
+      : local
+    : 'path'
+}
+
+function replaceCheck(scopeKey: string, entry: DraftImageCheck, next?: DraftImageCheck): void {
+  const checks = restoredImageChecks.get(scopeKey)
+  if (!checks?.includes(entry)) {
     return
   }
-  const gone = new Set(checked.filter((image) => missing.has(image.id)).map(({ path }) => path))
-  updateNativeChatComposerDraft(
+  restoredImageChecks.set(
     scopeKey,
-    {
-      images: readNativeChatComposerDraft(scopeKey).images.map((image) =>
-        missing.has(image.id) && gone.has(image.path)
-          ? unavailableNativeChatComposerDraftImage(image)
-          : image
-      )
-    },
-    'immediate'
+    checks.flatMap((held) => (held === entry ? (next ? [next] : []) : [held]))
+  )
+  if (restoredImageChecks.get(scopeKey)?.length === 0) {
+    restoredImageChecks.delete(scopeKey)
+  }
+  notifyScope(scopeKey)
+}
+
+function attemptIsCurrent(scopeKey: string, entry: DraftImageCheck): boolean {
+  return (
+    !!entry.attempt &&
+    restoredImageChecks.get(scopeKey)?.includes(entry) === true &&
+    readNativeChatComposerDraft(scopeKey).images.some(
+      (image) => restoredImageKey(image) === restoredImageKey(entry.image)
+    ) &&
+    entry.attempt.authority ===
+      checkAuthority(entry.image, localStoreAuthority(useAppStore.getState(), scopeKey, [entry]))
   )
 }
 
-/** Whether the scope's restored images still wait on their check, which runs as they arrive: at
- *  mount, or later when the startup load or another window brings new ones. */
+async function runCheck(scopeKey: string, entry: DraftImageCheck): Promise<void> {
+  try {
+    const missing = await findMissingNativeChatComposerDraftImages([entry.image])
+    if (attemptIsCurrent(scopeKey, entry) && missing.has(entry.image.id)) {
+      updateNativeChatComposerDraft(
+        scopeKey,
+        {
+          images: readNativeChatComposerDraft(scopeKey).images.map((image) =>
+            restoredImageKey(image) === restoredImageKey(entry.image)
+              ? unavailableNativeChatComposerDraftImage(image)
+              : image
+          )
+        },
+        'immediate'
+      )
+    }
+  } finally {
+    if (attemptIsCurrent(scopeKey, entry)) {
+      replaceCheck(scopeKey, entry)
+    }
+  }
+}
+
+export async function verifyRestoredNativeChatComposerDraftImages(scopeKey: string): Promise<void> {
+  await Promise.all(
+    (restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS).map(async (entry) => {
+      const authority = checkAuthority(
+        entry.image,
+        localStoreAuthority(useAppStore.getState(), scopeKey, [entry])
+      )
+      if (entry.attempt && entry.attempt.authority !== authority) {
+        replaceCheck(scopeKey, entry, { image: entry.image })
+      } else if (!entry.attempt && authority !== null) {
+        const claimed = { image: entry.image, attempt: { authority } }
+        replaceCheck(scopeKey, entry, claimed)
+        if (restoredImageChecks.get(scopeKey)?.includes(claimed)) {
+          await runCheck(scopeKey, claimed)
+        }
+      }
+    })
+  )
+}
+
+function isInsideUploadDir(path: string, uploadDir: string): boolean {
+  return (
+    path.startsWith(uploadDir) &&
+    (path[uploadDir.length] === '/' || path[uploadDir.length] === '\\')
+  )
+}
+
+/** Recheck every draft referencing a swept upload directory, including hidden composers with earlier successful checks. */
+export function recheckNativeChatComposerDraftImagesIn(uploadDir: string): void {
+  for (const scopeKey of records.keys()) {
+    const named = readNativeChatComposerDraft(scopeKey).images.filter(
+      (image) =>
+        image.unavailableName === undefined &&
+        !image.connectionId &&
+        !!image.path &&
+        isInsideUploadDir(image.path, uploadDir)
+    )
+    if (named.length === 0) {
+      continue
+    }
+    // A fresh entry replaces any attempt in flight, whose answer predates the removal.
+    const keys = new Set(named.map(restoredImageKey))
+    restoredImageChecks.set(scopeKey, [
+      ...(restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS).filter(
+        (entry) => !keys.has(restoredImageKey(entry.image))
+      ),
+      ...named.map((image) => ({ image }))
+    ])
+    notifyScope(scopeKey)
+    void verifyRestoredNativeChatComposerDraftImages(scopeKey)
+  }
+}
+
+/** Only an eligible image's finite restore work holds its chip, independent of deferred peers. */
 export function useRestoredNativeChatComposerDraftImageCheck(
   scopeKey: string,
   subscribe: (listener: () => void) => () => void
-): boolean {
-  const restoring = useSyncExternalStore(subscribe, () =>
-    isNativeChatComposerDraftUnverified(scopeKey)
+): ReadonlySet<string> {
+  const checks = useSyncExternalStore(
+    subscribe,
+    () => restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS
+  )
+  const local = useAppStore((state) => localStoreAuthority(state, scopeKey, checks))
+  const pending = useMemo(
+    () =>
+      new Set(
+        checks
+          .filter(
+            (entry) =>
+              checkAuthority(entry.image, local) !== null &&
+              (isKeptLocalPaste(entry.image) || isAgentSessionAttachmentStorePath(entry.image.path))
+          )
+          .map((entry) => restoredImageKey(entry.image))
+      ),
+    [checks, local]
   )
   useEffect(() => {
-    if (restoring) {
-      void verifyRestoredNativeChatComposerDraftImages(scopeKey)
-    }
-  }, [scopeKey, restoring])
-  return restoring
+    void verifyRestoredNativeChatComposerDraftImages(scopeKey)
+  }, [scopeKey, checks, local])
+  return pending
 }

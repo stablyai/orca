@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   parseOrcadMigrationBlobDescriptor,
   type OrcadMigrationBlobDescriptor
-} from '../../../shared/orcad-migration-blob-transfer'
+} from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import { rewriteOrcadMigrationWorktreeId } from '../../ssh/orcad-migration-path-rewrite'
 import { hashWorktreeId } from '../../terminal-history-id'
 import { parseOrcadMigrationShellHistoryHeader } from '../migrating-orcad-catalog/orcad-migration-shell-history-format'
@@ -145,7 +145,7 @@ describe('WSL move shell history blobs', () => {
     utimesSync(legacy, 1_000, 1_000)
     utimesSync(current, 2_000, 2_000)
 
-    // The newer id is listed first; the merge still puts its commands last.
+    // Input order must not outrank history age.
     const blobs = await build([
       { sourceWorktreeId: SOURCE_ID, destinationWorktreeId: DESTINATION_ID },
       { sourceWorktreeId: legacyId, destinationWorktreeId: DESTINATION_ID }

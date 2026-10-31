@@ -34,7 +34,7 @@ import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { useAppStore } from '@/store'
 import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
 import { useStructuredAgentSessionRead } from '@/components/native-chat/use-structured-agent-session-read'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -184,7 +184,7 @@ describe('Explicit desktop read acknowledgements', () => {
     const delivery = createStructuredAttentionMobileDelivery({
       readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
       readWorkspaceLabels: () => ({}),
-      isWorkspaceHidden: () => false,
+      isWorkspaceMuted: () => false,
       dispatch: (event) => fixture.controller.dispatch(event),
       reconcile: (state) => fixture.controller.reconcileStructuredPromptAttention(state),
       now: () => 42

@@ -8,14 +8,15 @@ import {
 
 export function installBrowserRoutePartitionPolicies(
   profile: BrowserSessionProfile,
-  partition: string
+  partition: string,
+  { sitePermissions }: { sitePermissions?: 'saved' | 'session' } = {}
 ): Promise<void> {
   if (!isBrowserRoutePartition(partition)) {
     throw new Error('browser_route_partition_profile_unavailable')
   }
   return installBrowserSessionPartitionPolicies(
     { ...profile, partition },
-    { applyAppWideProxy: false }
+    { applyAppWideProxy: false, fileSystemAccess: false, sitePermissions }
   )
 }
 

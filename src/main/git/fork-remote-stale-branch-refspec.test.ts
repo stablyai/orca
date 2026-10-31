@@ -92,7 +92,7 @@ describe('fetchForkRemoteWithStaleRefspecRepair', () => {
       }
       return { stdout: '', stderr: '' }
     })
-    // Why: mirrors real git reporting exactly one missing ref per fetch attempt (see #17828 PR).
+    // Git reports only one missing ref per failed fetch.
     const staleBranches = ['refs/heads/gone-a', 'refs/heads/gone-b']
     const runFetch = vi.fn(async () => {
       const stillStale = staleBranches.find((branch) => refspecs.some((r) => r.includes(branch)))

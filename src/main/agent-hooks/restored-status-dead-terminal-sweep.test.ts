@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSubagentSnapshot } from '../../shared/agent-status-types'
+import { isLocalExecutionHost } from '../../shared/execution-host'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../shared/ssh-pty-id'
 import { AgentHookServer } from './server'
 import { buildBody, postHookEvent } from './server.test-fixtures'
 import {
   indexPersistedPaneKeyPtyIds,
-  isLocalExecutionHost,
   resolveAgentWorkspaceExecutionHostId,
   retireRestoredStatusesWithDeadTerminals
 } from './restored-status-dead-terminal-sweep'
@@ -44,7 +44,6 @@ type PersistedRow = {
   providerSessionOnly?: boolean
 }
 
-/** Start a server over the last-status.json an Orca that closed mid-turn leaves behind. */
 async function restartWith(rows: PersistedRow[] = [{}]): Promise<AgentHookServer> {
   const now = Date.now()
   const entries = Object.fromEntries(
@@ -174,7 +173,7 @@ describe('restored status dead-terminal sweep', () => {
         expect(response.status).toBe(204)
       }
 
-      // Why: a stranded restored child would hold the next agent's finished turn `working`.
+      // A stranded restored child could keep the next finished turn working.
       expect(paneState(server)).toBe('done')
     } finally {
       server.stop()

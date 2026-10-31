@@ -1,27 +1,42 @@
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
-import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
-import {
-  resolveTerminalSessionWorktreeId,
-  runtimeWorktreeIdsEqual
-} from '../../runtime-worktree-path-identity'
+import { OrcaRuntimeWithSplitPaneInMain } from './terminal-split-in-main'
+import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session-pane-ownership'
 import type {
   AgentTeamsTmuxCompatRequest,
   AgentTeamsTmuxCompatResponse
-} from '../../claude-agent-teams-service'
+} from '../../claude-agent-teams-types'
 import {
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin
 } from '../../claude-agent-teams-shim-env'
 import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { splitPanePendingError } from './terminal-split-retry'
+import {
+  SPLIT_PANE_APPEAR_TIMEOUT_MS,
+  SPLIT_PANE_START_TIMEOUT_MS
+} from './terminal-split-wait-timeout'
 
-export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRuntimeWithSplitPtyBackedTerminal {
+export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRuntimeWithSplitPaneInMain {
   abstract getTerminalHandleForPaneKey(
     ...args: Parameters<
       OrcaRuntimeWithPruneMobileSessionTabGroupLayout['getTerminalHandleForPaneKey']
     >
   ): ReturnType<OrcaRuntimeWithPruneMobileSessionTabGroupLayout['getTerminalHandleForPaneKey']>
+
+  /** A mounted view can drain its exited process after durable retirement removed the binding. */
+  hasTerminalPaneView(worktreeId: string, tabId: string, leafId: string): boolean {
+    const tab = this.tabs.get(tabId)
+    const leaf = this.leaves.get(this.getLeafKey(tabId, leafId))
+    return Boolean(
+      tab &&
+      leaf &&
+      worktreeIdsEqual(tab.worktreeId, worktreeId) &&
+      worktreeIdsEqual(leaf.worktreeId, worktreeId)
+    )
+  }
 
   protected resolveTerminalSplitSourceAuthority(
     worktreeId: string,
@@ -47,7 +62,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
     const persistedTab = sessionWorktreeId
       ? session?.tabsByWorktree[sessionWorktreeId]?.find(
-          (tab) => tab.id === tabId && runtimeWorktreeIdsEqual(tab.worktreeId, worktreeId)
+          (tab) => tab.id === tabId && worktreeIdsEqual(tab.worktreeId, worktreeId)
         )
       : undefined
     const persistedLayout = session?.terminalLayoutsByTabId?.[tabId]
@@ -72,8 +87,8 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     const rendererMounted = Boolean(
       rendererTab &&
       rendererLeaf &&
-      runtimeWorktreeIdsEqual(rendererTab.worktreeId, worktreeId) &&
-      runtimeWorktreeIdsEqual(rendererLeaf.worktreeId, worktreeId) &&
+      worktreeIdsEqual(rendererTab.worktreeId, worktreeId) &&
+      worktreeIdsEqual(rendererLeaf.worktreeId, worktreeId) &&
       (rendererLeaf.ptyId === ptyId || (persisted && rendererLeaf.ptyId === null))
     )
     // Only a contradiction is trusted: the window's graph lags, so an unlisted pane proves nothing.
@@ -90,7 +105,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     // Why: renderer adoption can precede graph sync; this path still requires reveal success before commit.
     const projected = [...this.mobileSessionTabsByWorktree.entries()].some(
       ([candidateWorktreeId, snapshot]) =>
-        runtimeWorktreeIdsEqual(candidateWorktreeId, worktreeId) &&
+        worktreeIdsEqual(candidateWorktreeId, worktreeId) &&
         snapshot.tabs.some(
           (tab) =>
             tab.type === 'terminal' &&
@@ -170,9 +185,17 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
   }
 
-  protected waitForLeafInTab(tabId: string, leafId: string, timeoutMs = 10_000): Promise<string> {
+  /** Give panes one deadline to appear and a longer deadline to bind once starting; never infer closure from absence. */
+  protected waitForLeafInTab(
+    tabId: string,
+    leafId: string,
+    timeouts: { appearMs?: number; startMs?: number } = {}
+  ): Promise<string> {
+    const appearMs = timeouts.appearMs ?? SPLIT_PANE_APPEAR_TIMEOUT_MS
+    const startMs = Math.max(appearMs, timeouts.startMs ?? SPLIT_PANE_START_TIMEOUT_MS)
+    const listedLeaf = () => this.leaves.get(this.getLeafKey(tabId, leafId))
     const tryResolve = (): string | null => {
-      const leaf = this.leaves.get(this.getLeafKey(tabId, leafId))
+      const leaf = listedLeaf()
       return leaf?.ptyId !== null && leaf?.ptyId !== undefined ? this.issueHandle(leaf) : null
     }
 
@@ -182,22 +205,30 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     }
 
     return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const stopWatching = (): void => {
+        clearTimeout(timer)
         const idx = this.graphSyncCallbacks.indexOf(check)
         if (idx !== -1) {
           this.graphSyncCallbacks.splice(idx, 1)
         }
-        reject(new Error('Timed out waiting for split pane handle'))
-      }, timeoutMs)
+      }
+      // Absence never proves a close: an unbound pane leaves the graph while it remounts.
+      const giveUp = (): void => {
+        stopWatching()
+        reject(splitPanePendingError(tabId, leafId))
+      }
+      let timer = setTimeout(() => {
+        if (listedLeaf()) {
+          timer = setTimeout(giveUp, startMs - appearMs)
+        } else {
+          giveUp()
+        }
+      }, appearMs)
 
       const check = (): void => {
         const handle = tryResolve()
         if (handle) {
-          clearTimeout(timer)
-          const idx = this.graphSyncCallbacks.indexOf(check)
-          if (idx !== -1) {
-            this.graphSyncCallbacks.splice(idx, 1)
-          }
+          stopWatching()
           resolve(handle)
         }
       }

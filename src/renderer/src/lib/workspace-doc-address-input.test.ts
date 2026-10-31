@@ -9,6 +9,22 @@ const plan = vi.hoisted(() => ({
     | { status: 'unsupported'; message: string; reason: 'no-channel' },
   calls: [] as { worktreeId: string; filePath: string }[]
 }))
+const hosts = vi.hoisted(() => new Map<string, string | null>())
+const places = vi.hoisted(() => new Map<string, string>())
+vi.mock('./resolve-owner', () => ({
+  resolveOwner: (_state: unknown, ref: { workspaceId: string }) => {
+    const environmentId = hosts.has(ref.workspaceId) ? hosts.get(ref.workspaceId) : 'server-1'
+    return environmentId
+      ? {
+          kind: 'resolved',
+          owner: {
+            endpoint: { kind: 'environment', environmentId },
+            at: places.get(ref.workspaceId) ?? 'local'
+          }
+        }
+      : { kind: 'ambiguous' }
+  }
+}))
 vi.mock('@/lib/file-preview', () => ({
   getWorkspaceFilePreviewPlan: (_state: unknown, worktreeId: string, filePath: string) => {
     plan.calls.push({ worktreeId, filePath })
@@ -38,9 +54,68 @@ function makeState(): AppState {
 beforeEach(() => {
   plan.result = { status: 'doc-preview' }
   plan.calls.length = 0
+  hosts.clear()
+  places.clear()
 })
 
 describe('resolveWorkspaceDocAddressTarget', () => {
+  it('resolves a file URL inside a sibling folder workspace on the same host', () => {
+    expect(
+      resolveWorkspaceDocAddressTarget(makeState(), CURRENT, 'file:///srv/site/report.html')
+    ).toMatchObject({
+      status: 'workspace-doc',
+      docLocation: {
+        worktreeId: 'folder:folder-1',
+        filePath: '/srv/site/report.html'
+      }
+    })
+  })
+
+  it('does not cross SSH targets behind the same paired server', () => {
+    places.set(CURRENT, 'ssh:first')
+    places.set(OTHER, 'ssh:second')
+    resolveWorkspaceDocAddressTarget(makeState(), CURRENT, 'file:///home/alice/wt2/report.html')
+    expect(plan.calls).toEqual([{ worktreeId: CURRENT, filePath: '/home/alice/wt2/report.html' }])
+  })
+  it('routes a pasted remote file URL through its workspace preview', () => {
+    expect(
+      resolveWorkspaceDocAddressTarget(
+        makeState(),
+        CURRENT,
+        ' file:///home/alice/wt1/docs/report%20one.html '
+      )
+    ).toMatchObject({
+      status: 'workspace-doc',
+      docLocation: {
+        worktreeId: CURRENT,
+        filePath: '/home/alice/wt1/docs/report one.html'
+      }
+    })
+  })
+
+  it('does not choose a matching root on another host', () => {
+    hosts.set(OTHER, 'server-2')
+    plan.result = { status: 'unsupported', message: 'outside workspace', reason: 'no-channel' }
+    expect(
+      resolveWorkspaceDocAddressTarget(makeState(), CURRENT, 'file:///home/alice/wt2/report.html')
+    ).toEqual({ status: 'unsupported', message: 'outside workspace' })
+    expect(plan.calls).toEqual([{ worktreeId: CURRENT, filePath: '/home/alice/wt2/report.html' }])
+  })
+
+  it('skips ambiguous sibling hosts and uses the current host boundary', () => {
+    hosts.set(OTHER, null)
+    resolveWorkspaceDocAddressTarget(makeState(), CURRENT, 'file:///home/alice/wt2/report.html')
+    expect(plan.calls).toEqual([{ worktreeId: CURRENT, filePath: '/home/alice/wt2/report.html' }])
+  })
+
+  it('refuses a file URL when its current workspace host is ambiguous', () => {
+    hosts.set(CURRENT, null)
+    expect(
+      resolveWorkspaceDocAddressTarget(makeState(), CURRENT, 'file:///home/alice/wt1/report.html')
+    ).toMatchObject({ status: 'unsupported' })
+    expect(plan.calls).toEqual([])
+  })
+
   it('resolves an absolute path inside the current worktree to its document', () => {
     const target = resolveWorkspaceDocAddressTarget(
       makeState(),
@@ -69,8 +144,7 @@ describe('resolveWorkspaceDocAddressTarget', () => {
     })
   })
 
-  // Why most-specific-first: the outer root lexically contains the nested workspace's files, and
-  // attributing them to it selects the wrong owner — and so the wrong host — for the grant.
+  // Prefer nested roots over outer containment so grants select the correct workspace/host owner.
   it('attributes a file in a nested workspace to the nested root, not the outer one', () => {
     const state = makeState()
     const stateWithNested = {
@@ -98,9 +172,10 @@ describe('resolveWorkspaceDocAddressTarget', () => {
     })
   })
 
-  it('leaves a path outside every known workspace to the URL pipeline', () => {
+  it('keeps a path outside every known workspace on the current host', () => {
     expect(resolveWorkspaceDocAddressTarget(makeState(), CURRENT, '/etc/motd.html')).toEqual({
-      status: 'not-a-workspace-doc'
+      status: 'workspace-doc',
+      docLocation: { kind: 'workspace-doc', worktreeId: CURRENT, filePath: '/etc/motd.html' }
     })
   })
 

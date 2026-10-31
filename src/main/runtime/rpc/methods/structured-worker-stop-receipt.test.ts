@@ -1,10 +1,10 @@
-/**
- * What `worker-stop` may claim it did to a structured worker.
- *
- * A runtime generation with no structured host installed cannot reach the session at all. Saying
- * `closed_agent_terminal` there credits this runtime with an action it never took, and a
- * coordinator reading the receipt treats the worker's chat tab as gone.
- */
+import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+/** An absent structured host cannot issue a close; receipts must not claim closed_agent_terminal and falsely tell coordinators its tab is gone. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -93,19 +93,16 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
   it('keeps a restarted worker unsettled when close finds no attached session', async () => {
     const dispatchId = startStructuredWorker()
     const close = vi.fn(async () => {})
-    setStructuredAgentSessionHost({
-      close,
-      setSessionTabVisibility: async () => {},
-      hasSession: () => false,
-      deps: {
-        store: {
-          getRecord: () => ({
-            location: { executionHostId: 'local', wslDistro: null },
-            lease: { runtimeKind: 'native', claimStatus: 'live', deathEvidence: null }
-          })
-        }
-      }
-    } as never)
+    const { host, store } = hostTestState()
+    vi.spyOn(host, 'close').mockImplementation(close)
+    vi.spyOn(host, 'setSessionTabVisibility').mockResolvedValue(undefined)
+    vi.spyOn(host, 'hasSession').mockReturnValue(false)
+    vi.spyOn(store, 'getConversation').mockImplementation(() =>
+      agentSessionConversationView(
+        agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION }))
+      )
+    )
+    setStructuredAgentSessionHost(host)
 
     await expect(call('orchestration.workerStop', { dispatch: dispatchId })).resolves.toMatchObject(
       {
@@ -113,7 +110,8 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
         state: 'stop_unknown'
       }
     )
-    expect(close).toHaveBeenCalledWith(SESSION, 'evict')
+    // worker-stop is never refused, so it passes no admission.
+    expect(close).toHaveBeenCalledWith(SESSION, 'evict', undefined)
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('stop_unknown')
   })
 

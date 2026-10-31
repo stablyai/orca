@@ -47,7 +47,7 @@ describe('ghTokenEnvVarForHost', () => {
 })
 
 describe('ghAccountBindingsEqual', () => {
-  it('compares normalized host/user pairs', () => {
+  it('compares equal pairs and preserves user case sensitivity', () => {
     expect(
       ghAccountBindingsEqual(
         { host: 'github.com', user: 'Alice' },

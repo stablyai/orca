@@ -1,56 +1,35 @@
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
-import {
-  createFloatingWorkspaceTerminalTab,
-  isFloatingWorkspacePanelFocused,
-  resolveFloatingWorkspaceBrowserWorkspaceId
-} from '@/lib/floating-workspace-terminal-actions'
+import { replayAppKeyDown } from '@/lib/app-keyboard-router'
+import { resolveFloatingWorkspaceBrowserWorkspaceId } from '@/lib/floating-workspace-terminal-actions'
 import {
   dispatchFloatingWorkspaceGuestClose,
   dispatchFloatingWorkspaceGuestSelectIndex
 } from '@/lib/floating-workspace-guest-bridge'
 
 import { useAppStore } from '../../store'
-function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
-  return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
-}
 
 export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
-    window.api.ui.onNewTerminalTab(() => {
-      const store = useAppStore.getState()
-      if (isFloatingWorkspacePanelFocused()) {
-        void createFloatingWorkspaceTerminalTab(store)
-        return
-      }
-      const worktreeId = store.activeWorktreeId
-      if (!worktreeId) {
-        return
-      }
-      void (async () => {
-        const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
-        const outcome = await createWebRuntimeSessionTerminal({
-          worktreeId,
-          environmentId,
-          activate: true
-        })
-        if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
-          return
-        }
-        const tabId = createBrowserUuid()
-        store.createTab(worktreeId, undefined, undefined, { id: tabId })
-        store.setActiveTabType('terminal', worktreeId)
-        persistAgentLaunchTabOrder(worktreeId, tabId)
-        focusTerminalTabSurface(tabId)
-      })()
-    })
+    // Why: a focused page is its own process, so main hands its tab chords back to run through
+    // the same app shortcut owners a key pressed in Orca's own UI reaches.
+    window.api.ui.onBrowserPageTabShortcut((input) =>
+      replayAppKeyDown(
+        Object.assign(
+          new KeyboardEvent('keydown', {
+            key: input.key,
+            code: input.code,
+            altKey: input.alt,
+            metaKey: input.meta,
+            ctrlKey: input.control,
+            shiftKey: input.shift,
+            cancelable: true
+          }),
+          // Why: keybinding matching reads this field, so a double-tap binding matches the replay too.
+          { doubleTapModifier: input.doubleTapModifier }
+        )
+      )
+    )
   )
-
   unsubs.push(
     window.api.ui.onCloseActiveTab((payload) => {
       dispatchWorkspaceTabCommand({
@@ -64,9 +43,7 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
 
   unsubs.push(
     window.api.ui.onCloseFloatingItem(({ sourceId }) => {
-      // Main forwards the guest's browser *page* id; resolve it to the owning live floating
-      // browser workspace (the id space the panel closes by), then hand off to the mounted
-      // panel's own close closure (pin guard + reclaim intent). Stale id = no-op.
+      // Resolve main’s page ID to its floating browser workspace, then use the mounted panel’s pin/reclaim-aware close; stale IDs no-op.
       const workspaceId = resolveFloatingWorkspaceBrowserWorkspaceId(
         useAppStore.getState(),
         sourceId
@@ -84,17 +61,8 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
   )
 
   unsubs.push(
-    window.api.ui.onSwitchTab((direction) => {
-      dispatchWorkspaceTabCommand({ type: 'switch', direction, scope: 'same-type' })
-    }),
-    window.api.ui.onSwitchTabAcrossAllTypes((direction) => {
-      dispatchWorkspaceTabCommand({ type: 'switch', direction, scope: 'all-types' })
-    }),
     window.api.ui.onSwitchRecentTab(() => {
       dispatchWorkspaceTabCommand({ type: 'previous-recent' })
-    }),
-    window.api.ui.onSwitchTerminalTab((direction) => {
-      dispatchWorkspaceTabCommand({ type: 'switch', direction, scope: 'terminal' })
     })
   )
 }

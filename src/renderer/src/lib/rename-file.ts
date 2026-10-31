@@ -8,11 +8,7 @@ import {
 } from '@/components/right-sidebar/file-explorer-operation-owner'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
 
-/**
- * Electron's ipcRenderer.invoke wraps errors as:
- *   "Error invoking remote method 'channel': Error: actual message"
- * Strip the wrapper so users see only the meaningful part.
- */
+/** Strip ipcRenderer.invoke’s remote-method wrapper so toasts show the underlying error. */
 export function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
     return fallback
@@ -23,27 +19,16 @@ export function extractIpcErrorMessage(err: unknown, fallback: string): string {
 
 type RenameFileArgs = {
   oldPath: string
-  /** just the new filename (no directory) */
   newName: string
   worktreeId: string
   worktreePath: string
   operationOwner?: FileExplorerOperationOwner
-  /** refresh the parent directory in the explorer tree, if caller tracks one */
   refreshDir?: (dirPath: string) => Promise<void>
   /** The file is an open user-named document, so the rename (and its Undo) may go anywhere. */
   documentScoped?: boolean
 }
 
-/**
- * Rename a file or directory on disk. Handles:
- *   - no-op when the name is unchanged
- *   - the open-editor move transaction (quiesce + rename + rekey) via the coordinator
- *   - committing an undo/redo pair via the file-explorer undo stack
- *   - unwrapped toast on IPC failure
- *
- * Used by the file-explorer inline rename and by double-click-rename
- * from an editor tab. Both go through here so the move behavior stays consistent.
- */
+/** Share explorer/editor rename transactions, undo/redo and unwrapped IPC errors; the move coordinator owns quiesce/rename/rekey and unchanged names no-op. */
 export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
   const { oldPath, newName, worktreeId, worktreePath, refreshDir } = args
   const trimmed = newName.trim()

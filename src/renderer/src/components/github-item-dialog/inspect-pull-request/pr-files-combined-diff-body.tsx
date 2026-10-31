@@ -1,3 +1,7 @@
+import {
+  combinedDiffViewportAttributes,
+  combinedDiffRowAttributes
+} from '@/components/editor/combined-diff-viewport'
 import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
@@ -78,7 +82,7 @@ export function PRFilesCombinedDiffBody({
     section: DiffSection,
     args: { lineNumber: number; startLine?: number; body: string }
   ) => Promise<boolean>
-  // Why: a stable callback, not an inline arrow — this re-keys every mounted row's comment decorator.
+  // Keep this callback stable or every row’s comment decorator is re-keyed.
   getCommentableLineNumbers: (section: DiffSection) => readonly number[] | undefined
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
@@ -108,7 +112,11 @@ export function PRFilesCombinedDiffBody({
           onCollapsedChange={setFileTreeCollapsed}
           onNavigate={handleTreeNavigate}
         />
-        <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+        <div
+          {...combinedDiffViewportAttributes}
+          ref={scrollContainerRef}
+          className="min-w-0 flex-1 overflow-auto scrollbar-editor"
+        >
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const section = sections[virtualItem.index]
@@ -118,6 +126,7 @@ export function PRFilesCombinedDiffBody({
               return (
                 <div
                   key={virtualItem.key}
+                  {...combinedDiffRowAttributes}
                   data-index={virtualItem.index}
                   ref={virtualizer.measureElement}
                   className="absolute left-0 top-0 w-full"

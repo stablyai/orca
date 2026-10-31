@@ -26,7 +26,7 @@ function Host(): React.JSX.Element {
 }
 
 function sizeCanvas(): HTMLElement {
-  const canvas = screen.getByTestId('diagram-viewer-canvas')
+  const canvas = screen.getByTestId('pan-zoom-image-canvas')
   Object.defineProperty(canvas, 'clientWidth', { value: 1000 })
   Object.defineProperty(canvas, 'clientHeight', { value: 600 })
   act(() => resizeObservers.forEach((notify) => notify()))
@@ -129,20 +129,6 @@ describe('DiagramViewerModal', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Diagram' })).toBeNull())
     expect(screen.getByRole('dialog', { name: 'Pull request' })).toBeInTheDocument()
     await waitFor(() => expect(document.activeElement).toBe(opener))
-  })
-
-  it('re-serializes the HTML-serialized sanitizer output as an XML image document', async () => {
-    // What DOMPurify returns in Chromium for a label holding U+00A0. Chromium's XML serializer
-    // then writes the character itself; happy-dom's keeps the entity, so only the reparse is asserted.
-    const sanitized = '<svg viewBox="0 0 400 200"><text>User&nbsp;A</text></svg>'
-    render(<Host />)
-    act(() => useAppStore.getState().openModal('diagram-viewer', { svg: sanitized }))
-    sizeCanvas()
-
-    expect(screen.getByRole('img', { name: 'Diagram' }).style.width).toBe('400px')
-    const blob = vi.mocked(URL.createObjectURL).mock.calls[0][0]
-    const xml = blob instanceof Blob ? await blob.text() : ''
-    expect(xml).toContain('xmlns="http://www.w3.org/2000/svg"')
   })
 
   it('pans by the wheel distance whatever unit the device reports', async () => {

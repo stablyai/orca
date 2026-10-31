@@ -1,11 +1,9 @@
-// Astra pass 4 §2: desktop A leases nothing, but desktop B's live shell, under another target id on
-// the same account, must never read as exited. COMPAT(legacy-relay-bridge): the host converts anyway
-// and leaves B's relay alone, so the census reads `bridged` with nothing of A's to serve.
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+// Other desktops' live relays never prove exit. COMPAT(legacy-relay-bridge): convert with bridged verdict while leaving their relays untouched.
+import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from './ssh-connection'
-import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
-import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
+import type { SshConnection } from './connection/ssh-connection'
+import { relaySocketNameForInstanceId } from './legacy-relay/ssh-relay-instance-id'
+import { windowsRelayPipePathsForSocketName } from './legacy-relay/ssh-relay-endpoints'
 import { getRemoteHostPlatform, joinRemotePath } from './ssh-remote-platform'
 
 const {
@@ -20,39 +18,40 @@ const {
   countRelayPtysOverBridge: vi.fn()
 }))
 
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand
 }))
-vi.mock('./ssh-relay-endpoint-incumbent', async (importOriginal) => ({
+vi.mock('./legacy-relay/ssh-relay-endpoint-incumbent', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   probeRelayEndpointIncumbent
 }))
-vi.mock('./ssh-relay-endpoint-pty-count', () => ({
+vi.mock('./legacy-relay/ssh-relay-endpoint-pty-count', () => ({
   countRelayEndpointPtys,
   countRelayPtysOverBridge
 }))
-vi.mock('./ssh-relay-endpoint-runtime', () => ({ readRelayDaemonRuntimes: async () => new Map() }))
+vi.mock('./legacy-relay/ssh-relay-endpoint-runtime', () => ({
+  readRelayDaemonRuntimes: async () => new Map()
+}))
 vi.mock('./ssh-remote-commands', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listRemoteInstallBaseDirsCommand: () => 'LIST'
 }))
-vi.mock('./ssh-host-relay-windows-inventory', async (importOriginal) => ({
+vi.mock('./legacy-relay/ssh-host-relay-windows-inventory', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   windowsRelayInventoryCommand: () => 'INVENTORY',
   windowsPipeAccessCommand: () => 'ACCESS'
 }))
-vi.mock('./ssh-relay-windows-launch-command', () => ({
+vi.mock('./legacy-relay/ssh-relay-windows-launch-command', () => ({
   windowsRelayConnectCommand: (_h: unknown, _n: string, _d: string, pipe: string) =>
     `BRIDGE ${pipe}`
 }))
 
 import { assessOrcadMigrationTerminals } from './orcad-migration-terminal-gate'
-import { censusHostRelayEndpoints } from './ssh-host-relay-endpoint-census'
-import { censusWindowsHostRelays } from './ssh-host-relay-windows-census'
-import { hostTerminalProofFromCensus } from './ssh-host-relay-terminals-on-connect'
+import { censusHostRelayEndpoints } from './legacy-relay/ssh-host-relay-endpoint-census'
+import { censusWindowsHostRelays } from './legacy-relay/ssh-host-relay-windows-census'
+import { hostTerminalProofFromCensus } from './legacy-relay/ssh-host-relay-terminals-on-connect'
 
-// The censuses only hand the connection to the mocked exec, probe and bridge.
 const conn: SshConnection = Object.create(null)
 const noLeases = { getSshRemotePtyLeases: () => [] }
 

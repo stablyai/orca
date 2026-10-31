@@ -37,6 +37,7 @@ describe('useIpcEvents browser tab create routing', () => {
       closeModal: vi.fn(),
       openModal: vi.fn(),
       activeWorktreeId: 'wt-1',
+      sleepingAgentSessionsByPaneKey: {},
       activeView: 'terminal',
       setActiveRepo: vi.fn(),
       setActiveWorktree: vi.fn(),
@@ -51,6 +52,7 @@ describe('useIpcEvents browser tab create routing', () => {
       setSshConnectionState: vi.fn(),
       setSshTargetLabels: vi.fn(),
       setPortForwards: vi.fn(),
+      setUnrestoredPortForwards: vi.fn(),
       clearPortForwards: vi.fn(),
       setDetectedPorts: vi.fn(),
       enqueueSshCredentialRequest: vi.fn(),
@@ -166,6 +168,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onPublishAgentLaunchTab: () => () => {},
           onRevealTerminalPane: () => () => {},
           onAgentLaunchPaneVerdict: () => () => {},
+          onLaunchRecipe: () => () => {},
           onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
@@ -179,10 +182,8 @@ describe('useIpcEvents browser tab create routing', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
-          onNewBrowserTab: () => () => {},
-          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: (
             listener: NonNullable<typeof requestTabCreateListenerRef.current>
           ) => {
@@ -195,14 +196,11 @@ describe('useIpcEvents browser tab create routing', () => {
           replyTabClose: () => {},
           onRequestTabSetProfile: () => () => {},
           replyTabSetProfile: () => {},
-          onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onCloseFloatingItem: () => () => {},
           onSelectFloatingIndex: () => () => {},
-          onSwitchTab: () => () => {},
-          onSwitchTabAcrossAllTypes: () => () => {},
+          onBrowserPageTabShortcut: () => () => {},
           onSwitchRecentTab: () => () => {},
-          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
@@ -218,6 +216,7 @@ describe('useIpcEvents browser tab create routing', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: (listener: NonNullable<typeof activateViewListenerRef.current>) => {
             activateViewListenerRef.current = listener
@@ -232,6 +231,7 @@ describe('useIpcEvents browser tab create routing', () => {
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},

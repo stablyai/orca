@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { win32 as pathWin32 } from 'node:path'
 
-/** Absolute path, so PATH cannot be hijacked the way it was for PowerShell (#15749). */
+/** Prefer checked System32 wsl.exe to avoid PATH hijacking (#15749); use PATH only when that file is absent. */
 let cached: string | undefined
 
 export function resolveWslExecutablePath(): string {

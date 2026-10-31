@@ -55,7 +55,8 @@ function createLiveFrameRoute(
     scheduleNavigationFrameCapture: () => {},
     clearNavigationCaptureTimer: () => {},
     bumpSnapshotGeneration: () => {},
-    setDialogOpen: () => {}
+    observeGuestViewSize: () => false,
+    openDialog: () => null
   })
   return {
     pacer,

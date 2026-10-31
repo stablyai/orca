@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodeKeepAliveFrame, KEEPALIVE_SEND_MS, TIMEOUT_MS } from './relay-protocol'
+import {
+  encodeKeepAliveFrame,
+  KEEPALIVE_SEND_MS,
+  TIMEOUT_MS
+} from './remote-exec/remote-frame-protocol'
 import { SshChannelMultiplexer, type MultiplexerTransport } from './ssh-channel-multiplexer'
 
 type WedgedTransport = MultiplexerTransport & { writes: Buffer[]; feed: (chunk: Buffer) => void }
 
-/**
- * A transport that accepts the first write, then reports backpressure forever: no drain, and no
- * write settlement. This is a half-open TCP link — the socket buffer filled and the peer's FIN
- * never arrived — which is what sleep/resume and a dropped NAT mapping produce in the field.
- */
+/** Model a half-open link: one accepted write then permanent backpressure with neither drain nor settlement. */
 function createWedgedTransport(): WedgedTransport {
   const writes: Buffer[] = []
   let onData: (chunk: Buffer) => void = () => {}
@@ -46,8 +46,7 @@ describe('SshChannelMultiplexer on a transport that saturates and never drains',
   })
 
   it('declares the link lost instead of suppressing the dead-link check forever', async () => {
-    // Drive well past every health window: keepalive interval, dead-link timeout, and the
-    // wake-gap grace that resets staleness after a suspend.
+    // Exceed keepalive, dead-link and wake-gap health windows.
     await vi.advanceTimersByTimeAsync(TIMEOUT_MS * 10 + KEEPALIVE_SEND_MS)
 
     expect(mux.isDisposed()).toBe(true)
@@ -66,8 +65,7 @@ describe('SshChannelMultiplexer on a transport that saturates and never drains',
   })
 
   it('keeps a slow-but-alive peer connected while its own keepalives arrive', async () => {
-    // The regression guard for the fix above: backpressure on our uplink is not evidence of
-    // death, and the relay's own keepalive is what proves it.
+    // Outbound saturation proves nothing; inbound keepalives alone must preserve a slow live peer.
     let seq = 1
     const inbound = setInterval(() => {
       transport.feed(encodeKeepAliveFrame(seq++, 0))

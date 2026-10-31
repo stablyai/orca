@@ -7,6 +7,7 @@ import type * as GitStatusModule from '../git/status'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
 import type * as WorktreeModule from '../git/worktree'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const mocks = vi.hoisted(() => ({
   listWorktrees: vi.fn(),
@@ -40,11 +41,7 @@ const PARAMS = { agentId: 'codex', model: 'gpt-5.4-mini' }
 
 const tempDirs: string[] = []
 
-/**
- * Store double narrow enough to drive worktree resolution, so the runtime runs
- * its real hydration (`listResolvedWorktrees` → `mergeWorktree` → cache) instead
- * of a hand-built worktree fixture carrying `linkedIssue`.
- */
+/** Exercise real worktree hydration/cache with a minimal store, rather than embedding linkedIssue in the fixture. */
 function makeStore(worktreePath: string) {
   const worktreeId = `${REPO_ID}::${worktreePath}`
   const worktreeMeta: Record<string, WorktreeMeta> = {
@@ -65,8 +62,7 @@ function makeStore(worktreePath: string) {
   return {
     worktreeId,
     updateLinkedIssue: (linkedIssue: number | null): void => {
-      // Why: mirrors `worktrees:updateMeta`, which persists the link without
-      // invalidating the runtime's resolved-worktree cache.
+      // Mirror metadata IPC: persist without invalidating the resolved-worktree cache.
       worktreeMeta[worktreeId] = { ...worktreeMeta[worktreeId], linkedIssue }
     },
     store: {
@@ -79,7 +75,7 @@ function makeStore(worktreePath: string) {
           : undefined,
       getAllWorktreeMeta: () => worktreeMeta,
       getWorktreeMeta: (id: string) => worktreeMeta[id],
-      setWorktreeMeta: (id: string, updates: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
         worktreeMeta[id] = { ...worktreeMeta[id], ...updates }
         return worktreeMeta[id]
       },
@@ -129,8 +125,7 @@ describe('runtime commit-message generation linked-issue freshness', () => {
     ])
     const runtime = new OrcaRuntimeService(store as never)
 
-    // Why: the first generation warms the resolved-worktree cache with the
-    // unlinked projection, so a stale read would still answer `unlinked` below.
+    // Warm an unlinked projection before updating metadata to expose stale-cache reads.
     expect(await generatedCommitContext(runtime, worktreeId)).not.toHaveProperty('linkedIssue')
 
     updateLinkedIssue(321)

@@ -1,7 +1,6 @@
 import Foundation
 
-/// What the shell does with one navigation: the whole decision, so the "allow it" half and the
-/// "offer it to the opener" half cannot drift apart.
+/// Keep allow/refuse/opener routing in one decision shared across platforms.
 enum MobileWebShellNavigationVerdict: Equatable {
   /// The served document loading itself, which is the only navigation this WebView performs.
   case allow
@@ -11,48 +10,16 @@ enum MobileWebShellNavigationVerdict: Equatable {
   case cancelAndOffer(String)
 }
 
-/// The rule for a navigation the shell is deciding about.
-///
-/// Framework-free on purpose, like `MobileWebShellOrigin`: `tests/MobileWebShellChecks.swift`
-/// compiles this file with `swiftc` and checks it without a device or a simulator. Kept in step with
-/// the Kotlin copy.
+/// Framework-free navigation policy, checked off-device and kept in sync with Kotlin.
 enum MobileWebShellNavigationPolicy {
-  /// Longest URL the shell hands back to JS for a cancelled navigation.
-  ///
-  /// The page's own bound is `BRIDGE_MAX_EXTERNAL_LINK_CHARS` (2048) and the filter that applies it
-  /// is `readBridgeExternalLinkUrl`, in TypeScript. This is not a second copy of that rule: it is a
-  /// cap on what crosses the native boundary at all, so an artifact cannot spend the bridge on a URL
-  /// the opener will refuse anyway.
+  /// Cap native-to-JS URL traffic; TypeScript’s readBridgeExternalLinkUrl owns scheme filtering and its smaller 2048-character limit.
   static let maxCancelledNavigationUrlCharacters = 4096
 
-  /// The whole decision.
-  ///
-  /// Three rules, in this order, and the order is the design.
-  ///
-  /// A navigation outside the main frame is the sealed preview frame loading itself. It is refused
-  /// and never offered: forwarding it would let an artifact ask for a browser with no tap behind it.
-  ///
-  /// **The document URL loads only when the shell asked for it.** `isShellLoad` is a flag the view
-  /// raises around its own `webView.load` and drops at commit; nothing else can raise it. Every
-  /// other navigation that names the document is refused and never offered -- offering the shell's
-  /// own URL to the opener would send the user out of the app instead of reloading it.
-  ///
-  /// The rule deliberately does not rest on the host reporting a gesture. Measured against a real
-  /// WKWebView, off-device: a sandboxed subframe navigating the top frame to the document URL
-  /// arrives as `.other` with no gesture at all, and under a gesture-shaped rule that is an allow
-  /// and a shell reload -- the bridge target cleared, the load state restarted, the page's state
-  /// gone. The initiating frame is deliberately not an input: before iOS 18.5 WebKit reports no
-  /// source frame for the view's own `load` (WebKit c28b242), and reading it refused the shell's
-  /// own document. The one-shot flag already refuses a subframe's top navigation, as on Android.
-  ///
-  /// What is left for the gesture is the only thing an artifact may ask for: a foreign URL, which
-  /// is refused and handed to the opener. A download is not a document load, so it takes that path
-  /// too, which is what makes `<a download>` behave the way it does on the native screens -- but a
-  /// download that still names the document takes the rule above and is refused without an offer,
-  /// because `<a href="/" download>` is the shell's own URL however it is dressed.
-  ///
-  /// Which URLs may actually open is not decided here -- `readBridgeExternalLinkUrl` owns the scheme
-  /// list, in the half that ships over the air.
+  /// Refuse subframes; allow the document only with the one-shot shell-load flag, spent at decision.
+  /// Other document URLs (including downloads) are never offered to the opener; gestured foreign URLs may be.
+  /// Gestures cannot authorize loads: sandboxed top navigation can report .other without one.
+  /// Ignore sourceFrame: WebKit before iOS 18.5 omits it for our own load (c28b242).
+  /// TypeScript’s readBridgeExternalLinkUrl owns scheme filtering so OTA policy has one source.
   static func verdict(
     url: String?,
     isMainFrame: Bool,

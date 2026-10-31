@@ -1,8 +1,3 @@
-// The lease reconcile is bookkeeping: a write that fails is reported, and startup and every read
-// carry on. Nothing is owed after it, because an unreconciled lease grants no writer and the next
-// send reconciles every lease again before it acts. Over records a newer Orca wrote, the reconcile
-// adjudicates in memory and writes nothing.
-
 import { cp, readdir, readFile, rm } from 'node:fs/promises'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as AgentSessionRecordRows from '../../runtime/agent-session-record-rows'
@@ -29,7 +24,10 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const writes = vi.hoisted(() => ({ failing: false }))
@@ -40,7 +38,6 @@ vi.mock('../../runtime/agent-session-record-rows', async (importOriginal) => {
     ...actual,
     writeAgentSessionStoreRows: (...args: Parameters<typeof actual.writeAgentSessionStoreRows>) => {
       if (writes.failing) {
-        // What SQLite throws when the disk will not take the commit.
         throw Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR', errcode: 10 })
       }
       return actual.writeAgentSessionStoreRows(...args)
@@ -54,13 +51,12 @@ const relaunchedRoots: string[] = []
 
 afterEach(async () => {
   writes.failing = false
+  await closeTestJournalHostDatabases()
   await Promise.all(
     relaunchedRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
   )
 })
 
-/** A host with one chat, relaunched over a copy of its files; `newer` marks the copied records as
- *  a newer Orca's. */
 async function relaunch(
   newer = false,
   probeOwner: StructuredAgentSessionHostDeps['probeOwner'] = async () => ({
@@ -69,11 +65,10 @@ async function relaunch(
 ) {
   const dying = hostTestState()
   await attach()
-  // An empty renewal queues behind every record write, so they are on disk.
+  // Empty renewal drains prior record writes before crash-state copy.
   await dying.store.renewLeases([])
   const relaunched = `${dying.root}-relaunched`
   relaunchedRoots.push(relaunched)
-  // A dead process holds no lock.
   await cp(dying.root, relaunched, {
     recursive: true,
     filter: (source) => !source.includes('.lock')
@@ -82,7 +77,6 @@ async function relaunch(
     await seedTestAgentSessionStoreFromNewerBuild(relaunched)
   }
   const store = await openTestAgentSessionRecordStore(relaunched)
-  // The lease-reconcile entries the host logs, by the failure each reports.
   const leaseReconcileLogged = vi.fn()
   const host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
@@ -117,7 +111,6 @@ it('reports a startup reconcile whose store write fails, and does not reject', a
 
   expect(leaseReconcileLogged).toHaveBeenCalledOnce()
   expect(leaseReconcileLogged).toHaveBeenCalledWith(IO_ERROR)
-  // Nothing was adjudicated, so the lease still grants no writer.
   expect(store.getRecord(SESSION)?.lease.unreconciled).toBe(true)
 })
 
@@ -133,13 +126,12 @@ it('reconciles the chat on its next send once the store can be written again', a
     host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
   ).resolves.toMatchObject({ ok: true })
 
-  // The send is queued; delivering it starts the agent, and that start reconciles the lease.
   await vi.waitFor(() => expect(hostTestState().dispatch).toHaveBeenCalledOnce(), {
     timeout: 10_000
   })
   expect(store.getRecord(SESSION)?.lease.unreconciled).toBe(false)
   expect(leaseReconcileLogged).toHaveBeenCalledOnce()
-  // Before the relaunched directory is removed, so the child's wind-down can write its lease.
+  // Drain wind-down writes before removing the relaunched directory.
   await host.flushAllStreamedEvents()
 })
 
@@ -161,14 +153,14 @@ it('adjudicates records a newer Orca wrote in memory only, and writes nothing', 
   expect(await readdir(stateDirectory)).toEqual(files)
 })
 
-it('restores a chat for reading while the reconcile keeps failing, and reports it once', async () => {
+it('lists a chat without opening it while the reconcile keeps failing, and reports it once', async () => {
   const { host, store, leaseReconcileLogged } = await relaunch()
   writes.failing = true
   await host.reconcileRestartLeases()
 
-  await expect(host.restoreReadableSessions([SESSION])).resolves.toBeUndefined()
+  await expect(host.seedSessionTabs([SESSION])).resolves.toBeUndefined()
 
-  expect(host.hasSession(SESSION)).toBe(true)
+  expect(host.hasSession(SESSION)).toBe(false)
   expect(store.getRecord(SESSION)?.lease.unreconciled).toBe(true)
   expect(leaseReconcileLogged).toHaveBeenCalledOnce()
   expect(leaseReconcileLogged).toHaveBeenCalledWith(IO_ERROR)
@@ -196,15 +188,14 @@ it('opens no chat from records a newer Orca wrote, and writes nothing trying', a
   const path = journalDatabasePath(stateDirectory)
   const bytes = await readFile(path)
 
-  await expect(host.restoreReadableSessions([SESSION])).resolves.toBeUndefined()
+  await expect(host.seedSessionTabs([SESSION])).resolves.toBeUndefined()
 
   expect(host.hasSession(SESSION)).toBe(false)
   expect(leaseReconcileLogged).not.toHaveBeenCalled()
   expect(await readFile(path)).toEqual(bytes)
 })
 
-// A chat whose owner could not be proven gone is left recovering; the next attach or send retries it.
-it('restores a chat for reading when resolving its recovery cannot write the store', async () => {
+it('keeps a chat readable when recovery cannot write the store', async () => {
   const { host, store, leaseReconcileLogged } = await relaunch(false, async () => ({
     outcome: 'indeterminate',
     reason: 'probe'
@@ -213,17 +204,16 @@ it('restores a chat for reading when resolving its recovery cannot write the sto
   expect(store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
   writes.failing = true
 
-  await expect(host.restoreReadableSessions([SESSION])).resolves.toBeUndefined()
+  await expect(host.seedSessionTabs([SESSION])).resolves.toBeUndefined()
 
-  expect(host.hasSession(SESSION)).toBe(true)
+  expect(host.hasSession(SESSION)).toBe(false)
   expect(store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
-  expect(leaseReconcileLogged).toHaveBeenCalledOnce()
-  expect(leaseReconcileLogged).toHaveBeenCalledWith(IO_ERROR)
+  expect(leaseReconcileLogged).toHaveBeenCalledExactlyOnceWith(IO_ERROR)
+  expect(await host.revealSession(SESSION)).toMatchObject({ readable: true })
 })
 
 it.each([
-  ['startup reconcile', (host: StructuredAgentSessionHost) => host.reconcileRestartLeases()],
-  ['read restore', (host: StructuredAgentSessionHost) => host.restoreReadableSessions([SESSION])]
+  ['startup reconcile', (host: StructuredAgentSessionHost) => host.reconcileRestartLeases()]
 ])('keeps the %s resolving when the logger throws', async (_step, read) => {
   const { host, leaseReconcileLogged } = await relaunch()
   const sinkError = new Error('error sink failed')

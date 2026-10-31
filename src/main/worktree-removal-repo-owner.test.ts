@@ -1,8 +1,3 @@
-/**
- * STA-4343 (host side): a repo id registered on two hosts has no single owner,
- * so unqualified legacy resolution is ambiguous and a qualified call picks the
- * named host. The destructive RPC boundary rejects missing qualifiers earlier.
- */
 import { describe, expect, it } from 'vitest'
 import {
   hasWorktreeRemovalRepoOwnerOnOtherHost,

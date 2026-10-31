@@ -12,8 +12,8 @@ import {
   sendNativeChatMessageVerified,
   resetNativeChatPtySendQueuesForTests
 } from '../../src/renderer/src/components/native-chat/native-chat-runtime-send'
-import { buildAskAnswerKeys } from '../../src/shared/native-chat-ask'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
+import { buildAskAnswerKeys } from '../../src/shared/native-chat-ask-answer'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
 import { sendAgentDraftPasteContentNow } from '../../src/renderer/src/lib/agent-draft-paste-content'
@@ -44,9 +44,11 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     await vi.advanceTimersByTimeAsync(2000)
     expect(ssh.bytes).not.toContain('\r')
     expect(onSettled).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(4000)
+    await vi.runAllTimersAsync()
     expect(ssh.bytes.join('')).toBe(
-      groups.map((group) => ('raw' in group ? group.raw : group.text)).join('')
+      groups
+        .map((group) => ('raw' in group ? group.raw : `\x1b[200~${group.text}\x1b[201~`))
+        .join('')
     )
     expect(ssh.bytes.findIndex((data) => data.includes('TAIL'))).toBeLessThan(
       ssh.bytes.indexOf('\r')
@@ -67,7 +69,7 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     await vi.advanceTimersByTimeAsync(500)
     handle.cancel()
     await vi.advanceTimersByTimeAsync(4000)
-    expect(ssh.bytes.join('')).toBe(`${'X'.repeat(32768)}TAIL`)
+    expect(ssh.bytes.join('')).toBe(`\x1b[200~${'X'.repeat(32768)}TAIL\x1b[201~`)
     expect(ssh.bytes).not.toContain('\r')
     expect(onSettled).not.toHaveBeenCalled()
   })

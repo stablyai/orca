@@ -104,8 +104,8 @@ export function ManagedDataAccountsSection({
           variant="outline"
           size="sm"
           onClick={() => {
-            void navigator.clipboard
-              .writeText(command)
+            void window.api.ui
+              .writeClipboardText(command)
               .then(() => setCopied(true))
               .catch((cause: unknown) => setError(String(cause)))
           }}

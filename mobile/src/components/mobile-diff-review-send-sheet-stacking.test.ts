@@ -4,11 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ReviewScreenState } from '../session/mobile-diff-review-screen-model'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import type { RpcResponse } from '../transport/types'
 
-// iOS cannot present a review sheet while another is still on screen (even mid-close): the second
-// presentation silently fails and every later tap on the screen is swallowed. These drive the real
-// controller and keyed drawer; only the native drawer is mocked, and its finished hide animation is
-// played by calling its `onHidden`.
+// Drive real controller/keyed drawer with mocked native hide completion; iOS rejects overlapping review sheets and can swallow later taps.
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -24,7 +23,6 @@ vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   Copy: 'Copy',
   Edit3: 'Edit3',
-  FileText: 'FileText',
   Plus: 'Plus',
   Send: 'Send',
   Trash2: 'Trash2',
@@ -58,11 +56,11 @@ const { useMobileDiffReviewController } =
   await import('../session/use-mobile-diff-review-controller')
 
 type Controller = ReturnType<typeof useMobileDiffReviewController>
-type Deferred = { promise: Promise<unknown>; resolve: (value: unknown) => void }
+type Deferred = { promise: Promise<RpcResponse>; resolve: (value: RpcResponse) => void }
 
 function deferred(): Deferred {
-  let resolve: (value: unknown) => void = () => {}
-  const promise = new Promise<unknown>((settle) => {
+  let resolve: (value: RpcResponse) => void = () => {}
+  const promise = new Promise<RpcResponse>((settle) => {
     resolve = settle
   })
   return { promise, resolve }
@@ -92,17 +90,23 @@ const SNAPSHOT: ReviewScreenState = {
   reviewState: { version: 1, files: {} }
 }
 
-const TABS_REPLY = {
+const TABS_REPLY: RpcResponse = {
   id: 'tabs',
   ok: true,
   result: { tabs: [{ type: 'terminal', id: 'tab-1', terminal: 'terminal-1', title: 'codex' }] },
   _meta: { runtimeId: 'runtime' }
 }
-const SAVE_REPLY = { id: 'save', ok: true, result: {}, _meta: { runtimeId: 'runtime' } }
+const SAVE_REPLY: RpcResponse = {
+  id: 'save',
+  ok: true,
+  result: {},
+  _meta: { runtimeId: 'runtime' }
+}
 
 let renderer: ReactTestRenderer | null = null
 let controller: Controller
 let replies: Map<string, Deferred>
+let requests: { method: string; params: unknown }[]
 
 function Screen({ client }: { client: RpcClient }) {
   controller = useMobileDiffReviewController({
@@ -123,23 +127,24 @@ function Screen({ client }: { client: RpcClient }) {
 }
 
 /** Every RPC waits until the test answers it, so each case controls when a load or save lands. */
-async function mountScreen(): Promise<void> {
+async function mountScreen(snapshot: ReviewScreenState = SNAPSHOT): Promise<void> {
   replies = new Map()
-  const sendRequest = vi.fn((method: string) => {
+  requests = []
+  const sendRequest = vi.fn((method: string, params: unknown) => {
+    requests.push({ method, params })
     const reply = deferred()
     replies.set(method, reply)
     return reply.promise
   })
-  loadSnapshot.mockResolvedValue(SNAPSHOT)
+  loadSnapshot.mockResolvedValue(snapshot)
   await act(async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the operations under test only call `sendRequest`.
-    renderer = create(createElement(Screen, { client: { sendRequest } as unknown as RpcClient }))
+    renderer = create(createElement(Screen, { client: stubRpcClient({ sendRequest }) }))
     await Promise.resolve()
   })
   expect(controller.currentItem).not.toBeNull()
 }
 
-async function answer(method: string, reply: unknown): Promise<void> {
+async function answer(method: string, reply: RpcResponse): Promise<void> {
   const pending = replies.get(method)
   expect(pending, `${method} was never requested`).toBeDefined()
   await act(async () => {
@@ -214,22 +219,6 @@ afterEach(() => {
 })
 
 describe('review screen sheets never stack', () => {
-  it('Send Unsent Notes shows Send Notes only after Review Actions has closed', async () => {
-    await mountScreen()
-    act(() => controller.openSheet({ kind: 'actions' }))
-    expect(shownSheets()).toEqual(['Review Actions'])
-
-    press(drawer('Review Actions'), 'Send Unsent Notes')
-    expect(shownSheets()).toEqual([])
-
-    await answer('session.tabs.list', TABS_REPLY)
-    expect(shownSheets()).toEqual([])
-
-    finishClosing('Review Actions')
-    expect(shownSheets()).toEqual(['Send Notes'])
-    expect(textOf(drawer('Send Notes'))).toContain('codex (termin)')
-  })
-
   it('Review Complete → Send shows Send Notes only after Review Complete has closed', async () => {
     await mountScreen()
     await completeReview()
@@ -254,34 +243,36 @@ describe('review screen sheets never stack', () => {
 
   it('Review Complete arriving while another sheet is open waits for that sheet to close', async () => {
     await mountScreen()
+    const target = controller.currentItem!
     const marking = startMarkReviewed()
-    // The user opens Review Actions while the save is still in flight.
-    act(() => controller.openSheet({ kind: 'actions' }))
+    // The user opens Discard while the save is still in flight.
+    act(() => controller.openSheet({ kind: 'discard', target }))
     await answer('worktree.set', SAVE_REPLY)
     await act(() => marking)
-    expect(shownSheets()).toEqual(['Review Actions'])
+    expect(shownSheets()).toEqual(['Discard File'])
 
-    act(() => drawer('Review Actions').props.onClose())
+    act(() => drawer('Discard File').props.onClose())
     expect(shownSheets()).toEqual([])
 
-    finishClosing('Review Actions')
+    finishClosing('Discard File')
     expect(shownSheets()).toEqual(['Review Complete'])
   })
 
   it('a sheet replaced before it was ever shown is never mounted', async () => {
     await mountScreen()
+    const target = controller.currentItem!
     act(() => {
       controller.openSheet({ kind: 'completion' })
-      controller.openSheet({ kind: 'actions' })
+      controller.openSheet({ kind: 'discard', target })
     })
-    expect(shownSheets()).toEqual(['Review Actions'])
+    expect(shownSheets()).toEqual(['Discard File'])
 
     act(() => {
       controller.openSheet({ kind: 'completion' })
       controller.closeSheet('completion')
     })
     expect(shownSheets()).toEqual([])
-    finishClosing('Review Actions')
+    finishClosing('Discard File')
     expect(mountedDrawers()).toEqual([])
   })
 
@@ -295,17 +286,30 @@ describe('review screen sheets never stack', () => {
     finishClosing('Send Notes')
     expect(mountedDrawers()).toEqual([])
 
-    act(() => controller.openSheet({ kind: 'actions' }))
-    expect(shownSheets()).toEqual(['Review Actions'])
+    act(() => controller.openSheet({ kind: 'discard', target: controller.currentItem! }))
+    expect(shownSheets()).toEqual(['Discard File'])
   })
 
   it('Discard keeps its file through the close and discards the file it showed', async () => {
-    await mountScreen()
+    await mountScreen({
+      ...SNAPSHOT,
+      status: {
+        ...SNAPSHOT.status,
+        entries: [
+          ...SNAPSHOT.status.entries,
+          { path: 'src/b.ts', status: 'modified', area: 'unstaged' }
+        ]
+      }
+    })
     const target = controller.currentItem!
     act(() => controller.openSheet({ kind: 'discard', target }))
+    act(() => controller.moveFile('next'))
+    expect(controller.currentItem?.filePath).toBe('src/b.ts')
     press(drawer('Discard File'), 'Discard')
     expect(shownSheets()).toEqual([])
     expect(textOf(drawer('Discard File')).join(' ')).toContain(target.filePath)
-    expect(replies.has('git.discard')).toBe(true)
+    expect(requests.filter((request) => request.method === 'git.discard')).toEqual([
+      { method: 'git.discard', params: { worktree: 'id:wt-1', filePath: 'src/a.ts' } }
+    ])
   })
 })

@@ -18,6 +18,7 @@ import {
 } from './visible-hosted-review-refresh-targets'
 import { getWorkspaceReferenceRequest } from '@/components/sidebar/workspace-reference-details'
 import { createVisibleHostedReviewRefreshScheduler } from './visible-hosted-review-refresh-scheduler'
+import { refreshHostedReviewCard } from '../slices/hosted-review-card-refresh'
 
 const repo: Repo = { id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }
 const worktree = makePRRefreshWorktree()
@@ -243,6 +244,29 @@ describe('visible hosted review refresh targets', () => {
     expect(targets(store)[0].revision).toBe(revision)
     store.setState({ worktreesByRepo: { [repo.id]: [{ ...worktree, head: 'new-head' }, alias] } })
     expect(targets(store)[0].revision).not.toBe(revision)
+  })
+
+  // E9: the timer-driven refresh of the selected card is interactive for priority, not a user act.
+  it('never asks to start a stopped WSL distro for the selected card, while a manual Refresh does', async () => {
+    const store = setup()
+    store.setState({ activeWorktreeId: worktree.id })
+    const rows = targets(store)
+    expect(rows[0]).toMatchObject({ selected: true })
+    await rows[0].refresh()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ admissionTier: 'interactive', active: true })
+    )
+    expect(mockApi.hostedReview.forBranch.mock.lastCall?.[0]).not.toHaveProperty('wakeWslDistro')
+
+    await refreshHostedReviewCard(store.getState().fetchHostedReviewForBranch, {
+      repoPath: repo.path,
+      repoId: repo.id,
+      branch: worktree.branch,
+      admissionTier: 'interactive'
+    })
+    expect(mockApi.hostedReview.forBranch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ admissionTier: 'interactive', wakeWslDistro: true })
+    )
   })
 
   it('sets provider-neutral cadence for open, no review, closed and merged states', () => {

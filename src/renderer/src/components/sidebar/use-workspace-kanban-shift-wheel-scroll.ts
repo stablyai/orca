@@ -97,8 +97,7 @@ export function useWorkspaceKanbanShiftWheelScroll(
     document.addEventListener('drop', stopTrackingDrag, true)
     document.addEventListener('dragend', stopTrackingDrag, true)
     window.addEventListener('blur', stopTrackingDrag)
-    // Why: Chromium can cancel the native drag if Shift+wheel reaches default
-    // scrolling first, so intercept before bubble listeners see the event.
+    // Capture Shift+wheel before default scrolling can cancel Chromium’s native drag.
     document.addEventListener('wheel', handleWheel, { capture: true, passive: false })
     return () => {
       document.removeEventListener('dragstart', handleDragStart, true)

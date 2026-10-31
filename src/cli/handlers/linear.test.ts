@@ -19,9 +19,7 @@ vi.mock('../runtime-client', async () => {
     }
   }
 
-  // Why: re-export the REAL error classes; format.ts narrows with `instanceof`
-  // against ./runtime/types, so a look-alike would collapse every CLI error
-  // code into the generic `runtime_error` shape.
+  // Error formatting uses instanceof, so preserve the production error classes.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
 
   return {
@@ -41,9 +39,7 @@ describe('orca linear CLI handlers', () => {
     vi.restoreAllMocks()
     callMock.mockReset()
     process.env = { ...originalEnv }
-    // Why: these tests can run inside an Orca-managed terminal, which exports
-    // real worktree/terminal/pairing env hints; clear them so handler context
-    // assertions stay deterministic.
+    // Clear real terminal/worktree/pairing hints inherited from the test runner.
     delete process.env.ORCA_WORKTREE_ID
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PAIRING_CODE
@@ -437,6 +433,37 @@ describe('orca linear CLI handlers', () => {
       },
       { timeoutMs: 75_000 }
     )
+  })
+
+  it('edits a comment from stdin and deletes one through the rm alias', async () => {
+    const commentId = '9f3c2a10-1111-4222-8333-444455556666'
+    const stdin = mockStdin(false, ['fixed body'])
+    queueFixtures(
+      callMock,
+      okFixture('req_edit', commentAddResult()),
+      okFixture('req_delete', commentAddResult())
+    )
+
+    try {
+      await main(['linear', 'comment', 'edit', commentId, '--body-file', '-'], '/tmp/repo')
+    } finally {
+      stdin.restore()
+    }
+    await main(['linear', 'comment', 'rm', commentId, '--workspace', 'w', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      1,
+      'linear.commentEdit',
+      { commentId, body: 'fixed body', workspaceId: undefined },
+      { timeoutMs: 75_000 }
+    )
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'linear.commentDelete',
+      { commentId, workspaceId: 'w' },
+      { timeoutMs: 75_000 }
+    )
+    expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Edited comment comment-id on ENG-123.')
   })
 
   it('rejects malformed write ids before dispatch', async () => {

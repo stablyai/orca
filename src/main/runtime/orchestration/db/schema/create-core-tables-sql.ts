@@ -191,8 +191,12 @@ CREATE TABLE IF NOT EXISTS worker_terminal_resources (
   last_recovery_at         TEXT,
   archive_source           TEXT,
   archive_status           TEXT,
+  auto_release_at          TEXT,
+  auto_release_dispatch_id TEXT,
   created_at               TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at               TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at               TEXT NOT NULL DEFAULT (datetime('now')),
+  -- JSON: the agent conversation a closed worker reopens in (WorkerResumeSession).
+  resume_session           TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_terminal_resources_owner

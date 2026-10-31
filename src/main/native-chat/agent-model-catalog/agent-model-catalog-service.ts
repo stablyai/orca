@@ -1,362 +1,305 @@
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
-import type {
-  AgentSessionAccountHome,
-  AgentSessionRecord
-} from '../../../shared/agent-session-record'
-import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import { isNativeLocalLocation } from '../../../shared/execution-host'
+import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
+import { createAgentModelCatalogLiveListings } from './agent-model-catalog-live-listings'
+import { scopedAgentModelCatalogLister } from './agent-model-catalog-lister'
+import { prewarmAgentModelCatalog, newChatCatalogKey } from './agent-model-catalog-prewarm'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
 import {
-  agentModelCatalogFingerprint,
-  agentModelCatalogFingerprintForRecord
-} from './agent-model-catalog-fingerprint'
-import {
-  agentModelCatalogResultFromEntry,
-  retainedAgentModelCatalogModels,
-  type AgentModelCatalogConfiguredChoice
-} from './agent-model-catalog-entry'
+  catalogFolder,
+  sessionWorkspacePath,
+  projectAgentModelCatalogDefault
+} from './agent-model-catalog-workspace'
+
 import type {
-  AgentModelCatalogEntry,
-  AgentModelCatalogLiveListing,
-  AgentModelCatalogProbe,
-  AgentModelCatalogStore,
-  AgentModelCatalogSuccess
-} from './agent-model-catalog-store'
-import { AgentModelCatalogListingStoppedError } from './agent-model-catalog-failures'
+  AgentModelCatalogServiceDeps,
+  AgentModelCatalogService,
+  AgentModelCatalogReadParams
+} from './agent-model-catalog-service-contract'
+export type { AgentModelCatalogServiceDeps, AgentModelCatalogService }
+import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
+import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { onAtRestCommandContextRetired } from '../agent-session-wire/at-rest-command-context'
+import {
+  createAgentModelCatalogSnapshot,
+  agentModelCatalogRequestKey,
+  agentModelCatalogReleasedOwner,
+  agentModelCatalogScopeIdentity,
+  retireAgentModelCatalogRequests,
+  agentModelCatalogMemoryBinding,
+  expireAgentModelCatalogBoundFailure,
+  agentModelCatalogSessionPeek,
+  type AgentModelCatalogBinding
+} from './agent-model-catalog-snapshot'
+import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import {
+  AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
+  runAgentModelCatalogOperation,
+  waitForAgentModelCatalogRead
+} from './agent-model-catalog-listing-waiters'
 
-export type AgentModelCatalogServiceDeps = {
-  store: AgentModelCatalogStore
-  getRecord: (sessionId: string) => AgentSessionRecord | undefined
-  /** Whether this build can start the record's agent as the record pins it; a record it cannot
-   *  names no account a probe may start that agent's CLI under. */
-  drivesRecord: (record: AgentSessionRecord) => boolean
-  /** The account home a structured launch for this agent would pin right now —
-   *  the SAME resolver the create path fills `record.accountHome` with, so a
-   *  record-less read can never answer from another account's listing. */
-  resolveAccountHome: (agent: string) => Promise<AgentSessionAccountHome>
-  /** Session-less listers, one per agent that has one on this host. */
-  probes?: Readonly<Partial<Record<string, AgentModelCatalogProbe>>>
-  /** Agents whose listing marks the model the account is configured to run as its default. */
-  listingNamesConfiguredModel?: ReadonlySet<string>
-  /** Where a session's provider runs, for deciding whether its own config scope is the account's. */
-  recordWorkspacePath?: (record: AgentSessionRecord) => Promise<string | null>
-  /** False for an agent whose model no project config can pick; its default holds everywhere. */
-  agentReadsProjectModelConfig?: (agent: string) => boolean
-  /** Whether the workspace's own config could pick a model other than the listed default;
-   *  `accountHomePath` is the agent's own home folder, which is account config, not a layer. */
-  workspaceMayOverrideDefaultModel?: (input: {
-    agent: string
-    workspacePath: string
-    accountHomePath: string | null
-  }) => Promise<boolean>
-  /** Whether this host keeps any chat of the agent; with a saved catalog, what marks it in use. */
-  hasChatRecords?: (agent: string) => boolean
-}
-
-export type AgentModelCatalogService = {
-  read: (params: {
-    agent: string
-    sessionId?: string
-    /** Where a new chat would run; null when one was named but is not a local directory. */
-    workspacePath?: string | null
-    /** Answer for the folder the named session runs in, as its new-chat read did. */
-    inSessionWorkspace?: true
-    /** With no entry yet, answer from the listing this read starts or joins instead of `unknown`;
-     *  with a held reason past its TTL, from the probe re-checking it. */
-    waitForListing?: boolean
-    /** Answer only from the saved entry and held reason; start, join or re-check no listing. */
-    savedOnly?: boolean
-  }) => Promise<AgentSessionModelCatalogResult>
-  /** Incoming listing ids, checking only a launch-added row against the pinned account. */
-  retainedLiveModelIds: (sessionId: string, listing: AgentModelCatalogLiveListing) => string[]
-  /** Saves a session's listing and newly learned menus so the next chat starts warm. */
-  recordLiveListing: (sessionId: string, listing: AgentModelCatalogLiveListing) => void
-  /** Lists, in the background, every agent the user has used here (a saved catalog or a chat)
-   *  whose catalog for the account a new chat would pin is missing or old, so a picker never meets
-   *  a cold catalog. Resolves once those listings settle. */
-  prewarm: () => Promise<void>
-  /** The host is going away: start no listing, and stop the ones running. */
-  stop: () => void
-  /** A chat under this record's account proved its start: a held reason is re-checked sooner. */
-  providerStarted: (
-    record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
-  ) => void
-}
-
-// At most this many agents list at once: each listing spawns that agent's CLI.
-const PREWARM_CONCURRENCY = 2
-
-/** A named workspace keeps the listed default only when none of its own config can replace it. */
-async function workspaceKeepsListedDefault(
-  deps: AgentModelCatalogServiceDeps,
-  agent: string,
-  workspacePath: string | null | undefined,
-  accountHomePath: string | null
-): Promise<boolean> {
-  if (workspacePath === undefined) {
-    return true
-  }
-  if (workspacePath === null || !deps.workspaceMayOverrideDefaultModel) {
-    return false
-  }
-  try {
-    return !(await deps.workspaceMayOverrideDefaultModel({ agent, workspacePath, accountHomePath }))
-  } catch {
-    return false
-  }
-}
-
-/** The catalog a new chat of `agent` would read: the account a launch would pin right now. */
-async function newChatCatalogKey(
-  deps: AgentModelCatalogServiceDeps,
-  agent: string
-): Promise<{ fingerprint: string; accountHome: AgentSessionAccountHome } | null> {
-  let accountHome: AgentSessionAccountHome
-  try {
-    accountHome = await deps.resolveAccountHome(agent)
-  } catch {
-    return null
-  }
-  return {
-    fingerprint: agentModelCatalogFingerprint({ agent, accountHome, wslDistro: null }),
-    accountHome
-  }
-}
-
-/** The local folder a session's agent runs in; null where this host cannot look into it, as a new
- *  chat's own read answers. */
-async function sessionWorkspacePath(
-  deps: AgentModelCatalogServiceDeps,
-  record: AgentSessionRecord
-): Promise<string | null> {
-  if (!isNativeLocalLocation(record.location) || !deps.recordWorkspacePath) {
-    return null
-  }
-  return deps.recordWorkspacePath(record).catch(() => null)
-}
-
-/** A session launched with no model pick resolved its config scope's default model and effort;
- *  when that scope is the account's (a native workspace with no config of its own), they are the
- *  account's default, and a resolution naming no listed model retires the saved one. */
-async function recordConfiguredDefault(
-  deps: AgentModelCatalogServiceDeps,
-  record: AgentSessionRecord,
-  fingerprint: string,
-  choice: AgentModelCatalogConfiguredChoice | null
-): Promise<void> {
-  const accountHome = record.accountHome
-  if (!deps.workspaceMayOverrideDefaultModel) {
-    return
-  }
-  const workspacePath = await sessionWorkspacePath(deps, record)
-  if (
-    !workspacePath ||
-    (await deps.workspaceMayOverrideDefaultModel({
-      agent: record.provider,
-      workspacePath,
-      accountHomePath: isLegacyAgentSessionAccountHome(accountHome) ? accountHome.path : null
-    }))
-  ) {
-    return
-  }
-  deps.store.recordConfiguredDefault(fingerprint, choice)
-}
-
-async function runBounded<T>(
-  items: readonly T[],
-  limit: number,
-  stopped: AbortSignal,
-  run: (item: T) => Promise<unknown>
-): Promise<void> {
-  const queue = [...items]
-  const worker = async (): Promise<void> => {
-    for (let item = queue.shift(); item !== undefined && !stopped.aborted; item = queue.shift()) {
-      await run(item).catch(() => {})
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, worker))
-}
-
-/**
- * Serves the host catalog to pickers, never through a session's serialize
- * queue. A session record names its own catalog (the account home pinned at
- * launch); without one, the key is the account a launch would pin right now —
- * never "whichever account listed last". `unknown` tells the client to keep
- * its static seed, and a missing or aged entry kicks one joined background
- * probe so the next read is warm. With no entry, the answer says that listing
- * is running, and only a read that asks waits for it. Failures suppress a new
- * probe for 30s, but never hide another listing already running for the account.
- * A probe failure that says why no chat can start rides every answer as
- * `unavailable` until a later probe answers again.
- */
 export function createAgentModelCatalogService(
   deps: AgentModelCatalogServiceDeps
 ): AgentModelCatalogService {
-  // One per host: stopping it ends every listing this service started.
   const lifetime = new AbortController()
-  // A chat's configured default still being checked against its workspace, per catalog: a read
-  // answers after it, so the chat that reported it is followed by an answer naming it.
-  const recordingDefaults = new Map<string, Promise<void>>()
-  const listWith =
-    (probe: AgentModelCatalogProbe, home: AgentSessionAccountHome) =>
-    (): Promise<AgentModelCatalogSuccess> =>
-      probe(home, { signal: lifetime.signal }).catch((error: unknown) => {
-        throw lifetime.signal.aborted
-          ? new AgentModelCatalogListingStoppedError(String(error))
-          : error
-      })
-  return {
-    providerStarted(record) {
-      deps.store.expireFailure(agentModelCatalogFingerprintForRecord(record))
-    },
-    async read(params) {
-      const record = params.sessionId ? deps.getRecord(params.sessionId) : undefined
+  const admission = new PrioritySemaphore(2)
+
+  type Claim = Pick<AgentModelCatalogBinding, 'identity' | 'params' | 'current'> & {
+    controller: AbortController
+    promise: Promise<void>
+    ready: Promise<void>
+  }
+  const bindings = new Map<string, AgentModelCatalogBinding>()
+  const claims = new Map<string, Claim>()
+  const requestKey = agentModelCatalogRequestKey.bind(null, deps)
+  const capture = agentModelCatalogScopeIdentity.bind(null, deps)
+  const retireContext = (workspaceId?: string, sources = true): void => {
+    if (sources) {
+      live.retireContext(workspaceId)
+    }
+    retireAgentModelCatalogRequests(deps, bindings, claims, workspaceId)
+  }
+  const live = createAgentModelCatalogLiveListings(deps, lifetime.signal)
+  const unbindRetirement = onAtRestCommandContextRetired((workspaceId) =>
+    retireContext(workspaceId, workspaceId !== undefined)
+  )
+  const memoryBinding = (params: AgentModelCatalogReadParams) =>
+    agentModelCatalogMemoryBinding(deps, params, bindings, capture)
+  const snapshot = createAgentModelCatalogSnapshot(
+    deps,
+    memoryBinding,
+    (params, bound) =>
+      bound
+        ? claims.has(requestKey(params))
+        : claims.get(requestKey(params))?.identity === capture(params),
+    () => lifetime.signal.aborted
+  )
+
+  const resolve = (params: AgentModelCatalogReadParams): Promise<void> => {
+    const deadline = params.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+    const remaining = deadline - Date.now()
+    if (lifetime.signal.aborted || remaining <= 0) {
+      return Promise.resolve()
+    }
+    const bindingKey = requestKey(params)
+    const key = params.savedOnly ? `${bindingKey}:saved` : bindingKey
+    let identity = capture(params)
+    const workspaceIdentity = params.workspace?.identity()
+    let coldWorkspace = params.workspace !== undefined && workspaceIdentity === null
+    const retirement = deps.store.retirementRevision(params.agent)
+    const previous = claims.get(key)
+    if (previous?.identity === identity) {
+      return previous.promise
+    }
+    previous?.controller.abort()
+    const controller = new AbortController()
+    const ready = Promise.withResolvers<void>()
+    const valid = (): boolean =>
+      Date.now() < deadline &&
+      !controller.signal.aborted &&
+      !lifetime.signal.aborted &&
+      deps.store.retirementRevision(params.agent) === retirement &&
+      requestKey(params) === bindingKey &&
+      (coldWorkspace || capture(params) === identity)
+    const current = (): boolean => valid() && claims.get(key)?.controller === controller
+    const run = async (): Promise<void> => {
+      if (!current()) {
+        return
+      }
+      const record = params.sessionId ? deps.getConversation(params.sessionId) : undefined
+      const savedOnly = params.savedOnly || !!(record && !deps.getRecord(record.sessionId))
       const scoped =
         record && record.provider === params.agent && deps.drivesRecord(record) ? record : undefined
+      if (record && !scoped) {
+        return
+      }
+      let workspacePath: string | null | undefined
+      if (params.workspace) {
+        const resolved = await params.workspace.resolve().catch(() => undefined)
+        if (!current() || resolved === undefined) {
+          return
+        }
+        if (resolved !== null && typeof resolved === 'object') {
+          if (
+            resolved.identity === null ||
+            params.workspace.identity() !== resolved.identity ||
+            (!coldWorkspace && workspaceIdentity !== resolved.identity)
+          ) {
+            return
+          }
+          identity = capture(params)
+          const claim = claims.get(key)
+          if (claim?.controller !== controller) {
+            return
+          }
+          claim.identity = identity
+          workspacePath = resolved.path
+        } else {
+          workspacePath = resolved
+        }
+        coldWorkspace = false
+      } else {
+        workspacePath =
+          params.inSessionWorkspace ||
+          (record &&
+            params.workspacePath === undefined &&
+            !params.legacy &&
+            deps.agentReadsProjectModelConfig?.(params.agent) === true)
+            ? record
+              ? await sessionWorkspacePath(deps, record)
+              : null
+            : params.workspacePath
+      }
+      if (!current()) {
+        return
+      }
+      const folder = await catalogFolder(deps, params.agent, workspacePath, scoped)
+      if (!current()) {
+        return
+      }
       let fingerprint: string
-      // The account a probe lists under; null where this host cannot spawn one natively.
       let probeHome: AgentSessionAccountHome | null
       if (scoped) {
-        fingerprint = agentModelCatalogFingerprintForRecord(scoped)
-        // Probes spawn natively; a WSL-pinned record has no host-side lister.
-        probeHome = scoped.location.wslDistro === null ? scoped.accountHome : null
+        fingerprint = agentModelCatalogFingerprintForRecord(scoped, folder)
+        // Native probes cannot list a WSL-pinned account.
+        probeHome =
+          scoped.location.executionHostId === 'local' && scoped.location.wslDistro === null
+            ? scoped.accountHome
+            : null
       } else {
-        const key = await newChatCatalogKey(deps, params.agent)
-        if (!key) {
-          return { origin: 'unknown' }
+        const key = await newChatCatalogKey(deps, params.agent, folder)
+        if (!current() || !key) {
+          return
         }
         fingerprint = key.fingerprint
         probeHome = key.accountHome
       }
-      const accountHomePath =
-        probeHome && isLegacyAgentSessionAccountHome(probeHome) ? probeHome.path : null
-      const workspacePath = params.inSessionWorkspace
-        ? record
-          ? await sessionWorkspacePath(deps, record)
-          : null
-        : params.workspacePath
-      await recordingDefaults.get(fingerprint)
-      let entry = deps.store.get(fingerprint)
-      const probe = deps.probes?.[params.agent]
-      const home = probeHome
-      // Every answer carries the reason the probe last found, read when the answer is made.
-      const answer = async (
-        listed: AgentModelCatalogEntry | null,
-        extra: { listingInProgress?: true } = {}
-      ): Promise<AgentSessionModelCatalogResult> => {
-        const unavailable = deps.store.failure(fingerprint)?.unavailable
-        const result = listed
-          ? agentModelCatalogResultFromEntry(
-              listed,
-              await workspaceKeepsListedDefault(deps, params.agent, workspacePath, accountHomePath),
-              deps.listingNamesConfiguredModel?.has(params.agent) === true
-            )
-          : null
-        const holdsEverywhere =
-          result?.listingNamesConfiguredModel === true &&
-          deps.agentReadsProjectModelConfig?.(params.agent) === false
-        return {
-          ...(result ?? { origin: 'unknown' }),
-          ...(holdsEverywhere ? { defaultHoldsInEveryWorkspace: true as const } : {}),
-          ...extra,
-          ...(unavailable ? { unavailable } : {})
-        }
-      }
-      // Death evidence keeps a read after an observed exit from spawning another agent; a new chat
-      // also starts released, but still needs its first listing.
-      if (
-        params.savedOnly ||
-        (scoped?.lease?.claimStatus === 'released' && scoped.lease.deathEvidence)
-      ) {
-        return answer(entry)
-      }
-      // Past its TTL, only the probe re-derives a held reason. The reason is served meanwhile;
-      // only a read that asks waits for the probe's answer.
-      if (probe && home && !lifetime.signal.aborted && deps.store.heldReasonDue(fingerprint)) {
-        const probing = deps.store.refresh(fingerprint, params.agent, probe, listWith(probe, home))
-        if (!params.waitForListing) {
-          return answer(entry, { listingInProgress: true })
-        }
-        await probing
-        return answer(deps.store.get(fingerprint))
-      }
-      // Without an entry, answer from any running listing instead of starting a second one.
-      let listing = !entry && home ? deps.store.pendingListing(fingerprint) : null
-      if (probe && home && !lifetime.signal.aborted) {
-        if (entry && deps.store.shouldRefresh(fingerprint)) {
-          void deps.store.refresh(fingerprint, params.agent, probe, listWith(probe, home))
-        } else if (!entry && !listing && !deps.store.hasActiveFailure(fingerprint)) {
-          void deps.store.refresh(fingerprint, params.agent, probe, listWith(probe, home))
-          listing = deps.store.pendingListing(fingerprint)
-        }
-      }
-      if (!entry) {
-        if (!listing) {
-          return answer(null)
-        }
-        if (!params.waitForListing) {
-          return answer(null, { listingInProgress: true })
-        }
-        const listed = await listing
-        entry = deps.store.get(fingerprint) ?? listed
-      }
-      return answer(entry)
-    },
-    retainedLiveModelIds(sessionId, listing) {
-      const record = deps.getRecord(sessionId)
-      const entry =
-        record && deps.drivesRecord(record)
-          ? deps.store.get(agentModelCatalogFingerprintForRecord(record))
-          : undefined
-      return retainedAgentModelCatalogModels(entry, listing).map((model) => model.id)
-    },
-    recordLiveListing(sessionId, listing) {
-      const record = deps.getRecord(sessionId)
-      if (!record || !deps.drivesRecord(record)) {
-        return
-      }
-      // The record's pinned account and host: the account this child listed under.
-      const fingerprint = agentModelCatalogFingerprintForRecord(record)
-      const { configuredDefault, ...listed } = listing
-      const saved = deps.store.recordSuccess(
+      const scope = await resolveAgentModelCatalogScope(
+        deps,
+        { ...params, workspacePath, savedOnly },
+        scoped,
         fingerprint,
-        record.provider,
-        { ...listed, origin: 'live-session' },
-        'live'
+        probeHome,
+        current,
+        { deadline, current, signal: controller.signal }
       )
-      if (saved && configuredDefault !== undefined) {
-        // In report order, so the latest chat's resolution is the one kept.
-        const recording = (recordingDefaults.get(fingerprint) ?? Promise.resolve())
-          .then(() => recordConfiguredDefault(deps, record, fingerprint, configuredDefault))
-          .catch(() => {})
-          .then(() => {
-            if (recordingDefaults.get(fingerprint) === recording) {
-              recordingDefaults.delete(fingerprint)
-            }
-          })
-        recordingDefaults.set(fingerprint, recording)
-      }
-    },
-    async prewarm() {
-      if (lifetime.signal.aborted) {
+      if (!current() || !scope) {
         return
       }
-      const probes = deps.probes ?? {}
-      // An agent never used here waits for its first chat, which shows the quiet placeholder.
-      const used = Object.keys(probes).filter(
-        (agent) => deps.store.hasEntryForAgent(agent) || deps.hasChatRecords?.(agent) === true
-      )
-      await runBounded(used, PREWARM_CONCURRENCY, lifetime.signal, async (agent) => {
-        const probe = probes[agent]
-        const key = probe ? await newChatCatalogKey(deps, agent) : null
-        // A fresh entry, a listing already running, or a recent failure each mean nothing to do.
-        if (!probe || !key || lifetime.signal.aborted || !deps.store.probeDue(key.fingerprint)) {
-          return
+      const { base, exact, resolved, cwd } = scope
+      fingerprint = scope.fingerprint
+      let bindingCurrent = true
+      const bound: AgentModelCatalogBinding = {
+        identity,
+        params,
+        current: () =>
+          bindingCurrent &&
+          !lifetime.signal.aborted &&
+          deps.store.retirementRevision(params.agent) === retirement,
+        workspaceId: record?.location.workspaceId,
+        cancel: () => {
+          bindingCurrent = false
+          controller.abort()
+        },
+        fingerprint,
+        base,
+        exact,
+        folder,
+        cwd,
+        workspacePath,
+        keepDefault:
+          workspacePath === undefined ||
+          (workspacePath === null && independentAgentModelCatalog(params.agent))
+      }
+      bindings.set(bindingKey, bound)
+      while (bindings.size > 256) {
+        const oldest = bindings.keys().next().value
+        if (oldest !== undefined) {
+          bindings.delete(oldest)
         }
-        await deps.store.refresh(key.fingerprint, agent, probe, listWith(probe, key.accountHome))
+      }
+      bound.projecting = projectAgentModelCatalogDefault(
+        deps,
+        params.agent,
+        bound,
+        probeHome,
+        () => valid() && bindings.get(bindingKey) === bound
+      )
+      if (savedOnly) {
+        await bound.projecting
+        return
+      }
+      if (!exact && agentModelCatalogReleasedOwner(scoped)) {
+        return
+      }
+      const probe = deps.probes?.[params.agent]
+      const signal = AbortSignal.any([lifetime.signal, controller.signal])
+      const list = scopedAgentModelCatalogLister({
+        legacy: params.legacy,
+        operation: { deadline, current, signal },
+        canList: () => !record || !!deps.getRecord(record.sessionId),
+        admission,
+        signal,
+        resolved,
+        probe,
+        probeHome,
+        workspacePath: cwd ?? folder
       })
+      if (probe && probeHome && deps.store.probeDue(fingerprint)) {
+        void deps.store.refresh(fingerprint, params.agent, list, current, signal)
+      }
+      // Demand owns ingestion until settlement, even when its caller only needs the snapshot.
+      ready.resolve()
+      const pending = deps.store.pendingListing(fingerprint, true, true)
+      if (pending) {
+        await pending
+      }
+    }
+    const promise = runAgentModelCatalogOperation(run, remaining, controller, () => {
+      ready.resolve()
+      if (claims.get(key)?.controller === controller) {
+        claims.delete(key)
+      }
+    })
+    claims.set(key, { identity, controller, promise, ready: ready.promise, params, current })
+    return promise
+  }
+  return {
+    snapshot,
+    demand: (params) => (params.savedOnly ? Promise.resolve() : resolve(params)),
+    async prepareSaved(params) {
+      if (!memoryBinding(params)) {
+        await resolve({ ...params, savedOnly: true })
+      }
+      return snapshot({ ...params, savedOnly: true })
+    },
+    captureSource: live.captureSource,
+    retireContext,
+    peek: agentModelCatalogSessionPeek(deps, memoryBinding),
+    providerStarted(record, source) {
+      expireAgentModelCatalogBoundFailure(deps, bindings, record, source)
+      live.providerStarted(record, source)
+    },
+    async read(params) {
+      if (!params.savedOnly && params.waitForListing) {
+        const deadline = params.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+        await waitForAgentModelCatalogRead({
+          params: { ...params, deadline },
+          store: deps.store,
+          resolve,
+          claim: () => claims.get(requestKey(params)),
+          binding: () => bindings.get(requestKey(params))
+        })
+      }
+      return snapshot(params)
+    },
+    recordLiveListing: live.recordLiveListing,
+    async prewarm() {
+      await prewarmAgentModelCatalog(deps, lifetime.signal, (params) => this.read(params))
     },
     stop() {
       lifetime.abort()
+      unbindRetirement()
+      retireContext()
+      deps.store.clearPartialAttempts()
     }
   }
 }

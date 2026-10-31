@@ -8,6 +8,11 @@ import {
 import { runtimeOwnedRepoState } from './store-test-helpers'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
+import {
+  buildTaskPageRepoSourceState,
+  selectTaskPageUnresolvedSourceRepos,
+  selectTaskPageWorkItemsCacheEntries
+} from '@/components/task-page/task-page-cache-selectors'
 
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   beforeEach(() => {
@@ -25,9 +30,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   })
 
   it('stores resolved sources on the cache entry for the indicator to read', async () => {
-    // Why: parent design doc §1 suppression rule — the Tasks header indicator
-    // consults `sources.issues` vs `sources.prs` on the cache entry. This is
-    // the round-trip through fetchWorkItems that populates those fields.
+    // Require fetch round-trip to retain issues/PR source slugs used by Tasks header suppression (design §1).
     const store = createTestStore()
     mockApi.gh.listWorkItems.mockResolvedValueOnce({
       items: [],
@@ -51,13 +54,36 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     expect(result.error).toBeNull()
   })
 
+  it('restores the unknown-source notice after a forced legacy runtime empty response', async () => {
+    const store = createTestStore()
+    store.setState(runtimeOwnedRepoState('env-1', 'repo-id', '/repo'))
+    const repos = store.getState().repos
+    const emptySources = { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+    for (const ineligible of [true, false]) {
+      const sources = ineligible ? { ...emptySources, ineligible: true } : emptySources
+      runtimeEnvironmentCall.mockResolvedValueOnce({
+        id: 'rpc-marker',
+        ok: true,
+        result: { items: [], sources },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      await store.getState().fetchWorkItems('repo-id', '/repo', 24, '', { force: !ineligible })
+      const cache = store.getState().workItemsCache
+      const entries = selectTaskPageWorkItemsCacheEntries(cache, repos, 24, '')
+      expect(entries[0]?.sources).toEqual(sources)
+      expect(
+        selectTaskPageUnresolvedSourceRepos(repos, buildTaskPageRepoSourceState(repos, entries))
+      ).toEqual(
+        ineligible
+          ? []
+          : [{ repoId: 'repo-id', sourceKey: 'repo-id::runtime:env-1', label: 'repo' }]
+      )
+    }
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
+  })
+
   it('stamps the issues-side ClassifiedError with its source slug for banner copy', async () => {
-    // Why: parent design doc §2 partial-failure rule — when the issue fetch
-    // returns a 403 but the PR fetch succeeds, the cache entry carries the
-    // successful items AND the error for the failing side so the banner +
-    // list render together. The error's `source` is pinned to the issues
-    // slug so the banner copy stays correct even if the cache entry later
-    // receives new data from another read.
+    // Issue-only failure keeps successful PR items plus source-qualified error so list/banner coexist even after later reads (design §2).
     const store = createTestStore()
     mockApi.gh.listWorkItems.mockResolvedValueOnce({
       items: [],
@@ -101,10 +127,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   })
 
   it('force-retry invalidates a still-failing in-flight request instead of deduping onto it', async () => {
-    // Why: parent design doc §2 acceptance criterion 4 — the [Retry] button
-    // must re-invoke the fetch with force=true and clear the banner on
-    // success. That only works when force=true does not silently dedupe onto
-    // a still-failing non-forcing request.
+    // Forced Retry must not join failing nonforced requests; require fresh fetch to clear banner on success (design §2 criterion 4).
     const store = createTestStore()
     let resolveFailing: (v: unknown) => void = () => {}
     const failingRequest = new Promise((resolve) => {

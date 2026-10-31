@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../src/shared/native-chat/every-agent-chat.test-fixture'
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
   RUNTIME_CAPABILITIES,
@@ -9,11 +10,9 @@ import { resolveAgentLaunchRoute } from '../../../src/renderer/src/lib/agent-lau
 import { pairedHostClientCapabilities } from '../../../src/renderer/src/runtime/paired-host-client-capabilities'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
-// The capability strings a released server really advertises, not hand-written ones: a renamed
-// string would follow along in unit tests but silently change what this desktop does with that server.
-// This release advertises structured chat but predates client-chosen launch modes.
+// Read real released capability strings so renamed capabilities cannot be hidden by matching hand-written fixtures.
 const LEGACY_PAIRED_STRUCTURED_LAUNCH_RELEASE_REF = 'v1.4.219'
-const SETTINGS = { experimentalNativeChat: true }
+const SETTINGS = { nativeChatProviders: EVERY_AGENT_CHAT }
 
 let legacyHostCapabilities: readonly string[]
 

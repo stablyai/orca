@@ -1,6 +1,4 @@
-// The runtime Orca installs for an agent, on the host that receives the call: the one that runs
-// that agent's chats. Needs no workspace. Negotiated by `managed-runtime.install.v1`. Status is
-// pushed: a snapshot on subscribe, then one per state revision.
+// Install on the agent's chat host without a workspace; negotiate install.v1/remove.v1 and stream a snapshot followed by state revisions.
 
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -12,6 +10,7 @@ import { resolveAcpLaunchCommand } from '../../../acp/acp-structured-launch-reso
 import { ManagedRuntimeInstallation } from '../../../node-runtime/managed-runtime-installation'
 import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
+import { stopStructuredAgentChats } from '../../structured-agent-chat-stop'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../structured-agent-launch-support'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { defineMethod, defineStreamingMethod } from '../core'
@@ -26,7 +25,7 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
   }
   const dataDirectory = getProfileUserDataPath()
   const releases = spec.managedRuntime.root(dataDirectory)
-  // What a start would run, outside Orca's releases: the launch's own lookup decides.
+  // Use the launch's own lookup to find external runtimes.
   const findExternal = async (): Promise<boolean> => {
     const settings = runtime.requireStore().getSettings()
     const env = {
@@ -34,25 +33,33 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
       ...spec.env
     }
     try {
-      const command = resolveAcpLaunchCommand(spec, env, {
+      const { command } = resolveAcpLaunchCommand(spec, env, {
         commandSettings: settings,
         dataDirectory
       })
       return command !== spec.command && !isPathInsideOrEqual(releases, command)
     } catch (error) {
-      // An unrunnable Command setting refuses the start itself; it is no copy.
+      // An unrunnable Command setting refuses start; it is not an external runtime copy.
       if (isAgentSessionPreSpawnError(error)) {
         return false
       }
       throw error
     }
   }
+  const { launchGate } = spec
+  const managedRuntime = spec.managedRuntime
+  // Chats, starts, copies, sign-ins and children not proven gone all hold the gate's fence.
+  const fence = (work: () => Promise<void>): Promise<void> =>
+    launchGate
+      ? launchGate.run(() => stopStructuredAgentChats(agent, managedRuntime.label), work)
+      : Promise.reject(new Error(`${managedRuntime.label} cannot be removed on this host.`))
   const installation =
     installations.get(agent) ??
     // The chat host's own state root, where its launches look.
-    new ManagedRuntimeInstallation(agent, spec.managedRuntime, {
+    new ManagedRuntimeInstallation(agent, managedRuntime, {
       dataDirectory,
-      findExternal
+      findExternal,
+      fence
     })
   installations.set(agent, installation)
   return installation
@@ -121,6 +128,16 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
     handler: async ({ agent, operationId }, { runtime }) => {
       // The outcome once the run has unwound: `cancelled`, or `succeeded` if it had committed.
       return await installationFor(agent, runtime).cancel(operationId)
+    }
+  }),
+  defineMethod({
+    name: 'managedRuntime.remove',
+    permission: 'host-admin',
+    params: ManagedRuntimeAgentParams,
+    handler: async ({ agent }, { runtime }) => {
+      const installation = installationFor(agent, runtime)
+      installation.remove()
+      return installation.status()
     }
   })
 ] as const

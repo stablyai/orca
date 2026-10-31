@@ -4,12 +4,20 @@ const collect = vi.hoisted(() => vi.fn())
 vi.mock('../../../orcad/orcad-terminal-census', () => ({ collectOrcadTerminalCensus: collect }))
 
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad-terminal-census'
+import { TerminalUpdateAdmission } from '../../terminal/stop/terminal-update-admission'
 
 const handler = ORCAD_TERMINAL_CENSUS_METHODS[0]!.handler
 const idle = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 7 }
 
-function call(params: Record<string, unknown>, released: number) {
-  const runtime = { releaseFinishedAutomationRunTerminals: vi.fn(async () => released) }
+function call(
+  params: Record<string, unknown>,
+  released: number,
+  terminalUpdateAdmission = new TerminalUpdateAdmission(async () => [])
+) {
+  const runtime = {
+    releaseFinishedAutomationRunTerminals: vi.fn(async () => released),
+    terminalUpdateAdmission
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only the runtime member faked above.
   const result = handler({ activatedAt: 1, ...params } as never, { runtime } as never)
   return { runtime, result }
@@ -33,6 +41,21 @@ describe('orcad.terminalCensus', () => {
 
     await expect(result).resolves.toEqual(idle)
     expect(runtime.releaseFinishedAutomationRunTerminals).toHaveBeenCalledOnce()
+  })
+
+  it('answers unverifiable, still closed, when a spawn started before the close never settles', async () => {
+    vi.useFakeTimers()
+    const admission = new TerminalUpdateAdmission(async () => [])
+    await admission.admit(undefined)
+    const { result } = call({ closeAdmissionForMs: 60_000 }, 0, admission)
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await expect(result).resolves.toMatchObject({
+      liveSessions: null,
+      admissionClosedUntil: expect.any(Number)
+    })
+    expect(collect).not.toHaveBeenCalled()
+    expect(admission.isClosed()).toBe(true)
   })
 
   it('still counts terminals it may not close, and closes nothing for a plain census', async () => {

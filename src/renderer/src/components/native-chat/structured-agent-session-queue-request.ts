@@ -5,14 +5,12 @@ export type StructuredAgentSessionQueueDelivery = {
   enabled: boolean
 }
 
-/** Whether a send made now asks to be queued: a host known to queue, with queueing enabled. */
 export function structuredAgentSessionNewSendsQueue(
   queue: StructuredAgentSessionQueueDelivery
 ): boolean {
   return queue.capability === 'supported' && queue.enabled
 }
 
-/** Whether the host holds a send, images included, as a card while the agent works. */
 export function structuredAgentSessionQueueRequest(
   queue: StructuredAgentSessionQueueDelivery
 ): 'queue-if-active' | undefined {

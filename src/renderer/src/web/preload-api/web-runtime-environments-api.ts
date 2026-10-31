@@ -168,6 +168,15 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         runtimeStatus
       }
     },
+    // Why: the browser keeps a single paired server; pairing it again replaces that one.
+    repairFromPairingCode: async () => ({
+      ok: false,
+      kind: 'environment-save-failed',
+      message: translate(
+        'auto.web.webPreloadApi.remotePairingRepairUnavailable',
+        'Re-pairing is not available in the browser. Pair this browser with the server again.'
+      )
+    }),
     resolve: async ({ selector }) =>
       redactStoredWebRuntimeEnvironment(resolveEnvironment(selector)),
     remove: async ({ selector }) => {
@@ -201,15 +210,22 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       observeOnly
         ? observeWebRuntimeStatus(selector, timeoutMs)
         : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
-    retryControlConnection: () => Promise.resolve(),
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
-    call: ({ selector, method, params, timeoutMs, expectedEnvironmentPairingRevision }) =>
+    call: ({
+      selector,
+      method,
+      params,
+      timeoutMs,
+      expectedEnvironmentPairingRevision,
+      expectedEnvironmentRuntimeId
+    }) =>
       callEnvironmentEnvelope(
         selector,
         method,
         params,
         timeoutMs,
-        expectedEnvironmentPairingRevision
+        expectedEnvironmentPairingRevision,
+        expectedEnvironmentRuntimeId
       ),
     cancelSubscription: async ({ subscriptionId }) => {
       pendingSubscriptions.get(subscriptionId)?.abort()

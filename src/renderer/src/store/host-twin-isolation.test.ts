@@ -1,16 +1,13 @@
-/**
- * Destructive and selection actions aimed at one twin must leave the other twin's state alone.
- * The action table is declared by hand: adding a destroy, hide, link or select entry point means
- * adding its row here. Cells listed in KNOWN_TWIN_LEAKS are today's failures (the Stage 1 worklist):
- * they assert the leak still happens, so a fix turns them red until the entry is deleted.
- */
+/** Twin-targeted actions must isolate survivors. Keep the hand-declared action table current; KNOWN_TWIN_LEAKS pins Stage 1 failures, so fixes require removing their entries. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../runtime/runtime-rpc-client'
+import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
   changedHostTwinState,
   projectHostTwinState,
@@ -36,7 +33,9 @@ vi.mock('@/store', () => ({
         throw new Error('no twin fixture store bound')
       }
       return appStore.current.getState()
-    }
+    },
+    subscribe: (listener: Parameters<HostTwinFixture['store']['subscribe']>[0]) =>
+      appStore.current?.subscribe(listener) ?? (() => {})
   }
 }))
 
@@ -45,6 +44,7 @@ vi.mock('sonner', () => ({
 }))
 
 const { sleepWorktreesReportingFailures } = await import('@/components/sidebar/sleep-worktree-flow')
+const { fakeMainSleep } = await import('@/components/sidebar/sleep-worktree-test-main')
 
 const ptyKill = vi.fn()
 
@@ -83,7 +83,9 @@ beforeEach(() => {
         call: vi.fn(answerLikeHost),
         list: vi.fn().mockResolvedValue([{ id: TWIN_RUNTIME_ENV }])
       },
-      ui: { set: vi.fn().mockResolvedValue(undefined) }
+      ui: { set: vi.fn().mockResolvedValue(undefined) },
+      // Main runs the sleep; the window follows its notices as in the app.
+      worktrees: { sleep: fakeMainSleep().sleep, sleepReopened: vi.fn() }
     }
   })
 })
@@ -107,7 +109,12 @@ type TwinAction = {
   run: (fixture: HostTwinFixture, target: HostTwinSide) => Promise<unknown>
   /** Proves the action reached its target, so an isolated no-op can't pass. */
   applied: (fixture: HostTwinFixture, target: HostTwinSide) => void
+  // Workspace-wide by design (user decision 2026-10-17): assert survivor was acted on too.
+  wholeWorkspace?: (fixture: HostTwinFixture, survivor: HostTwinSide) => void
 }
+
+const survivorStopped = (f: HostTwinFixture, survivor: HostTwinSide) =>
+  expect(f.store.getState().ptyIdsByTabId[survivor.terminalTabId] ?? []).toEqual([])
 
 const isFolderKind = (kind: HostTwinKind) =>
   kind === 'folder local+ssh' || kind === 'folder group local+ssh'
@@ -149,7 +156,9 @@ const TWIN_ACTIONS: readonly TwinAction[] = [
     run: async (f, target) =>
       f.store
         .getState()
-        .purgeWorktreeTerminalState([{ id: f.workspaceKey, hostId: target.hostId }]),
+        .purgeWorktreeTerminalState([
+          hostWorktreeTarget({ id: f.workspaceKey, hostId: target.hostId })
+        ]),
     applied: (f, target) =>
       expect(f.store.getState().ptyIdsByTabId[target.terminalTabId]).toBeUndefined()
   },
@@ -157,10 +166,11 @@ const TWIN_ACTIONS: readonly TwinAction[] = [
     id: 'kill terminals',
     source: 'store/terminals/terminal-shutdown.ts shutdownWorktreeTerminals',
     appliesTo: () => true,
-    // Why raw id: the entry point cannot name a host yet (Stage 1.3 HostWorktreeTarget).
+    // Why raw id: a twin's copies share one workspace, so killing one kills both.
     run: (f) => settle(() => f.store.getState().shutdownWorktreeTerminals(f.workspaceKey)),
     applied: (f, target) =>
-      expect(f.store.getState().ptyIdsByTabId[target.terminalTabId] ?? []).toEqual([])
+      expect(f.store.getState().ptyIdsByTabId[target.terminalTabId] ?? []).toEqual([]),
+    wholeWorkspace: survivorStopped
   },
   {
     id: 'sleep',
@@ -168,7 +178,8 @@ const TWIN_ACTIONS: readonly TwinAction[] = [
     appliesTo: () => true,
     run: (f) => settle(() => sleepWorktreesReportingFailures([f.workspaceKey])),
     applied: (f, target) =>
-      expect(f.store.getState().ptyIdsByTabId[target.terminalTabId] ?? []).toEqual([])
+      expect(f.store.getState().ptyIdsByTabId[target.terminalTabId] ?? []).toEqual([]),
+    wholeWorkspace: survivorStopped
   },
   {
     id: 'select',
@@ -180,7 +191,9 @@ const TWIN_ACTIONS: readonly TwinAction[] = [
         ? f.store.getState().setActiveFolderWorkspace(f.projectId, target.hostId)
         : f.store.getState().setActiveWorktree(f.workspaceKey, target.hostId),
     applied: (f, target) =>
-      expect(f.store.getState().activeWorkspaceExecutionHostId).toBe(target.hostId)
+      expect(f.store.getState().activeWorkspaceExecutionHostId).toBe(target.hostId),
+    // Why: opening either copy wakes the shared workspace marker for both.
+    wholeWorkspace: (f) => expect(hasWorktreeSleepIntent(f.workspaceKey)).toBe(false)
   }
 ]
 
@@ -191,32 +204,8 @@ const TWIN_KINDS: readonly HostTwinKind[] = [
   'folder group local+ssh'
 ]
 
-function everyCell(actionId: string, reason: string, kinds = TWIN_KINDS): [string, string][] {
-  return kinds.flatMap((kind) =>
-    (['remote', 'local'] as const).map((target): [string, string] => [
-      `${actionId} | ${kind} | ${target}`,
-      reason
-    ])
-  )
-}
-
 /** `<action> | <kind> | <target>` → why the survivor is touched today (tracker Stage 1 worklist). */
-const KNOWN_TWIN_LEAKS: Readonly<Record<string, string>> = Object.fromEntries([
-  ...everyCell(
-    'purge terminal state',
-    'the purge drops every bucket under the raw id; the target host only scopes visit recency'
-  ),
-  ...everyCell('kill terminals', 'takes a raw worktree id, so it stops both twins’ PTYs'),
-  ...everyCell('sleep', 'takes a raw worktree id, so it sleeps both twins'),
-  [
-    'remove project | local+runtime | local',
-    'a sleeping-agent record with no host evidence is dropped instead of kept for the survivor'
-  ],
-  ...everyCell(
-    'select',
-    'activating a slept twin clears the shared raw-id sleep marker and re-arms both twins’ tabs'
-  )
-])
+const KNOWN_TWIN_LEAKS: Readonly<Record<string, string>> = Object.fromEntries([])
 
 function cellId(action: TwinAction, kind: HostTwinKind, target: 'local' | 'remote'): string {
   return `${action.id} | ${kind} | ${target}`
@@ -228,7 +217,12 @@ describe('an action on one twin leaves the other twin alone', () => {
       for (const targetName of ['remote', 'local'] as const) {
         const id = cellId(action, kind, targetName)
         const knownLeak = KNOWN_TWIN_LEAKS[id]
-        it(knownLeak ? `${id} (known leak: ${knownLeak})` : id, async () => {
+        const label = action.wholeWorkspace
+          ? `${id} (whole workspace by design)`
+          : knownLeak
+            ? `${id} (known leak: ${knownLeak})`
+            : id
+        it(label, async () => {
           const fixture = createHostTwinFixture(kind)
           current = fixture
           appStore.current = fixture.store
@@ -241,6 +235,10 @@ describe('an action on one twin leaves the other twin alone', () => {
           const after = projectHostTwinState(fixture, survivor)
           const changed = changedHostTwinState(before, after)
           action.applied(fixture, target)
+          if (action.wholeWorkspace) {
+            action.wholeWorkspace(fixture, survivor)
+            return
+          }
           if (knownLeak) {
             // Fixed? Delete this cell's KNOWN_TWIN_LEAKS entry.
             expect(changed).not.toEqual([])

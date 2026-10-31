@@ -1,3 +1,7 @@
+import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { OrcaRuntimeWithCreateAgentSession } from '../../orca-runtime-create-agent-session'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
@@ -5,16 +9,33 @@ import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-te
 import { withTimeoutResult } from '../../runtime-async-boundaries'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
 import { inferWorktreeIdFromPtyId } from '../../runtime-worktree-path-identity'
-import { getRegisteredSshState } from '../../../ssh/ssh-target-registry'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId
+  toSshExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from '../../worktree-launch-host-repo'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 
 export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {
+  /** A create's scope: its `wslUserAct` lets the folder check start a stopped WSL distro (E9). */
+  protected resolveTerminalCreateLaunchScope(
+    selector: string,
+    opts: { wslUserAct?: boolean },
+    ...[createdWorktree, resolvedWorktree, resolvedFolder]: TerminalWorkspaceCreationEvidence
+  ): Promise<TerminalWorkspaceLaunchScope> {
+    return this.resolveTerminalWorkspaceLaunchScope(
+      selector,
+      createdWorktree,
+      { wslUserAct: opts.wslUserAct === true },
+      resolvedWorktree,
+      resolvedFolder
+    )
+  }
+
   async dedupeTerminalCreate(
     clientIdentity: string,
     worktreeSelector: string | undefined,
@@ -23,7 +44,8 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     run: (
       canonicalWorktreeSelector: string | undefined,
       preAllocatedHandle: string | undefined
-    ) => Promise<RuntimeTerminalCreate>
+    ) => Promise<RuntimeTerminalCreate>,
+    options: { wslUserAct?: boolean } = {}
   ): Promise<RuntimeTerminalCreate> {
     if (!clientMutationId || !worktreeSelector) {
       if (reconcileExisting) {
@@ -31,7 +53,11 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       }
       return await run(worktreeSelector, undefined)
     }
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+      worktreeSelector,
+      undefined,
+      options
+    )
     const canonicalWorktreeSelector = `id:${workspace.id}`
     const preAllocatedHandle = deriveRemoteRuntimeTerminalCreateHandle(
       clientIdentity,
@@ -47,9 +73,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
           const adopted = await this.reconcileRemoteTerminalCreate(
             workspace.id,
             preAllocatedHandle,
-            // Why: an unreachable SSH host vanishes from the aggregate listing, which would read
-            // as absence and respawn over live remote work. Local/folder workspaces have no
-            // connection and keep the aggregate listing.
+            // Scope SSH inventory to its host: aggregate listings silently omit unreachable relays and could respawn live work.
             workspace.connectionId ?? null
           )
           if (adopted) {
@@ -64,8 +88,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
   protected async reconcileRemoteTerminalCreate(
     worktreeId: string,
     terminalHandle: string,
-    // Why: an aggregate listing drops a non-answering SSH host silently, which would read as
-    // absence. Scoping to the owning host makes an unreachable relay throw instead.
+    // Host-scoped inventory throws for unreachable SSH; aggregate omission cannot prove absence.
     connectionId?: string | null
   ): Promise<RuntimeTerminalCreate | null> {
     if (!this.ptyController?.listProcesses) {
@@ -152,58 +175,85 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string; extraAgentArgs?: string }
+    opts: {
+      agent: TuiAgent
+      prompt: string
+      title?: string
+      extraAgentArgs?: string
+      suppressStartupUpdatePrompt?: boolean
+      /** Run now is the user's act; a scheduled run is background and a stopped WSL distro holds it. */
+      wslUserAct?: true
+    },
+    resolvedTarget?: { worktree: ResolvedWorktree; repo: Repo; folderWorkspace?: FolderWorkspace }
   ): Promise<RuntimeTerminalCreate> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    // Why: `getRepo(id)` is host-blind; the same repo id on two hosts must build the launch for the
-    // host that owns this worktree (#11163).
+    const worktree =
+      resolvedTarget?.worktree ?? (await this.resolveGitWorktreeSelector(worktreeSelector))
+    // Repo ids are host-blind; resolve against the worktree owner before quoting its launch (#11163).
     const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
     if (resolution.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
     }
-    const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId)
+    const repo = resolvedTarget?.repo ?? resolution.repo ?? this.store?.getRepo(worktree.repoId)
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
     const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, undefined, {
       ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
-      launchScope: await this.resolveTerminalWorkspaceLaunchScope(`id:${worktree.id}`)
+      ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
+      launchScope: await this.resolveTerminalWorkspaceLaunchScope(
+        `id:${worktree.id}`,
+        undefined,
+        { wslUserAct: opts.wslUserAct === true },
+        worktree,
+        resolvedTarget?.folderWorkspace
+      )
     })
     if (startup.launchRuntime instanceof Error) {
       throw startup.launchRuntime
     }
-    const terminal = await this.createTerminal(`id:${worktree.id}`, {
-      command: startup.startup.command,
-      env: startup.startup.env,
-      ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),
-      launchAgent: startup.agent,
-      launchRuntime: startup.launchRuntime,
-      startupCommandDelivery: startup.startup.startupCommandDelivery,
-      telemetry: startup.startup.telemetry,
-      title: opts.title
-    })
+    const terminal = await this.createTerminal(
+      `id:${worktree.id}`,
+      {
+        command: startup.startup.command,
+        env: startup.startup.env,
+        ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),
+        launchAgent: startup.agent,
+        launchRuntime: startup.launchRuntime,
+        startupCommandDelivery: startup.startup.startupCommandDelivery,
+        telemetry: startup.startup.telemetry,
+        title: opts.title,
+        ...(opts.wslUserAct ? { wslUserAct: true } : {})
+      },
+      undefined,
+      worktree,
+      resolvedTarget?.folderWorkspace
+    )
     // Why: agents that read the prompt after they start get it typed in, not on argv.
     if (startup.followup) {
-      this.sendStartupFollowupWhenReady(terminal.handle, startup.followup)
+      void this.deliverStartupFollowup(terminal.handle, startup.followup, {
+        terminalCreation: terminal
+      })
     }
     return terminal
   }
 
-  // Why: dedupes a worktree.create whose response was lost when a mobile
-  // connection migration (relay/direct hand-off on shoddy cellular) rejected the
-  // in-flight request. A retry with the same clientMutationId returns the
-  // in-flight or just-finished create instead of a duplicate worktree; failures
-  // drop immediately so a genuine retry starts fresh, and successes linger
-  // briefly so a retry whose response was lost in the cutover still reconciles.
+  // Cellular handoff can lose worktree.create responses; join/reuse successes by clientMutationId briefly, and drop failures for fresh retries.
   dedupeWorktreeCreate<T>(
-    repoSelector: string,
+    target: string | { repo: string; repoHostId?: ExecutionHostId },
     clientMutationId: string | undefined,
     run: () => Promise<T>
   ): Promise<T> {
     if (!clientMutationId) {
       return run()
     }
-    const key = `${repoSelector}\0${clientMutationId}`
+    // Why the host: two creates for one repo id on different hosts are different creates.
+    const repoKey =
+      typeof target === 'string'
+        ? target
+        : target.repoHostId
+          ? `${target.repoHostId}\0${target.repo}`
+          : target.repo
+    const key = `${repoKey}\0${clientMutationId}`
     const inflight = this.worktreeCreateByMutationId.get(key)
     if (inflight) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Callers must use one operation/result type per repo and mutation key.

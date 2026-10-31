@@ -12,7 +12,7 @@ import {
   type FileExplorerRowProjection
 } from './file-explorer-row-projection'
 import { isDotfileRelativePath } from './file-explorer-entries'
-import { splitPathSegments } from './path-tree'
+import { splitPathSegments } from '../../../../shared/cross-platform-path'
 import { isPathIgnored } from './status-display'
 
 export type FileExplorerNameFilterProjectionSource = {
@@ -133,18 +133,17 @@ export function createNameFilteredFileExplorerProjection({
   }
   const nameFilterTokens = getFileExplorerNameFilterTokens(nameFilter.query)
   if (nameFilterTokens.length === 0 || nameFilter.relativePaths === null) {
-    // Why: empty queries use the normal explorer projection, and loading filters must not
-    // fall back to a partial cached path list.
+    // Empty queries use normal projection; loading filters must not reveal partial cached paths.
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
   }
 
   const rootChildren = new Map<string, SyntheticTreeEntry>()
   for (const rawRelativePath of nameFilter.relativePaths) {
     const relativePath = normalizeRelativePath(rawRelativePath, worktreePath)
-    if (
-      !relativePath ||
-      getRelativePathInsideRoot(joinPath(worktreePath, relativePath), displayRootPath) === null
-    ) {
+    if (!relativePath || !pathMatchesFileNameFilterTokens(relativePath, nameFilterTokens)) {
+      continue
+    }
+    if (getRelativePathInsideRoot(joinPath(worktreePath, relativePath), displayRootPath) === null) {
       continue
     }
     if (!showDotfiles && isDotfileRelativePath(relativePath, worktreePath)) {
@@ -153,10 +152,6 @@ export function createNameFilteredFileExplorerProjection({
     if (!showGitIgnoredFiles && isPathIgnored(ignoredSet, relativePath)) {
       continue
     }
-    if (!pathMatchesFileNameFilterTokens(relativePath, nameFilterTokens)) {
-      continue
-    }
-
     const segments = splitPathSegments(relativePath, worktreePath)
     let currentChildren = rootChildren
     let currentRelativePath = ''

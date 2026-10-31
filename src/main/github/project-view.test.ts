@@ -1,12 +1,3 @@
-// Why: covers the recent fixes —
-// (a) network errors must NOT be misclassified as not_found ("could not
-//     resolve host" partially overlaps "could not resolve to a"),
-// (b) repo slug validation must accept names with leading underscore
-//     (GitHub allows them, e.g. `_internal`),
-// (c) owner slug validation must reject `.` and a leading `_`/`-`, but accept
-//     the `_<shortcode>` suffix GitHub appends to Enterprise Managed User logins,
-// (d) parseProjectPaste shorthand owner-only alphabet matches the renderer,
-// (e) project owner/capability caches stay bounded in long sessions.
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   GITHUB_PROJECT_REF_INPUT_MAX_BYTES,
@@ -41,9 +32,7 @@ describe('classifyProjectError', () => {
   })
 
   it('classifies "could not resolve host" as network_error, NOT not_found', () => {
-    // Why: this was the bug — substring "could not resolve" overlaps. The
-    // network branch must run before not_found, and the not_found check
-    // must require "to a " to disambiguate.
+    // DNS host failures overlap could-not-resolve text; distinguish them from unresolved GraphQL objects.
     expect(classifyProjectError('could not resolve host: api.github.com', '').type).toBe(
       'network_error'
     )
@@ -140,8 +129,7 @@ describe('parseProjectPaste', () => {
   })
 
   it('accepts shorthand with an Enterprise Managed User owner (renderer parity)', () => {
-    // Why: the renderer's parser uses `[A-Za-z0-9][A-Za-z0-9_-]*` for owner
-    // (matches OWNER_SLUG_RE). Both sides must accept and reject the same inputs.
+    // Keep shorthand owner validation aligned with the renderer.
     expect(parseProjectPaste('octocat_acme/1')).toEqual({
       kind: 'bare',
       owner: 'octocat_acme',
@@ -194,7 +182,6 @@ describe('parseProjectPaste', () => {
       viewNumber: 2
     })
     expect(parseProjectPaste(url)).toBeNull()
-    // github.com URLs still parse when a GHES host is supplied.
     expect(
       parseProjectPaste('https://github.com/orgs/acme/projects/7', 'github.corp.example')
     ).toEqual({ kind: 'org', owner: 'acme', number: 7, host: 'github.com' })
@@ -251,7 +238,8 @@ describe('resolveProjectRef', () => {
       ok: false,
       error: {
         type: 'validation_error',
-        message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR
+        message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
+        reason: 'input_too_large'
       }
     })
     await expect(resolveProjectRef({ input })).resolves.not.toMatchObject({

@@ -23,16 +23,15 @@ export function equalizeTerminalPanes(
       { type: 'equalizePanes', tabId: pane.tabId },
       {
         // No frame is coming (the stream is down): the window equalizes itself, as main did.
-        apply: () => {
+        apply: (_result, origin) => {
           const manager = pane.getManager()
-          if (!layoutFramesFlowing()) {
+          if (!origin.routed && !layoutFramesFlowing(origin.framesKey)) {
             equalize()
           } else if (manager) {
             then(manager)
           }
         },
-        asToday: equalize,
-        unapplied: () => {}
+        asToday: equalize
       }
     )
   ) {

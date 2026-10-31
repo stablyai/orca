@@ -6,10 +6,10 @@ import type { NativeChatViewProps } from './native-chat-view-types'
 import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
 import { NativeChatVisualOwnerProvider } from './native-chat-visual-owner'
 import { NativeChatFileLinkExistenceProvider } from './use-native-chat-file-link-existence'
+import { NativeChatMarkdownImageOwnerProvider } from './native-chat-markdown-image-owner'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
-/** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   return (
     <NativeChatPaneFileDropSurface className="relative flex h-full min-h-0 min-w-0 w-full">
@@ -21,7 +21,13 @@ export default function NativeChatView(props: NativeChatViewProps): React.JSX.El
           tabId={props.tabId}
         >
           <NativeChatFileLinkExistenceProvider tabId={props.tabId}>
-            <NativeChatStructuredSession {...props} />
+            <NativeChatMarkdownImageOwnerProvider
+              tabId={props.tabId}
+              isVisible={props.isVisible}
+              sessionId={props.sessionId}
+            >
+              <NativeChatStructuredSession {...props} />
+            </NativeChatMarkdownImageOwnerProvider>
           </NativeChatFileLinkExistenceProvider>
         </NativeChatVisualOwnerProvider>
       ) : (
@@ -58,20 +64,26 @@ function NativeChatBridgeView({
     >
       {(resolution) => (
         <NativeChatFileLinkExistenceProvider tabId={terminalTabId}>
-          <NativeChatResolvedView
-            paneKey={resolution.paneKey}
-            agent={resolution.agent}
+          <NativeChatMarkdownImageOwnerProvider
             sessionId={resolution.sessionId}
-            transcriptPath={resolution.transcriptPath}
+            tabId={terminalTabId}
             isVisible={isVisible}
-            isFocusedGroup={isFocusedGroup}
-            targetPtyId={targetPtyId}
-            terminalTabId={terminalTabId}
-            ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
-            onSwitchToTerminal={onSwitchToTerminal}
-            readTerminalScreen={readTerminalScreen}
-            contextMenuActions={contextMenuActions}
-          />
+          >
+            <NativeChatResolvedView
+              paneKey={resolution.paneKey}
+              agent={resolution.agent}
+              sessionId={resolution.sessionId}
+              transcriptPath={resolution.transcriptPath}
+              isVisible={isVisible}
+              isFocusedGroup={isFocusedGroup}
+              targetPtyId={targetPtyId}
+              terminalTabId={terminalTabId}
+              ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
+              onSwitchToTerminal={onSwitchToTerminal}
+              readTerminalScreen={readTerminalScreen}
+              contextMenuActions={contextMenuActions}
+            />
+          </NativeChatMarkdownImageOwnerProvider>
         </NativeChatFileLinkExistenceProvider>
       )}
     </NativeChatSessionGate>

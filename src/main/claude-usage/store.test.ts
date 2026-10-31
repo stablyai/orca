@@ -319,7 +319,6 @@ describe('ClaudeUsageStore', () => {
     const summary = await store.getSummary('orca', '30d')
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    // 5 + 25 + 0.5 + (0.6 * 6.25 + 0.4 * 10); the flat 5m rate would give 36.75.
     expect(summary.estimatedCostUsd).toBeCloseTo(38.25)
     expect(
       breakdown.find((row) => row.key === 'claude-opus-4-7-20260416')?.estimatedCostUsd
@@ -461,7 +460,6 @@ describe('ClaudeUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    // Why: Sonnet 4.6 and earlier bill above 200k at a premium; Sonnet 5 does not.
     expect(summary.estimatedCostUsd).toBeCloseTo(4.41)
   })
 
@@ -480,25 +478,29 @@ describe('ClaudeUsageStore', () => {
         outputTokens: 300_000,
         cacheReadTokens: 300_000,
         cacheWriteTokens: 300_000,
-        cacheWrite1hTokens: 0
+        cacheWrite1hTokens: 0,
+        longContext: {
+          inputTokens: 300_000,
+          outputTokens: 300_000,
+          cacheReadTokens: 300_000,
+          cacheWriteTokens: 300_000,
+          cacheWrite1hTokens: 0
+        }
       }))
     })
 
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    // Why: the 4.5 tier premium only survives if `-4-5-` never matches the `-5`
-    // family regex, so this doubles as the digit-boundary proof for both families.
     expect(
       breakdown.find((row) => row.key === 'claude-sonnet-4-5-20250929')?.estimatedCostUsd
-    ).toBeCloseTo(8.07)
-    // Why: Opus 4.5 and Opus 5 share rates today, so this pins the rate rather
-    // than the routing — it fails only if the two ever diverge.
+    ).toBeCloseTo(10.98)
+    // Opus 4.5 and 5 share rates, so this assertion cannot distinguish their routing.
     expect(
       breakdown.find((row) => row.key === 'claude-opus-4-5-20251101')?.estimatedCostUsd
     ).toBeCloseTo(11.025)
   })
 
-  it('prices unknown newer Opus 4 point releases with current Opus rates', async () => {
+  it('leaves unknown Opus point releases unpriced instead of borrowing another model', async () => {
     const store = createStoreWithState({
       dailyAggregates: [
         {
@@ -536,7 +538,8 @@ describe('ClaudeUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(73.5)
+    expect(summary.estimatedCostUsd).toBeNull()
+    expect(summary.hasUnpricedModels).toBe(true)
   })
 
   it('does not collapse older Opus 4.1 or base Opus 4 usage into current Opus pricing', async () => {
@@ -683,8 +686,6 @@ describe('ClaudeUsageStore', () => {
 
     expect(beforeRefresh).toHaveBeenCalledWith(true)
 
-    // That forced scan failed: it recorded an attempt but no completion. Later
-    // lookups must not keep forcing a full rescan of all Claude history.
     const afterAttempt = createStoreWithState({ scanState: failedScanState(completedAt + 1000) })
     const afterRefresh = vi.spyOn(afterAttempt, 'refresh').mockResolvedValue(scanStateResult)
     const usage = await afterAttempt.getAutomationRunUsage(request)
@@ -767,8 +768,6 @@ describe('ClaudeUsageStore', () => {
     finishScan()
     await inFlight
 
-    // The in-flight scan's start time is not a finished attempt, so the lookup
-    // forces and rides that scan instead of reading a pre-run cache.
     expect((await usage).status).toBe('known')
     expect((await usage).providerSessionId).toBe('session-1')
   })

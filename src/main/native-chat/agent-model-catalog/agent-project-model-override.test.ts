@@ -65,7 +65,7 @@ describe('workspaceMayOverrideDefaultModel', () => {
     const worktree = join(root, 'claude-repo')
     write(join(worktree, '.git'), 'gitdir: /elsewhere')
     expect(await mayOverride('claude', worktree)).toBe(false)
-    // The user's own `.claude` is account config, which the CLI's resolution already covers.
+    // Account-home config is already included in CLI resolution, even inside this workspace.
     write(join(worktree, '.claude', 'settings.json'), '{"model":"sonnet"}')
     expect(await mayOverride('claude', worktree, join(worktree, '.claude'))).toBe(false)
     expect(await mayOverride('claude', worktree)).toBe(true)
@@ -77,7 +77,6 @@ describe('workspaceMayOverrideDefaultModel', () => {
   it('ignores Claude project settings that pick no model or effort', async () => {
     const worktree = join(root, 'claude-permissions')
     write(join(worktree, '.git'), 'gitdir: /elsewhere')
-    // A committed permissions/hooks file, and the local file "always allow" writes.
     write(
       join(worktree, '.claude', 'settings.json'),
       JSON.stringify({ permissions: { allow: ['Bash(pnpm test)'] }, hooks: {}, env: { CI: '1' } })
@@ -138,13 +137,20 @@ describe('workspaceMayOverrideDefaultModel', () => {
     const worktree = join(root, 'oc-plain')
     write(join(worktree, '.git'), 'gitdir: /elsewhere')
     expect(await mayOverride('opencode', worktree, null)).toBe(false)
-    // JSONC with comments, MCP servers, permissions and a subagent prompt.
     write(
       join(worktree, 'opencode.jsonc'),
       '{\n  // team MCP\n  "mcp": { "docs": { "type": "local" } },\n  "permission": { "edit": "ask" },\n  "agent": { "review": { "prompt": "be brief" } },\n}\n'
     )
     write(join(worktree, '.opencode', 'agent', 'review.md'), '---\ndescription: Reviews\n---\nBody')
     expect(await mayOverride('opencode', worktree, null)).toBe(false)
+  })
+
+  it('reads OpenCode 2 project config through the same layers as OpenCode', async () => {
+    const worktree = join(root, 'oc2-plain')
+    write(join(worktree, '.git'), 'gitdir: /elsewhere')
+    expect(await mayOverride('opencode2', worktree, null)).toBe(false)
+    write(join(worktree, 'opencode.json'), '{"model":"x/y"}')
+    expect(await mayOverride('opencode2', worktree, null)).toBe(true)
   })
 
   it.each([
@@ -230,7 +236,6 @@ describe('workspaceMayOverrideDefaultModel', () => {
     write(join(worktree, '.git'), 'gitdir: /elsewhere')
     expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
     write(join(worktree, '.pi', 'settings.json'), '\uFEFF{"theme":"dark","defaultTools":["+grep"]}')
-    // Another agent's model settings are not Pi's.
     write(join(worktree, '.omp', 'settings.json'), '{"defaultModel":"gpt-6"}')
     expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
     write(join(worktree, '.pi', 'settings.json'), '{"defaultModel":"gpt-6"}')
@@ -248,7 +253,7 @@ describe('workspaceMayOverrideDefaultModel', () => {
     expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
   })
 
-  // Windows has no permission bits to make a folder unreadable.
+  // Windows permission bits cannot make this fixture unreadable.
   it.skipIf(process.platform === 'win32')(
     'counts a Pi extensions folder it cannot read',
     async () => {
@@ -257,7 +262,6 @@ describe('workspaceMayOverrideDefaultModel', () => {
       const extensions = join(worktree, '.pi', 'extensions')
       write(join(extensions, '.gitkeep'))
       expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
-      // Unreadable, it might hold anything.
       chmodSync(extensions, 0o000)
       try {
         expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(true)

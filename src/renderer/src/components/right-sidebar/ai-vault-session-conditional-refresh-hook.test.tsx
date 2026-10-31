@@ -5,10 +5,52 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
+import { filterAiVaultSessions } from '../../../../shared/ai-vault-session-filters'
+import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
+import {
+  markInputQuietSchedulerInput,
+  resetInputQuietSchedulerForTest
+} from '@/lib/input-quiet-scheduler'
 import {
   resetAiVaultForcedRescanThrottleForTest,
   useAiVaultSessionRefresh
 } from './ai-vault-session-refresh'
+
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+const statusFrames = vi.hoisted(() => ({ emit: (_event: AgentSessionStatusEvent): void => {} }))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: async (
+    _target: unknown,
+    emit: typeof statusFrames.emit
+  ) => {
+    statusFrames.emit = emit
+    return { unsubscribe: () => {} }
+  }
+}))
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({ index, key: index, start: index * 40 })),
+    getTotalSize: () => count * 40,
+    measureElement: vi.fn(),
+    scrollOffset: 0
+  })
+}))
+vi.mock('./AiVaultVirtualRow', () => ({
+  AiVaultVirtualRow: ({
+    row,
+    onResume
+  }: {
+    row: { type: string; session?: AiVaultSession }
+    onResume: (session: AiVaultSession, worktreeId: string) => void
+  }) =>
+    row.session ? (
+      <button onClick={() => row.session && onResume(row.session, 'workspace')}>
+        {row.session.title}
+      </button>
+    ) : null
+}))
 
 const session: AiVaultSession = {
   id: 'runtime:one:codex:session:/session.jsonl',
@@ -42,18 +84,73 @@ const list = vi.fn<(args: unknown) => Promise<AiVaultListResult>>()
 const initialState = useAppStore.getInitialState()
 let root: Root | null = null
 let latest: ReturnType<typeof useAiVaultSessionRefresh> | null = null
+const pendingRenders: boolean[] = []
+const resume = vi.fn()
+const unused = (): never => {
+  throw new Error('Unexpected row callback')
+}
 
 function Probe({
   host,
   limit,
-  paths
+  paths,
+  showList = false,
+  noAgentsSelected = false
 }: {
   host: ExecutionHostScope
   limit: number
   paths: readonly string[]
-}): null {
+  showList?: boolean
+  noAgentsSelected?: boolean
+}): React.JSX.Element | null {
   latest = useAiVaultSessionRefresh(paths, host, limit)
-  return null
+  if (!showList) {
+    return null
+  }
+  pendingRenders.push(latest.scopePending)
+  const sessions = filterAiVaultSessions(latest.sessions, {
+    query: '',
+    agents: noAgentsSelected ? [] : ['codex'],
+    scope: 'workspace',
+    sort: 'updated',
+    activeWorktreePaths: paths,
+    hideEmptySessions: true
+  })
+  return (
+    <AiVaultSessionVirtualList
+      groups={[{ key: 'rows', label: null, sessions }]}
+      collapsedGroups={new Set()}
+      loading={latest.loading}
+      scopePending={latest.scopePending}
+      sessionsCount={latest.sessions.length}
+      filteredSessionsCount={sessions.length}
+      noAgentsSelected={noAgentsSelected}
+      error={latest.error}
+      vaultScope="workspace"
+      buildResumeStartup={unused}
+      getOriginalPaneTarget={unused}
+      isStructuredSessionOpen={unused}
+      getSessionLiveState={unused}
+      getWorktreeInfo={unused}
+      getSessionResumeState={unused}
+      getSessionResumeActions={unused}
+      getSessionResumeInChat={unused}
+      onToggleGroup={unused}
+      onJumpToOriginalPane={unused}
+      onJumpToWorktree={unused}
+      onResume={resume}
+      onContinueInNewSession={unused}
+      onResumeInNewChat={unused}
+      onResumeInNewCli={unused}
+      onCopyResume={unused}
+      onCopyId={unused}
+      onCopyPath={unused}
+      onOpenLog={unused}
+      onRevealLog={unused}
+      onOpenCwd={unused}
+      onRequestDelete={unused}
+    />
+  )
 }
 async function render(
   host: ExecutionHostScope = 'runtime:one',
@@ -74,6 +171,10 @@ async function refresh(force = false): Promise<void> {
 }
 beforeEach(() => {
   vi.useFakeTimers()
+  resetInputQuietSchedulerForTest()
+  resetStructuredAgentSessionStatusFeedsForTests()
+  pendingRenders.length = 0
+  resume.mockReset()
   resetAiVaultForcedRescanThrottleForTest()
   useAppStore.setState(initialState, true)
   list.mockReset().mockResolvedValue(first)
@@ -87,17 +188,113 @@ beforeEach(() => {
       }
     }
   })
-  root = createRoot(document.createElement('div'))
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
 })
 afterEach(() => {
   act(() => root?.unmount())
+  resetStructuredAgentSessionStatusFeedsForTests()
   root = null
   latest = null
+  document.body.replaceChildren()
   useAppStore.setState(initialState, true)
   vi.useRealTimers()
 })
 
 describe('conditional panel publication', () => {
+  it('keeps scope changes loading through actual publication and settles failures, cancellation and empty results', async () => {
+    const show = async (paths: string[], noAgentsSelected = false) => {
+      pendingRenders.length = 0
+      await act(async () =>
+        root?.render(
+          <Probe
+            host="local"
+            limit={250}
+            paths={paths}
+            showList
+            noAgentsSelected={noAgentsSelected}
+          />
+        )
+      )
+    }
+    const loading = () => document.querySelector('[aria-busy="true"]')
+    const expectPending = () => {
+      expect(loading()).not.toBeNull()
+      expect(document.body.textContent).not.toContain('No sessions match')
+    }
+    list.mockResolvedValue({ ...first, sessions: [{ ...session, cwd: '/sibling' }] })
+    await show(['/repo', '/sibling'])
+    await settle()
+    let deliver = (_result: AiVaultListResult): void => {
+      throw new Error('No pending request')
+    }
+    list.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          deliver = resolve
+        })
+    )
+    await show(['/repo'])
+    expect(pendingRenders[0]).toBe(true)
+    expectPending()
+    await show(['/repo'], true)
+    expect(document.body.textContent).toContain('No agents selected')
+    expect(loading()).toBeNull()
+    await show(['/repo'])
+    markInputQuietSchedulerInput()
+    await act(async () => deliver({ ...first, scannedAt: 'workspace' }))
+    expectPending()
+    await settle()
+    expect(loading()).toBeNull()
+    const row = document.querySelector('button')
+    expect(row?.textContent).toBe(session.title)
+    row?.click()
+    expect(resume).toHaveBeenCalledOnce()
+    const applied = latest?.scanResult
+    list.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          deliver = resolve
+        })
+    )
+    await show(['/repo', '/another'])
+    expect(latest?.scopePending).toBe(true)
+    expect(loading()).toBeNull()
+    document.querySelector('button')?.click()
+    expect(resume).toHaveBeenCalledTimes(2)
+    await act(async () => deliver({ ...first, cancelled: true }))
+    expect(latest?.loading).toBe(false)
+    expect(latest?.scanResult).toBe(applied)
+    list.mockRejectedValueOnce(new Error('SSH relay is not ready'))
+    await show(['/failed'])
+    expect(latest?.loading).toBe(false)
+    expect(latest?.error).toBe('SSH relay is not ready')
+    expect(loading()).toBeNull()
+    list.mockRejectedValueOnce(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+    await show(['/cancelled'])
+    expect(latest?.loading).toBe(false)
+    expect(latest?.error).toBeNull()
+    expect(latest?.scanResult).toBe(applied)
+    list.mockResolvedValueOnce({ ...first, sessions: [], scannedAt: 'empty' })
+    await show(['/empty'])
+    await settle()
+    expect(document.body.textContent).toContain('No agent sessions found')
+    list.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          deliver = resolve
+        })
+    )
+    await act(async () => {
+      void latest?.refresh({ background: true })
+    })
+    expect(loading()).toBeNull()
+    expect(document.body.textContent).toContain('No agent sessions found')
+    await act(async () => deliver({ ...first, sessions: [], cancelled: true }))
+    expect(latest?.loading).toBe(false)
+  })
+
   it('keeps rows and updates the proof even when React reuses the old result identity', async () => {
     await render()
     const original = latest?.scanResult
@@ -166,4 +363,87 @@ describe('conditional panel publication', () => {
     await refresh()
     expect(latest?.scanResult).toBe(original)
   })
+})
+
+it('cancels queued pre-clear publication while the current nonforced projection is pending', async () => {
+  const summary = {
+    sessionId: 'native',
+    workspaceId: 'workspace',
+    agent: 'codex' as const,
+    latestPrompt: '',
+    status: null,
+    updatedAt: 1,
+    providerSession: { key: 'session_id' as const, id: 'session' }
+  }
+  const owned = {
+    ...session,
+    title: 'Manual name',
+    structuredSession: { sessionId: 'native', workspaceId: 'workspace' }
+  }
+  list.mockResolvedValue({ ...first, sessions: [owned] })
+  await render('local')
+  await act(async () => statusFrames.emit({ type: 'snapshot', sessions: [summary] }))
+  await settle()
+  markInputQuietSchedulerInput()
+  list.mockResolvedValueOnce({
+    ...first,
+    sessions: [{ ...owned, title: 'Obsolete queued result' }]
+  })
+  await act(async () => latest?.refresh({ background: true }))
+  expect(latest?.sessions[0]?.title).toBe('Manual name')
+  let deliver = (_result: AiVaultListResult): void => {}
+  list.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        deliver = resolve
+      })
+  )
+  const baseline = list.mock.calls.length
+  const { providerSession: _provider, ...detached } = summary
+  await act(async () => statusFrames.emit({ type: 'status', session: detached }))
+  await act(async () => {
+    for (const id of ['next', 'third']) {
+      statusFrames.emit({
+        type: 'status',
+        session: {
+          ...summary,
+          providerSession: { key: 'session_id', id }
+        }
+      })
+    }
+    statusFrames.emit({ type: 'status', session: detached })
+  })
+  await settle()
+  expect(latest?.sessions[0]?.title).toBe('Manual name')
+  list.mockResolvedValueOnce({ ...first, sessions: [{ ...session, title: 'Provider title' }] })
+  await act(async () => deliver({ ...first, sessions: [{ ...session, title: 'Provider title' }] }))
+  await settle()
+  expect(latest?.sessions[0]).toMatchObject({ title: 'Provider title' })
+  expect(latest?.sessions[0]?.structuredSession).toBeUndefined()
+  expect(list).toHaveBeenCalledTimes(baseline + 2)
+  expect(
+    list.mock.calls
+      .slice(baseline)
+      .every(
+        ([args]) =>
+          typeof args === 'object' && args !== null && 'force' in args && args.force === false
+      )
+  ).toBe(true)
+  list.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        deliver = resolve
+      })
+  )
+  await act(async () => {
+    statusFrames.emit({ type: 'status', session: summary })
+    statusFrames.emit({ type: 'status', session: detached })
+  })
+  await act(async () => {
+    root?.unmount()
+    root = null
+  })
+  await act(async () => deliver(first))
+  await settle()
+  expect(list).toHaveBeenCalledTimes(baseline + 3)
 })

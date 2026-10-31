@@ -17,8 +17,7 @@ function evictLinearAgentSkillSetupReminderStateIfAtCapacity(): void {
     return
   }
   let evictionKey = reminderStateByRuntimeKey.keys().next().value
-  // Why: visible toasts retain their reminder state when an inactive entry can
-  // be evicted instead; deterministic toast ids still make fallback cleanup safe.
+  // Prefer evicting inactive reminders; deterministic IDs keep cleanup safe if a visible entry must be evicted.
   for (const [runtimeKey, state] of reminderStateByRuntimeKey) {
     if (state.activeToastId === undefined) {
       evictionKey = runtimeKey
@@ -50,8 +49,7 @@ export function getLinearAgentSkillSetupReminderState(
     toastCount: 0,
     snoozed: false
   }
-  // Why: runtime dismiss keys can churn as local/remote targets change; keep
-  // recent reminder UX state without retaining stale runtime keys forever.
+  // Bound retained reminder state as local and remote runtime keys change.
   evictLinearAgentSkillSetupReminderStateIfAtCapacity()
   reminderStateByRuntimeKey.set(localDismissStorageKey, nextState)
   return nextState

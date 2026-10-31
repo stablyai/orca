@@ -61,9 +61,7 @@ describe('hasCustomCodexHomeOverride', () => {
     }
   )
 
-  // Why: a fish user who exports XDG_CONFIG_HOME from config.fish never passes it to
-  // a Dock-launched Orca, so the launch env is the only place it appears. Reading the
-  // main process env instead scans ~/.config and misses the override entirely.
+  // Dock launches may lack XDG_CONFIG_HOME exported by fish; use the pane launch environment.
   it.skipIf(process.platform === 'win32')(
     'resolves a fish override under the launch env XDG_CONFIG_HOME, not the process one',
     () => {

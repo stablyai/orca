@@ -2,7 +2,9 @@ import type {
   ClaudeUsageAttributedTurn,
   ClaudeUsageDailyAggregate,
   ClaudeUsagePersistedFile,
-  ClaudeUsageSession
+  ClaudeUsageSession,
+  ClaudeUsageTokenMaxima,
+  ClaudeUsageTokenTotals
 } from './types'
 import type { ClaudeUsageParsedSourceTurn, ClaudeUsageScanFile } from './transcript-record-parser'
 import {
@@ -17,6 +19,21 @@ import {
   type ClaudeUsageTokenCorrection
 } from './transcript-token-checkpoint'
 import { buildClaudeUsageProjectionIntegrity } from './transcript-projection-integrity'
+import { addLongContext } from './claude-billable-tokens'
+import { longContextTurnTokens } from './claude-model-pricing'
+
+/** Bump when a change to projected rows needs saved files reparsed (v2: long-context subsets). */
+export const CLAUDE_USAGE_PROJECTION_VERSION = 2
+
+function maximaTotals(row: Readonly<ClaudeUsageTokenMaxima>): ClaudeUsageTokenTotals {
+  return {
+    inputTokens: row[0],
+    outputTokens: row[1],
+    cacheReadTokens: row[2],
+    cacheWriteTokens: row[3],
+    cacheWrite1hTokens: row[4]
+  }
+}
 
 function dailyKey(day: string, model: string | null, projectKey: string): string {
   return [day, model ?? 'unknown', projectKey].join('::')
@@ -49,12 +66,17 @@ function applyTokenCorrection(
   session.totalCacheReadTokens += read
   session.totalCacheWriteTokens += write
   session.totalCacheWrite1hTokens += write1h
+  // A growing turn can cross the long-context threshold, moving its whole share at once.
+  const previousLong = longContextTurnTokens(projection.model, maximaTotals(previous))
+  const updatedLong = longContextTurnTokens(projection.model, maximaTotals(updated))
   for (const target of [location, aggregate]) {
     target.inputTokens += input
     target.outputTokens += output
     target.cacheReadTokens += read
     target.cacheWriteTokens += write
     target.cacheWrite1hTokens += write1h
+    addLongContext(target, previousLong, -1)
+    addLongContext(target, updatedLong)
   }
   aggregate.zeroCacheReadTurnCount += Number(updated[2] === 0) - Number(previous[2] === 0)
 }
@@ -159,6 +181,7 @@ export async function projectClaudeUsageScanFile(
     ),
     ownedDedupeKeys: owned.ownedDedupeKeys,
     hasDeferredClaims,
+    projectionVersion: CLAUDE_USAGE_PROJECTION_VERSION,
     parseResumeState: read.checkpoint
       ? {
           ...read.checkpoint,

@@ -1,3 +1,4 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type {
@@ -6,7 +7,9 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
+  CodexAppServerConnectionHandlers
+} from './app-server/codex-app-server-connection-types'
+import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
 } from './codex-app-server-connection'
@@ -38,8 +41,6 @@ const USER_MESSAGE: AgentJournalMessageItem = {
 
 type Route = (params: Record<string, unknown> | undefined) => unknown
 
-// `closed` is readonly on the real connection; the fake flips it so a test can
-// kill the child at a chosen moment.
 type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   closed: boolean
   launch: CodexAppServerLaunch
@@ -49,8 +50,6 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   closeCount: number
 }
 
-/** Stands in for a live `codex app-server`: every RPC is answered from `routes`,
- *  and the test drives Codex's own traffic through `handlers`. */
 function fakeCodex(routes: Record<string, Route> = {}): {
   connections: FakeConnection[]
   openConnection: typeof openCodexAppServerConnection
@@ -125,7 +124,11 @@ async function acquired(
   events: CodexStructuredSessionEvent[] = []
 ): Promise<CodexStructuredSessionAdapter> {
   const adapter = adapterFor(codex, launch, events)
-  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+  await acquireReadyCodexForTest(adapter, {
+    identity: identityFor('session-1'),
+    fence: 7,
+    spawnToken: 'spawn-9'
+  })
   return adapter
 }
 
@@ -133,8 +136,16 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
   it('keeps sessions isolated and closes each child once', async () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex)
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 1, spawnToken: 'spawn-a' })
-    await adapter.acquire({ identity: identityFor('session-2'), fence: 1, spawnToken: 'spawn-b' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 1,
+      spawnToken: 'spawn-a'
+    })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-2'),
+      fence: 1,
+      spawnToken: 'spawn-b'
+    })
 
     codex.connections[0].handlers.onServerRequest?.({
       id: 21,
@@ -198,7 +209,11 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     const adapter = await acquired(codex, {}, events)
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 8, spawnToken: 'spawn-10' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 8,
+      spawnToken: 'spawn-10'
+    })
     const endedBeforeStaleExit = events.filter((event) => event.type === 'ended').length
 
     codex.connections[0].handlers.onExit?.(new Error('the superseded child died'))
@@ -265,7 +280,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
       publish: () => {}
     }
     const adapter = adapterFor(codex)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -286,7 +301,6 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     await adapter.closeSession('session-1')
 
     expect(bodies.at(-1)?.blocks).toEqual([{ type: 'text', text: 'last words' }])
-    // A requested close interrupts the open turn; the row is revised, not removed.
     expect(tombstones).toEqual([])
     expect(lifecycles.at(-1)).toEqual({
       identity: {

@@ -42,6 +42,7 @@ vi.mock('./NativeChatComposer', () => ({
   NativeChatComposer: () => (
     <>
       <NativeChatImageAttachmentPreview
+        number={1}
         attachment={{ id: 'image-menu', path: '/tmp/original.png', previewUrl: 'data:thumbnail' }}
         onRemove={vi.fn()}
       />
@@ -113,7 +114,7 @@ describe('NativeChatResolvedView image menu ownership', () => {
   it('refuses image capture from a portaled preview while its retained owner is hidden', async () => {
     mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
     const view = render(<RetainedBridgeChat />)
-    fireEvent.click(screen.getByRole('button', { name: 'View image: original.png' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Image #1: View image: original.png' }))
     const preview = screen.getByRole('dialog')
     expect(screen.getByTestId('retained-owner').contains(preview)).toBe(false)
 
@@ -129,7 +130,7 @@ describe('NativeChatResolvedView image menu ownership', () => {
   it('closes the image preview on the first Close click while its copy menu is open', async () => {
     mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
     render(<RetainedBridgeChat />)
-    fireEvent.click(screen.getByRole('button', { name: 'View image: original.png' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Image #1: View image: original.png' }))
     const preview = screen.getByRole('dialog', { name: 'original.png' })
     fireEvent.contextMenu(within(preview).getByRole('img'))
     await screen.findByRole('menuitem', { name: 'Copy image' })
@@ -143,21 +144,58 @@ describe('NativeChatResolvedView image menu ownership', () => {
     expect(mocks.writeClipboardImage).not.toHaveBeenCalled()
   })
 
-  it('copies the original image through the visible bridge chat menu', async () => {
+  it.each(['thumbnail', 'preview'])(
+    'copies the original image from the %s through the visible bridge chat menu',
+    async (surface) => {
+      mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
+      render(<RetainedBridgeChat />)
+
+      if (surface === 'preview') {
+        fireEvent.click(screen.getByRole('button', { name: 'Image #1: View image: original.png' }))
+      }
+      const preview =
+        surface === 'preview' ? screen.getByRole('dialog', { name: 'original.png' }) : null
+      const image = preview
+        ? within(preview).getByRole('img')
+        : screen.getByRole('img', { name: 'original.png' })
+      fireEvent.contextMenu(image)
+      const copy = await screen.findByRole('menuitem', { name: 'Copy image' })
+      fireEvent.pointerDown(copy, { button: 0, pointerType: 'mouse' })
+      fireEvent.pointerUp(copy, { button: 0, pointerType: 'mouse' })
+      fireEvent.click(copy)
+
+      await waitFor(() =>
+        expect(mocks.writeClipboardImage).toHaveBeenCalledWith(
+          `data:image/png;base64,${Buffer.from('original image').toString('base64')}`
+        )
+      )
+      expect(mocks.fetch).toHaveBeenCalledWith('blob:original')
+      expect(mocks.success).toHaveBeenCalledWith('Image copied')
+      expect(mocks.error).not.toHaveBeenCalled()
+      if (preview) {
+        expect(preview).toBeInTheDocument()
+        expect(preview).toHaveAttribute('data-state', 'open')
+      }
+    }
+  )
+
+  it('reports a clipboard write failure without announcing success while the write is pending', async () => {
+    const write = Promise.withResolvers<void>()
     mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
+    mocks.writeClipboardImage.mockReturnValue(write.promise)
     render(<RetainedBridgeChat />)
 
     fireEvent.contextMenu(screen.getByRole('img', { name: 'original.png' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy image' }))
 
-    await waitFor(() =>
-      expect(mocks.writeClipboardImage).toHaveBeenCalledWith(
-        `data:image/png;base64,${Buffer.from('original image').toString('base64')}`
-      )
-    )
-    expect(mocks.fetch).toHaveBeenCalledWith('blob:original')
-    expect(mocks.success).toHaveBeenCalledWith('Image copied')
+    await waitFor(() => expect(mocks.writeClipboardImage).toHaveBeenCalledOnce())
+    expect(mocks.success).not.toHaveBeenCalled()
     expect(mocks.error).not.toHaveBeenCalled()
+
+    await act(async () => write.reject(new Error('Clipboard unavailable')))
+
+    expect(mocks.error).toHaveBeenCalledWith("Couldn't copy image", { description: undefined })
+    expect(mocks.success).not.toHaveBeenCalled()
   })
 
   it('removes the portaled menu and captured image when the retained bridge owner hides', async () => {

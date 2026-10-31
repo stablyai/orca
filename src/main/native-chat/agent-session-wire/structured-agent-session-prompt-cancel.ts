@@ -1,6 +1,4 @@
-// A prompt card's own Cancel, routed the way its provider says: a dismissal, or the chat's Stop. A
-// provider that says nothing interrupts the turn holding the card. The host decides, so a client of
-// any version gets the same Cancel.
+// Route Cancel on the host for consistent clients; absent provider routing interrupts the card’s turn.
 
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -47,10 +45,8 @@ export async function cancelStructuredAgentSessionPrompt(
     ok: true,
     value: { ...(input.turnId ? { turnId: input.turnId } : {}), cancelled: true }
   }
-  // Judged on the fold as it stands: the provider's own cancel of the card, or the end of the turn
-  // that raised it, landed when it was handed over. A request that outlived its turn, such as a
-  // background agent's, is not the running turn's: nothing stops and the request is declined.
-  // The dismissal's row carries the Cancel's receipt, unless the Stop already saved it.
+  // Recheck after handover: dismiss stale/background prompts without stopping an unrelated live turn.
+  // Save dismissal with the receipt unless Stop already committed it.
   if (route.kind === 'dismiss' || !raisedByLiveTurn(ctx, validated)) {
     const dismissed = await dismissPrompt(ctx, validated, true)
     return dismissed.ok ? cancelled : dismissed
@@ -59,18 +55,12 @@ export async function cancelStructuredAgentSessionPrompt(
   if (!stopped.outcome.ok) {
     return stopped.outcome
   }
-  // Settled in the Stop's own step, so the card is not answerable while the child ends. That end
-  // takes the provider's request with it; a Stop that ends nothing must answer the request itself.
+  // Stop settles the card before child exit; if Stop ends nothing, answer the provider request here.
   const dismissed = await dismissPrompt(ctx, validated, !stopped.endsSession)
   return dismissed.ok ? cancelled : dismissed
 }
 
-/** A card an ended generation raised: no live provider holds it, so it is dismissed in the journal
- *  alone. As on main, a provider whose card Cancel routes (a dismissal, or a Stop of the turn that
- *  raised it) stops nothing, since the live turn did not raise it. One with no route gets the
- *  named live turn's own cancel with the card, as main's plan does, never the chat's Stop, so
- *  queued messages stay and the queue is not paused: ACP interrupts that turn, and Codex, finding
- *  no such card in its live child, interrupts nothing. */
+/** Dismiss ended-generation cards locally; unrouted providers get only named-turn cancel, preserving queues. */
 async function cancelEndedGenerationPrompt(
   ctx: AgentSessionTurnContext,
   input: { turnId?: string },
@@ -85,7 +75,7 @@ async function cancelEndedGenerationPrompt(
   if (interrupted && !interrupted.ok) {
     return interrupted
   }
-  // The interrupt's provider may have let go of it already; what is still pending is dismissed.
+  // Recheck whether provider cancellation already settled the prompt.
   const still = validatePendingPrompt(ctx, {
     itemId: pending.item.itemId,
     expectedRevision: pending.item.revision
@@ -110,9 +100,7 @@ function raisedByLiveTurn(ctx: AgentSessionTurnContext, pending: PendingPrompt):
   return live.kind === 'turn' && raised?.kind === 'turn' && raised.turnItemId === live.turnItemId
 }
 
-/** Records the card as cancelled by the caller, after every row the provider already sent (each
- *  landed at its call); `answer` also declines the provider's request. Null: no live provider holds
- *  the card (an ended generation's), so only the journal records it. */
+/** Record after prior provider rows; answer declines the request, null means no live provider owns it. */
 async function dismissPrompt(
   ctx: AgentSessionTurnContext,
   pending: PendingPrompt,
@@ -144,7 +132,7 @@ async function dismissPrompt(
           resolvedAt: ctx.now()
         }
       },
-      // A revision: the prompt keeps the turn it was raised in.
+      // Revision must preserve the prompt’s original turn.
       { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() },
       receipt
     )
@@ -165,7 +153,7 @@ async function dismissPrompt(
       return dismissalNotSaved(ctx, error)
     }
     if (committed) {
-      // The adapter's error is Orca's; the row says only what the user needs to know.
+      // Log adapter details locally; journal only the user-facing failure.
       await ctx.journal.appendItem(
         { provider: 'orca', clientMessageId: `${item.itemId}#delivery` },
         {
@@ -178,8 +166,7 @@ async function dismissPrompt(
       )
     }
   }
-  // A request the provider already let go of, by its own cancel or the child's end, is still the
-  // user's to have cancelled.
+  // Provider release does not erase the user’s cancellation.
   if (!committed) {
     try {
       await commit()
@@ -190,8 +177,7 @@ async function dismissPrompt(
   return { ok: true, value: null }
 }
 
-/** Nothing of the Cancel saved: refused in words about the card, which stands. Once a Stop saved
- *  the receipt, the failure is answered from it. */
+/** Before acceptance, report save failure; after Stop commits its receipt, answer from it. */
 function dismissalNotSaved(ctx: AgentSessionTurnContext, error: unknown): TurnOutcome<never> {
   if (ctx.operationReceipt?.isCommitted()) {
     throw error

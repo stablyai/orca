@@ -1,3 +1,4 @@
+import { automationRequiresHostReselection } from '../../shared/automation-repo-target'
 import type { Automation } from '../../shared/automations-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
@@ -6,6 +7,7 @@ import type { Repo } from '../../shared/repo-types'
 import { parseExecutionHostId } from '../../shared/execution-host'
 import {
   resolveAutomationWorkspaceSshTargetId,
+  resolveAutomationWorkspaceHost,
   type AutomationWorkspaceSshPin
 } from '../../shared/automation-workspace-pin'
 import {
@@ -19,24 +21,9 @@ import {
   sanitizeSshTargetGeneration
 } from '../../shared/ssh-target-generation'
 
-/**
- * One idempotent load-time migration that gives every stored automation a
- * fenceable owner: generations are stamped on live targets, then automations
- * adopt or are classified. Running it twice changes nothing. Classification only
- * gates adoption here — refusing to run an orphan is dispatch's live verdict
- * (`resolveAutomationRunTarget`), not a persisted write this migration makes.
- */
-
 export type AutomationOwnerClassification = 'owned' | 'orphan' | 'ambiguous'
 
-/**
- * Runtime markers belong to a runtime store; the same markers are ambiguous desktop mirrors.
- *
- * `knownSshTargetIds` is the authority's own persisted registry, so a miss is
- * settled evidence rather than a list that has not loaded. `workspacePin` is
- * likewise only supplied once a workspace has been resolved: an absent pin means
- * nothing proves the record is pinned, never that its host is gone.
- */
+/** Use the authority’s persisted registry; runtime-owned records are ambiguous desktop mirrors. */
 export function classifyAutomationOwner(
   automation: Automation,
   knownSshTargetIds: ReadonlySet<string>,
@@ -51,8 +38,6 @@ export function classifyAutomationOwner(
     return 'ambiguous'
   }
   if (automation.executionTargetType !== 'ssh') {
-    // The pin is where the run goes, so a pin this authority cannot vouch for is the same
-    // unrunnable record dispatch refuses — classifying it `owned` left it enabled and editable.
     if (!workspacePin) {
       return 'owned'
     }
@@ -71,7 +56,6 @@ export type AutomationOwnerMigrationInput = {
   automations: readonly Automation[]
   sshTargets: readonly SshTarget[]
   repos: readonly Repo[]
-  /** Needed to resolve which SSH target a record's folder workspace pins it to. */
   folderWorkspaces?: readonly FolderWorkspace[]
   projectGroups?: readonly ProjectGroup[]
   sshTargetGenerationCounter?: number
@@ -106,10 +90,7 @@ function stampTargetGenerations(
 
 type MigratedAutomations = { automations: Automation[]; changed: boolean }
 
-/**
- * Only an absent capture is stamped: overwriting a differing one would re-adopt
- * the record onto the target that replaced the incarnation it was attached to.
- */
+/** Never overwrite a capture: a different generation may belong to a replacement host. */
 function stampCapturedGeneration(
   automation: Automation,
   ownerTargetId: string | undefined,
@@ -126,10 +107,7 @@ function stampCapturedGeneration(
   return { ...automation, executionTargetGeneration: generation }
 }
 
-/**
- * A local record its workspace pins to SSH runs on that registration, so it is
- * fenced by it too — the pin owns the capture the way the selector does for SSH rows.
- */
+/** Workspace-pinned local records need the SSH registration’s generation too. */
 function resolveWorkspacePin(
   automation: Automation,
   workspaceState: FolderWorkspaceHostState,
@@ -144,7 +122,6 @@ function resolveWorkspacePin(
     : { targetId, generation: targetsById.get(targetId)?.generation }
 }
 
-/** A re-pinned workspace moved the record's host, so the capture moves with it. */
 function followWorkspaceRepin(
   automation: Automation,
   pin: AutomationWorkspaceSshPin | undefined,
@@ -183,11 +160,16 @@ function migrateAutomations(
   let changed = false
   const migrated = automations.map((automation) => {
     const pin = resolveWorkspacePin(automation, workspaceState, targetsById)
+    if (
+      resolveAutomationWorkspaceHost(workspaceState, automation.workspaceId).kind === 'unpinned' &&
+      automationRequiresHostReselection(automation, workspaceState.repos)
+    ) {
+      return automation
+    }
     // Before classification: a followed re-pin is a healthy record, not an orphan.
     const record = followWorkspaceRepin(automation, pin, sshTargetIdForGeneration)
     const classification = classifyAutomationOwner(record, knownIds, pin, storageAuthority)
-    // Orphans and ambiguous records are never moved, rewritten to Self, stamped,
-    // or deleted; dispatch refuses them live rather than this migration writing state.
+    // Dispatch refuses unowned records; migration must not adopt them.
     if (classification !== 'owned') {
       changed ||= record !== automation
       return record

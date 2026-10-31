@@ -13,7 +13,6 @@ export type HarnessStoreState = {
   [key: string]: unknown
 }
 
-/** Store surface useIpcEvents touches at mount plus the terminal-reveal path. */
 export function createHarnessStoreState(
   overrides: Partial<HarnessStoreState> & Pick<HarnessStoreState, 'tabsByWorktree'>
 ): HarnessStoreState {
@@ -24,6 +23,7 @@ export function createHarnessStoreState(
     markWorktreeVisited: vi.fn(),
     recordWorktreeVisit: vi.fn(),
     isNavigatingHistory: false,
+    sleepingAgentSessionsByPaneKey: {},
     setActiveTabType: vi.fn(),
     setActiveTab: vi.fn(),
     revealWorktreeInSidebar: vi.fn(),
@@ -38,6 +38,7 @@ export function createHarnessStoreState(
     setUpdateStatus: vi.fn(),
     fetchRepos: vi.fn(),
     fetchWorktrees: vi.fn(),
+    fetchHostWorkspaceStatuses: vi.fn(),
     closeModal: vi.fn(),
     openModal: vi.fn(),
     setActiveRepo: vi.fn(),
@@ -50,6 +51,7 @@ export function createHarnessStoreState(
     setSshTargetsMetadata: vi.fn(),
     setRemovedSshTargetLabels: vi.fn(),
     setPortForwards: vi.fn(),
+    setUnrestoredPortForwards: vi.fn(),
     clearPortForwards: vi.fn(),
     setDetectedPorts: vi.fn(),
     enqueueSshCredentialRequest: vi.fn(),
@@ -70,7 +72,7 @@ export function createHarnessStoreState(
     editorFontZoomLevel: 0,
     settings: {
       terminalFontSize: 13,
-      experimentalNativeChat: false,
+      nativeChatProviders: { claude: false, codex: false },
       openAgentTabsInChatByDefault: false,
       activeRuntimeEnvironmentId: undefined
     },

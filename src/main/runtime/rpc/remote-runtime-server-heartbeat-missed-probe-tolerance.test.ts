@@ -21,11 +21,10 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     heartbeat.noteAlive(socket)
     heartbeat.start(() => [socket])
 
-    // Probe #1 goes out on the first interval tick.
     now += INTERVAL_MS
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
     expect(socket.ping).toHaveBeenCalledTimes(1)
-    heartbeat.noteAlive(socket) // pongs probe #1
+    heartbeat.noteAlive(socket)
 
     // A transient blackhole: probe #2 goes out and its pong is stuck in the network.
     now += INTERVAL_MS
@@ -38,8 +37,7 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
     heartbeat.noteAlive(socket)
 
-    // One unanswered probe is not evidence the peer is gone: it must still be connected,
-    // and it must have been re-probed rather than reaped.
+    // One lost probe is insufficient evidence: keep the peer and re-probe it.
     expect(socket.terminate).not.toHaveBeenCalled()
     expect(socket.ping).toHaveBeenCalledTimes(3)
     heartbeat.stop()
@@ -114,11 +112,10 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     const reaped = (candidate: WebSocket): boolean =>
       (candidate.terminate as unknown as ReturnType<typeof vi.fn>).mock.calls.length > 0
 
-    // Discover the budget rather than hardcoding it: the first sweep consumes the pong above, so
-    // every sweep after it is an unanswered probe.
+    // Discover the miss budget; the first sweep consumes the existing pong.
     await sweep()
     let toleratedMisses = 0
-    // Bounded so a heartbeat that never reaps fails here instead of hanging out to the test timeout.
+    // Bound discovery so a broken reaper fails here instead of timing out.
     while (!reaped(socket) && toleratedMisses < 20) {
       await sweep()
       toleratedMisses += 1
@@ -127,9 +124,7 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     expect(toleratedMisses).toBeGreaterThan(1)
     heartbeat.stop()
 
-    // Replay on a fresh socket: bank misses to one short of the limit, then suspend. The stalled tick
-    // must charge nothing — the client had no chance to answer it — but it must not forgive the misses
-    // already banked, or a host that stalls periodically could shelter a dead socket indefinitely.
+    // Bank misses before suspend: the delayed tick must neither charge an unanswerable probe nor erase prior silence.
     const resumed = new RemoteRuntimeServerHeartbeat(INTERVAL_MS, () => now)
     const resumedSocket = makeSocket()
     resumed.noteAlive(resumedSocket)
@@ -143,17 +138,14 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
 
     now += 3_600_000
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-    // The suspend itself costs the socket nothing.
     expect(reaped(resumedSocket)).toBe(false)
 
-    // But the pre-suspend evidence survives, so the very next unanswered probe completes the budget.
     await sweep()
     expect(reaped(resumedSocket)).toBe(true)
     resumed.stop()
   })
 
-  // Why: pre-fix the pardon cleared banked misses, so a host stalling once every few ticks reset the
-  // budget forever and a dead socket was never reaped — the connection leak the reaper exists to stop.
+  // Clearing banked misses on stall formerly sheltered dead sockets forever.
   it('still reaps a dead socket when the host stalls repeatedly', async () => {
     vi.useFakeTimers()
     let now = 1_000
@@ -166,7 +158,7 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     const reaped = (): boolean =>
       (socket.terminate as unknown as ReturnType<typeof vi.fn>).mock.calls.length > 0
 
-    // Stall every third tick — the worst case the old pardon could not survive.
+    // Stall every third tick to reproduce the old perpetual pardon.
     for (let tick = 0; tick < 30 && !reaped(); tick += 1) {
       now += tick % 3 === 2 ? INTERVAL_MS * 2 : INTERVAL_MS
       await vi.advanceTimersByTimeAsync(INTERVAL_MS)

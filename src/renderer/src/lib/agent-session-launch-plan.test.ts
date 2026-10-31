@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentLaunchRouteStore } from './agent-launch-route-input'
 
@@ -89,7 +90,6 @@ describe('planAgentSessionLaunch', () => {
         promptDelivery: 'submit-after-ready',
         resumeFrom,
         onPromptDelivered,
-        // The chat is created on the host the route was decided for.
         executionHostId: 'local'
       },
       hooks
@@ -112,7 +112,6 @@ describe('planAgentSessionLaunch', () => {
     )
   })
 
-  // The route is the one gate: it admits only an agent the host registered as structured.
   it('launches any agent the structured route admitted', async () => {
     const plan = planAgentSessionLaunch(store, {
       requestId: 'request-4',
@@ -186,7 +185,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
 
   it.each([true, false])('answers from feasibility alone (supported=%s)', (supported) => {
     mocks.structuredAgentLaunchSupported.mockReturnValue(supported)
-    const settings = { experimentalNativeChat: true }
+    const settings = { nativeChatProviders: EVERY_AGENT_CHAT }
 
     expect(
       structuredAgentSessionLaunchFeasible(store, {
@@ -200,7 +199,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
   })
 
   it('builds the input from the named settings, not the store copy', () => {
-    const settings = { experimentalNativeChat: true }
+    const settings = { nativeChatProviders: EVERY_AGENT_CHAT }
     structuredAgentSessionLaunchFeasible(store, {
       agent: 'codex',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
@@ -211,7 +210,6 @@ describe('structuredAgentSessionLaunchFeasible', () => {
       agent: 'codex',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
     })
-    // The builder's input carries no settings, so seeing them here proves the named copy won.
     expect(mocks.structuredAgentLaunchSupported).toHaveBeenCalledWith(
       expect.objectContaining({ ...ROUTE_INPUT, settings })
     )

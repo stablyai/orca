@@ -8,6 +8,7 @@ import { sameBucketRecords } from './bucket-record-equality'
 import { getUnreadBadgeCount } from './unread-badge-count'
 import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type UnreadBadgeCountState = Pick<
   AppState,
@@ -54,7 +55,7 @@ function sameFolderAttention(
   ) {
     return true
   }
-  for (const folder of next.folderWorkspaces) {
+  for (const folder of selectFolderWorkspaces(next)) {
     if (!folder.isUnread) {
       continue
     }
@@ -68,7 +69,7 @@ function sameFolderAttention(
 
 function sameCountInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCountState): boolean {
   return (
-    previous.folderWorkspaces === next.folderWorkspaces &&
+    selectFolderWorkspaces(previous) === selectFolderWorkspaces(next) &&
     previous.projectGroups === next.projectGroups &&
     previous.repos === next.repos &&
     previous.workspaceHostScope === next.workspaceHostScope &&
@@ -79,20 +80,16 @@ function sameCountInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCount
     (!next.hideWorkspacesFromOtherDevices ||
       (previous.runtimeEnvironments === next.runtimeEnvironments &&
         previous.runtimeStatusByEnvironmentId === next.runtimeStatusByEnvironmentId)) &&
-    sameBucketRecords(previous.worktreesByRepo, next.worktreesByRepo, sameBadgeWorktree) &&
+    sameBucketRecords(
+      selectWorktreesByRepo(previous),
+      selectWorktreesByRepo(next),
+      sameBadgeWorktree
+    ) &&
     sameFolderAttention(previous, next)
   )
 }
 
-/**
- * Why: the App root holds this subscription for a single integer. Returning the raw maps re-rendered
- * the whole shell on every agent title frame; selecting the count instead means the subscription
- * only notifies when the badge value can actually have moved.
- *
- * Why chaining against the immediately preceding state is enough: equality over the count's read
- * set is transitive, so a run of unchanged states is equivalent to comparing against the state
- * that produced the cached count.
- */
+/** Subscribe App to the badge integer, avoiding whole-shell rerenders on raw-map/title churn. Compare each state’s read set to its predecessor; transitive equality preserves the cached count across unchanged runs. */
 export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState) => number {
   let previousState: UnreadBadgeCountState | undefined
   let unreadCount = 0
@@ -100,8 +97,8 @@ export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState)
   return (state) => {
     if (!previousState || !sameCountInputs(previousState, state)) {
       unreadCount = getUnreadBadgeCount({
-        worktreesByRepo: state.worktreesByRepo,
-        folderWorkspaces: state.folderWorkspaces,
+        worktreesByRepo: selectWorktreesByRepo(state),
+        folderWorkspaces: selectFolderWorkspaces(state),
         tabsByWorktree: state.tabsByWorktree,
         unifiedTabsByWorktree: state.unifiedTabsByWorktree,
         unreadTerminalTabs: state.unreadTerminalTabs,

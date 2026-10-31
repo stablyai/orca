@@ -33,7 +33,7 @@ function cardSearchText(card: DashboardCard): string {
   ]
     .filter(Boolean)
     .join(' ')
-    .toLocaleLowerCase()
+    .toLowerCase()
 }
 
 export function filterDashboardCards(
@@ -41,7 +41,7 @@ export function filterDashboardCards(
   query: string,
   filters: DashboardFilters
 ): DashboardCard[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const normalizedQuery = query.trim().toLowerCase()
   return cards.filter((card) => {
     const reviewState = card.review?.state ?? (card.hasReview ? null : 'none')
     return (

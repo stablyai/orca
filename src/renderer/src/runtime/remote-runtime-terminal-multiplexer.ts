@@ -19,9 +19,7 @@ onRuntimeEnvironmentsRetired((environmentIds) => {
   }
 })
 
-// Why: a stream opened before main re-paired stays open but sendFrame refuses its stale revision,
-// so input would vanish silently; a recoverable close lets each pane rebind, and the pane itself
-// only follows the new pairing once it is proven to be the same machine.
+// Re-pair leaves old streams open but fences their sends. Recoverable close lets panes rebind only after same-machine proof, preventing silent input loss.
 onRuntimeEnvironmentRevisionsChanged((environmentIds) => {
   for (const environmentId of environmentIds) {
     const multiplexer = multiplexers.get(environmentId)

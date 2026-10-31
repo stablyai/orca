@@ -1,5 +1,3 @@
-// What every decision of one assembler shares, and where a joined row goes.
-
 import type {
   AgentJournalProducerLinkage,
   AgentJournalTurnScope,
@@ -14,11 +12,10 @@ export type ProviderTimelineContext = {
   agent: AgentType
   generation: string
   rows: ProviderTimelineRows
-  /** The session's own provider thread; a join naming another thread is subagent work. */
+  /** Other provider threads are subagent work. */
   ownThread?: () => string | null
 }
 
-/** A settlement id no other settlement of this journal shares. */
 export function providerTimelineSettlementId(
   context: ProviderTimelineContext,
   serial: number,
@@ -27,8 +24,7 @@ export function providerTimelineSettlementId(
   return `provider-timeline:${context.sessionId}:${context.generation}:${serial}:${what}`
 }
 
-/** The turn a new row joins: the one the provider names, else the open one, else none. Subagent
- *  work on a thread of its own joins the open turn whatever turn it names. */
+/** Prefer the named turn, then open turn; independent subagent threads always join the open turn. */
 export function providerTimelinePlacement(
   context: ProviderTimelineContext,
   state: ProviderTimelineState,
@@ -45,9 +41,7 @@ export function providerTimelinePlacement(
   return { kind: 'turn', turnItemId: context.rows.turn(providerKey(join.turn)).itemId }
 }
 
-/** What an entry the assembler holds open costs: its body, its producer, and every provider
- *  string it keeps (its key and join), each twice: as given, and inside the identities spelled
- *  from it. */
+/** Budget bodies/linkage plus provider strings twice: raw values and derived identities. */
 export function providerTimelineEntryBytes(input: {
   key: string
   join: ProviderTimelineJoin | undefined

@@ -1,6 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-// A transcript stream ends when its client says so: the host drops that subscriber, so nothing is
-// derived or sent for it any more, and a sibling stream of the same session keeps going.
+// Unsubscribe stops only that transcript's projection/sends; sibling streams continue.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -35,8 +34,7 @@ function subscriberCount(): number {
 async function stream(id: string, frames: RpcResponse[]): Promise<void> {
   await dispatcher.dispatchStreaming(
     { id, authToken: 'token', method: 'agentSession.subscribe', params: { sessionId: SESSION } },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher writes RpcResponse JSON.
-    (raw) => frames.push(JSON.parse(raw) as RpcResponse),
+    (raw) => frames.push(JSON.parse(raw)),
     CLIENT
   )
 }
@@ -45,13 +43,7 @@ beforeEach(async () => {
   rig = await createRestTestRig({ idleSweep: { intervalMs: 3_600_000 } })
   setStructuredAgentSessionHost(rig.host)
   const runtime = new OrcaRuntimeService()
-  vi.spyOn(runtime, 'getClientSettings').mockImplementation(
-    () =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC gate reads only this one setting.
-      ({ experimentalStructuredNativeChat: true }) as ReturnType<
-        OrcaRuntimeService['getClientSettings']
-      >
-  )
+
   dispatcher = new RpcDispatcher({ runtime, methods: STRUCTURED_AGENT_SESSION_METHODS })
 })
 
@@ -76,8 +68,7 @@ it('drops the subscriber a client unsubscribes, and keeps its sibling (U-02)', a
       method: 'agentSession.unsubscribe',
       params: { sessionId: SESSION, subscriptionId: 'frame-a' }
     },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher writes RpcResponse JSON.
-    (raw) => replies.push(JSON.parse(raw) as RpcResponse),
+    (raw) => replies.push(JSON.parse(raw)),
     CLIENT
   )
   expect(replies[0]).toMatchObject({ ok: true })
@@ -87,6 +78,5 @@ it('drops the subscriber a client unsubscribes, and keeps its sibling (U-02)', a
   const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
   await rig.host.send(CALLER, restTestSend('after the unsubscribe', fence))
   await vi.waitFor(() => expect(kept.length).toBeGreaterThan(1))
-  // The ended stream's own `end` frame is all it gets.
   expect(ended.slice(before).every((frame) => JSON.stringify(frame).includes('"end"'))).toBe(true)
 })

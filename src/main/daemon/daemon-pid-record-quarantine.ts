@@ -3,25 +3,10 @@ import { join } from 'node:path'
 import { salvagePidFromCorruptDaemonRecord } from './daemon-pid-file-parse'
 import { inspectProcessLiveness } from './daemon-process-inspection'
 
-/**
- * A record that was just written is never quarantined: publishDaemonPidFile creates the record
- * before writing it (writeFileSync with flag 'wx'), so a concurrent launch can read a LIVE
- * daemon's record as empty or torn. Renaming it aside would strand that daemon's record, and the
- * next launch — seeing a complete listing with no record for its version — would reclaim the
- * running daemon's host image. An in-flight publish is by definition fresh; a record left corrupt
- * by a dead writer ages past this floor and is quarantined on a later launch.
- */
+// Publishing creates the file before writing; protect fresh or torn live records from host-image reclamation.
 const QUARANTINE_MIN_RECORD_AGE_MS = 60_000
 
-/**
- * A pid record that parses to nothing would otherwise veto daemon-host pruning on every future
- * launch: nothing ever rewrites a retired protocol version's pid file, so the veto never expires.
- * Quarantine the record (rename in place, bytes kept for diagnosis) so the next launch scans a
- * complete listing again — unless a process still answers for a pid salvaged from the corrupt
- * bytes, in which case the record may belong to a live daemon and keeps its conservative veto
- * until that pid exits. Returns the unverifiable reason; every branch is logged because this
- * state suppresses pruning.
- */
+/** Quarantine aged corrupt records to unblock pruning, unless a salvaged PID may still be live. */
 export function quarantineCorruptDaemonPidRecord(
   runtimeDir: string,
   name: string,

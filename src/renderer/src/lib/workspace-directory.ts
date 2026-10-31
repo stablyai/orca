@@ -1,13 +1,15 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo,
+  type WorkspaceRecordState
+} from '@/store/workspace-record-selectors'
 
-// Why detected rows are optional: skill discovery does not subscribe to them, so a detected-only
-// workspace has no directory there.
-export type WorkspaceDirectoryState = Pick<
-  AppState,
-  'worktreesByRepo' | 'folderWorkspaces' | 'floatingWorkspacePath'
-> &
+// Skill discovery omits detected rows, so detected-only workspaces have no directory there.
+export type WorkspaceDirectoryState = WorkspaceRecordState &
+  Pick<AppState, 'floatingWorkspacePath'> &
   Partial<Pick<AppState, 'detectedWorktreesByRepo'>>
 
 const NO_DETECTED_WORKTREES: AppState['detectedWorktreesByRepo'] = {}
@@ -22,9 +24,11 @@ export function resolveWorkspaceDirectory(
   executionHostId?: ExecutionHostId | null
 ): string | null {
   const catalog = {
-    worktreesByRepo: state.worktreesByRepo,
+    projectGroups: state.projectGroups,
+    repos: state.repos,
+    worktreesByRepo: selectWorktreesByRepo(state),
     detectedWorktreesByRepo: state.detectedWorktreesByRepo ?? NO_DETECTED_WORKTREES,
-    folderWorkspaces: state.folderWorkspaces,
+    folderWorkspaces: selectFolderWorkspaces(state),
     floatingWorkspacePath: state.floatingWorkspacePath
   }
   return findKnownWorktreeById(catalog, worktreeId, executionHostId ?? undefined)?.path || null
