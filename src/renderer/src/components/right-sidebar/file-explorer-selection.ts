@@ -170,6 +170,36 @@ export function updateFileExplorerSelectionPaths(
   }
 }
 
+/**
+ * Moves selected folders that compact folders folded away onto the row that shows them.
+ * Resolved on read because a clicked folder only folds into its child's row once its listing loads.
+ */
+export function resolveFileExplorerSelectionRows(
+  current: FileExplorerSelectionState,
+  getRowPath: (path: string) => string | undefined
+): FileExplorerSelectionState {
+  const toRowPath = (path: string): string => getRowPath(path) ?? path
+  const isFolded = (path: string | null): boolean => path !== null && toRowPath(path) !== path
+  return hasFoldedSelectionPath(current, isFolded)
+    ? updateFileExplorerSelectionPaths(current, toRowPath)
+    : current
+}
+
+function hasFoldedSelectionPath(
+  current: FileExplorerSelectionState,
+  isFolded: (path: string | null) => boolean
+): boolean {
+  if (isFolded(current.activePath) || isFolded(current.anchorPath)) {
+    return true
+  }
+  for (const path of current.selectedPaths) {
+    if (isFolded(path)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function formatFileExplorerPathsForClipboard(
   nodes: readonly TreeNode[],
   pathKind: 'absolute' | 'relative',

@@ -4,6 +4,7 @@ import {
   createSingleFileExplorerSelection,
   formatFileExplorerPathsForClipboard,
   getFileExplorerSelectionMode,
+  resolveFileExplorerSelectionRows,
   updateFileExplorerSelection,
   updateFileExplorerSelectionPaths
 } from './file-explorer-selection'
@@ -96,5 +97,49 @@ describe('file explorer selection', () => {
     expect(Array.from(next.selectedPaths)).toEqual(['/repo/a.ts', '/repo/c.ts'])
     expect(next.activePath).toBe('/repo/c.ts')
     expect(next.anchorPath).toBe('/repo/a.ts')
+  })
+
+  it('moves a selected folder that compact folders folded away onto the row that shows it', () => {
+    const rowPaths = new Map([
+      ['/repo/src', '/repo/src/main/java'],
+      ['/repo/src/main', '/repo/src/main/java'],
+      ['/repo/src/main/java', '/repo/src/main/java']
+    ])
+
+    const next = resolveFileExplorerSelectionRows(
+      createSingleFileExplorerSelection('/repo/src'),
+      (path) => rowPaths.get(path)
+    )
+
+    expect(Array.from(next.selectedPaths)).toEqual(['/repo/src/main/java'])
+    expect(next.activePath).toBe('/repo/src/main/java')
+    expect(next.anchorPath).toBe('/repo/src/main/java')
+  })
+
+  it('merges a folded folder and the row it folds into into one selected path', () => {
+    const rowPaths = new Map([
+      ['/repo/src', '/repo/src/main'],
+      ['/repo/src/main', '/repo/src/main'],
+      ['/repo/build.gradle', '/repo/build.gradle']
+    ])
+    const current = updateFileExplorerSelection(
+      createSingleFileExplorerSelection('/repo/src'),
+      ['/repo/src', '/repo/src/main', '/repo/build.gradle'],
+      '/repo/build.gradle',
+      'range'
+    )
+
+    const next = resolveFileExplorerSelectionRows(current, (path) => rowPaths.get(path))
+
+    expect(Array.from(next.selectedPaths)).toEqual(['/repo/src/main', '/repo/build.gradle'])
+    expect(next.anchorPath).toBe('/repo/src/main')
+    expect(next.activePath).toBe('/repo/build.gradle')
+  })
+
+  it('returns the same selection when no selected path is folded or visible elsewhere', () => {
+    const current = createSingleFileExplorerSelection('/repo/collapsed/hidden.ts')
+    const rowPaths = new Map([['/repo/a.ts', '/repo/a.ts']])
+
+    expect(resolveFileExplorerSelectionRows(current, (path) => rowPaths.get(path))).toBe(current)
   })
 })

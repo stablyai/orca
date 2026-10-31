@@ -14,6 +14,7 @@ import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
 import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
+import type { InlineInput } from './file-explorer-inline-input-row'
 import { useFileExplorerNodeCommands } from './use-file-explorer-node-commands'
 import { useFileExplorerRowScrolling } from './use-file-explorer-row-scrolling'
 import { useFileExplorerLoadMore } from './use-file-explorer-load-more'
@@ -45,6 +46,10 @@ type UseFileExplorerTreePaneStateParams = {
   rowExpandedPaths: Set<string>
   visibleRowCount: number
   pathOwner: LocalPathOpenOwner
+  /** Opens single-folder chains when compact folders is on. */
+  toggleDir: (worktreeId: string, dirPath: string) => void
+  inlineInput: InlineInput | null
+  setInlineInput: Dispatch<SetStateAction<InlineInput | null>>
 }
 
 type UseFileExplorerTreePaneStateResult = {
@@ -84,7 +89,10 @@ export function useFileExplorerTreePaneState({
   rowProjection,
   rowExpandedPaths,
   visibleRowCount,
-  pathOwner
+  pathOwner,
+  toggleDir,
+  inlineInput,
+  setInlineInput
 }: UseFileExplorerTreePaneStateParams): UseFileExplorerTreePaneStateResult {
   const {
     dirCache,
@@ -129,7 +137,6 @@ export function useFileExplorerTreePaneState({
   const ownerRuntimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
-  const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
@@ -200,7 +207,9 @@ export function useFileExplorerTreePaneState({
     expanded,
     rowProjection,
     scrollRef,
-    refreshDir
+    refreshDir,
+    inlineInput,
+    setInlineInput
   })
 
   useFileExplorerWatch({
