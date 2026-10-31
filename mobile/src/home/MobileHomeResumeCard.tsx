@@ -63,7 +63,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     paddingLeft: spacing.md,
     paddingRight: spacing.md,
     paddingVertical: 12
@@ -73,7 +73,7 @@ const styles = themedStyleSheet(() => ({
   resumeIcon: {
     width: 46,
     height: 46,
-    borderRadius: 13,
+    borderRadius: radii.tile,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
@@ -82,6 +82,6 @@ const styles = themedStyleSheet(() => ({
   resumeMain: { flex: 1, minWidth: 0 },
   resumeTitle: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   resumeSub: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  repoDot: { width: 7, height: 7, borderRadius: 3.5 },
+  repoDot: { width: 7, height: 7, borderRadius: radii.pill },
   resumeSubText: { fontSize: 12, color: colors.textSecondary, flex: 1 }
 }))

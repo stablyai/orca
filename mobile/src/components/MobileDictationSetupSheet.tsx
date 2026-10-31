@@ -332,7 +332,7 @@ const styles = themedStyleSheet(() => ({
     gap: 5,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   actionPressed: { opacity: 0.7 },

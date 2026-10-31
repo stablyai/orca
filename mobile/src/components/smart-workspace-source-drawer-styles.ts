@@ -32,8 +32,8 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   list: {
     flex: 1,
     backgroundColor: colors.bgPanel,
-    borderTopLeftRadius: radii.card,
-    borderTopRightRadius: radii.card,
+    borderTopLeftRadius: radii.surface,
+    borderTopRightRadius: radii.surface,
     overflow: 'hidden'
   },
   listContent: {
@@ -62,7 +62,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
     gap: spacing.xs,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -86,7 +86,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -104,7 +104,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   },
   crossRepo: {
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     padding: spacing.md,
@@ -123,7 +123,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   crossRepoDismiss: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },
@@ -134,7 +134,7 @@ export const smartWorkspaceSourceDrawerStyles = themedStyleSheet(() => ({
   crossRepoSwitch: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.textSecondary

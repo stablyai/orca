@@ -73,6 +73,7 @@ export const pluginsApi = {
     }
   },
   getAutoUpdateState: () => ipcRenderer.invoke('plugins:getAutoUpdateState'),
+  takeUpdateReviewNotices: () => ipcRenderer.invoke('plugins:takeUpdateReviewNotices'),
   onAutoUpdateChanged: (callback): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, change: PluginAutoUpdateEvent): void =>
       callback(change)

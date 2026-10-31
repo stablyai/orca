@@ -18,7 +18,6 @@ function makeRuntime() {
     store: Record<string, unknown>
     resolveGitWorktreeSelector: (selector: string) => Promise<unknown>
     createTerminal: (selector: string, opts: unknown) => Promise<unknown>
-    sendStartupFollowupWhenReady: (handle: string, followup: unknown) => void
   }
   internals.store = {
     getSettings: () => ({ disabledTuiAgents: [], workspaceDir: '/tmp/workspaces' }),
@@ -36,9 +35,7 @@ function makeRuntime() {
     worktreeId: 'repo-1::/home/me/app-feature',
     title: null
   })
-  const sendFollowup = vi
-    .spyOn(internals, 'sendStartupFollowupWhenReady')
-    .mockImplementation(() => undefined)
+  const sendFollowup = vi.spyOn(runtime, 'deliverStartupFollowup').mockResolvedValue(true)
   return { runtime, createTerminal, sendFollowup }
 }
 
@@ -59,7 +56,8 @@ describe('launchAgentTerminal startup follow-up', () => {
     expect(sendFollowup).toHaveBeenCalledTimes(1)
     expect(sendFollowup).toHaveBeenCalledWith(
       'term_x',
-      expect.objectContaining({ prompt: 'fix the flaky test' })
+      expect.objectContaining({ prompt: 'fix the flaky test' }),
+      { terminalCreation: terminal }
     )
   })
 

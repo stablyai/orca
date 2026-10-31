@@ -66,6 +66,7 @@ export class ClaimedAgentPtyOwnerRegistry {
     /** Called when this request waits on another request's start instead of starting its own. */
     onJoin?: (creation?: Promise<PtyCreationDisposition>) => void
     creation?: Promise<PtyCreationDisposition>
+    exitedDuringStart?: () => Error
   }): Promise<AgentSessionClaimedSpawnResult> {
     // Snapshot reused retry arguments before awaits so caller mutations cannot change registry keys.
     const requestedClaim = cloneClaim(args.claim)
@@ -163,11 +164,11 @@ export class ClaimedAgentPtyOwnerRegistry {
       // Index before awaited proof so an exit beating spawn completion can remove the matching generation.
       if (args.isLive && !(await args.isLive(cloneOwner(owner)))) {
         this.release(owner.ptyId, owner.generation)
-        throw new Error('agent_session_exited_during_start')
+        throw args.exitedDuringStart?.() ?? new Error('agent_session_exited_during_start')
       }
       const current = this.live.get(key)
       if (current?.ptyId !== owner.ptyId || current.generation !== owner.generation) {
-        throw new Error('agent_session_exited_during_start')
+        throw args.exitedDuringStart?.() ?? new Error('agent_session_exited_during_start')
       }
       const result: AgentSessionClaimedSpawnResult = {
         disposition: spawned.disposition ?? 'created',

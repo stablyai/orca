@@ -957,7 +957,13 @@
       "empty": "尚未设置自定义快捷键。",
       "removeShortcut": "移除 {{label}}",
       "resetDefaults": "恢复默认设置",
-      "resetDescription": "按原始顺序显示所有内置快捷键"
+      "resetDescription": "按原始顺序显示所有内置快捷键",
+      "moreKeys": "更多按键",
+      "moreKeysDescription": "这些按键位于终端按键栏的 ⋯ 下。切换按键以显示或隐藏，按住拖动柄可调整顺序。已在按键栏中的按键（如 Esc 或方向键）不会显示在 ⋯ 下。",
+      "directionPad": "方向键盘",
+      "showDirectionPad": "显示方向键盘",
+      "showDirectionPadDescription": "将方向键盘固定在侧边栏。关闭后，侧边栏会列出各个方向键。",
+      "showShortcut": "显示 {{label}} 快捷键"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "使用一次速率限制重置额度？",
@@ -1399,7 +1405,8 @@
       "reconnect": "重新连接",
       "searchWorkspaces": "搜索工作区",
       "tasks": "任务",
-      "workspaceOptions": "工作区选项"
+      "workspaceOptions": "工作区选项",
+      "newWorkspace": "新建工作区"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要删除“{{name}}”（{{branch}}）吗？",
@@ -1827,7 +1834,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "关闭键盘",
-      "sendKey": "发送 {{label}}"
+      "sendKey": "发送 {{label}}",
+      "modifierHint": "应用于下一个按键。双击可保持启用。",
+      "typeCharacter": "输入 {{character}}",
+      "interrupt": "中断终端",
+      "keysModeLabel": "按键模式：输入内容直接发送到终端。切换到消息模式",
+      "messageModeLabel": "消息模式：输入后发送。切换到按键模式",
+      "keysMode": "按键",
+      "messageMode": "消息",
+      "moreKeys": "更多按键和操作",
+      "showKeyboard": "显示键盘"
     },
     "activeContent": {
       "createTab": "创建标签页",
@@ -1939,7 +1955,10 @@
     "commandDock": {
       "liveInputHint": "输入的文本会直接发送到当前终端",
       "liveInputLabel": "终端实时输入",
-      "sendCommand": "发送命令"
+      "sendCommand": "发送命令",
+      "messageAgentPlaceholder": "向 {{agent}} 发送消息",
+      "writeCommandPlaceholder": "输入命令后发送",
+      "theAgent": "智能体"
     },
     "contentRow": {
       "dismissCreationWarning": "关闭工作区创建警告"
@@ -2113,13 +2132,19 @@
       "requestFailed": "请求失败：{{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "显示工作区的完整名称及其所在位置",
       "backToWorktrees": "返回工作树",
       "moreActions": "更多会话操作",
       "openFileExplorer": "打开文件资源管理器",
       "openSourceControl": "打开源代码控制",
       "reconnectToDesktop": "重新连接到桌面",
       "showSidebar": "显示侧边栏",
-      "terminalTitle": "终端"
+      "terminalTitle": "终端",
+      "terminalLayout": "终端布局",
+      "fileExplorer": "文件资源管理器",
+      "sourceControl": "源代码管理",
+      "newTab": "新标签页",
+      "quickCommands": "快捷命令"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "智能体历史记录",
@@ -2319,7 +2344,8 @@
       "terminal": "终端",
       "terminalName": "终端名称",
       "unsavedMarkdown": "未保存的 Markdown 更改",
-      "urlPrompt": "输入 URL，或留空以新建标签页。"
+      "urlPrompt": "输入 URL，或留空以新建标签页。",
+      "allowAutoClose": "允许自动关闭"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "此工作区主机上未检测到已启用的 AI 智能体。",
@@ -2336,7 +2362,8 @@
       "checkingCapabilities": "正在检查桌面支持的功能，请稍后重试",
       "newTab": "新标签页",
       "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用",
-      "tabStatus": "{{title}}，{{status}}"
+      "tabStatus": "{{title}}，{{status}}",
+      "terminalLayout": "终端布局"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清空终端",
@@ -2598,6 +2625,56 @@
       "waitForStart": "请等待智能体完成启动。",
       "waitForTurn": "请等待智能体完成回复，或将其停止。",
       "waitMoment": "请稍候。"
+    },
+    "workerAutoClose": {
+      "running": "临时协作工作者 · 完成 2 分钟后关闭",
+      "finished": "临时协作工作者已完成 · 将在 {{countdown}} 后关闭",
+      "keepOpen": "保持打开"
+    },
+    "terminalLayoutSheet": {
+      "title": "终端布局",
+      "oneTerminal": "一个终端",
+      "selected": "已选择",
+      "auto": "自动",
+      "autoHint": "根据可用空间分割",
+      "sideBySide": "并排",
+      "sideBySideHint": "即使侧边栏打开也显示为两列",
+      "stacked": "上下排列",
+      "stackedHint": "任意屏幕方向下均显示为两行",
+      "selectedHint": "已选择 · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "无法保存布局",
+      "saveFailedMessage": "此布局暂时生效。请再次选择以重试保存。"
+    },
+    "terminalArrowPad": {
+      "label": "方向键",
+      "hint": "点击一侧可按一次方向键，或按住并拖动以重复",
+      "up": "上",
+      "down": "下",
+      "left": "左",
+      "right": "右"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "发送 {{label}}",
+      "paste": "粘贴",
+      "sending": "发送中…",
+      "photo": "照片",
+      "file": "文件",
+      "desktopWidth": "桌面宽度",
+      "phoneWidth": "手机宽度",
+      "keys": "按键",
+      "combos": "组合键",
+      "yourKeys": "你的按键",
+      "deleteKeyHint": "长按以删除此按键",
+      "addCustomKey": "添加自定义按键",
+      "addKey": "添加按键"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}，已聚焦",
+      "terminal": "终端",
+      "tapToFocusPane": "{{title}}，点按以聚焦",
+      "inputPane": "{{title}} · 输入"
     }
   },
   "settings": {
@@ -2789,7 +2866,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "合并",
       "rebaseState": "变基",
-      "stagedCount": "已暂存 {{count}} 个文件"
+      "stagedCount": "已暂存 {{count}} 个文件",
+      "completingMerge": "正在完成…",
+      "completeMerge": "完成合并"
     },
     "branchCompare": {
       "commits_one": "{{count}} 次提交",
@@ -3228,6 +3307,13 @@
       "branchUnavailable": "无法获取分支状态",
       "commitFailed": "提交失败",
       "waitingForDesktop": "正在等待桌面…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "请更新运行此工作区的电脑上的 Orca，以便通过手机解决合并冲突。",
+      "markResolved": "标记为已解决",
+      "keepFile": "保留文件",
+      "keepDeletion": "保留删除",
+      "completeMergeFailed": "无法完成合并"
     }
   },
   "tasks": {
@@ -3894,6 +3980,15 @@
       "inProgress": "进行中",
       "inReview": "评审中",
       "pinned": "已固定"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "方向键盘上",
+      "left": "方向键盘左",
+      "right": "方向键盘右",
+      "down": "方向键盘下",
+      "hint": "发送方向键。按住可重复。"
     }
   }
 }

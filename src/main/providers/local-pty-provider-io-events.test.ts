@@ -153,6 +153,27 @@ describe('LocalPtyProvider', () => {
     provider = new LocalPtyProvider()
   })
 
+  it('retains the fallback owner cause when output and exit precede the spawn reply', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    mockProc.onData.mockImplementation((cb) => {
+      cb('too many consoles in use, max consoles is 128')
+      return { dispose: vi.fn() }
+    })
+    mockProc.onExit.mockImplementation((cb) => {
+      cb({ exitCode: 256 })
+      return { dispose: vi.fn() }
+    })
+    const result = await provider.spawn({ cols: 80, rows: 24 })
+    expect(result).toMatchObject({
+      exitedBeforeSpawnReply: true,
+      exitCause: {
+        kind: 'exited',
+        exitCode: 256,
+        initialOutputDiagnostic: 'git-bash-console-capacity'
+      }
+    })
+  })
+
   describe('write', () => {
     it('writes data to the PTY process', async () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })

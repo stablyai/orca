@@ -46,7 +46,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-owed-work-release-'))
   _internals.resetCachesForTests()
   resetHostTestOperationIds()
-  claude = fakeClaude()
+  claude = fakeClaude({ holdInit: true })
   lifecycle = []
   clock = NOW
   const initLanded = new Promise<void>((resolve) => {
@@ -75,11 +75,10 @@ beforeEach(async () => {
       host.publishChildWorkEvidence(sessionId, evidence),
     openConnection: async (launch, handlers) => {
       const connection = await claude.openConnection(launch, handlers)
-      const answer = connection.initializationResult
-      connection.initializationResult = async () => {
-        await initLanded
-        return answer()
-      }
+      const response = claude.connections.find(
+        (candidate) => candidate === connection
+      )?.initialization
+      void initLanded.then(() => response?.resolve()).catch(() => {})
       return connection
     },
     readProcessStartTime: async () => 1_700_000_000_000,
@@ -107,12 +106,17 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  vi.useRealTimers()
+  host.stopDelivery()
   landInit()
-  await adapter.closeAll()
-  await host.flushAllStreamedEvents()
-  await closeTestJournalHostDatabases()
-  await rm(root, { recursive: true, force: true })
+  claude.dispose()
+  try {
+    await adapter.closeAll()
+    await host.flushAllStreamedEvents()
+    await closeTestJournalHostDatabases()
+  } finally {
+    vi.useRealTimers()
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 async function attachStarting(): Promise<void> {
@@ -191,7 +195,7 @@ describe('a Claude chat whose CLI is still starting', () => {
   })
 
   it('gives a message held while starting a full idle window after startup lands to open its turn', async () => {
-    claude = fakeClaude({ replayUuid: null })
+    claude = fakeClaude({ replayUuid: null, holdInit: true })
     await attachStarting()
     const connection = claude.connections[0]
     // Loaded runners may delay Claude’s first turn echo.

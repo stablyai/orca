@@ -957,7 +957,13 @@
       "empty": "아직 설정된 맞춤 단축키가 없습니다.",
       "removeShortcut": "{{label}} 제거",
       "resetDefaults": "기본값 복원",
-      "resetDescription": "모든 기본 단축키를 원래 순서로 표시"
+      "resetDescription": "모든 기본 단축키를 원래 순서로 표시",
+      "moreKeys": "더 많은 키",
+      "moreKeysDescription": "이 키는 터미널 키 행의 ⋯ 아래에 있습니다. 키의 표시 여부를 전환하고 핸들을 길게 눌러 원하는 순서로 끌어 놓으세요. Esc나 화살표처럼 이미 행에 있는 키는 ⋯에 표시되지 않습니다.",
+      "directionPad": "방향 패드",
+      "showDirectionPad": "방향 패드 표시",
+      "showDirectionPadDescription": "화살표 패드를 사이드 레일에 고정합니다. 끄면 레일에 개별 화살표 키가 표시됩니다.",
+      "showShortcut": "{{label}} 단축키 표시"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "사용량 한도를 재설정하시겠습니까?",
@@ -1399,7 +1405,8 @@
       "reconnect": "다시 연결",
       "searchWorkspaces": "워크스페이스 검색",
       "tasks": "작업",
-      "workspaceOptions": "워크스페이스 옵션"
+      "workspaceOptions": "워크스페이스 옵션",
+      "newWorkspace": "새 워크스페이스"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "\"{{name}}\" ({{branch}})을(를) 삭제하시겠습니까?",
@@ -1827,7 +1834,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "키보드 닫기",
-      "sendKey": "{{label}} 보내기"
+      "sendKey": "{{label}} 보내기",
+      "modifierHint": "다음 키에 적용됩니다. 두 번 탭하면 계속 켜집니다.",
+      "typeCharacter": "{{character}} 입력",
+      "interrupt": "터미널 중단",
+      "keysModeLabel": "키 모드: 입력 내용이 터미널로 바로 전송됩니다. 메시지 모드로 전환",
+      "messageModeLabel": "메시지 모드: 작성한 뒤 전송합니다. 키 모드로 전환",
+      "keysMode": "키",
+      "messageMode": "메시지",
+      "moreKeys": "더 많은 키와 작업",
+      "showKeyboard": "키보드 표시"
     },
     "activeContent": {
       "createTab": "탭 만들기",
@@ -1939,7 +1955,10 @@
     "commandDock": {
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
       "liveInputLabel": "실시간 터미널 입력",
-      "sendCommand": "명령 보내기"
+      "sendCommand": "명령 보내기",
+      "messageAgentPlaceholder": "{{agent}}에게 메시지 보내기",
+      "writeCommandPlaceholder": "명령을 작성한 후 전송",
+      "theAgent": "에이전트"
     },
     "contentRow": {
       "dismissCreationWarning": "워크스페이스 생성 경고 닫기"
@@ -2113,13 +2132,19 @@
       "requestFailed": "요청 실패: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "워크스페이스의 전체 이름과 위치를 표시합니다",
       "backToWorktrees": "워크트리로 돌아가기",
       "moreActions": "세션 작업 더 보기",
       "openFileExplorer": "파일 탐색기 열기",
       "openSourceControl": "소스 제어 열기",
       "reconnectToDesktop": "데스크톱에 다시 연결",
       "showSidebar": "사이드바 표시",
-      "terminalTitle": "터미널"
+      "terminalTitle": "터미널",
+      "terminalLayout": "터미널 레이아웃",
+      "fileExplorer": "파일 탐색기",
+      "sourceControl": "소스 제어",
+      "newTab": "새 탭",
+      "quickCommands": "빠른 명령어"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "에이전트 기록",
@@ -2319,7 +2344,8 @@
       "terminal": "터미널",
       "terminalName": "터미널 이름",
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
-      "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다."
+      "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다.",
+      "allowAutoClose": "자동 닫기 허용"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "이 워크스페이스 호스트에서는 활성화된 AI 에이전트가 감지되지 않았습니다.",
@@ -2336,7 +2362,8 @@
       "checkingCapabilities": "데스크톱에서 지원하는 기능을 확인 중입니다. 잠시 후 다시 시도하세요.",
       "newTab": "새 탭",
       "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다.",
-      "tabStatus": "{{title}}, {{status}}"
+      "tabStatus": "{{title}}, {{status}}",
+      "terminalLayout": "터미널 레이아웃"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "터미널 지우기",
@@ -2598,6 +2625,56 @@
       "waitForStart": "에이전트가 시작을 마칠 때까지 기다리세요.",
       "waitForTurn": "에이전트가 응답을 마칠 때까지 기다리거나 에이전트를 중지하세요.",
       "waitMoment": "잠시 기다리세요."
+    },
+    "workerAutoClose": {
+      "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힙니다",
+      "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힙니다",
+      "keepOpen": "열어 두기"
+    },
+    "terminalLayoutSheet": {
+      "title": "터미널 레이아웃",
+      "oneTerminal": "터미널 하나",
+      "selected": "선택됨",
+      "auto": "자동",
+      "autoHint": "사용 가능한 공간에 맞게 분할",
+      "sideBySide": "나란히",
+      "sideBySideHint": "사이드바를 열어도 두 열로 표시",
+      "stacked": "위아래로",
+      "stackedHint": "화면 방향에 관계없이 두 행으로 표시",
+      "selectedHint": "선택됨 · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "레이아웃을 저장할 수 없습니다",
+      "saveFailedMessage": "현재는 이 레이아웃이 적용됩니다. 다시 선택하여 저장을 재시도하세요."
+    },
+    "terminalArrowPad": {
+      "label": "방향키",
+      "hint": "한쪽을 탭하면 방향키를 한 번 누르고, 길게 눌러 드래그하면 반복합니다",
+      "up": "위",
+      "down": "아래",
+      "left": "왼쪽",
+      "right": "오른쪽"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "{{label}} 보내기",
+      "paste": "붙여넣기",
+      "sending": "보내는 중…",
+      "photo": "사진",
+      "file": "파일",
+      "desktopWidth": "데스크톱 너비",
+      "phoneWidth": "휴대폰 너비",
+      "keys": "키",
+      "combos": "조합",
+      "yourKeys": "내 키",
+      "deleteKeyHint": "길게 눌러 이 키 삭제",
+      "addCustomKey": "사용자 지정 키 추가",
+      "addKey": "키 추가"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, 포커스됨",
+      "terminal": "터미널",
+      "tapToFocusPane": "{{title}}, 탭하여 포커스",
+      "inputPane": "{{title}} · 입력"
     }
   },
   "settings": {
@@ -2789,7 +2866,9 @@
       "cherryPickState": "체리픽",
       "mergeState": "병합",
       "rebaseState": "리베이스",
-      "stagedCount": "{{count}}개 스테이징됨"
+      "stagedCount": "{{count}}개 스테이징됨",
+      "completingMerge": "완료 중…",
+      "completeMerge": "병합 완료"
     },
     "branchCompare": {
       "commits_one": "커밋 {{count}}개",
@@ -3228,6 +3307,13 @@
       "branchUnavailable": "브랜치 상태를 확인할 수 없습니다.",
       "commitFailed": "커밋 실패",
       "waitingForDesktop": "데스크톱 연결 대기 중…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "휴대전화에서 병합 충돌을 해결하려면 이 워크스페이스를 실행 중인 컴퓨터의 Orca를 업데이트하세요.",
+      "markResolved": "해결됨으로 표시",
+      "keepFile": "파일 유지",
+      "keepDeletion": "삭제 유지",
+      "completeMergeFailed": "병합을 완료하지 못했습니다"
     }
   },
   "tasks": {
@@ -3894,6 +3980,15 @@
       "inProgress": "진행중",
       "inReview": "리뷰 중",
       "pinned": "고정됨"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "방향 패드 위",
+      "left": "방향 패드 왼쪽",
+      "right": "방향 패드 오른쪽",
+      "down": "방향 패드 아래",
+      "hint": "방향키를 보냅니다. 길게 눌러 반복합니다."
     }
   }
 }

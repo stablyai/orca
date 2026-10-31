@@ -11,12 +11,12 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
-// Host chat settings choose new-launch defaults, never whether paired clients' existing chats restore.
+// Host Chat | CLI choices pick new-launch defaults, never whether paired clients' existing chats restore.
 function makeRuntime(): OrcaRuntimeService {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the runtime members these RPCs read are staged.
   return {
     getRuntimeId: () => 'test-runtime',
-    getClientSettings: vi.fn(() => ({ experimentalNativeChat: false })),
+    getClientSettings: vi.fn(() => ({})),
     restoreStructuredAgentSessionTabs: vi.fn(),
     listMobileSessionTabs: vi.fn().mockResolvedValue(visibleSnapshot())
   } as unknown as OrcaRuntimeService

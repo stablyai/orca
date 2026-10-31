@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 
 /** Choose, display and revalidate the storage destination explicitly; workspace execution cannot infer authority, and stale destinations must preserve the refused form. */
 
@@ -57,7 +58,10 @@ describe('AutomationsPage create destination', () => {
       mocks.state.runtimeStatusByEnvironmentId = new Map()
       addRuntimeProject()
       if (selection === 'explicit') {
-        mocks.state.settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
+        mocks.state.settings = {
+          ...getDefaultSettings('/tmp'),
+          nativeChatProviders: EVERY_AGENT_CHAT
+        }
       }
       mocks.state.automationHostFilter = RUNTIME_SELF_FILTER
 
@@ -95,7 +99,10 @@ describe('AutomationsPage create destination', () => {
       scopedList([])
       runtimeHost([], [])
       addRuntimeProject()
-      mocks.state.settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
+      mocks.state.settings = {
+        ...getDefaultSettings('/tmp'),
+        nativeChatProviders: EVERY_AGENT_CHAT
+      }
       mocks.state.automationHostFilter = RUNTIME_SELF_FILTER
       runtimeCreateReturns(makeAutomation({ id: 'a-new' }))
       observeRuntimeChat(null)
@@ -169,7 +176,7 @@ describe('AutomationsPage create destination', () => {
     runtimeHost([], [])
     addRuntimeProject()
     capableChatDestination()
-    mocks.state.settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
+    mocks.state.settings = { ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT }
     mocks.state.automationHostFilter = RUNTIME_SELF_FILTER
     runtimeCreateReturns(makeAutomation({ id: 'a-new', surface: 'chat' }))
     const { checkRuntimeHooks } = await import('@/runtime/runtime-hooks-client')

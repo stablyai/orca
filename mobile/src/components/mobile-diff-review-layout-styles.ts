@@ -22,7 +22,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   iconButton: {
     width: 44,
     height: 44,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -60,7 +60,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   },
   filterChip: {
     minHeight: 34,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -99,7 +99,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   statusBadge: {
     width: 28,
     height: 28,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center'
@@ -151,7 +151,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   fileNote: {
     minHeight: 44,
     padding: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
@@ -176,7 +176,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel
   },
   hunkButtonPressed: {
@@ -192,7 +192,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusAmber
@@ -236,7 +236,7 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: {

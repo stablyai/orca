@@ -59,7 +59,7 @@ const styles = themedStyleSheet(() => ({
   },
   retryButton: {
     backgroundColor: colors.surfaceBright,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     padding: spacing.md,
     alignItems: 'center'
   },

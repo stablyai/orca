@@ -125,7 +125,7 @@ describe('durable automation outcome publication', () => {
 it.each([1_000, 10_000])(
   'does no history work on idle durable commits with %i retained rows',
   async (size) => {
-    const { store } = await fixture(undefined, (initial) => {
+    const { store } = await fixture(undefined, {}, (initial) => {
       const automation = initial.automations[0]
       const run = initial.automationRuns[0]
       initial.automations = Array.from({ length: size / 100 }, (_, index) => ({
@@ -156,6 +156,7 @@ it.each([1_000, 10_000])(
 it('keeps activation and live outcomes atomic when the first complete write fails', async () => {
   const { store, authority, readState, reopen } = await fixture(
     undefined,
+    {},
     (initial) => {
       delete initial.automationFailureSeenVersion
       initial.automationRuns[0].status = 'dispatch_failed'
@@ -209,7 +210,7 @@ it('keeps activation and live outcomes atomic when the first complete write fail
 })
 
 it.each([1_000, 10_000])('bounds pending membership work at %i raw rows', async (size) => {
-  const { store, authority } = await fixture(undefined, (initial) => {
+  const { store, authority } = await fixture(undefined, {}, (initial) => {
     const run = initial.automationRuns[0]
     initial.automationRuns = Array.from({ length: size }, (_, index) => ({
       ...run,
@@ -263,6 +264,7 @@ it.each([1_000, 10_000])('bounds pending membership work at %i raw rows', async 
 it('loads the committed receipt before a lost primary acknowledgement without reseeding live failures', async () => {
   const { store, authority, readState, loadBeforeAck } = await fixture(
     undefined,
+    {},
     (initial) => {
       delete initial.automationFailureSeenVersion
       initial.automationRuns[0].status = 'dispatch_failed'

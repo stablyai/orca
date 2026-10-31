@@ -10,6 +10,7 @@ import { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-
 import { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
 import { PluginReleaseFirstSeenStore } from '../plugins/catalog/plugin-release-first-seen-store'
+import { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
 import { isPluginAutoUpdateOn } from '../../shared/plugins/catalog/plugin-update-policy'
 import { PluginBundledBootstrapCoordinator } from '../plugins/plugin-bundled-bootstrap-coordinator'
 import { getPluginsDataDir } from '../plugins/plugin-discovery'
@@ -122,6 +123,12 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     }
   })
   state.pluginAutoUpdater = pluginAutoUpdater
+  state.pluginUpdateReviewNotices = new PluginUpdateReviewNotices({
+    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
+    getHeld: () => pluginAutoUpdater.getHeldForReview(),
+    findName: (pluginKey) => pluginService.findValidPlugin(pluginKey)?.manifest.name ?? null,
+    isKillListed: (pluginKey) => Boolean(state.pluginKillListService?.find(pluginKey))
+  })
   // Why packaged only (like the safety list): dev and e2e runs must not update fixtures unasked.
   const autoUpdateScheduled = app.isPackaged || process.env.ORCA_PLUGIN_AUTO_UPDATE === '1'
   const syncPluginAutoUpdate = (runNow: boolean): void => {
