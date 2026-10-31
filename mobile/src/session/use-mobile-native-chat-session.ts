@@ -20,6 +20,15 @@ import {
 } from './native-chat/mobile-native-chat-stream-frame'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
+import type { AgentJournalThreadGoal } from '../../../src/shared/agent-session-journal-types'
+import type { MobileThreadGoalControls } from './use-mobile-structured-thread-goal-controls'
+
+export type MobileNativeChatThreadGoal = {
+  goal: AgentJournalThreadGoal
+  runningTurn: { startedAt: number | null } | null
+  hostClockOffsetMs: number
+  controls?: MobileThreadGoalControls
+}
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -31,6 +40,7 @@ export type MobileNativeChatStatus =
   | 'error'
 
 export type MobileNativeChatSession = {
+  threadGoal?: MobileNativeChatThreadGoal | null
   messages: NativeChatMessage[]
   status: MobileNativeChatStatus
   // Unsettled reads or passive resets may still hold another tab’s history; wait before interpreting empty messages as a seed/retirement boundary.

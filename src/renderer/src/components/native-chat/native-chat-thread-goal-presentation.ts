@@ -1,24 +1,25 @@
 import { translate } from '@/i18n/i18n'
 import type { AgentJournalThreadGoalStatus } from '../../../../shared/agent-session-journal-types'
+import { nativeChatThreadGoalStatusKey } from '../../../../shared/native-chat-thread-goal-copy'
 
 /** Active goals read as pursued only during a running turn; between turns they remain set. */
 export function nativeChatThreadGoalStatusLabel(
   status: AgentJournalThreadGoalStatus,
   working: boolean
 ): string | null {
-  switch (status) {
-    case 'active':
-      return working
-        ? translate('components.native-chat.goal.pursuing', 'Pursuing goal')
-        : translate('components.native-chat.goal.set', 'Goal set')
+  const key = nativeChatThreadGoalStatusKey(status, working)
+  switch (key) {
+    case 'pursuing':
+      return translate('components.native-chat.goal.pursuing', 'Pursuing goal')
+    case 'set':
+      return translate('components.native-chat.goal.set', 'Goal set')
     case 'paused':
       return translate('components.native-chat.goal.paused', 'Paused goal')
     case 'blocked':
       return translate('components.native-chat.goal.blocked', 'Goal blocked')
-    case 'usageLimited':
-    case 'budgetLimited':
+    case 'limited':
       return translate('components.native-chat.goal.limited', 'Goal limited')
-    case 'complete':
+    case null:
       return null
   }
 }

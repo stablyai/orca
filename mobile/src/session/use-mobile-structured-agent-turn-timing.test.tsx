@@ -62,14 +62,19 @@ describe('useMobileStructuredAgentTurnTiming', () => {
     items,
     submissions = NO_SUBMISSIONS,
     turnId,
-    hostClock
+    hostClock,
+    threadGoalReport
   }: {
     items: readonly AgentJournalRenderItem[]
     submissions?: readonly AgentJournalSubmission[]
     turnId: string | null
     hostClock?: { hostNow: number; receivedAt: number }
+    threadGoalReport?: Parameters<typeof useMobileStructuredAgentTurnTiming>[0]['threadGoalReport']
   }): null {
-    timing = useMobileStructuredAgentTurnTiming({ items, submissions, hostClock }, turnId)
+    timing = useMobileStructuredAgentTurnTiming(
+      { items, submissions, hostClock, threadGoalReport },
+      turnId
+    )
     return null
   }
 
@@ -145,6 +150,39 @@ describe('useMobileStructuredAgentTurnTiming', () => {
       )
     )
     expect(timing?.workingStartedAt).toBe(CLIENT_NOW + 60_000 - 40_000)
+  })
+
+  it('holds the reported goal duration until a host clock sample arrives', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(CLIENT_NOW)
+    const goal = {
+      objective: 'Measure the host goal',
+      status: 'active' as const,
+      tokenBudget: null,
+      tokensUsed: 0,
+      timeUsedSeconds: 30,
+      createdAt: HOST_START,
+      updatedAt: HOST_START
+    }
+    const items = [
+      user('u1', 1),
+      lifecycle('t1', 2, { state: 'running', startedAt: HOST_START }, HOST_START)
+    ]
+    const props = { items, turnId: 't1', threadGoalReport: { current: goal } }
+    act(() => {
+      renderer = create(createElement(Harness, props))
+    })
+    expect(timing?.threadGoal?.goal).toEqual(goal)
+    expect(timing?.threadGoal?.runningTurn).toBeNull()
+    act(() =>
+      renderer?.update(
+        createElement(Harness, {
+          ...props,
+          hostClock: { hostNow: HOST_START + 1000, receivedAt: CLIENT_NOW }
+        })
+      )
+    )
+    expect(timing?.threadGoal?.runningTurn).toEqual({ startedAt: HOST_START })
   })
 
   it('leaves the anchor null when an older host records no start', () => {

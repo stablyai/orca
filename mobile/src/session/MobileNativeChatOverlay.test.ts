@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
+import type { MobileNativeChatThreadGoal } from './use-mobile-native-chat-session'
 import type { MobileImageSource } from '../platform/media-picker-contract'
 import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
@@ -37,13 +38,18 @@ type Tick = {
   activeTabId?: string | null
   setTabView?: (tabId: string, view: 'terminal') => void
   attachImage?: (source: MobileImageSource) => Promise<void>
+  threadGoal?: MobileNativeChatThreadGoal | null
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the overlay reads only these controller members; the rest of the controller is unreachable from it.
   const controller = {
     showNativeChat: tick.show ?? true,
-    nativeChatSession: { messages: tick.messages ?? [], status: 'ready' },
+    nativeChatSession: {
+      messages: tick.messages ?? [],
+      status: 'ready',
+      threadGoal: tick.threadGoal
+    },
     nativeChatAgent: tick.agent ?? 'claude',
     nativeChatStructured: tick.structured ?? false,
     setTabView: tick.setTabView ?? vi.fn(),
@@ -96,7 +102,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
   })
 }
 
-describe("MobileNativeChatOverlay while a person's Stop ends the turn", () => {
+describe('MobileNativeChatOverlay controller state', () => {
   let renderer: ReactTestRenderer | null = null
 
   afterEach(() => {
@@ -111,6 +117,30 @@ describe("MobileNativeChatOverlay while a person's Stop ends the turn", () => {
     const view = findByHostType(renderer!.root, 'ChatView')
     return view.props.composerTray?.content?.props?.children?.[1]?.props?.steerHeld
   }
+
+  it('passes the structured goal through the overlay and removes it when cleared', async () => {
+    const threadGoal: MobileNativeChatThreadGoal = {
+      goal: {
+        objective: 'Finish the mobile work',
+        status: 'paused',
+        tokenBudget: null,
+        tokensUsed: 0,
+        timeUsedSeconds: 12,
+        createdAt: 1,
+        updatedAt: 2
+      },
+      runningTurn: null,
+      hostClockOffsetMs: 0
+    }
+    await act(async () => {
+      renderer = create(overlayElement({ structured: true, threadGoal }))
+    })
+    expect(findByHostType(renderer!.root, 'ChatView').props.threadGoal).toEqual(threadGoal)
+    await act(async () => {
+      renderer?.update(overlayElement({ structured: true, threadGoal: null }))
+    })
+    expect(findByHostType(renderer!.root, 'ChatView').props.threadGoal).toBeNull()
+  })
 
   it("holds the queued cards' Steer while the agent works and the host says Stopping", async () => {
     expect(await steerHeld({ stopping: true })).toBe(true)

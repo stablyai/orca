@@ -172,6 +172,8 @@ export function hostTestRestingOptionsJournal(
 ) {
   return {
     threadGoal: () => null,
+    threadGoalSource: () => ({ goal: null, row: null }),
+    cursor: () => ({ epoch: 'epoch-1', sequence: items.length }),
     visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) =>
       items.forEach((body, index) => visit(`item-${index}`, index + 1, body)),
     wroteBeforeOpen: () => wroteBeforeOpen,

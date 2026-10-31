@@ -1,3 +1,4 @@
+import { hostTestRestingOptionsJournal } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 // Before start, new-chat options must match the workspace catalog's first model/effort frame so the picker stays stable.
@@ -218,13 +219,7 @@ function host(agent: string, record: AgentSessionRecord) {
   const resting = {
     child: null,
     params: { provider: agent },
-    journal: {
-      threadGoal: () => null,
-      visitItems: () => {},
-      submissions: () => [],
-      contextUsage: () => null,
-      context: { floor: () => null }
-    }
+    journal: hostTestRestingOptionsJournal()
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the at-rest read touches only these members.
   const context = {

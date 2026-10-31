@@ -1286,6 +1286,20 @@
       "title": "Something went wrong",
       "tryAgain": "Try again",
       "home": "Home"
+    },
+    "native-chat": {
+      "goal": {
+        "pause": "Pause goal",
+        "set": "Goal set",
+        "limited": "Goal limited",
+        "paused": "Paused goal",
+        "resume": "Resume goal",
+        "blocked": "Goal blocked",
+        "collapse": "Hide full goal",
+        "expand": "Show full goal",
+        "clear": "Clear goal",
+        "pursuing": "Pursuing goal"
+      }
     }
   },
   "pullRequest": {

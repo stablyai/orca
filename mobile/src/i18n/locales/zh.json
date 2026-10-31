@@ -1009,6 +1009,20 @@
       "title": "出了点问题",
       "tryAgain": "重试",
       "home": "首页"
+    },
+    "native-chat": {
+      "goal": {
+        "pause": "暂停目标",
+        "set": "目标已设定",
+        "limited": "目标受限",
+        "paused": "目标已暂停",
+        "resume": "恢复目标",
+        "blocked": "目标受阻",
+        "collapse": "隐藏完整目标",
+        "expand": "显示完整目标",
+        "clear": "清除目标",
+        "pursuing": "正在追求目标"
+      }
     }
   },
   "connection": {

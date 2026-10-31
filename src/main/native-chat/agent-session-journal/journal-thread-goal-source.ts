@@ -8,6 +8,7 @@ import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/a
 
 export type JournalThreadGoalSource = {
   goal: AgentJournalThreadGoal | null
+  transition?: Pick<AgentJournalRenderItem, 'sequence' | 'revision'>
   row: { identity: AgentJournalItemIdentity; text: string } | null
 }
 
@@ -19,6 +20,7 @@ export function journalThreadGoalSource(
   const identity = item ? parseAgentJournalItemKey(item.itemId) : null
   return {
     goal: source?.goal ?? null,
+    ...(item ? { transition: { sequence: item.sequence, revision: item.revision } } : {}),
     row:
       source?.goal && item?.body.kind === 'status' && identity
         ? { identity, text: item.body.text }

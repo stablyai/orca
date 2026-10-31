@@ -194,6 +194,7 @@ export function MobileNativeChatOverlay({
                     canStop={controller.nativeChatCanStop}
                     structuredActivityUi={controller.nativeChatStructured}
                     turnIndicator={controller.nativeChatTurnIndicator}
+                    threadGoal={session.threadGoal}
                     workingStartedAt={controller.nativeChatWorkingStartedAt}
                     settledTurns={controller.nativeChatSettledTurns}
                     turnJournal={controller.nativeChatTurnJournal}

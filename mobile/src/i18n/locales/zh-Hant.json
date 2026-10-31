@@ -1009,6 +1009,20 @@
       "title": "發生錯誤",
       "tryAgain": "再試一次",
       "home": "首頁"
+    },
+    "native-chat": {
+      "goal": {
+        "pause": "暫停目標",
+        "set": "目標已設定",
+        "limited": "目標受限",
+        "paused": "目標已暫停",
+        "resume": "恢復目標",
+        "blocked": "目標受阻",
+        "collapse": "隱藏完整目標",
+        "expand": "顯示完整目標",
+        "clear": "清除目標",
+        "pursuing": "正在追求目標"
+      }
     }
   },
   "connection": {

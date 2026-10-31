@@ -27,9 +27,19 @@ import { formatNativeChatFileReference } from '../../../shared/agent-image-paste
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performThreadGoalChange, threadGoalPlan } from './structured-agent-session-thread-goal'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
-import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
+import {
+  claudeAndCodexAgents,
+  claudeAndCodexDeclared
+} from './structured-agent-session-adapter-router-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+
+import { readStructuredAgentSessionOptions } from './structured-agent-session-options-read'
+import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import {
+  hostTestOptionsReadStore,
+  hostTestRestingOptionsRecord
+} from './structured-agent-session-host-test-data'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -759,3 +769,47 @@ it.each(['step', 'batch'] as const)(
     }
   }
 )
+
+it('reports the exact goal transition revision for independent options and history reads', async () => {
+  const journal = await openJournal()
+  await appendGoalRow(journal, {})
+  const session = { params: { provider: 'codex' }, journal }
+  const record = hostTestRestingOptionsRecord(IDENTITY.sessionId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these option-reader context fields are used; the journal itself is real.
+  const context = {
+    deps: {
+      adapter: {},
+      agents: claudeAndCodexDeclared(),
+      store: hostTestOptionsReadStore(() => record),
+      modelCatalog: { read: async () => ({ origin: 'unknown' }) }
+    },
+    serialize: (_id: string, task: () => Promise<unknown>) => task(),
+    openConversation: async () => session,
+    conversation: async () => session
+  } as unknown as StructuredAgentSessionMutationContext
+  for (const cleared of [false, true]) {
+    if (cleared) {
+      await journal.appendItem(
+        { provider: 'orca', clientMessageId: 'clear-watermark' },
+        {
+          kind: 'status',
+          text: 'Goal cleared',
+          threadGoal: { state: 'cleared' }
+        },
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    }
+    const latest = journal.snapshot().items.at(-1)!
+    const report = await readStructuredAgentSessionOptions(context, IDENTITY.sessionId, {
+      readsWithoutModel: true
+    })
+    expect.soft(report.threadGoal).toMatchObject({
+      current: cleared ? null : GOAL,
+      source: {
+        epoch: journal.cursor().epoch,
+        sequence: latest.sequence,
+        revision: latest.revision
+      }
+    })
+  }
+})

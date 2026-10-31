@@ -28,7 +28,6 @@ import type {
   MobileStructuredAgentSessionArgs,
   StructuredMobileSession
 } from './mobile-structured-agent-session-contract'
-import type { MobileNativeChatVisualSource } from './native-chat/visual/mobile-native-chat-visual-read'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press'
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
@@ -89,21 +88,19 @@ export function useMobileStructuredAgentSession(
   })
 
   const optionStamp = useMobileStructuredSessionOptionStamp({
-    client,
-    sessionId,
+    ...stateArgs,
     enabled: enabled && connected && hostSupport?.statusFeed === true
   })
   const turnId = runningStructuredAgentSessionTurnId(state)
   const options = useMobileStructuredAgentOptions({
+    ...stateArgs,
     agent,
-    client,
-    sessionId,
-    enabled,
     fence: state.fence,
     mutate,
     optionStamp,
     turnId,
-    hostSupport
+    hostSupport,
+    goalActions: { enabled: enabled && connected && state.status === 'ready', onSendError }
   })
   const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
     options
@@ -149,8 +146,9 @@ export function useMobileStructuredAgentSession(
     [transcriptItems, sends.optimistic, state.submissions]
   )
   const turnTiming = useMobileStructuredAgentTurnTiming(
-    { ...state, items: transcriptItems },
-    turnId
+    { ...state, threadGoalReport: options.threadGoalReport, connected },
+    turnId,
+    transcriptItems
   )
   const isWorking = structuredAgentSessionHostSaysWorking(state.working, () =>
     isStructuredAgentSessionMainAgentWorking(turnId, state.submissions, state.fence)
@@ -164,8 +162,7 @@ export function useMobileStructuredAgentSession(
     mutate
   })
   const hostStopping = useMobileStructuredSessionHostStopping({
-    client,
-    sessionId,
+    ...stateArgs,
     enabled: enabled && connected && hostSupport?.statusFeed === true
   })
   const stopPress = useMobileStructuredStopPress(sessionKey)
@@ -266,10 +263,13 @@ export function useMobileStructuredAgentSession(
     ]
   )
 
-  const visualSource = useMemo<MobileNativeChatVisualSource | null>(
+  const visualSource = useMemo(
     () => (client && sessionId ? { client, sessionId } : null),
     [client, sessionId]
   )
+  const threadGoal = turnTiming.threadGoal
+    ? { ...turnTiming.threadGoal, controls: options.threadGoalControls }
+    : null
 
   return {
     ...options,
@@ -278,6 +278,7 @@ export function useMobileStructuredAgentSession(
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     session: {
       messages,
+      threadGoal,
       status,
       transcriptLoading: status === 'loading',
       error: state.error,
@@ -292,6 +293,7 @@ export function useMobileStructuredAgentSession(
     turnId,
     turnIndicator,
     ...turnTiming,
+    threadGoal,
     sendWithOutcome,
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>

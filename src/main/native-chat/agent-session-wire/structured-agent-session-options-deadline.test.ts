@@ -1,3 +1,4 @@
+import { hostTestRestingOptionsJournal as restingJournal } from './structured-agent-session-host-test-data'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { it, expect, vi } from 'vitest'
 import { createClaudeModelCatalogProbe } from '../../claude/claude-model-catalog-probe'
@@ -9,15 +10,6 @@ import type { StructuredAgentSessionMutationContext } from './structured-agent-s
 import { readStructuredAgentSessionOptions } from './structured-agent-session-options-read'
 
 const SESSION = 'session-1'
-function restingJournal() {
-  return {
-    threadGoal: () => null,
-    visitItems: () => {},
-    submissions: () => [],
-    contextUsage: () => null,
-    context: { floor: () => null }
-  }
-}
 
 it('keeps one legacy deadline across an optional join and current resting read', async () => {
   vi.useFakeTimers()

@@ -77,6 +77,7 @@ vi.mock('./native-chat/input/MobileNativeChatQueuedMessages', () => ({
 vi.mock('./native-chat/visual/MobileNativeChatVisual', () => ({
   useMobileNativeChatVisualRenderer: () => null
 }))
+vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('./native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./native-chat/input/MobileNativeChatPermission', () => ({

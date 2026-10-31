@@ -6,6 +6,7 @@ import type {
 } from './agent-session-journal-types'
 import {
   agentSessionThreadGoalElapsedSeconds,
+  agentSessionThreadGoalFromReport,
   agentSessionThreadGoalStatusChange,
   currentAgentSessionThreadGoal,
   currentAgentSessionThreadGoalSourceBySequence,
@@ -108,6 +109,83 @@ describe('current thread goal', () => {
     // A newer provider status must not read as a known one.
     const future = goalRow(5, 'set', Object.assign(goal(), { status: 'snoozed' }))
     expect(currentAgentSessionThreadGoal([goalRow(1, 'set'), future])).toBeNull()
+  })
+})
+
+describe('thread goal report epoch ownership', () => {
+  it.each(['set', 'cleared'] as const)(
+    'keeps the report when a %s row belongs to another epoch',
+    (state) => {
+      const reported = goal({ objective: 'Current conversation goal' })
+      const loaded = goal({ objective: 'Previous conversation goal' })
+      const report = { current: reported, contextFloor: { epoch: 'current', sequence: 2 } }
+      const items = [goalRow(3, state, loaded)]
+      expect.soft(agentSessionThreadGoalFromReport(items, report, 'previous')).toEqual(reported)
+      expect
+        .soft(agentSessionThreadGoalFromReport(items, report, 'current'))
+        .toEqual(state === 'set' ? loaded : null)
+    }
+  )
+
+  it('does not revive another epoch after the reported goal was cleared', () => {
+    expect(
+      agentSessionThreadGoalFromReport(
+        [goalRow(3, 'set')],
+        {
+          current: null,
+          contextFloor: { epoch: 'current', sequence: 2 }
+        },
+        'previous'
+      )
+    ).toBeNull()
+  })
+})
+
+describe('thread goal report freshness', () => {
+  it.each(['set', 'cleared'] as const)(
+    'does not replace a newer %s report with stale loaded history',
+    (state) => {
+      const reported = state === 'set' ? goal({ objective: 'Latest goal' }) : null
+      const report = { current: reported, source: { epoch: 'epoch', sequence: 5, revision: 1 } }
+      expect(agentSessionThreadGoalFromReport([goalRow(3, 'set')], report, 'epoch')).toEqual(
+        reported
+      )
+    }
+  )
+
+  it('compares revisions when accounting updates reuse the source row sequence', () => {
+    const reported = goal({ tokensUsed: 20 })
+    const report = { current: reported, source: { epoch: 'epoch', sequence: 3, revision: 2 } }
+    expect
+      .soft(agentSessionThreadGoalFromReport([goalRow(3, 'set')], report, 'epoch'))
+      .toEqual(reported)
+    const newer = goal({ tokensUsed: 30 })
+    expect
+      .soft(
+        agentSessionThreadGoalFromReport(
+          [{ ...goalRow(3, 'set', newer), revision: 3 }],
+          report,
+          'epoch'
+        )
+      )
+      .toEqual(newer)
+    expect
+      .soft(agentSessionThreadGoalFromReport([goalRow(6, 'cleared')], report, 'epoch'))
+      .toBeNull()
+  })
+
+  it('keeps a sourced report when another journal epoch is still loaded', () => {
+    const reported = goal({ objective: 'Current epoch goal' })
+    expect(
+      agentSessionThreadGoalFromReport(
+        [goalRow(9, 'cleared')],
+        {
+          current: reported,
+          source: { epoch: 'current', sequence: 3, revision: 1 }
+        },
+        'previous'
+      )
+    ).toEqual(reported)
   })
 })
 

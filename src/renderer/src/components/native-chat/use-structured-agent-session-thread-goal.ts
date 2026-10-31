@@ -3,7 +3,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
 } from '../../../../shared/agent-session-journal-types'
-import { currentAgentSessionThreadGoal } from '../../../../shared/agent-session-thread-goal'
+import { agentSessionThreadGoalFromReport } from '../../../../shared/agent-session-thread-goal'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
 import type {
   AgentSessionThreadGoalChange,
@@ -35,16 +35,10 @@ export function useStructuredAgentSessionThreadGoal(args: {
   const { journalItems, mutate, support, reported, journalEpoch, send } = args
   const [pendingCount, setPendingCount] = useState(0)
   const report = support ?? reported
-  // Loaded rows reach the live head and outrank older whole-journal goal evidence.
-  const floor =
-    report?.contextFloor && (!journalEpoch || report.contextFloor.epoch === journalEpoch)
-      ? report.contextFloor.sequence
-      : 0
-  const loaded = useMemo(
-    () => currentAgentSessionThreadGoal(journalItems, floor),
-    [journalItems, floor]
+  const goal = useMemo(
+    () => agentSessionThreadGoalFromReport(journalItems, report, journalEpoch),
+    [journalItems, report, journalEpoch]
   )
-  const goal = loaded === undefined ? (report?.current ?? null) : loaded
   const hostChanges = support !== undefined
   const change = useCallback(
     async (next: AgentSessionThreadGoalChange): Promise<boolean> => {

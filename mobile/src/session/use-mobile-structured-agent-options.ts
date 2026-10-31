@@ -28,6 +28,7 @@ import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalo
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import { encodeStructuredAgentSessionOptionValue } from '../../../src/shared/structured-agent-session-option-codec'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
+import { useMobileStructuredThreadGoalControls } from './use-mobile-structured-thread-goal-controls'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
@@ -35,11 +36,13 @@ export function useMobileStructuredAgentOptions(args: {
   agent: string | null
   client: RpcClient | null
   sessionId: string | null
+  sessionKey?: string
   enabled: boolean
   fence: number | null
   turnId: string | null
   mutate: StructuredAgentSessionMutate
   optionStamp?: string
+  goalActions?: { enabled: boolean; onSendError: (message: string) => void }
   hostSupport: Pick<
     StructuredAgentSessionHostSupport,
     | 'permissionModes'
@@ -70,6 +73,8 @@ export function useMobileStructuredAgentOptions(args: {
     updateOptionState,
     conversationSupport,
     imageSupport,
+    threadGoalReport,
+    threadGoalHostChanges,
     awaitingOptions,
     receiveCatalog,
     isCurrentContext,
@@ -85,6 +90,7 @@ export function useMobileStructuredAgentOptions(args: {
     turnId,
     client,
     optionStamp,
+    sessionKey: args.sessionKey,
     sendSelection: hostSupport?.sendSelection === true,
     newLaunch: createdHere !== undefined,
     worktree: createdHere?.worktree,
@@ -260,7 +266,20 @@ export function useMobileStructuredAgentOptions(args: {
       readOptionState
     })
 
+  const threadGoalControls = useMobileStructuredThreadGoalControls({
+    sessionKey: args.sessionKey ?? sessionId ?? '',
+    client,
+    fence,
+    enabled: args.goalActions?.enabled === true,
+    supported: threadGoalHostChanges,
+    mutate,
+    reread,
+    onSendError: args.goalActions?.onSendError ?? (() => {})
+  })
+
   return {
+    threadGoalReport,
+    threadGoalControls,
     optionPickerRequest,
     conversationCommands:
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : NO_COMMANDS,

@@ -44,6 +44,9 @@ vi.mock('node:fs/promises', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).fsPromisesModuleMock(await importOriginal())
 )
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('../../startup/login-shell-environment', () => ({
+  resolveLoginShellEnvironment: async () => ({})
+}))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )

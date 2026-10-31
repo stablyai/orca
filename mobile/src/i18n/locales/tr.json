@@ -1013,6 +1013,20 @@
       "title": "Bir sorun oluştu",
       "tryAgain": "Tekrar dene",
       "home": "Ana sayfa"
+    },
+    "native-chat": {
+      "goal": {
+        "pause": "Hedefi duraklat",
+        "set": "Hedef belirlendi",
+        "limited": "Hedef sınırına ulaşıldı",
+        "paused": "Hedef duraklatıldı",
+        "resume": "Hedefe devam et",
+        "blocked": "Hedef engellendi",
+        "collapse": "Hedefin tamamını gizle",
+        "expand": "Hedefin tamamını göster",
+        "clear": "Hedefi temizle",
+        "pursuing": "Hedef üzerinde çalışılıyor"
+      }
     }
   },
   "connection": {

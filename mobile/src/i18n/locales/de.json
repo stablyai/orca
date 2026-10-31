@@ -1013,6 +1013,20 @@
       "title": "Etwas ist schiefgelaufen",
       "tryAgain": "Erneut versuchen",
       "home": "Startseite"
+    },
+    "native-chat": {
+      "goal": {
+        "pause": "Ziel pausieren",
+        "set": "Ziel festgelegt",
+        "limited": "Ziel eingeschränkt",
+        "paused": "Pausiertes Ziel",
+        "resume": "Ziel fortsetzen",
+        "blocked": "Ziel blockiert",
+        "collapse": "Vollständiges Ziel ausblenden",
+        "expand": "Vollständiges Ziel anzeigen",
+        "clear": "Ziel entfernen",
+        "pursuing": "Ziel wird verfolgt"
+      }
     }
   },
   "connection": {

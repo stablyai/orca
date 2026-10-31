@@ -165,10 +165,13 @@ export function threadGoalPlan(params: {
 export function structuredAgentSessionThreadGoalReport(
   hostChangesGoal: boolean,
   current: AgentJournalThreadGoal | null,
-  contextFloor: { contextFloor?: AgentJournalCursor }
+  contextFloor: { contextFloor?: AgentJournalCursor },
+  source?: NonNullable<AgentSessionOptionsResult['threadGoal']>['source']
 ): Pick<AgentSessionOptionsResult, 'threadGoal' | 'reportedThreadGoal'> {
   if (hostChangesGoal) {
-    return { threadGoal: { current, ...contextFloor } }
+    return { threadGoal: { current, ...contextFloor, ...(source ? { source } : {}) } }
   }
-  return current ? { reportedThreadGoal: { current, ...contextFloor } } : {}
+  return current
+    ? { reportedThreadGoal: { current, ...contextFloor, ...(source ? { source } : {}) } }
+    : {}
 }

@@ -1,5 +1,5 @@
 import { resolveMobileNativeChatRowProps } from './native-chat/transcript/use-mobile-native-chat-row-props'
-import { createElement, type ReactElement } from 'react'
+import { createElement, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -11,6 +11,19 @@ import {
   pageScroller
 } from './MobileNativeChatView.render-stubs.test-fixture'
 
+vi.mock('../components/BottomDrawer', async () => {
+  const { createElement } = await import('react')
+  return {
+    BottomDrawer: ({
+      children,
+      ...props
+    }: {
+      children: ReactNode
+      visible: boolean
+      onClose: () => void
+    }) => (props.visible ? createElement('GoalDrawer', props, children) : null)
+  }
+})
 vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
@@ -32,6 +45,7 @@ export type Overrides = {
   onSend?: (text: string) => Promise<boolean>
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
   structuredActivityUi?: boolean
+  threadGoal?: Parameters<typeof MobileNativeChatView>[0]['threadGoal']
   turnIndicator?: Parameters<typeof MobileNativeChatView>[0]['turnIndicator']
   agentWorking?: boolean
   canStop?: boolean
