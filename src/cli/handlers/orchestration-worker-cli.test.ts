@@ -15,7 +15,7 @@ import { formatCommandHelp } from '../help'
 import { buildAgentContext } from '../agent-context'
 import { suggestCommands } from '../command-suggestion'
 import { okFixture } from '../test-fixtures'
-import { RuntimeClient } from '../runtime-client'
+import { RuntimeClient, RuntimeClientError } from '../runtime-client'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from '../specs/orchestration-worker-specs'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
@@ -799,48 +799,46 @@ describe('orchestration worker-start CLI contract', () => {
     expect(printedText()).toContain('keptOpen=true')
   })
 
-  it('reports a --keep-open start whose terminal was not kept open as a failure', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    callMock.mockImplementation(async (method: string) =>
-      method === 'orchestration.workerStart'
-        ? { result: { taskId: 'task_1', dispatchId: 'ctx_1', state: 'ready', effects: [] } }
-        : {
-            result: {
-              dispatchId: 'ctx_1',
-              state: 'already_released',
-              processAction: 'none',
-              archive: null
-            }
-          }
-    )
-    await invokeWorkerStart(
-      new Map<string, string | boolean>([
-        ['task', 'task_1'],
-        ['agent', 'codex'],
-        ['keep-open', true]
-      ]),
-      false
-    )
-    const text = printedText()
-    expect(text).not.toContain('keptOpen')
-    expect(text).toContain('keepOpenState=already_released')
-    expect(text).toContain('worker-read --dispatch ctx_1')
-    expect(process.exitCode).toBe(1)
-
-    vi.mocked(console.log).mockClear()
-    await invokeWorkerStart(
-      new Map<string, string | boolean>([
-        ['task', 'task_1'],
-        ['agent', 'codex'],
-        ['keep-open', true],
-        ['full', true]
-      ]),
-      false
-    )
-    const full = printedText()
-    expect(full).toContain('Keep open: already_released')
-    expect(full).toContain('worker-read --dispatch ctx_1')
-  })
+  it.each([
+    [
+      'receipt',
+      { result: { dispatchId: 'ctx_1', state: 'already_released', processAction: 'none' } }
+    ],
+    ['error', new RuntimeClientError('runtime_unavailable', 'gone')]
+  ])(
+    'prints the start receipt then fails a --keep-open that was not kept (%s)',
+    async (_, retain) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      callMock.mockImplementation(async (method: string) => {
+        if (method === 'orchestration.workerStart') {
+          return { result: { taskId: 'task_1', dispatchId: 'ctx_1', state: 'ready', effects: [] } }
+        }
+        if (method === 'orchestration.workerRetain' && retain instanceof Error) {
+          throw retain
+        }
+        return retain
+      })
+      await invokeWorkerStart(
+        new Map<string, string | boolean>([
+          ['task', 'task_1'],
+          ['agent', 'codex'],
+          ['keep-open', true]
+        ]),
+        false
+      )
+      const text = printedText()
+      expect(text).toContain('dispatchId=ctx_1')
+      expect(text).not.toContain('keptOpen')
+      const error = String(vi.mocked(console.error).mock.calls[0]?.[0])
+      expect(error).toContain('not_kept_open')
+      expect(error).toContain(
+        retain instanceof Error
+          ? 'worker-keep-open --dispatch ctx_1'
+          : 'worker-read --dispatch ctx_1'
+      )
+      expect(process.exitCode).toBe(1)
+    }
+  )
 
   it('does not tell a coordinator that chat workers skip automatic release', () => {
     const spec = ORCHESTRATION_WORKER_COMMAND_SPECS.find(

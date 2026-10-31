@@ -1,15 +1,10 @@
 import {
   renderOrchestrationArgv,
   resolveOrcaCommandsInText,
-  type OrchestrationAgentView,
-  type OrchestrationFailure
+  type OrchestrationAgentView
 } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
-import {
-  formatWorkerStart,
-  type WorkerReleaseReceipt,
-  type WorkerStartReceipt
-} from './worker-output'
+import { formatWorkerStart, type WorkerStartReceipt } from './worker-output'
 
 type LaunchChoice = {
   agent?: string | null
@@ -25,8 +20,7 @@ export type WorkerStartAgentReceipt = WorkerStartReceipt & {
   stage?: string
   turnStart?: string
   next?: string
-  /** The retain receipt for --keep-open. */
-  keepOpen?: WorkerReleaseReceipt
+  keptOpen?: true
 }
 
 // A hook-capable agent that has not shown its turn yet is usually slow, not dead; a resend duplicates the task.
@@ -57,7 +51,6 @@ type WorkerStartFields = {
   residualResources?: string[]
   nextCommands?: string[]
   keptOpen?: true
-  keepOpenState?: string
   next?: string
 }
 
@@ -69,7 +62,6 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
       const fellBack = value.mode?.mode !== undefined && value.mode.mode !== value.mode.preferred
       const residual = (value.residualResources ?? []).map(describeEffect)
       const unobserved = isUnobservedTurnStart(value)
-      const notKept = notKeptOpen(value)
       return {
         dispatchId: value.dispatchId,
         taskId: value.taskId,
@@ -93,30 +85,17 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         residualResources:
           value.state !== 'ready' && !unobserved && residual.length ? residual : undefined,
         nextCommands: value.state === 'ready' || unobserved ? undefined : value.nextCommands,
-        keptOpen: value.keepOpen?.state === 'retained' ? true : undefined,
-        keepOpenState: notKept?.state,
-        next: notKept
-          ? keepOpenNext(notKept)
-          : unobserved
-            ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
-            : value.recovery
-              ? resolveOrcaCommandsInText(value.recovery)
-              : value.next && resolveOrcaCommandsInText(value.next)
+        keptOpen: value.keptOpen,
+        next: unobserved
+          ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
+          : value.recovery
+            ? resolveOrcaCommandsInText(value.recovery)
+            : value.next && resolveOrcaCommandsInText(value.next)
       }
     },
-    fullText: (value) => {
-      const notKept = notKeptOpen(value)
-      const keepOpen = value.keepOpen
-        ? `\nKeep open: ${value.keepOpen.state}${value.keepOpen.lastError ? `: ${value.keepOpen.lastError}` : ''}`
-        : ''
-      return withReceiptNext(
-        `${formatWorkerStart(value)}${keepOpen}`,
-        notKept ? { next: keepOpenNext(notKept) } : value
-      )
-    },
+    fullText: (value) => withReceiptNext(formatWorkerStart(value), value),
     failure: (value) =>
-      keepOpenFailure(value) ??
-      (value.state === 'ready'
+      value.state === 'ready'
         ? undefined
         : isUnobservedTurnStart(value)
           ? {
@@ -130,31 +109,8 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
           : {
               code: value.state === 'outcome_unknown' ? 'start_outcome_unknown' : 'start_failed',
               message: `${value.failedStage ?? 'start'}: ${value.lastError ?? value.state}`
-            })
+            }
   }
-
-function notKeptOpen(value: WorkerStartAgentReceipt): WorkerReleaseReceipt | undefined {
-  return value.keepOpen && value.keepOpen.state !== 'retained' ? value.keepOpen : undefined
-}
-
-// The worker runs either way, so this fails the call without inviting a second start.
-function keepOpenFailure(value: WorkerStartAgentReceipt): OrchestrationFailure | undefined {
-  const receipt = notKeptOpen(value)
-  return receipt
-    ? {
-        code: 'not_kept_open',
-        message: `${value.dispatchId} started but its terminal is ${receipt.state}${receipt.lastError ? `: ${receipt.lastError}` : ''}`
-      }
-    : undefined
-}
-
-function keepOpenNext(receipt: WorkerReleaseReceipt): string {
-  if (receipt.recovery) {
-    return resolveOrcaCommandsInText(receipt.recovery)
-  }
-  const verb = receipt.state === 'already_released' ? 'worker-read' : 'worker-show'
-  return `Run ${renderOrchestrationArgv(['orchestration', verb, '--dispatch', receipt.dispatchId])}.`
-}
 
 function findEffectId(
   effects: unknown[] | undefined,

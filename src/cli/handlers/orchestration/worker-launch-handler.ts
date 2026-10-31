@@ -12,7 +12,11 @@ import {
   WORKER_START_VIEW,
   type WorkerStartAgentReceipt
 } from './worker-start-agent-view'
-import { printOrchestrationResult, renderOrchestrationArgv } from './agent-view'
+import {
+  printOrchestrationResult,
+  renderOrchestrationArgv,
+  reportOrchestrationFailure
+} from './agent-view'
 import type { WorkerReleaseReceipt } from './worker-output'
 import { explainOlderRuntimeRunRequired } from './older-runtime-run-binding'
 import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
@@ -72,14 +76,16 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     ).catch(async (error: unknown) => {
       throw await explainOlderRuntimeRunRequired(client, error)
     })
-    const keepOpen = flags.has('keep-open')
-      ? await keepStartedWorkerOpen(client, result.result)
-      : undefined
+    const keepOpenState =
+      flags.has('keep-open') &&
+      (result.result.state === 'ready' || isUnobservedTurnStart(result.result))
+        ? await keepWorkerOpen(client, result.result.dispatchId)
+        : undefined
     const renderedResult = {
       ...result,
       result: {
         ...result.result,
-        ...(keepOpen ? { keepOpen } : {}),
+        ...(keepOpenState === 'retained' ? { keptOpen: true as const } : {}),
         ...(result.result.nextCommands
           ? {
               nextCommands: result.result.nextCommands.map((command) =>
@@ -90,30 +96,24 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       }
     }
     printOrchestrationResult(renderedResult, { flags, json }, WORKER_START_VIEW)
+    if (keepOpenState && keepOpenState !== 'retained') {
+      const dispatchId = result.result.dispatchId
+      // The worker runs either way, so the next step never starts it again.
+      const verb = keepOpenState === 'already_released' ? 'worker-read' : 'worker-keep-open'
+      reportOrchestrationFailure({
+        code: 'not_kept_open',
+        message: `${dispatchId} started but was not kept open (${keepOpenState}). Run ${renderOrchestrationArgv(['orchestration', verb, '--dispatch', dispatchId])}.`
+      })
+    }
   }
 }
 
 // Every host version serves workerRetain, so older servers keep the worker open too.
-async function keepStartedWorkerOpen(
-  client: RuntimeClient,
-  receipt: WorkerStartAgentReceipt
-): Promise<WorkerReleaseReceipt | undefined> {
-  if (receipt.state !== 'ready' && !isUnobservedTurnStart(receipt)) {
-    return undefined
-  }
+async function keepWorkerOpen(client: RuntimeClient, dispatch: string): Promise<string> {
   try {
-    return (
-      await client.call<WorkerReleaseReceipt>('orchestration.workerRetain', {
-        dispatch: receipt.dispatchId
-      })
-    ).result
+    return (await client.call<WorkerReleaseReceipt>('orchestration.workerRetain', { dispatch }))
+      .result.state
   } catch (error) {
-    const code = error instanceof RuntimeClientError ? error.code : 'keep_open_failed'
-    const message = error instanceof Error ? error.message : String(error)
-    // The worker is running, so recovery is the keep-open call, never a second start.
-    throw new RuntimeClientError(
-      code,
-      `Started ${receipt.dispatchId} but could not keep it open: ${message} Run ${renderOrchestrationArgv(['orchestration', 'worker-keep-open', '--dispatch', receipt.dispatchId])}.`
-    )
+    return error instanceof RuntimeClientError ? error.code : 'keep_open_failed'
   }
 }
