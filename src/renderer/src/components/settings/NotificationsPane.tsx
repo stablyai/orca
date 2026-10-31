@@ -165,6 +165,7 @@ export function NotificationsPane({
 
       <NotificationHostToggles
         mutedNotificationSourceIds={notificationSettings.mutedNotificationSourceIds}
+        phoneMutedNotificationSourceIds={notificationSettings.phoneMutedNotificationSourceIds}
         disabled={!notificationSettings.enabled}
         onChange={(hostIds, muted) =>
           void updateNotificationSettings({
@@ -176,6 +177,20 @@ export function NotificationsPane({
                   ])
                 ]
               : notificationSettingsRef.current.mutedNotificationSourceIds.filter(
+                  (id) => !hostIds.includes(id)
+                )
+          })
+        }
+        onPhoneChange={(hostIds, muted) =>
+          void updateNotificationSettings({
+            phoneMutedNotificationSourceIds: muted
+              ? [
+                  ...new Set([
+                    ...notificationSettingsRef.current.phoneMutedNotificationSourceIds,
+                    ...hostIds
+                  ])
+                ]
+              : notificationSettingsRef.current.phoneMutedNotificationSourceIds.filter(
                   (id) => !hostIds.includes(id)
                 )
           })

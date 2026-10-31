@@ -9,6 +9,8 @@ export type NotificationSettingToggleProps = {
   onToggle: () => void
   disabled?: boolean
   icon?: ReactNode
+  /** Defaults to `label`; set it when several switches share one visible label. */
+  ariaLabel?: string
 }
 
 export function NotificationSettingToggle({
@@ -17,7 +19,8 @@ export function NotificationSettingToggle({
   checked,
   onToggle,
   disabled = false,
-  icon
+  icon,
+  ariaLabel
 }: NotificationSettingToggleProps): React.JSX.Element {
   return (
     <div className="flex items-center justify-between gap-4 py-2">
@@ -28,7 +31,12 @@ export function NotificationSettingToggle({
         </div>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
-      <Switch checked={checked} aria-label={label} disabled={disabled} onCheckedChange={onToggle} />
+      <Switch
+        checked={checked}
+        aria-label={ariaLabel ?? label}
+        disabled={disabled}
+        onCheckedChange={onToggle}
+      />
     </div>
   )
 }

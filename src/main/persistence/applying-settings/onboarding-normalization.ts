@@ -60,6 +60,9 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
     mutedNotificationSourceIds: normalizeMutedNotificationSourceIds(
       candidate.mutedNotificationSourceIds
     ),
+    phoneMutedNotificationSourceIds: normalizeMutedNotificationSourceIds(
+      candidate.phoneMutedNotificationSourceIds
+    ),
     notifyHiddenWorkspaces: booleanOr(
       candidate.notifyHiddenWorkspaces,
       defaults.notifyHiddenWorkspaces

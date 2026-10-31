@@ -23,6 +23,7 @@ function makeSettings(overrides: Partial<NotificationSettings> = {}): Notificati
     customSoundPath: null,
     customSoundVolume: 1,
     mutedNotificationSourceIds: [],
+    phoneMutedNotificationSourceIds: [],
     notifyHiddenWorkspaces: true,
     ...overrides
   }
@@ -150,6 +151,63 @@ describe('createNotificationDeliveryService', () => {
     expect(service.dispatch(makeRequest({ worktreeId: 'wt-3', worktreeLabel: 'wt-3' }))).toEqual({
       delivered: true
     })
+  })
+
+  it('skips the phone push for a phone-muted machine but still shows its desktop banner', () => {
+    const harness = makeHarness(
+      makeSettings({ phoneMutedNotificationSourceIds: ['runtime:m4air'] })
+    )
+    const service = createNotificationDeliveryService(harness.deps)
+
+    expect(service.dispatch(makeRequest({ notificationSourceId: 'runtime:m4air' }))).toEqual({
+      delivered: true
+    })
+    expect(harness.dispatchMobileNotification).not.toHaveBeenCalled()
+
+    // Other machines, this computer's own work and requests with no machine still reach the phone.
+    const others: (NotificationDispatchRequest['notificationSourceId'] | undefined)[] = [
+      'runtime:other',
+      'local',
+      undefined
+    ]
+    for (const [index, notificationSourceId] of others.entries()) {
+      service.dispatch(
+        makeRequest({
+          ...(notificationSourceId ? { notificationSourceId } : {}),
+          worktreeId: `wt-${index + 2}`,
+          worktreeLabel: `wt-${index + 2}`
+        })
+      )
+    }
+    expect(harness.dispatchMobileNotification).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps a phone-muted machine off the phone when its desktop banner is also muted or off', () => {
+    const harness = makeHarness(
+      makeSettings({
+        enabled: false,
+        mutedNotificationSourceIds: ['runtime:m4air'],
+        phoneMutedNotificationSourceIds: ['runtime:m4air']
+      })
+    )
+    createNotificationDeliveryService(harness.deps).dispatch(
+      makeRequest({ notificationSourceId: 'runtime:m4air' })
+    )
+    expect(harness.dispatchMobileNotification).not.toHaveBeenCalled()
+  })
+
+  it('does not spend the mobile cooldown on a phone-muted request', () => {
+    const settings = makeSettings({ phoneMutedNotificationSourceIds: ['runtime:qa'] })
+    const harness = makeHarness(settings)
+    const service = createNotificationDeliveryService(harness.deps)
+    const request = makeRequest({
+      notificationSourceId: 'runtime:qa',
+      mobileDeliveredByHost: false
+    })
+    service.dispatch(request)
+    settings.phoneMutedNotificationSourceIds = []
+    service.dispatch(request)
+    expect(harness.dispatchMobileNotification).toHaveBeenCalledTimes(1)
   })
 
   it('reports the master switch over a muted machine', () => {

@@ -12811,7 +12811,10 @@
         "NotificationHostToggles": {
           "offCount": "{{count}} off",
           "machines": "Machines",
-          "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+          "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it.",
+          "phone": "Push to phone",
+          "phoneDescription": "Turn off if another computer already pushes this machine’s alerts to your phone.",
+          "phoneAriaLabel": "Push {{host}} to phone"
         },
         "SettingsHostScopePicker": {
           "label": "Host",
