@@ -259,6 +259,15 @@
           "rowCount_one": "{{formatted}} row",
           "rowCount_other": "{{formatted}} rows"
         },
+        "ImageViewer": {
+          "6c89c73d9f": "Reset zoom",
+          "77bfc9b35a": "Open image in popup"
+        },
+        "ImageViewerPopup": {
+          "0ef78475e7": "Press Esc to close",
+          "535f4e2b56": "Close",
+          "9e27b2ecaf": "Full-size image preview"
+        },
         "IpynbViewer": {
           "cellCount_one": "{{count}} cell",
           "cellCount_other": "{{count}} cells"

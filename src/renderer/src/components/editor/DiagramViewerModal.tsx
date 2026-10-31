@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { PanZoomSize } from './pan-zoom-view'
 import { PanZoomImageDialog } from './PanZoomImageDialog'
+import { useSvgObjectUrl } from './use-svg-object-url'
 
 function readSvgImage(svg: string): { xml: string; size: PanZoomSize } | null {
   // HTML-serialized sanitized SVG can contain &nbsp;, which XML image documents reject.
@@ -18,21 +19,6 @@ function readSvgImage(svg: string): { xml: string; size: PanZoomSize } | null {
     xml: new XMLSerializer().serializeToString(element),
     size: { width, height }
   }
-}
-
-function useSvgObjectUrl(xml: string | null): string | null {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    if (xml === null) {
-      setUrl(null)
-      return
-    }
-    // An image document isolates copied IDs and styles from the original on the page.
-    const next = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }))
-    setUrl(next)
-    return () => URL.revokeObjectURL(next)
-  }, [xml])
-  return url
 }
 
 export default function DiagramViewerModal(): React.JSX.Element {

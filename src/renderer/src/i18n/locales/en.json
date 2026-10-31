@@ -13261,7 +13261,9 @@
           "light": "Light",
           "languageIncomplete": "{{value0}}% translated, too incomplete to use as Orca’s language",
           "languageCoverage": "Interface language · {{value0}}% translated",
-          "newFileMenu": "Adds to the + menu"
+          "newFileMenu": "Adds to the + menu",
+          "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
+          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer"
         },
         "PluginCardAction": {
           "installed": "Installed",
@@ -16259,7 +16261,10 @@
           "be27304574": "Zoom out",
           "77bfc9b35a": "Open image in popup",
           "3ef9551ba2": "Loading preview...",
-          "d9d2944855": "Failed to load file preview"
+          "d9d2944855": "Failed to load file preview",
+          "fitToView": "Fit to view",
+          "actualSize": "Actual size",
+          "expand": "Expand image"
         },
         "ImageViewerPopup": {
           "0ef78475e7": "Press Esc to close",
