@@ -15,14 +15,12 @@ import { journalOutcomeSource } from '../../../src/main/native-chat/agent-sessio
 import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
 import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/journal-write-projection'
-import {
-  resolveOldestStableReleaseRefWith,
-  resolveRecentStableReleaseRefs
-} from './release-checkout'
+import { resolveRecentStableReleaseRefs } from './release-checkout'
 import {
   editReleasedCard,
   rewindReleasedChat,
-  sendAfterUpgrade
+  sendAfterUpgrade,
+  type ContinuedJournal
 } from './released-chat-continuation'
 import {
   identityOf,
@@ -35,15 +33,15 @@ import {
 // reads, writes a Claude and a Codex chat through its own writers. This build admits every row as
 // written, opens the chat as that release had it, then edits a queued card (its first write, over
 // a key the old rows hold), sends, and rewinds, which saves the kept chat again in this build's
-// form. Every commit restores to the live chat, and the result equals the newest release's after
-// the same steps.
+// form. Every commit restores to the live chat. What this build does after the open is checked on
+// its own result, never against a release, so main stays free to change it.
 const SUITE_TIMEOUT_MS = 180_000
-const HOST_DATABASE = 'src/main/native-chat/agent-session-journal/journal-host-database.ts'
 const RELEASES = {
   'the newest release': () => resolveRecentStableReleaseRefs(2)[0]!,
   'the release before it': () => resolveRecentStableReleaseRefs(2)[1]!,
-  'the oldest release with this chat database': () =>
-    resolveOldestStableReleaseRefWith(HOST_DATABASE)
+  // The first release with one chat database per host (schema 3, the oldest this build opens);
+  // earlier releases kept a file per chat, which nothing reads any more. It never changes.
+  'the oldest release with this chat database': () => 'v1.4.219'
 } as const
 type Written = Awaited<ReturnType<typeof writeReleasedChat>>
 
@@ -59,7 +57,18 @@ const view = (journal: ContinuedJournal) => ({
   cards: [...journal.queuedMessages.list()]
 })
 
-/** Opens the chat, edits, sends and rewinds it, then reopens it; returns what the user sees. */
+const kept = (items: ReturnType<ContinuedJournal['snapshot']>['items']) =>
+  items.map(({ itemId, body }) => ({ itemId, body }))
+
+/** The chat as `opener`'s build opens it, over a copy so the original stays as the release left it. */
+async function openedBy(opener: TrackedJournalOpener, agent: Agent, stateDirectory: string) {
+  return opener
+    .open({ identity: identityOf(agent), stateDirectory })
+    .then(view)
+    .finally(() => opener.closeAll())
+}
+
+/** Opens the chat, edits, sends and rewinds it, then reopens it; checks what the user sees. */
 async function carryOn(
   opener: TrackedJournalOpener,
   agent: Agent,
@@ -89,9 +98,26 @@ async function carryOn(
         ).toBe(prefix.length)
       }
       await sendAfterUpgrade(journal)
+      const sent = view(journal)
+      expect(sent.snapshot.submissions).toContainEqual(
+        expect.objectContaining({ clientMessageId: 'after-upgrade', dispatchState: 'accepted' })
+      )
       await rewindReleasedChat(journal, new Set(opened.snapshot.items.map((item) => item.itemId)))
       expect(journal.epoch).toBe('epoch-rewound')
-      return { opened, seen: view(journal) }
+      const seen = view(journal)
+      // The rewind keeps every message the release wrote and every card not taken back, the edit
+      // included.
+      expect(kept(seen.snapshot.items)).toEqual(kept(opened.snapshot.items))
+      expect(seen.cards.map((card) => card.messageId)).toEqual(
+        opened.cards.filter((card) => card.state !== 'withdrawn').map((card) => card.messageId)
+      )
+      expect(seen.cards).toHaveLength(1)
+      for (const result of [sent, seen]) {
+        expect(result.cards.find((card) => card.messageId === 'card-2')?.body.blocks).toEqual([
+          { type: 'text', text: 'second, edited after the upgrade' }
+        ])
+      }
+      return { opened, seen }
     })
     .finally(() => opener.closeAll())
   const reopened = await opener
@@ -111,7 +137,7 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
     ['the oldest release with this chat database', 'claude'],
     ['the oldest release with this chat database', 'codex']
   ] as const)(
-    'admits every row %s wrote for a %s chat, then opens, edits, sends and rewinds it as the newest release does',
+    'admits every row %s wrote for a %s chat, opens it as the newest release does, then edits, sends and rewinds it',
     async (build, agent) => {
       const directory = mkdtempSync(join(tmpdir(), 'orca-released-chat-upgrade-'))
       const shipped = mkdtempSync(join(tmpdir(), 'orca-released-chat-shipped-'))
@@ -155,8 +181,9 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
           expect(edits).toContainEqual({ ordinal: JOURNAL_PREFIX_ORDINAL })
           await closeTestJournalHostDatabase(directory)
         }
+        // This build opens the chat as the newest release does.
         const newest = await releasedJournalOpener(RELEASES['the newest release']())
-        expect(ours).toEqual(await carryOn(newest, agent, shipped, written))
+        expect(ours.opened).toEqual(await openedBy(newest, agent, shipped))
       } finally {
         rmSync(directory, { recursive: true, force: true })
         rmSync(shipped, { recursive: true, force: true })

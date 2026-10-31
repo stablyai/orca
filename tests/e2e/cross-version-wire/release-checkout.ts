@@ -1,11 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import {
-  compareReleaseTags,
-  selectLatestStableReleaseTag,
-  STABLE_DESKTOP_RELEASE_TAG
-} from '../../../config/scripts/stable-release-tags.mjs'
+import { selectLatestStableReleaseTag } from '../../../config/scripts/stable-release-tags.mjs'
 import {
   populateReleaseCheckoutSource,
   resolveSharedReleaseCacheRoot
@@ -94,26 +90,6 @@ export function resolveRecentStableReleaseRefs(count: number): string[] {
     tags = tags.filter((tag) => tag !== latest)
   }
   return recent
-}
-
-/** The oldest stable desktop release whose tree holds `path`: the first one that wrote what lives there. */
-export function resolveOldestStableReleaseRefWith(path: string): string {
-  const added = git(['log', '--diff-filter=A', '--format=%H', '--reverse', '--', path]).split(
-    '\n'
-  )[0]
-  const oldest = added
-    ? git(['tag', '--contains', added, '--list', 'v[0-9]*'])
-        .split('\n')
-        .filter((tag) => STABLE_DESKTOP_RELEASE_TAG.test(tag))
-        .sort(compareReleaseTags)[0]
-    : undefined
-  if (!oldest) {
-    throw new Error(
-      `Cross-version harness found no stable desktop release holding ${path}; ` +
-        'a shallow CI clone needs `fetch-depth: 0`.'
-    )
-  }
-  return oldest
 }
 
 function resolveCommit(ref: string): string {
