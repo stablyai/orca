@@ -17,12 +17,11 @@ function channel() {
   return { incoming, stream, child, report, ack: () => ack }
 }
 
-it('commits and ACKs late success after initialize success retires semantic subscribers', async () => {
+it('isolates retired semantic subscribers from the retained physical subscriber', async () => {
   const source = channel()
   const semantic: unknown[] = [],
     physical: unknown[] = []
   const unsubscribe = source.report.subscribe((record) => semantic.push(record))
-  await Promise.resolve('initialized')
   unsubscribe()
   source.report.subscribe((record) => physical.push(record))
   source.incoming.write('{"kind":"spawned","pgid":4321}\n')

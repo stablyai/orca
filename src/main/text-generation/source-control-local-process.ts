@@ -119,6 +119,7 @@ export function runLocalSourceControlPlan(
     const startTermination = (): void => {
       stop.abort()
       terminationComplete ??= killSourceControlAgentProcess(child).catch((error: unknown) => {
+        terminationComplete = null
         console.error('[commit-message] Local generator termination failed:', error)
       })
     }

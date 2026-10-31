@@ -78,10 +78,11 @@ export async function probeOpenCodeLaunchModelContext(options: {
     detached: true,
     stdio: ['pipe', 'pipe', 'pipe', ...spawnSpec.groupReportStdio]
   })
+  const launchReport = createProviderLaunchReport(child, spawnSpec.supervised)
   guardSupervisedProviderGroup(child, {
     site: OPENCODE_PREFLIGHT_KILL_SITE,
     supervised: spawnSpec.supervised,
-    report: createProviderLaunchReport(child, spawnSpec.supervised)
+    report: launchReport
   })
   const output = createOutputSink(4096)
   let childClosed = false
@@ -157,6 +158,9 @@ export async function probeOpenCodeLaunchModelContext(options: {
   } finally {
     if (spawnSpec.supervised) {
       stopped = await stopSupervisedPreflight(child, closed)
+      if (stopped) {
+        launchReport.retire()
+      }
     } else {
       if (!childClosed && !rootExited) {
         await signalProcessTree(child, 'SIGTERM')

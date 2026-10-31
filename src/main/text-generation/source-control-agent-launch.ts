@@ -118,10 +118,11 @@ function spawnSupervisedAgent(
     detached: spec.detached,
     stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
   })
+  const launchReport = createProviderLaunchReport(child, spec.supervised)
   guardSupervisedProviderGroup(child, {
     site: SOURCE_CONTROL_KILL_SITE,
     supervised: spec.supervised,
-    report: createProviderLaunchReport(child, spec.supervised)
+    report: launchReport
   })
-  return Object.assign(child, { supervised: spec.supervised })
+  return Object.assign(child, { supervised: spec.supervised, launchReport })
 }

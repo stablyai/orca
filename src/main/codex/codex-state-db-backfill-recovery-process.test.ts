@@ -1,4 +1,9 @@
 import { EventEmitter } from 'node:events'
+import { Duplex, PassThrough } from 'node:stream'
+import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
+import { createProviderLaunchReport } from '../provider-process/provider-launch-report'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
+import { killSourceControlAgentProcess } from '../text-generation/source-control-agent-termination'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
@@ -49,7 +54,11 @@ describe('stopCodexBackfillRecoveryProcess for a supervised app-server', () => {
   it('ends its input and leaves the group stop to the supervisor', async () => {
     const child = fakeSupervisor(true)
 
-    await stopCodexBackfillRecoveryProcess(asHandle(child), true)
+    await stopCodexBackfillRecoveryProcess({
+      child: asHandle(child),
+      supervised: true,
+      launchReport: createProviderLaunchReport(child, false)
+    })
 
     expect(child.stdin.end).toHaveBeenCalledOnce()
     expect(child.kill).not.toHaveBeenCalled()
@@ -60,7 +69,13 @@ describe('stopCodexBackfillRecoveryProcess for a supervised app-server', () => {
     vi.useFakeTimers()
     const child = fakeSupervisor(false)
 
-    const stopped = stopCodexBackfillRecoveryProcess(asHandle(child), true)
+    const stopped = expect(
+      stopCodexBackfillRecoveryProcess({
+        child: asHandle(child),
+        supervised: true,
+        launchReport: createProviderLaunchReport(child, false)
+      })
+    ).rejects.toThrow('termination was not confirmed')
     await vi.advanceTimersByTimeAsync(PROVIDER_SUPERVISOR_MAX_STOP_MS - 1)
     expect(terminateProviderProcessTree).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
@@ -75,3 +90,62 @@ describe('stopCodexBackfillRecoveryProcess for a supervised app-server', () => {
     expect(child.kill).not.toHaveBeenCalled()
   })
 })
+
+it.each(['backfill', 'generation'] as const)(
+  '%s retains a partial report after refusal and retires the same owner on accepted no-root retry',
+  async (caller) => {
+    vi.useFakeTimers()
+    const child = createFakePipedChild(424242)
+    const incoming = new PassThrough(),
+      outgoing = new PassThrough()
+    outgoing.resume()
+    const channel = Duplex.from({ readable: incoming, writable: outgoing })
+    child.stdio[3] = channel
+    const launchReport = createProviderLaunchReport(child, true)
+    expect(
+      guardSupervisedProviderGroup(child, {
+        site: 'stop-report-test',
+        supervised: true,
+        report: launchReport
+      })
+    ).toBe(true)
+    const owned = Object.assign(child, { supervised: true, launchReport })
+    const stop = () =>
+      caller === 'backfill'
+        ? stopCodexBackfillRecoveryProcess({ child, supervised: true, launchReport })
+        : killSourceControlAgentProcess(owned)
+    try {
+      incoming.write('{"kind":"spawned","pgid":')
+      vi.mocked(terminateProviderProcessTree).mockResolvedValueOnce('unverifiable')
+      const refused = expect(stop()).rejects.toThrow('termination was not confirmed')
+      await vi.advanceTimersByTimeAsync(PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000)
+      await refused
+      expect(channel.destroyed).toBe(false)
+      expect(child.listenerCount('exit')).toBe(2)
+      vi.mocked(terminateProviderProcessTree).mockResolvedValueOnce({
+        tree: 'unverifiable',
+        killDelivered: true
+      })
+      const accepted = stop()
+      await vi.advanceTimersByTimeAsync(PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000)
+      await accepted
+      await launchReport.closed
+      expect(child.exitCode).toBeNull()
+      expect(child.signalCode).toBeNull()
+      expect(channel.destroyed).toBe(true)
+      expect(child.listenerCount('exit')).toBe(1)
+      expect(launchReport.record).toBeNull()
+      expect(terminateProviderProcessTree).toHaveBeenCalledTimes(2)
+      expect(child.stdin.writableEnded).toBe(true)
+    } finally {
+      launchReport.retire()
+      child.stdin.destroy()
+      child.stdout.destroy()
+      child.stderr.destroy()
+      incoming.destroy()
+      outgoing.destroy()
+      channel.destroy()
+      await launchReport.closed
+    }
+  }
+)

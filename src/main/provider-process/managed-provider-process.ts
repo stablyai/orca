@@ -1,5 +1,12 @@
-import { createProviderSourceCompletion } from './provider-source-completion'
-import { createProviderLaunchReport, type ProviderLaunchReport } from './provider-launch-report'
+import {
+  createProviderSourceCompletion,
+  observeProviderReaderOutput
+} from './provider-source-completion'
+import {
+  createProviderLaunchReport,
+  type ProviderLaunchReport,
+  type ProviderLaunchObservation
+} from './provider-launch-report'
 import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
@@ -70,6 +77,8 @@ export type ManagedProviderProcess = {
   /** What that ENOENT proves absent; the working folder, not the CLI, when the cwd is gone. */
   readonly spawnAbsence: ProviderSpawnAbsence | null
   readonly launchReport: ProviderLaunchReport
+  observeLaunchFailure(): Promise<ProviderLaunchObservation>
+  abandonLaunchObservation(): void
   finishDiagnostics: () => Promise<void>
   /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
   stderrTail(): string
@@ -146,7 +155,7 @@ export function spawnManagedProviderProcess(
     error: () => retainLine(stderrLine, lineCut)
   })
   if (options.onOutput) {
-    observeReaderOutput(child.stdout, options.onOutput)
+    observeProviderReaderOutput(child.stdout, options.onOutput)
   }
   let resolveExit = (): void => {}
   const exitPromise = new Promise<void>((resolve) => {
@@ -197,6 +206,17 @@ export function spawnManagedProviderProcess(
     absence = providerSpawnAbsence(reported.error, launch.command, launch.cwd)
     return absence
   }
+  let directObservation: { absence: ProviderSpawnAbsence | null; error: unknown } | undefined
+  const observeDirectFailure = () => {
+    if (!directObservation) {
+      const direct = providerSpawnAbsence(spawnError, spec.program, launch.cwd)
+      directObservation = {
+        absence: spec.supervised && direct === 'executable' ? null : direct,
+        error: spawnError
+      }
+    }
+    return directObservation
+  }
   const terminateTree = (): Promise<ProviderProcessTeardownVerdict> =>
     terminateProviderProcessTree(child, {
       site: options.site,
@@ -233,7 +253,7 @@ export function spawnManagedProviderProcess(
         tree,
         terminateTree
       })
-      if (result.root === 'exited' || result.killDelivered) {
+      if ((options.acceptClose ?? acceptProviderWriterClose)(result)) {
         launchReport.retire()
       }
       lastCloseResult = {
@@ -247,6 +267,23 @@ export function spawnManagedProviderProcess(
     child,
     supervised: spec.supervised,
     launchReport,
+    observeLaunchFailure() {
+      // Direct error evidence must be captured before any report/diagnostic continuation.
+      const direct = observeDirectFailure()
+      return launchReport.done.then((record) => ({
+        record,
+        directError: direct.error,
+        absence:
+          direct.absence ??
+          (record?.kind === 'failed'
+            ? providerSpawnAbsence(record.error, launch.command, launch.cwd)
+            : null)
+      }))
+    },
+    abandonLaunchObservation() {
+      observeDirectFailure()
+      launchReport.abandon()
+    },
     finishDiagnostics: () => diagnostics.finish(),
     exitPromise,
     get exitStatus() {
@@ -289,20 +326,4 @@ export function spawnManagedProviderProcess(
       return close(tree)
     }
   }
-}
-
-/** A premature data listener would drain stdout before a late reader can subscribe. */
-function observeReaderOutput(
-  stdout: Pick<NodeJS.ReadableStream, 'on' | 'removeListener'>,
-  onOutput: () => void
-): void {
-  const onSubscribe = (event: string | symbol): void => {
-    if (event !== 'data' && event !== 'readable') {
-      return
-    }
-    stdout.removeListener('newListener', onSubscribe)
-    // newListener fires before registration; attach after the reader via a microtask.
-    queueMicrotask(() => stdout.on('data', onOutput))
-  }
-  stdout.on('newListener', onSubscribe)
 }

@@ -6,14 +6,14 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { withManagedHookInstallLock } from '../agent-hooks/managed-hook-install-lock'
 import { readManagedHookHostIdentity } from '../agent-hooks/managed-hook-owner-identity'
 import { resolveCodexCommand } from '../codex-cli/command'
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import {
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
 } from './codex-app-server-process-tree-kill'
 import {
   spawnCodexBackfillRecoveryProcess,
-  stopCodexBackfillRecoveryProcess
+  stopCodexBackfillRecoveryProcess,
+  type CodexBackfillRecoveryProcess
 } from './codex-state-db-backfill-recovery-process'
 import { getOrcaUserDataPath } from './codex-home-paths'
 import {
@@ -43,7 +43,7 @@ type RecoveryDependencies = {
   countSessions: (sessionsRoot: string, limit: number) => number
   now: () => number
   sleep: (ms: number, signal: AbortSignal) => Promise<void>
-  terminate: (child: ChildProcessHandle, supervised: boolean) => Promise<void>
+  terminate: (process: CodexBackfillRecoveryProcess) => Promise<void>
 }
 
 const defaultDependencies: RecoveryDependencies = {
@@ -101,12 +101,13 @@ export async function runCodexStateDbBackfillRecovery(
   const deadline = dependencies.now() + RECOVERY_MAX_TOTAL_MS
   let spawnCount = 0
   while (!signal.aborted && dependencies.now() < deadline && spawnCount < RECOVERY_MAX_SPAWNS) {
-    const { child, supervised } = spawnCodexBackfillRecoveryProcess(
+    const recovery = spawnCodexBackfillRecoveryProcess(
       codexHomePath,
       dependencies.spawnProcess,
       dependencies.resolveCommand
     )
-    const terminate = (): Promise<void> => dependencies.terminate(child, supervised)
+    const { child } = recovery
+    const terminate = (): Promise<void> => dependencies.terminate(recovery)
     spawnCount += 1
     let childDown = false
     child.once('error', () => {

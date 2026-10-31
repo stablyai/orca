@@ -2,10 +2,17 @@ import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
 import { detachProviderStreamErrorHandler } from './provider-stdio-error-boundary'
 import { Duplex } from 'node:stream'
 import { createIncrementalNdjsonFramer } from '../../shared/main-process-ndjson-framer'
+import type { ProviderSpawnAbsence } from './provider-executable-missing'
 
 export type ProviderLaunchRecord =
   | { kind: 'spawned'; pgid: number }
   | { kind: 'failed'; thrown: boolean; error: NodeJS.ErrnoException }
+
+export type ProviderLaunchObservation = {
+  record: ProviderLaunchRecord | null
+  absence: ProviderSpawnAbsence | null
+  directError: unknown
+}
 
 export type ProviderLaunchReport = {
   readonly record: ProviderLaunchRecord | null

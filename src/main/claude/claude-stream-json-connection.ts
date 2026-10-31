@@ -215,7 +215,7 @@ export async function openClaudeStreamJsonConnection(
     }
     const attempt = (async (): Promise<ClaudeCloseOutcome> => {
       closing = true
-      managed.launchReport.abandon()
+      managed.abandonLaunchObservation()
       resumeReading()
       await (tree.refresh?.() ?? tree.capture())
       inbox.end()

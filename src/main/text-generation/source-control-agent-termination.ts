@@ -1,4 +1,5 @@
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
+import { acceptProviderWriterClose } from '../provider-process/provider-process-close'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import type { SpawnedSourceControlAgentProcess } from './source-control-text-generation-types'
 
@@ -7,12 +8,16 @@ export const SOURCE_CONTROL_KILL_SITE = 'source-control-text-generation'
 export async function killSourceControlAgentProcess(
   child: SpawnedSourceControlAgentProcess
 ): Promise<void> {
-  const pid = child.pid
-  if (!pid) {
+  if (child.supervised) {
+    const result = await stopSupervisedChildProcess(child, { site: SOURCE_CONTROL_KILL_SITE })
+    if (!acceptProviderWriterClose(result)) {
+      throw new Error('Source control agent termination was not confirmed')
+    }
+    child.launchReport?.retire()
     return
   }
-  if (child.supervised) {
-    await stopSupervisedChildProcess(child, { site: SOURCE_CONTROL_KILL_SITE })
+  const pid = child.pid
+  if (!pid) {
     return
   }
   if (process.platform === 'win32') {

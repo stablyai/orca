@@ -65,7 +65,7 @@ describe('spawnSourceControlAgent', () => {
       args: ['-e', POSIX_PROVIDER_SUPERVISOR_SCRIPT, '--', '/opt/agent/claude', '-p', '--verbose'],
       cwd,
       detached: true,
-      stdio: ['pipe', 'pipe', 'pipe', 'ipc']
+      stdio: ['pipe', 'pipe', 'pipe', 'pipe']
     })
     expect(spec.env).toMatchObject({ PATH: '/usr/bin', AGENT_TOKEN: 'kept' })
     expect(decodedSupervisorSpec(spec)).toMatchObject({

@@ -83,7 +83,9 @@ describe('Codex backfill recovery app-server supervision', () => {
       lifetime: 'session',
       cwd: '/managed-home'
     })
-    expect(terminate).toHaveBeenCalledWith(child, true)
+    expect(terminate).toHaveBeenCalledWith(
+      expect.objectContaining({ child, supervised: true, launchReport: expect.any(Object) })
+    )
   })
 })
 

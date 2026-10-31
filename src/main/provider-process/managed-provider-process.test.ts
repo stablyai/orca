@@ -248,7 +248,7 @@ describe('managed provider process', () => {
     }
   )
 
-  it("never blames the agent's CLI when the supervisor binary itself is gone", () => {
+  it("never blames the agent's CLI when the supervisor binary itself is gone", async () => {
     const execPath = process.execPath
     // Orca's binary replaced mid-update: the supervisor spawn finds no such file.
     const gone = join(tmpdir(), 'orca-updated-away', 'Orca')
@@ -264,10 +264,14 @@ describe('managed provider process', () => {
           policy: () => ({ gracefulExitMs: PROVIDER_SUPERVISOR_MAX_STOP_MS, forcedExitMs: 50 })
         }
       )
-      fixture.child.emit(
-        'error',
-        Object.assign(new Error(`spawn ${gone} ENOENT`), { code: 'ENOENT', path: gone })
-      )
+      const original = Object.assign(new Error(`spawn ${gone} ENOENT`), {
+        code: 'ENOENT',
+        path: gone
+      })
+      fixture.child.emit('error', original)
+      const observing = managed.observeLaunchFailure()
+      managed.abandonLaunchObservation()
+      expect(await observing).toEqual({ record: null, absence: null, directError: original })
       expect(managed.spawnAbsence).toBeNull()
       expect(managed.executableMissing).toBe(false)
     } finally {

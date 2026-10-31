@@ -50,12 +50,16 @@ export function createClaudeQueryOperation(account?: AgentSessionAccountKind) {
       query: Pick<Query, 'initializationResult'>,
       managed?: Pick<
         ManagedProviderProcess,
-        'launchReport' | 'finishDiagnostics' | 'stderrTail' | 'exitStatus' | 'spawnAbsence'
+        | 'observeLaunchFailure'
+        | 'abandonLaunchObservation'
+        | 'finishDiagnostics'
+        | 'stderrTail'
+        | 'exitStatus'
       >,
       sourceDone?: Promise<void>
     ): void {
       timer = setTimeout(() => {
-        managed?.launchReport.abandon()
+        managed?.abandonLaunchObservation()
         reject(
           withProviderRequestTimeout(
             new Error(`claude did not answer initialize within ${CLAUDE_INITIALIZE_TIMEOUT_MS}ms`),
@@ -68,8 +72,8 @@ export function createClaudeQueryOperation(account?: AgentSessionAccountKind) {
       }, CLAUDE_INITIALIZE_TIMEOUT_MS)
       timer.unref?.()
       void sourceDone?.then(
-        () => managed?.launchReport.abandon(),
-        () => managed?.launchReport.abandon()
+        () => managed?.abandonLaunchObservation(),
+        () => managed?.abandonLaunchObservation()
       )
       void runClaudeControl('initialize', () => query.initializationResult(), null)
         .then(
@@ -87,27 +91,40 @@ export function createClaudeQueryOperation(account?: AgentSessionAccountKind) {
             result.resolve(value)
           },
           async (cause: unknown) => {
+            if (cause instanceof ClaudeControlRequestTimeoutError) {
+              reject(cause)
+              return
+            }
+            const observing = managed?.observeLaunchFailure()
+            if (cause instanceof ClaudeControlRequestError) {
+              managed?.abandonLaunchObservation()
+            }
+            // Source completion abandons only observation; no receive finalizer awaits this result.
+            const observation = await observing
+            const report = observation?.record
+            const absence = observation?.absence ?? null
             if (
-              cause instanceof ClaudeControlRequestTimeoutError ||
-              (cause instanceof ClaudeControlRequestError &&
-                managed?.launchReport.record?.kind !== 'failed' &&
-                !managed?.spawnAbsence)
+              cause instanceof ClaudeControlRequestError &&
+              report?.kind !== 'failed' &&
+              !absence
             ) {
               reject(cause)
               return
             }
-            // Source completion abandons only observation; no receive finalizer awaits this result.
-            const report = await managed?.launchReport.done
-            const absence = managed?.spawnAbsence ?? null
             const diagnosticFailure = await managed?.finishDiagnostics().then(
               () => undefined,
               (error: unknown) => error
             )
             const received = cause instanceof Error ? cause : new Error(String(cause))
+            const causes: unknown[] = [received]
+            if (observation?.directError && observation.directError !== received) {
+              causes.push(observation.directError)
+            }
+            if (diagnosticFailure !== undefined) {
+              causes.push(diagnosticFailure)
+            }
             const original =
-              diagnosticFailure === undefined
-                ? received
-                : new AggregateError([received, diagnosticFailure], received.message)
+              causes.length === 1 ? received : new AggregateError(causes, received.message)
             const error =
               report?.kind === 'failed'
                 ? new Error(report.error.message, {

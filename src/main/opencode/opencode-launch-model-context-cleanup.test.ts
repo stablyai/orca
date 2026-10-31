@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ChildProcess } from 'node:child_process'
-import { PassThrough } from 'node:stream'
+import { Duplex, PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import {
@@ -32,7 +32,7 @@ class ProbeChild extends ChildProcess {
   override signalCode: NodeJS.Signals | null = null
   // A handle-less ChildProcess's own kill can signal this test's process group.
   override kill = vi.fn((_signal?: NodeJS.Signals | number): boolean => true)
-  override stdio: [PassThrough, PassThrough, PassThrough, undefined, undefined] = [
+  override stdio: [PassThrough, PassThrough, PassThrough, Duplex | undefined, undefined] = [
     this.stdin,
     this.stdout,
     this.stderr,
@@ -193,6 +193,38 @@ describe('OpenCode model probe termination evidence', () => {
       site: 'opencode-launch-model-preflight',
       supervised: true
     })
+  })
+
+  it('retains a partial report when delivered kill without root fails the strict preflight policy', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const incoming = new PassThrough(),
+      outgoing = new PassThrough()
+    outgoing.resume()
+    const channel = Duplex.from({ readable: incoming, writable: outgoing })
+    child.stdio[3] = channel
+    child.kill.mockReturnValue(true)
+    vi.mocked(terminateProviderProcessTree).mockResolvedValue({
+      tree: 'unverifiable',
+      killDelivered: true
+    })
+    try {
+      const probe = probeOpenCodeLaunchModelContext(options)
+      incoming.write('{"kind":"spawned","pgid":')
+      await untilStopRequested()
+      await vi.advanceTimersByTimeAsync(PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000)
+      expect(await probe).toBeNull()
+      expect(child.exitCode).toBeNull()
+      expect(child.signalCode).toBeNull()
+      expect(channel.destroyed).toBe(false)
+      expect(child.listenerCount('exit')).toBeGreaterThan(0)
+      supervisorExits(0, null)
+      expect(channel.destroyed).toBe(true)
+    } finally {
+      supervisorExits(0, null)
+      incoming.destroy()
+      outgoing.destroy()
+      channel.destroy()
+    }
   })
 
   it('trusts no forced POSIX stop, even one whose teardown reports the tree gone', async () => {

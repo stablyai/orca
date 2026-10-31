@@ -110,7 +110,9 @@ describe('killSourceControlAgentProcess for a supervised agent', () => {
     vi.useFakeTimers()
     const child = fakeSupervisor(null)
 
-    const stopped = killSourceControlAgentProcess(asSpawned(child))
+    const stopped = expect(killSourceControlAgentProcess(asSpawned(child))).rejects.toThrow(
+      'termination was not confirmed'
+    )
     await vi.advanceTimersByTimeAsync(PROVIDER_SUPERVISOR_MAX_STOP_MS - 1)
     expect(child.kill.mock.calls).toEqual([['SIGTERM']])
     expect(terminateTreeMock).not.toHaveBeenCalled()

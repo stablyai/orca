@@ -136,7 +136,10 @@ async function discoverModelsOnce(
       let terminationComplete: Promise<void> | null = null
       let detachChildListeners = (): void => {}
       const startTermination = (): void => {
-        terminationComplete ??= killSourceControlAgentProcess(child)
+        terminationComplete ??= killSourceControlAgentProcess(child).catch((error: unknown) => {
+          terminationComplete = null
+          console.error('[commit-message] Model discovery termination failed:', error)
+        })
       }
       const markClosedAfterTermination = (): void => {
         void (terminationComplete ?? Promise.resolve()).then(markProcessClosed)

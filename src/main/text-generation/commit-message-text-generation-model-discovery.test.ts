@@ -74,25 +74,13 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       configurable: true,
       value: hostPlatform
     })
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: {
-        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
-      },
-      stderr: {
-        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
-      },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
+    const child = createMockDiscoveryChild()
+    spawnMock.mockReturnValue(child)
 
     const pending = discoverCommitMessageModelsLocal('cursor', undefined)
 
-    listeners.get('stdout:data')?.(Buffer.from('auto - Auto\ngpt-5.2 - GPT-5.2\n'))
-    listeners.get('close')?.(0)
+    child.stdout.emit('data', Buffer.from('auto - Auto\ngpt-5.2 - GPT-5.2\n'))
+    child.emit('close', 0)
 
     await expect(pending).resolves.toMatchObject({
       success: true,
@@ -111,24 +99,13 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       configurable: true,
       value: hostPlatform
     })
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: {
-        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
-      },
-      stderr: {
-        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
-      },
-      stdin: { on: vi.fn(), end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
+    const child = createMockDiscoveryChild()
+    spawnMock.mockReturnValue(child)
 
     const pending = discoverCommitMessageModelsLocal('claude', undefined)
 
-    listeners.get('stdout:data')?.(
+    child.stdout.emit(
+      'data',
       Buffer.from(
         `${JSON.stringify({
           type: 'control_response',
@@ -152,7 +129,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
         })}\n`
       )
     )
-    listeners.get('close')?.(0)
+    child.emit('close', 0)
 
     await expect(pending).resolves.toMatchObject({
       success: true,
@@ -178,7 +155,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     ])
     expect(spawnMock.mock.calls[0]![2]).toMatchObject({
       windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['ipc'])]
+      stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['pipe'])]
     })
     expect(child.stdin.end).toHaveBeenCalledWith(expect.stringContaining('"list_models"'))
   })
@@ -222,25 +199,13 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       configurable: true,
       value: hostPlatform
     })
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: {
-        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
-      },
-      stderr: {
-        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
-      },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
+    const child = createMockDiscoveryChild()
+    spawnMock.mockReturnValue(child)
 
     const pending = discoverCommitMessageModelsLocal('cursor', undefined, 'npx cursor-agent')
 
-    listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
-    listeners.get('close')?.(0)
+    child.stdout.emit('data', Buffer.from('auto - Auto\n'))
+    child.emit('close', 0)
 
     await expect(pending).resolves.toMatchObject({
       success: true,

@@ -261,7 +261,7 @@ describe('Codex state DB backfill recovery', () => {
       maxLiveChildren = Math.max(maxLiveChildren, children.size)
       return child
     })
-    const terminate = vi.fn(async (child: ReturnType<typeof createFakeChild>) => {
+    const terminate = vi.fn(async ({ child }: { child: ReturnType<typeof createFakeChild> }) => {
       children.delete(child)
     })
     const sleep = vi.fn(async (ms: number) => {
@@ -360,7 +360,13 @@ describe('Codex state DB backfill recovery', () => {
     expect(spawnProcess).toHaveBeenCalledTimes(2)
     expect(timerDurations).toEqual([5_000, 2_000, 5_000])
     expect(terminate).toHaveBeenCalledTimes(1)
-    expect(terminate).toHaveBeenCalledWith(children[1], process.platform !== 'win32')
+    expect(terminate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        child: children[1],
+        supervised: process.platform !== 'win32',
+        launchReport: expect.any(Object)
+      })
+    )
   })
 
   it('keeps the successful app-server claimant alive until Codex marks its DB complete', async () => {
@@ -380,7 +386,13 @@ describe('Codex state DB backfill recovery', () => {
         now: vi.fn(() => 1_000)
       })
     ).resolves.toEqual({ outcome: 'completed', spawnCount: 1 })
-    expect(terminate).toHaveBeenCalledWith(child, process.platform !== 'win32')
+    expect(terminate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        child,
+        supervised: process.platform !== 'win32',
+        launchReport: expect.any(Object)
+      })
+    )
   })
 
   it('hands the Codex shim itself to the spawn chokepoint for native Windows recovery', async () => {
@@ -426,7 +438,9 @@ describe('Codex state DB backfill recovery', () => {
     expect(spawnOptions.cwd).toBe('C:\\Users\\alice\\.codex')
     expect(spawnOptions.env?.CODEX_HOME).toBe('C:\\Users\\alice\\.codex')
     expect(spawnOptions).not.toHaveProperty('detached')
-    expect(terminate).toHaveBeenCalledWith(child, false)
+    expect(terminate).toHaveBeenCalledWith(
+      expect.objectContaining({ child, supervised: false, launchReport: expect.any(Object) })
+    )
   })
 
   it('retries a live foreign lease until one durable claimant can recover it', async () => {

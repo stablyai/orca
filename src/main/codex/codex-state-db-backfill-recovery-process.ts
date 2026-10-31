@@ -1,4 +1,8 @@
-import { createProviderLaunchReport } from '../provider-process/provider-launch-report'
+import {
+  createProviderLaunchReport,
+  type ProviderLaunchReport
+} from '../provider-process/provider-launch-report'
+import { acceptProviderWriterClose } from '../provider-process/provider-process-close'
 import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -21,6 +25,7 @@ const BACKFILL_RECOVERY_CLOSE_REQUEST: ProviderCloseRequest = 'stdin-end'
 export type CodexBackfillRecoveryProcess = {
   child: ChildProcessHandle
   supervised: boolean
+  launchReport: ProviderLaunchReport
 }
 
 export function spawnCodexBackfillRecoveryProcess(
@@ -44,7 +49,7 @@ export function spawnCodexBackfillRecoveryProcess(
         cwd: resolveWslInteropSpawnCwd()
       }
     )
-    return { child, supervised: false }
+    return { child, supervised: false, launchReport: createProviderLaunchReport(child, false) }
   }
   const command = resolveCommand()
   // The POSIX supervisor stops this long-lived child even if Orca crashes.
@@ -64,24 +69,31 @@ export function spawnCodexBackfillRecoveryProcess(
     env: spawnSpec.env,
     ...(spawnSpec.supervised ? { detached: true } : {})
   })
+  const launchReport = createProviderLaunchReport(child, spawnSpec.supervised)
   guardSupervisedProviderGroup(child, {
     site: BACKFILL_RECOVERY_KILL_SITE,
     supervised: spawnSpec.supervised,
-    report: createProviderLaunchReport(child, spawnSpec.supervised)
+    report: launchReport
   })
-  return { child, supervised: spawnSpec.supervised }
+  return { child, supervised: spawnSpec.supervised, launchReport }
 }
 
-export async function stopCodexBackfillRecoveryProcess(
-  child: ChildProcessHandle,
-  supervised: boolean
-): Promise<void> {
+export async function stopCodexBackfillRecoveryProcess({
+  child,
+  supervised,
+  launchReport
+}: CodexBackfillRecoveryProcess): Promise<void> {
   if (supervised) {
-    await stopSupervisedChildProcess(child, {
+    const result = await stopSupervisedChildProcess(child, {
       site: BACKFILL_RECOVERY_KILL_SITE,
       closeRequest: BACKFILL_RECOVERY_CLOSE_REQUEST
     })
+    if (!acceptProviderWriterClose(result)) {
+      throw new Error('Codex backfill recovery process termination was not confirmed')
+    }
+    launchReport.retire()
     return
   }
   await terminateCodexProbeChild(child)
+  launchReport.retire()
 }

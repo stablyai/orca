@@ -145,3 +145,19 @@ export function createProviderSourceCompletion(
     }
   }
 }
+
+/** A premature data listener would drain stdout before a late reader can subscribe. */
+export function observeProviderReaderOutput(
+  stdout: Pick<NodeJS.ReadableStream, 'on' | 'removeListener'>,
+  onOutput: () => void
+): void {
+  const onSubscribe = (event: string | symbol): void => {
+    if (event !== 'data' && event !== 'readable') {
+      return
+    }
+    stdout.removeListener('newListener', onSubscribe)
+    // newListener fires before registration; attach after the reader via a microtask.
+    queueMicrotask(() => stdout.on('data', onOutput))
+  }
+  stdout.on('newListener', onSubscribe)
+}
