@@ -24,6 +24,10 @@ const fixture = vi.hoisted(() => {
       store: null,
       stats: {},
       runtime: null,
+      claudeUsage: {},
+      codexUsage: {},
+      openCodeUsage: {},
+      museUsage: {},
       claudeAccounts: {},
       codexAccounts: {},
       rateLimits: {}
@@ -44,6 +48,7 @@ vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
     readonly sidebarFacts = null
     readonly agentTransitions = { seedRestoredRows() {} }
+    readonly usageHistory = { setStores() {} }
     attachAgentStatusStore() {
       return () => {}
     }

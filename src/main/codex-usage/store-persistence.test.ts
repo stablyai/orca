@@ -47,6 +47,7 @@ describe('CodexUsageStore', () => {
       path: join(storeEnv.tempUserData, 'orca-codex-usage-sources.json'),
       schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
       worktreeFingerprint: '[]',
+      hadPreviousHistory: false,
       reuse: false
     })
     expect(persistedJson).toBe(JSON.stringify(JSON.parse(persistedJson)))
@@ -102,33 +103,42 @@ describe('CodexUsageStore', () => {
     })
   })
 
-  it('rescans from scratch when the cache predates per-request long-context counts', async () => {
-    const scanMock = vi.mocked(scanCodexUsageFilesViaWorker)
-    const sourceCachePath = join(storeEnv.tempUserData, 'orca-codex-usage-sources.json')
-    const cacheFile = join(storeEnv.tempUserData, 'orca-codex-usage.json')
-    const seeded = new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) })
-    await seeded.setEnabled(true)
-    await seeded.refresh(true)
-    await seeded.flush()
-    const current = readFileSync(cacheFile, 'utf-8')
+  it.each([6, 7])(
+    'rescans from scratch when schema %i predates fork deduplication or session/day attribution',
+    async (schemaVersion) => {
+      const scanMock = vi.mocked(scanCodexUsageFilesViaWorker)
+      const sourceCachePath = join(storeEnv.tempUserData, 'orca-codex-usage-sources.json')
+      const cacheFile = join(storeEnv.tempUserData, 'orca-codex-usage.json')
+      const seeded = new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) })
+      await seeded.setEnabled(true)
+      await seeded.refresh(true)
+      await seeded.flush()
+      const current = readFileSync(cacheFile, 'utf-8')
 
-    scanMock.mockClear()
-    await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(true)
-    expect(scanMock).toHaveBeenLastCalledWith([], {
-      path: sourceCachePath,
-      schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
-      worktreeFingerprint: '[]',
-      reuse: true
-    })
+      scanMock.mockClear()
+      await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(
+        true
+      )
+      expect(scanMock).toHaveBeenLastCalledWith([], {
+        path: sourceCachePath,
+        schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
+        worktreeFingerprint: '[]',
+        hadPreviousHistory: false,
+        reuse: true
+      })
 
-    writeFileSync(cacheFile, JSON.stringify({ ...JSON.parse(current), schemaVersion: 5 }))
-    scanMock.mockClear()
-    await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(false)
-    expect(scanMock).toHaveBeenLastCalledWith([], {
-      path: sourceCachePath,
-      schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
-      worktreeFingerprint: '[]',
-      reuse: false
-    })
-  })
+      writeFileSync(cacheFile, JSON.stringify({ ...JSON.parse(current), schemaVersion }))
+      scanMock.mockClear()
+      await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(
+        false
+      )
+      expect(scanMock).toHaveBeenLastCalledWith([], {
+        path: sourceCachePath,
+        schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
+        worktreeFingerprint: '[]',
+        hadPreviousHistory: false,
+        reuse: false
+      })
+    }
+  )
 })

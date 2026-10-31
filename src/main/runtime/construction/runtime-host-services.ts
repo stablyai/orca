@@ -7,7 +7,7 @@ import type { LegacyWorkerRecoveryCandidate } from '../runtime-legacy-worker-ter
 
 import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/orchestration-legacy-worker-terminal-recovery'
 
-import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driver-resources'
+import { OrcaRuntimeWithAgentProviderSessionRows } from './runtime-agent-provider-session-rows'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from '../run-terminal-client-use'
@@ -19,14 +19,13 @@ import type {
   RestoredOrchestrationAuthorityReceipt
 } from '../runtime-terminal-contracts'
 
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
-
 import type { AgentStatus } from '../../../shared/agent-detection'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy-worker-terminal-recovery-controller'
 import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/worker-terminal-release-reconciliation'
 
 import { RuntimeAccountController } from '../runtime-account-controller'
+import { UsageProviderFacade } from '../../usage/usage-provider-facade'
 import { RuntimeMobileSpeechCatalog } from '../runtime-mobile-speech-catalog'
 import { RuntimeMobileDictationController } from '../runtime-mobile-dictation-controller'
 import { RuntimeProjectHostSetupController } from '../runtime-project-host-setup-controller'
@@ -45,7 +44,7 @@ import { ClaudeAgentTeamsService } from '../claude-agent-teams-service'
 import { teardownFolderWorkspacePtys } from '../folder-workspace-pty-teardown'
 import { countRepoTerminalsNotKnownExited } from '../project-removal-impact'
 
-export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
+export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithAgentProviderSessionRows {
   declare addRepo: RuntimeRepositoryCommandSurface['addRepo']
   declare cloneRepo: RuntimeRepositoryCommandSurface['cloneRepo']
   protected abstract tryGetWorkspaceSessionHostIdForWorktree(
@@ -114,14 +113,6 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   readonly readObservedAgentStatusPaneIdentityFn!: HostBindings['readObservedAgentStatusPaneIdentity']
 
-  protected readonly getAgentProviderSessionSnapshotFn!:
-    | HostBindings['getAgentProviderSessionSnapshot']
-    | null
-
-  protected readonly getAgentProviderSessionRowsForPaneFn!:
-    | HostBindings['getAgentProviderSessionRowsForPane']
-    | null
-
   readTerminalClientUse(ptyId: string): 'used' | 'unused' | 'unknown' {
     return readRunTerminalClientUse(this, ptyId)
   }
@@ -132,15 +123,6 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   getTerminalPtyIdForHandle(handle: string): string | null {
     return this.getLivePtyForHandle(handle)?.pty.ptyId ?? null
-  }
-
-  /** Includes resume-identity-only provider rows. */
-  getAgentProviderSessionRows(): AgentStatusIpcPayload[] {
-    return this.getAgentProviderSessionSnapshotFn?.() ?? []
-  }
-
-  getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
-    return this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []
   }
 
   protected readonly attestAgentHookCompatibilityAuthorityFn!:
@@ -272,6 +254,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   protected ptyControllerInventoryGenerationByProvider = new Map<string, number>()
 
   protected readonly accounts = new RuntimeAccountController()
+  readonly usageHistory = new UsageProviderFacade()
 
   protected readonly mobileSpeech = new RuntimeMobileSpeechCatalog(() => this.store)
 

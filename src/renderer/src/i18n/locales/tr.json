@@ -5151,7 +5151,6 @@
         },
         "StatsPane": {
           "42d3e0bdf7": "Kullanım analizi sağlayıcısı: {{value0}}",
-          "c79f073d4c": "Kullanım Analizleri",
           "a58aba506f": "Oluşturulan PR'lar",
           "1c96f433e2": "Ajanların çalıştığı süre",
           "9dbec9e675": "Başlatılan ajanlar",
@@ -5164,25 +5163,7 @@
           "trackingSince": "{{value0}} tarihinden beri takip ediliyor"
         },
         "UsageOverviewPane": {
-          "33f7b043d2": "Sağlayıcılar",
-          "70f36452d4": "Önbellek payı",
-          "327603fe8b": "Etkin gün",
-          "0eaf937335": "Tahmini maliyet",
-          "3887b94ce5": "Toplam token",
-          "2d13e57f72": "OpenCode'u etkinleştir",
-          "2f1ee2878b": "Codex'i etkinleştir",
-          "0ea0cae435": "Claude'u etkinleştir",
-          "6c00c46815": "Yerel ajan günlüklerini taramak ve birleşik token defterini oluşturmak için bir sağlayıcı etkinleştirin.",
-          "49405ccc8d": "Token takibini başlat",
-          "ca6bc5fded": "Yenile",
-          "e06d1baf5c": "Kullanım genel bakışını yenile",
-          "c760c481c5": "Kullanım Genel Bakışı",
-          "55c910f4f1": "- bazı model fiyatları kullanılamıyor",
-          "enableMuse": "Muse'u etkinleştir",
-          "noLocalUsageYet": "Henüz yerel Claude, Codex, OpenCode veya Muse kullanımı bulunamadı. Bir sonraki ajan oturumu token günlüklerini yazdığında genel görünüm doldurulacak.",
-          "providersEnabledWithData": "{{enabled}} etkin - {{withData}} tanesinde veri var",
-          "sessionCount_other": "{{formatted}} oturum",
-          "sessionCount_one": "{{formatted}} oturum"
+          "3887b94ce5": "Toplam token"
         },
         "share": {
           "card": {

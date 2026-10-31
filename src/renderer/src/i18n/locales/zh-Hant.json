@@ -5052,7 +5052,6 @@
         },
         "StatsPane": {
           "42d3e0bdf7": "用量分析供應商：{{value0}}",
-          "c79f073d4c": "用量分析",
           "a58aba506f": "已建立 PR",
           "1c96f433e2": "代理程式工作時間",
           "9dbec9e675": "已啟動代理程式",
@@ -5065,24 +5064,7 @@
           "trackingSince": "自 {{value0}} 開始追蹤"
         },
         "UsageOverviewPane": {
-          "33f7b043d2": "供應商",
-          "70f36452d4": "快取占比",
-          "327603fe8b": "活躍天數",
-          "0eaf937335": "預計成本",
-          "3887b94ce5": "token 總數",
-          "2d13e57f72": "啟用 OpenCode",
-          "2f1ee2878b": "啟用 Codex",
-          "0ea0cae435": "啟用 Claude",
-          "6c00c46815": "啟用供應商以掃描本機代理程式日誌並建置組合的 token 帳本。",
-          "49405ccc8d": "開始追蹤 token",
-          "ca6bc5fded": "重新整理",
-          "e06d1baf5c": "重新整理用量概覽",
-          "c760c481c5": "用量概覽",
-          "55c910f4f1": "- 部分模型價格不詳",
-          "enableMuse": "啟用 Muse",
-          "noLocalUsageYet": "目前尚未找到本機 Claude、Codex、OpenCode 或 Muse 用量。下一次代理程式工作階段寫入 Token 記錄後，這裡就會顯示資料。",
-          "providersEnabledWithData": "{{enabled}} 個已啟用 - {{withData}} 個有資料",
-          "sessionCount_other": "{{formatted}} 個工作階段"
+          "3887b94ce5": "token 總數"
         },
         "share": {
           "card": {

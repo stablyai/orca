@@ -51,6 +51,9 @@ export function* iterateClaudeUsageProjectionIntegrity(
     file.ownedDedupeKeys.length,
     state.ownedTokenMaxima.length
   ])
+  if (file.ownedAccountIds !== undefined) {
+    append(file.ownedAccountIds)
+  }
   for (let index = 0; index < file.ownedDedupeKeys.length; index++) {
     append([file.ownedDedupeKeys[index], state.ownedTokenMaxima[index]])
     if ((index + 1) % CLAUDE_USAGE_VALIDATION_BATCH_ROWS === 0) {

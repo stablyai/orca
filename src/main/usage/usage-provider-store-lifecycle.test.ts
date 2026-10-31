@@ -275,7 +275,8 @@ describe('UsageProviderStoreLifecycle', () => {
     const sourceCache = {
       path: join(tempDirectory, 'usage-0-sources.json'),
       schemaVersion: 1,
-      worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT
+      worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
+      hadPreviousHistory: false
     }
     store.replaceState(
       makeState({

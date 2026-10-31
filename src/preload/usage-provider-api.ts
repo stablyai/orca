@@ -17,7 +17,7 @@ export function createUsageProviderApi(
     getScanState: () => ipc.invoke(`${prefix}:getScanState`),
     setEnabled: (args: { enabled: boolean }) => ipc.invoke(`${prefix}:setEnabled`, args),
     refresh: (args?: { force?: boolean }) => ipc.invoke(`${prefix}:refresh`, args),
-    getSnapshot: (args: UsageRangeArgs & { limit?: number }) =>
+    getSnapshot: (args: UsageRangeArgs & { limit?: number; includeHistory?: boolean }) =>
       ipc.invoke(`${prefix}:getSnapshot`, args),
     getSummary: (args: UsageRangeArgs) => ipc.invoke(`${prefix}:getSummary`, args),
     getDaily: (args: UsageRangeArgs) => ipc.invoke(`${prefix}:getDaily`, args),

@@ -5239,7 +5239,6 @@
         },
         "StatsPane": {
           "42d3e0bdf7": "Usage analytics provider: {{value0}}",
-          "c79f073d4c": "Usage Analytics",
           "a58aba506f": "PRs created",
           "1c96f433e2": "Time agents worked",
           "9dbec9e675": "Agents spawned",
@@ -5252,25 +5251,7 @@
           "trackingSince": "Tracking since {{value0}}"
         },
         "UsageOverviewPane": {
-          "33f7b043d2": "Providers",
-          "70f36452d4": "Cache share",
-          "327603fe8b": "Active days",
-          "0eaf937335": "Est. cost",
-          "3887b94ce5": "Total tokens",
-          "2d13e57f72": "Enable OpenCode",
-          "2f1ee2878b": "Enable Codex",
-          "0ea0cae435": "Enable Claude",
-          "6c00c46815": "Enable a provider to scan local agent logs and build the combined token ledger.",
-          "49405ccc8d": "Start tracking tokens",
-          "ca6bc5fded": "Refresh",
-          "e06d1baf5c": "Refresh usage overview",
-          "c760c481c5": "Usage Overview",
-          "55c910f4f1": "- some model prices are unavailable",
-          "enableMuse": "Enable Muse",
-          "noLocalUsageYet": "No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.",
-          "providersEnabledWithData": "{{enabled}} enabled - {{withData}} with data",
-          "sessionCount_one": "{{formatted}} session",
-          "sessionCount_other": "{{formatted}} sessions"
+          "3887b94ce5": "Total tokens"
         },
         "share": {
           "card": {
@@ -22879,6 +22860,123 @@
       "events_other": "{{count}} events",
       "sessions_other": "{{count}} sessions",
       "turns_other": "{{count}} turns"
+    },
+    "usage": {
+      "localHost": "This device",
+      "history": {
+        "detail": "History detail",
+        "providerDetails": "Original provider view",
+        "providerDetailsScope": "This provider view has its own period and project filters. Account filters above apply to the historical ledger.",
+        "title": "Historical usage",
+        "owner": "{{host}} · Recorded agent logs",
+        "refresh": "Refresh historical usage",
+        "ownerUnavailable": "Historical usage is unavailable from {{host}}. Check the host connection and update it if it does not support historical usage.",
+        "empty": "No recorded usage matches this selection. Enable a provider, refresh its scan, or change the filters."
+      },
+      "activity": {
+        "title": "Local Orca activity · since first launch",
+        "scope": "Local Orca events only. These counters use a different source and lifetime period from the historical log scan."
+      },
+      "refresh": "Refresh",
+      "breakdown": {
+        "share": "Share of selected tokens"
+      },
+      "daily": {
+        "title": "Daily usage",
+        "metric": "Chart metric",
+        "cost": "API estimate",
+        "description": "Select a day to inspect its usage. Days without recorded usage are shown at zero.",
+        "partialCost": "Some usage has no recorded price. The chart shows the priced portion; * marks a partial estimate. This is not a billing statement.",
+        "inspect": "{{day}}: {{tokens}} tokens",
+        "inspectCost": "{{day}}: {{cost}} API-equivalent estimate",
+        "providers": "Provider series",
+        "unpriced": "Price unavailable"
+      },
+      "tokens": "Tokens",
+      "unknown": "Unknown",
+      "accounts": {
+        "title": "By account · tokens / API estimate"
+      },
+      "models": {
+        "title": "By model · tokens / API estimate"
+      },
+      "projects": {
+        "title": "By project · tokens / API estimate"
+      },
+      "session": {
+        "unavailable": "Session attribution unavailable",
+        "multipleProjects": "Multiple projects",
+        "multipleModels": "Multiple models",
+        "title": "Session drilldown",
+        "description": "Tokens match the selected period, account, provider, model, project and day. Select the last recorded day to inspect a session.",
+        "lastDay": "Last recorded day",
+        "activity": "Events / turns",
+        "input": "All input",
+        "output": "Output",
+        "showMore": "Show more sessions",
+        "estimate": "API-equivalent estimate: {{cost}}",
+        "legacy": "Some cached rows have no session attribution. Their tokens remain in the ledger; a new scan rebuilds session detail from available logs.",
+        "lifetime": "Some session rows show lifetime totals because period attribution is unavailable. Refresh the scan to rebuild their detail."
+      },
+      "account": {
+        "multiple": "Multiple accounts",
+        "coverage": "{{tokens}} tokens across {{rows}} rows have unknown account ownership and are excluded from named-account totals. Shared history and older records cannot be assigned from the current login.",
+        "unknown": "Unknown account",
+        "recorded": "Recorded account {{id}}"
+      },
+      "filter": {
+        "project": "Project",
+        "model": "Model",
+        "search": "Search {{filter}}…",
+        "noMatches": "No matches",
+        "period": "History period",
+        "provider": "Provider",
+        "allProviders": "All providers",
+        "account": "Account",
+        "allAccounts": "All accounts",
+        "allModels": "All models",
+        "allProjects": "All projects",
+        "scope": "Project scope",
+        "allLocal": "All local projects",
+        "orca": "Orca projects and folders",
+        "clearDay": "{{day}} · Clear day filter"
+      },
+      "period": {
+        "7d": "7 days",
+        "30d": "30 days",
+        "90d": "90 days",
+        "all": "All time"
+      },
+      "estimate": {
+        "partial": "Partial API-equivalent estimate",
+        "title": "API-equivalent estimate",
+        "calculation": "How these figures are calculated",
+        "explanation": "Dollar amounts are API-equivalent estimates from token logs, not subscription charges or billed spend. Unavailable model prices are excluded; OpenCode cost telemetry and Muse pricing are not treated as billing sources.",
+        "unpriced": "{{tokens}} tokens have no API price estimate."
+      },
+      "days": "Recorded days",
+      "cache": {
+        "title": "Cache read share of input",
+        "explanation": "Cache share = cache read / (new input + cache read + cache write). Cached input is included once; reasoning is already included in output."
+      },
+      "format": {
+        "notAvailable": "n/a"
+      },
+      "coverage": {
+        "counts": "Recorded coverage: {{providers}} providers · {{models}} models · {{projects}} projects · {{days}} days.",
+        "partial": "Coverage is incomplete. Disabled, unavailable or failed sources do not mean zero usage; totals include recorded rows only."
+      },
+      "source": {
+        "ownerUnsupported": "History unavailable on this host",
+        "loading": "Loading scan state…",
+        "failed": "Historical source unavailable",
+        "disabled": "Tracking disabled",
+        "scanning": "Scanning logs…",
+        "neverScanned": "Not scanned yet",
+        "updated": "Scanned {{time}}",
+        "needsRescan": "Saved totals need a new scan before they can be included. Refresh to rebuild history from available logs.",
+        "enable": "Enable {{provider}}"
+      }
     }
   },
   "github": {

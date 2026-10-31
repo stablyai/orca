@@ -92,7 +92,7 @@ describe('ClaudeUsageStore', () => {
   beforeEach(() => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-claude-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
-    initClaudeUsagePath()
+    initClaudeUsagePath(tempUserData)
     vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
     vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
       sessions: [],
@@ -712,6 +712,7 @@ describe('ClaudeUsageStore', () => {
       path: join(tempUserData, 'orca-claude-usage-sources.json'),
       schemaVersion: 7,
       worktreeFingerprint: '[]',
+      hadPreviousHistory: false,
       reuse: false
     })
     const persisted = readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')

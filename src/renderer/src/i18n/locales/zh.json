@@ -4602,7 +4602,6 @@
         },
         "StatsPane": {
           "42d3e0bdf7": "使用情况分析提供商：{{value0}}",
-          "c79f073d4c": "使用情况分析",
           "a58aba506f": "已创建 PR",
           "1c96f433e2": "智能体工作时间",
           "9dbec9e675": "已启动智能体",
@@ -4615,24 +4614,7 @@
           "trackingSince": "自 {{value0}} 开始跟踪"
         },
         "UsageOverviewPane": {
-          "33f7b043d2": "供应商",
-          "70f36452d4": "缓存共享",
-          "327603fe8b": "活跃天数",
-          "0eaf937335": "预计成本",
-          "3887b94ce5": "token总数",
-          "2d13e57f72": "启用OpenCode",
-          "2f1ee2878b": "启用 Codex",
-          "0ea0cae435": "启用 Claude",
-          "6c00c46815": "启用提供商以扫描本地智能体日志并构建组合的token账本。",
-          "49405ccc8d": "开始跟踪token",
-          "ca6bc5fded": "刷新",
-          "e06d1baf5c": "刷新使用概览",
-          "c760c481c5": "使用概述",
-          "55c910f4f1": "- 部分型号价格不详",
-          "enableMuse": "启用 Muse",
-          "noLocalUsageYet": "尚未找到本地 Claude、Codex、OpenCode 或 Muse 使用情况。概览将在下一个智能体会话写入token日志后填充。",
-          "providersEnabledWithData": "{{enabled}} 个已启用 - {{withData}} 个有数据",
-          "sessionCount_other": "{{formatted}} 个会话"
+          "3887b94ce5": "token总数"
         },
         "share": {
           "card": {

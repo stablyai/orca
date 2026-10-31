@@ -4962,7 +4962,6 @@
         },
         "StatsPane": {
           "42d3e0bdf7": "Fournisseur de statistiques d'utilisation : {{value0}}",
-          "c79f073d4c": "Statistiques d'utilisation",
           "a58aba506f": "PRs créées",
           "1c96f433e2": "Temps de travail des agents",
           "9dbec9e675": "Agents lancés",
@@ -4975,26 +4974,7 @@
           "trackingSince": "Suivi depuis {{value0}}"
         },
         "UsageOverviewPane": {
-          "33f7b043d2": "Fournisseurs",
-          "70f36452d4": "Part du cache",
-          "327603fe8b": "Jours actifs",
-          "0eaf937335": "Coût estimé",
-          "3887b94ce5": "Total de tokens",
-          "2d13e57f72": "Activer OpenCode",
-          "2f1ee2878b": "Activer Codex",
-          "0ea0cae435": "Activer Claude",
-          "6c00c46815": "Activez un fournisseur pour analyser les journaux locaux des agents et construire le registre combiné de tokens.",
-          "49405ccc8d": "Commencer le suivi des tokens",
-          "ca6bc5fded": "Actualiser",
-          "e06d1baf5c": "Actualiser la vue d'ensemble de l'utilisation",
-          "c760c481c5": "Vue d'ensemble de l'utilisation",
-          "55c910f4f1": "- certains prix de modèles sont indisponibles",
-          "enableMuse": "Activer Muse",
-          "noLocalUsageYet": "Aucune utilisation locale de Claude, Codex, OpenCode ou Muse trouvée pour l'instant. L'aperçu se remplira dès que la prochaine session d'agent écrira des journaux de tokens.",
-          "providersEnabledWithData": "Activés : {{enabled}} - avec des données : {{withData}}",
-          "sessionCount_one": "{{formatted}} session",
-          "sessionCount_other": "{{formatted}} sessions",
-          "sessionCount_many": "{{formatted}} sessions"
+          "3887b94ce5": "Total de tokens"
         },
         "share": {
           "card": {

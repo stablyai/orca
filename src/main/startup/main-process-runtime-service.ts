@@ -196,6 +196,11 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   )
   runtime.setSkillCloudService(new SkillCloudService(app.getPath('userData')))
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  const { claudeUsage, codexUsage, openCodeUsage, museUsage } = state
+  if (!claudeUsage || !codexUsage || !openCodeUsage || !museUsage) {
+    throw new Error('Usage stores must be initialized before runtime wiring')
+  }
+  runtime.usageHistory.setStores({ claudeUsage, codexUsage, openCodeUsage, museUsage })
   installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Resolve every Codex launch through runtime-home, including default-account hooks/auth.

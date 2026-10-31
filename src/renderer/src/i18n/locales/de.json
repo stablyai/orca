@@ -5165,7 +5165,6 @@
         },
         "StatsPane": {
           "42d3e0bdf7": "Anbieter der Nutzungsanalyse: {{value0}}",
-          "c79f073d4c": "Nutzungsanalyse",
           "a58aba506f": "Erstellte PRs",
           "1c96f433e2": "Arbeitszeit der Agenten",
           "9dbec9e675": "Gestartete Agenten",
@@ -5178,25 +5177,7 @@
           "trackingSince": "Erfassung seit {{value0}}"
         },
         "UsageOverviewPane": {
-          "33f7b043d2": "Anbieter",
-          "70f36452d4": "Cache-Anteil",
-          "327603fe8b": "Aktive Tage",
-          "0eaf937335": "Geschätzte Kosten",
-          "3887b94ce5": "Token insgesamt",
-          "2d13e57f72": "OpenCode aktivieren",
-          "2f1ee2878b": "Codex aktivieren",
-          "0ea0cae435": "Claude aktivieren",
-          "6c00c46815": "Einen Anbieter aktivieren, um lokale Agentenprotokolle zu durchsuchen und eine gemeinsame Token-Übersicht zu erstellen.",
-          "49405ccc8d": "Token-Erfassung starten",
-          "ca6bc5fded": "Aktualisieren",
-          "e06d1baf5c": "Nutzungsübersicht aktualisieren",
-          "c760c481c5": "Nutzungsübersicht",
-          "55c910f4f1": "- einige Modellpreise sind nicht verfügbar",
-          "enableMuse": "Muse aktivieren",
-          "noLocalUsageYet": "Bisher wurde keine lokale Nutzung von Claude, Codex, OpenCode oder Muse gefunden. Die Übersicht wird gefüllt, sobald die nächste Agentensitzung Token-Protokolle schreibt.",
-          "providersEnabledWithData": "{{enabled}} aktiviert - {{withData}} mit Daten",
-          "sessionCount_one": "{{formatted}} Sitzung",
-          "sessionCount_other": "{{formatted}} Sitzungen"
+          "3887b94ce5": "Token insgesamt"
         },
         "share": {
           "card": {

@@ -1,4 +1,5 @@
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
+import { USAGE_RUNTIME_CAPABILITIES } from './usage-history-rpc'
 import * as agentLaunchCapabilities from './agent-launch-runtime-capability'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
@@ -50,6 +51,7 @@ export * from './ai-vault-runtime-capabilities'
 export * from './browser-runtime-capabilities'
 export * from './files-runtime-capabilities'
 export * from './host-runtime-capabilities'
+export * from './usage-history-rpc'
 
 export * from './mobile-runtime-capabilities'
 export * from './preflight-runtime-capabilities'
@@ -140,6 +142,7 @@ export const RUNTIME_CAPABILITIES = [
   ...agentLaunchCapabilities.AGENT_LAUNCH_RUNTIME_CAPABILITIES,
   ...AGENT_SESSION_RUNTIME_CAPABILITIES,
   ...ACCOUNT_RUNTIME_CAPABILITIES,
+  ...USAGE_RUNTIME_CAPABILITIES,
   ...SKILL_RUNTIME_CAPABILITIES,
   ...AUTOMATION_RUNTIME_CAPABILITIES,
   ...WORKTREE_RUNTIME_CAPABILITIES,

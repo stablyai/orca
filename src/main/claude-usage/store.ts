@@ -1,5 +1,8 @@
+import { localUsageDay } from '../../shared/usage-history-range'
+import { filterUsageDaily } from '../usage/usage-scope-filters'
+import { projectClaudeUsageHistory } from '../usage/usage-history-projection'
 import { claudeTokenSessions } from '../usage/agent-token-usage'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
   ClaudeUsageBreakdownKind,
@@ -63,13 +66,13 @@ function normalizePersistedState(state: ClaudeUsagePersistedState): ClaudeUsageP
   }
 }
 
-export function initClaudeUsagePath(): void {
-  _claudeUsageFile = join(app.getPath('userData'), 'orca-claude-usage.json')
+export function initClaudeUsagePath(userDataPath = getAppEnvironment().getPath('userData')): void {
+  _claudeUsageFile = join(userDataPath, 'orca-claude-usage.json')
 }
 
 function getClaudeUsageFile(): string {
   if (!_claudeUsageFile) {
-    _claudeUsageFile = join(app.getPath('userData'), 'orca-claude-usage.json')
+    _claudeUsageFile = join(getAppEnvironment().getPath('userData'), 'orca-claude-usage.json')
   }
   return _claudeUsageFile
 }
@@ -102,10 +105,20 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   getSnapshot(
     scope: ClaudeUsageScope,
     range: ClaudeUsageRange,
-    recentSessionLimit = 10
+    recentSessionLimit = 10,
+    includeHistory = false
   ): ClaudeUsageSnapshot {
     return {
       scanState: this.getScanState(),
+      ...(includeHistory
+        ? {
+            historyToday: localUsageDay(new Date()),
+            historyNeedsRescan: this.state.schemaVersion === 6,
+            history: projectClaudeUsageHistory(
+              filterUsageDaily(this.state.dailyAggregates, scope, range)
+            )
+          }
+        : {}),
       summary: buildSummary(this.state, scope, range),
       daily: buildDaily(this.state, scope, range),
       modelBreakdown: buildBreakdown(this.state, scope, range, 'model'),

@@ -15592,30 +15592,10 @@
           }
         },
         "UsageOverviewPane": {
-          "33f7b043d2": "Provedores",
-          "70f36452d4": "Parcela de cache",
-          "327603fe8b": "Dias ativos",
-          "0eaf937335": "Custo est.",
-          "3887b94ce5": "Total de tokens",
-          "2d13e57f72": "Ativar OpenCode",
-          "2f1ee2878b": "Ativar Codex",
-          "0ea0cae435": "Ativar Claude",
-          "6c00c46815": "Ative um provedor para escanear os logs locais de agente e construir o registro combinado de tokens.",
-          "49405ccc8d": "Começar a rastrear tokens",
-          "ca6bc5fded": "Atualizar",
-          "e06d1baf5c": "Atualizar visão geral de uso",
-          "c760c481c5": "Visão Geral de Uso",
-          "55c910f4f1": "- alguns preços de modelo não estão disponíveis",
-          "enableMuse": "Ativar Muse",
-          "noLocalUsageYet": "Nenhum uso local de Claude, Codex, OpenCode ou Muse encontrado ainda. A visão geral será preenchida quando a próxima sessão de agente gravar registros de tokens.",
-          "providersEnabledWithData": "Habilitados: {{enabled}} - com dados: {{withData}}",
-          "sessionCount_one": "{{formatted}} sessão",
-          "sessionCount_other": "{{formatted}} sessões",
-          "sessionCount_many": "{{formatted}} sessões"
+          "3887b94ce5": "Total de tokens"
         },
         "StatsPane": {
           "42d3e0bdf7": "Provedor de análise de uso: {{value0}}",
-          "c79f073d4c": "Análise de Uso",
           "a58aba506f": "PRs criados",
           "1c96f433e2": "Tempo que os agentes trabalharam",
           "9dbec9e675": "Agentes iniciados",

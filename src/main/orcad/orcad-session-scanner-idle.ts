@@ -9,3 +9,12 @@ export function orcadSessionScannerIdleTimeoutMs(
 ): number | null {
   return isWslHost() ? WSL_HOST_SESSION_SCANNER_IDLE_TIMEOUT_MS : null
 }
+
+export async function configureOrcadSessionScannerIdleTimeout(): Promise<void> {
+  const timeoutMs = orcadSessionScannerIdleTimeoutMs()
+  if (timeoutMs !== null) {
+    const { setAiVaultServiceIdleTimeoutMs } =
+      await import('../ai-vault/session-scanner-service-spawn')
+    setAiVaultServiceIdleTimeoutMs(timeoutMs)
+  }
+}

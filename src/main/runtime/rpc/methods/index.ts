@@ -26,6 +26,7 @@ import { TERMINAL_DAEMON_METHODS } from './terminal-daemon'
 import { ACCOUNT_METHODS } from './accounts'
 import { ANTIGRAVITY_ACCOUNT_METHODS } from './antigravity-accounts'
 import { USAGE_CREDENTIAL_METHODS } from './usage-credentials'
+import { USAGE_HISTORY_METHODS } from './usage-history'
 import { PREFLIGHT_METHODS } from './preflight'
 import { COMPUTER_METHODS } from './computer'
 import { SESSION_TAB_METHODS } from './session-tabs'
@@ -114,6 +115,7 @@ export const ALL_RPC_METHODS = [
   ...ACCOUNT_METHODS,
   ...ANTIGRAVITY_ACCOUNT_METHODS,
   ...USAGE_CREDENTIAL_METHODS,
+  ...USAGE_HISTORY_METHODS,
   ...PREFLIGHT_METHODS,
   ...COMPUTER_METHODS,
   ...SESSION_TAB_METHODS,

@@ -1,6 +1,7 @@
 /** Event providers share token rollups but keep their extra metric generic: Codex pricing and OpenCode cost need no nullable union. */
 
 export type UsageAttributedEventFields = {
+  accountId?: string | null
   sessionId: string
   timestamp: string
   model: string | null
@@ -76,6 +77,8 @@ export type UsageSession<TMetric> = {
 } & TMetric
 
 export type UsageDailyAggregate<TMetric> = {
+  accountId?: string | null
+  sessionId?: string
   day: string
   model: string | null
   projectKey: string
@@ -98,9 +101,17 @@ export type UsageMetricFold<TEvent, TMetric> = {
 }
 
 export function usageDailyAggregateKey(record: {
+  accountId?: string | null
+  sessionId?: string
   day: string
   model: string | null
   projectKey: string
 }): string {
-  return [record.day, record.model ?? 'unknown', record.projectKey].join('::')
+  return [
+    record.day,
+    record.model ?? 'unknown',
+    record.projectKey,
+    record.sessionId ?? '',
+    record.accountId ?? ''
+  ].join('::')
 }

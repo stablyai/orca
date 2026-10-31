@@ -8,6 +8,13 @@ import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
+import type { SettingsHostScope } from '../settings/settings-host-scope'
+import { SettingsHostScopeUnavailableNotice } from '../settings/SettingsHostScopePicker'
+import { isWebClientLocation } from '@/lib/web-client-location'
+import {
+  getUsageOwnerHostScope,
+  useOwnerUsageRateLimits
+} from '../status-bar/use-owner-usage-rate-limits'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -101,14 +108,41 @@ function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element
   return <AgentIcon agent={tab} size={14} />
 }
 
-export function StatsPane(): React.JSX.Element {
+export function StatsPane({
+  hostScope
+}: { hostScope?: SettingsHostScope } = {}): React.JSX.Element {
+  return hostScope?.available === false ? (
+    <SettingsHostScopeUnavailableNotice />
+  ) : (
+    <OwnedStatsPane hostScope={hostScope} />
+  )
+}
+
+function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React.JSX.Element {
   const summary = useAppStore((s) => s.statsSummary)
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const localRateLimits = useAppStore((state) => state.rateLimits)
+  const environments = useAppStore((state) => state.runtimeEnvironments)
+  const selectedHost =
+    hostScope?.target.kind === 'local' && isWebClientLocation() && environments?.length === 1
+      ? { kind: 'environment' as const, environmentId: environments[0].id }
+      : hostScope?.target
+  const { remoteOwner } = useOwnerUsageRateLimits(localRateLimits)
+  const historyTarget = selectedHost ?? getUsageOwnerHostScope(remoteOwner)
+  const remoteHistory = historyTarget.kind === 'environment' || isWebClientLocation()
+  const historyOwnerLabel =
+    historyTarget.kind === 'environment'
+      ? (environments?.find((environment) => environment.id === historyTarget.environmentId)
+          ?.name ??
+        remoteOwner?.label ??
+        historyTarget.environmentId)
+      : translate('stats.usage.localHost', 'This device')
   const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('overview')
   const activeUsageOption =
-    USAGE_ANALYTICS_OPTIONS.find((option) => option.id === activeUsageTab) ??
-    USAGE_ANALYTICS_OPTIONS[0]
+    USAGE_ANALYTICS_OPTIONS.find(
+      (option) => option.id === activeUsageTab && (!remoteHistory || option.id !== 'grok')
+    ) ?? USAGE_ANALYTICS_OPTIONS[0]
 
   useEffect(() => {
     recordFeatureInteraction('usage-tracking')
@@ -116,52 +150,11 @@ export function StatsPane(): React.JSX.Element {
   }, [fetchStatsSummary, recordFeatureInteraction])
 
   return (
-    <div className="space-y-5">
-      {summary ? (
-        <div className="space-y-3">
-          {summary.totalAgentsSpawned === 0 && summary.totalPRsCreated === 0 ? (
-            <div className="flex min-h-[8rem] items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
-              {translate(
-                'auto.components.stats.StatsPane.73ed07859c',
-                'Start your first agent to begin tracking'
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-3">
-                <StatCard
-                  label={translate('auto.components.stats.StatsPane.9dbec9e675', 'Agents spawned')}
-                  value={summary.totalAgentsSpawned.toLocaleString(getIntlLocale())}
-                  icon={<Bot className="size-4" />}
-                />
-                <StatCard
-                  label={translate(
-                    'auto.components.stats.StatsPane.1c96f433e2',
-                    'Time agents worked'
-                  )}
-                  value={formatDuration(summary.totalAgentTimeMs)}
-                  icon={<Clock className="size-4" />}
-                />
-                <StatCard
-                  label={translate('auto.components.stats.StatsPane.a58aba506f', 'PRs created')}
-                  value={summary.totalPRsCreated.toLocaleString(getIntlLocale())}
-                  icon={<GitPullRequest className="size-4" />}
-                />
-              </div>
-              {formatTrackingSince(summary.firstEventAt) && (
-                <p className="px-1 text-xs text-muted-foreground">
-                  {formatTrackingSince(summary.firstEventAt)}
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      ) : null}
-
+    <div className="@container space-y-5">
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-foreground">
-            {translate('auto.components.stats.StatsPane.c79f073d4c', 'Usage Analytics')}
+            {translate('stats.usage.history.detail', 'History detail')}
           </h3>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -185,7 +178,9 @@ export function StatsPane(): React.JSX.Element {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              {USAGE_ANALYTICS_OPTIONS.map((option) => (
+              {USAGE_ANALYTICS_OPTIONS.filter(
+                (option) => !remoteHistory || option.id !== 'grok'
+              ).map((option) => (
                 <DropdownMenuItem key={option.id} onSelect={() => setActiveUsageTab(option.id)}>
                   <span className="flex min-w-0 items-center gap-2">
                     <UsageAnalyticsOptionIcon tab={option.id} />
@@ -205,21 +200,100 @@ export function StatsPane(): React.JSX.Element {
 
         {/* Mount only the active panel to avoid hidden layout/focus churn jittering the scroll-tracked settings page. */}
         <div>
-          {activeUsageTab === 'overview' ? (
-            <UsageOverviewPane />
-          ) : activeUsageTab === 'claude' ? (
-            <ClaudeUsagePane />
-          ) : activeUsageTab === 'codex' ? (
-            <CodexUsagePane />
-          ) : activeUsageTab === 'opencode' ? (
-            <OpenCodeUsagePane />
-          ) : activeUsageTab === 'muse' ? (
-            <MuseUsagePane />
+          {activeUsageOption.id !== 'grok' ? (
+            <div className="space-y-4">
+              <UsageOverviewPane
+                key={JSON.stringify([
+                  historyTarget.kind,
+                  historyTarget.kind === 'environment' ? historyTarget.environmentId : null,
+                  activeUsageOption.id
+                ])}
+                target={historyTarget}
+                ownerLabel={historyOwnerLabel}
+                initialProvider={activeUsageOption.id === 'overview' ? 'all' : activeUsageOption.id}
+              />
+              {!remoteHistory && activeUsageOption.id !== 'overview' ? (
+                <details className="rounded-lg border border-border p-4">
+                  <summary className="cursor-pointer text-sm font-medium text-foreground">
+                    {translate('stats.usage.history.providerDetails', 'Original provider view')}
+                  </summary>
+                  <p className="my-3 text-xs text-muted-foreground">
+                    {translate(
+                      'stats.usage.history.providerDetailsScope',
+                      'This provider view has its own period and project filters. Account filters above apply to the historical ledger.'
+                    )}
+                  </p>
+                  {activeUsageOption.id === 'claude' ? (
+                    <ClaudeUsagePane />
+                  ) : activeUsageOption.id === 'codex' ? (
+                    <CodexUsagePane />
+                  ) : activeUsageOption.id === 'opencode' ? (
+                    <OpenCodeUsagePane />
+                  ) : (
+                    <MuseUsagePane />
+                  )}
+                </details>
+              ) : null}
+            </div>
           ) : (
             <GrokUsagePane />
           )}
         </div>
       </div>
+      {summary ? (
+        <details className="rounded-lg border border-border p-4">
+          <summary className="cursor-pointer text-sm font-medium text-foreground">
+            {translate('stats.usage.activity.title', 'Local Orca activity · since first launch')}
+          </summary>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {translate(
+              'stats.usage.activity.scope',
+              'Local Orca events only. These counters use a different source and lifetime period from the historical log scan.'
+            )}
+          </p>
+          <div className="mt-3 space-y-3">
+            {summary.totalAgentsSpawned === 0 && summary.totalPRsCreated === 0 ? (
+              <div className="flex min-h-[8rem] items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
+                {translate(
+                  'auto.components.stats.StatsPane.73ed07859c',
+                  'Start your first agent to begin tracking'
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-3 @sm:grid-cols-3">
+                  <StatCard
+                    label={translate(
+                      'auto.components.stats.StatsPane.9dbec9e675',
+                      'Agents spawned'
+                    )}
+                    value={summary.totalAgentsSpawned.toLocaleString(getIntlLocale())}
+                    icon={<Bot className="size-4" />}
+                  />
+                  <StatCard
+                    label={translate(
+                      'auto.components.stats.StatsPane.1c96f433e2',
+                      'Time agents worked'
+                    )}
+                    value={formatDuration(summary.totalAgentTimeMs)}
+                    icon={<Clock className="size-4" />}
+                  />
+                  <StatCard
+                    label={translate('auto.components.stats.StatsPane.a58aba506f', 'PRs created')}
+                    value={summary.totalPRsCreated.toLocaleString(getIntlLocale())}
+                    icon={<GitPullRequest className="size-4" />}
+                  />
+                </div>
+                {formatTrackingSince(summary.firstEventAt) && (
+                  <p className="px-1 text-xs text-muted-foreground">
+                    {formatTrackingSince(summary.firstEventAt)}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </details>
+      ) : null}
     </div>
   )
 }

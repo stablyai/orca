@@ -1,3 +1,8 @@
+import {
+  countUsageDailySessions,
+  applyUsageBreakdownSessionCounts,
+  selectEventUsageSessions
+} from '../usage/usage-session-selection'
 import { highestUsageKey } from '../usage/highest-usage-key'
 import type {
   OpenCodeUsageBreakdownKind,
@@ -54,7 +59,7 @@ export function buildOpenCodeUsageSummary(
   return {
     scope,
     range,
-    sessions: filteredSessions.length,
+    sessions: countUsageDailySessions(filteredDaily, filteredSessions.length),
     events,
     inputTokens,
     cachedInputTokens,
@@ -143,15 +148,25 @@ export function buildOpenCodeUsageBreakdownRows(
     }
   }
 
+  applyUsageBreakdownSessionCounts(rows.values(), filteredDaily, kind)
   return [...rows.values()].sort((left, right) => right.totalTokens - left.totalTokens)
 }
 
 export function buildOpenCodeUsageRecentSessions(
   filteredSessions: OpenCodeUsageSession[],
-  limit = 10
+  limit = 10,
+  filteredDaily?: OpenCodeUsageDailyAggregate[],
+  range: OpenCodeUsageRange = 'all'
 ): OpenCodeUsageSessionRow[] {
+  const selected = filteredDaily
+    ? selectEventUsageSessions('opencode', filteredDaily, filteredSessions)
+    : null
+  if (selected) {
+    return selected.slice(0, limit)
+  }
   return filteredSessions.slice(0, limit).map((session): OpenCodeUsageSessionRow => ({
     sessionId: session.sessionId,
+    ...(range !== 'all' ? { totalsScope: 'lifetime' as const } : {}),
     lastActiveAt: session.lastTimestamp,
     durationMinutes: Math.max(
       0,

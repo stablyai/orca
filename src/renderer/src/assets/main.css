@@ -99,6 +99,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-provider-claude: var(--chart-provider-claude);
+  --color-chart-provider-opencode: var(--chart-provider-opencode);
+  --color-chart-provider-muse: var(--chart-provider-muse);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-worktree-sidebar: var(--worktree-sidebar);
@@ -253,6 +256,9 @@
   --chart-3: var(--color-blue-600);
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
+  --chart-provider-claude: var(--color-orange-600);
+  --chart-provider-opencode: var(--color-teal-600);
+  --chart-provider-muse: var(--color-violet-600);
   --worktree-sidebar: #f5f5f5;
   --worktree-sidebar-foreground: #0a0a0a;
   --worktree-sidebar-accent: #eaeaea;
@@ -364,6 +370,9 @@
   --chart-3: var(--color-blue-600);
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
+  --chart-provider-claude: var(--color-orange-400);
+  --chart-provider-opencode: var(--color-teal-400);
+  --chart-provider-muse: var(--color-violet-400);
   /* Mirror light mode’s lifted worktree sidebar above the dark canvas. */
   --worktree-sidebar: #2a2a2a;
   --worktree-sidebar-foreground: #e5e5e5;

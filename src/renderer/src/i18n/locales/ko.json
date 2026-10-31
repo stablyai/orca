@@ -4602,7 +4602,6 @@
         },
         "StatsPane": {
           "42d3e0bdf7": "사용 분석 제공자: {{value0}}",
-          "c79f073d4c": "사용량 분석",
           "a58aba506f": "생성된 PR",
           "1c96f433e2": "agents 작업 시간",
           "9dbec9e675": "시작된 Agents",
@@ -4615,24 +4614,7 @@
           "trackingSince": "{{value0}} 이후 추적 중"
         },
         "UsageOverviewPane": {
-          "33f7b043d2": "공급자",
-          "70f36452d4": "캐시 공유",
-          "327603fe8b": "활성 일수",
-          "0eaf937335": "예상 비용",
-          "3887b94ce5": "총 토큰",
-          "2d13e57f72": "OpenCode 활성화",
-          "2f1ee2878b": "Codex 활성화",
-          "0ea0cae435": "Claude 활성화",
-          "6c00c46815": "공급자를 활성화해 로컬 agent 로그를 스캔하고 통합 토큰 원장을 만드세요.",
-          "49405ccc8d": "토큰 추적 시작",
-          "ca6bc5fded": "새로고침",
-          "e06d1baf5c": "사용량 개요 새로고침",
-          "c760c481c5": "사용량 개요",
-          "55c910f4f1": "- 일부 모델 가격 확인 불가",
-          "enableMuse": "Muse 사용",
-          "noLocalUsageYet": "아직 로컬 Claude, Codex, OpenCode 또는 Muse 사용량을 찾지 못했습니다. 다음 에이전트 세션이 토큰 로그를 기록하면 개요가 채워집니다.",
-          "providersEnabledWithData": "{{enabled}}개 활성화 - {{withData}}개에 데이터 있음",
-          "sessionCount_other": "세션 {{formatted}}개"
+          "3887b94ce5": "총 토큰"
         },
         "share": {
           "card": {
