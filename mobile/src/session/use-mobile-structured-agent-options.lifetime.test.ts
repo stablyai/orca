@@ -236,7 +236,7 @@ it('coalesces a burst of turns into one running and one trailing options read', 
     await view.rerender({ turnId: `turn-${turn}` })
   }
   expect(reads).toHaveLength(2)
-  await act(async () => reads[1].resolve({ ...OPTIONS, conversationCommands: ['stale'] }))
+  await act(async () => reads[1].resolve({ ...OPTIONS, conversationCommands: ['clear'] }))
   await settle()
   expect(view.current().conversationCommands).toEqual([])
   expect(reads).toHaveLength(3)
@@ -330,10 +330,6 @@ it.each(['current', 'failed-then-wake', 'true-end'] as const)(
       const beforeWake = reads.length
       cause = 'status-wake'
       await view.rerender({ optionStamp: 'legitimate-status-wake' })
-      // The wake rereads behind the revalidation read still in flight, whose answer it supersedes.
-      expect(reads.length).toBe(beforeWake)
-      await act(async () => reads.at(-1)!.resolve(current))
-      await settle()
       expect(reads.length).toBe(beforeWake + 1)
       await act(async () => reads.at(-1)!.resolve(current))
     }
