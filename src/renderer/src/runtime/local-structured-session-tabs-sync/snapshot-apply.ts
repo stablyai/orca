@@ -2,7 +2,7 @@ import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
 } from '../../../../shared/runtime-types'
-import { markStructuredAgentSessionLaunchesPublished } from '../../lib/structured-agent-session-launch-publication'
+import { markStructuredAgentSessionLaunchesPublished } from '../../lib/agent-session/launch/structured-agent-session-launch-publication'
 import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner-state'
 import { getExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
 import { applyWebSessionTabsSnapshot } from '../web-session-tabs-sync/snapshot-api'
@@ -24,7 +24,7 @@ import {
   hostSnapshotAffirmsAgentSessions,
   hostSnapshotAffirmsWorktreeContents
 } from '../host-session-snapshot-authority'
-import { retireAbsentStructuredAgentSessionLaunchCancellationTombstones } from '../../lib/structured-agent-session-launch-registry'
+import { retireAbsentStructuredAgentSessionLaunchCancellationTombstones } from '../../lib/agent-session/launch/structured-agent-session-launch-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
@@ -33,9 +33,10 @@ import {
 import { suppressCancelledStructuredSessionTabs } from '../structured-agent-session-tab-retirement'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
-import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { recordSyncedAgentSessionTabsInLayoutOwner } from '../agent-session-tab-layout-owner'
+import { useAppStore } from '../../store'
+import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'
+import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'
 
 /** The host saying it no longer publishes this worktree at all, rather than publishing an empty one. */
 function isWorktreeRetraction(
@@ -45,12 +46,7 @@ function isWorktreeRetraction(
 }
 
 export type StructuredSessionSnapshotApplyOptions = {
-  /**
-   * Marks these snapshots as an authoritative `session.tabs.listAll` response, which exempts them
-   * from the retired-epoch fence. A census is the synchronous answer to a request we just issued,
-   * so it cannot be the delayed frame from a dead generation that the fence exists to reject —
-   * whereas a subscription frame can be, and stays fenced.
-   */
+  /** Authority census replies answer a just-issued listAll, so exempt them from retired-epoch fencing of delayed dead-generation stream frames. */
   authoritative?: boolean
   /** Re-applies a publication at the version already applied: the window removed a chat early. */
   reacceptCurrentVersion?: boolean
@@ -60,6 +56,10 @@ export type StructuredSessionSnapshotApplyOptions = {
   onRetiredEpochDrop?: (worktreeId: string, publicationEpoch: string) => void
   /** Collects accepted publications so lifecycle listeners run after the store patch settles. */
   onAcceptedAgentSession?: (worktreeId: string, sessionId: string) => void
+  /** Workspaces main's frames draw: the listing writes none of their tabs, only collects labels. */
+  framesDraw?: (worktreeId: string) => boolean
+  /** Collects host titles for drawn chat tabs, applied as content after the store patch. */
+  onDrawnChatLabel?: (change: DrawnChatLabel) => void
 }
 
 export function applyStructuredSessionTabSnapshots(
@@ -68,26 +68,35 @@ export function applyStructuredSessionTabSnapshots(
   options: StructuredSessionSnapshotApplyOptions = {}
 ): void {
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
-  const before = ORCA_LAYOUT_OWNER_IS_MAIN ? useAppStore.getState() : null
+  const drawnChatLabels: DrawnChatLabel[] = []
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
-    (state) =>
-      applyLocalStructuredSessionTabSnapshots(state, snapshots, owner, undefined, {
-        ...options,
-        onAcceptedAgentSession: (worktreeId, sessionId) => {
-          acceptedAgentSessions.push({ worktreeId, sessionId })
-          options.onAcceptedAgentSession?.(worktreeId, sessionId)
-        }
-      }),
-    { frames: [] }
+    (state, changedAgentPaneKeys) =>
+      applyLocalStructuredSessionTabSnapshots(
+        state,
+        snapshots,
+        owner,
+        undefined,
+        {
+          ...options,
+          onAcceptedAgentSession: (worktreeId, sessionId) => {
+            acceptedAgentSessions.push({ worktreeId, sessionId })
+            options.onAcceptedAgentSession?.(worktreeId, sessionId)
+          },
+          // Switch point: main places the listed chats' tabs; its frames draw them.
+          framesDraw: ORCA_LAYOUT_OWNER_IS_MAIN ? framesDrawWorkspace(state) : undefined,
+          onDrawnChatLabel: (change) => drawnChatLabels.push(change)
+        },
+        changedAgentPaneKeys
+      ),
+    { frames: [] },
+    undefined,
+    false,
+    snapshots.map(({ worktree }) => worktree)
   )
   settleStructuredSessionMirror()
-  // Switch point: main records the chat tabs this listing added to or removed from the tab bars.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN && before) {
-    recordSyncedAgentSessionTabsInLayoutOwner(
-      before,
-      useAppStore.getState(),
-      snapshots.map((snapshot) => snapshot.worktree)
-    )
+  const { setTabLabel } = useAppStore.getState()
+  for (const { tabId, label } of drawnChatLabels) {
+    setTabLabel(tabId, label)
   }
   markStructuredAgentSessionLaunchesPublished(LOCAL_EXECUTION_HOST_ID, acceptedAgentSessions)
   if (options.authoritative) {
@@ -116,18 +125,16 @@ export function applyLocalStructuredSessionTabSnapshots<
   snapshots: readonly RuntimeMobileSessionTabsResult[],
   owner = LOCAL_STRUCTURED_SESSION_OWNER,
   now = Date.now(),
-  options: StructuredSessionSnapshotApplyOptions = {}
+  options: StructuredSessionSnapshotApplyOptions = {},
+  changedAgentPaneKeys?: Set<string>
 ): State {
   let next = state
   for (const snapshot of snapshots) {
-    // Why: the execution host owns its tabs; local inventory must not rewrite paired or SSH panes.
+    // Local inventory must not rewrite paired/SSH panes; execution hosts own their tabs.
     if (getExecutionHostIdForWorktree(next, snapshot.worktree) !== 'local') {
       continue
     }
-    // "Ask me later", not an answer: a worktree the host holds no entry for still answers a forced
-    // inventory, with the `none` placeholder epoch. Absence there proves nothing, so it neither applies nor
-    // records — recording it would retire the epoch below. Its cursor is left alone, so a genuinely
-    // stale frame arriving late is still fenced.
+    // Forced none-epoch placeholders prove no absence: neither apply nor record, which would retire the renderer epoch. Retain cursor to fence genuinely stale frames.
     if (!hostSnapshotAffirmsWorktreeContents(snapshot)) {
       continue
     }
@@ -136,11 +143,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       prior && sameSessionTabsPublicationLineage(prior.publicationEpoch, snapshot.publicationEpoch)
     )
     const epochHistory = localStructuredSessionEpochHistoryByWorktree.get(snapshot.worktree)
-    // Why not just drop: an epoch is retired whenever another publisher takes over the worktree,
-    // but a live publisher can return after transient interlopers (a `removed:` retraction, then a
-    // headless rebuild), and the structured publish inherits the worktree's existing epoch rather
-    // than minting its own. So a retired epoch is not proof of a dead generation — only authority
-    // can settle it, and the repair lane goes and asks.
+    // Retired epochs can belong to live returning publishers after retraction/headless takeover. They inherit current worktree epoch, so rejection needs authoritative repair rather than assuming death.
     if (
       !sharesLineage &&
       !admitRetiredValueUnderAuthority(
@@ -167,6 +170,7 @@ export function applyLocalStructuredSessionTabSnapshots<
         options.onAcceptedAgentSession?.(snapshot.worktree, tab.sessionId)
       }
     }
+    // Runs for a drawn workspace too: its tab-id, focus and close-intent ledgers still follow the host.
     const patch = applyWebSessionTabsSnapshot(
       next,
       projectLocalStructuredSessionTabs(effectiveSnapshot),
@@ -176,26 +180,22 @@ export function applyLocalStructuredSessionTabSnapshots<
         contentScope: 'agent-session',
         preserveLocalLayout: true,
         terminalPtyMode: 'local'
-      }
+      },
+      changedAgentPaneKeys
     )
-    next = patch === next ? next : ({ ...next, ...patch } as State)
+    if (options.framesDraw?.(snapshot.worktree)) {
+      // Main's frames own this workspace's tabs, so the patch (tab structure only here) is dropped.
+      for (const change of drawnChatLabelChanges(
+        next.unifiedTabsByWorktree[snapshot.worktree] ?? [],
+        effectiveSnapshot
+      )) {
+        options.onDrawnChatLabel?.(change)
+      }
+    } else {
+      next = patch === next ? next : ({ ...next, ...patch } as State)
+    }
     if (isWorktreeRetraction(effectiveSnapshot)) {
-      // A retraction was applied above — the mirrored rows must go — but it is not a publication
-      // to fence later frames against. Recording it would retire the renderer's own epoch, which
-      // is one string for the whole process lifetime, and every republication afterwards would be
-      // dropped until a reload minted a new one. That is what left a revealed chat invisible.
-      //
-      // The cursor stays: the host mints a fresh epoch when it rebuilds a pruned entry, so a
-      // republication is never gated by it, while dropping it would leave a frame issued before
-      // the close free to land afterwards and strand a row nothing republishes.
-      //
-      // The history keeps its tombstones but forgets what is current. Unlike the mainstream path —
-      // where the epochs belong to a remote publisher — here the consumer IS the publisher, and
-      // `current` is the renderer's own lifetime epoch: leave it set and the next frame under any
-      // other epoch retires it for good, which is this bug again one cycle later. Clearing the
-      // whole record would instead let a delayed frame from an already-superseded epoch back in,
-      // because the version cursor only fences within a lineage. Dropping `current` alone does
-      // neither: `noteRetiredValue` retires nothing when there is nothing current.
+      // Retraction removes rows but is not a publication: recording it would retire this consumer/publisher renderer’s lifetime epoch. Retain version cursor against pre-close replies; rebuilt entries mint fresh epochs. Preserve retired tombstones but clear current so the next lineage cannot retire our lifetime epoch one cycle later. Clearing all history would admit dead-epoch stragglers across lineages.
       const history = localStructuredSessionEpochHistoryByWorktree.get(snapshot.worktree)
       if (history) {
         localStructuredSessionEpochHistoryByWorktree.set(snapshot.worktree, {
@@ -214,8 +214,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       noteRetiredValue(epochHistory, snapshot.publicationEpoch, 8)
     )
   }
-  // Drop publisher cursors for worktrees that no longer exist. Without this,
-  // every deleted worktree leaves an entry for the lifetime of the renderer.
+  // Deleted worktrees must release publisher cursors instead of retaining them for renderer lifetime.
   const knownWorktreeIds = knownStructuredSessionWorktreeIds(next)
   for (const worktreeId of localStructuredSessionVersionByWorktree.keys()) {
     if (!knownWorktreeIds.has(worktreeId)) {

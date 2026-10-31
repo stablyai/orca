@@ -7,7 +7,9 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
@@ -19,6 +21,8 @@ import {
   LINEAGE_NESTED_ROW_SURFACE_INSET,
   WORKTREE_CARD_SURFACE_MARGIN
 } from './worktree-list/rows/indentation'
+
+import { revealMountedWorktreeElement } from './worktree-list/navigation/mounted-row-reveal'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -142,7 +146,9 @@ vi.mock('./WorktreeCardAgents', () => ({
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({
-  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+  default: ({ children }: { children: ReactNode }) => (
+    <div data-worktree-context-menu-scope>{children}</div>
+  ),
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
@@ -324,6 +330,8 @@ function setLineageState(
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),
     tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    structuredChatSleptAtByPaneKey: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
     updateRepo: vi.fn(),
@@ -466,6 +474,45 @@ describe('WorktreeList real child WorktreeCard integration', () => {
     })
   })
 
+  it.each([
+    { newStyle: false, deleting: false },
+    { newStyle: true, deleting: false },
+    { newStyle: true, deleting: true }
+  ])('reveals complete real-card segments %j', async ({ newStyle, deleting }) => {
+    setLineageState({ includeGrandchild: true, deletingChild: deleting })
+    mockStore.state.settings = { experimentalNewWorktreeCardStyle: newStyle }
+    const container = await renderWorktreeList()
+    const parent = container.querySelector<HTMLElement>(
+      '[role="option"][data-worktree-id="parent"]'
+    )!
+    const child = container.querySelector<HTMLElement>('[role="option"][data-worktree-id="child"]')!
+    const boundaries = container.querySelectorAll<HTMLElement>('[data-worktree-lineage-children]')
+    Object.defineProperty(container, 'clientHeight', { value: 673 })
+    container.getBoundingClientRect = () => new DOMRect(0, 0, 300, 673)
+    parent.getBoundingClientRect = () => new DOMRect(0, 200, 300, 11800)
+    child.getBoundingClientRect = () => new DOMRect(0, 900, 300, 11100)
+    boundaries[0]!.getBoundingClientRect = () => new DOMRect(0, 320, 300, 11680)
+    boundaries[1]!.getBoundingClientRect = () => new DOMRect(0, 1020, 300, 10980)
+    container.scrollTo = vi.fn()
+
+    expect(revealMountedWorktreeElement(container, 'parent', 'auto', parent.id)).toBe(parent)
+    expect(container.scrollTo).not.toHaveBeenCalled()
+    expect(revealMountedWorktreeElement(container, 'child', 'auto', child.id)).toBe(child)
+    expect(container.scrollTo).toHaveBeenCalledWith({ top: 347, behavior: 'auto' })
+    const leaf = container.querySelector<HTMLElement>('[data-worktree-id="grandchild"]')!
+    leaf.getBoundingClientRect = () => new DOMRect(0, 1005, 300, 55)
+    expect(revealMountedWorktreeElement(container, 'grandchild', 'auto', leaf.id)).toBe(leaf)
+    expect(container.scrollTo).toHaveBeenLastCalledWith({ top: 387, behavior: 'auto' })
+    expect(parent.getBoundingClientRect().height).toBe(11800)
+    if (newStyle && !deleting) {
+      expect(parent.querySelector('[data-worktree-sleeping-dim]')).not.toBeNull()
+    }
+    if (deleting) {
+      expect(child.querySelector('[aria-busy=true]')).not.toBeNull()
+    }
+    expect(boundaries[0]!.parentElement?.lastElementChild).toBe(boundaries[0])
+  })
+
   it('double-clicking a nested child opens edit metadata for the child only', async () => {
     const container = await renderWorktreeList()
     const childCard = container.querySelector<HTMLElement>(
@@ -490,6 +537,72 @@ describe('WorktreeList real child WorktreeCard integration', () => {
       'edit-meta',
       expect.objectContaining({ worktreeId: 'parent' })
     )
+  })
+
+  it.each([
+    { pressed: 'option', worktreeId: 'parent' },
+    { pressed: 'option', worktreeId: 'child' },
+    { pressed: 'option', worktreeId: 'folder:folder-workspace' },
+    { pressed: 'card', worktreeId: 'parent' },
+    { pressed: 'card', worktreeId: 'child' },
+    { pressed: 'card', worktreeId: 'folder:folder-workspace' }
+  ])('activating the $worktreeId $pressed activates it once', async ({ pressed, worktreeId }) => {
+    mockStore.state.projectGroups = [
+      {
+        id: 'folder-group',
+        name: 'Folder group',
+        parentPath: '/tmp/lineage-real-card-folder',
+        parentGroupId: null,
+        createdFrom: 'folder-scan',
+        tabOrder: 1,
+        isCollapsed: false,
+        color: null,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ] satisfies ProjectGroup[]
+    mockStore.state.folderWorkspaces = [
+      {
+        id: 'folder-workspace',
+        projectGroupId: 'folder-group',
+        name: 'folder workspace',
+        folderPath: '/tmp/lineage-real-card-folder',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 1,
+        lastActivityAt: 1,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ] satisfies FolderWorkspace[]
+    const container = await renderWorktreeList()
+    const option = container.querySelector<HTMLElement>(
+      `[role="option"][data-worktree-id="${worktreeId}"]`
+    )
+    const target =
+      pressed === 'option'
+        ? option
+        : option?.querySelector<HTMLElement>('[data-worktree-card-surface="true"]')
+
+    expect(target).not.toBeNull()
+    await act(async () => {
+      target!.click()
+    })
+
+    if (pressed === 'option' && worktreeId === 'folder:folder-workspace') {
+      container.getBoundingClientRect = () => new DOMRect(0, 0, 300, 673)
+      Object.defineProperty(container, 'clientHeight', { value: 673 })
+      option!.getBoundingClientRect = () => new DOMRect(0, 1005, 300, 55)
+      container.scrollTo = vi.fn()
+      expect(revealMountedWorktreeElement(container, worktreeId, 'auto', option!.id)).toBe(option)
+      expect(container.scrollTo).toHaveBeenCalledWith({ top: 387, behavior: 'auto' })
+    }
+
+    expect(mockStore.activateWorktreeFromSidebar).toHaveBeenCalledTimes(1)
+    expect(mockStore.activateWorktreeFromSidebar).toHaveBeenCalledWith(worktreeId, 'local')
   })
 
   it('does not activate a nested child while it is deleting', async () => {

@@ -56,7 +56,6 @@ describe('background worktree removal', () => {
     })
     await _settlePendingWorktreeRemovalsForTests()
     expect(isPending()).toBe(false)
-    // A refetch the end notice triggers must not see the row as still removing.
     expect(pendingAtPublish).toEqual([true, false])
   })
 
@@ -231,7 +230,6 @@ describe('background worktree removal', () => {
         projectPendingWorktreeRemovals(rows, (row) => row.id, clientReadsMarker, pendingAtScan)
       ).toEqual([{ id: other.worktreeId }])
     }
-    // A listing that began after the delete finished reads Git's current answer as-is.
     expect(
       projectPendingWorktreeRemovals(rows, (row) => row.id, true, snapshotPendingWorktreeRemovals())
     ).toBe(rows)

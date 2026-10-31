@@ -1,8 +1,3 @@
-// A Grok session Grok cannot reopen, through the real host, record store, journal and launch
-// resolver: a fresh session continues the chat, the chain records what it replaced, and the chat
-// says so once, unless nothing was ever exchanged on the lost session. A start that succeeds
-// writes the row an earlier attach failure dropped.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
@@ -16,7 +11,7 @@ import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { GROK, GROK_CONFIG_OPTIONS, PROVIDER_SESSION } from './acp-structured-adapter.test-support'
 import { ACP_HANDLE_TRANSPORT } from './acp-structured-agent-definitions'
-import { replayJournal } from '../native-chat/agent-session-journal/journal-open'
+import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import {
@@ -28,6 +23,7 @@ import {
 } from './acp-structured-host.test-support'
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await closeProviderTimelineRigs()
 })
 
@@ -38,7 +34,6 @@ const keyOf = (nativeId: string) =>
 
 type Lost = Map<string, { code: number; message: string }>
 
-/** Grok opens sessions in turn and cannot reopen any session in `lost`; it reopens every other. */
 function sessionsLost(loads: string[], lost: Lost) {
   const opened = [PROVIDER_SESSION, FRESH, FRESH_2]
   return (agent: AcpScriptedAgent) => {
@@ -88,7 +83,7 @@ async function openRestoreRig(code: number, message: string) {
   const { rig, host, store, journalDatabase } = opened
   resolver.resolve = createAcpStructuredLaunchResolver(GROK, {
     store,
-    readJournal: (sessionId) => replayJournal(journalDatabase.db, sessionId),
+    readJournal: (sessionId) => restoreJournal(journalDatabase.db, sessionId),
     resolveWorkspacePath: async () => '/workspace',
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     resolveCommand: () => '/fake/grok'
@@ -101,7 +96,6 @@ async function openRestoreRig(code: number, message: string) {
         readAgentSessionFailureFact(row.body.failure)?.kind === 'sessionNotRestored'
     )
   }
-  /** A send Grok answers in `providerSession`, ending its turn. */
   const exchange = async (text: string, reply: string, providerSession: string) => {
     await send(host, text)
     const prompt = await rig.frame('session/prompt')
@@ -147,7 +141,6 @@ describe('a saved Grok session Grok cannot reopen', () => {
       text: "Grok couldn't reopen its earlier session, so this chat continues in a new one. Grok doesn't remember the earlier messages."
     })
 
-    // The chat keeps working in the fresh session.
     await exchange('still there?', 'yes', FRESH)
     const messages = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
       .filter((row) => row.body.kind === 'message')
@@ -159,7 +152,6 @@ describe('a saved Grok session Grok cannot reopen', () => {
       ])
     )
 
-    // The next reopen loads the fresh session, and says nothing new.
     await host.close(SESSION, 'user-close')
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
     await ready()
@@ -194,10 +186,8 @@ describe('a created Grok session Grok reports missing on the first reopen', () =
     })
     expect(head?.supersedesKey).toBeUndefined()
     expect(await warnings()).toHaveLength(1)
-    // The person still sees what Grok forgot.
     expect(await messages()).toEqual(expect.arrayContaining(['remember 42', 'noted']))
 
-    // The next reopen loads the fresh session, and says nothing new.
     await host.close(SESSION, 'user-close')
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
     await ready()
@@ -239,7 +229,7 @@ describe('a replacement after its earlier attach failed to open the journal', ()
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
     await ready()
     await host.close(SESSION, 'user-close')
-    // The journal must open before a spawned child's background handshake proves a new link.
+    // Fail before the spawned child's background handshake can prove a replacement link.
     vi.spyOn(AgentSessionJournal.prototype, 'open').mockRejectedValueOnce(
       new Error('journal path unavailable')
     )
@@ -317,7 +307,6 @@ describe('a replacement Grok never saved, superseded after its row was written',
     await ready()
     expect(loads).toEqual([PROVIDER_SESSION, FRESH])
     expect(await warnings()).toHaveLength(1)
-    // The newer session carries the same loss, so reopening it says nothing new.
     await host.close(SESSION, 'user-close')
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
     await ready()

@@ -1,6 +1,4 @@
 import { MEDIA_FILE_MIME_TYPES } from '../../../src/shared/media-file-extensions'
-// Pure tree projection for the mobile file explorer. Mobile mirrors desktop
-// browse semantics by flattening cached files.readDir results as folders open.
 import { compareFileNames } from '../../../src/shared/file-name-sort'
 
 export type MobileDirEntry = {
@@ -106,6 +104,41 @@ function visitDirectory(
   }
 }
 
+/** Rows whose name contains the query, across every folder loaded so far, with their parent folders. */
+export function filterDirectoryCache(cache: DirectoryCache, query: string): TreeNode[] {
+  const needle = query.trim().toLowerCase()
+  const rows: TreeNode[] = []
+  if (needle !== '') {
+    collectMatches('', 0, cache, needle, rows)
+  }
+  return rows
+}
+
+function collectMatches(
+  relativePath: string,
+  depth: number,
+  cache: DirectoryCache,
+  needle: string,
+  rows: TreeNode[]
+): boolean {
+  const entries = (getDirectoryCacheState(cache, relativePath)?.entries ?? [])
+    .filter(shouldIncludeMobileFileExplorerEntry)
+    .sort(compareDirectoryEntries)
+  let matched = false
+  for (const entry of entries) {
+    const childPath = joinRelativePath(relativePath, entry.name)
+    const nameMatches = entry.name.toLowerCase().includes(needle)
+    const childRows: TreeNode[] = []
+    const childMatches =
+      entry.isDirectory && collectMatches(childPath, depth + 1, cache, needle, childRows)
+    if (nameMatches || childMatches) {
+      rows.push(toTreeNode(entry, childPath, depth), ...childRows)
+      matched = true
+    }
+  }
+  return matched
+}
+
 function toTreeNode(entry: MobileDirEntry, relativePath: string, depth: number): TreeNode {
   return {
     id: `${entry.isDirectory ? 'dir' : 'file'}:${relativePath}`,
@@ -132,8 +165,7 @@ export function getDirectoryCacheState(
   cache: DirectoryCache,
   relativePath: string
 ): DirectoryState | undefined {
-  // Why: repository paths are arbitrary object keys; inherited keys like
-  // "constructor" must not masquerade as loaded directory state.
+  // Inherited keys such as constructor must not masquerade as cached directories.
   return Object.hasOwn(cache, relativePath) ? cache[relativePath] : undefined
 }
 

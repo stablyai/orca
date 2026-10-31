@@ -4,17 +4,12 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
 import { translate } from '@/i18n/i18n'
 
-// ---------------------------------------------------------------------------
-// Grab payload → human-readable prompt context
-// ---------------------------------------------------------------------------
-
 export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {
   const lines: string[] = []
 
   lines.push(`Attached browser context from ${payload.page.sanitizedUrl}`)
   lines.push('')
 
-  // Selected element summary
   lines.push('Selected element:')
   lines.push(payload.target.tagName)
   if (payload.target.accessibility.accessibleName) {
@@ -34,14 +29,12 @@ export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {
   lines.push(`Dimensions: ${Math.round(rectViewport.width)}x${Math.round(rectViewport.height)}`)
   lines.push('')
 
-  // Text snippet
   if (payload.target.textSnippet) {
     lines.push('Text content:')
     lines.push(payload.target.textSnippet)
     lines.push('')
   }
 
-  // Nearby context
   if (payload.nearbyText.length > 0) {
     lines.push('Nearby context:')
     for (const text of payload.nearbyText) {
@@ -50,7 +43,6 @@ export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {
     lines.push('')
   }
 
-  // Computed styles
   const styles = payload.target.computedStyles
   const styleLines: string[] = []
   if (styles.display && styles.display !== 'inline') {
@@ -76,14 +68,12 @@ export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {
     lines.push('')
   }
 
-  // HTML snippet
   if (payload.target.htmlSnippet) {
     lines.push('HTML:')
     lines.push(payload.target.htmlSnippet)
     lines.push('')
   }
 
-  // Ancestor path
   if (payload.ancestorPath.length > 0) {
     lines.push(`Ancestor path: ${payload.ancestorPath.join(' > ')}`)
   }
@@ -94,10 +84,7 @@ export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {
   return lines.join('\n').trimEnd()
 }
 
-// ---------------------------------------------------------------------------
-// Security: all page-derived strings are rendered as escaped plain text.
-// No innerHTML, no markdown rendering, no auto-linking.
-// ---------------------------------------------------------------------------
+// Render page-controlled strings as escaped text; never HTML, markdown or automatic links.
 
 function EscapedText({ text, className }: { text: string; className?: string }): React.JSX.Element {
   return <span className={className}>{text}</span>
@@ -111,10 +98,6 @@ function getNearbyTextRows(nearbyText: readonly string[]): { key: string; text: 
     return { key: `${text}:${count}`, text }
   })
 }
-
-// ---------------------------------------------------------------------------
-// Confirmation Sheet Component
-// ---------------------------------------------------------------------------
 
 export default function GrabConfirmationSheet({
   payload,
@@ -155,9 +138,7 @@ export default function GrabConfirmationSheet({
       {/* Content */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
-          {/* Screenshot preview — only render if dataUrl is a valid PNG data URI.
-              Why: the design doc requires screenshots be image/png only. Validating
-              the prefix prevents a crafted payload from injecting non-image URIs. */}
+          {/* Only PNG data URIs may populate the screenshot preview; reject crafted non-image URIs. */}
           {payload.screenshot?.dataUrl?.startsWith('data:image/png;base64,') ? (
             <div className="overflow-hidden rounded-lg border border-border/60">
               <img

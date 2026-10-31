@@ -110,8 +110,7 @@ function dispatchPointer(type: PointerEventType, init: PointerEventInit = {}): v
     button: init.button ?? 0,
     buttons: init.buttons ?? 0
   })
-  // Why: happy-dom's PointerEvent init drops pointerType; grafting it onto a
-  // MouseEvent exercises the same duck-typed reads the WebView handler does.
+  // Happy DOM drops pointerType initialization; add it to MouseEvent for the handler’s duck-typed reads.
   Object.defineProperty(event, 'pointerType', { value: init.pointerType ?? 'mouse' })
   terminalSurface().dispatchEvent(event)
 }
@@ -158,13 +157,13 @@ export function useTerminalMouseWebViewHarness() {
         data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData })
       })
     )
-    // Why: init commits the replacement surface on the next animation frame.
+    // Wait for init’s animation-frame surface commit.
     while (animationFrames.length > 0) {
       animationFrames.shift()?.()
     }
   }
 
-  // Why: the document sends no mouse report until replayed bytes prove the encoding.
+  // Replay must prove mouse encoding before the document sends reports.
   function writeLegacyMouseEncoding(): void {
     window.dispatchEvent(
       new MessageEvent('message', {

@@ -1,11 +1,5 @@
-/**
- * Layout rework P3 baseline for the frozen path: the current desktop against a pinned released
- * headless server. The desktop splits a server pane, drags the divider, renames a pane and
- * reconnects after the server restarts. Each step records the old server's `session.tabs.list`
- * and the pane tree the desktop holds and draws; the rework's frozen adapter must match them.
- *
- * Needs ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE (CI: packaged-browser-e2e.yml, job layout-compat).
- */
+// P3 frozen adapter: compare current desktop split/resize/rename/restart observations against a pinned released headless server.
+// Requires ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE (packaged-browser-e2e.yml layout-compat).
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { launchPairedElectronClient } from './helpers/paired-electron-client'

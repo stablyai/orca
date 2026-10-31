@@ -1,11 +1,10 @@
-/**
- * A worker start that fails AFTER its structured session exists is the fourth settlement path.
- *
- * The create publishes a "Claude Chat"/"Codex Chat" tab and writes it into the durable restore
- * index before the start can fail on the authority gate or on the preamble turn. Dropping only the
- * dispatch hold there left one dead tab per failed start, re-published on every app launch and
- * re-attaching a session no dispatch owns.
- */
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { hostTestState } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session-record.test-fixture'
+/** Post-create authority/preamble failure must retire both live and durable chat tabs; dropping only the dispatch hold restores an unowned dead tab after restart. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -37,12 +36,6 @@ vi.mock('./orchestration/worker/worker-setup-gate', () => ({
   persistWorkerReadinessStage: () => {},
   persistWorkerSetupWaitOutcome: () => {}
 }))
-vi.mock('./orchestration/worker/worker-start-receipt', () => ({
-  failWorkerStartWithReceipt: (args: { failedStage: string }) => ({
-    state: 'failed',
-    stage: args.failedStage
-  })
-}))
 vi.mock('./orchestration/runs/dispatch-creator', () => ({
   resolveDispatchCreator: () => ({ kind: 'terminal', handle: 'term_c' })
 }))
@@ -55,36 +48,37 @@ const WORKTREE = 'wt_1'
 function installHost() {
   const closed: string[] = []
   const visibility: [string, boolean][] = []
-  setStructuredAgentSessionHost({
-    setSessionTabVisibility: async (sessionId: string, visible: boolean) => {
-      visibility.push([sessionId, visible])
-    },
-    close: async (sessionId: string) => {
-      closed.push(sessionId)
-    },
-    hasSession: () => true,
-    hold: async () => {},
-    release: () => {},
-    subscribe: () => () => {},
-    deps: {
-      store: {
-        getRecord: () => ({
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: {
-            runtimeKind: 'native',
-            claimStatus: 'live',
-            deathEvidence: null,
-            runtimeFence: 1
-          }
+  const { host, store } = hostTestState()
+  vi.spyOn(host, 'setSessionTabVisibility').mockImplementation(async (sessionId, visible) => {
+    visibility.push([sessionId, visible])
+  })
+  vi.spyOn(host, 'close').mockImplementation(async (sessionId) => {
+    closed.push(sessionId)
+  })
+  vi.spyOn(host, 'hasSession').mockImplementation((id) => !closed.includes(id))
+  vi.spyOn(store, 'getConversation').mockImplementation((id) =>
+    agentSessionConversationView(
+      agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId: id,
+          claimStatus: closed.includes(id) ? 'released' : 'live',
+          ownerProcess: null,
+          reservedSpawnToken: null
         })
-      }
-    }
-  } as never)
+      )
+    )
+  )
+  vi.spyOn(host, 'subscribe').mockResolvedValue(() => {})
+  vi.spyOn(store, 'requireWritableRecord').mockImplementation((sessionId) =>
+    agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId, runtimeFence: 1 }))
+  )
+  setStructuredAgentSessionHost(host)
   return { closed, visibility }
 }
 
 function fakes() {
   const retireStructuredAgentSessionTabFromSnapshot = vi.fn(() => true)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this partial runtime fixture implements the methods called by the failing start path.
   const runtime = {
     showTerminal: async () => ({ worktreeId: WORKTREE }),
     showManagedTerminalWorkspace: async () => ({ id: WORKTREE }),
@@ -104,14 +98,22 @@ function fakes() {
     getTerminalPaneKey: vi.fn(() => 'pane_1'),
     retireStructuredAgentSessionTabFromSnapshot
   } as unknown as OrcaRuntimeService
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start path calls only these three methods.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the failing start path calls only these methods.
   const db = {
     createStartingWorkerDispatch: () => ({
       dispatch: { id: 'd_fail', depth: 0 },
       task: { id: 't1', spec: 'do the thing' }
     }),
     recordWorkerStage: () => {},
-    prepareStartingWorkerAuthority: () => {}
+    prepareStartingWorkerAuthority: () => {},
+    getWorkerDispatch: () => undefined,
+    failWorkerStart: (_dispatchId: string, stage: string) => ({
+      state: 'failed',
+      stage,
+      effects: '[]',
+      residual_resources: '[]'
+    }),
+    getWorkerTerminalResourceByOwner: () => undefined
   } as unknown as OrchestrationDb
   return { runtime, db, retireStructuredAgentSessionTabFromSnapshot }
 }
@@ -135,7 +137,9 @@ describe('a structured worker-start that fails after the session exists', () => 
       } as const,
       runtime,
       db,
-      run: { id: 'run_1' } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start reads only the bound Run's id.
+      bindRun: () => ({ id: 'run_1' }) as never,
+      taskDeps: undefined,
       existingTask: { id: 't1', spec: 'do the thing' } as never,
       coordinator: null,
       orchestrationMutation: undefined
@@ -144,8 +148,7 @@ describe('a structured worker-start that fails after the session exists', () => 
     expect(receipt).toMatchObject({ state: 'failed', stage: 'dispatch_input' })
     expect(host.closed).toHaveLength(1)
     const sessionId = host.closed[0] as string
-    // Durable restore index first, then the live snapshot; without both, the dead tab comes back
-    // on the next launch.
+    // Hide durable restore before retiring live state, or the dead tab returns next launch.
     expect(host.visibility).toContainEqual([sessionId, false])
     expect(retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledWith(sessionId)
   })

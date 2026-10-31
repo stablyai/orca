@@ -1,6 +1,10 @@
-import { Pressable, Switch, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
-import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { MobileSwitch } from './MobileSwitch'
+import { ListGroup } from './list/ListGroup'
+import { ListRow } from './list/ListRow'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
 
@@ -21,55 +25,60 @@ export function NewWorkspaceSetupScriptField({
   onDecisionChange: (decision: Exclude<WorkspaceCreateSetupDecision, 'inherit'>) => void
   onRunSetupChange: (run: boolean) => void
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const runSetupLabel = t(
+    'components.newWorkspaceSetupScriptField.runSetupCommand',
+    'Run setup command'
+  )
   return (
-    <View style={styles.field}>
+    <View style={styles.setupStack}>
       <View style={styles.setupHeader}>
-        <Text style={styles.label}>Setup script</Text>
+        <Text style={styles.setupLabel}>
+          {t('components.newWorkspaceSetupScriptField.label', 'Setup script')}
+        </Text>
         {source ? (
           <View style={styles.sourceBadge}>
             <Text style={styles.sourceBadgeText}>
-              {source === 'orca.yaml' ? 'ORCA.YAML' : 'HOOKS'}
+              {source === 'orca.yaml'
+                ? 'ORCA.YAML'
+                : t('components.newWorkspaceSetupScriptField.hooks', 'HOOKS')}
             </Text>
           </View>
         ) : null}
       </View>
-      <View style={styles.setupBox}>
-        {runPolicy === 'ask' ? (
-          <View style={styles.setupChoiceRow}>
-            <Pressable
-              style={[
-                styles.setupChoiceButton,
-                decision === 'run' && styles.setupChoiceButtonSelected
-              ]}
-              onPress={() => onDecisionChange('run')}
-            >
-              <Text style={styles.setupChoiceText}>Run</Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.setupChoiceButton,
-                decision === 'skip' && styles.setupChoiceButtonSelected
-              ]}
-              onPress={() => onDecisionChange('skip')}
-            >
-              <Text style={styles.setupChoiceText}>Skip</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.setupToggleRow}>
-            <Text style={styles.setupToggleLabel}>Run setup command</Text>
-            <Switch
-              value={runSetup}
-              onValueChange={onRunSetupChange}
-              trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
-              style={styles.setupSwitch}
-            />
-          </View>
-        )}
-        <View style={styles.setupCommandBlock}>
-          <Text style={styles.setupCommand}>{command}</Text>
-        </View>
+      {runPolicy === 'ask' ? (
+        <ListGroup>
+          <ListRow
+            key="run"
+            title={t('components.newWorkspaceSetupScriptField.run', 'Run')}
+            selected={decision === 'run'}
+            onPress={() => onDecisionChange('run')}
+          />
+          <ListRow
+            key="skip"
+            title={t('components.newWorkspaceSetupScriptField.skip', 'Skip')}
+            selected={decision === 'skip'}
+            onPress={() => onDecisionChange('skip')}
+          />
+        </ListGroup>
+      ) : (
+        <ListGroup>
+          <ListRow
+            key="runSetup"
+            title={runSetupLabel}
+            accessory={
+              <MobileSwitch
+                value={runSetup}
+                onValueChange={onRunSetupChange}
+                accessibilityLabel={runSetupLabel}
+              />
+            }
+          />
+        </ListGroup>
+      )}
+      <View style={styles.codeBlock}>
+        <Text style={styles.code}>{command}</Text>
       </View>
     </View>
   )

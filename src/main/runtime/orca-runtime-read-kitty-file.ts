@@ -29,7 +29,7 @@ export abstract class OrcaRuntimeWithReadKittyFile extends RuntimeWorkspaceSelec
     }
     const workspacePath = isFloatingWorkspaceId(pty.worktreeId)
       ? null
-      : (await this.resolveWorktreeSelector(`id:${pty.worktreeId}`)).path
+      : (await this.resolveWorkspaceSelector(`id:${pty.worktreeId}`)).path
     const result = await readTerminalKittyFile(
       request,
       {

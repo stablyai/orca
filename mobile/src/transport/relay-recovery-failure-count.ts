@@ -56,8 +56,7 @@ export class RelayRecoveryFailureCount {
   }
 }
 
-// The cell held the dial for the desktop's data link, which never attached while
-// its control looked alive. No re-resolve: the director names the seated cell.
+// Attach timeout means desktop control was seated; retry the same cell rather than re-resolving its assignment.
 function isHostAttachTimeout(error: Error | null): boolean {
   return (
     error instanceof RelayOuterError &&

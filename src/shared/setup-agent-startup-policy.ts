@@ -1,7 +1,6 @@
 import type { SetupAgentStartupPolicy } from './orca-yaml-hook-types'
 
-// Why: existing repos keep launching setup and agents side by side unless the user or
-// committed project config requires setup to finish first.
+// Existing repos launch setup/agents in parallel unless user/project config requires sequencing.
 export const DEFAULT_SETUP_AGENT_STARTUP_POLICY: SetupAgentStartupPolicy = 'start-immediately'
 
 export function shouldWaitForSetupBeforeAgentStartup(

@@ -6,14 +6,7 @@ import type { StructuredWorkerIdentity } from '../../../../structured-worker-ide
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import { releaseUnknownRecovery, type WorkerReleaseReceipt } from './worker-release-completion'
 
-/**
- * The close half of a release for a worker that IS a structured session.
- *
- * Separate from the PTY close for the same reason the delivery lane is: there is no terminal to
- * close and no exit to observe, so the host's own settlement is the only proof available. Only a
- * proven close may settle; an unproven one reports `release_unknown` and stays retryable, but only
- * under a fresh request id — replaying the prior one just returns this same receipt.
- */
+/** Use host settlement to prove structured close; unproven closes remain release_unknown. Retry with a fresh request id because replay returns the old receipt. */
 export async function stopStructuredWorkerForRelease(args: {
   structured: StructuredWorkerIdentity
   dispatchId: string
@@ -24,8 +17,25 @@ export async function stopStructuredWorkerForRelease(args: {
   archiveStatus: string | null
 }): Promise<WorkerReleaseReceipt> {
   const { structured, dispatchId, resource, runtime, db } = args
-  const stop = await stopStructuredWorker(structured, dispatchId, runtime)
+  // Only an automatic release can be refused; an explicit one keeps cutting through a hung start.
+  const stop = await stopStructuredWorker(
+    structured,
+    runtime,
+    resource.auto_release_at
+      ? () => db.admitWorkerChatReleaseClose(resource.id, (row) => runtime.isWorkerAgentInTurn(row))
+      : undefined
+  )
   if (!stop.stopped) {
+    const current = db.getWorkerTerminalResource(resource.id)
+    if (current && current.release_state !== 'releasing') {
+      // Refused in the session lane: Keep open, a new turn, or a fall back to manual release.
+      return {
+        dispatchId,
+        state: 'retained',
+        processAction: 'none',
+        archive: archiveSummary(current)
+      }
+    }
     const unknown = db.markWorkerTerminalReleaseUnknown(
       resource.id,
       stop.reason ?? 'The structured session close was not proven.'

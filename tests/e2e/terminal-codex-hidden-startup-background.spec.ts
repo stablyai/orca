@@ -1,3 +1,4 @@
+import type { XtermWithRenderDimensions } from './helpers/xterm-render-dimensions'
 import { Buffer } from 'node:buffer'
 import { PNG } from 'pngjs'
 import type { Page } from '@stablyai/playwright-test'
@@ -138,7 +139,9 @@ async function readCodexStartupBackgroundTarget(
         throw new Error('Active Codex terminal pane is unavailable')
       }
       const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
-      const dimensions = pane.terminal._core?._renderService?.dimensions?.css?.cell
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+      const dimensions = (pane.terminal as XtermWithRenderDimensions)._core?._renderService
+        ?.dimensions?.css?.cell
       if (!screen || !dimensions) {
         throw new Error('Active Codex terminal has no measurable xterm screen')
       }
@@ -289,10 +292,7 @@ test.describe('Codex hidden startup composer background', () => {
         message: 'Hidden Codex startup background never reached the main buffer snapshot'
       })
       .toBe(true)
-    // Why: the renderer skip counter is dead under the Phase-4 main-side delivery
-    // gate (#7214) — hidden bytes are dropped in main before reaching the renderer.
-    // The main-buffer snapshot above proves the hidden output was handled; the
-    // reveal restore below proves it repaints when the worktree first shows.
+    // #7214: main ingests then withholds hidden output before renderer delivery; main snapshot and first reveal prove handling/restoration.
 
     await switchToWorktree(orcaPage, secondWorktreeId)
     await expect
@@ -319,16 +319,17 @@ test.describe('Codex hidden startup composer background', () => {
       })
       .toContain(marker)
 
-    let target: CodexStartupBackgroundTarget | null = null
+    // Why a holder: TS can't see the poll callback's writes and would narrow a `let` to null.
+    const captured: { target: CodexStartupBackgroundTarget | null } = { target: null }
     await expect
       .poll(
         async () => {
           try {
             const nextTarget = await readCodexStartupBackgroundTarget(orcaPage, marker)
-            target = nextTarget
+            captured.target = nextTarget
             return nextTarget.modelBackgroundCells >= Math.min(40, nextTarget.cols)
           } catch {
-            target = null
+            captured.target = null
             return false
           }
         },
@@ -338,6 +339,7 @@ test.describe('Codex hidden startup composer background', () => {
         }
       )
       .toBe(true)
+    const target = captured.target
     if (!target) {
       throw new Error('Codex startup background target was not captured')
     }

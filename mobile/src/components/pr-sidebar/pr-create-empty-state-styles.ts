@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const prCreateEmptyStateStyles = StyleSheet.create({
+export const prCreateEmptyStateStyles = themedStyleSheet(() => ({
   section: {
     backgroundColor: colors.bgPanel,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -43,7 +44,7 @@ export const prCreateEmptyStateStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary
   },
   createButtonDisabled: {
@@ -59,7 +60,7 @@ export const prCreateEmptyStateStyles = StyleSheet.create({
     minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   iconButtonPressed: {
     backgroundColor: colors.bgRaised
@@ -104,4 +105,4 @@ export const prCreateEmptyStateStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   }
-})
+}))

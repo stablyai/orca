@@ -60,8 +60,6 @@ function realHomeStopHooks(systemHooksPath: string): unknown {
   return JSON.parse(readFileSync(systemHooksPath, 'utf-8')).hooks.Stop
 }
 
-// Why: Codex turned off per agent reaches remove(), the explicit opt-out that alone
-// strips the shared real-home entry.
 describe('Codex turned off per agent', () => {
   it('removes the Orca entry from the real ~/.codex and keeps user hooks', async () => {
     const systemHooksPath = seedRealHomeHooks()

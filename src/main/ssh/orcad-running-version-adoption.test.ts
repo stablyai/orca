@@ -93,8 +93,7 @@ describe('adoptRunningOrcadVersion', () => {
     expect(mocks.probe).not.toHaveBeenCalled()
   })
 
-  // #28833: after a reboot another desktop may be starting the server; a deploy would only defer
-  // on a terminal count no server it pairs with can give.
+  // #28833: peer startup must defer adoption; an unpaired deploy cannot census the running host.
   it('waits on a fence another run holds instead of deploying over an uncounted host', async () => {
     mocks.wake.mockResolvedValueOnce({ outcome: 'fenced' })
     mocks.fenceRefusal.mockResolvedValueOnce({

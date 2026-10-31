@@ -19,6 +19,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionStartupDraftDeliveryTests(): void {
   let mockStoreState: StoreState
@@ -89,8 +90,7 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
       })
       vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
 
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the connection fields exercised here without a real terminal or DOM.
-      const binding = connectPanePty(pane as never, manager as never, deps as never)
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await vi.advanceTimersByTimeAsync(VISIBLE_PTY_SETTLE_MS)
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
@@ -181,7 +181,7 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
         }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
       const sidecarClaimed = claimStartupDelivery({
         worktreeId: 'wt-1',
@@ -226,17 +226,19 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
       }
 
       const binding = connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({
-          startup: {
-            command: 'codex',
-            launchAgent: 'codex',
-            launchConfig: { agentArgs: '', agentEnv: {} },
-            launchToken: 'launch-token-1',
-            draftPrompt: 'https://github.com/stablyai/orca/issues/42'
-          }
-        }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({
+            startup: {
+              command: 'codex',
+              launchAgent: 'codex',
+              launchConfig: { agentArgs: '', agentEnv: {} },
+              launchToken: 'launch-token-1',
+              draftPrompt: 'https://github.com/stablyai/orca/issues/42'
+            }
+          })
+        )
       )
 
       binding.dispose()

@@ -1,9 +1,12 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
+import { printOrchestrationResult } from './agent-view'
+import { TASK_LIST_VIEW, TASK_RECEIPT_VIEW, type TaskListResult } from './task-agent-views'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration-task-summary'
 import { callOrchestrationMutation } from './mutation-request'
+import { readTextOrFileFlag } from '../../command-body-input'
 import { resolveCoordinatorTerminalHandle, runScopedSessionCaller } from './terminal-identity'
 
 const TASK_STATUS_VALUES = [
@@ -23,7 +26,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       flags,
       'orchestration.taskCreate',
       {
-        spec: getRequiredStringFlag(flags, 'spec'),
+        spec: await readTextOrFileFlag(flags, cwd, 'spec', true),
         taskTitle: getOptionalStringFlag(flags, 'task-title'),
         displayName: getOptionalStringFlag(flags, 'display-name'),
         deps: getOptionalStringFlag(flags, 'deps'),
@@ -32,6 +35,10 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         callerTerminalHandle
       }
     )
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, TASK_RECEIPT_VIEW)
+      return
+    }
     printResult(result, json, (r) => `Created ${r.task.id} [${r.task.status}]`)
   },
 
@@ -41,28 +48,14 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
     const callerTerminalHandle = run
       ? runScopedSessionCaller(flags)
       : await resolveCoordinatorTerminalHandle(flags, cwd, client)
-    const result = await client.call<{
-      tasks: {
-        id: string
-        spec: string
-        task_title?: string | null
-        display_name?: string | null
-        status: string
-        assignee_handle?: string | null
-        dispatch_id?: string | null
-        spec_truncated?: boolean
-      }[]
-      count: number
-      runId?: string
-      legacyReadOnly?: boolean
-    }>('orchestration.taskList', {
+    const result = await client.call<TaskListResult>('orchestration.taskList', {
       status: getOptionalStringFlag(flags, 'status'),
       ready: flags.has('ready') ? true : undefined,
       brief: brief ? true : undefined,
       run,
       callerTerminalHandle
     })
-    // Why: only older runtimes (no spec_truncated) skip server-side abbreviation and need this client-side fallback.
+    // Only hosts that omit spec_truncated need client-side abbreviation.
     const needsClientAbbreviation =
       brief && result.result.tasks.some((task) => task.spec_truncated === undefined)
     const output = needsClientAbbreviation
@@ -71,6 +64,10 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
           result: { ...result.result, tasks: abbreviateOrchestrationTasks(result.result.tasks) }
         }
       : result
+    if (!flags.has('full')) {
+      printOrchestrationResult(output, json, TASK_LIST_VIEW)
+      return
+    }
     printResult(output, json, (r) => {
       if (r.count === 0) {
         return r.legacyReadOnly ? 'No legacy tasks (read-only).' : 'No tasks.'
@@ -109,6 +106,10 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         callerTerminalHandle: await resolveCoordinatorTerminalHandle(flags, cwd, client)
       }
     )
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, TASK_RECEIPT_VIEW)
+      return
+    }
     printResult(result, json, (r) => `Updated ${r.task.id} -> ${r.task.status}`)
   }
 }

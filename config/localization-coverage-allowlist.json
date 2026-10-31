@@ -16,6 +16,20 @@
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
+    "text": "Dil",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "Sprache",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "kind": "object-property:keywords",
     "text": "언어",
     "dynamic": false,
     "count": 1
@@ -75,5 +89,124 @@
     "text": "sidebar",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/onboarding/OnboardingLanguageSwitcher.tsx",
+    "kind": "jsx-text",
+    "text": "Switch language",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/component-fixtures/component-fixture-explorer.tsx",
+    "kind": "jsx-text",
+    "text": "Component fixtures",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/component-fixtures/component-fixture-explorer.tsx",
+    "kind": "jsx-text",
+    "text": "fixtures · files named *.fixture.tsx under src/renderer/src",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/ChatFontFamilySetting.tsx",
+    "kind": "jsx-text",
+    "text": "fontFamily",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Workspace comment",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Created by automation",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Linked task",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/lib/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Linked issue",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/worktree-palette-evidence.ts",
+    "kind": "object-property:accessibilityLabel",
+    "text": "Listening port",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Claude",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Canonical agent brand in the approved Claude CLI still; preserve the exact brand."
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "kind": "jsx-text",
+    "text": "Claude Code",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Canonical CLI product name in the approved terminal still; preserve the exact brand."
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "kind": "jsx-text",
+    "text": "· ~/projects/acme-web",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Literal sample workspace path and CLI separator in the terminal still; paths are not translated."
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "kind": "jsx-text",
+    "text": "&gt;",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Literal Claude CLI prompt marker in the terminal still; preserve command-line syntax."
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "kind": "jsx-text",
+    "text": "Read",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Actual Claude CLI tool label in the terminal still; preserve the external interface text."
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "kind": "jsx-text",
+    "text": "(src/",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Literal tool-argument path prefix in the terminal still; preserve path and CLI syntax."
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
+    "kind": "jsx-text",
+    "text": "⎿ Read 84 lines",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Actual Claude CLI tool-result line in the terminal still; preserve the illustrative output and line count."
   }
 ]

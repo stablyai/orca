@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   addEnvironmentFromPairingCode,
@@ -16,6 +16,7 @@ import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
 import { makeStore, SESSION_WORKTREE_ID } from '../../runtime/paired-client-navigation-test-harness'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { partialRuntimeStore } from '../../runtime/runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 
@@ -76,8 +77,7 @@ function recorder(): Received & { onResponse: (response: RuntimeRpcResponse<unkn
 
 describe('session.tabs tab delta across mixed client versions', () => {
   it('serves an old desktop full frames and a new desktop the same frames from deltas', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared paired-client harness store covers every store read this host makes.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
     runtime.attachWindow(1)
     runtime.markGraphReady(1)
     publish(runtime, 1, -1)
@@ -85,11 +85,7 @@ describe('session.tabs tab delta across mixed client versions', () => {
       runtime.registerPty(`pty-${index + 1}`, SESSION_WORKTREE_ID)
     }
     const hostDataPath = mkdtempSync(join(tmpdir(), 'orca-tab-delta-host-'))
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-tab-delta-client-'))
-    cleanups.push(() => {
-      rmSync(hostDataPath, { recursive: true, force: true })
-      rmSync(userDataPath, { recursive: true, force: true })
-    })
+    cleanups.push(() => rmSync(hostDataPath, { recursive: true, force: true }))
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath: hostDataPath,
@@ -98,18 +94,31 @@ describe('session.tabs tab delta across mixed client versions', () => {
     })
     await server.start()
     cleanups.push(() => server.stop())
-    const pair = (name: string): string => {
+    // Duplicate server registrations are forbidden within one profile; isolate each desktop.
+    const pair = (name: string): { userDataPath: string; id: string } => {
       const offer = server.createPairingOffer({ address: '127.0.0.1', name, scope: 'runtime' })
       if (!offer.available) {
         throw new Error('pairing_unavailable')
       }
-      return addEnvironmentFromPairingCode(userDataPath, { name, pairingCode: offer.pairingUrl }).id
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-tab-delta-client-'))
+      cleanups.push(() => rmSync(userDataPath, { recursive: true, force: true }))
+      const { id } = addEnvironmentFromPairingCode(userDataPath, {
+        name,
+        pairingCode: offer.pairingUrl
+      })
+      return { userDataPath, id }
+    }
+    const pairedConnection = (name: string) => {
+      const desktop = pair(name)
+      return getPreferredPairedRuntimeConnection(
+        resolveEnvironment(desktop.userDataPath, desktop.id)
+      )
     }
 
     // A desktop released before the delta: same handshake, minus the one capability.
     const legacy = recorder()
     const legacySubscription = await subscribeRemoteRuntimeRequest(
-      getPreferredPairedRuntimeConnection(resolveEnvironment(userDataPath, pair('old-desktop'))),
+      pairedConnection('old-desktop'),
       'session.tabs.subscribe',
       { worktree: `id:${SESSION_WORKTREE_ID}` },
       10_000,
@@ -125,7 +134,7 @@ describe('session.tabs tab delta across mixed client versions', () => {
     // What a new desktop's socket carries before main decodes it.
     const wire = recorder()
     const wireSubscription = await subscribeRemoteRuntimeRequest(
-      getPreferredPairedRuntimeConnection(resolveEnvironment(userDataPath, pair('new-wire'))),
+      pairedConnection('new-wire'),
       'session.tabs.subscribe',
       { worktree: `id:${SESSION_WORKTREE_ID}` },
       10_000,
@@ -136,9 +145,10 @@ describe('session.tabs tab delta across mixed client versions', () => {
 
     // This desktop: the real main-process path, which decodes before the window sees a frame.
     const current = recorder()
+    const desktop = pair('new-desktop')
     const currentSubscription = await subscribeRuntimeEnvironment(
-      userDataPath,
-      pair('new-desktop'),
+      desktop.userDataPath,
+      desktop.id,
       'session.tabs.subscribe',
       { worktree: `id:${SESSION_WORKTREE_ID}` },
       10_000,
@@ -153,18 +163,16 @@ describe('session.tabs tab delta across mixed client versions', () => {
     )
     cleanups.push(() => currentSubscription.close())
 
-    await vi.waitFor(() => {
-      expect(legacy.frames).toHaveLength(1)
-      expect(current.frames).toHaveLength(1)
-      expect(wire.frames).toHaveLength(1)
-    })
+    const expectFrames = (count: number): void => {
+      for (const [client, received] of Object.entries({ legacy, current, wire })) {
+        expect(received.frames, `${client} desktop frames`).toHaveLength(count)
+      }
+    }
+    // Three pairings and real sockets must deliver the first frame; a loaded host misses the 1 s default.
+    await vi.waitFor(() => expectFrames(1), { timeout: 10_000 })
     for (let version = 2; version <= 11; version += 1) {
       publish(runtime, version, version % 3)
-      await vi.waitFor(() => {
-        expect(legacy.frames).toHaveLength(version)
-        expect(current.frames).toHaveLength(version)
-        expect(wire.frames).toHaveLength(version)
-      })
+      await vi.waitFor(() => expectFrames(version))
     }
 
     expect(current.frames).toEqual(legacy.frames)

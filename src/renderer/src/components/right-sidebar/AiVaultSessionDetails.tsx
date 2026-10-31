@@ -25,6 +25,9 @@ import { ResumeInNewCliTooltipText } from './ai-vault-session-cli-fork-copy'
 import { sessionDetailConversationTurns, sessionPromptPreview } from './ai-vault-session-display'
 import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
+import { useAiVaultSessionAccount } from './ai-vault-session-account'
+import { SessionAccountSection } from './AiVaultSessionAccount'
+import { SessionReceiptSection } from './AiVaultSessionReceiptSection'
 import {
   aiVaultResumeInSessionWorkspaceLabel,
   aiVaultSessionWorkspaceHeading,
@@ -69,8 +72,7 @@ export function SessionInlineDetails({
   /** Hides the action bar; the details stay. */
   actionsHidden?: boolean
 }): React.JSX.Element {
-  // A zero-turn transcript would resume into an empty conversation, so the plain
-  // resume affordances are withheld and a distinct "not saved" state is shown.
+  // Zero-turn sessions cannot resume meaningful content; show not-saved status instead.
   const referenceSession = isAntigravityReferenceSession(session)
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   const showResumeInWorktree = hasResumableContent && Boolean(resumeActions.worktree.worktreeId)
@@ -79,6 +81,7 @@ export function SessionInlineDetails({
     (!resumeActions.worktree.worktreeId || Boolean(resumeActions.newTab.worktreeId))
   const promptPreview = sessionPromptPreview(session)
   const detailTurns = sessionDetailConversationTurns(session, 3)
+  const accountLabel = useAiVaultSessionAccount(session)
 
   return (
     <div
@@ -156,7 +159,7 @@ export function SessionInlineDetails({
               <MessagesSquare className="size-3.5" />
               {translate(
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-                'Switch to Chat'
+                'Resume in New Chat'
               )}
             </Button>
           ) : null}
@@ -177,7 +180,7 @@ export function SessionInlineDetails({
                   <SquareTerminal className="size-3.5" />
                   {translate(
                     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-                    'Switch to Terminal'
+                    'Resume in New Terminal'
                   )}
                 </Button>
               </TooltipTrigger>
@@ -261,8 +264,7 @@ export function SessionInlineDetails({
             </SessionReceiptSection>
           </>
         ) : (
-          // An unsaved session has no turns to show; the notice replaces the
-          // preview section instead of stacking a second empty state under it.
+          // Replace unsaved previews with one notice instead of a second empty state.
           <SessionUnsavedConversationNotice session={session} logAvailable={Boolean(onOpenLog)} />
         )}
 
@@ -282,28 +284,9 @@ export function SessionInlineDetails({
             <WorktreeMetadataLines worktreeInfo={worktreeInfo} vaultScope={vaultScope} />
           </SessionReceiptSection>
         ) : null}
+        <SessionAccountSection accountLabel={accountLabel} />
       </div>
     </div>
-  )
-}
-
-function SessionReceiptSection({
-  icon,
-  label,
-  children
-}: {
-  icon: React.ReactNode
-  label: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <section className="space-y-1.5">
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        <span className="text-muted-foreground/80">{icon}</span>
-        <span>{label}</span>
-      </div>
-      {children}
-    </section>
   )
 }
 

@@ -3,17 +3,140 @@ import {
   formatSubmodulePushFailureDetail,
   isDivergentPullReconciliationError,
   isNoUpstreamError,
-  MERGE_RECONCILIATION_PULL_ARGS,
   normalizeGitErrorMessage,
   pullArgsSpecifyReconciliation,
-  runPullWithDivergenceFallback
+  runPullWithDivergenceFallback,
+  stripCredentialsFromMessage
 } from './git-remote-error'
 
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('stripCredentialsFromMessage', () => {
+  it.each([
+    ['https://user:secret@host/repo', 'https://host/repo'],
+    ['custom+git.1://user:sec:ret@host/repo', 'custom+git.1://host/repo'],
+    ['SSH://git:secret@host/repo', 'SSH://host/repo'],
+    ['HTTPS://token@host/repo', 'HTTPS://host/repo'],
+    ['http://token@host/repo', 'http://host/repo'],
+    ['ssh://git@host/repo', 'ssh://git@host/repo'],
+    ['git@host:repo', 'git@host:repo'],
+    ['123://user:secret@host', '123://user:secret@host'],
+    ['123git+1://user:secret@host', '123git+1://host'],
+    ['https://user:secret/path@host', 'https://user:secret/path@host'],
+    ['https://user:secret\u00a0tail@host', 'https://user:secret\u00a0tail@host'],
+    ['https://user:secret@token@host', 'https://host'],
+    ['https://user:pa@ss:word@host/repo', 'https://host/repo'],
+    ['ssh://user:pa@ss:word@host/repo', 'ssh://host/repo'],
+    ['https://user:pa@ss:word@host?query=@other', 'https://host?query=@other'],
+    ['https://user:pa@ss:word@host#fragment=@other', 'https://host#fragment=@other'],
+    ['https://user:pa@ss:word@host/path@other', 'https://host/path@other'],
+    ['https://user:secret?query=@host', 'https://user:secret?query=@host'],
+    ['https://user:secret#fragment=@host', 'https://user:secret#fragment=@host'],
+    [
+      '界 https://user:secret@host/😀 ssh://git@host https://token@other',
+      '界 https://host/😀 ssh://git@host https://other'
+    ]
+  ])('preserves URL structure when redacting %s', (input, expected) => {
+    expect(stripCredentialsFromMessage(input)).toBe(expected)
+  })
+})
+
 describe('normalizeGitErrorMessage', () => {
+  it('bounds redaction time when ANSI stripping joins a long scheme-like word', () => {
+    const error = new Error(
+      `remote: ${'\x1b[31ma\x1b[0m'.repeat(65_536)}\nfatal: denied https://user:secret@host/repo`
+    )
+    const start = performance.now()
+
+    expect(normalizeGitErrorMessage(error, 'push')).toBe('fatal: denied https://host/repo')
+    expect(performance.now() - start).toBeLessThan(2_000)
+  })
+
+  it.each([
+    ' ! [rejected] main -> main (stale info)',
+    '\t!\t[rejected] main -> main (stale info)\t',
+    ' \x1b[31m! [rejected] main -> main (stale info)\x1b[m',
+    '\x1b[31m ! [rejected] main -> main (stale info)\x1b[0m'
+  ])('preserves stale lease rejection details: %s', (rejection) => {
+    for (const newline of ['\n', '\r\n']) {
+      const output = [
+        'Command failed: git push https://user:secret@example.com/repo.git',
+        rejection,
+        "error: failed to push some refs to 'https://token@example.com/repo.git'"
+      ].join(newline)
+
+      expect(normalizeGitErrorMessage(new Error(output), 'push')).toBe(
+        output
+          .replace('user:secret@', '')
+          .replace('token@', '')
+          .replaceAll('\x1b[31m', '')
+          .replaceAll('\x1b[m', '')
+          .replaceAll('\x1b[0m', '')
+      )
+    }
+  })
+
+  it.each([
+    'https://user:sec\x1b[1 qret@example.com/repo.git',
+    'https://sec\x1b]8;;https://example.org\x07ret\x1b]8;;\x07@example.com/repo.git'
+  ])('redacts ANSI-bearing URL userinfo in stale lease diagnostics: %s', (url) => {
+    const error = new Error(
+      [
+        `Command failed: git push ${url}`,
+        ' ! [rejected] main -> main (stale\x1b[31m info\x1b[m)',
+        "error: failed to push some refs to 'origin'"
+      ].join('\n')
+    )
+
+    expect(normalizeGitErrorMessage(error, 'push')).toBe(
+      [
+        'Command failed: git push https://example.com/repo.git',
+        ' ! [rejected] main -> main (stale info)',
+        "error: failed to push some refs to 'origin'"
+      ].join('\n')
+    )
+  })
+
+  it('does not classify a rejection marker on a separate line as a stale lease rejection', () => {
+    const tail = "error: failed to push some refs to 'origin'"
+    const error = new Error(`Command failed: git push\n !\n [rejected] main (stale info)\n${tail}`)
+
+    expect(normalizeGitErrorMessage(error, 'push')).toBe(tail)
+  })
+
+  it('handles push errors containing many blank lines', () => {
+    const tail = "error: failed to push some refs to 'origin'"
+    const error = new Error(`Command failed: git push\n${'\n'.repeat(64_000)}${tail}`)
+
+    expect(normalizeGitErrorMessage(error, 'push')).toBe(tail)
+  })
+
+  it.each(['remote: stale info', 'hook: stale info'])(
+    'does not classify unrelated output as a lease rejection: %s',
+    (output) => {
+      const tail = "error: failed to push some refs to 'origin'"
+      const error = new Error(`Command failed: git push\n${output}\n${tail}`)
+
+      expect(normalizeGitErrorMessage(error, 'push')).toBe(tail)
+    }
+  )
+
+  it.each(['push', 'pull', 'fetch', 'upstream'] as const)(
+    'classifies noninteractive credential refusal for %s',
+    (operation) => {
+      for (const stderr of [
+        'fatal: unable to get password from user',
+        "fatal: could not read Password for 'https://user@example.com': terminal prompts disabled"
+      ]) {
+        expect(normalizeGitErrorMessage(new Error(stderr), operation)).toBe(
+          'Authentication failed. Check your remote credentials.'
+        )
+      }
+    }
+  )
+
   it('keeps the submodule name when a recursive push is rejected', () => {
     const error = new Error(
       "Command failed: git push\nPushing submodule 'find-cmux-followers'\n" +
@@ -97,6 +220,15 @@ describe('normalizeGitErrorMessage', () => {
 })
 
 describe('formatSubmodulePushFailureDetail', () => {
+  it.each([
+    "Unable to push sub\x1b[1 qmodule 'https://user:sec\x1b[1 qret@example.com/repo.git'\n(fetch\x1b[1 q first)",
+    "Submodule 'https://user:sec\x1b[1 qret@example.com/repo.git' has remote changes. Pull inside the submodule, then try again."
+  ])('sanitizes raw and normalized submodule details before classification: %s', (message) => {
+    expect(formatSubmodulePushFailureDetail(message)).toBe(
+      "Submodule 'https://example.com/repo.git' has remote changes. Pull inside the submodule, then try again."
+    )
+  })
+
   it('keeps normalized guidance when transport layers prefix the error', () => {
     expect(
       formatSubmodulePushFailureDetail(
@@ -209,7 +341,7 @@ describe('runPullWithDivergenceFallback', () => {
 
     await runPullWithDivergenceFallback([], runPull)
 
-    expect(calls).toEqual([[], [...MERGE_RECONCILIATION_PULL_ARGS]])
+    expect(calls).toEqual([[], ['--no-rebase']])
     expect(runPull).toHaveBeenCalledTimes(2)
   })
 

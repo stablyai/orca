@@ -23,7 +23,15 @@ describe('session search public contract', () => {
   ])('clamps %s to %s', (limit, expected) => {
     expect(AiVaultSearchRequestSchema.parse({ query: 'needle', limit }).limit).toBe(expected)
   })
-  it('allows the engine to report long-query truncation', () => {
+  it.each(['2026-10-12T00:00:00Z', '2026-10-12T08:00:00+08:00', '2026-10-11T16:00:00-08:00'])(
+    'reads since %s as the stored UTC instant',
+    (since) => {
+      expect(AiVaultSearchRequestSchema.parse({ query: 'q', filters: { since } }).filters).toEqual({
+        since: '2026-10-12T00:00:00.000Z'
+      })
+    }
+  )
+  it('preserves long query text in the request schema', () => {
     const query = 'needle '.repeat(100)
     expect(AiVaultSearchRequestSchema.parse({ query }).query).toBe(query)
   })

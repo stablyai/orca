@@ -1,5 +1,4 @@
-// A CLI-started terminal the window never mounted reads as unowned to the host's census. With the
-// layout-owner switch on, every path that finds it shows exactly main's one tab for it.
+/** CLI terminals can look unowned before mount; layout-owner main places/names them, and every finder must show that one tab without asking another adoption. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
@@ -93,26 +92,30 @@ describe('a CLI terminal the window never mounted, layout-owner build', () => {
   let sync: WorkspaceLayoutFrameSync | null = null
   let model: WorkspaceLayoutModel
   let streamUp: boolean
+  /** Every layout command the window sent main. */
+  let applied: LayoutCommand[] = []
 
   beforeEach(() => {
     sync?.close()
     sync = null
     streamUp = true
     model = loadWorkspaceLayoutWithoutReport('local', cliSession(), nameBasedLoadContext()).layout
+    applied = []
     main.apply = (command) => {
-      const applied = applyLayoutCommand(model, command, {
+      applied.push(command)
+      const result = applyLayoutCommand(model, command, {
         mintId: () => 'minted-tab',
         mintLeafId: () => leaf(9),
         now: () => 1
       })
-      if (!applied.ok) {
-        return { ok: false, code: applied.code }
+      if (!result.ok) {
+        return { ok: false, code: result.code }
       }
-      model = applied.model
+      model = result.model
       if (streamUp) {
         stream.onFrame!(frameOf(model))
       }
-      return { ok: true, result: applied.result }
+      return { ok: true, result: result.result }
     }
   })
 
@@ -129,7 +132,7 @@ describe('a CLI terminal the window never mounted, layout-owner build', () => {
     (store.getState().tabsByWorktree[GIT_KEY] ?? []).map((tab) => tab.id)
   const mainTabIds = () => (model.workspaces[GIT_KEY]?.tabs ?? []).map((tab) => tab.id)
 
-  it('the stream is closed during the visit: main names its tab, and the reopened stream draws it', async () => {
+  it('the stream is closed during the visit: the window draws nothing, and the reopened stream draws main’s tab', async () => {
     const store = await bootWindow()
     stream.onFrame!(frameOf(model))
     await flushMicrotasks()
@@ -140,11 +143,18 @@ describe('a CLI terminal the window never mounted, layout-owner build', () => {
     expect(terminalTabIds(store)).toEqual([])
     const createTab = vi.spyOn(store.getState(), 'createTab')
 
-    await adoptLiveWorkspacePtySurfaces(store.getState, GIT_KEY, [CLI_PTY], async () => unowned)
+    const adoption = await adoptLiveWorkspacePtySurfaces(
+      store.getState,
+      GIT_KEY,
+      [CLI_PTY],
+      async () => unowned
+    )
     await flushMicrotasks()
 
+    // A closed stream cannot say main still holds it: declined, not drawn by the window.
+    expect(adoption).toEqual({ surfaced: false, declinedPtyIds: [CLI_PTY] })
     expect(createTab).not.toHaveBeenCalled()
-    expect(mainTabIds()).toEqual(['tab-cli'])
+    expect(applied).toEqual([])
     stream.onStatus!({ state: 'connecting' })
     streamUp = true
     stream.onFrame!(frameOf(model))
@@ -152,7 +162,7 @@ describe('a CLI terminal the window never mounted, layout-owner build', () => {
     expect(terminalTabIds(store)).toEqual(['tab-cli'])
   })
 
-  it('main’s frame arrives after the census: main names its tab, and that frame draws it', async () => {
+  it('main’s binding frame arrives after the census: the window draws nothing, and that frame draws main’s tab', async () => {
     const store = await bootWindow()
     const before = loadWorkspaceLayoutWithoutReport('local', emptySession(), nameBasedLoadContext())
     stream.onFrame!(frameOf(before.layout))
@@ -166,11 +176,17 @@ describe('a CLI terminal the window never mounted, layout-owner build', () => {
     streamUp = false
     const createTab = vi.spyOn(store.getState(), 'createTab')
 
-    await adoptLiveWorkspacePtySurfaces(store.getState, GIT_KEY, [CLI_PTY], async () => unowned)
+    const adoption = await adoptLiveWorkspacePtySurfaces(
+      store.getState,
+      GIT_KEY,
+      [CLI_PTY],
+      async () => unowned
+    )
     await flushMicrotasks()
 
+    expect(adoption).toEqual({ surfaced: false, declinedPtyIds: [CLI_PTY] })
     expect(createTab).not.toHaveBeenCalled()
-    expect(mainTabIds()).toEqual(['tab-cli'])
+    expect(applied).toEqual([])
     streamUp = true
     stream.onFrame!(frameOf(model))
     await flushMicrotasks()
@@ -197,17 +213,18 @@ describe('a CLI terminal the window never mounted, layout-owner build', () => {
 
     expect(outcome).toBe('adopted')
     expect(createTab).not.toHaveBeenCalled()
+    expect(applied).toEqual([])
     expect(mainTabIds()).toEqual(['tab-cli'])
     store.getState().ensureWorktreeRootGroup(GIT_KEY)
     await flushMicrotasks()
     expect(terminalTabIds(store)).toEqual(['tab-cli'])
   })
 
-  it('main refusing the adoption (a WSL move) leaves the terminal declined, not shown, and makes no tab', async () => {
+  it('declines a terminal main holds in no pane, rather than making a tab or asking main', async () => {
     const store = await bootWindow()
+    model = loadWorkspaceLayoutWithoutReport('local', emptySession(), nameBasedLoadContext()).layout
     stream.onFrame!(frameOf(model))
     await flushMicrotasks()
-    main.apply = () => ({ ok: false, code: 'wsl_move_in_progress' })
     const createTab = vi.spyOn(store.getState(), 'createTab')
 
     const adoption = await adoptLiveWorkspacePtySurfaces(
@@ -219,5 +236,6 @@ describe('a CLI terminal the window never mounted, layout-owner build', () => {
 
     expect(adoption).toEqual({ surfaced: false, declinedPtyIds: [CLI_PTY] })
     expect(createTab).not.toHaveBeenCalled()
+    expect(applied).toEqual([])
   })
 })

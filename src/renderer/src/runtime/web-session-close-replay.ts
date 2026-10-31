@@ -1,7 +1,4 @@
-// Why: a user's close of a paired host's tab prunes the local mirror at once, so a close the host
-// never received (the connection dropped) would otherwise be lost and the host's next snapshot
-// brings the tab back. The close is held in the persisted store and sent again once the host is
-// reachable, so a reload does not forget it either.
+// Persist undelivered closes across disconnect/reload; replay once reachable or authoritative snapshots resurrect optimistically removed tabs.
 
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
@@ -10,13 +7,17 @@ import {
   type PairedTerminalTabCloseIntent
 } from '../../../shared/paired-terminal-tab-close-intent'
 import type { PairedTerminalTabCloseIntentsByEnvironment } from './paired-terminal-tab-close-intents'
-import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import {
+  getRuntimeEnvironmentRevision,
+  isRuntimeEnvironmentContinuationPending
+} from './runtime-environment-revision'
 import {
   clearWebSessionCloseIntent,
   makeWebSessionCloseIntentDurable,
   recordWebSessionCloseIntent
 } from './web-session-close-intent'
 import type { WebSessionIntentOwner } from './web-session-intent-owner'
+import { acceptReplayedWebSessionTabsSnapshot } from './web-session-tabs-sync/state'
 
 /** Bounded so a host that keeps failing the close hands the tab back instead of hiding it forever. */
 export const MAX_WEB_SESSION_CLOSE_REPLAY_ATTEMPTS = 3
@@ -34,10 +35,13 @@ export type WebSessionCloseReplay = {
   /** Every host id the close suppressed; the first is the one sent. */
   hostTabIds: readonly string[]
   intentKey: string
+  force?: true
 }
 
 // Session-scoped on purpose: after a reload a held close starts a fresh attempt count.
 const attemptsByIntent = new Map<string, { attempts: number; inFlight: boolean }>()
+// Held closes also hidden under the current pairing while their own was unknown or undecided.
+const hiddenUnderCurrentPairing = new Set<string>()
 
 function attemptKey(environmentId: string, intentKey: string): string {
   return `${environmentId}\0${intentKey}`
@@ -80,11 +84,7 @@ function revealHeldClose(
   }
 }
 
-/**
- * The one way a held close leaves the store. Whatever the change removed -- the named intents, a
- * cap eviction, or anything past the age bound that the store prunes on the way -- is never sent
- * again, so it stops hiding its tab, except a delivered close the host's next snapshot will settle.
- */
+/** Remove held closes through this path so eviction/age pruning also releases their hides, except delivered closes awaiting host removal. Reaccept unchanged snapshots after release or tabs stay hidden until host changes. */
 function changeHeldIntents(
   store: Pick<PairedTerminalTabCloseIntentStore, 'getIntents'>,
   environmentId: string,
@@ -93,16 +93,34 @@ function changeHeldIntents(
 ): void {
   const before = listHeldIntents(store, environmentId)
   change()
-  const kept = new Set(listHeldIntents(store, environmentId).map(pairedTerminalTabCloseIntentKey))
+  const after = listHeldIntents(store, environmentId)
+  const kept = new Set(after.map(pairedTerminalTabCloseIntentKey))
+  const stillHeldTabs = new Set(
+    after.flatMap((intent) => intent.hostTabIds.map((id) => `${intent.worktreeId}\0${id}`))
+  )
+  const revealedWorktreeIds = new Set<string>()
   for (const intent of before) {
     const key = pairedTerminalTabCloseIntentKey(intent)
     if (kept.has(key)) {
       continue
     }
     attemptsByIntent.delete(attemptKey(environmentId, key))
+    const hidUnderCurrent = hiddenUnderCurrentPairing.delete(attemptKey(environmentId, key))
     if (!stillHidden.has(key)) {
       revealHeldClose(intentOwner(environmentId, intent), intent.worktreeId, intent.hostTabIds)
+      // Only the hide this close laid: a fresh close of the same tab may hide there too.
+      if (hidUnderCurrent) {
+        revealHeldClose(
+          { environmentId },
+          intent.worktreeId,
+          intent.hostTabIds.filter((id) => !stillHeldTabs.has(`${intent.worktreeId}\0${id}`))
+        )
+      }
+      revealedWorktreeIds.add(intent.worktreeId)
     }
+  }
+  for (const worktreeId of revealedWorktreeIds) {
+    acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
   }
 }
 
@@ -111,7 +129,8 @@ export function holdWebSessionCloseForReplay(
   store: PairedTerminalTabCloseIntentStore,
   owner: WebSessionIntentOwner,
   worktreeId: string,
-  hostTabIds: readonly string[]
+  hostTabIds: readonly string[],
+  options: { force?: boolean } = {}
 ): void {
   hideHeldClose(owner, worktreeId, hostTabIds)
   if (!worktreeId || !hostTabIds[0]) {
@@ -123,17 +142,13 @@ export function holdWebSessionCloseForReplay(
       hostTabIds: [...hostTabIds],
       worktreeId,
       closedAt: Date.now(),
-      ...(owner.pairingRevision !== undefined ? { pairingRevision: owner.pairingRevision } : {})
+      ...(owner.pairingRevision !== undefined ? { pairingRevision: owner.pairingRevision } : {}),
+      ...(options.force ? { force: true as const } : {})
     })
   )
 }
 
-/**
- * Re-hides every held close whose tab this snapshot lists and returns the ones it makes due: a
- * snapshot that still lists the tab proves the host is reachable and still holds it. Absence is
- * not treated as removal, because an incomplete inventory omits tabs too; a close whose tab never
- * returns ends at delivery, give-up, the cap, or the age bound.
- */
+/** Rehide all listed held closes and return due replays; listed tabs prove reachability. Incomplete inventories make absence inconclusive, so unlisted closes end only at delivery, give-up, cap or age bound. */
 export function takeDueWebSessionCloseReplays(
   store: PairedTerminalTabCloseIntentStore,
   environmentId: string,
@@ -153,23 +168,25 @@ export function takeDueWebSessionCloseReplays(
     }
     const intentKey = pairedTerminalTabCloseIntentKey(intent)
     const key = attemptKey(environmentId, intentKey)
-    // Why: after a reload a snapshot can land before the environment list publishes revisions.
-    // Unknown is not a mismatch: keep hiding the tab (under the key the snapshot apply reads now)
-    // and send nothing until the pairing can be checked.
+    // Reload/re-pair snapshots can precede pairing identity. Unknown is not mismatch: hide under the current key without sending until checked; the age bound limits unresolved holds.
     const expired = now - intent.closedAt > PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS
-    if (!expired && currentRevision === undefined && intent.pairingRevision !== undefined) {
+    if (
+      !expired &&
+      intent.pairingRevision !== undefined &&
+      (currentRevision === undefined ||
+        isRuntimeEnvironmentContinuationPending(environmentId, intent.pairingRevision))
+    ) {
       hideHeldClose({ environmentId }, intent.worktreeId, intent.hostTabIds)
+      hiddenUnderCurrentPairing.add(key)
       continue
     }
-    // Why: the close was the old pairing's, so a replacement host must never receive it; and past
-    // the age bound the tab is one this client can no longer explain hiding.
+    // Never send old-pairing closes to replacement hosts; age-bound closes can no longer justify hiding.
     if (expired || intent.pairingRevision !== currentRevision) {
       dropped.push(intentKey)
       continue
     }
     const owner = intentOwner(environmentId, intent)
-    // Why every held close, in flight too: a reload or a subscription reinstall clears close
-    // intents, and this snapshot lists the tab.
+    // Rehide in-flight closes too: reload/subscription reinstall clears intent while snapshots still list the tab.
     hideHeldClose(owner, intent.worktreeId, intent.hostTabIds)
     const attempt = attemptsByIntent.get(key) ?? { attempts: 0, inFlight: false }
     if (attempt.inFlight) {
@@ -178,7 +195,13 @@ export function takeDueWebSessionCloseReplays(
     attempt.inFlight = true
     attempt.attempts += 1
     attemptsByIntent.set(key, attempt)
-    due.push({ owner, worktreeId: intent.worktreeId, hostTabIds: intent.hostTabIds, intentKey })
+    due.push({
+      owner,
+      worktreeId: intent.worktreeId,
+      hostTabIds: intent.hostTabIds,
+      intentKey,
+      ...(intent.force ? { force: true as const } : {})
+    })
   }
   if (dropped.length > 0) {
     changeHeldIntents(store, environmentId, () => store.clear(environmentId, dropped))
@@ -232,12 +255,7 @@ export function pairedTerminalTabCloseIntentStoreOf(
   }
 }
 
-/**
- * Brings the held closes in line with a published catalog. A close owed to a server the catalog
- * lacks or to a retired peer can never be sent, so it goes; the whole catalog, not a diff, so a
- * server removed while the app was closed goes too. A proven same-machine re-pair moves its closes
- * to the new pairing, in the saved record, so a reload still sends them.
- */
+/** Reconcile the full catalog, including servers removed while closed: discard absent/retired peers’ closes. Proven same-machine re-pairs persist the new pairing so reload still replays them. */
 export function reconcileWebSessionCloseReplaysWithCatalog(
   store: PairedTerminalTabCloseIntentStore,
   catalog: {
@@ -271,6 +289,17 @@ export function reconcileWebSessionCloseReplaysWithCatalog(
     for (const intent of rebased) {
       hideHeldClose(intentOwner(environmentId, intent), intent.worktreeId, intent.hostTabIds)
     }
+    // Request a snapshot after resolving re-pair identity; idle hosts may publish none to trigger replay.
+    const worktreeIds = [...new Set(rebased.map((intent) => intent.worktreeId))]
+    // Lazy: the snapshot module reaches the store, which loads this module.
+    void import('./web-runtime-session-snapshot').then(({ refreshWebRuntimeSessionTabsSnapshot }) =>
+      worktreeIds.forEach(
+        (worktreeId) =>
+          void refreshWebRuntimeSessionTabsSnapshot(environmentId, worktreeId, {
+            expectedEnvironmentPairingRevision: toRevision
+          })
+      )
+    )
   }
 }
 
@@ -303,4 +332,5 @@ export function replayWebSessionClosesDueForSnapshot(
 
 export function resetWebSessionCloseReplaysForTests(): void {
   attemptsByIntent.clear()
+  hiddenUnderCurrentPairing.clear()
 }

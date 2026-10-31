@@ -1,12 +1,11 @@
-// Old layout methods' params as layout commands (design 2.6). Pure: the handler resolves the
-// worktree selector and terminal handles, applies the commands and shapes today's reply.
+// Translate old method params to pure layout commands; handlers resolve selectors/handles, apply changes and shape compatible replies.
 
-import type { z } from 'zod'
-import type { MoveTab } from '../../rpc-contract/session-tabs-schemas-params'
+import type { RuntimeMobileSessionTabMove } from '../../runtime-session-contracts'
 import { isTerminalLeafId } from '../../stable-pane-id'
 import { isValidHostTerminalTabId } from '../../terminal-tab-id'
 import type { TerminalPaneSplitDirection } from '../../terminal-tab-types'
 import { resolveSessionTabRow } from './old-client-session-tab-rows'
+import { tabOrderAnchor } from '../tab-order'
 import { collectLayoutLeafIdsInOrder, layoutContainsLeafId } from '../terminal-pane-tree'
 import type { ProjectedSessionTabs } from './old-client-session-tabs-projection'
 import type { LayoutCommand, LayoutRefusalCode } from '../workspace-layout-command-types'
@@ -17,7 +16,7 @@ import {
   type WorkspaceLayoutModel
 } from '../workspace-layout-model'
 
-/** Errors today's `session.tabs.move` throws, kept so old clients read the same codes. */
+/** Preserve session.tabs.move error codes for older clients. */
 export type SessionTabMoveErrorCode =
   | 'tab_not_found'
   | 'target_group_not_found'
@@ -33,11 +32,8 @@ const refused = (code: LayoutRefusalCode | SessionTabMoveErrorCode): MethodTrans
   code
 })
 
-/**
- * `terminal.create`. An old desktop names the pane it already drew (`tabId`/`leafId`): a pane the
- * model has starts; a new pane in a tab the model has splits that tab; unused ids create a tab
- * with them. Ids that are missing or malformed are minted, as `allocateTerminalPaneIdentity` does.
- */
+/** Honor older desktops’ drawn tab/leaf IDs: start existing panes, split new panes into existing tabs, or create unused tabs.
+ * Mint missing/malformed IDs like allocateTerminalPaneIdentity. */
 export function translateTerminalCreate(
   model: WorkspaceLayoutModel,
   workspaceKey: string,
@@ -74,7 +70,7 @@ export function translateTerminalCreate(
   if (!target) {
     return create({ tabId, leafId })
   }
-  // The desktop sends its tree after, through updatePaneLayout, which moves the pane where it drew it.
+  // The desktop later sends updatePaneLayout to move this pane to its drawn position.
   const besideLeafId = collectLayoutLeafIdsInOrder(target.panes.root).at(-1)
   return besideLeafId
     ? to({
@@ -123,7 +119,7 @@ export function translateSetTabProps(
   }
 ): MethodTranslation {
   const target = resolveSessionTabRow(workspace, params.tabId)
-  // Today an unknown tab is a silent `{updated: true}`.
+  // Preserve silent updated:true for unknown tabs.
   if (!target) {
     return to()
   }
@@ -137,11 +133,7 @@ export function translateSetTabProps(
   })
 }
 
-/**
- * `session.tabs.close`: a pane row of a split tab closes its pane; any other terminal row closes
- * its tab, which a pinned tab refuses (`terminal_tab_pinned`) with or without a window, as today.
- * Other kinds close as asked. A row that is already gone closes as already closed (#10747).
- */
+/** Split-pane row closes remove the pane; other terminal rows close their tab and refuse pinned tabs. Preserve already-closed success (#10747); other content kinds close as requested. */
 export function translateSessionTabClose(
   workspaceKey: string,
   workspace: WorkspaceLayout | undefined,
@@ -160,16 +152,12 @@ export function translateSessionTabClose(
   })
 }
 
-/**
- * `session.tabs.move` from a paired client, checked against the snapshot it was shown (`projected`)
- * as today: a `reorder` must be exactly the shown group's tabs, and tabs the client cannot see keep
- * their places. It becomes the moves that produce that order.
- */
+/** Validate reorders against the client’s projected group and retain unseen tabs’ places, then translate to moves. */
 export function translateSessionTabMove(
   workspaceKey: string,
   workspace: WorkspaceLayout,
-  projected: ProjectedSessionTabs,
-  params: z.infer<typeof MoveTab>
+  projected: Pick<ProjectedSessionTabs, 'tabGroups'>,
+  params: RuntimeMobileSessionTabMove
 ): MethodTranslation {
   const shownTabIds = new Set(
     (projected.tabGroups ?? []).flatMap((group) => toTabIds(workspace, group.tabOrder))
@@ -195,23 +183,36 @@ export function translateSessionTabMove(
   }
   const shownOrder = toTabIds(workspace, shown.tabOrder)
   if (params.kind === 'move-to-group') {
-    const index = Math.max(0, Math.min(params.index ?? shownOrder.length, shownOrder.length))
+    const rowCount = shown.tabOrder.length
+    const shownIndex = Math.max(0, Math.min(params.index ?? rowCount, rowCount))
+    // Place before the next projected row main holds; pre-frame window-only rows anchor nothing. Past the end appends.
+    const before = toTabIds(workspace, shown.tabOrder.slice(shownIndex))[0]
+    const index = before === undefined ? target.tabOrder.length : target.tabOrder.indexOf(before)
     return to({
       ...on,
       type: 'moveTab',
       tabId: tab.id,
-      // A shown index lands before the same tab in the full order; the end stays the end.
-      index:
-        index === shownOrder.length
-          ? target.tabOrder.length
-          : target.tabOrder.indexOf(shownOrder[index]!)
+      index,
+      afterTabId: tabOrderAnchor(target.tabOrder, index)
     })
   }
-  const sent = params.tabOrder.map((rowId) => resolveSessionTabRow(workspace, rowId)?.tab.id)
+  // A row main holds no tab for (one drawn before main's frame) is named once, and keeps no place.
+  const unheld = (rowIds: readonly string[]) =>
+    rowIds.filter((rowId) => !resolveSessionTabRow(workspace, rowId))
+  const shownUnheld = new Set(unheld(shown.tabOrder))
+  const sentUnheld = unheld(params.tabOrder)
+  if (
+    sentUnheld.length !== shownUnheld.size ||
+    new Set(sentUnheld).size !== sentUnheld.length ||
+    sentUnheld.some((rowId) => !shownUnheld.has(rowId))
+  ) {
+    return refused('invalid_tab_order')
+  }
+  const sent = toTabIds(workspace, params.tabOrder)
   if (
     sent.length !== shownOrder.length ||
     new Set(sent).size !== sent.length ||
-    sent.some((id) => id === undefined || !shownOrder.includes(id)) ||
+    sent.some((id) => !shownOrder.includes(id)) ||
     !sent.includes(tab.id)
   ) {
     return refused('invalid_tab_order')
@@ -225,7 +226,13 @@ export function translateSessionTabMove(
     if (order[index] !== id) {
       order.splice(order.indexOf(id), 1)
       order.splice(index, 0, id)
-      commands.push({ ...on, type: 'moveTab', tabId: id, index })
+      commands.push({
+        ...on,
+        type: 'moveTab',
+        tabId: id,
+        index,
+        afterTabId: tabOrderAnchor(wanted, index)
+      })
     }
   })
   return to(...commands)
@@ -240,7 +247,7 @@ function toTabIds(workspace: WorkspaceLayout, rowIds: readonly string[]): string
 
 type ResolvedPane = { tab: LayoutTerminalTab; leafId: string }
 
-/** `terminal.split` on a resolved handle; it splits below when no direction is sent, as today. */
+/** Preserve terminal.split’s default downward direction. */
 export function translateTerminalSplit(
   workspaceKey: string,
   pane: ResolvedPane,
@@ -255,7 +262,7 @@ export function translateTerminalSplit(
   })
 }
 
-/** `terminal.rename`: an empty title resets to the generated one, as today. */
+/** Empty terminal.rename resets to the generated title. */
 export function translateTerminalRename(
   workspaceKey: string,
   pane: ResolvedPane,
@@ -270,10 +277,7 @@ export function translateTerminalRename(
   })
 }
 
-/**
- * `terminal.close`. Closing a tab's last pane closes the tab, so a pinned tab refuses it
- * (`terminal_tab_pinned`), as the CLI has no force today.
- */
+/** Closing the last pane closes its tab; refuse pinned tabs because terminal.close has no force. */
 export function translateTerminalClose(
   workspaceKey: string,
   pane: ResolvedPane
@@ -283,7 +287,7 @@ export function translateTerminalClose(
     : translateTerminalCloseTab(workspaceKey, pane)
 }
 
-/** `terminal.closeTab` refuses a pinned tab (`terminal_tab_pinned`), as today. */
+/** Preserve terminal.closeTab’s terminal_tab_pinned refusal. */
 export function translateTerminalCloseTab(
   workspaceKey: string,
   pane: Pick<ResolvedPane, 'tab'>

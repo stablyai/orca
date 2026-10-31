@@ -1,7 +1,3 @@
-// A prompt answer accepts through its own command receipt, committed with the resolved revision
-// before the provider hears the answer: a retry answers from that receipt and the provider hears
-// each answer once.
-
 import { beforeEach, describe, expect, it, type Mock } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
 import {
@@ -37,7 +33,6 @@ const CONFLICT = {
   refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
 }
 const UNKNOWN = { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
-/** The provider identity `seedApproval` raises its prompt under. */
 const PROMPT = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
 
 let root: string
@@ -94,7 +89,6 @@ function promptBody(itemId: string): AgentJournalItemBody {
   return body
 }
 
-/** The provider writes the answered prompt again, as a later echo of it would. */
 async function reviseFromProvider(itemId: string): Promise<void> {
   const body = promptBody(itemId)
   if (body.kind !== 'approval') {
@@ -112,11 +106,11 @@ async function reviseFromProvider(itemId: string): Promise<void> {
   await host.flushStreamedEvents(SESSION)
 }
 
-/** What a rewind does to the conversation: a new epoch, the prompt rebuilt into it as it stands. */
+/** Rebuild the current prompt into a replacement epoch, as rewind does. */
 async function rewindKeepingPrompt(itemId: string): Promise<void> {
   const fence = store.getRecord(SESSION)!.lease.runtimeFence
   await journal().replaceEpochItems('handle_forked', fence, [
-    // The prompt keeps the generation that raised it (this one), as a rewind carries it.
+    // Rewind preserves the generation that raised the prompt.
     {
       identity: PROMPT,
       body: promptBody(itemId),
@@ -138,7 +132,6 @@ const GROUPED_ANSWERS = [
   { questionId: 'q2', optionIds: [], other: 'SSH host' }
 ]
 
-/** A provider question with a multi-select and a free-text part; resolves its item id. */
 async function seedGroupedQuestion(): Promise<string> {
   const question = { ...PROMPT, ordinal: 100 }
   acquire.mock.calls.at(-1)?.[0].events?.appendItem(
@@ -429,7 +422,7 @@ describe('a prompt answer', () => {
     expect(await host.respondToPrompt(CALLER, answer(second, stopped, 'approve'))).toMatchObject(
       CONFLICT
     )
-    // The Stop's own receipt stands; the refused answer committed nothing over it.
+    // Refused answers cannot overwrite the Stop receipt.
     expect(receipt(stopped)).toMatchObject({
       verdict: 'readable',
       receipt: { method: 'agentSession.cancel' }

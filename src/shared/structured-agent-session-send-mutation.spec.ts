@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from './agent-session-journal-types'
-import type { AgentMessageSource } from './agent-session-message-source'
+import type { AgentMessageSource } from './agent-session/agent-session-message-source'
 import { AgentJournalSubmissionSchema } from './agent-session-journal-submission-schema'
 import { SendParams } from './rpc-contract/structured-agent-session-params'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
@@ -123,6 +123,26 @@ describe('send fingerprints never cover the sender', () => {
       })
     )
     expect(SendParams.safeParse({ ...carried, body: BODY }).success).toBe(true)
+  })
+
+  it('binds source controls only into the operation hash while preserving the legacy payload', () => {
+    const input = {
+      sessionId: 'session-1',
+      clientOperationId: 'op-1',
+      expectedRuntimeFence: 1,
+      body: BODY
+    }
+    const legacy = structuredAgentSessionMessageSendMutation(input)
+    const bound = structuredAgentSessionMessageSendMutation({
+      ...input,
+      usageLimitContinuationOfTurnItemId: 'turn-1'
+    })
+    expect(legacy).not.toHaveProperty('usageLimitContinuationOfTurnItemId')
+    expect(legacy.envelope.payloadFingerprint).not.toBe(bound.envelope.payloadFingerprint)
+    expect(agentSessionSendBodyFingerprint('session-1', bound.body)).toBe(
+      legacy.envelope.payloadFingerprint
+    )
+    expect(SendParams.safeParse(bound).success).toBe(true)
   })
 
   it('refuses a client send whose body names a sender', () => {

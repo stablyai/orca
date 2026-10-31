@@ -5,44 +5,28 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-addres
 
 export type PreambleParams = {
   taskId: string
-  // Why: completion and heartbeat payloads attribute activity to a specific
-  // dispatch context (not just a task). A retried task has multiple
-  // dispatch_contexts rows; keying worker_done/heartbeat on dispatchId
-  // prevents stale messages from a previously-failed dispatch from completing
-  // or refreshing the retry.
+  // Dispatch ids fence completion authority across retries of one Task.
   dispatchId: string
   taskSpec: string
   /** A terminal handle, or a session's `orca_session_id:<id>`; each is labelled by its kind. */
   coordinatorHandle: string
   workerHandle: string
   devMode?: boolean
-  // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
-  // other execution hosts keep their existing bare `orca` bridge.
+  // Packaged WSL uses orca-ide; other hosts retain their existing launcher.
   cliCommand?: OrchestrationCliCommand
-  // Why: populated by the coordinator's dispatch pre-flight (§3.1) only
-  // when the target worktree is behind its tracking remote. When absent
-  // or when `behind === 0`, the preamble emits no drift section. Callers
-  // must NOT pre-populate this with empty data; the drift section is a
-  // loud-but-rare signal tied to the `allow-stale-base: true` override
-  // path, and polluting it for fresh worktrees would train workers to
-  // ignore it.
+  // Supply actual preflight drift only; spurious warnings train workers to ignore stale-base evidence.
   baseDrift?: {
     base: string
     behind: number
     recentSubjects: string[]
   }
-  // Why: prompt-returning agents should idle after worker_done, while bare
-  // shells have no agent prompt for Orca to reuse.
+  // Prompt-returning agents should idle after completion; bare shells have no reusable agent prompt.
   workerKind?: 'prompt-returning-agent' | 'bare-shell'
-  // Why gated: advertising a verb the depth cap will reject just burns a turn.
+  // Do not advertise delegation when depth enforcement will reject it.
   canDispatchSubWorkers?: boolean
+  // Federated workers have no local Dispatch row to parent helpers.
+  subWorkersInOwnRun?: boolean
 }
-
-// Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
-// check (threshold 10 min) catches a hung worker within one tick, and
-// infrequent enough to avoid inbox spam on long tasks. One constant so
-// cadence tuning is a single-line change (Q1 in DESIGN_DOC_PREAMBLE_FIX.md).
-const HEARTBEAT_INTERVAL_MIN = 5
 
 /** A session address names a chat worker; any other handle is a terminal. */
 function isSessionHandle(handle: string): boolean {
@@ -62,15 +46,9 @@ function dispatchIdentityLines(params: PreambleParams): string {
   ].join('\n')
 }
 
-// Why: the dispatch preamble teaches agents about Orca's CLI commands for
-// structured communication. Behavioral rules (body summary, heartbeat cadence,
-// no-AskUserQuestion) live as inline comments above the relevant CLI example,
-// not as a separate prose block — LLM readers anchor on examples and skim
-// trailing prose, so rules must land at the point of use.
+// Place behavior rules beside CLI examples, where agent readers use them.
 export function buildDispatchPreamble(params: PreambleParams): string {
-  // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
-  // socket. Without this, agents inside the dev Electron app would call the
-  // production CLI and talk to the wrong Orca instance (Section 6.4).
+  // Dev agents must reach the dev socket through orca-dev.
   const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
   const chat = isSessionHandle(params.workerHandle)
   const surface = chat ? 'chat' : 'terminal'
@@ -80,82 +58,45 @@ export function buildDispatchPreamble(params: PreambleParams): string {
     chat
   })
 
-  // Why: one-line recipes paste unchanged in POSIX shells, PowerShell, and cmd.exe.
-  // Why fenced: keeps the shell comments executable without rendering them as Chat UI headings.
-  // Why plain-reason wording: Claude Code tells the model pasted text may carry instructions
-  // the user did not write, and shouted rules read as prompt injection (STA-8200).
+  // Use one-line recipes across POSIX/PowerShell/cmd; fence comments and use plain reasons to avoid misleading Chat rendering (STA-8200).
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 ${dispatchIdentityLines(params)}
 
-The coordinator cannot see this ${surface}, so reach it with the \`${cli} orchestration\`
+The coordinator cannot see this ${surface}, so reach it only with the \`${cli} orchestration\`
 commands below; a question or result left only in this ${surface} never gets to it.
-Don't post to Slack, GitHub, or other channels during the run; report through these commands.
+Don't post to Slack, GitHub, or other channels during the run.
+Do only this task, yourself: no subagents or helper workers unless the task asks.
 
 === CLI COMMANDS ===
 
 \`\`\`sh
-  # Report the task outcome (required, exactly once).
-  #
-  # --body must be a 3-sentence executive summary (what you did,
-  # what you found, what's left). Never send an empty body; the coordinator
-  # reads the body first and only opens artifacts if it needs more detail.
-  # Append --files-modified only when files changed, and append --report-path
-  # only when you produced a durable report. Always pass real values; do not
-  # send the example placeholders literally.
-  #
-  # Send worker_done exactly once. Use --outcome succeeded when the
-  # requested work is done, or replace it with --outcome failed when it is not.
-  # Never encode failure only in prose and never silently exit.
-  # Include BOTH taskId and dispatchId in the payload so a late completion
-  # from a failed retry cannot complete the current dispatch.
-  ${cli} orchestration send --from ${params.workerHandle} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
+  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
+  # Never use a local question prompt such as AskUserQuestion; the
+  # coordinator cannot see or answer it.
+  ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>" --options "<optional,comma,separated>"
 
-  # Send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
-  # while actively working on the task. The coordinator uses this to
-  # distinguish "still thinking" from "hung / crashed." Skip heartbeats only
-  # while blocked inside \`check --wait\` or \`ask\` — those calls are
-  # themselves liveness signals.
-  #
-  # Include BOTH taskId and dispatchId in the payload: the coordinator
-  # attributes the heartbeat to the specific dispatch context, not just
-  # the task, so a straggler heartbeat from a previously-failed dispatch
-  # cannot mask a hung retry.
-  ${cli} orchestration send --from ${params.workerHandle} --type heartbeat --subject "alive" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --phase "<short: investigating|implementing|reviewing|waiting>"
-
-  # Ask the coordinator a question and block until it answers.
-  #
-  # Use this instead of AskUserQuestion: that opens a local prompt the
-  # coordinator cannot see or answer, so the task would stall until someone
-  # happened to look at this ${surface}. Send every question through \`ask\`.
-  #
-  # The \`ask\` verb durably records a question in this Dispatch's Run and
-  # blocks until the coordinator replies, then prints the reply body. If the
-  # call times out or disconnects, resume with the returned message ID instead
-  # of creating a duplicate question.
-  ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>" --options "<optional,comma,separated>" --timeout-ms 600000
-
-  # Escalate a blocker or failure (pre-completion, when you need the
-  # coordinator to do something before you can continue):
+  # Blocked, and the coordinator must act before you can continue:
   ${cli} orchestration send --from ${params.workerHandle} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
 
-  # Read coordinator follow-ups. Nothing interrupts you: a durable message only
-  # arrives when you look, so run this at each natural checkpoint — before you
-  # start a new file and after a test run — and once more immediately before
-  # you send worker_done, so a redirect lands before the task settles.
-  ${cli} orchestration check --terminal ${params.workerHandle} --json
+  # Finish: send exactly once. --body is three sentences: what you did, what
+  # you found, what is left. Use --outcome failed if the work is not done;
+  # never hide failure in prose. Add --files-modified or --report-path only
+  # with real values. You are done when it confirms; if it fails, follow the
+  # recovery it prints.
+  ${cli} orchestration send --from ${params.workerHandle} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
 \`\`\`
 
 ${postDoneInstructions}`
 
-  // Why: the drift section fires only when the coordinator allowed dispatch
-  // against a stale worktree (via `allow-stale-base: true` in the task spec,
-  // see §3.4) OR when behind>0 but under the refusal threshold. Either way
-  // it is defense-in-depth: the worker sees the drift from line 1 instead
-  // of discovering it via stale line numbers in artifacts later.
+  // Show real drift even below refusal threshold so workers notice stale artifacts early.
   const drift =
     params.baseDrift && params.baseDrift.behind > 0 ? buildDriftSection(params.baseDrift) : ''
 
-  const subDispatch = params.canDispatchSubWorkers ? buildSubDispatchSection(cli) : ''
+  const subDispatch = params.canDispatchSubWorkers
+    ? params.subWorkersInOwnRun
+      ? buildOwnRunSubDispatchSection(cli)
+      : buildSubDispatchSection(cli, params.workerHandle)
+    : ''
 
   return `${header}${drift}${subDispatch}
 
@@ -171,7 +112,7 @@ export type DispatchPreambleSendOptions = Pick<
 export function dispatchPreambleSendOptions(requestId: string): DispatchPreambleSendOptions {
   // Why: a delayed provider hook must not revoke an accepted Dispatch.
   return {
-    inputKind: 'driving',
+    inputKind: 'orchestration',
     leadLine: ORCA_DISPATCH_PROMPT_LEAD_LINE,
     acceptQueued: true,
     observationTimeoutMs: 0,
@@ -179,14 +120,11 @@ export function dispatchPreambleSendOptions(requestId: string): DispatchPreamble
   }
 }
 
-export const TERMINAL_REDISPATCH_PARAGRAPH = `Do not exit the shell. Your terminal stays available, and if the
-coordinator has more for you it will re-engage this terminal with a fresh
-preamble + TASK block, which arrives as new input. Treat that as supervised
-work under the new Dispatch; ignore stale follow-ups from the settled task.`
+export const TERMINAL_REDISPATCH_PARAGRAPH = `Do not exit the shell. More supervised work arrives here as a fresh preamble
+and TASK block; follow it under its new Dispatch and ignore stale follow-ups.`
 
-export const CHAT_REDISPATCH_PARAGRAPH = `If the coordinator has more for you, it will send this chat a fresh
-preamble + TASK block, which arrives as a new message. Treat that as supervised
-work under the new Dispatch; ignore stale follow-ups from the settled task.`
+export const CHAT_REDISPATCH_PARAGRAPH = `More supervised work arrives in this chat as a fresh preamble and TASK
+block; follow it under its new Dispatch and ignore stale follow-ups.`
 
 function buildPostWorkerDoneInstructions({
   cli,
@@ -197,49 +135,58 @@ function buildPostWorkerDoneInstructions({
   workerKind: NonNullable<PreambleParams['workerKind']>
   chat: boolean
 }): string {
-  // Why: re-dispatch reaches idle agents as new input; inbox polling
-  // after completion cannot receive that new TASK block and looks hung.
-  // Why chat first: a chat has no shell to exit, whatever workerKind says.
+  // Redispatch arrives as new input; post-completion inbox polling looks hung. Chats have no shell to exit.
   if (workerKind === 'bare-shell' && !chat) {
     return `=== AFTER YOU SEND worker_done ===
 
-worker_done ends your turn for this task. Your dispatched work is complete:
-stop and take no further actions — do NOT start new or unrelated work,
+worker_done ends your turn for this task. Do NOT start other work,
 do NOT run a sleep/poll loop, and do NOT keep calling
-\`${cli} orchestration check\`. The coordinator has already recorded your
-completion and expects no further output.
+\`${cli} orchestration check\`.
 
-Exit the shell after completion. Bare-shell workers have no idle agent
-prompt for Orca to reuse; if the coordinator has more for you it will
-dispatch or prompt another worker with a fresh TASK block.`
+Exit the shell after completion. Bare-shell workers have no idle agent prompt
+for Orca to reuse.`
   }
 
   return `=== AFTER YOU SEND worker_done ===
 
-worker_done ends your turn for this task. Your dispatched work is complete:
-stop, return to an idle prompt, and take no further actions — do NOT start
-new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
-\`${cli} orchestration check\`. The coordinator has already recorded your
-completion and expects no further output.
+worker_done ends your turn for this task: return to an idle prompt. Do NOT
+start other work, do NOT run a sleep/poll loop, and do NOT keep calling
+\`${cli} orchestration check\`.
 
-A direct instruction from the user takes precedence over this idle rule.
-Treat it as new user-owned work: follow it without coordinator approval or a
-fresh Dispatch, and do not send lifecycle messages using the settled task or
-Dispatch IDs. Never refuse a direct user request because you were a worker.
+A direct instruction from the user takes precedence over this idle rule: it is
+new work, so do it without the settled task or Dispatch IDs.
+Never refuse a direct user request because you were a worker.
 
 ${chat ? CHAT_REDISPATCH_PARAGRAPH : TERMINAL_REDISPATCH_PARAGRAPH}`
 }
 
-// Why the whole section is omitted rather than softened when nesting is off: a
-// worker told it "usually cannot" delegate still tries, then reports the refusal
-// as a blocker.
-// Why fenced + blank line before the closing `---`: unfenced `<placeholders>` are stripped as raw
-// HTML by the Chat UI, and a rule directly under a paragraph is a setext H2 (giant last sentence).
-function buildSubDispatchSection(cli: string): string {
+// Omit disabled delegation entirely; fence placeholders and separate closing rules so Chat rendering preserves the instructions.
+function buildSubDispatchSection(cli: string, workerHandle: string): string {
   return `
 
 === SUB-DISPATCH ===
-You may dispatch sub-workers for this task. Create your own Run first, then:
+If the task asks for helper workers, start them here. They report to you: their
+questions, escalations, and worker_done arrive in your own \`check\`, next to
+your coordinator's mail.
+
+\`\`\`sh
+  ${cli} orchestration worker-start --from ${workerHandle} --spec "<sub-task>" --worktree current --agent <agent> --json
+  # Answer a helper's question by its message ID:
+  ${cli} orchestration reply --from ${workerHandle} --id <message_id> --body "<answer>"
+\`\`\`
+
+Wait until every helper has settled (worker_done, a failed start, stop, or
+abandon) before reporting your own, and name any that failed. Nesting is
+capped; your helpers may not be able to start helpers of their own.
+
+---`
+}
+
+function buildOwnRunSubDispatchSection(cli: string): string {
+  return `
+
+=== SUB-DISPATCH ===
+If the task asks for sub-workers, create your own Run first, then:
 
 \`\`\`sh
   ${cli} orchestration run-create --objective "<what the sub-workers are for>" --json
@@ -247,7 +194,8 @@ You may dispatch sub-workers for this task. Create your own Run first, then:
   ${cli} orchestration worker-start --task <task_id> --worktree current --agent <agent> --json
 \`\`\`
 
-Wait for every sub-worker's worker_done before reporting your own. Nesting is
+Wait until every sub-worker has settled (worker_done, a failed start, stop, or
+abandon) before reporting your own, and name any that failed. Nesting is
 capped; your sub-workers may not be able to dispatch further.
 
 ---`

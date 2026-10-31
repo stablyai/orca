@@ -28,6 +28,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionCommandFinishedCleanupTests(): void {
   let mockStoreState: StoreState
@@ -83,9 +84,11 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         transportFactoryQueue.push(transport)
 
         connectPanePty(
-          pane as never,
-          createManager(1) as never,
-          createDeps({ tabId, isVisibleRef: { current: false } }) as never
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            createDeps({ tabId, isVisibleRef: { current: false } })
+          )
         )
         await vi.advanceTimersByTimeAsync(20)
         await flushAsyncTicks()
@@ -133,9 +136,11 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         transportFactoryQueue.push(transport)
 
         connectPanePty(
-          pane as never,
-          createManager(1) as never,
-          createDeps({ tabId, isVisibleRef: { current: false } }) as never
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            createDeps({ tabId, isVisibleRef: { current: false } })
+          )
         )
         await vi.advanceTimersByTimeAsync(20)
         await flushAsyncTicks()
@@ -169,9 +174,11 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const paneKey = makePaneKey('tab-1', LEAF_1)
 
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -218,12 +225,9 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       )
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
+      const deps = createDeps({ isVisibleRef: { current: false } })
 
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef: { current: false } }) as never
-      )
+      connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
@@ -242,16 +246,15 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         shellForeground: true
       })
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
-      // Why: `agentStatus:drop` deliberately preserves a live pane's per-pane caches, so a
-      // process-confirmed agent exit must go through the reconcile route instead — otherwise a
-      // surviving Claude latch resolves the pane's next event straight back to 'working' (STA-4612).
+      // Process-confirmed exit must reconcile caches; agentStatus:drop retains live-pane latches that would restore working status (STA-4612).
       expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
+      // Shell-confirmed exit must leave ChatView even when the agent's OSC title survives.
+      expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
     })
 
     it.each([
       ['clears stale sleeping identity after a confirmed return to shell', false],
-      // Why: a hibernation records the pane's resume before its kill; the agent dying first
-      // surfaces the shell, which is Orca's own stop rather than the agent exiting.
+      // Hibernation records resume before kill; the exposed shell is Orca’s own stop rather than an independent agent exit.
       ['keeps sleeping identity when the shell surfaces during an intentional stop', true]
     ])('%s', async (_label, stoppingOnPurpose) => {
       vi.useFakeTimers()
@@ -268,12 +271,9 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       )
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
+      const deps = createDeps({ isVisibleRef: { current: false } })
 
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef: { current: false } }) as never
-      )
+      connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
@@ -300,9 +300,11 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
           agent: 'codex'
         })
+        expect(deps.onAgentExitedRef.current).not.toHaveBeenCalled()
       } else {
         expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(paneKey)
         expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+        expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
       }
       expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
         agent: null,
@@ -328,9 +330,11 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const paneKey = makePaneKey('tab-1', LEAF_1)
 
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -358,14 +362,10 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
     })
 
     it('reconciles a pane that HAS a status row, whose own drop removes it first', async () => {
-      // Why this shape: the sibling test above covers a pane with no row, where the deferred drop
-      // early-returns and never touches the pane's accepted-status bookkeeping. That is not the
-      // production case. A pane worth reconciling always HAS a row — and settling runs the drop
-      // BEFORE the reconcile, so the reconcile must survive its own drop having already fired.
+      // Use an accepted row to exercise deferred-drop bookkeeping before reconcile; the no-row path returns early.
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
-      // Both imported after vi.resetModules() so they share pty-connection's module registry; a
-      // static top-level import here is a DIFFERENT instance and the assertion goes vacuous.
+      // Import after resetModules to share pty-connection’s registry; static imports would assert against a different instance.
       const { createCommandFinishedStatusStore } =
         await import('./command-finished-status-store-test-fixture')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
@@ -383,22 +383,21 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const paneKey = makePaneKey('tab-1', LEAF_1)
 
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
 
-      // A real accepted status write, through the real slice, so the row carries whatever
-      // bookkeeping the store stamps on an accepted write. `working` is the shape STA-4612 is about:
-      // a latch is holding the pane open and the agent is about to exit out from under it.
+      // A real working write carries accepted-status bookkeeping and the latch present during STA-4612 exits.
       const realStore = createCommandFinishedStatusStore()
       const row = realStore.acceptWorkingClaudeStatus(paneKey)
       expect(row).toBeDefined()
       mockStoreState.agentStatusByPaneKey[paneKey] = row
-      // The real dismissal removes the row and runs the slice's own teardown; mirror both, or the
-      // ordering this test exists to pin is never exercised.
+      // Mirror both real dismissal and teardown to exercise drop-before-reconcile ordering.
       mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
         delete mockStoreState.agentStatusByPaneKey[key]
         realStore.dropAgentStatus(key)
@@ -430,9 +429,11 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const paneKey = makePaneKey('tab-1', LEAF_1)
 
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -442,9 +443,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       }
 
       dataCallbackRef.current?.('\x1b]133;D;0\x07')
-      // Run the whole confirm ladder. At 350ms the unavailable branch has not settled yet, so
-      // asserting there proves nothing — it would pass just as happily if this path DID tear the
-      // pane down a moment later.
+      // Run the full ladder; at 350ms the unavailable branch has not settled, so early assertions can falsely pass.
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
       await flushAsyncTicks()
 
@@ -475,12 +474,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const { writes } = captureCallbackTerminalWrites(pane)
       const deps = createDeps({ isVisibleRef: { current: false } })
 
-      connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture types intentionally model the production connection boundary.
-        deps as never
-      )
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
@@ -491,9 +485,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       // The agent negotiates Kitty keys across a chunk split, then dies armed.
       dataCallbackRef.current?.('\x1b[>')
       dataCallbackRef.current?.('5u')
-      // A SIGKILLed agent emits no mode teardown; only the shell's next prompt
-      // mark arrives. The bare 133;D must not disarm yet — the foreground read
-      // has not confirmed the agent is gone.
+      // SIGKILL omits mode teardown; bare 133;D cannot disarm until foreground inspection confirms exit.
       dataCallbackRef.current?.('\x1b]133;D;0\x07')
       expect(writes.some((w) => w.includes(POST_REPLAY_REATTACH_RESET))).toBe(false)
       expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(5)
@@ -503,8 +495,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
 
       const disarm = writes.find((w) => w.includes(POST_REPLAY_REATTACH_RESET))
       expect(disarm).toBeDefined()
-      // The live shell re-arms bracketed paste at its prompt before the disarm
-      // fires; the reset must not strip it.
+      // Preserve bracketed paste re-armed by the live shell before the delayed reset.
       expect(disarm).not.toContain('\x1b[?2004l')
       // Shortcut policy reads the mirror, so it must drop the dead app's flags with xterm.
       expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(0)
@@ -530,12 +521,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const { writes } = captureCallbackTerminalWrites(pane)
       const deps = createDeps({ isVisibleRef: { current: false } })
 
-      connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture types intentionally model the production connection boundary.
-        deps as never
-      )
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
@@ -582,12 +568,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const { writes } = captureCallbackTerminalWrites(pane)
       const deps = createDeps({ isVisibleRef: { current: false } })
 
-      connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture types intentionally model the production connection boundary.
-        deps as never
-      )
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
       mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
@@ -596,9 +577,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       }
 
       dataCallbackRef.current?.('\x1b[>5u')
-      // A full-screen agent's nested command shell leaks a 133;D onto the main
-      // PTY; the confirming read republishes the live agent, so its armed
-      // mouse/kitty modes must survive untouched.
+      // Nested-shell 133;D leaves the agent foreground, so its mouse/Kitty modes must survive confirmation.
       dataCallbackRef.current?.('\x1b]133;D;0\x07')
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
       await flushAsyncTicks()
@@ -625,9 +604,11 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const paneKey = makePaneKey(tabId, LEAF_1)
 
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({ tabId, isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ tabId, isVisibleRef: { current: false } })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -667,9 +648,11 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef: { current: false } }) as never
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
@@ -759,7 +742,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
           return { dispose: vi.fn() }
         }) as typeof pane.terminal.onData)
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
         vi.advanceTimersByTime(1_000)
         await flushAsyncTicks()
         expect(capturedDataCallback.current).not.toBeNull()
@@ -835,7 +818,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         return { dispose: vi.fn() }
       }) as typeof pane.terminal.onData)
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
       vi.advanceTimersByTime(1_000)
       await flushAsyncTicks()
       if (!onDataHandler) {

@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
@@ -26,6 +27,7 @@ const {
 await import('./orca-runtime-test-lifecycle.spec')
 const { makeRuntimeStoreWithWorkspaceSession, store } =
   await import('./orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('./bind-first-pane.test-fixture')
 
 const DEFAULTS = {
   runCommands: true,
@@ -65,7 +67,7 @@ function chatCreateRuntime(args: {
     getSettings: () => ({
       ...runtimeStore.getSettings(),
       setupScriptLaunchMode: args.setupScriptLaunchMode,
-      ...(args.nativeChat ? { experimentalNativeChat: true } : {})
+      ...(args.nativeChat ? { nativeChatProviders: EVERY_AGENT_CHAT } : {})
     })
   })
   const spawn = vi.fn<NonNullable<RuntimePtyController['spawn']>>(async () => {
@@ -73,7 +75,7 @@ function chatCreateRuntime(args: {
     return { id: ptyId }
   })
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -152,7 +154,6 @@ describe('host-created workspaces awaiting their agent chat', () => {
     }
   )
 
-  // The phone creates through agent.launch; a reported bug left a plain "Terminal 1" beside Setup.
   it('gives a paired-device chat launch Setup and the chat with no plain shell', async () => {
     const { runtime, spawn } = chatCreateRuntime({
       setupScriptLaunchMode: 'new-tab',

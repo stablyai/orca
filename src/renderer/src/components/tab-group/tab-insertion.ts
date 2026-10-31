@@ -2,11 +2,7 @@ import { useCallback, useState } from 'react'
 import type { DragEndEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
 import type { TabDragItemData } from './tab-drag-data'
 
-// Why: when a tab is dragged over another tab's sortable rect, we compute
-// which side of the hovered tab the drop will land on (before vs. after).
-// Rendering a blue insertion bar at that edge makes the drop target feel
-// VS Code-like even though dnd-kit's default sortable animation already
-// slides tabs apart.
+// Keep tabs anchored and draw the insertion bar on the hovered tab’s before/after edge.
 export type HoveredTabInsertion = {
   groupId: string
   visibleTabId: string
@@ -31,8 +27,6 @@ export function resolveTabInsertion(
   if (!event.over || !isTabDragData(activeData) || !isTabDragData(overData)) {
     return null
   }
-  // Why: dropping a tab onto itself is a no-op — suppress the indicator there
-  // so users don't see a false positive target.
   if (activeData.unifiedTabId === overData.unifiedTabId) {
     return null
   }

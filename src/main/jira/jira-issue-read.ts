@@ -1,6 +1,6 @@
-import type { JiraIssue, JiraSiteSelection } from '../../shared/jira-types'
-import type { JiraMediaFormat } from '../../shared/jira-attachment-image'
-import { JiraSummaryLookupError } from '../../shared/jira-summary-lookup'
+import type { JiraIssue, JiraSiteSelection } from '../../shared/jira/jira-types'
+import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
+import { JiraSummaryLookupError } from '../../shared/jira/jira-summary-lookup'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
@@ -53,7 +53,7 @@ export async function getIssue(
         entry,
         `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}?${params.toString()}`
       )
-      // Why: keep only JSON under the pool; binary downloads fan out after release.
+      // Release the API pool before downloading binary media.
       mediaRequest = collectIssueMediaRequest(issue, mediaFormat)
     } catch (error) {
       if (isAuthError(error)) {

@@ -1,11 +1,4 @@
-/**
- * Putting a host back to the slot and state it had before an activation or rollback.
- *
- * Shared by the in-flight failure paths and by crash recovery, so both apply one rule: state
- * a launched slot may have changed is replaced only after that slot is proven exited, and only
- * when an operator accepts it — the slot exposed RPC, and with it stopped nothing on the host
- * can count the terminals it started, so the snapshot may no longer describe them.
- */
+/** Restore changed state only after proven slot exit and operator consent: a launched RPC server may have created terminals the stopped host cannot census, making the snapshot stale. Use the same rule for failure and crash recovery. */
 import { execOrcadStateMutation } from '../managed-server/host-state/orcad-state-mutation-exec'
 import { orcadRemoteBaseDir } from '../managed-server/install/orcad-remote-windows-node'
 import type { ServeReadiness } from '../server/serve-readiness'
@@ -35,7 +28,7 @@ export type OrcadIncumbentRecoveryOptions = OrcadSlotOptions & {
   acceptChangedState?: boolean
 }
 
-export type OrcadIncumbentRecovery =
+type OrcadIncumbentRecovery =
   | { outcome: 'restored'; readiness: ServeReadiness | null }
   | { outcome: 'refused'; verdict: 'live' | 'unverifiable'; code: string; reason: string }
 
@@ -49,7 +42,7 @@ export function orcadSnapshotPath(options: OrcadSlotOptions, dirName: string): s
   )
 }
 
-/** Throws when a step cannot be verified; the caller keeps the fence. */
+/** Unverifiable steps throw so the caller retains the fence. */
 export async function recoverOrcadIncumbent(
   options: OrcadIncumbentRecoveryOptions,
   input: {
@@ -57,7 +50,7 @@ export async function recoverOrcadIncumbent(
     launchedVersion: string | null
     incumbent: OrcadSlotIdentity | null
     restoreState: OrcadSnapshotVerdict | null
-    /** The state the launched slot started from, when that is not `restoreState` (a rollback). */
+    /** Rollback may restore a different snapshot from the launched slot's starting state. */
     launchedFromState?: OrcadSnapshotVerdict | null
     /** This run itself proved both slots exited, so no fresh liveness probe is needed. */
     slotsProvenExited?: boolean
@@ -97,7 +90,7 @@ async function decideChangedStateRestore(
 ): Promise<'unchanged' | 'restore' | Extract<OrcadIncumbentRecovery, { outcome: 'refused' }>> {
   if (state.state === 'captured') {
     const snapshotDir = orcadSnapshotPath(options, state.dirName)
-    // Read-only, so a lost answer is just "changed".
+    // A lost read-only comparison can conservatively mean changed.
     const comparison = await execOrcadRemote(
       options,
       compareOrcadStateSnapshotCommand(

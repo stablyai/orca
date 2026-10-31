@@ -1,5 +1,4 @@
-// A value read by revision: a reader subscribes to every change. Its owner keeps its own lifecycle
-// policy; this only publishes.
+// Publish revisioned changes; lifecycle policy remains with the owner.
 
 export class RevisionedState<S> {
   private revision = 0

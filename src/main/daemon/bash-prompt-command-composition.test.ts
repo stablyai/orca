@@ -13,18 +13,21 @@ const bashMajor = hasBash
 const bashMinor = hasBash
   ? Number(spawnSync('bash', ['-lc', 'printf %s "${BASH_VERSINFO[1]}"']).stdout)
   : 0
+const LEGACY_GATE = 'BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1)'
 const bashPreservesOddTerminalBackslash = bashMajor > 4 || (bashMajor === 4 && bashMinor >= 4)
 
 function runInteractiveBash(
   profile: string,
   tempHome: string,
-  input = 'true\nfalse\nexit 0\n'
+  input = 'true\nfalse\nexit 0\n',
+  rcfileContent = getDaemonBashShellReadyRcfileContent(),
+  bash = 'bash'
 ): string {
   const rcfile = join(tempHome, 'rcfile')
   writeFileSync(join(tempHome, '.bash_profile'), profile)
-  writeFileSync(rcfile, getDaemonBashShellReadyRcfileContent())
+  writeFileSync(rcfile, rcfileContent)
   const result = spawnSync(
-    'bash',
+    bash,
     ['-lc', '"$BASH" --noprofile --rcfile "$1" -i 2>&1', 'bash', rcfile],
     {
       input,
@@ -395,6 +398,37 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     expect(commands).toEqual(['echo __orca_osc133_probe', 'false', 'exit 0'])
     expectLifecycle(output)
   })
+
+  // Why: macOS /bin/bash 3.2 also reverts DEBUG traps set inside functions.
+  const legacyBashes = process.platform === 'darwin' ? ['bash', '/bin/bash'] : ['bash']
+  itWithBash.each(
+    legacyBashes.flatMap((bash) => [
+      ['trap - DEBUG', bash],
+      ["trap ':' DEBUG", bash]
+    ])
+  )(
+    'starts the next command after its prompt when `%s` runs at a legacy prompt (%s)',
+    (trapChange, bash) => {
+      // Why: force the bash <= 5.0 scalar PROMPT_COMMAND dispatch on any bash.
+      const rcfile = getDaemonBashShellReadyRcfileContent()
+      expect(rcfile).toContain(LEGACY_GATE)
+      const legacyRcfile = rcfile.replaceAll(LEGACY_GATE, '0')
+      const output = runInteractiveBash(
+        "PS1='ORCA_PS1> '",
+        tempHome,
+        `${trapChange}\ntrue\nexit 0\n`,
+        legacyRcfile,
+        bash
+      )
+      const startBeforePrompt = new RegExp(
+        `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
+      )
+
+      expect(output).toContain('ORCA_PS1> ')
+      expect(output).not.toMatch(startBeforePrompt)
+      expectLifecycle(output, 0)
+    }
+  )
 
   itWithBash('does not treat user command text as a bash-preexec helper', () => {
     const output = runInteractiveBash('', tempHome, 'echo a:__bp_x\nfalse\nexit 0\n')

@@ -11,11 +11,7 @@ const WINDOWS_RELAY_PATH_FALLBACKS = [
   'C:\\Windows'
 ]
 
-// Why: the login-shell probe (`/bin/sh -lc`) sources ~/.profile but not the
-// interactive ~/.bashrc, so per-user package-manager bins are invisible to
-// detection even though the user can run those agents. Add them to PATH so the
-// relay sees what interactive PTY sessions do; prefer each tool's documented
-// relocation env var over the $HOME default so relocated installs stay covered.
+// Login-only probes omit interactive package-manager paths; add documented relocations before home defaults.
 function getPosixUserInstallBinFallbacks(
   baseEnv: NodeJS.ProcessEnv,
   platform: NodeJS.Platform
@@ -157,12 +153,7 @@ export function buildRelayCommandEnv(
   }
 }
 
-/**
- * Env for relay-spawned git specifically: the PATH fallbacks above plus a
- * pinned English UTF-8 locale, because relay git output is machine-parsed
- * (stderr phrase matching, progress regexes) and a gettext-enabled git under
- * a non-English host locale translates it (issue #7808).
- */
+// Pin English UTF-8 for machine-parsed git stderr/progress; translated output breaks matching (#7808).
 export function buildRelayGitEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
@@ -175,8 +166,7 @@ export function buildRelayUnattendedGitEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
-  // Why: SSH-host GCM can open its own OAuth window even though the clone's
-  // stdin is ignored, leaving the relay request hung with no way to answer it.
+  // GCM can open OAuth UI without usable stdin; unattended RPCs must suppress it.
   const env = gitCredentialPromptGuardEnv(buildRelayGitEnv(baseEnv, platform), platform)
   return env
 }

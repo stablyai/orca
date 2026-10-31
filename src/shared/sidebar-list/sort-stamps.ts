@@ -1,9 +1,6 @@
-import { agentPhaseTransition, nextAgentPhase, type AgentPhase } from '../agent-transitions'
+import { agentPhaseTransition, type AgentPhase, type AgentTransition } from '../agent-transitions'
 
-/**
- * Sort stamps the host that owns a workspace writes on its record when something happens there.
- * Every client sorts by them; none keeps a clock. `recentAt` is stored in `lastActivityAt`.
- */
+/** Owning hosts stamp events; every client sorts without a clock. recentAt persists in lastActivityAt. */
 
 /** Smart's tiers, most demanding first. No tier means Rest, ordered by `recentAt`. */
 export const SMART_TIERS = ['needs-you', 'done', 'working'] as const satisfies readonly AgentPhase[]
@@ -25,27 +22,23 @@ export type AgentPaneState = { phase: AgentPhase; at: number }
 export const RECENT_STAMP_THROTTLE_MS = 10_000
 
 export type SortStampEvent =
-  /** One pane moved; `panes` is every pane of the workspace afterwards. */
+  /** A pane’s transition plus every pane’s state afterwards. */
   | {
       kind: 'agent'
       from: AgentPhase
       to: AgentPhase
+      transition: AgentTransition | null
       panes: readonly AgentPaneState[]
     }
   | { kind: 'bell' }
   | { kind: 'terminal-started' }
 
-/**
- * A pane's state after observing `observed` at `now`. Done only follows a turn, and stays until
- * the next prompt or the agent exits (owner decision Q1: no fade; change it here before the flip).
- * Resuming after an approval is the same turn, so it keeps the time it asked.
- */
-export function nextAgentPaneState(
+/** Done holds until prompt/exit with no fade. Resuming approval stays in the same turn and retains its request time. */
+export function enterAgentPaneState(
   previous: AgentPaneState,
-  observed: AgentPhase,
+  phase: AgentPhase,
   now: number
 ): AgentPaneState {
-  const phase = nextAgentPhase(previous.phase, observed)
   if (phase === previous.phase) {
     return previous
   }
@@ -54,9 +47,18 @@ export function nextAgentPaneState(
 
 export const REST_PANE: AgentPaneState = { phase: 'rest', at: 0 }
 
-/** The workspace's tier is its most demanding pane; its time is that tier's latest entry. */
-export function workspaceSmartStamp(panes: readonly AgentPaneState[]): SmartStampFields {
-  const tier = SMART_TIERS.find((candidate) => panes.some((pane) => pane.phase === candidate))
+/** A read Done ranks below Working: the user has seen that finish, another pane still runs. */
+const READ_TIER_ORDER = ['needs-you', 'working', 'done'] as const satisfies readonly SmartTier[]
+
+/** Most demanding pane wins; unread Done outranks Working, read Done does not. Use the tier’s latest time.
+ * Read Done alone remains Done on disk but readers show Rest. */
+export function workspaceSmartStamp(
+  panes: readonly AgentPaneState[],
+  isUnread = true
+): SmartStampFields {
+  const tier = (isUnread ? SMART_TIERS : READ_TIER_ORDER).find((candidate) =>
+    panes.some((pane) => pane.phase === candidate)
+  )
   if (!tier) {
     return {}
   }
@@ -69,21 +71,20 @@ export function workspaceSmartStamp(panes: readonly AgentPaneState[]): SmartStam
   return { smartTier: tier, smartAt }
 }
 
-/**
- * The stamps after `event`, or null when nothing changes. Pure: `now` is the host's time of the
- * event. Prompts, finishes and requests for input stamp `recentAt`; tier changes apply at once.
- */
+/** Pure host-time event classification; use post-event unread state (absent lets Done outrank Working).
+ * Prompts/finishes/input requests stamp recentAt; tier changes apply immediately; null means unchanged. */
 export function classifySortStampEvent(
   current: SortStamps,
   event: SortStampEvent,
-  now: number
+  now: number,
+  isUnread = true
 ): SortStamps | null {
   const stampsRecent = event.kind !== 'agent' || agentPhaseTransition(event.from, event.to) !== null
   const recentAt =
     stampsRecent && now - current.recentAt >= RECENT_STAMP_THROTTLE_MS ? now : current.recentAt
   const smart =
     event.kind === 'agent'
-      ? workspaceSmartStamp(event.panes)
+      ? workspaceSmartStamp(event.panes, isUnread)
       : { smartTier: current.smartTier, smartAt: current.smartAt }
   if (
     recentAt === current.recentAt &&
@@ -98,11 +99,10 @@ export function classifySortStampEvent(
   }
 }
 
-/** A finish, a request for input or a bell: news that flags the workspace for whoever isn't looking. */
+/** Finishes/failures/input requests/bells mark unseen news; session-boundary Done changes tier without raising unread. */
 export function isUnreadNews(event: SortStampEvent): boolean {
   if (event.kind !== 'agent') {
     return event.kind === 'bell'
   }
-  const transition = agentPhaseTransition(event.from, event.to)
-  return transition === 'turn-finished' || transition === 'needs-input'
+  return event.transition !== null && event.transition !== 'prompt-submitted'
 }

@@ -1,6 +1,4 @@
-// Why: RN's WebSocket close/error events are loosely typed and vary per
-// platform. Serialize them defensively (circular-safe, function-safe,
-// truncated) so the [net] diagnostics can never crash mid-handler.
+// RN socket event shapes vary by platform; serialize defensively so diagnostics cannot crash event handlers.
 export function describeSocketEvent(event: unknown): { keys: string[]; json: string } {
   let keys: string[] = []
   try {

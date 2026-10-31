@@ -3,7 +3,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
-} from '../../../../shared/remote-runtime-pty-id'
+} from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 type CopyTerminalHandleDeps = {
   tabId: string
@@ -24,8 +24,7 @@ export async function copyTerminalHandleForPane({
   callRuntime,
   writeClipboardText
 }: CopyTerminalHandleDeps): Promise<string> {
-  // Why: this desktop's runtime does not own a paired server's pane; the owner's handle is what
-  // its CLI addresses, and the PTY binding already carries it.
+  // Use the paired owner’s bound handle; this desktop’s runtime cannot resolve the server’s pane.
   if (ptyId && isRemoteRuntimePtyId(ptyId)) {
     const ownerHandle = parseRemoteRuntimePtyId(ptyId)?.handle
     if (!ownerHandle) {

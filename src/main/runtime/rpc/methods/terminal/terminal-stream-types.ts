@@ -5,6 +5,8 @@ import type {
   TerminalOutputMeta
 } from '../../terminal-output-frame-chunks'
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
+import type { TerminalReplyQueryScanState } from '../../../../../shared/terminal-reply-query-scan'
+import type { YieldedTerminalQuery } from './terminal-multiplex-yielded-queries'
 
 export type SnapshotFrameOptions = {
   kind: 'scrollback' | 'resized'
@@ -20,7 +22,7 @@ export type SnapshotFrameOptions = {
   truncatedByByteBudget?: boolean
   /** History rows this image carries above its screen; 0 tells the client to keep its own. */
   scrollbackRows?: number
-  // Why: distinguishes "I could not answer right now" from a genuinely empty buffer; omitted on success.
+  // Distinguish temporary unavailability from an empty buffer; omit on success.
   unavailable?: TerminalSnapshotUnavailableReason
   source?: 'headless' | 'renderer'
   oscLinks?: TerminalOscLinkRange[]
@@ -29,6 +31,8 @@ export type SnapshotFrameOptions = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  /** The host's tracked title when this image was taken. */
+  lastTitle?: string
 }
 
 export type SerializedSnapshot = {
@@ -46,6 +50,7 @@ export type SerializedSnapshot = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  lastTitle?: string
 } | null
 
 export type TerminalViewportClient = {
@@ -74,7 +79,7 @@ export type TerminalMultiplexStream = {
   outputPaused: boolean
   supportsDesktopViewportClaims: boolean
   desktopClaimTail: Promise<boolean>
-  // Whether THIS stream registered the width driver, so detach won't release a peer stream's floor.
+  // Only this stream's floor may be released on detach.
   registeredRemoteDesktopDriver: boolean
   remoteDesktopSubscriptionKey: string
   pendingRemoteDesktopViewport: { cols: number; rows: number } | null
@@ -83,6 +88,8 @@ export type TerminalMultiplexStream = {
   ackPendingOutputBytes: number
   ackPendingOutputOverflowed: boolean
   ackRecoverySnapshotInFlight: boolean
+  yieldedQueries: YieldedTerminalQuery[]
+  yieldedQueryScan: TerminalReplyQueryScanState
   /** A recovery went out screen-only while the link was saturated; history follows once it drains. */
   ackRecoveryHistoryOwed: boolean
   pendingOutput: TerminalOutputChunk[]
@@ -97,7 +104,7 @@ export type TerminalMultiplexStream = {
   unsubscribeFit: () => void
   unsubscribeDriver: () => void
   unregisterBinaryHandler: () => void
-  // Why: the runtime drops the exit-waiter only on real PTY exit; abort on detach so a never-exiting agent terminal doesn't leak the waiter.
+  // Abort on detach: runtime releases exit-waiters only on real PTY exit, so long-lived agents would leak them.
   exitWaiterAbort: AbortController
 }
 

@@ -30,7 +30,7 @@ export function refreshSourceControlAfterRemoteAction({
   refreshGitHistory: () => Promise<void>
   onError?: (error: unknown) => void
 }): void {
-  // Why: fetch/sync can move the remote base without touching local files; refresh all three projections so branch compare re-runs immediately.
+  // Fetch/sync can move the remote base without local file changes; refresh every projection.
   void Promise.all([refreshGitStatus(), refreshBranchCompare(), refreshGitHistory()]).catch(onError)
 }
 

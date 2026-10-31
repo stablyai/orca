@@ -10,10 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  hasAppImagePathEnvironment,
-  resolveAppImageRuntimeIdentity
-} from './appimage-runtime-identity'
+import { resolveAppImageRuntimeIdentity } from './appimage-runtime-identity'
 
 const fixtureRoots: string[] = []
 
@@ -222,13 +219,5 @@ describe.skipIf(process.platform === 'win32')('resolveAppImageRuntimeIdentity', 
   it('rejects the identity off Linux', () => {
     const fixture = createFixture()
     expect(resolveAppImageRuntimeIdentity({ ...fixture.identity, platform: 'darwin' })).toBeNull()
-  })
-})
-
-describe('hasAppImagePathEnvironment', () => {
-  it('requires the AppImage file path before treating the runtime as verifiable', () => {
-    expect(hasAppImagePathEnvironment({ APPIMAGE: '/tmp/Orca.AppImage' })).toBe(true)
-    expect(hasAppImagePathEnvironment({ APPDIR: '/tmp/.mount_Orca123' })).toBe(false)
-    expect(hasAppImagePathEnvironment({ APPIMAGE: '', APPDIR: '/tmp/.mount_Orca123' })).toBe(false)
   })
 })

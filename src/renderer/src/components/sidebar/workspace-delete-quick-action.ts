@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 let deleteModifierPressed = false
 let listenersInstalled = false
@@ -39,10 +40,9 @@ function installListeners(): void {
     return
   }
   listenersInstalled = true
-  // Why: Option/Alt is a transient reveal modifier, so stale key state after
-  // focus loss would leave destructive affordances visible.
-  window.addEventListener('keydown', onKeyDown, { capture: true })
-  window.addEventListener('keyup', onKeyUp, { capture: true })
+  // Clear transient Option/Alt state on blur so destructive affordances cannot remain visible.
+  addAppKeyListener('keydown', onKeyDown)
+  addAppKeyListener('keyup', onKeyUp)
   window.addEventListener('blur', clearDeleteModifierPressed)
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', clearDeleteModifierPressed)
@@ -54,8 +54,8 @@ function uninstallListeners(): void {
     return
   }
   listenersInstalled = false
-  window.removeEventListener('keydown', onKeyDown, { capture: true })
-  window.removeEventListener('keyup', onKeyUp, { capture: true })
+  removeAppKeyListener('keydown', onKeyDown)
+  removeAppKeyListener('keyup', onKeyUp)
   window.removeEventListener('blur', clearDeleteModifierPressed)
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', clearDeleteModifierPressed)

@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
+import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 import type { FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
@@ -41,7 +42,12 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
+}))
 
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import {
@@ -56,8 +62,7 @@ let latestFileContents: Record<string, FileContent> = {}
 const EMPTY_EDITOR_VIEW_MODE = {}
 const HOST_READ_LATENCY_MS = 1
 
-// Why: openFiles/editorViewMode must be referentially stable across renders — the prune
-// effect keys on them, and a fresh array per render would loop it.
+// Keep fixture arrays stable because pruning keys on their identity and would otherwise loop.
 function Probe({ activeFile, openFiles }: { activeFile: OpenFile; openFiles: OpenFile[] }): null {
   const state = useEditorPanelContentState({
     activeFile,
@@ -70,7 +75,6 @@ function Probe({ activeFile, openFiles }: { activeFile: OpenFile; openFiles: Ope
   return null
 }
 
-// A host-mirrored markdown tab in a runtime-owned worktree, with unsaved edits.
 function makeDirtyMirroredFile(): OpenFile {
   return {
     id: 'mirror-1',
@@ -118,25 +122,30 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
   })
 
   it('keeps a dirty mirrored tab open when the host keeps answering selector_not_found', async () => {
-    // Why: selector_not_found is the host's "could not resolve right now", not proof the
-    // workspace is gone. The only safe outcome is a bounded retry that ends in a truthful
-    // terminal message with the tab and its draft untouched — never a close.
+    // Selector failure proves no deletion; bounded retries must end with the dirty tab and its draft preserved.
     const activeFile = makeDirtyMirroredFile()
     const openFiles = [activeFile]
     const closeFile = vi.fn()
     const editorDrafts = { [activeFile.id]: '# unsaved edits' }
-    mocks.getState.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+    const store = createTestStore()
+    store.setState({
       openFiles,
       editorDrafts,
       closeFile,
+      worktreesByRepo: {
+        project: [
+          makeWorktree({
+            id: activeFile.worktreeId,
+            repoId: 'project',
+            path: '/home/user/project',
+            hostId: 'runtime:env-1'
+          })
+        ]
+      },
       setLastKnownDiskSignature: vi.fn()
     })
-    // Why the latency: a real host read rejects after I/O, in a later task than the retry
-    // that issued it. An immediate rejection would batch with the retry's own state
-    // update into one render and the effect would never re-arm — a test artifact.
-    // The documented host shape: machine code on `.code`, prose on `.message`
-    // (runtime-rpc-result.test.ts). Matching the message text alone would miss it.
+    mocks.getState.mockImplementation(store.getState)
+    // Delay rejection like real host I/O so retry state commits separately; return machine code with prose to exercise code-based classification.
     const hostError = new RuntimeRpcCallError({
       id: 'rpc-1',
       ok: false,
@@ -159,12 +168,10 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
     expect(latestFileContents[activeFile.id]?.loadError).toBe('Selector not found')
     expect(latestFileContents[activeFile.id]?.loadErrorCode).toBe('selector_not_found')
 
-    // Exhaust the bounded backoff; every retry gets the same answer.
     for (const delayMs of FILE_LOAD_RETRY_DELAYS_MS) {
       await advanceTimers(delayMs)
       await advanceTimers(HOST_READ_LATENCY_MS)
     }
-    // The budget is spent; the tab and its draft must still be there.
     expect(closeFile).not.toHaveBeenCalled()
     expect(editorDrafts[activeFile.id]).toBe('# unsaved edits')
     const expectedReads = 1 + FILE_LOAD_RETRY_DELAYS_MS.length

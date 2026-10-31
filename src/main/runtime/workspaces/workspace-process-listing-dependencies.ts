@@ -1,3 +1,6 @@
+import { resolveTuiAgentLaunchEnv } from '../../../shared/tui-agent-launch-defaults'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
 import type { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from '../terminal/lifecycle/pty-worktree-refresh'
 import type { RuntimeAccountController } from '../runtime-account-controller'
@@ -5,9 +8,22 @@ import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session
 import type { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from '../session-tabs/structured-session-create-support'
 import type { OrcaRuntimeWithGetPtyRecordForPaneKey } from '../orchestration/terminal-pane-mail-routing'
 import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from '../terminal/wait/terminal-wait-visible-probe'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { escalateChatWorkerError } from '../orchestration/chat-worker-error-escalation'
+import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
 
-/** Members the worktree listing reads from later runtime layers; declarations only. */
 export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
+  /** Apply the host-owning desktop's account overlay to configured agent environment. */
+  protected structuredAgentLaunchEnv(
+    agent: StructuredAgentId,
+    settings: Pick<GlobalSettings, 'agentDefaultEnv'>
+  ) {
+    return {
+      ...resolveTuiAgentLaunchEnv(agent, settings),
+      ...this.accounts.hostLaunchEnvFor(agent)
+    }
+  }
+
   protected abstract listResolvedWorktreeSnapshot(
     ...args: Parameters<RuntimeWorkspaceCatalog['listResolvedWorktreeSnapshot']>
   ): ReturnType<RuntimeWorkspaceCatalog['listResolvedWorktreeSnapshot']>
@@ -43,7 +59,15 @@ export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeW
   abstract onStructuredSessionStatusForMail(
     ...args: Parameters<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionStatusForMail']>
   ): ReturnType<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionStatusForMail']>
+  protected abstract assertStructuredChatAcquireAdmissible(
+    record: AgentSessionRecord
+  ): Promise<void>
   abstract onStructuredSessionTabHidden(
     ...args: Parameters<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionTabHidden']>
   ): ReturnType<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionTabHidden']>
+
+  /** A chat worker whose request settled failed tells the Run that dispatched it. */
+  onStructuredRequestFailureForErrorMail(failure: StructuredAgentSessionRequestFailure): void {
+    void escalateChatWorkerError(failure, this.workerTurnStopReportDeps)
+  }
 }

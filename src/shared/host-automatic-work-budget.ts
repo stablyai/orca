@@ -1,5 +1,4 @@
-// One automatic-restore budget per execution host: every daemon the user runs on a machine
-// adds the automatic work the others publish before it decides (owner decision Q1).
+// Combine every daemon’s published automatic work before per-host restore admission (owner decision Q1).
 import type { SpawnAdmissionLimits, SpawnAdmissionState } from './host-spawn-admission'
 
 /** Automatic work another daemon on this host published. */
@@ -35,11 +34,8 @@ function hostBucketTokens(
   return Math.min(limits.automaticBurst, tokens + (now - at) * perMs)
 }
 
-/**
- * This daemon's admission state as the policy should see it: its own in-flight and live
- * automatic work plus everyone else's, and a rate bucket no fuller than either view.
- * The result is for one decision only; accounting stays on the daemon's own state.
- */
+/** Combine local/other-daemon live and in-flight work, with rate tokens no fuller than either view.
+ * Use only for one policy decision; accounting remains daemon-local. */
 export function withOtherDaemonsAutomaticWork(
   state: SpawnAdmissionState,
   others: OtherAutomaticWork,

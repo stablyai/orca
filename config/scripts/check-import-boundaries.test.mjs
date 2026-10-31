@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { COMPAT_FOLDERS } from './check-compat-boundary-imports.mjs'
 import { main } from './check-import-boundaries.mjs'
 import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
 
@@ -43,7 +44,11 @@ it('parses candidate files once and reports violations from both guards', () => 
     parseSpecifiers.mock.calls.filter(([file]) => file === 'src/main/consumer.ts')
   ).toHaveLength(1)
   expect(error).toHaveBeenCalledWith(expect.stringContaining('not a public process-host export'))
-  expect(error).toHaveBeenCalledWith(expect.stringContaining('through old-client-session-tab-rows'))
+  const oldClient = COMPAT_FOLDERS.find(({ folder }) => folder.endsWith('/old-client'))
+  // The message names the folder's entry modules, whichever they are.
+  expect(error).toHaveBeenCalledWith(
+    expect.stringContaining(`through ${oldClient.entries.join(', ')}, not`)
+  )
 })
 
 it('uses fresh inputs on every invocation, including newly added files', () => {

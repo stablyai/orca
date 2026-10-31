@@ -1,4 +1,5 @@
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/worker-terminal-auto-release-scheduler'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { OrcaRuntimeWithPtyForegroundProcessReads } from '../../client/runtime-client-state'
 import type {
@@ -16,7 +17,11 @@ import {
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
 import { OrchestrationDb } from '../../orchestration/db'
-import { join } from 'node:path'
+import { orchestrationDbFile } from '../../orchestration/db/orchestration-db-file'
+import {
+  committedHandBackTypes,
+  type MailHandBack
+} from '../../orchestration/db/messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
@@ -24,10 +29,15 @@ import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-wo
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
+// Keyed by runtime, not a field: the database can open while the runtime is still constructing.
+const runtimesWatchingAutoReleaseSetting = new WeakSet<object>()
+
 export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForegroundProcessReads {
   abstract notifyAutomationsChanged(payload?: AutomationsChangedPayload): void
   abstract ensureOrchestrationFederationRelay(runId?: string): void
   protected abstract scheduleRestoredMessageRepoints(): void
+  /** Mail a worker left unread when it reported before a restart still continues it. */
+  protected abstract continueRestoredWorkerMail(db: OrchestrationDb): void
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
   protected abstract getLeafKey(tabId: string, leafId: string): string
 
@@ -144,14 +154,17 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     return this.automation.ownerPrecondition(id)
   }
 
-  // Why: lazy initialization — the DB path depends on Electron's userData
-  // which may not be finalized until after app.ready. Also allows unit tests
-  // to inject an in-memory DB without touching the filesystem.
+  // Defer until userData is final; tests can inject an in-memory DB.
   getOrchestrationDb(): OrchestrationDb {
     if (!this._orchestrationDb) {
       this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
+      this.bindMailHandBack(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
+      this.bindWorkerTerminalAutoRelease(this._orchestrationDb)
+      // Recover deadlines armed before a restart.
+      getWorkerTerminalAutoReleaseScheduler(this).rearm()
+      this.continueRestoredWorkerMail(this._orchestrationDb)
     }
     return this._orchestrationDb
   }
@@ -164,15 +177,61 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   }
 
   private orchestrationDbPath(): string {
-    return join(getAppEnvironment().getPath('userData'), 'orchestration.db')
+    return orchestrationDbFile(getAppEnvironment().getPath('userData'))
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
+    this.bindMailHandBack(db)
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
+    this.bindWorkerTerminalAutoRelease(db)
+  }
+
+  private bindWorkerTerminalAutoRelease(db: OrchestrationDb): void {
+    db.workerTerminalAutoReleaseListener = () => {
+      if (this._orchestrationDb === db) {
+        getWorkerTerminalAutoReleaseScheduler(this).rearm()
+      }
+    }
+    db.workerAutoReleaseEnabled = () =>
+      this.store?.getSettings?.()?.orchestrationWorkerAutoReleaseEnabled !== false
+    if (this.store?.onSettingsChanged && !runtimesWatchingAutoReleaseSetting.has(this)) {
+      runtimesWatchingAutoReleaseSetting.add(this)
+      // Turning the setting off drops the timer; turning it on finds the deadlines still due.
+      this.store.onSettingsChanged((updates) => {
+        if ('orchestrationWorkerAutoReleaseEnabled' in updates && this._orchestrationDb) {
+          getWorkerTerminalAutoReleaseScheduler(this).rearm()
+        }
+      })
+    }
+  }
+
+  private bindMailHandBack(db: OrchestrationDb): void {
+    db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
+  }
+
+  /** Wakes the Run for helper mail its creator's settlement moved there, once that committed. */
+  private offerHandedBackMail(db: OrchestrationDb, handBack: MailHandBack): void {
+    // A replaced database's consumers belong to another runtime.
+    if (this._orchestrationDb !== db) {
+      return
+    }
+    try {
+      if (db.db.isTransaction) {
+        this.mailPointerRepointScheduler.schedule(handBack.mailbox)
+        return
+      }
+      // Re-read committed rows so rolled-back settlements wake nobody.
+      for (const type of committedHandBackTypes(db, handBack)) {
+        this.notifyMessageArrived(handBack.mailbox, type)
+      }
+    } catch (error) {
+      console.warn('[orchestration] failed to offer handed-back helper mail', error)
+      this.mailPointerRepointScheduler.schedule(handBack.mailbox)
+    }
   }
 
   protected async flushWorkspaceSessionOrThrowAsync(): Promise<void> {
@@ -236,8 +295,8 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     if (
       !pty?.connected ||
       pty.incarnationId !== expected.incarnationId ||
-      pty.tabId !== expected.tabId ||
-      pty.paneKey !== makePaneKey(expected.tabId, expected.leafId) ||
+      this.paneOfPty(pty).tabId !== expected.tabId ||
+      this.paneOfPty(pty).paneKey !== makePaneKey(expected.tabId, expected.leafId) ||
       !worktreeIdsEqual(pty.worktreeId, expected.worktreeId) ||
       this.handleByPtyId.get(expected.ptyId) !== expected.terminalHandle
     ) {

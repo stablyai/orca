@@ -73,6 +73,7 @@ export type UseComposerStateResult = {
   nameInputRef: RefObject<HTMLInputElement | null>
   submitQuick: (agent: TuiAgent | null, options?: QuickSubmitOptions) => Promise<void>
   createDisabled: boolean
+  selectAddedProjectGroup: (groupId: string) => boolean
   selectAddedProjectRepo: (repoId: string) => void
 }
 
@@ -104,6 +105,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     nameInputRef: model.nameInputRef,
     submitQuick: model.submitQuick,
     createDisabled,
-    selectAddedProjectRepo: model.selectAddedProjectRepo
+    selectAddedProjectRepo: model.selectAddedProjectRepo,
+    selectAddedProjectGroup: model.selectAddedProjectGroup
   }
 }

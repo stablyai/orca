@@ -1,9 +1,11 @@
+import { GitCommandTimeoutError } from '../../shared/git-command-timeout'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
 } from '../../shared/worktree/base-ref-drift-types'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
+import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
@@ -19,7 +21,11 @@ import type {
   AddWorktreeResult,
   GitWorktreeExecOptions
 } from './worktree-operation-options'
-import { gitExecOptions, resolveWorktreeAddTimeoutMs } from './worktree-operation-options'
+import {
+  gitExecOptions,
+  resolveWorktreeAddTimeoutMs,
+  worktreeAddTimeoutMessage
+} from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
 import { assertNoPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import { createWorktreeCheckoutProgressReader } from './worktree-checkout-progress'
@@ -27,7 +33,7 @@ import { createWorktreeCheckoutProgressReader } from './worktree-checkout-progre
 export type WorktreeAddBaseContext = Pick<AddWorktreeResult, 'localBaseRefUpdateSuggestion'> & {
   effectiveBase: string
   effectiveBaseOid?: string
-  /** Started, not awaited: the worktree is created from the remote-tracking commit, so the refresh can overlap the checkout. Never rejects. */
+  /** Never rejects; refresh can overlap creation from the remote-tracking commit. */
   pendingLocalBaseRefRefresh?: Promise<LocalBaseRefRefreshResult | undefined>
 }
 
@@ -43,7 +49,7 @@ export async function resolveWorktreeAddBaseContext(
     effectiveBaseOid = await resolveWorktreeBaseCommitOid(repoPath, qualifiedRef, options)
     return effectiveBaseOid !== null
   })
-  // Why: `-b` refuses an existing branch, so creating the base's own local branch leaves nothing to refresh; probing it would race the overlapped add's branch write into a false "not fast-forward" warning.
+  // -b rejects existing branches; refreshing the branch it creates would race its own ref write.
   const createsLocalBaseBranch =
     parseRemoteTrackingLocalBaseRef(baseBranch, effectiveBase, options.remoteTrackingBase)
       ?.localBranch === createdBranch
@@ -56,7 +62,7 @@ export async function resolveWorktreeAddBaseContext(
           options.remoteTrackingBase,
           options
         ).catch((error: unknown) => {
-          // Why: the create may already have succeeded by the time this settles; a refresh bug must not fail it.
+          // An advisory refresh must not fail a checkout that may already have succeeded.
           console.warn('addWorktree: local base ref refresh failed unexpectedly', error)
           return undefined
         })
@@ -96,7 +102,7 @@ export async function persistWorktreeCreationBase(
   } catch (error) {
     console.warn(`addWorktree: failed to set ${configKey} for ${worktreePath}`, error)
     try {
-      // Why: reused branch names may carry stale base metadata; if replacement fails, unset it so consumers don't trust stale lineage.
+      // Clear stale lineage if replacing reused branch metadata fails.
       await gitExecFileAsync(['config', '--local', '--unset-all', configKey], {
         ...gitExecOptions(worktreePath, options)
       })
@@ -114,7 +120,7 @@ export async function configurePushAutoSetupRemote(
   options: GitWorktreeExecOptions
 ): Promise<void> {
   try {
-    // Why: `--get` (not `--local --get`) treats a value at any scope as an explicit user choice.
+    // Honor explicit config at any scope.
     let alreadySet = false
     try {
       await gitExecFileAsync(['config', '--get', 'push.autoSetupRemote'], {
@@ -147,24 +153,19 @@ export async function unsetWorktreeCreationBase(
     await gitExecFileAsync(['config', '--local', '--unset-all', `branch.${branch}.base`], {
       ...gitExecOptions(worktreePath, options)
     })
-  } catch {
-    // Best-effort cleanup; leave the original sparse-setup error as the actionable failure.
-  }
+  } catch {}
 }
 
-/**
- * Issue #26344: a branch created from its own remote branch (`origin/foo` -> `foo`) tracks it, as
- * `git checkout foo` would; every other new branch stays untracked (see `--no-track` below).
- */
+/** Track a same-name remote base; other newly created branches stay untracked. */
 export async function trackSameNameRemoteBase(
   worktreePath: string,
   branch: string,
   baseBranch: string,
   effectiveBase: string,
   options: AddWorktreeOptions
-): Promise<void> {
+): Promise<boolean> {
   if (!effectiveBase.startsWith('refs/remotes/')) {
-    return
+    return false
   }
   const parsed = parseRemoteTrackingLocalBaseRef(
     baseBranch,
@@ -172,30 +173,21 @@ export async function trackSameNameRemoteBase(
     options.remoteTrackingBase
   )
   if (parsed?.localBranch !== branch) {
-    return
+    return false
   }
   try {
-    // Why: `branch --set-upstream-to` (Git 1.8) maps the ref to its remote through the fetch
-    // refspecs, so a remote name containing `/` resolves without a capability probe.
+    // Git 1.8+ resolves slash-containing remote names via fetch refspecs without another probe.
     await gitExecFileAsync(['branch', '--set-upstream-to', effectiveBase, branch], {
       ...gitExecOptions(worktreePath, options)
     })
+    return true
   } catch (error) {
     console.warn(`addWorktree: failed to track ${effectiveBase} for ${branch}`, error)
+    return false
   }
 }
 
-/**
- * Create a new worktree.
- * @param repoPath - Path to the main repo (or bare repo)
- * @param worktreePath - Absolute path where the worktree will be created
- * @param branch - Branch name for the new worktree
- * @param baseBranch - Optional base branch to create from (defaults to HEAD)
- * @remarks Side effects (best-effort, warn-only): passes `--no-track`, writes
- * `branch.<branch>.base` for new-branch worktrees with a base ref, tracks a
- * same-named remote base, and may write `push.autoSetupRemote=true` to the
- * repo's shared config.
- */
+/** Create a worktree; new branches record base lineage and may enable repo-wide push.autoSetupRemote. */
 export async function addWorktree(
   repoPath: string,
   worktreePath: string,
@@ -233,22 +225,24 @@ async function performAddWorktree(
   noCheckout = false,
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
-  // Why: Git still owns that path and branch until the background delete finishes; a create now
-  // would race it, and the branch cleanup that follows would find the branch checked out again.
+  // Wait for background removal ownership to end before reusing its path or branch.
   assertNoPendingWorktreeRemovalConflict(repoPath, { worktreePath, branch })
   let pendingLocalBaseRefRefresh: Promise<LocalBaseRefRefreshResult | undefined> | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
-  // Why: enable long paths for this Windows checkout without changing user Git config.
   const args = [...windowsLongPathGitArgs(repoPath), 'worktree', 'add']
   let effectiveBase: string | undefined
+  if (options.trackRemoteBranch && !baseBranch) {
+    throw new Error('Reuse branch requires a remote-tracking ref when the local branch is missing.')
+  }
+  // Overlaps base resolution; never rejects.
+  const checkoutWorkersArgs = noCheckout ? [] : checkoutWorkersGitArgs(repoPath, options)
   if (noCheckout) {
     args.push('--no-checkout')
   }
   if (options.checkoutExistingBranch) {
-    // Why: -b would create a new branch instead of checking out the selected one.
     args.push(worktreePath, branch)
   } else {
-    // Why: --no-track avoids inheriting the base's upstream so `git status` won't misreport "behind by N" pre-publish; first push sets it (see push.autoSetupRemote below).
+    // Avoid inheriting the base's upstream; same-name remote bases are tracked explicitly afterward.
     args.push('--no-track', '-b', branch, worktreePath)
     if (baseBranch) {
       const baseContext = await resolveWorktreeAddBaseContext(
@@ -259,31 +253,38 @@ async function performAddWorktree(
         branch
       )
       effectiveBase = baseContext.effectiveBase
+      if (options.trackRemoteBranch && !effectiveBase.startsWith('refs/remotes/')) {
+        throw new Error(
+          'Reuse branch requires a remote-tracking ref when the local branch is missing.'
+        )
+      }
       pendingLocalBaseRefRefresh = baseContext.pendingLocalBaseRefRefresh
       localBaseRefUpdateSuggestion = baseContext.localBaseRefUpdateSuggestion
       args.push(effectiveBase)
     }
   }
-  // Why: git already writes its checkout meter into our stderr pipe; read it, don't request it.
+  // Read Git's existing stderr meter without requesting extra progress output.
   const checkoutProgress =
     options.onCheckoutProgress && !noCheckout
       ? createWorktreeCheckoutProgressReader(options.onCheckoutProgress)
       : null
   try {
-    await gitExecFileAsync(args, {
+    await gitExecFileAsync([...(await checkoutWorkersArgs), ...args], {
       ...gitExecOptions(repoPath, options),
-      // Why: resolve per call — hoisting this to a module const would freeze the override at import.
+      // Resolve per call so later environment overrides take effect.
       timeout: resolveWorktreeAddTimeoutMs(),
       ...(checkoutProgress ? { onStderr: checkoutProgress.read } : {})
     })
   } catch (error) {
-    // Why: settle the overlapped refresh inside the caller's ref-maintenance pause before reporting the failure.
+    // Settle the refresh before leaving the caller's maintenance pause on failure.
     await pendingLocalBaseRefRefresh
+    if (error instanceof GitCommandTimeoutError) {
+      error.message = worktreeAddTimeoutMessage(error.timeoutMs)
+    }
     throw error
   } finally {
     checkoutProgress?.close()
-    // Git may have written the target's `.git` marker even when it reports a late
-    // failure, so drop any pre-create route before the follow-up commands route.
+    // Even late failures can rewrite .git; invalidate pre-create routing before follow-up commands.
     invalidateWslLinkedWorktreeGitRouting(worktreePath)
   }
 
@@ -291,19 +292,27 @@ async function performAddWorktree(
     return {}
   }
 
+  let upstreamWarning: string | undefined
   if (effectiveBase && baseBranch) {
     await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
-    await trackSameNameRemoteBase(worktreePath, branch, baseBranch, effectiveBase, options)
+    const tracked = await trackSameNameRemoteBase(
+      worktreePath,
+      branch,
+      baseBranch,
+      effectiveBase,
+      options
+    )
+    if (options.trackRemoteBranch && !tracked) {
+      upstreamWarning = `Could not set ${effectiveBase} as the upstream of "${branch}". Check the push destination before pushing; Git may use a different remote.`
+    }
   }
 
-  // Why: --no-track leaves no upstream until first push; push.autoSetupRemote=true lets a plain
-  // `git push` create+set origin/<branch> (git >=2.37; older clients ignore it). `--local` on a
-  // linked worktree writes the shared common-dir config (whole repo) — intentional and idempotent,
-  // so it's warn-only and not rolled back on failure.
+  // Git >= 2.37 can set an upstream on first push; --local intentionally writes shared repo config.
   await configurePushAutoSetupRemote(worktreePath, options)
   const localBaseRefRefresh = await pendingLocalBaseRefRefresh
   return {
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
+    ...(upstreamWarning ? { upstreamWarning } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})
   }
 }

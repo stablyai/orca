@@ -1,0 +1,120 @@
+name: Dependency security
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - '**/package.json'
+      - '**/pnpm-lock.yaml'
+      - '**/pnpm-workspace.yaml'
+      - '**/.npmrc'
+      - 'native/**/Cargo.toml'
+      - 'native/**/Cargo.lock'
+      - 'config/dependency-security-exceptions.json'
+      - 'config/cargo-deny.toml'
+      - 'config/scripts/*dependency-security*'
+      - 'config/scripts/pnpm-cli-invocation.mjs'
+      - 'config/pnpmfile.cjs'
+      - '**/patches/**'
+      - '.github/workflows/dependency-security.yml'
+      - '.github/workflows/release-cut.yml'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/prepare-dependency-audit/**'
+      - 'src/packages/process-host/**'
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact release tag to audit using the workflow commit's tooling
+        required: true
+        type: string
+      runner:
+        description: Runner override for GitHub-hosted signing provenance.
+        type: string
+        default: ubuntu-24.04
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-security-${{ inputs.ref && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
+
+jobs:
+  javascript:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - uses: ./.github/actions/prepare-dependency-audit
+        if: inputs.ref != ''
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Audit JavaScript lockfiles
+        id: audit
+        continue-on-error: true
+        shell: bash
+        env:
+          RELEASE_REF: ${{ inputs.ref }}
+        run: |
+          if [ -n "$RELEASE_REF" ]; then
+            pnpm check:dependencies candidate . mobile
+          else
+            pnpm check:dependencies
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: dependency-security-javascript
+          path: tmp/dependency-security/*.json
+          if-no-files-found: error
+
+  rust:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/cache@v5
+        id: scanner
+        with:
+          path: ~/.cargo/bin/cargo-deny
+          key: cargo-deny-0.20.2-${{ runner.os }}-${{ runner.arch }}
+      - if: steps.scanner.outputs.cache-hit != 'true'
+        run: cargo install cargo-deny --locked --version 0.20.2
+      - uses: ./.github/actions/prepare-dependency-audit
+        if: inputs.ref != ''
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Audit native Rust lockfiles
+        id: audit
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ inputs.ref != '' && 'candidate' || '.' }}
+        run: |
+          set -euo pipefail
+          report_dir="$GITHUB_WORKSPACE/tmp/dependency-security"
+          mkdir -p "$report_dir"
+          status=0
+          for manifest in native/*/Cargo.toml; do
+            name="$(basename "$(dirname "$manifest")")"
+            cargo deny --manifest-path "$manifest" --locked --config "$GITHUB_WORKSPACE/config/cargo-deny.toml" check advisories 2>&1 | tee "$report_dir/$name.log" || status=1
+          done
+          exit "$status"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: dependency-security-rust
+          path: tmp/dependency-security/*.log
+          if-no-files-found: error

@@ -1,14 +1,6 @@
-// Bringing a store's in-memory state up from disk.
-//
-// Split out of the store for the same reason its collaborators were: this is the
-// ORDERING between replay and the notices an open owes, and none of it belongs
-// to the store's public surface. Every step here reads or writes through the
-// same host the collaborators use, so the store keeps the state and this owns
-// the sequence.
-
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { JournalEpochController } from './journal-epoch-controller'
-import { replayJournal } from './journal-open'
+import { restoreJournal } from './journal-open'
 import { journalOpenRefusalError } from './journal-open-failure'
 import type { JournalStoreHost } from './journal-store-collaborators'
 import { openJournalStoreState } from './journal-store-open'
@@ -20,7 +12,6 @@ export async function restoreJournalStore(
 ): Promise<void> {
   const database = host.database()
   if (database.readOnly) {
-    // A newer Orca's database: nothing in it is read as this build's, and nothing is written.
     throw journalOpenRefusalError(
       new AgentSessionJournalError(
         'journal_read_only',
@@ -28,12 +19,15 @@ export async function restoreJournalStore(
       )
     )
   }
+  // Unpaced and charged to no maintenance budget: background work alone pays its duty cycle.
+  const loaded = restoreJournal(database.db, host.identity.sessionId)
   return openJournalStoreState({
     sessionId: host.identity.sessionId,
-    replay: () => replayJournal(database.db, host.identity.sessionId),
-    start: () => collaborators.epochController.start('session_created', 0),
+    replay: () => loaded,
+    start: () =>
+      collaborators.epochController.start('session_created', 0, loaded?.state.epoch ?? null),
     adopt: host.adopt,
-    // Journal-open revisions are host recovery, not new provider output.
+    // Recovery revisions must not count as new provider output.
     appendItem: (identity, body, fence) =>
       host.journal().appendItem(identity, body, {
         fence,

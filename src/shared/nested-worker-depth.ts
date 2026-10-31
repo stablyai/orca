@@ -1,10 +1,6 @@
 import type { GlobalSettings } from './global-settings-types'
 
-/**
- * How deep dispatched workers may nest. 1 means a coordinator dispatches
- * workers and those workers may not dispatch further — the behaviour Orca
- * documented but never actually enforced.
- */
+/** Worker nesting limit: at one, root coordinators dispatch workers but workers cannot dispatch further. */
 export const NESTED_WORKER_MAX_DEPTH_DEFAULT = 1
 
 /** Root coordinators are depth 0; the first generation of workers is depth 1. */
@@ -13,8 +9,7 @@ export const ROOT_DISPATCH_DEPTH = 0
 export const NESTED_WORKER_DEPTH_EXCEEDED_CODE = 'nested_worker_depth_exceeded'
 
 export function nestedWorkerDepthExceededMessage(childDepth: number, maxDepth: number): string {
-  // Why "complete this task yourself": a refusal alone leaves the worker looping
-  // on a capability it will never get.
+  // Explicitly require doing the work locally or refused workers loop on unavailable dispatch.
   return (
     `Sub-worker dispatch is not permitted at depth ${childDepth} (max ${maxDepth}). ` +
     'Complete this task yourself.'
@@ -26,11 +21,7 @@ export const NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS: readonly string[] = [
   'To allow deeper nesting, open Settings → Orchestration in the Orca desktop app and raise "Nested worker depth".'
 ]
 
-/**
- * Clamp to a usable integer. Anything that is not a safe whole number >= 1 falls back
- * to the default rather than disabling the fence: a malformed setting must not
- * be a way to get unlimited nesting.
- */
+/** Reject unsafe/noninteger values below one to the default; malformed settings cannot disable the depth fence. */
 export function resolveNestedWorkerMaxDepth(
   settings: Pick<GlobalSettings, 'nestedWorkerMaxDepth'> | null | undefined
 ): number {

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import {
   OrcadManagedIdentityError,
+  OrcadManagedPairingRejectedError,
   type OrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
 import {
@@ -13,6 +13,10 @@ import {
   forwardToVerifiedOrcad,
   MANAGED_ORCAD_TUNNEL_TARGETING
 } from './orcad-managed-tunnel-target'
+import {
+  unusedOrcadHostTransport,
+  unusedSshConnection
+} from '../../ssh/unused-host-transport.test-fixture'
 
 const mocks = vi.hoisted(() => ({ wake: vi.fn(), resolveContext: vi.fn() }))
 vi.mock('./orcad-managed-wake', () => ({ wakeStoppedManagedOrcad: mocks.wake }))
@@ -35,8 +39,7 @@ function setup(verdicts: OrcadTunnelIdentity[], rereadPort: number) {
   const rereadRemotePort = vi.fn().mockResolvedValue(rereadPort)
   const args = {
     targetId: 'ssh-1',
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the forward manager double never reads it.
-    connection: {} as SshConnection,
+    connection: unusedSshConnection(),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double for the two members forwarding calls.
     forwards: { addForward, removeForwardAndWait } as unknown as SshPortForwardManager,
     localPort: 46_768,
@@ -87,6 +90,21 @@ describe('forwardToVerifiedOrcad', () => {
     expect(state.removeForwardAndWait).toHaveBeenCalledWith('forward-1')
   })
 
+  it('says the host dropped this pairing, not that another Orca holds the port', async () => {
+    const state = setup(
+      [{ verdict: 'unpaired', detail: 'Remote Orca runtime rejected the pairing token.' }],
+      58_520
+    )
+    const result = forwardToVerifiedOrcad(state.args)
+    await expect(result).rejects.toBeInstanceOf(OrcadManagedPairingRejectedError)
+    await expect(result).rejects.toThrow(/no longer accepts this desktop's pairing/)
+    await expect(result).rejects.not.toThrow(/another Orca/)
+    expect(state.removeForwardAndWait).toHaveBeenCalledWith('forward-1')
+    // A pinned server's token refusal needs pairing repair, not a port change.
+    expect(state.rereadRemotePort).not.toHaveBeenCalled()
+    expect(state.addForward).toHaveBeenCalledTimes(1)
+  })
+
   it('fails when the re-read port is foreign too, without re-reading forever', async () => {
     const state = setup([FOREIGN, FOREIGN], 58_520)
     await expect(forwardToVerifiedOrcad(state.args)).rejects.toThrow(/remote port 58520/)
@@ -125,8 +143,7 @@ describe('environmentForwardChecks', () => {
     } as KnownRuntimeEnvironment,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: passed through to the mocked context resolver only.
     target: { id: 'ssh-1' } as SshTarget,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: passed through to the mocked context resolver only.
-    connection: {} as OrcadHostTransport
+    connection: unusedOrcadHostTransport()
   }
 
   beforeEach(() => {

@@ -29,13 +29,13 @@ export function createCodexSessionJournalTranslator(input: {
         ...(deps.now ? { now: deps.now } : {}),
         primaryThreadId: input.primaryThreadId,
         dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
+        dispatchTurnOpener: (threadId, turnId) => dispatchEchoes.turnOpener(threadId, turnId),
         subagentExecutions: input.subagentExecutions,
         bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
           prompts.bindJournalItemId(journalItemId, threadId, promptKey, turnId),
         clearPromptTurn: (threadId, turnId) => prompts.clearTurn(threadId, turnId),
         onUserMessageEcho: (clientMessageId, providerIdentity) => {
-          // Codex no longer holds an echoed send. Either exact live echo saves its receipt: the
-          // journal writes it only while the send is unsettled, so the second retries a failed one.
+          // Duplicate exact echoes retry receipt persistence while the send remains unsettled.
           dispatchEchoes.settle(clientMessageId)
           deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
         }

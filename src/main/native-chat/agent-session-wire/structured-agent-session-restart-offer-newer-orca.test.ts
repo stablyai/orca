@@ -5,9 +5,7 @@ import {
   AGENT_SESSION_RECOVERY_CAPSULE_FILE,
   AgentSessionRecoveryCapsule
 } from '../../runtime/agent-session-recovery-capsule'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import {
-  insertTestJournalRowJson,
   liveTestJournalRows,
   openTestJournalHostDatabase,
   updateTestJournalRowJson
@@ -21,35 +19,23 @@ import {
   HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
 
-// Nothing here can continue a chat a newer Orca saved, so it is not offered after a restart and
-// nothing is counted. Its offer is kept: the offers file is shared by every Orca on the host, and
-// the newer one can still act on it. Nothing here writes to that file for such a chat.
+// Preserve newer-chat offers byte-for-byte for a compatible build; this host cannot act on them.
 
 afterEach(() => vi.restoreAllMocks())
 
-/** Writes a row of a kind this build does not know into the chat's journal, as a newer Orca would. */
 function newerOrcaRow(root: string, sessionId: string = SESSION): void {
   const { db } = openTestJournalHostDatabase(root)
-  const last = liveTestJournalRows(db, sessionId).at(-1)
-  const parsed: unknown = last ? JSON.parse(last.rowJson) : null
-  if (!last || typeof parsed !== 'object' || parsed === null || !('epoch' in parsed)) {
-    throw new Error('the chat has no journal row to follow')
+  const first = liveTestJournalRows(db, sessionId)[0]
+  if (!first) {
+    throw new Error('the chat has no founding row')
   }
-  const { epoch } = parsed
-  const seq = last.seq + 1
-  insertTestJournalRowJson(
+  const anchor = JSON.parse(first.rowJson)
+  db.prepare('UPDATE journal_outcome_epochs SET format = 99 WHERE session_id = ?').run(sessionId)
+  updateTestJournalRowJson(
     db,
     sessionId,
-    seq,
-    JSON.stringify({
-      v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-      kind: 'future-mark',
-      epoch,
-      seq,
-      fence: 1,
-      ts: NOW
-    }),
-    NOW
+    1,
+    JSON.stringify({ ...anchor, v: 99, outcomeFormat: 99 })
   )
 }
 
@@ -57,14 +43,16 @@ function offersFile(root: string): Promise<Buffer> {
   return readFile(join(root, AGENT_SESSION_RECOVERY_CAPSULE_FILE))
 }
 
-/** Lists and acts with nothing offered, run or counted, and the offers file left byte-identical. */
 async function keptWithoutAWord(
   host: Awaited<ReturnType<typeof interruptedRestart>>['host'],
   root: string,
-  acquire: ReturnType<typeof vi.fn>
+  acquire: ReturnType<typeof vi.fn>,
+  unopenedJournalIsNewer = false
 ) {
   const before = await offersFile(root)
-  expect(await host.restartResume.list()).toEqual([])
+  expect((await host.restartResume.list()).map((offer) => offer.sessionId)).toEqual(
+    unopenedJournalIsNewer ? [SESSION] : []
+  )
   expect(await offersFile(root)).toEqual(before)
   expect((await host.restartResume.continueAfterRestart([SESSION], 'modal')).continued).toEqual([])
   expect(acquire).not.toHaveBeenCalled()
@@ -75,13 +63,12 @@ async function keptWithoutAWord(
   expect(await capsule.listFailed(NOW)).toEqual([])
 }
 
-it('keeps the offer of a chat whose journal a newer Orca wrote, and offers, runs and counts nothing', async () => {
+it('lists an unopened newer journal passively and preserves its offer when acting is refused', async () => {
   const { host, root, acquire } = await interruptedRestart()
   newerOrcaRow(root)
-  await keptWithoutAWord(host, root, acquire)
+  await keptWithoutAWord(host, root, acquire, true)
 })
 
-// A newer Orca's whole database: every chat in it is a newer Orca's, even one whose tables changed.
 it('keeps the offer of every chat in a newer Orca database, and offers, runs and counts nothing', async () => {
   const { host, root, acquire } = await interruptedRestart()
   const database = openTestJournalHostDatabase(root)
@@ -90,8 +77,6 @@ it('keeps the offer of every chat in a newer Orca database, and offers, runs and
   await keptWithoutAWord(host, root, acquire)
 })
 
-// However a newer Orca's refusal reaches a send (a journal first opened when sending), it files
-// nothing and the offer is reopened.
 it('keeps the offer and files nothing when the send is refused as a newer Orca chat', async () => {
   const { host, root } = await interruptedRestart()
   await host.restartResume.list()
@@ -114,8 +99,7 @@ it('keeps the offer and files nothing when the send is refused as a newer Orca c
   expect(await host.restartResume.listFailures()).toEqual([])
 })
 
-// A failure filed before the chat became a newer Orca's stays for that Orca, and is not shown here.
-it('keeps a failure already filed for a chat a newer Orca saved since, but does not show it', async () => {
+it('lists a filed failure passively and hides it once an action discovers a newer journal', async () => {
   const { host, root, acquire } = await interruptedRestart()
   await host.restartResume.list()
   acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
@@ -124,14 +108,14 @@ it('keeps a failure already filed for a chat a newer Orca saved since, but does 
   await host.close(SESSION, 'evict')
   newerOrcaRow(root)
 
+  expect(await host.restartResume.listFailures()).toMatchObject([{ sessionId: SESSION }])
+  await host.restartResume.continueAfterRestart([SESSION], 'retry')
   expect(await host.restartResume.listFailures()).toEqual([])
   expect(
     (await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).map((f) => f.marker.sessionId)
   ).toEqual([SESSION])
 })
 
-// What listing does with a journal that throws for another reason: a damaged chat stays offered,
-// and acting on it files the failure, which names the damage.
 it('still offers a damaged chat, and files its failure when acting on it', async () => {
   const { host, root, acquire } = await interruptedRestart()
   updateTestJournalRowJson(openTestJournalHostDatabase(root).db, SESSION, 1, '}{')
@@ -151,19 +135,14 @@ it('still offers a damaged chat, and files its failure when acting on it', async
   ])
 })
 
-// "Dismiss all" ends what the person was shown. A newer Orca's offer was never shown here, so it
-// stays, byte for byte, for the Orca that can act on it.
 it.each([
   ['after the dialog listed the offers', true, undefined],
   ['on a host that has not listed them yet', false, undefined],
-  // A remote client that cannot show every agent dismisses through its audience.
   ['for a client shown only Codex', false, (agent: string) => agent === 'codex']
 ])(
   "dismisses every listed offer and leaves a newer Orca's hidden one as it was, %s",
   async (_when, listFirst, audience) => {
     const NEWER = 'session-newer-orca'
-    // A second chat, made before the restart; a newer Orca then saves it with a row this build
-    // can't place.
     const created = await hostTestState().host.attach(
       CALLER,
       attachParams({ envelope: { ...attachParams().envelope, sessionId: NEWER } })
@@ -188,7 +167,8 @@ it.each([
 
     if (listFirst) {
       expect((await host.restartResume.list()).map((candidate) => candidate.sessionId)).toEqual([
-        SESSION
+        SESSION,
+        NEWER
       ])
     }
     await host.restartResume.dismiss(undefined, audience)

@@ -5,11 +5,7 @@ import { TerminalLigaturesAddon } from '@/lib/pane-manager/terminal-ligatures-ad
 
 const ligatureAddonsByTerminal = new WeakMap<Terminal, TerminalLigaturesAddon>()
 
-/**
- * Match the pane's ligature state on the preview terminal, attaching and
- * detaching as the setting (or a font that can't ligate) changes. The pane's
- * WebGL atlas rebuild has no counterpart here — the preview is DOM-rendered.
- */
+/** Match live pane ligature settings; DOM previews need no WebGL atlas rebuild. */
 export function syncPreviewTerminalLigatures(
   terminal: Terminal,
   settings: GlobalSettings | null
@@ -25,9 +21,7 @@ export function syncPreviewTerminalLigatures(
   if (!enabled) {
     try {
       attached?.dispose()
-    } catch {
-      /* ignore */
-    }
+    } catch {}
     ligatureAddonsByTerminal.delete(terminal)
     return
   }

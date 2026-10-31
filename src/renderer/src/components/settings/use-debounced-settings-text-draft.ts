@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-// Matches the repository-hook script draft, the established debounce for settings text in this pane.
+// Match repository-hook script drafts’ debounce.
 const SETTINGS_TEXT_COMMIT_DEBOUNCE_MS = 700
 
 export type DebouncedSettingsTextDraft = {
@@ -9,18 +9,7 @@ export type DebouncedSettingsTextDraft = {
   onBlur: () => void
 }
 
-/**
- * Local draft for a free-text setting, committed on a debounce and flushed on blur, unmount, and
- * window unload.
- *
- * Why: binding an `<Input>` straight to `updateSettings` sends one IPC round trip per keystroke,
- * and each one replaces the `settings` object identity in every other window, re-rendering every
- * component subscribed to it. The committed value is unchanged — only the number of commits is.
- *
- * A pending timer is the single source of truth for "the draft has uncommitted edits": `onChange`
- * is the only place that arms it and `flush` the only place that clears it, so there is no separate
- * dirty flag to fall out of sync.
- */
+/** Debounce settings IPC to avoid per-keystroke rerenders across windows; timer presence tracks uncommitted edits. */
 export function useDebouncedSettingsTextDraft(args: {
   value: string
   commit: (next: string) => void
@@ -31,13 +20,12 @@ export function useDebouncedSettingsTextDraft(args: {
   const commitRef = useRef(commit)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Why an effect, not a render-time write: render must stay pure, and React can replay it.
+  // Publish after commit because React may replay renders.
   useEffect(() => {
     commitRef.current = commit
   }, [commit])
 
-  // Why gated on a pending commit: an external write (another window, a reset) should land in the
-  // field, but must not yank characters out from under someone mid-edit.
+  // Accept external writes only without pending local edits so echoes cannot erase new typing.
   useEffect(() => {
     if (timerRef.current !== null) {
       return
@@ -67,13 +55,7 @@ export function useDebouncedSettingsTextDraft(args: {
     [flush]
   )
 
-  // Why unmount: closing the pane (or the settings search hiding the section) mid-word must persist
-  // the same value typing it would have. `flush` has no dependencies, so this cleanup only ever runs
-  // on unmount.
-  // Why beforeunload: a window close or app quit never unmounts the tree, so the cleanup cannot run.
-  // The close coordinator dispatches a synthetic beforeunload while the tree is still mounted so
-  // listeners like this one can flush; `updateSettings` issues its IPC synchronously, ahead of the
-  // close confirmation, so main persists the value before it flushes the store on quit.
+  // Unmount flushes partial edits; close dispatches beforeunload while mounted so synchronous IPC precedes main’s quit flush.
   useEffect(() => {
     window.addEventListener('beforeunload', flush)
     return () => {

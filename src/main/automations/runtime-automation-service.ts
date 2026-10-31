@@ -1,7 +1,8 @@
-/**
- * The AutomationService a runtime host executes schedules with. Shared by Electron startup and
- * orcad so both hosts dispatch through the same headless path.
- */
+import { observeAutomationChatRun } from './runtime-chat-run-observer'
+import { readAutomationRunReceipt } from './automation-run-receipt'
+import { publishedLaunchTarget } from './automation-agent-run-result'
+import { launchAutomationChatAgent } from './automation-chat-agent-launch'
+import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { Store } from '../persistence'
@@ -14,7 +15,11 @@ import {
   TUI_AGENT_CONFIG
 } from '../../shared/tui-agent-config'
 import { launchHeadlessAutomationAgent, runOwnHandle } from './headless-automation-agent-launch'
-import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
+import {
+  AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
+  createRuntimeAutomationRunTerminalObserver
+} from './runtime-terminal-run-observer'
+import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -23,11 +28,11 @@ export function createRuntimeAutomationService(input: {
   runtime: OrcaRuntimeService
   claudeUsage?: ClaudeUsageStore
   codexUsage?: CodexUsageStore
-  /** A server process: it executes remote_host_service-owned schedules and dispatches headlessly. */
+  /** Execute remote_host_service schedules through the headless dispatcher. */
   headless: boolean
 }): AutomationService {
   const { store, runtime, claudeUsage, codexUsage } = input
-  // The handle each headless launch returned, so its watcher never depends on a pane-key lookup.
+  // Launch handles remain usable before pane-key lookup resolves.
   const launchedHandles = new Map<string, string>()
   const observer = createRuntimeAutomationRunTerminalObserver(runtime, {
     getAgentStatusRowsForPane: (paneKey) => runtime.getAgentStatusRowsForPane(paneKey),
@@ -41,13 +46,121 @@ export function createRuntimeAutomationService(input: {
     codexUsage,
     terminalObserver: {
       ...observer,
-      // This host's own launch handle first: it names the run's terminal without a lookup.
-      resolveRunTerminal: (run) =>
-        (run.terminalPaneKey ? launchedHandles.get(run.terminalPaneKey) : undefined) ??
-        observer.resolveRunTerminal(run)
+      resolveRunTerminal: (run) => {
+        if (run.sessionKind === 'chat') {
+          return `automation:${run.id}`
+        }
+        if (run.status === 'dispatching') {
+          const records = runtime.openedAgentSessionRecordStore()
+          if (
+            (records && readAutomationRunReceipt(records, run)) ||
+            store.listAutomations().find((entry) => entry.id === run.automationId)?.surface ===
+              'chat'
+          ) {
+            return `automation:${run.id}`
+          }
+          if (!records) {
+            void runtime.openAgentSessionRecordStore().catch((error: unknown) => {
+              console.warn('[automations] could not read accepted Chat operation:', error)
+            })
+          }
+        }
+        return (
+          (run.terminalPaneKey ? launchedHandles.get(run.terminalPaneKey) : undefined) ??
+          observer.resolveRunTerminal(run)
+        )
+      },
+      observeCompletion: async (handle, options) => {
+        let run = options.run
+        if (run && handle.startsWith('automation:')) {
+          if (!run.chatSessionId) {
+            const records = await runtime.openAgentSessionRecordStore()
+            const receipt = readAutomationRunReceipt(records, run)
+            const agent =
+              tuiAgentDisplayName(
+                store.listAutomations().find((entry) => entry.id === run?.automationId)?.agentId ??
+                  'Agent'
+              ) ?? 'Agent'
+            if (!receipt) {
+              return {
+                status: 'dispatch_failed',
+                error: `${agent} could not confirm this run after Orca restarted. Open its workspace before running again.`
+              }
+            }
+            const target =
+              receipt.kind === 'terminal'
+                ? publishedLaunchTarget(runtime, receipt.launch)
+                : {
+                    workspaceId: receipt.workspaceId,
+                    sessionKind: 'chat' as const,
+                    chatSessionId: receipt.sessionId,
+                    terminalPaneKey: null,
+                    terminalSessionId: null,
+                    terminalPtyId: null
+                  }
+            run = await service.markDispatchResult({
+              ...target,
+              runId: run.id,
+              status: receipt.accepted ? 'dispatched' : 'dispatch_failed',
+              error: receipt.accepted
+                ? null
+                : `${agent} could not confirm this run's prompt. Open the run before trying again.`
+            })
+            if (!receipt.accepted) {
+              return { status: 'dispatch_failed', error: run.error }
+            }
+            if (receipt.kind === 'terminal') {
+              handle = receipt.launch.outcome.handle
+            }
+          }
+          if (run.sessionKind === 'chat') {
+            try {
+              return await observeAutomationChatRun(runtime, run, options.signal)
+            } catch (error) {
+              if (options.signal.aborted) {
+                throw error
+              }
+              console.error('[automations] chat run observation failed:', error)
+              const agent =
+                tuiAgentDisplayName(
+                  store.listAutomations().find((entry) => entry.id === run?.automationId)
+                    ?.agentId ?? 'Agent'
+                ) ?? 'Agent'
+              return {
+                status: 'dispatch_failed',
+                error: `${agent} stopped reporting this run's result. Open the chat before running again.`
+              }
+            }
+          }
+        }
+        const observation = await observer.observeCompletion(handle, { ...options, run })
+        if (options.run && observation.error === AGENT_HOOKS_REVIEW_BLOCKED_ERROR) {
+          const markDispatchResult = service.markDispatchResult.bind(service)
+          void closeEarlierHookReviewRunTerminals(
+            { store, runtime, markDispatchResult },
+            options.run
+          ).catch((error: unknown) => {
+            console.warn('[automations] hook-review tab cleanup failed:', error)
+          })
+        }
+        return observation
+      }
     },
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
     allowRemoteHostScheduling: input.headless,
+    chatDispatcher: async (request) => {
+      const { terminalHandle, ...launch } = await launchAutomationChatAgent(runtime, {
+        ...request,
+        runs: store.listAutomationRuns(request.automation.id)
+      })
+      if (launch.terminalPaneKey && terminalHandle) {
+        launchedHandles.set(launch.terminalPaneKey, terminalHandle)
+        if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {
+          launchedHandles.delete(launchedHandles.keys().next().value ?? '')
+        }
+      }
+      return launch
+    },
     headlessDispatcher: input.headless
       ? async (request) => {
           const { terminalHandle, ...launch } = await launchHeadlessAutomationAgent(runtime, {
@@ -60,7 +173,7 @@ export function createRuntimeAutomationService(input: {
               launchedHandles.delete(launchedHandles.keys().next().value ?? '')
             }
           }
-          // No completion: the run's watcher observes it, retrying wait timeouts until it settles.
+          // Let the watcher retry wait timeouts until completion or its observation deadline.
           return launch
         }
       : undefined
@@ -72,7 +185,6 @@ export function createRuntimeAutomationService(input: {
   return service
 }
 
-/** A headless host has no renderer to close finished run terminals; its service does it. */
 function bindHeadlessRunTerminalRetention(
   service: AutomationService,
   store: Store,
@@ -88,31 +200,33 @@ function bindHeadlessRunTerminalRetention(
         ? runtime.confirmTerminalShellAlone(run.terminalPtyId)
         : Promise.resolve(false),
     closeRunTerminal: async (run) => {
-      // Only the run's own process: a restarted pane holds a new PTY a user may be working in.
       const handle = runOwnHandle(runtime, run)
       if (!handle) {
         return false
       }
-      // The run's pane only: a pane a user split into the same tab is theirs.
+      // Preserve user-created splits in the same tab.
       await runtime.closeTerminal(handle)
       return true
     },
-    // Why: only a workspace made for this run sleeps; a shared one would gather a tab per run.
-    runOwnsWorkspace: (run) =>
-      run.workspaceId !== null &&
-      store.getWorktreeMeta(run.workspaceId)?.automationProvenance?.automationRunId === run.id,
+    // Shared workspaces must close run panes rather than accumulate sleeping tabs.
+    runOwnsWorkspace: (run) => {
+      const provenance = run.workspaceId
+        ? store.getWorktreeMeta(run.workspaceId)?.automationProvenance
+        : undefined
+      // Why: a client-origin label names another owner's run, never one of this host's.
+      return provenance?.origin !== 'client' && provenance?.automationRunId === run.id
+    },
     sleepRunWorkspace: async (run) => {
       const ptyId = run.terminalPtyId
       if (!run.workspaceId || !ptyId) {
         return false
       }
       try {
-        // Records the agent's resume for reopening; sole, since any other live terminal is a user's.
+        // Sleep only this PTY, preserving other live terminals and the agent resume state.
         const sleep = await runtime.sleepTerminalsForWorktree(`id:${run.workspaceId}`, {
           soleLivePtyId: ptyId
         })
-        // Why "nothing live" too: retrying a sleep that stopped the PTY and then threw finds none;
-        // a decline always reports the other live terminal.
+        // A retry may find no live PTYs if an earlier sleep stopped the process before failing.
         const slept =
           sleep.livePtyIds.length === 0 ||
           (sleep.stoppedPtyIds.includes(ptyId) && !sleep.remainingLivePtyIds?.includes(ptyId))
@@ -123,14 +237,14 @@ function bindHeadlessRunTerminalRetention(
         console.error('[automations] could not sleep a run workspace:', error)
         return false
       }
-      // The slept pane keeps its tab and pane key, which reopen and resume it.
+      // Preserve tab and pane keys for resuming the slept agent.
       await service.markDispatchResult({ runId: run.id, status: run.status, terminalPtyId: null })
       return true
     },
     inAutomationLane: (automationId, operation) =>
       service.runInAutomationLane(automationId, operation),
     forgetRunTerminal: async (run) => {
-      // A run still dispatched had its agent exit without a result, proven by its idle shell.
+      // An idle shell proves a dispatched run exited without a completion result.
       const unfinished = run.status === 'dispatched'
       await service.markDispatchResult({
         runId: run.id,

@@ -14,11 +14,7 @@ export type SessionSearchStatusRead = {
   adopt: (status: AiVaultSearchStatus) => void
 }
 
-/**
- * Polls one host's index status while the pane is visible: fast during a sweep,
- * slow once settled. An inactive host keeps its last answer, which is what an
- * offline row reports rather than inventing "off".
- */
+/** Retain the last index status for inactive hosts rather than reporting offline as disabled. */
 export function useSessionSearchStatus(args: {
   executionHostId: ExecutionHostId
   active: boolean

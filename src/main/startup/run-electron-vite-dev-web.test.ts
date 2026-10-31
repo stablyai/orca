@@ -96,8 +96,7 @@ function stashWebBuild(): () => void {
     }
   }
 
-  // Why: Windows temp can be on a different drive from the workspace, and
-  // renameSync cannot move directories across devices.
+  // Stash beside output: Windows temp may be on another drive, where rename cannot move directories.
   const tempDir = mkdtempSync(join(dirname(outWebPath), '.orca-dev-web-stash-'))
   const stashedPath = join(tempDir, 'web')
   renameSync(outWebPath, stashedPath)
@@ -156,6 +155,7 @@ describe('run-electron-vite-dev web client prepare', () => {
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_VITE_CLI: fakeVitePath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
+          ORCA_DEV_USER_DATA_PATH: join(tempDir, 'user-data'),
           ORCA_SKIP_DEV_STORAGE_RECLAIM: '1',
           ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
           ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
@@ -179,10 +179,10 @@ describe('run-electron-vite-dev web client prepare', () => {
         }
       })
 
+      const trackedPids = trackPidFile(pidFile)
+
       expect(existsSync(viteFile)).toBe(false)
       expect(stderr).toContain('Web client bundle missing; skipping pairing web build.')
-
-      const trackedPids = trackPidFile(pidFile)
 
       await stopWrapperAndTrackedPids(wrapper, trackedPids)
     } finally {
@@ -208,6 +208,7 @@ describe('run-electron-vite-dev web client prepare', () => {
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_VITE_CLI: fakeVitePath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
+          ORCA_DEV_USER_DATA_PATH: join(tempDir, 'user-data'),
           ORCA_SKIP_DEV_STORAGE_RECLAIM: '1',
           ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
           ORCA_DEV_WEB_PREPARE: '1',
@@ -229,9 +230,12 @@ describe('run-electron-vite-dev web client prepare', () => {
         }
       })
 
-      expect(readFileSync(viteFile, 'utf8')).toContain('build')
-
+      // Track before the build wait: a timeout there would otherwise orphan the fake CLI tree.
       const trackedPids = trackPidFile(pidFile)
+
+      // The pairing build runs beside electron-vite instead of before it.
+      await waitFor(() => existsSync(viteFile), 20_000)
+      expect(readFileSync(viteFile, 'utf8')).toContain('build')
 
       await stopWrapperAndTrackedPids(wrapper, trackedPids)
     } finally {

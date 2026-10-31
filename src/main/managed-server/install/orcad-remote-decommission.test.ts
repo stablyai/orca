@@ -92,7 +92,7 @@ describe('decommissioning a managed orcad', () => {
     })
     expect(currentRecord()).toMatchObject({ active: null, previous: OLD, snapshot: null })
     expectExactlyTheRecordedSlot()
-    // Never a signal: the instance-bound request is the only stop path.
+    // Only instance-bound requests may stop the server; never signal a possibly reused PID.
     expect(host.commands.some((command) => command.includes('kill -TERM'))).toBe(false)
   })
 

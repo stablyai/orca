@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { AgentSessionReserveRequest } from '../../runtime/agent-session-reservation-admission'
+import type { AgentSessionReserveRequest } from '../../runtime/agent-session/ownership/agent-session-reservation-admission'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabases } from '../agent-session-journal/journal-host-database-test-support'
 import { createRestartReconciler } from './structured-agent-session-restart-reconcile'
@@ -65,7 +65,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -99,7 +99,6 @@ describe('targeted restart reconciliation', () => {
 
     expect(await reconcile('session-1')).toBeNull()
     expect(store.getRecord('session-1')?.lease.unreconciled).toBe(false)
-    // The whole-host pass does run out of passes on session-2.
     expect(await reconcile()).not.toBeNull()
     expect(store.getRecord('session-2')?.lease.unreconciled).toBe(true)
   })

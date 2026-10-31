@@ -1,7 +1,7 @@
 import { createElement, memo } from 'react'
 import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from '@/components/right-sidebar/status-display'
-import type { SourceControlTreeNode } from '@/components/right-sidebar/source-control-tree'
+import type { SourceControlTreeNode } from '../../../../../../shared/source-control-tree'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -25,8 +25,7 @@ export type CombinedDiffTreeNode = SourceControlTreeNode<
   GitStagingArea | CombinedDiffBranchTreeArea
 >
 
-// Why: every row is a single `py-1 text-xs` line (16px line box + 8px padding); measureElement
-// still corrects, but a wrong estimate makes the virtualized tree's scrollbar jump on first paint.
+// Estimate the 16px line plus 8px padding accurately so measurement cannot jump the scrollbar on first paint.
 export const COMBINED_DIFF_TREE_ROW_HEIGHT_PX = 24
 const COMBINED_DIFF_TREE_INDENT_PX = 12
 const COMBINED_DIFF_TREE_DIRECTORY_PADDING_PX = 8

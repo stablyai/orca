@@ -1,4 +1,6 @@
+import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
+import { extractExecError } from '../git/exec-error'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { glabExecFileAsync } from '../git/runner'
 import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from './project-ref-parser'
@@ -12,7 +14,13 @@ export type LocalGitExecOptions = {
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
 const UNAUTHENTICATED_HOSTS_MAX_ENTRIES = 128
 export const KNOWN_HOSTS_CACHE_MAX_ENTRIES = 128
+export const KNOWN_HOSTS_FAILURE_INITIAL_BACKOFF_MS = 15_000
 const knownHostsCacheByExecutionContext = new Map<string, readonly string[]>()
+// Failed probes back off exponentially (capped) so locked keyrings are not re-prompted on every poll.
+const knownHostsFailureBackoff = new Map<
+  string,
+  { retryAt: number; delayMs: number; hosts: readonly string[] }
+>()
 const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
 const unauthenticatedHostExpiries = new Map<string, number>()
 
@@ -30,6 +38,7 @@ function knownHostsExecutionKey(
 export function _resetKnownHostsCache(): void {
   knownHostsCacheByExecutionContext.clear()
   knownHostsInFlightByExecutionContext.clear()
+  knownHostsFailureBackoff.clear()
   unauthenticatedHostExpiries.clear()
 }
 
@@ -61,14 +70,7 @@ function unauthenticatedHostKey(
   return `${knownHostsExecutionKey(connectionId, localGitOptions)}\0${normalizeGitLabHost(host)}`
 }
 
-/**
- * Why: `glab auth status --hostname` is how a self-hosted instance that plain
- * `glab auth status` did not list gets discovered, so a remote that is not
- * GitLab at all runs it too. Project-ref negatives expire now, and without this
- * that becomes one `glab` spawn per repo per interval on the hosted-review poll.
- * The answer is per host, not per repo, and expires on the same clock so a
- * login still lands within an interval.
- */
+/** Share negative host-auth probes across repositories until expiry, avoiding a subprocess per repo on each poll. */
 export function isGlabHostKnownUnauthenticated(
   host: string,
   connectionId?: string | null,
@@ -112,12 +114,23 @@ export function rememberGlabKnownHost(
   rememberGlabKnownHosts([host], connectionId, localGitOptions)
 }
 
+export function getGlabPartialHosts(
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): readonly string[] {
+  return (
+    knownHostsFailureBackoff.get(knownHostsExecutionKey(connectionId, localGitOptions))?.hosts ?? []
+  )
+}
+
 export function rememberGlabKnownHosts(
   hosts: readonly string[],
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): void {
   const key = knownHostsExecutionKey(connectionId, localGitOptions)
+  const partial = knownHostsFailureBackoff.get(key)
+  knownHostsFailureBackoff.delete(key)
   const cached = knownHostsCacheByExecutionContext.get(key) ?? DEFAULT_GITLAB_HOSTS
   const seen = new Set(cached.map(normalizeGitLabHost))
   const additions: string[] = []
@@ -133,9 +146,15 @@ export function rememberGlabKnownHosts(
     )
   }
   if (additions.length === 0) {
+    if (!knownHostsCacheByExecutionContext.has(key) && partial?.hosts.length) {
+      knownHostsFailureBackoff.set(key, { hosts: partial.hosts, retryAt: 0, delayMs: 0 })
+    }
     return
   }
-  knownHostsCacheByExecutionContext.set(key, [...cached, ...additions])
+  knownHostsCacheByExecutionContext.set(
+    key,
+    Array.from(new Set([...cached, ...additions, ...(partial?.hosts ?? [])]))
+  )
   trimKnownHostsCache()
 }
 
@@ -150,8 +169,10 @@ export async function getGlabKnownHosts(
     knownHostsCacheByExecutionContext.set(key, cached)
     return cached
   }
-  // Why: only join a probe still young enough to answer, so a wedged one cannot
-  // pin every later retry for the life of the process (P1-D).
+  if ((knownHostsFailureBackoff.get(key)?.retryAt ?? 0) > Date.now()) {
+    return [...DEFAULT_GITLAB_HOSTS]
+  }
+  // Retire wedged probes so later retries can discover recovered auth.
   return runCoalescedProbe(knownHostsInFlightByExecutionContext, key, (ownsKey) =>
     probeGlabKnownHosts(key, ownsKey, connectionId, localGitOptions)
   )
@@ -164,13 +185,10 @@ async function probeGlabKnownHosts(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<readonly string[]> {
   try {
-    // Why: auth config belongs to the executing host; do not share native, WSL or
-    // connection results, and bound an otherwise global probe.
+    // Isolate native, WSL and connection probe state; bound each auth subprocess.
     const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'], {
       timeout: GLAB_KNOWN_HOSTS_TIMEOUT_MS,
-      // Why: a local probe would cache the default distro's auth under 'native'
-      // and wake an idle VM. A connection-keyed probe keeps the retry — glab never
-      // runs over SSH/relay, so the calls it gates take that same fallback.
+      // Native probes must not cache default-distro auth; connection-keyed API calls retain that same fallback.
       ...(connectionId ? {} : { allowDefaultWslFallback: false }),
       ...(!connectionId && localGitOptions.wslDistro
         ? { wslDistro: localGitOptions.wslDistro }
@@ -179,25 +197,78 @@ async function probeGlabKnownHosts(
     })
     const hosts = parseGlabAuthStatusHosts(`${stdout}\n${stderr}`)
     const remembered = knownHostsCacheByExecutionContext.get(key) ?? []
-    const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
+    const partial = knownHostsFailureBackoff.get(key)?.hosts ?? []
+    const merged = Array.from(
+      new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...partial, ...hosts])
+    )
     if (ownsKey()) {
+      knownHostsFailureBackoff.delete(key)
       knownHostsCacheByExecutionContext.set(key, merged)
       trimKnownHostsCache()
     }
     return merged
-  } catch {
-    // Keep failures uncached so auth or tunnel recovery is discovered later.
+  } catch (error) {
+    if (ownsKey()) {
+      const { stdout, stderr } = extractExecError(error)
+      const hosts = isCompletedGlabFailure(error)
+        ? parseGlabAuthenticatedHosts(`${stdout}\n${stderr}`)
+        : []
+      rememberKnownHostsFailure(key, hosts)
+    }
     return knownHostsCacheByExecutionContext.get(key) ?? [...DEFAULT_GITLAB_HOSTS]
   }
 }
 
-export function parseGlabAuthStatusHosts(output: string): string[] {
+function isCompletedGlabFailure(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    typeof error.code === 'number' &&
+    error.code !== 0 &&
+    'killed' in error &&
+    error.killed === false &&
+    'signal' in error &&
+    error.signal === null &&
+    'outputTruncated' in error &&
+    error.outputTruncated === false &&
+    error.name !== 'AbortError'
+  )
+}
+
+function parseGlabAuthenticatedHosts(output: string): string[] {
   const hosts = new Set<string>()
-  // Why: self-hosted GitLab can run on a non-default port; preserve it so
-  // services on the same hostname remain distinct downstream.
-  for (const match of output.matchAll(/logged in to ([a-zA-Z0-9.-]+(?::\d+)?)/gi)) {
+  for (const match of stripAnsiEscapeSequences(output).matchAll(
+    /^[\t ]*(?:\u2713[\t ]+)?Logged in to ([a-zA-Z0-9.-]+(?::\d+)?)[\t ]+as[\t ]+[^\s(]+/gim
+  )) {
     hosts.add(match[1].toLowerCase())
   }
+  return Array.from(hosts)
+}
+
+function rememberKnownHostsFailure(key: string, hosts: readonly string[]): void {
+  const partial = knownHostsFailureBackoff.get(key)?.hosts ?? []
+  const previousDelayMs = knownHostsFailureBackoff.get(key)?.delayMs
+  const delayMs = previousDelayMs
+    ? Math.min(previousDelayMs * 2, NEGATIVE_ENTRY_TTL_MS)
+    : KNOWN_HOSTS_FAILURE_INITIAL_BACKOFF_MS
+  knownHostsFailureBackoff.delete(key)
+  knownHostsFailureBackoff.set(key, {
+    retryAt: Date.now() + delayMs,
+    delayMs,
+    hosts: Array.from(new Set([...partial, ...hosts]))
+  })
+  while (knownHostsFailureBackoff.size > KNOWN_HOSTS_CACHE_MAX_ENTRIES) {
+    const oldestKey = knownHostsFailureBackoff.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    knownHostsFailureBackoff.delete(oldestKey)
+  }
+}
+
+export function parseGlabAuthStatusHosts(output: string): string[] {
+  const hosts = new Set(parseGlabAuthenticatedHosts(output))
+  // Preserve non-default web ports so same-host services retain distinct identity.
   for (const line of output.split('\n')) {
     const bareLine = line.trim()
     const hostLine = bareLine.endsWith(':') ? bareLine.slice(0, -1) : bareLine

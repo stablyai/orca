@@ -1,3 +1,6 @@
+import type { AgentSessionHandoverContext } from './structured-agent-session-host-types'
+import type { AgentSessionDispatchOutcome } from './structured-agent-session-adapter'
+import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -8,7 +11,7 @@ import type {
   TurnOutcome
 } from './structured-agent-session-turns'
 
-/** Only thrown while the provider dispatch is still unreachable. */
+/** Proves dispatch was unreachable. */
 export class AgentSessionPreDispatchError extends Error {
   constructor(code: string) {
     super(code)
@@ -45,7 +48,7 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
   try {
     const ran = await input.plan.run(context)
     if (receipt?.isCommitted() && !ran.ok) {
-      // The row says accepted, so a refusal past it (a fold that failed after COMMIT) is a fault.
+      // Refusal after committed acceptance is an internal fault, even if post-COMMIT folding failed.
       throw new Error(
         `operation ${operation.operationId} was accepted, then refused: ${ran.refusal.code}`
       )
@@ -65,19 +68,19 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
             code: outcome.refusal.code,
             message: outcome.refusal.message,
             ...(outcome.refusal.details ? { details: outcome.refusal.details } : {}),
-            // The row's own field, which builds before details read; copied from the legacy mirror.
+            // Preserve the legacy mirror for builds predating refusal details.
             ...(outcome.refusal.rewindReason ? { rewindReason: outcome.refusal.rewindReason } : {})
           }
     )
     return outcome
   } catch (error) {
     const { logger, sessionId } = input.context
-    // Its success commits with its write, so a throw leaves the row pending: nothing was written.
+    // Atomic effect settlement leaves pending on throw because no write committed.
     if (!input.plan.settlesWithWrite) {
       try {
         await settle({ status: 'unknown' })
       } catch {
-        // Bookkeeping must not replace the operation's proof of whether dispatch began.
+        // Bookkeeping cannot replace the original proof of dispatch reachability.
         logger.warn('recording an operation as unknown failed', {
           scope: 'operation-unknown-settlement',
           sessionId,
@@ -97,7 +100,7 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
   }
 }
 
-/** Tracks whether a receipt committed, so a Stop can commit it alone before it acts. */
+/** Track committed acceptance so Stop can save a standalone receipt before acting. */
 export function observedReceipt(
   store: Pick<AgentSessionRecordStore, 'commitOperationReceipt'>,
   receipt: JournalOperationReceipt
@@ -117,4 +120,51 @@ export function observedReceipt(
     }
   }
   return observed
+}
+
+export async function resolveHandover(
+  ctx: AgentSessionHandoverContext,
+  clientMessageId: string,
+  outcome: AgentSessionDispatchOutcome | null
+): Promise<void> {
+  if (!outcome || outcome.state === 'admitted') {
+    return
+  }
+  try {
+    await ctx.journal.resolveDispatch(
+      outcome.state === 'accepted'
+        ? {
+            clientMessageId,
+            state: 'accepted',
+            providerIdentity: outcome.providerIdentity,
+            fence: ctx.fence
+          }
+        : outcome.state === 'rejected'
+          ? {
+              clientMessageId,
+              state: 'rejected',
+              reason: outcome.reason,
+              rejection: outcome.rejection,
+              ...(outcome.answeredInTurn ? { answeredInTurn: outcome.answeredInTurn } : {}),
+              fence: ctx.fence
+            }
+          : {
+              clientMessageId,
+              state: 'unknown',
+              reason: outcome.reason,
+              fence: ctx.fence
+            }
+    )
+  } catch (error) {
+    // Persist uncertainty if settlement fails; next-open recovery handles any remaining pending row.
+    try {
+      await ctx.journal.resolveDispatch({
+        clientMessageId,
+        state: 'unknown',
+        reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
+        fence: ctx.fence
+      })
+    } catch {}
+    throw error
+  }
 }

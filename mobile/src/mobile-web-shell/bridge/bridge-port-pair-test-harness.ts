@@ -14,67 +14,42 @@ import {
 } from './bridge-envelope'
 import type { BridgeErrorCapture } from './bridge-error-capture'
 import type { BridgeSafeAreaInsets } from './bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge-fold-division'
+import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
 import {
   createBridgeRpcClient,
   type BridgeRpcClient,
   type BridgeRpcClientDiagnostic
 } from './bridge-rpc-client'
 
-/**
- * The page and the shell wired to each other through the weakest transport that is still a
- * transport, so a test of either one is a test of the pair.
- *
- * Two properties are the whole point. One FIFO per direction, because the payloads a shell client
- * publishes are published in delivery order, so a lane that let a `subscribe` pass a `sendRequest`
- * would move the recorder's shared ordinal and manufacture the reorder `write-ordinal.ts` exists to
- * catch. And delivery on a microtask, the weakest async the golden runner's zero-time drains flush
- * and the only one that moves no virtual millisecond.
- *
- * The shell client is a type parameter because the golden recorder puts its own scripted client
- * behind this pair; `createFakeBridgePortPair` is the shape every other test wants.
- */
+// Use one FIFO per direction so subscribe/request ordering preserves recorder ordinals; deliver on microtasks so zero-time golden drains advance no virtual milliseconds.
+// Accept the recorder’s scripted client as well as the ordinary fake client.
 export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   client: BridgeRpcClient
   host: BridgeHost
   rpc: TRpc
-  /** Everything each side posted, in the order it was posted, raw. */
   toShell: string[]
   toPage: string[]
   diagnostics: BridgeRpcClientDiagnostic[]
   hostDiagnostics: BridgeHostDiagnostic[]
-  /** Every screen the page asked the shell to open, in order. */
   navigations: string[]
-  /** Every URL the page asked the shell to open outside the app, in order. */
   externalLinks: string[]
-  /** Every haptic the page asked the shell to play, in order. */
   haptics: BridgeHapticsKind[]
-  /** One entry per stack pop the page asked for, with what the shell did about it. */
   backPops: BridgeNavigateBackOutcome[]
-  /** Every allowlisted key the page wrote through the shell, in order. */
   storageWrites: { key: string; value: string | null }[]
-  /** Every fault the page reported, in order, as the shell received it. */
   pageFaults: BridgeErrorCapture[]
-  /** How many times the page asked for a session; it re-asks on a backoff until one lands. */
   readonly pageReadyCount: () => number
   readonly pagePaintCount: () => number
-  /** Every claim on the device Back key the host reported, in order. */
   readonly backClaims: boolean[]
+  /** Every claim on the key rail the host reported, drops on `ready` and `close` included. */
+  readonly terminalKeyRailClaims: boolean[]
   /** What each answered `ready` declared it reports, in order. */
   /** Every clear the page asked the shell for, in order. */
   readonly routeParamClears: () => readonly { param: string; value: string }[]
-  /** Why the host refused to open a session at all, if it did. */
   readonly routeRefusals: string[]
-  /** Runs both lanes until a full round moves nothing. */
   flush: () => Promise<void>
-  /**
-   * Delivers what is queued right now, in place, and returns how many frames moved.
-   *
-   * For the one exchange a caller cannot await: a page refuses every member until `init` lands, and
-   * a recorder that mounted a screen before then would record a different first render. Nothing
-   * else may use it — delivering in place is what the lanes exist not to do.
-   */
+  // Flush init synchronously only for first-render recording; every other exchange must retain asynchronous lane delivery.
   drainNow: () => number
-  /** Read back through the reader on the receiving side, so a frame this returns is one that lands. */
   readToShell: () => BridgeClientMessage[]
   readToPage: () => BridgeHostMessage[]
 }
@@ -86,28 +61,19 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   route?: BridgeInitRoute
   pageRoutes?: readonly string[]
   storage?: Readonly<Record<string, string>>
-  /** The allowlisted keys the app holds a value for that is over the page's cap (ruling 33.6). */
   storageOversize?: readonly string[]
-  /**
-   * Rewrites each frame on its way to the page, for asking the page a counterfactual it cannot be
-   * asked any other way: would this run have gone differently had the shell sent one more field?
-   * The golden recorder's bridged replay uses it to separate what a narrow reader costs from what
-   * the payload itself does. Nothing in the product rewrites a frame in flight.
-   */
+  // Test-only frame rewrite lets golden replay isolate narrower-reader behavior from payload changes; product transport never rewrites in-flight frames.
   rewriteToPage?: (json: string) => string
-  /** What the mounted route declared; everything this shell implements unless a case narrows it. */
   routeGrants?: readonly string[]
-  /** Stands for a host rebuilt under a page whose session already handshook. */
   sessionEstablished?: boolean
-  /** This device's identity to the host; `null` stands for one the shell cannot read yet. */
   clientIdentity?: string | null
-  /** Replaces the verb handler, for the arms where the shell refuses rather than answers. */
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   safeAreaInsets?: BridgeSafeAreaInsets
   keyboardInset?: number
+  foldDivision?: BridgeFoldDivision | null
+  terminalKeyRail?: BridgeTerminalKeyRail
   /** Stands for the wide host-area session, the one shell mount that tells the page it owns it. */
   ownsHostArea?: boolean
-  /** Applies each storage write the host takes, as the screen does; recorded either way. */
   onStorageWrite?: (key: string, value: string | null) => void
 }
 
@@ -118,7 +84,6 @@ type Lane = {
   readonly depth: number
 }
 
-/** This device's identity to the host, as the shell reads it off the native client. */
 export const PORT_PAIR_CLIENT_IDENTITY = 'device-token-a'
 
 function createLane(deliver: (json: string) => void): Lane {
@@ -175,8 +140,7 @@ function readAll<TMessage>(
   })
 }
 
-/** One answer per row of the verb table. Adding a verb without a row here is a refusal a case
- *  would have to read as a result shape the shell does not declare. */
+// Keep a valid default reply per verb table row so unconfigured native calls do not fail as malformed shell results.
 function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
   switch (verb) {
     case 'native.clipboard.write':
@@ -213,9 +177,9 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   const storageWrites: { key: string; value: string | null }[] = []
   const pageFaults: BridgeErrorCapture[] = []
   const backClaims: boolean[] = []
+  const terminalKeyRailClaims: boolean[] = []
   let pageReadies = 0
   let pagePaints = 0
-  /** What each answered `ready` declared it reports, in order. */
   const routeParamClears: { param: string; value: string }[] = []
   const routeRefusals: string[] = []
   let receiveOnPage: ((json: string) => void) | null = null
@@ -235,6 +199,8 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     route: options.route ?? { pathname: '/h/host-a' },
     ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
     ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset }),
+    ...(options.foldDivision === undefined ? {} : { foldDivision: options.foldDivision }),
+    ...(options.terminalKeyRail === undefined ? {} : { terminalKeyRail: options.terminalKeyRail }),
     readClientIdentity: () =>
       options.clientIdentity === undefined ? PORT_PAIR_CLIENT_IDENTITY : options.clientIdentity,
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
@@ -244,13 +210,10 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     onNavigate: (href) => navigations.push(href),
     onExternalLink: (url) => externalLinks.push(url),
     onHaptic: (kind) => haptics.push(kind),
-    // The pair has no device: what a test reads here is that the host answered without forwarding.
-    // Each verb gets a shape its own row declares, so a case that calls one it did not configure
-    // reads an answer rather than `native_verb_result`, which is a shell bug's code.
+    // No device exists in this pair; answer each native verb with its declared shape and prove it was not forwarded.
     serveNativeVerb: (verb, params) =>
       options.serveNativeVerb?.(verb, params) ?? Promise.resolve(defaultVerbAnswer(verb)),
     onNavigateBack: () => {
-      // A pair has no stack, so the pop always lands: what a test reads here is that the host acted.
       backPops.push('popped')
       return 'popped'
     },
@@ -271,6 +234,8 @@ export function createBridgePortPair<TRpc extends RpcClient>(
       pagePaints += 1
     },
     onPageBackClaim: (claimed) => backClaims.push(claimed),
+    onPageLocation: () => {},
+    onTerminalKeyRailClaim: (claimed) => terminalKeyRailClaims.push(claimed),
     onRouteParamClear: (param, value) => routeParamClears.push({ param, value }),
     onRouteRefused: (issue) => routeRefusals.push(issue),
     onDiagnostic: (diagnostic) => hostDiagnostics.push(diagnostic)
@@ -308,6 +273,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     pageReadyCount: () => pageReadies,
     pagePaintCount: () => pagePaints,
     backClaims,
+    terminalKeyRailClaims,
     routeParamClears: () => routeParamClears,
     routeRefusals,
     async flush(): Promise<void> {
@@ -332,7 +298,6 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   }
 }
 
-/** The pair every test that is not the golden recorder wants: a shell client that records calls. */
 export function createFakeBridgePortPair(
   options: Omit<BridgePortPairOptions<FakeRpcClient>, 'rpc'> & { rpc?: FakeRpcClient } = {}
 ): BridgePortPair<FakeRpcClient> {

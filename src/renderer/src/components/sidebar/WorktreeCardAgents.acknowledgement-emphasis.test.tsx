@@ -15,7 +15,7 @@ const WORKSPACE = 'acknowledgement-workspace'
 const PANE_A = makePaneKey('tab-a', '11111111-1111-4111-8111-111111111111')
 const PANE_B = makePaneKey('tab-b', '22222222-2222-4222-8222-222222222222')
 let acknowledgements: Record<string, number> = {}
-// The store's hook turn records; renderLabels defaults them to the rendered rows' entries.
+// Default live hook records to rendered rows so unread detection sees the same entries.
 let liveTurns: Record<string, DashboardAgentRow['entry']> = {}
 let focusedPaneKey: string | null = null
 
@@ -175,7 +175,7 @@ describe('compact acknowledgement emphasis through WorktreeCardAgents', () => {
   })
 
   it('emphasizes only rows with an unread hook turn, never title-derived or subagent rows', () => {
-    // Title and subagent rows have no turn record; title rows restamp stateStartedAt on every rebuild.
+    // Title/subagent rows have no hook turn; title timestamps restamp on rebuild and cannot prove unread activity.
     acknowledgements = {}
     const hook = agentRow(PANE_A)
     const title = { ...agentRow(PANE_B, 'idle', { stateStartedAt: 9000 }), startedAt: 0 }

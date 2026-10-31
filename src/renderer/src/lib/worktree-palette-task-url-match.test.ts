@@ -545,9 +545,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
   })
 
   it('declines a different GitLab project even when the identity came from upstream', () => {
-    // STA-4450: iids are per-project, so a bare `linkedGitLabMR` must not span projects.
-    // `deriveGitRemoteIdentity` prefers `upstream`, so the fork's own `origin` is not visible here;
-    // an MR URL from the fork itself is the accepted false negative of gating on the known project.
+    // GitLab iids are project-scoped; authoritative upstream identity rejects fork-origin URLs hidden by single-remote selection (accepted false negative, STA-4450).
     const forkRepo: Repo = {
       ...gitLabRepo('gitlab.com/acme/orca'),
       gitRemoteIdentity: {
@@ -674,8 +672,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
     ).toMatchObject({ supportingText: { text: 'PROJ-123' } })
   })
 
-  // Why: Jira issue keys are per-project, so the same PROJ-123 exists on every
-  // tenant that has a PROJ project.
+  // Jira issue keys repeat across tenants sharing a project key.
   it('rejects a Jira issue URL from a different tenant with the same issue key', () => {
     const intent = parseCmdJTaskSourceUrl('https://acme.atlassian.net/browse/PROJ-123')
 
@@ -697,8 +694,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
   })
 
   it('carries the worktree host so the board can key the Jira match by host identity', () => {
-    // Why: the other three providers spread worktreeHostId and Jira did not, so a Jira URL
-    // recorded an unqualified identity and the board filtered every lane to empty.
+    // Jira must carry worktreeHostId like other providers or URL board filters lose every lane.
     const intent = parseCmdJTaskSourceUrl('https://acme.atlassian.net/browse/PROJ-123')
 
     expect(
@@ -740,9 +736,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
     ).toBeNull()
   })
 
-  // The reachable fallback: `normalizeWorkspaceLinkedItem` drops any item with a
-  // blank url, so the only way to have no tenant evidence is a url that is present
-  // but is not a Jira browse link. The identifier is then all there is.
+  // Blank URLs are normalized away; only a present non-browse URL leaves identifier-only Jira matching reachable.
   it('falls back to the Jira identifier when the stored url is not a Jira link', () => {
     const intent = parseCmdJTaskSourceUrl('https://acme.atlassian.net/browse/PROJ-123')
 

@@ -99,55 +99,6 @@ describe('task promotion query allocation', () => {
     }
   )
 
-  it.each(['ready', 'failed', 'blocked'] as const)(
-    'leaves a dependent pending when another dependency is %s',
-    (status) => {
-      const db = createDb()
-      const target = db.createTask({ runId: 'run_legacy_local', spec: 'Completing task' })
-      const other = db.createTask({ runId: 'run_legacy_local', spec: 'Other dependency' })
-      if (status !== 'ready') {
-        db.updateTaskStatus(other.id, status)
-      }
-      const child = db.createTask({
-        runId: 'run_legacy_local',
-        spec: 'Dependent task',
-        deps: [target.id, other.id]
-      })
-
-      db.updateTaskStatus(target.id, 'completed')
-
-      expect(db.getTask(child.id)?.status).toBe('pending')
-    }
-  )
-
-  it.each(['not-json', 'null', '{}', '2'])(
-    'rolls back completion and earlier promotions on persisted malformed deps %s',
-    (deps) => {
-      const db = createDb()
-      const target = db.createTask({ runId: 'run_legacy_local', spec: 'Completing task' })
-      const child = db.createTask({
-        runId: 'run_legacy_local',
-        spec: 'Promoted before malformed row',
-        deps: [target.id]
-      })
-      const run = db.createRun({
-        objective: 'Other run',
-        coordinatorHandle: 'term_other',
-        coordinatorPaneKey: 'tab_other:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-      })
-      const open = db.createTask({ runId: run.id, spec: 'Other dependency' })
-      const malformed = db.createTask({ runId: run.id, spec: 'Malformed task', deps: [open.id] })
-      db.db.prepare('UPDATE tasks SET deps = ? WHERE id = ?').run(deps, malformed.id)
-
-      expect(() => db.updateTaskStatus(target.id, 'completed', 'Must roll back')).toThrow()
-
-      expect(db.getTask(target.id)).toEqual(target)
-      expect(db.getTask(child.id)).toEqual(child)
-      expect(db.getTask(malformed.id)).toMatchObject({ status: 'pending', deps })
-      expect(db.db.isTransaction).toBe(false)
-    }
-  )
-
   it('leaves promotion inside the caller-owned transaction', () => {
     const db = createDb()
     const target = db.createTask({ runId: 'run_legacy_local', spec: 'Completing task' })

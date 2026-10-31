@@ -321,8 +321,7 @@ describe('Relay region probe log', () => {
 
     await resolver.invalidateIfAssignedCellIsFar(CELL)
 
-    // A self-heal that never chose a region must not log a probe event that
-    // reads as a withheld hint; it names the failure under its own event.
+    // Self-heal failure must not masquerade as a withheld-hint refresh.
     expect(events.map((event) => event.event)).toEqual([RELAY_REGION_SELF_HEAL_EVENT])
     expect(events[0]).toMatchObject({ decision: 'kept', reason: 'catalog-unavailable' })
   })

@@ -1,13 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Defect under test: the restored workspace surface used to wait for the whole
- * startup chain (SSH reconnect, PTY reconnect, legacy worker recovery) before it
- * mounted, so a session whose tab model had been in the store for seconds painted
- * nothing at all. Only terminal panes need that chain — they bind a PTY on mount.
- * The surface now mounts on the tab model, and terminal tabs are held unadmitted
- * until the gate opens and the activation plan replaces the hold.
- */
+/** Hydrated surfaces may render before startup PTY ownership settles; hold terminal panes unadmitted until gate opening replaces the hold with activation deferral. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useRef, useState } from 'react'
@@ -67,7 +60,6 @@ function leafLayout(worktreeId: string): {
 
 type HarnessProps = { worktreeId: string | null; gateOpen: boolean }
 
-/** Mirrors use-terminal-controller.ts: cold activation during render, then admission. */
 function useStartupHoldHarness(props: HarnessProps) {
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
@@ -156,16 +148,14 @@ describe('startup terminal tab hold', () => {
     })
     const restrictions = result.current.backgroundMountTabIdsByWorktreeRef.current
 
-    // The surface mounts from the tab model alone...
     expect(result.current.mountedWorktreeIdsRef.current.has(WORKTREE_ID)).toBe(true)
     expect(result.current.anyMountedWorktreeHasLayout).toBe(true)
-    // ...while no terminal pane may bind a PTY yet, and none is idle-admission work.
     expect(admits(restrictions, WORKTREE_ID, TAB_1)).toBe(false)
     expect(admits(restrictions, WORKTREE_ID, TAB_2)).toBe(false)
     expect(result.current.activationDeferredMountTabIdsByWorktreeRef.current.has(WORKTREE_ID)).toBe(
       false
     )
-    // Held tabs stay parked-equivalent, so watchers own their bells, titles, and completions.
+    // Held tabs need parked watchers for bells, titles, and completions.
     expect(result.current.startupTerminalTabHold).toEqual({
       worktreeId: WORKTREE_ID,
       heldTabIds: new Set([TAB_1, TAB_2])
@@ -175,7 +165,6 @@ describe('startup terminal tab hold', () => {
     })
     expect(admits(restrictions, WORKTREE_ID, TAB_1)).toBe(false)
 
-    // The gate opening runs the activation plan, which replaces the hold.
     rerender({ worktreeId: WORKTREE_ID, gateOpen: true })
     expect(result.current.mountedWorktreeIdsRef.current.has(WORKTREE_ID)).toBe(true)
     expect(admits(restrictions, WORKTREE_ID, TAB_1)).toBe(true)
@@ -219,7 +208,6 @@ describe('startup terminal tab hold', () => {
       initialProps: { worktreeId: WORKTREE_ID, gateOpen: false }
     })
     const restrictions = result.current.backgroundMountTabIdsByWorktreeRef.current
-    // A targeted background mount widens the hold to its tab.
     restrictions.set(WORKTREE_ID, new Set([TAB_1]))
     act(() => {
       useAppStore.setState({

@@ -207,7 +207,7 @@ describe('current daemon lifecycle retirement', () => {
       expect(clock.pendingCount).toBe(0)
       expect(existsSync(tokenPath)).toBe(false)
       expect(existsSync(pidPath)).toBe(false)
-      // Why: the dead entry remains for the next publisher to replace.
+      // The dead socket entry stays; check reachability rather than file existence.
       expect(await waitForEndpointUnreachable(socketPath)).toBe(true)
     }
   )
@@ -624,7 +624,7 @@ describe('current daemon lifecycle retirement', () => {
     expect(currentRequest).toHaveBeenCalledOnce()
     expect(currentRequest.mock.calls[0]?.slice(0, 2)).toEqual(['shutdownIfIdle', undefined])
     const timeoutMs = currentRequest.mock.calls[0]?.[2]
-    // Why: connection and RPC share a wall-clock budget, so elapsed setup time is expected.
+    // Connection setup consumes the shared RPC deadline.
     expect(timeoutMs).toEqual(expect.any(Number))
     expect(timeoutMs).toBeGreaterThan(0)
     expect(timeoutMs).toBeLessThanOrEqual(250)

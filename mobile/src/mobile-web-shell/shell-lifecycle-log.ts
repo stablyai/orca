@@ -8,22 +8,16 @@ import type {
 import type { ShellLifecycleLine } from './shell-lifecycle-line-recorder'
 import { maskUserText } from './shell-log-path-masking'
 
-/** Session-side shell log lines: reducer steps, one-shot stalls and page-reported failures. */
-
 const BUILD_ID_PREFIX_LENGTH = 8
 
-/**
- * How long a parked waiting state lasts before the log says so. Armed per state object, so for
- * `ready` it starts at activation and outlasts the 10 s ready deadline, which starts at document load.
- */
+// Arm per state identity; ready stalls count from activation, while the shorter ready deadline starts at document load.
 export const SHELL_STALL_LOG_MS = 15_000
 
-/** What the reducer does not keep but a log line needs; tracked beside the session, log-only. */
+// Diagnostic-only facts must not affect reducer decisions.
 export type ShellLogTrace = {
-  /** The flow whose cache read answered, so a stall can say whether it waits on the cache. */
   readonly cacheReadFlow: number | null
   readonly openedFrom: 'download' | 'cache' | null
-  /** The page's `ready` asks for this document: more than one means it keeps refusing `init`. */
+  // Repeated ready asks suggest init has not been accepted, but do not prove why.
   readonly readyAsks: number
   readonly documentLoaded: boolean
 }
@@ -77,14 +71,13 @@ export function traceShellStep(
   }
 }
 
-/** What one reducer step is worth logging; empty for most steps. `trace` is the post-step one. */
+// Use post-step trace; most reducer steps intentionally log nothing.
 export function shellSessionStepLines(
   before: MobileWebShellSession,
   event: MobileWebShellSessionEvent,
   after: MobileWebShellSession,
   trace: ShellLogTrace
 ): ShellLifecycleLine[] {
-  // A superseded flow's result changed nothing and says nothing about this one.
   if ('flow' in event && event.flow !== before.flow) {
     return []
   }
@@ -96,7 +89,6 @@ export function shellSessionStepLines(
   return lines
 }
 
-/** The one-shot warning for a session parked in a waiting state, or null when not parked. */
 export function shellStallLine(
   state: MobileWebShellSessionState,
   session: Pick<MobileWebShellSession, 'pagePainted' | 'pageReady' | 'gates' | 'flow'>,
@@ -113,7 +105,7 @@ export function shellStallLine(
       )
     }
     case 'fetching':
-      // Each progress tick is a new state and re-arms the timer, so this means no progress.
+      // Progress ticks rearm the timer, so expiry means no progress.
       return stallLine(
         `Web shell: download made no progress for ${seconds}`,
         `assets=${state.completedAssets}/${state.totalAssets} bytes=${state.receivedBytes}/${state.totalBytes}`
@@ -144,7 +136,6 @@ export function pageFaultLine(error: BridgeErrorCapture): ShellLifecycleLine {
   )
 }
 
-/** The profile read behind `init` rejected, so no bridge host can be built for this screen. */
 export function hostProfileUnreadableLine(): ShellLifecycleLine {
   return pageLine('warn', 'Web shell: host profile unreadable')
 }
@@ -160,7 +151,6 @@ function eventLines(
       flowLine('warn', 'Web shell: app download failed', `reason=${event.cause.reason}${code}`)
     ]
   }
-  // Every page signal below is only accepted while a generation is on screen.
   if (before.state.kind !== 'ready') {
     return []
   }
@@ -168,7 +158,7 @@ function eventLines(
     case 'shell-failed':
       return [pageLine('warn', 'Web shell: page load failed', `reason=${event.reason}`)]
     case 'page-painted':
-      // The one line a healthy open writes; `activatedMs` is flow start to activation, not to paint.
+      // Keep one healthy-open line; activatedMs measures flow-to-activation, not flow-to-paint.
       return before.pagePainted
         ? []
         : [
@@ -199,7 +189,7 @@ function eventLines(
     case 'page-back-claim':
     case 'layout-changed':
     case 'retry-pressed':
-      // Healthy-path signals; the paint line or a stall line's detail stands in for them.
+      // Paint/stall details cover healthy signals without filling the bounded log.
       return []
   }
 }
@@ -223,12 +213,10 @@ function transitionLine(
         `${after.totalAssets} assets, ${after.totalBytes} bytes`
       )
     case 'activating':
-      // A cache activation is immediate and shows up as the paint line's source.
       return after.source === 'download'
         ? flowLine('info', 'Web shell: activating app', 'source=download')
         : null
     case 'ready':
-      // Logged at paint.
       return null
     case 'route-unavailable':
       return flowLine('warn', 'Web shell: page does not serve this route')

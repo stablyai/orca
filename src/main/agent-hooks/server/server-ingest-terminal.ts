@@ -12,20 +12,13 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import { agentSubagentsEqual } from '../../../shared/agent-status-subagent-snapshot'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
-import {
-  HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS,
-  programStatusYieldsToHookRow
-} from './program-status/hook-precedence'
+import { programStatusHookYieldEndsAt } from './program-status/hook-precedence'
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 
 const PROGRAM_STATUS_FACET_REPUBLISH_MS = 250
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
-  /**
-   * A resume launch names its provider session before the agent reports one. Codex runs
-   * SessionStart only at its first turn, so until the user typed, readers had no transcript
-   * to address and native chat stayed empty (#10923). Seeds an identity-only row.
-   */
+  /** Seed resume identity before the first hook; Codex SessionStart waits for the first turn (#10923). */
   recordLaunchResumeIdentity(event: {
     paneKey: string
     worktreeId?: string
@@ -62,14 +55,13 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       connectionId: null,
       providerSession: event.providerSession,
       providerSessionOnly: true,
-      // Why: hydration keeps only marked identity rows; a host restart before the first turn must not lose it.
+      // Hydration must retain this identity even if no first turn occurs before restart.
       retainedForLiveness: true,
       payload: { state: 'done', prompt: '', agentType: event.agentType }
     }
     this.applyNormalizedStatus(identity, undefined, 'launch')
   }
 
-  /** The pane's OSC 7501 facet changed. Applies whoever owns the row's state; see ProgramStatusFacetStore. */
   ingestProgramStatusFacet(event: { paneKey: string; facet: ProgramStatusFacet | null }): void {
     const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
     if (
@@ -106,7 +98,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     origin?: 'process'
     /** Drop this write when a hook has reported the pane since then (the hook owns that command). */
     yieldsToHookSince?: number
-    /** Projected from OSC 7501: yields to the pane's hook row (programStatusYieldsToHookRow). */
+    /** Projected from OSC 7501: yields to the pane's hook row (programStatusHookYieldEndsAt). */
     fromProgramStatus?: true
     /** The program left no records: a row only OSC wrote is removed instead. */
     removesProgramStatusRow?: true
@@ -129,8 +121,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.terminalHandle?.trim() &&
       reportedTabId === legacyPaneKey.tabId
     )
-    // Legacy rows are accepted only from the in-process PTY ingress with both runtime identities;
-    // HTTP and relay paths still require a stable pane key or a registered alias.
+    // Only PTY ingress can admit legacy keys with runtime identities; HTTP and relay require stable keys or aliases.
     if (paneKey.length > MAX_PANE_KEY_LEN || (!parsedPaneKey && !runtimeOwnedLegacyPane)) {
       return
     }
@@ -149,7 +140,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       connectionId
     })
     const newRun = event.origin === 'process' && event.payload.state === 'working'
-    // Why: a verified process-lifetime Working proves a new agent run, as a hook new-turn event does.
+    // Process-lifetime working proves a new run, like a hook turn boundary.
     const disposition = this.getAgentStatusDisposition(
       paneKey,
       newRun
@@ -195,16 +186,21 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
-    // Why: a hook that reported during this command owns it (OpenCode 1 `run` loads its plugin in-process).
+    // OpenCode 1 run loads hooks in-process; a hook during the command owns its status.
     const hookOwnsCommand =
       event.yieldsToHookSince !== undefined &&
       previous?.observation?.origin === 'hook' &&
       previous.receivedAt >= event.yieldsToHookSince
+    const now = Date.now()
+    // Record ordering before removal, which also marks a program turn boundary.
+    const workingSince =
+      event.fromProgramStatus === true
+        ? this.programStatusFacets.noteState(paneKey, event.payload, now)
+        : undefined
     if (event.removesProgramStatusRow === true) {
-      // Why: gone records end only the program's own row; they are no verdict on a hook agent.
       this.hookSilenceRechecks.cancel(paneKey)
       if (previous?.observation?.origin === 'osc') {
-        // Why a row drop, not pane teardown: the process lives on, and so do its alias and caches.
+        // The program row ended; the pane, aliases and caches remain live.
         if (mutationBefore !== undefined) {
           this.commitStatusRowMutation(mutationBefore, previous)
         }
@@ -213,16 +209,18 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       }
       return
     }
-    const hookOwnsAgent =
-      event.fromProgramStatus === true &&
-      programStatusYieldsToHookRow(previous, event.payload, Date.now())
+    const yieldEndsAt =
+      event.fromProgramStatus === true
+        ? programStatusHookYieldEndsAt(previous, event.payload, workingSince)
+        : undefined
+    const hookOwnsAgent = yieldEndsAt !== undefined && now < yieldEndsAt
     if (event.fromProgramStatus === true) {
-      if (hookOwnsAgent && previous && event.payload.state !== previous.payload.state) {
+      if (hookOwnsAgent && previous && Number.isFinite(yieldEndsAt)) {
         const yieldedTo = previous.receivedAt
-        const delayMs = yieldedTo + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS - Date.now()
+        const delayMs = yieldEndsAt - now
         this.hookSilenceRechecks.defer(paneKey, delayMs + 1, (currentPaneKey) => {
           const row = this.state.lastStatusByPaneKey.get(currentPaneKey)
-          // Only against the hook observation it yielded to: a newer turn or a cleared pane drops it.
+          // Re-offer only against the hook observation this report yielded to.
           if (
             row &&
             row.providerSessionOnly !== true &&
@@ -240,22 +238,22 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     if (
       hookOwnsCommand ||
       hookOwnsAgent ||
-      // OSC 7501 settles child-held rows through its own hook precedence above.
+      // OSC 7501 uses the hook precedence above; other terminal reports cannot settle child-held work.
       (event.fromProgramStatus !== true &&
         previous?.payload.agentType === 'claude' &&
         event.payload.agentType === 'claude' &&
         isAgentStatusHeldOpenByChildWork(previous.payload) &&
         previous.payload.subagents?.some((subagent) => subagent.state === 'working') === true)
     ) {
-      // Why: OSC carries no child identity, so it cannot settle or repaint a row child agents hold open
-      // (working, or waiting on a child's prompt); their lifecycle hooks will.
       if (previous && mutationBefore !== undefined) {
         this.commitStatusRowMutation(mutationBefore, previous)
         this.emitEnrichedStatus(previous)
       }
+      if (hookOwnsAgent && previous) {
+        this.settleClaudePromptBlocked(previous)
+      }
       return
     }
-    // Why: preserve the hook-completed turn stamp while OSC repaints the current state.
     const preserveActiveTurnStamp =
       previous?.payload.turnCompletedAt !== undefined &&
       previous.payload.turnCompletedAt === this.activeHookTurnCompletedAtByPaneKey.get(paneKey)
@@ -264,16 +262,14 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       previous?.connectionId === connectionId &&
       previous.tabId === tabId &&
       previous.worktreeId === worktreeId &&
-      // Why in the unchanged gate: the handle is a join key readers match on, so a pane that
-      // only just acquired one (or moved to another) must still refresh the row it is stamped on.
+      // A terminal handle joins row identity; acquiring or replacing it requires publication.
       previous.terminalHandle === (terminalHandle ?? previous.terminalHandle) &&
       terminalStatusPayloadMatchesHook(previous.payload, event.payload, preserveActiveTurnStamp) &&
-      // OSC 7501 does carry children, so a child-only change is news (absent means none left).
+      // OSC 7501 child-only changes still require publication; absent children means none remain.
       (event.fromProgramStatus !== true ||
         agentSubagentsEqual(previous.payload.subagents, event.payload.subagents))
     ) {
-      // A handle-authority transfer is a new pane observation even when its payload is a
-      // duplicate; enriched subscribers must capture the replacement pane identity.
+      // An authority transfer must refresh enriched subscribers even for an identical payload.
       this.refreshTerminalStatusEvidence(
         previous,
         mutationBefore,
@@ -282,29 +278,22 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       )
       return
     }
-    // Why: the OSC 9999 wire payload has no providerSession field at all, so an OSC observation is
-    // never evidence that the session ended — yet overwriting the row dropped the cached identity.
-    // That erased it from persisted rows (lost across restart) and from headless `orca serve`, which
-    // serves these rows to mobile directly instead of the renderer store, blanking Chat UI (#10630).
-    // A new turn after `done` still starts clean so a reused pane cannot inherit a finished session.
-    // Why: mirror resolveAgentStatusIdentity, which treats a literal 'unknown' exactly like an
-    // omitted type — an OSC ping that names no agent makes no claim about the pane's identity, so
-    // it must not be read as a mismatch and strip the session the renderer would have kept.
+    // Terminal status carries no provider session; retain eligible cached identity without treating unknown as a mismatch (#10630).
     const claimedAgentType =
       event.payload.agentType && event.payload.agentType !== 'unknown'
         ? event.payload.agentType
         : undefined
-    // A launch seed's `done` is a placeholder, not a finished turn, so its session carries over.
+    // A live agent's turn after `done` keeps its session (OSC 7501 reports hookless slash commands); a new run or an exited agent's resume-only row does not. Launch seeds are not completed turns.
     const preservedProviderSession =
       previous?.providerSession &&
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType) &&
       (previous.payload.state !== 'done' ||
         event.payload.state === 'done' ||
-        previous.observation?.origin === 'launch')
+        previous.observation?.origin === 'launch' ||
+        (!newRun && previous.providerSessionOnly !== true))
         ? previous.providerSession
         : undefined
-    // Why: OSC carries no main agent fact. While it repaints the state the hook row already holds, the
-    // main agent behind that state is unchanged too; a different state is a turn edge OSC cannot date.
+    // Without a new main-agent fact, preserve it only while the row's state and agent still match.
     const preservedMainAgent =
       event.payload.mainAgent ??
       (previous?.payload.mainAgent &&
@@ -312,7 +301,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType)
         ? previous.payload.mainAgent
         : undefined)
-    // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
+    // Terminal observations cannot establish prompt-sent telemetry.
     this.applyNormalizedStatus(
       {
         paneKey,
@@ -329,7 +318,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.origin ?? 'osc',
       undefined,
       mutationBefore,
-      newRun
+      newRun,
+      !preservedProviderSession
     )
   }
 }

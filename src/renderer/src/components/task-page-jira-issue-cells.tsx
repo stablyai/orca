@@ -1,15 +1,15 @@
 import React from 'react'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import {
   formatJiraEstimate,
   formatJiraStoryPoints,
   type JiraListColumnId
 } from './jira-list-columns'
-import { getJiraPriorityTone } from './task-page-jira-status-tone'
+import { getJiraPriorityTone } from './task-page/jira/task-page-jira-status-tone'
 
 const MUTED_CELL = 'block truncate text-[12px] text-muted-foreground'
 
@@ -137,7 +137,7 @@ export function JiraIssueCell({
             </div>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {new Date(issue.updatedAt).toLocaleString()}
+            {new Date(issue.updatedAt).toLocaleString(getIntlLocale())}
           </TooltipContent>
         </Tooltip>
       )

@@ -40,6 +40,14 @@ function nullContentWindowFocus(): TypeError {
   return new TypeError("Cannot read properties of null (reading 'focus')")
 }
 
+function pageNavigationStart(): Event {
+  return Object.assign(new Event('did-start-navigation'), {
+    isMainFrame: true,
+    isInPlace: false,
+    url: 'https://example.com/next'
+  })
+}
+
 function page(overrides?: Partial<BrowserPage>): BrowserPage {
   return {
     id: 'page-a',
@@ -66,6 +74,8 @@ function createGuest(): Electron.WebviewTag & {
     reload: ReturnType<typeof vi.fn>
   }
   Object.assign(webview, {
+    // An attached guest has a WebContents id; focus waits for one.
+    getWebContentsId: vi.fn(() => 7),
     getURL: vi.fn(() => 'https://example.internal/'),
     getTitle: vi.fn(() => 'Example'),
     isLoading: vi.fn(() => false),
@@ -223,11 +233,11 @@ describe('client-hosted browser pane over a dead guest', () => {
     })
 
     act(() => {
-      webview.dispatchEvent(new Event('did-start-loading'))
+      webview.dispatchEvent(pageNavigationStart())
     })
 
     expect(screen.getByText('Client-hosted browser unavailable')).toBeTruthy()
-    // did-start-loading writes loading:true first; the loss must be the last word.
+    // The navigation start writes loading:true first; the loss must be the last word.
     expect(onUpdatePageState.mock.calls.at(-1)).toEqual(['page-a', { loading: false }])
   })
 
@@ -237,23 +247,31 @@ describe('client-hosted browser pane over a dead guest', () => {
     act(() => webview.dispatchEvent(new Event('destroyed')))
     onUpdatePageState.mockClear()
 
-    act(() => webview.dispatchEvent(new Event('did-start-loading')))
+    act(() => webview.dispatchEvent(pageNavigationStart()))
 
     expect(onUpdatePageState).not.toHaveBeenCalled()
     expect(screen.getByText('Client-hosted browser unavailable')).toBeTruthy()
   })
 
-  it('uses the guarded title snapshot if the guest dies immediately afterward', () => {
-    render(paneElement(true))
-    webview.getTitle = vi.fn(() => {
+  it('uses one guarded title read when the next read would find the guest gone', () => {
+    const onUpdatePageState = vi.fn()
+    render(paneElement(true, { onUpdatePageState }))
+    onUpdatePageState.mockClear()
+    const readTitle = vi.fn(() => {
       webview.getTitle = vi.fn(() => {
         throw invalidGuestInstanceId()
       })
       return 'Last live title'
     })
+    webview.getTitle = readTitle
 
     expect(() => act(() => webview.dispatchEvent(new Event('did-navigate')))).not.toThrow()
+    expect(readTitle).toHaveBeenCalledTimes(1)
     expect(webview.getTitle).not.toHaveBeenCalled()
+    expect(onUpdatePageState).toHaveBeenCalledWith(
+      'page-a',
+      expect.objectContaining({ title: 'Last live title' })
+    )
   })
 
   it('shows unavailability when a load-failure fallback finds the guest gone', () => {

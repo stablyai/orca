@@ -1,8 +1,4 @@
-/**
- * Proving the runtime behind a managed tunnel is this environment's orcad. A port held by another
- * runtime still accepts the connection, so a forward that opened proves nothing; only a status
- * call that completes the pairing handshake and reports the paired runtime id does.
- */
+// Open forwards prove no identity; require an authenticated status call from the pinned server.
 import { parsePairingCode } from '../../../shared/pairing'
 import {
   pairedRuntimeConnectionFromOffer,
@@ -12,8 +8,8 @@ import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
-} from '../../../shared/remote-runtime-client-error-classification'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+} from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
@@ -23,10 +19,10 @@ import type { ServeReadiness } from '../../server/serve-readiness'
 import { orcadBoundPort } from './orcad-managed-bound-port'
 import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
 
-/** `unreachable` means nothing answered; it is never evidence about which server holds the port. */
+/** Unreachable proves no identity; unpaired is a refusal sealed by the pinned server key. */
 export type OrcadTunnelIdentity =
   | { verdict: 'verified' }
-  | { verdict: 'foreign' | 'unreachable'; detail: string }
+  | { verdict: 'foreign' | 'unreachable' | 'unpaired'; detail: string }
 
 export const ORCAD_IDENTITY_MISMATCH_CODE = 'orcad_identity_mismatch'
 
@@ -35,17 +31,48 @@ export class OrcadManagedIdentityError extends Error {
   constructor(remotePort: number, detail: string) {
     super(
       `${ORCAD_IDENTITY_MISMATCH_CODE}: the server on remote port ${remotePort} is not this ` +
-        `managed Orca server (another Orca may be using that port): ${detail}`
+        `host’s Orca server (another Orca may be using that port): ${detail}`
     )
     this.name = 'OrcadManagedIdentityError'
   }
 }
 
-// Why 4001/4003: a runtime that rejects our keys closes the socket rather than replying.
+export const ORCAD_PAIRING_REJECTED_CODE = 'orcad_pairing_rejected'
+
+export class OrcadManagedPairingRejectedError extends Error {
+  readonly code = ORCAD_PAIRING_REJECTED_CODE
+  constructor(detail: string) {
+    super(
+      `${ORCAD_PAIRING_REJECTED_CODE}: this host’s Orca server no longer accepts ` +
+        `this desktop's pairing (its saved devices were reset, or this desktop was removed ` +
+        `there), so reconnecting alone won't restore access: ${detail}`
+    )
+    this.name = 'OrcadManagedPairingRejectedError'
+  }
+}
+
+export function orcadIdentityRefusal(
+  remotePort: number,
+  identity: Exclude<OrcadTunnelIdentity, { verdict: 'verified' }>
+): Error {
+  return identity.verdict === 'unpaired'
+    ? new OrcadManagedPairingRejectedError(identity.detail)
+    : new OrcadManagedIdentityError(remotePort, identity.detail)
+}
+
+// Key rejection closes the socket instead of returning a status reply.
 const FOREIGN_CLOSE_CODES = new Set([4001, 4003])
 
 export function classifyOrcadTunnelIdentityFailure(error: unknown): OrcadTunnelIdentity {
   const detail = error instanceof Error ? error.message : String(error)
+  // Only sealed access-grant refusals prove the pinned server answered.
+  if (
+    error instanceof RemoteRuntimeClientError &&
+    error.code === 'unauthorized' &&
+    error.pairingStage === 'access-grant'
+  ) {
+    return { verdict: 'unpaired', detail }
+  }
   if (error instanceof RemoteRuntimeClientError && FOREIGN_CLOSE_CODES.has(error.closeCode ?? 0)) {
     return { verdict: 'foreign', detail }
   }
@@ -66,26 +93,19 @@ export async function verifyOrcadPairingIdentity(
   }
 }
 
-/** Independent SSH access proved its identity when it linked; only managed orcad is checked. */
 export function verifyManagedOrcadTunnelIdentity(
   environment: KnownRuntimeEnvironment
 ): Promise<OrcadTunnelIdentity> {
   if (!environment.orcadDeployment) {
     return Promise.resolve({ verdict: 'verified' })
   }
-  // Why no runtime id: it is minted per process, so a restart by another desktop, or while this one
-  // was away, changes it. The E2EE handshake with our pinned host key and our token being accepted
-  // prove the server; the first authenticated status reply records the new id. Why no device id:
-  // one left stale by a racing reply must not block it either.
+  // Runtime/device IDs can change or become stale; pinned-key handshake and token acceptance prove identity.
   return verifyOrcadPairingIdentity(getPreferredPairedRuntimeConnection(environment), {
     runtimeId: null
   })
 }
 
-/**
- * A fresh deploy has no saved environment yet: its pairing comes from the readiness, and a
- * foreign answer re-reads that readiness, whose bound endpoint the tunnel then follows.
- */
+/** Fresh deploys have no saved pairing; reread readiness after foreign answers to follow port changes. */
 export function deployedOrcadTunnelChecks(
   initial: ServeReadiness,
   rereadReadiness: () => Promise<ServeReadiness>
@@ -104,7 +124,7 @@ export function deployedOrcadTunnelChecks(
         ? verifyOrcadPairingIdentity(pairedRuntimeConnectionFromOffer(pairing), {
             runtimeId: readiness.runtimeId || null
           })
-        : { verdict: 'foreign', detail: 'The managed Orca server published an invalid pairing.' }
+        : { verdict: 'foreign', detail: 'This host’s Orca server published an invalid pairing.' }
     }
   }
 }

@@ -6,9 +6,7 @@ import {
   type ActiveHistoryRecoveryFreeze
 } from './terminal-history-recovery-quarantine'
 
-/** The recovery freezes one HistoryManager holds, each paired with the process-wide hold that keeps
- *  the backlog permission sweep off a tree whose fingerprint has already been taken. Paired here so
- *  the in-memory freeze and that hold cannot drift apart across the manager's many release paths. */
+/** Pair manager freezes with process-wide sweep holds so all release paths stay synchronized. */
 export class TerminalHistoryRecoveryFreezes {
   private readonly bySessionId = new Map<string, ActiveHistoryRecoveryFreeze>()
 
@@ -24,8 +22,7 @@ export class TerminalHistoryRecoveryFreezes {
 
   hold(sessionId: string, freeze: ActiveHistoryRecoveryFreeze): void {
     this.bySessionId.set(sessionId, freeze)
-    // Why before the caller's first await: the sweep must see the hold before the freeze reads the
-    // fingerprint it later re-checks, or a chmod in between silently disables the session's writer.
+    // Hold before fingerprinting: an intervening permission sweep would invalidate recovery.
     markTerminalHistorySessionRecoveryFrozen(this.sessionDir(sessionId))
   }
 
@@ -35,7 +32,6 @@ export class TerminalHistoryRecoveryFreezes {
     }
   }
 
-  /** Why: an outstanding hold would keep the sweep off that tree for the rest of the process. */
   releaseAll(): void {
     for (const sessionId of this.bySessionId.keys()) {
       this.release(sessionId)

@@ -1,16 +1,8 @@
 import React from 'react'
-import {
-  ChevronRight,
-  CircleAlert,
-  CircleSlash,
-  Folder,
-  FolderOpen,
-  Link,
-  Loader2
-} from 'lucide-react'
+import { ChevronRight, CircleAlert, CircleSlash, Link, Loader2 } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import {
   encodeWorkspaceFilePaths,
   WORKSPACE_FILE_PATH_MIME,
@@ -29,14 +21,12 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-typ
 import { createMultiSelectDragGhost } from './file-explorer-multi-drag-image'
 import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
 
-// ─── File / Folder Row with Context Menu ─────────────────────────
-
 export type FileExplorerRowProps = {
   node: TreeNode
   displayDepthOffset?: number
   isExpanded: boolean
   isLoading: boolean
-  /** Why: a failed read leaves no children, which otherwise reads as an empty folder. */
+  /** Distinguish failed reads from empty folders. */
   loadError?: string | null
   isSelected: boolean
   isFlashing: boolean
@@ -162,10 +152,9 @@ export function FileExplorerRow({
           )}
           style={{ paddingLeft: `${(node.depth - displayDepthOffset) * 16 + 8}px` }}
           ref={setRowDragNode}
-          // Why: the explorer's OS-drop owner reads the target folder from this at drop time.
+          // The OS-drop owner reads the target folder here at drop time.
           data-file-explorer-drop-dir={rowDropDir}
-          // Why: marks this draggable row so the wheel-capture handler can rescue
-          // scroll Chromium swallows over draggable nodes (file-explorer-drag-scroll-marker).
+          // Let wheel capture rescue scrolling Chromium swallows over draggable rows (file-explorer-drag-scroll-marker).
           data-explorer-draggable="true"
           draggable
           onDragStart={(event) => {
@@ -218,9 +207,9 @@ export function FileExplorerRow({
               ) : showLoadError ? (
                 <CircleAlert className="size-3 shrink-0 text-destructive" />
               ) : isExpanded ? (
-                <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
+                <FolderIcon open className="size-3 shrink-0 text-muted-foreground" />
               ) : (
-                <Folder className="size-3 shrink-0 text-muted-foreground" />
+                <FolderIcon open={false} className="size-3 shrink-0 text-muted-foreground" />
               )}
             </>
           ) : (
@@ -237,15 +226,12 @@ export function FileExplorerRow({
             </>
           )}
           <span
-            // Why: marks the rename hotspot so the row's click handler can drop
-            // the directory toggle on the second click of a double-click rename.
+            // Suppress directory toggling on the second click of a filename double-click rename.
             {...{ [RENAME_HOTSPOT_ATTR]: '' }}
             className={cn(
               'truncate',
               isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
-              // Why: italic glyphs overhang their advance width; truncate's
-              // overflow:hidden clips it, shaving the last char (".md" → ".ma").
-              // pr-0.5 reserves room for the slant so the final letter survives.
+              // Reserve space for italic overhang so truncation does not clip the final letter.
               isIgnored && 'italic pr-0.5'
             )}
             style={
@@ -256,8 +242,11 @@ export function FileExplorerRow({
                   : undefined
             }
             onDoubleClick={(e) => {
-              // Why: scope rename to the filename text so "pin preview" and the
-              // directory toggle stay reachable on the icon and empty row area.
+              // Outside-link rows are browse-only, so their name double-click pins the preview instead.
+              if (node.outsideProject) {
+                return
+              }
+              // Keep icon/empty-row double-clicks available for pin preview and directory toggling.
               e.stopPropagation()
               onStartRename(node)
             }}

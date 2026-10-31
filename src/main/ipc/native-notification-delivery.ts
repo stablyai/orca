@@ -27,9 +27,6 @@ export function deliverNativeNotification(
 ): NotificationDispatchResult | Promise<NotificationDispatchResult> {
   if (getEffectiveNotificationSoundId(settings) !== 'system') {
     notificationOptions.silent = true
-  } else if (process.platform === 'darwin') {
-    // Why: macOS treats an unset sound as silent, so request Electron's default when using the OS sound.
-    notificationOptions.sound = 'default'
   }
   const notification = new Notification({
     ...notificationOptions,
@@ -43,7 +40,7 @@ export function deliverNativeNotification(
     }
   }
 
-  // Why: prevent GC from collecting the notification and its click handler while it's still visible.
+  // Retain the notification and click handler through display lifetime.
   let clickHandler: (() => void) | null = null
   let failedHandler: ((_event: unknown, error?: string) => void) | null = null
   const entryForId: { notification: Notification; release: () => void } | null = args.notificationId
@@ -68,9 +65,9 @@ export function deliverNativeNotification(
   }
 
   failedHandler = (_event, error) => {
-    // Why: Electron 42's macOS backend reports unsigned/delivery failures here; release now, not after the fallback timer.
+    // Release immediately on macOS delivery/signing failure instead of waiting for retention expiry.
     logNativeNotificationFailure(args.source, error)
-    // Why: feeds the permission card's evidence.
+    // Feed permission-card fallback evidence.
     recordNotificationDeliveryOutcome('failed')
     release()
   }
@@ -78,12 +75,9 @@ export function deliverNativeNotification(
 
   const worktreeId = args.worktreeId
   const paneTarget = args.paneKey ? parsePaneKey(args.paneKey) : null
-  // Why: a structured chat has no PTY pane. Its pane key's leaf is a synthetic id minted from
-  // the session, so focusTerminal would hunt a split-layout leaf that does not exist; the
-  // unified tab id in the same key is what reveals the chat.
+  // Structured chat keys have synthetic leaves; reveal their unified tab instead of a nonexistent PTY pane.
   const chatTarget = args.surface === 'agent-session' ? paneTarget : null
-  // Why: only a "repoId::worktreePath" id has a repo to activate. Folder and floating workspaces have
-  // none; a pane reveal shows its workspace where it lives on its own, so it still binds the click.
+  // Repo-less folder/floating workspaces still bind clicks through their pane target.
   const repoId = worktreeId?.includes('::') ? getRepoIdFromWorktreeId(worktreeId) : null
   if (worktreeId && (repoId !== null || paneTarget)) {
     clickHandler = () => {
@@ -110,7 +104,7 @@ export function deliverNativeNotification(
       if (!paneTarget) {
         return
       }
-      // Why: focusTerminal targets the pane by stable leafId so split-pane notifications land on the exact pane.
+      // Stable leaf IDs select the exact split pane.
       win.webContents.send('ui:focusTerminal', {
         tabId: paneTarget.tabId,
         worktreeId,

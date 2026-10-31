@@ -55,7 +55,7 @@ afterEach(async () => {
   )
 })
 
-/** Stands in for `ssh -L`'s listener: the socket handler plays what the channel open did. */
+/** Model ssh -L: socket behavior represents the remote channel-open result. */
 async function forwardAnswering(
   onSocket: (socket: Socket, log: (line: string) => void) => void
 ): Promise<Parameters<typeof checkForwardChannel>[0]> {
@@ -115,6 +115,13 @@ describe('forward channel check (system SSH)', () => {
     const silent = await forwardAnswering((socket) => socket.resume())
     await expect(checkForwardChannel(silent, 50)).resolves.toBe('unverifiable')
     await expect(checkForwardChannel({ entry: dropped.entry })).resolves.toBe('unverifiable')
+  })
+
+  // Why: a forward still waiting on its own login (a key touch, a prompt) never binds its listener.
+  it('reports a listener that never came up as not listening', async () => {
+    const closed = await forwardAnswering(() => {})
+    await new Promise((resolve) => servers.pop()?.close(resolve))
+    await expect(checkForwardChannel(closed, 300)).resolves.toBe('not-listening')
   })
 
   it('reads the last channel failure OpenSSH logged', () => {

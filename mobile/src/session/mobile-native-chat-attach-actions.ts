@@ -1,11 +1,10 @@
 import { AtSign, Image, Package, Paperclip, Terminal } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
+import { translate } from '../i18n/mobile-i18n'
 
-/** The composer's + sheet: every way to add to the message, then the session's skills and
- *  commands. Each runs once the sheet is gone, since iOS cannot present a picker over it. */
+// Dismiss the sheet before opening pickers because iOS cannot present them over its Modal.
 export function mobileNativeChatAttachActions(args: {
   onPhotos: (() => void) | undefined
-  /** Absent where the host cannot take a file from a phone. */
   onFiles: (() => void) | undefined
   onWorkspaceFile: () => void
   onSkills: () => void
@@ -14,12 +13,19 @@ export function mobileNativeChatAttachActions(args: {
 }): ActionSheetAction[] {
   const actions: ActionSheetAction[] = []
   if (args.onPhotos) {
-    actions.push({ label: 'Photos', icon: Image, closeBeforePress: true, onPress: args.onPhotos })
+    actions.push({
+      id: 'photos',
+      label: translate('session.nativeChatAttachActions.photos', 'Photos'),
+      icon: Image,
+      closeBeforePress: true,
+      onPress: args.onPhotos
+    })
   }
   if (args.onFiles) {
     actions.push({
-      label: 'Files',
-      hint: 'PDF, text, code…',
+      id: 'files',
+      label: translate('session.nativeChatAttachActions.files', 'Files'),
+      hint: translate('session.nativeChatAttachActions.fileTypes', 'PDF, text, code…'),
       icon: Paperclip,
       closeBeforePress: true,
       onPress: args.onFiles
@@ -27,19 +33,37 @@ export function mobileNativeChatAttachActions(args: {
   }
   actions.push(
     {
-      label: 'Workspace file',
+      id: 'workspaceFile',
+      label: translate('session.nativeChatAttachActions.workspaceFile', 'Workspace file'),
       icon: AtSign,
       closeBeforePress: true,
       onPress: args.onWorkspaceFile
     },
     {
-      label: 'Skills',
-      ...(args.skillCount > 0 ? { hint: `${args.skillCount} available` } : {}),
+      id: 'skills',
+      label: translate('session.nativeChatAttachActions.skills', 'Skills'),
+      ...(args.skillCount > 0
+        ? {
+            hint: translate(
+              'session.nativeChatAttachActions.availableSkills',
+              '{{count}} available',
+              {
+                count: args.skillCount
+              }
+            )
+          }
+        : {}),
       icon: Package,
       closeBeforePress: true,
       onPress: args.onSkills
     },
-    { label: 'Commands', icon: Terminal, closeBeforePress: true, onPress: args.onCommands }
+    {
+      id: 'commands',
+      label: translate('session.nativeChatAttachActions.commands', 'Commands'),
+      icon: Terminal,
+      closeBeforePress: true,
+      onPress: args.onCommands
+    }
   )
   return actions
 }

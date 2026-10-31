@@ -5,11 +5,10 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import { randomUUID } from 'node:crypto'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuildPtyTerminalSummary {
   protected abstract getLeafKey(tabId: string, leafId: string): string
-
-  protected abstract rejectWaitersForHandle(handle: string, code: string): void
 
   protected bindPtyIncarnationHandle(
     retained: PtyIncarnationHandleRecord,
@@ -46,7 +45,6 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     }
     this.handles.delete(retained.handle)
     this.syntheticTerminalHandles.delete(retained.handle)
-    this.rejectWaitersForHandle(retained.handle, 'terminal_handle_stale')
   }
 
   protected clearPtyIncarnationHandles(): void {
@@ -60,8 +58,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     for (const [ptyId, retained] of this.handleByPtyIncarnation) {
       const pty = this.ptysById.get(ptyId)
       const leaves = this.getLeavesForPty(ptyId)
-      // Why: a handle issued before the host reported the incarnation is un-fenced, so
-      // learning it is not a replacement; only a known-to-different incarnation is.
+      // Learning a previously unknown incarnation fences the handle; only known-to-different means replacement.
       const incarnationReplaced =
         retained.incarnationId !== null &&
         pty !== undefined &&
@@ -99,6 +96,17 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
   }
 
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
+    const handle = this.issuePtyHandleRecord(pty)
+    // An unbound terminal retains its issued pane stamp for recovery, including after replacement.
+    const record = ORCA_LAYOUT_OWNER_IS_MAIN ? this.handles.get(handle) : undefined
+    const issuedForPaneKey = record && this.paneOfPty(pty).paneKey
+    if (record && issuedForPaneKey && record.issuedForPaneKey !== issuedForPaneKey) {
+      this.handles.set(handle, { ...record, issuedForPaneKey })
+    }
+    return handle
+  }
+
+  private issuePtyHandleRecord(pty: RuntimePtyWorktreeRecord): string {
     const retained = this.handleByPtyIncarnation.get(pty.ptyId)
     if (retained?.incarnationId === pty.incarnationId) {
       return retained.handle
@@ -112,7 +120,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
         existingRecord.runtimeId === this.runtimeId &&
         existingRecord.ptyId === pty.ptyId
       ) {
-        this.handleByPtyId.set(pty.ptyId, existingHandle)
+        this.setPtyHandle(pty.ptyId, existingHandle)
         return existingHandle
       }
     }
@@ -132,7 +140,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       ptyId: pty.ptyId,
       ptyGeneration: 0
     })
-    this.handleByPtyId.set(pty.ptyId, handle)
+    this.setPtyHandle(pty.ptyId, handle)
     return handle
   }
 
@@ -167,7 +175,6 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     this.handleByLeafKey.delete(leafKey)
     this.handles.delete(handle)
     this.syntheticTerminalHandles.delete(handle)
-    this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
   }
 
   protected adoptFirstPtyForLeafHandle(
@@ -187,7 +194,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
   protected rememberDetachedPreAllocatedLeaves(): void {
     for (const leaf of this.leaves.values()) {
       if (leaf.ptyId && this.handleByPtyId.has(leaf.ptyId)) {
-        // Why: ORCA_TERMINAL_HANDLE is an agent identity, so CLI control survives renderer graph loss while the PTY is alive.
+        // Agent identity via ORCA_TERMINAL_HANDLE must survive renderer graph loss while the PTY lives.
         this.detachedPreAllocatedLeaves.set(leaf.ptyId, leaf)
       }
     }

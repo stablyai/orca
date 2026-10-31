@@ -7,10 +7,7 @@ import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { collectClientLayoutGroupIds } from './web-session-client-owned-tab-placement'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 
-// Why: a structured session created on a worktree with no prior tabs must land in a
-// group the local layout actually renders. The host publishes it inside a
-// "headless-terminals:" group; adopting that group while freezing the local layout
-// leaves the tab in store but permanently off screen (empty-worktree launch P0).
+// Host headless-terminals groups must become locally renderable; adopting them while freezing the split tree hides new chats forever (empty-worktree launch P0).
 
 const GIT_WT = 'repo-1::/tmp/wt1'
 const FOLDER_WT = 'folder:folder-1'
@@ -40,6 +37,7 @@ function emptyState(overrides: Partial<WebSessionTabsSyncState>): WebSessionTabs
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},

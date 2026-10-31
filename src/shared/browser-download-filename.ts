@@ -1,6 +1,6 @@
 const WINDOWS_RESERVED_FILENAME_CHARS = new Set(['<', '>', ':', '"', '|', '?', '*'])
 const WINDOWS_RESERVED_FILENAME =
-  /^(?:con|prn|aux|nul|clock\$|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/iu
+  /^(?:con|prn|aux|nul|clock\$|conin\$|conout\$|com[1-9\u00B9\u00B2\u00B3]|lpt[1-9\u00B9\u00B2\u00B3])(?:\.|$)/iu
 
 export const MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS = 1_000
 

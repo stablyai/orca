@@ -3,17 +3,11 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { useAllWorktrees } from '@/store/selectors'
 import { NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX } from '@/lib/new-workspace-project-options'
 
-/**
- * Most-recently-used project option ids, newest first, derived from when the
- * user last created a workspace in each project. Orca stores no explicit
- * per-project recency, and workspace creation is exactly the action this picker
- * is about to repeat, so it's the honest proxy rather than a new store field.
- */
+/** Use each project’s newest workspace creation as recency; it matches this picker’s action without separate persisted state. */
 export function orderProjectIdsByRecency(worktrees: readonly Worktree[]): string[] {
   const newestByProject = new Map<string, number>()
   for (const worktree of worktrees) {
     const projectId = worktree.projectId
-    // Legacy repo-only workspaces have no projectId and can't be attributed.
     if (projectId === undefined || projectId === '') {
       continue
     }

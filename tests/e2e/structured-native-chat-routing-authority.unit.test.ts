@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../src/shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
 import type * as SharedLaunchRoute from '../../src/shared/structured-native-chat-launch-route'
@@ -22,7 +23,7 @@ vi.mock('../../src/shared/structured-native-chat-launch-route', async (importOri
 })
 
 const settings = {
-  experimentalNativeChat: true,
+  nativeChatProviders: EVERY_AGENT_CHAT,
   experimentalStructuredNativeChat: true,
   openAgentTabsInChatByDefault: true
 }
@@ -56,8 +57,7 @@ describe('shared feasibility owns every caller decision', () => {
     (placement) => {
       for (const agent of ['claude', 'codex', 'grok', 'openclaude'] as const) {
         for (const customized of [false, true]) {
-          // Arguments and environment are customized on BOTH passes and the launch command on one;
-          // none of them reaches the verdict. A caller that resumed reading any of them fails here.
+          // Change args/env on both passes and launch command on one; none may influence feasibility.
           const launchSettings: Partial<GlobalSettings> & typeof settings = {
             ...settings,
             agentDefaultArgs: { [agent]: '--custom' },
@@ -91,8 +91,7 @@ describe('shared feasibility owns every caller decision', () => {
     }
   )
 
-  // A worker placed on another runtime starts through federation, which creates terminal agents
-  // only, so that runtime is never asked; the shared verdict is not this host's to give for it.
+  // Federated workers start terminal-only on another runtime, so this host must not decide native feasibility for them.
   it.each(placements.filter((placement) => 'on' in placement))(
     'places a worker on another runtime as a terminal agent for %j',
     (placement) => {

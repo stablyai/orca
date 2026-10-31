@@ -1,61 +1,128 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isWorkspaceBoardKeepOpenTarget } from './use-workspace-kanban-outside-dismiss'
+// @vitest-environment happy-dom
 
-class FakeNode {
-  parentElement: FakeElement | null = null
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, renderHook } from '@testing-library/react'
+import {
+  isWorkspaceBoardKeepOpenTarget,
+  useWorkspaceKanbanOutsideDismiss
+} from './use-workspace-kanban-outside-dismiss'
+
+afterEach(() => {
+  cleanup()
+  document.body.replaceChildren()
+})
+
+function mountBoardListener({
+  open = true,
+  preserveOpenForMenu = false
+}: { open?: boolean; preserveOpenForMenu?: boolean } = {}) {
+  const sheet = document.createElement('div')
+  sheet.setAttribute('data-slot', 'sheet-content')
+  const board = document.createElement('div')
+  sheet.append(board)
+  document.body.append(sheet)
+  vi.spyOn(sheet, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 36, 800, 600))
+  const onOpenChange = vi.fn()
+  const hook = renderHook(() =>
+    useWorkspaceKanbanOutsideDismiss({
+      open,
+      boardRef: { current: board },
+      preserveOpenForMenu,
+      onOpenChange
+    })
+  )
+  return { board, onOpenChange, unmount: hook.unmount }
 }
 
-class FakeElement extends FakeNode {
-  private readonly attributes: ReadonlySet<string>
-
-  constructor(attributes: readonly string[] = [], parentElement: FakeElement | null = null) {
-    super()
-    this.attributes = new Set(attributes)
-    this.parentElement = parentElement
-  }
-
-  closest(selector: string): FakeElement | null {
-    if (this.matches(selector)) {
-      return this
-    }
-    return this.parentElement?.closest(selector) ?? null
-  }
-
-  private matches(selector: string): boolean {
-    return selector
-      .split(',')
-      .map((part) => part.trim())
-      .some((part) => this.attributes.has(part))
-  }
+function sidebarTab(): HTMLButtonElement {
+  const tab = document.createElement('button')
+  tab.setAttribute('data-workspace-board-dismiss', '')
+  document.body.append(tab)
+  return tab
 }
 
 describe('workspace kanban outside dismiss keep-open targets', () => {
-  beforeEach(() => {
-    vi.stubGlobal('Node', FakeNode)
-    vi.stubGlobal('Element', FakeElement)
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('keeps the board open when a Sonner toast action is clicked', () => {
-    const toast = new FakeElement(['[data-sonner-toast]'])
-    const action = new FakeElement([], toast)
-
-    expect(isWorkspaceBoardKeepOpenTarget(action as unknown as EventTarget)).toBe(true)
-  })
-
-  it('keeps the board open when the contextual tour panel is clicked', () => {
-    const panel = new FakeElement(['[data-contextual-tour-panel]'])
-    const nextButton = new FakeElement([], panel)
-
-    expect(isWorkspaceBoardKeepOpenTarget(nextButton as unknown as EventTarget)).toBe(true)
-  })
+  it.each(['data-sonner-toast', 'data-contextual-tour-panel'])(
+    'keeps the board open for a child of %s',
+    (attribute) => {
+      const panel = document.createElement('div')
+      panel.setAttribute(attribute, '')
+      const action = document.createElement('button')
+      panel.append(action)
+      expect(isWorkspaceBoardKeepOpenTarget(action)).toBe(true)
+    }
+  )
 
   it('does not keep the board open for generic outside content', () => {
-    const target = new FakeElement()
+    expect(isWorkspaceBoardKeepOpenTarget(document.createElement('div'))).toBe(false)
+  })
+})
 
-    expect(isWorkspaceBoardKeepOpenTarget(target as unknown as EventTarget)).toBe(false)
+describe('workspace kanban outside dismiss', () => {
+  it.each(['pointerdown', 'click'])(
+    'closes from a sidebar tab inside a portalled menu on %s',
+    (eventType) => {
+      const { onOpenChange } = mountBoardListener()
+      const menu = document.createElement('div')
+      menu.setAttribute('data-slot', 'dropdown-menu-content')
+      const tab = sidebarTab()
+      const icon = document.createElement('span')
+      tab.append(icon)
+      menu.append(tab)
+      document.body.append(menu)
+
+      icon.dispatchEvent(new MouseEvent(eventType, { bubbles: true }))
+
+      expect(onOpenChange).toHaveBeenCalledWith(false)
+    }
+  )
+
+  it('dismisses for an explicit sidebar tab while a board menu is open', () => {
+    const { onOpenChange } = mountBoardListener({ preserveOpenForMenu: true })
+
+    sidebarTab().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('preserves board content, unrelated menus and the existing outside bounds', () => {
+    const { board, onOpenChange } = mountBoardListener()
+    const markerInsideBoard = sidebarTab()
+    board.append(markerInsideBoard)
+    markerInsideBoard.click()
+    const menu = document.createElement('div')
+    menu.setAttribute('data-slot', 'dropdown-menu-content')
+    document.body.append(menu)
+    menu.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, clientX: 950, clientY: 80 })
+    )
+    document.body.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, clientX: 500, clientY: 18 })
+    )
+    expect(onOpenChange).not.toHaveBeenCalled()
+
+    document.body.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, clientX: 950, clientY: 80 })
+    )
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('preserves an open board menu for ordinary outside pointer events', () => {
+    const { onOpenChange } = mountBoardListener({ preserveOpenForMenu: true })
+    document.body.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, clientX: 950, clientY: 80 })
+    )
+    expect(onOpenChange).not.toHaveBeenCalled()
+  })
+
+  it('stops listening after unmount and while the board is closed', () => {
+    const mounted = mountBoardListener()
+    mounted.unmount()
+    const closed = mountBoardListener({ open: false })
+    const tab = sidebarTab()
+    tab.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    tab.click()
+    expect(mounted.onOpenChange).not.toHaveBeenCalled()
+    expect(closed.onOpenChange).not.toHaveBeenCalled()
   })
 })

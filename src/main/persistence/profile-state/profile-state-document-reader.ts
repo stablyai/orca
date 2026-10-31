@@ -13,11 +13,11 @@ import {
 } from './profile-state-document-validation'
 
 export type ReadProfileStateDocumentsOptions = {
-  /** The profile revision already read by a surrounding snapshot. */
+  /** Reuse the surrounding snapshot's revision. */
   profileRevision?: number
 }
 
-/** Read the authoritative rows after checking their hash, shape, and JSON payload. */
+/** Validate hash, shape and JSON before returning authoritative rows. */
 export function readProfileStateDocuments(
   db: Database.Database,
   options: ReadProfileStateDocumentsOptions & { representation: 'parsed' }

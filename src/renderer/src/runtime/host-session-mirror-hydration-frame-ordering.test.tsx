@@ -69,22 +69,14 @@ import {
   settle,
   setDocumentVisibility,
   tabIds
-} from './host-session-mirror-frame-ordering-harness'
+} from './host-session-mirror-frame-ordering-test-harness'
 import { clearWebSessionTabsTrackingForEnvironment } from './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './web-session-tabs-sync/state'
 import { hasHostSessionMirrorHydrated } from './host-session-mirror-hydration'
 import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
 
-/**
- * Parked waiters drain synchronously, so a settle placed before its frame's
- * patch reaches the store re-runs recovery while ptyIdsByTabId is still empty
- * — the pane reads as dead and the duplicate `codex resume` fires anyway.
- * These drive the real handlers because that ordering is the thing under test.
- *
- * The second block pins the other half: this latch releases into replaying a
- * resume, so `unverifiable` must not read as `exited` and settle anything.
- */
+// Waiters drain synchronously: settle only after frame patch commits or recovery sees empty bindings and duplicates resume. Real handlers also verify unverifiable never settles as exited.
 describe('mirrored-pane resume deferral against real stream frames', () => {
   installFrameOrderingHarness()
 
@@ -174,8 +166,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
       await settle()
     })
 
-    // The empty full inventory is newer evidence; the late list must not
-    // reinsert its stale host handle into the renderer's existing mirror row.
+    // Newer empty inventory must prevent a late list reinserting stale handles.
     const state = useAppStore.getState()
     expect(state.ptyIdsByTabId[MIRROR_TAB_ID]).toBeUndefined()
     expect(state.tabsByWorktree[WT]?.find((tab) => tab.id === MIRROR_TAB_ID)?.ptyId).toBeNull()
@@ -250,17 +241,14 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
     expect(tabIds(WT)).toEqual([MIRROR_TAB_ID])
 
-    // The host answers on the stream, before listAll ever resolves. The frame
-    // says this pane's PTY is alive; the replay must see that, not the empty
-    // handle map that existed when the frame arrived.
+    // The stream answers before listAll; replay must see its live binding, not the pre-patch empty map.
     await publish(findSubscription('session.tabs.subscribeAll'), {
       type: 'snapshots',
       snapshots: [makeHostSnapshot(WT, HOST_SURFACE_ID, 'host-tab-1')]
     })
 
     expect(useAppStore.getState().ptyIdsByTabId[MIRROR_TAB_ID]).toEqual([HOST_PTY_ID])
-    // RED before the ordering fix: the drain ran while ptyIdsByTabId was still
-    // empty, so a second `codex resume` tab was appended here.
+    // Before the fix, draining against empty bindings appended another codex resume tab.
     expect(tabIds(WT)).toEqual([MIRROR_TAB_ID])
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
@@ -273,8 +261,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
 
     expect(resumeSleepingAgentSessionsForWorktree(BG_WT)).toBe(0)
 
-    // The active worktree's scoped mirror answers. It says nothing whatsoever
-    // about the background workspace, so that pane must stay parked.
+    // Scoped active-worktree evidence says nothing about the parked background pane.
     await publish(findSubscription('session.tabs.subscribe'), {
       type: 'snapshot',
       ...makeHostSnapshot(WT, HOST_SURFACE_ID, 'host-tab-1')
@@ -293,9 +280,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     expectHostOwnedRecordNotResumed(backgroundPaneKey, BG_WT, 'codex-session-bg-1')
   })
 
-  // The three tests below pin the remaining release sites one frame at a time:
-  // each delivers ONLY its own path's frame, so a release that stops happening
-  // there cannot be covered for by another handler.
+  // Deliver each remaining release path alone so another handler cannot mask a missing settle.
   it('the initial listAll releases the pane it parked', async () => {
     let resolveListAll: (response: unknown) => void = () => {}
     runtimeCall.mockImplementation((request: { method: string }) =>
@@ -391,8 +376,7 @@ describe('mirror latch verdicts against real stream failures', () => {
     const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-listall-reject')
     expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
 
-    // Contact is lost AFTER the pane parked. That is `unverifiable`, not proof
-    // the host-owned PTY exited, so nothing may drain on it.
+    // Lost contact after parking is unverifiable; no PTY exit proof may drain waiters.
     await act(async () => {
       rejectListAll(new Error('relay disconnected'))
       await settle()
@@ -432,8 +416,7 @@ describe('mirror latch verdicts against real stream failures', () => {
     const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-spawn-reject')
     expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
 
-    // The wake respawn this frame triggers fails, but the frame it failed after
-    // already reached the store — the host is healthy and has spoken.
+    // Wake respawn failure follows a committed frame; the healthy host has already answered.
     mocks.createTerminal.mockRejectedValue(new Error('spawn failed'))
     await publish(findSubscription('session.tabs.subscribe'), {
       type: 'snapshot',
@@ -469,8 +452,7 @@ describe('mirror latch verdicts against real stream failures', () => {
     const backgroundPaneKey = seedSleepingRecord(BG_MIRROR_TAB_ID, BG_WT, 'codex-session-bg-drop')
     expect(resumeSleepingAgentSessionsForWorktree(BG_WT)).toBe(0)
 
-    // The background snapshot never reaches the store, so the pane it would
-    // have published a PTY for is still unaccounted for.
+    // An unapplied background snapshot leaves its pane’s PTY unanswered.
     mocks.recoverSnapshot.mockImplementation(
       async (_state: unknown, snapshot: RuntimeMobileSessionTabsResult) =>
         snapshot.worktree === BG_WT ? null : snapshot
@@ -499,8 +481,7 @@ describe('a parked wake replay keeps the mount contract of its caller', () => {
     await act(settle)
     const paneKey = seedSleepingRecord(BG_MIRROR_TAB_ID, BG_WT, 'codex-session-parked-wake')
 
-    // A phone opens a workspace the desktop is not looking at, while the mirror
-    // for its pane is still unanswered — so the sweep parks instead of resuming.
+    // Phone opens a background workspace whose unanswered mirror must park resumes.
     wakeSleepingAgentsForWorktreeInBackground(BG_WT)
     expect(takePendingBackgroundTerminalWorktreeMount(BG_WT)).toBeNull()
 
@@ -523,8 +504,7 @@ describe('an inventory whose post-patch bookkeeping throws', () => {
     renderHook(() => useWebSessionTabsSync())
     await act(settle)
 
-    // Seeds this worktree's freshness — so the resume inventory reads as
-    // unchanged for it — without settling the environment latch.
+    // Seed freshness without settling so the resume inventory treats this worktree unchanged.
     await publish(findSubscription('session.tabs.subscribe'), {
       type: 'snapshot',
       ...makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
@@ -540,8 +520,7 @@ describe('an inventory whose post-patch bookkeeping throws', () => {
     })
     await act(settle)
 
-    // Bookkeeping for the unchanged worktree fails AFTER the background
-    // worktree's patch landed — a healthy host that has already spoken.
+    // Bookkeeping fails after the background patch commits; the healthy host has already answered.
     mocks.queueAcceptedSnapshot.mockImplementation((snapshot: RuntimeMobileSessionTabsResult) => {
       if (snapshot.worktree === WT) {
         throw new Error('accepted-handle queue failed')
@@ -555,8 +534,7 @@ describe('an inventory whose post-patch bookkeeping throws', () => {
       ]
     })
 
-    // Only the post-patch site queues the unchanged worktree, so this proves
-    // the throw landed after the background patch reached the store.
+    // Only post-patch queues unchanged worktrees, proving the throw followed the background commit.
     expect(mocks.queueAcceptedSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ worktree: WT }),
       ENV

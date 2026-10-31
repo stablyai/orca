@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { JiraIssue } from '../../../src/shared/jira-types'
+import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 import type { RpcResponse } from '../transport/types'
 import { fetchJiraIssueDetail, fetchJiraTaskIssues } from './mobile-jira-task-source'
 

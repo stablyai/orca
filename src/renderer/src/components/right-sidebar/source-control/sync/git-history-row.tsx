@@ -55,14 +55,10 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     const item = viewModel.historyItem
     const isBoundaryNode =
       viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
-    // Expanding to an inline file list is the primary click; opening the combined
-    // diff stays reachable from the expanded list. Fall back to open-all when no
-    // expand handler is wired so the row still does something useful.
+    // Prefer inline expansion; retain open-all as fallback when no expansion handler exists.
     const canExpand = !isBoundaryNode && Boolean(onToggleExpand)
     const canOpenCommit = !isBoundaryNode && Boolean(onOpenCommit)
     const isInteractive = canExpand || canOpenCommit
-    // A local branch and its own remote-tracking ref at the same commit are
-    // redundant, so collapse the pair to one pill.
     const refs = dedupeRemoteTrackingRefs(item.references ?? [], { preserveRefIds })
     const visibleRefs = refs.slice(0, 2)
     const hiddenRefs = refs.slice(2)

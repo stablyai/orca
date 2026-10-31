@@ -16,6 +16,7 @@ import {
 } from './structured-agent-session-item-retention'
 import { foldStructuredAgentSubagentRosterPage } from './structured-agent-session-subagent-roster'
 import { admitAgentSessionBackgroundTaskState } from './agent-session-background-task-state-admission'
+import { agentSessionHasOlderTranscript } from './agent-session-context-clear'
 
 /** A frame without `hostNow` (older host) leaves the previous sample in place. */
 export function hostClockField(
@@ -41,7 +42,7 @@ export function replacePage(
     submissions: page.submissions,
     retainedOwnItemLimit: Math.max(MAX_RETAINED_OWN_ITEMS, ownItemCount(page.items)),
     retainedItemCap: Math.max(MAX_RETAINED_ITEMS, page.items.length),
-    hasOlder: page.hasOlder,
+    hasOlder: agentSessionHasOlderTranscript(page.items, page.hasOlder),
     status: 'ready',
     subagentRoster: foldStructuredAgentSubagentRosterPage(undefined, page),
     activity: activity ?? null,
@@ -78,15 +79,8 @@ export function mergeItems(
   return [...byId.values()].sort(compareAgentJournalItems)
 }
 
-/**
- * Live rows the loaded window can take. The window is a contiguous suffix of the
- * journal, and its oldest row is the load-older anchor. A revision of a row older
- * than the window keeps that row's original sequence, so admitting it would move
- * the anchor below the window and paging `before` it would skip every row between.
- * The journal keeps the revision; the page reader serves it once the window
- * reaches the row. With nothing older on the host the window is the whole journal
- * and a row below the head (a revived tombstone) leaves no hole, so it is admitted.
- */
+/** Keep the contiguous loaded suffix: an older revision retains its sequence and would move the paging anchor past a hole.
+ * Leave it for paging unless the window already covers the whole journal, where revival below the head cannot skip rows. */
 export function liveItemsWithinWindow(
   state: StructuredAgentSessionState,
   incoming: readonly AgentJournalRenderItem[]

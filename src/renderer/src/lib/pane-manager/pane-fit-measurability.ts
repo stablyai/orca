@@ -37,24 +37,16 @@ export function canMeasurePaneForFit(pane: ManagedPane): boolean {
   if (!dims) {
     return false
   }
-  // Why: worktree switches can briefly measure a near-zero overlay before
-  // fallback positioning lands. Fitting there pins the PTY at ~2 cols.
+  // Worktree switches can briefly expose near-zero overlays; fitting would pin the PTY near two columns.
   return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
 }
 
-/** Why only the pixel box, not the fit floor: a pane held at the 50px divider
- *  clamp proposes ~5 cols, so the fit floor would reject it forever — it never
- *  hides and its box never changes, so nothing would flush and it would render
- *  a stale font until widened. A hidden pane or the transient worktree-switch
- *  overlay is near-zero, so the pixel floor still defers those. The cols/rows
- *  floor stays where it belongs: on the fit. */
+// Gate metrics by pixels only: the 50px divider minimum can stay below the grid-fit floor forever, stranding font updates. Near-zero hidden/transient boxes still defer; the grid floor applies to fitting.
 export function canApplyPaneMetricOptions(pane: ManagedPane): boolean {
   return !isManagedPaneDisplayNone(pane) && hasPaneFitPixelBox(pane)
 }
 
-/** Why the pending check comes first: it is an O(1) WeakMap lookup, while the
- *  measurability probe forces style+layout. This runs per pane on every reveal,
- *  so the common no-deferral case must cost zero DOM reads. */
+// Check pending state before forcing layout; reveals without deferred metrics need no DOM reads.
 export function flushDeferredPaneMetricOptionsIfMeasurable(pane: ManagedPane): boolean {
   if (!hasDeferredPaneMetricOptions(pane) || !canApplyPaneMetricOptions(pane)) {
     return false

@@ -28,7 +28,6 @@ export type ReservedPreparation = {
   canonicalBase: string
 }
 
-/** Selection through take, so the take stays in the same synchronous run as the last selection. */
 export async function reservePreparation(
   request: { repoPath: string; workspaceRoot: string; baseBranch: string },
   options: AddWorktreeOptions
@@ -44,8 +43,7 @@ export async function reservePreparation(
   }
   let selection = selectPreparationForCreate(listPreparations(), { ...key, canonicalBase: null })
   if (selection.kind === 'needs-canonical-base') {
-    // The probe is the only await here, and the pool is re-read after it, so the select-and-take
-    // below stays one synchronous run and no other create can hold the same entry.
+    // Re-read after yielding, then select and take synchronously to avoid duplicate claims.
     const canonicalBase = await canonicalBaseRef(request.repoPath, request.baseBranch, options)
     selection = selectPreparationForCreate(listPreparations(), { ...key, canonicalBase })
   }
@@ -65,7 +63,6 @@ export async function reservePreparation(
       {
         ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
         ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
-        // Why forward it: a cancelled create must stop these probes now, not at the deadline.
         ...(options.signal ? { signal: options.signal } : {})
       }
     )
@@ -75,8 +72,7 @@ export async function reservePreparation(
         reason: divergence === 'exceeded' ? 'retarget_too_divergent' : 'retarget_unverifiable'
       }
     }
-    // Re-select after the walk: the pool may have gained an exact match or lost this entry. A
-    // different retarget candidate is left for the next create rather than claimed unverified.
+    // Recheck after the walk; a different retarget candidate has not passed divergence validation.
     selection = selectPreparationForCreate(listPreparations(), { ...key, canonicalBase })
     if (selection.kind === 'miss' || selection.kind === 'needs-canonical-base') {
       return { status: 'miss', reason: 'base_mismatch' }

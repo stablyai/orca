@@ -8,10 +8,18 @@ import type {
 } from '../../../../orca-runtime'
 import {
   hasRunBindingKey,
+  mailboxAddressOf,
+  runCoordinatorKey,
   type OrchestrationCallerIdentity,
   type OrchestrationSessionCaller
 } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveDeclaredCallerParty } from '../../../../orchestration/orchestration-party'
+import {
+  findCallerWorkerDispatches,
+  unboundWorkerMessage,
+  workerRunBindingRefusal
+} from '../../../../orchestration/db/runs/worker-run-binding'
+import type { OrchestrationDb } from '../../../../orchestration/db'
 
 export type RunScopeParams = {
   runId?: string
@@ -21,11 +29,11 @@ export type RunScopeParams = {
   callerSession: OrchestrationSessionCaller | undefined
   requireCurrentConsumer: boolean
   legacyCoordinatorRunId?: string
-  // Why: the caller's declared handle is a user param; this is the attested one to check it against.
+  // Attest user-supplied handles against this trusted handle.
   callerEvidence?: OrchestrationCompatibilityEvidence
 }
 
-// Why: declared handles select mutable Run bindings, so attested callers may only name themselves.
+// Mutable Run bindings require attested callers to name only themselves.
 export function assertCallerHandleMatchesEvidence(
   runtime: OrcaRuntimeService,
   callerTerminalHandle: string,
@@ -44,10 +52,7 @@ export function assertCallerHandleMatchesEvidence(
   }
 }
 
-/**
- * The caller as Run binding and mail routing see it. A session the dispatch entry resolved is the
- * caller outright; otherwise it is the party the declared handle names, at the pane it resolved to.
- */
+/** Use the dispatch-resolved session outright; otherwise resolve the declared handle's party and pane. */
 export function orchestrationCallerIdentity(
   runtime: OrcaRuntimeService,
   caller: {
@@ -70,11 +75,7 @@ export type OrchestrationCallerParams = {
   callerSession: OrchestrationSessionCaller | undefined
   /** Preserve legacy callers that treated a missing pane as an ordinary fence. */
   requireStablePane?: boolean
-  /**
-   * Skip attestation here because the caller performs it itself — run-use must run
-   * its legacy-takeover check between pane resolution and attestation. Setting this
-   * without asserting elsewhere reopens the hole this helper exists to close.
-   */
+  /** Only skip attestation when the caller does it after the legacy-takeover check (run-use); omitting that reopens impersonation. */
   evidenceAssertedByCaller?: boolean
 }
 
@@ -116,6 +117,33 @@ export function resolveOrchestrationCaller(
   return caller
 }
 
+const COORDINATOR_RUN_REQUIRED =
+  'No Run is bound. A coordinator creates one with `orchestration run-create`, or resumes its own with `orchestration run-use --id <run_id>`.'
+
+// Why: a worker is told where its own mail is, never to bind a Run.
+function unboundCallerError(
+  db: OrchestrationDb,
+  caller: OrchestrationCallerIdentity,
+  explicit: RunRow | undefined
+): OrchestrationError {
+  if (explicit) {
+    // Why: consumer_fenced, since a reader that lost this Run mid-check must stop, worker or not.
+    const holder = mailboxAddressOf(runCoordinatorKey(explicit))
+    return new OrchestrationError(
+      'consumer_fenced',
+      holder
+        ? `This caller is not bound to Run ${explicit.id}, which is bound to ${holder}. Nothing changed.`
+        : `This caller does not coordinate Run ${explicit.id}, which has no coordinator now. Nothing changed.`
+    )
+  }
+  const worked = findCallerWorkerDispatches(db, caller)[0]
+  return new OrchestrationError(
+    'run_required',
+    worked ? unboundWorkerMessage(worked) : `${COORDINATOR_RUN_REQUIRED} No effects were applied.`,
+    orchestrationSkillRecoveryData()
+  )
+}
+
 // Why: task and gate mutations must share one Run-binding rule.
 export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopeParams): RunRow {
   const db = runtime.getOrchestrationDb()
@@ -130,7 +158,7 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
   if (!params.callerTerminalHandle) {
     throw new OrchestrationError(
       'run_required',
-      'No Run is bound. Use orchestration run-create or run-use first. No effects were applied.',
+      `${COORDINATOR_RUN_REQUIRED} A worker never binds a Run: its mail arrives through plain \`orchestration check\`, and it reports with \`orchestration send\`. No effects were applied.`,
       orchestrationSkillRecoveryData()
     )
   }
@@ -152,25 +180,25 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
       'The coordinator terminal has no stable pane identity.'
     )
   }
-  const current = db.getCurrentRunForCoordinator(caller)
-  if (!current) {
-    if (explicit) {
-      throw new OrchestrationError(
-        'consumer_fenced',
-        `This coordinator terminal is no longer bound to Run ${explicit.id}.`
-      )
-    }
-    throw new OrchestrationError(
-      'run_required',
-      'No Run is bound. Use orchestration run-create or run-use first. No effects were applied.',
-      orchestrationSkillRecoveryData()
-    )
+  const run = explicit
+    ? db.getCoordinatedRun(caller, explicit.id)
+    : db.getCurrentRunForCoordinator(caller)
+  if (run) {
+    return run
   }
-  if (explicit && current.id !== explicit.id) {
-    throw new OrchestrationError(
-      'consumer_fenced',
-      `This coordinator terminal is bound to ${current.id}, not ${explicit.id}.`
-    )
+  // A worker naming its own or ancestor Run needs its Dispatch mailbox, not a binding change.
+  const workerRefusal = explicit
+    ? workerRunBindingRefusal(db, caller, explicit.id, { takeover: false, bind: false })
+    : null
+  if (workerRefusal) {
+    throw workerRefusal
   }
-  return current
+  const current = explicit ? db.getCurrentRunForCoordinator(caller) : undefined
+  if (!explicit || !current) {
+    throw unboundCallerError(db, caller, explicit)
+  }
+  throw new OrchestrationError(
+    'consumer_fenced',
+    `This caller is bound to Run ${current.id}, not Run ${explicit.id}. Nothing changed.`
+  )
 }

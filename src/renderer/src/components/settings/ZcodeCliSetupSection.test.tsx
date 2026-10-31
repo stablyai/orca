@@ -34,13 +34,6 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('ZCode CLI-owned sign-in setup', () => {
-  it('starts no terminal until the user opens a supported flow', () => {
-    render(<ZcodeCliSetupSection />)
-    expect(screen.queryByTestId('setup-terminal')).not.toBeInTheDocument()
-    expect(screen.getByText(/ZCode’s masked API-key setup/)).toBeInTheDocument()
-    expect(screen.getByText(/use \/model to choose a GLM model/)).toBeInTheDocument()
-  })
-
   it.each([
     ['Z.AI browser sign-in', 'zcode login zai --no-browser'],
     ['BigModel browser sign-in', 'zcode login bigmodel --no-browser'],

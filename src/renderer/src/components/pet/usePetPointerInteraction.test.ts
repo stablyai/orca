@@ -80,9 +80,7 @@ describe('usePetPointerInteraction', () => {
   })
 
   it('accumulates horizontal travel across a slow diagonal drag', () => {
-    // Regression: the baseline advances only on an accepted direction, so a
-    // sequence of sub-4px diagonal moves still crosses the threshold instead of
-    // resetting each time and never triggering.
+    // Advance baseline only after accepted horizontal travel so repeated small diagonal moves can cross the threshold.
     const { result, fire } = setup()
     fire('onPointerDown', { clientX: 50, clientY: 50 })
     fire('onPointerMove', { clientX: 53, clientY: 55 })
@@ -92,9 +90,7 @@ describe('usePetPointerInteraction', () => {
   })
 
   it('keeps the latest horizontal direction when two moves land in one commit', () => {
-    // Regression: the direction lives in a ref, not the state closure, so a
-    // vertical move batched right after a horizontal one cannot resurrect the
-    // stale prior direction.
+    // Batched vertical motion must read the ref’s latest direction instead of resurrecting stale state.
     const { result } = renderHook(() => usePetPointerInteraction({ x: 0, y: 0 }, vi.fn()))
     const target = fakeTarget()
     const ev = (clientX: number, clientY: number) =>
@@ -109,8 +105,8 @@ describe('usePetPointerInteraction', () => {
 
     act(() => result.current.handlers.onPointerDown(ev(50, 50)))
     act(() => {
-      result.current.handlers.onPointerMove(ev(40, 50)) // left
-      result.current.handlers.onPointerMove(ev(40, 90)) // vertical from the new sample
+      result.current.handlers.onPointerMove(ev(40, 50))
+      result.current.handlers.onPointerMove(ev(40, 90))
     })
     expect(result.current.dragAnimation).toBe('running-left')
   })
@@ -118,15 +114,12 @@ describe('usePetPointerInteraction', () => {
   it('scopes the drag to the owning pointer and ignores a second touch', () => {
     const { result, fire, moveTo } = setup()
     fire('onPointerDown', { clientX: 50, clientY: 50, pointerId: 1 })
-    // A second pointer must not hijack the drag or mint a new restart.
     fire('onPointerDown', { clientX: 50, clientY: 50, pointerId: 2 })
     expect(result.current.dragGeneration).toBe(1)
     fire('onPointerMove', { clientX: 90, clientY: 50, pointerId: 2 })
     expect(moveTo).not.toHaveBeenCalled()
-    // Releasing the non-owning pointer leaves the drag alive.
     fire('onPointerUp', { pointerId: 2 })
     expect(result.current.dragging).toBe(true)
-    // The owning pointer ends it.
     fire('onPointerUp', { pointerId: 1 })
     expect(result.current.dragging).toBe(false)
     expect(result.current.dragAnimation).toBe(null)

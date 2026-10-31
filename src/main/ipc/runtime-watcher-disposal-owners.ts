@@ -4,7 +4,7 @@ type Attempt = { pending: Promise<void> | null; failure?: unknown }
 
 type Completion = { promise: Promise<void>; resolve: () => void; reject: (error: unknown) => void }
 
-// Why not Promise.withResolvers: the relay bundles this pool and still targets Node 18 hosts.
+// Relay bundles still target Node 18, which lacks Promise.withResolvers.
 function createCompletion(): Completion {
   let resolve!: () => void
   let reject!: (error: unknown) => void

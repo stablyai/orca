@@ -1,8 +1,13 @@
 // @vitest-environment happy-dom
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from '@/components/native-chat/native-chat-composer-draft-store'
 
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
-import type * as RecoveryModule from '@/lib/structured-agent-session-launch-recovery'
+import type * as RecoveryModule from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 
 const mocks = vi.hoisted(() => ({
   abandonIntent: vi.fn(),
@@ -18,19 +23,33 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
+const launchErrorMocks = vi.hoisted(() => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+  return { StructuredAgentSessionCreateRefusalError }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+  launchStructuredAgentSession: mocks.launch
+}))
+
+vi.mock('@/lib/launch-structured-agent-session', () => {
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent,
     launchStructuredAgentSession: mocks.launch,
-    StructuredAgentSessionCreateRefusalError
+    StructuredAgentSessionCreateRefusalError:
+      launchErrorMocks.StructuredAgentSessionCreateRefusalError
   }
 })
 
-vi.mock('@/lib/structured-agent-session-launch-recovery', async () => {
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-recovery', async () => {
   const actual = await vi.importActual<typeof RecoveryModule>(
-    '@/lib/structured-agent-session-launch-recovery'
+    '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
   )
   return { ...actual, launchAndReconcile: vi.fn(actual.launchAndReconcile) }
 })
@@ -188,11 +207,8 @@ describe('coalesced launch delivery mode', () => {
     expect(mocks.callRuntimeRpc.mock.calls.some((call) => call[1] === 'agentSession.send')).toBe(
       false
     )
-    expect(mocks.seedDraft).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        tabId: 'structured-agent-session-unset-delivery-session',
-        text: 'PR context'
-      })
-    )
+    expect(
+      readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(intent.sessionId)).text
+    ).toBe('PR context')
   })
 })

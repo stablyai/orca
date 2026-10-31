@@ -1,49 +1,46 @@
-/**
- * One SSH host command's hold on a page. While it runs, every page sink (guest CDP sends, native
- * input, edit commands, the CDP proxy's intake) refuses work attributed to it once the host is
- * revoked. Work is attributed by async context: the command's own through its bridged scope, its
- * out-of-process helper's through the proxy message it arrived on. The hold also owns the
- * command's input cancel list: what it pressed and has not released, let go of on revocation.
- */
+/** Attribute page work to its host command and release host-owned input when access ends. */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import {
   assertRemoteCliBrowserAccess,
   runOutsideRemoteCliBrowserScope
 } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
-/** The CDP input event that lets go of something a command pressed. */
 export type HeldInputRelease = { method: string; params: Record<string, unknown> }
 
 export type PageHoldHooks = {
-  /** Fires when the host is revoked; `retire` then runs at once, while the page is still held. */
+  /** Abort immediately retires the helper while admission is still held. */
   revoked?: AbortSignal
-  /** Stops the command's helper, whose daemon outlives its killed client and keeps retrying. */
+  /** Attachment revocation, independent of individual command cancellation. */
+  hostRevoked?: AbortSignal
+  inPageTurn?: (work: () => Promise<void>) => Promise<unknown>
+  /** Retire the daemon too: killing its helper client does not stop its retries. */
   retire?: () => Promise<void>
   releaseHeld?: (release: HeldInputRelease) => Promise<unknown>
 }
 
 type Admission = {
   admit: () => void
-  /** Keyed by button, key or touch. */
   held: Map<string, HeldInputRelease>
+  hooks: PageHoldHooks
 }
 
-const admissions = new Map<number, Admission>()
-/** The hold a proxy message arrived under; its deferred steps keep it after the hold ends. */
-const messageAdmission = new AsyncLocalStorage<() => void>()
+type HostPress = { hostRevoked: AbortSignal; release: HeldInputRelease; hooks: PageHoldHooks }
 
-/**
- * Runs a host's command holding the page. On revocation every later step is refused, releases
- * included, so once the command ends the desktop lets go of what it left held, from outside the
- * host's scope. A failure after revocation reports the revocation.
- */
+const admissions = new Map<number, Admission>()
+/** Per-page input stays host-owned until released or pressed again by another caller. */
+const hostPresses = new Map<number, Map<string, HostPress>>()
+const watchedHosts = new WeakSet<AbortSignal>()
+/** Deferred proxy steps retain the admission active when their message arrived. */
+const messageAdmission = new AsyncLocalStorage<Admission>()
+
+/** Refuse revoked host work, then retire its helper and release held input outside its scope. */
 export async function runWithRemoteCliPageAdmission<T>(
   webContentsId: number,
   admit: () => void,
   run: () => Promise<T>,
   hooks: PageHoldHooks = {}
 ): Promise<T> {
-  const admission: Admission = { admit, held: new Map() }
+  const admission: Admission = { admit, held: new Map(), hooks }
   let retiring: Promise<void> | undefined
   const retire = (): Promise<void> | undefined =>
     hooks.retire && (retiring ??= runOutsideRemoteCliBrowserScope(hooks.retire))
@@ -72,40 +69,112 @@ export async function runWithRemoteCliPageAdmission<T>(
   }
 }
 
-/** Runs a proxy message's handling, deferred steps included, under the page's current hold. */
+/** Attribute deferred proxy work to the page's current admission. */
 export function runUnderRemoteCliPageAdmission<T>(webContentsId: number, handle: () => T): T {
   const admission = admissions.get(webContentsId)
-  return admission ? messageAdmission.run(admission.admit, handle) : handle()
+  return admission ? messageAdmission.run(admission, handle) : handle()
 }
 
-/** The page sinks' gate: throws for work of a revoked host's command; a no-op for the desktop's. */
+/** Reject revoked host work; desktop-owned work remains admitted. */
 export function assertRemoteCliPageAccess(webContentsId?: number): void {
   assertRemoteCliBrowserAccess(webContentsId)
-  messageAdmission.getStore()?.()
+  messageAdmission.getStore()?.admit()
 }
 
-/**
- * Delivers one input event, recording it on the page's hold: a press counts as held once it may
- * have landed, a release only once it surely did.
- */
+/** Recheck after reads: the page may navigate to a desktop-local document while awaiting results. */
+export async function readRemoteCliAdmittedPage<T>(
+  webContentsId: number | undefined,
+  read: () => Promise<T>
+): Promise<T> {
+  assertRemoteCliPageAccess(webContentsId)
+  const result = await read()
+  assertRemoteCliPageAccess(webContentsId)
+  return result
+}
+
+/** Record presses before delivery and releases only after confirmed delivery. */
 export function trackRemoteCliInput<T>(
   webContentsId: number | undefined,
   method: string,
   params: Record<string, unknown> | undefined,
   deliver: () => Promise<T>
 ): Promise<T> {
-  const admission = webContentsId === undefined ? undefined : admissions.get(webContentsId)
-  if (!admission || !params) {
+  const input = params ? heldInput(method, params) : undefined
+  if (webContentsId === undefined || !input) {
     return deliver()
   }
-  if (!['mouseReleased', 'keyUp', 'touchEnd', 'touchCancel'].includes(String(params.type))) {
-    trackInput(admission, method, params)
-    return deliver()
+  // Deferred helper work must retain its original admission after the command ends.
+  const admission = messageAdmission.getStore() ?? admissions.get(webContentsId)
+  if (input.release) {
+    if (admission) {
+      admission.held.set(input.id, input.release)
+    }
+    if (notePress(webContentsId, input.id, input.release, admission)) {
+      return deliver()
+    }
+    // A failed desktop press must not transfer ownership of the host's held input.
+    return deliver().then((result) => {
+      forgetHostPress(webContentsId, input.id)
+      return result
+    })
   }
   return deliver().then((result) => {
-    trackInput(admission, method, params)
+    admission?.held.delete(input.id)
+    forgetHostPress(webContentsId, input.id)
     return result
   })
+}
+
+function notePress(
+  webContentsId: number,
+  id: string,
+  release: HeldInputRelease,
+  admission: Admission | undefined
+): boolean {
+  const { hostRevoked } = admission?.hooks ?? {}
+  if (!admission || !hostRevoked || hostRevoked.aborted) {
+    // A successful desktop press transfers ownership, so host cleanup must not release it.
+    return false
+  }
+  const presses = hostPresses.get(webContentsId) ?? new Map<string, HostPress>()
+  presses.set(id, { hostRevoked, release, hooks: admission.hooks })
+  hostPresses.set(webContentsId, presses)
+  if (!watchedHosts.has(hostRevoked)) {
+    watchedHosts.add(hostRevoked)
+    hostRevoked.addEventListener('abort', () => letGoOfHostPresses(hostRevoked), { once: true })
+  }
+  return true
+}
+
+function forgetHostPress(webContentsId: number, id: string): void {
+  const presses = hostPresses.get(webContentsId)
+  presses?.delete(id)
+  if (presses?.size === 0) {
+    hostPresses.delete(webContentsId)
+  }
+}
+
+function letGoOfHostPresses(hostRevoked: AbortSignal): void {
+  for (const [webContentsId, presses] of hostPresses) {
+    for (const [id, press] of presses) {
+      const { inPageTurn, releaseHeld } = press.hooks
+      if (press.hostRevoked !== hostRevoked || !releaseHeld) {
+        continue
+      }
+      const letGo = async (): Promise<void> => {
+        // A queued command may have transferred ownership before this cleanup runs.
+        if (hostPresses.get(webContentsId)?.get(id) !== press) {
+          return
+        }
+        forgetHostPress(webContentsId, id)
+        await releaseAll(new Map([[id, press.release]]), releaseHeld)
+      }
+      // Teardown can reject queued cleanup; fall back to direct release.
+      void runOutsideRemoteCliBrowserScope(() =>
+        (inPageTurn ? inPageTurn(letGo) : letGo()).catch(() => letGo())
+      ).catch(() => {})
+    }
+  }
 }
 
 function isRevoked(admit: () => void): boolean {
@@ -125,50 +194,64 @@ async function releaseAll(
     try {
       await releaseHeld(release)
     } catch {
-      // Best effort: the page may be gone, and nothing else is waiting on this release.
+      // The page may already be gone; continue releasing other held input.
     }
   }
 }
 
-function trackInput(admission: Admission, method: string, params: Record<string, unknown>): void {
+/** A press carries its release event; a release carries only the input ID. */
+function heldInput(
+  method: string,
+  params: Record<string, unknown>
+): { id: string; release?: HeldInputRelease } | undefined {
   const type = params.type
   if (typeof type !== 'string') {
-    return
+    return undefined
   }
   if (
     method === 'Input.dispatchMouseEvent' &&
     (type === 'mousePressed' || type === 'mouseReleased')
   ) {
     const id = `mouse:${String(params.button ?? 'left')}`
-    if (type === 'mouseReleased') {
-      admission.held.delete(id)
-      return
-    }
-    // Why off the page: letting go there completes no click or drop the host had started.
-    admission.held.set(id, {
-      method,
-      params: { type: 'mouseReleased', x: -1, y: -1, button: params.button ?? 'left', buttons: 0 }
-    })
-  } else if (
-    method === 'Input.dispatchKeyEvent' &&
-    ['keyDown', 'rawKeyDown', 'keyUp'].includes(type)
-  ) {
+    // Release off-page to avoid completing the revoked click or drop.
+    return type === 'mouseReleased'
+      ? { id }
+      : {
+          id,
+          release: {
+            method,
+            params: {
+              type: 'mouseReleased',
+              x: -1,
+              y: -1,
+              button: params.button ?? 'left',
+              buttons: 0
+            }
+          }
+        }
+  }
+  if (method === 'Input.dispatchKeyEvent' && ['keyDown', 'rawKeyDown', 'keyUp'].includes(type)) {
     const id = `key:${String(params.code ?? params.key ?? '')}`
     if (type === 'keyUp') {
-      admission.held.delete(id)
-      return
+      return { id }
     }
     const { key, code, windowsVirtualKeyCode, nativeVirtualKeyCode } = params
-    admission.held.set(id, {
-      method,
-      params: { type: 'keyUp', key, code, windowsVirtualKeyCode, nativeVirtualKeyCode }
-    })
-  } else if (method === 'Input.dispatchTouchEvent' && type.startsWith('touch')) {
-    if (type === 'touchStart') {
-      // Why cancel: a cancelled touch completes no tap the host had started.
-      admission.held.set('touch', { method, params: { type: 'touchCancel', touchPoints: [] } })
-    } else if (type === 'touchEnd' || type === 'touchCancel') {
-      admission.held.delete('touch')
+    return {
+      id,
+      release: {
+        method,
+        params: { type: 'keyUp', key, code, windowsVirtualKeyCode, nativeVirtualKeyCode }
+      }
     }
   }
+  if (method === 'Input.dispatchTouchEvent') {
+    if (type === 'touchStart') {
+      // Cancel avoids completing a tap from the revoked host.
+      return { id: 'touch', release: { method, params: { type: 'touchCancel', touchPoints: [] } } }
+    }
+    if (type === 'touchEnd' || type === 'touchCancel') {
+      return { id: 'touch' }
+    }
+  }
+  return undefined
 }

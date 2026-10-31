@@ -532,6 +532,32 @@ describe('resolvePrimaryAction Create PR intent', () => {
     })
   })
 
+  it('names a failed review lookup instead of calling a ready branch not ready', () => {
+    expect(
+      resolveCreatePrHeaderAction(
+        inputs({
+          upstreamStatus: upstreamInSync,
+          hostedReviewCreation: {
+            provider: 'gitlab',
+            review: null,
+            reviewLookupOutcome: 'unavailable',
+            defaultBaseRef: 'origin/main',
+            head: 'feature',
+            canCreate: false,
+            blockedReason: null,
+            nextAction: null
+          }
+        })
+      )
+    ).toEqual({
+      kind: 'create_pr',
+      label: 'Create MR',
+      title:
+        'Create MR failed: Orca could not confirm whether this branch already has a merge request. Retry once the GitLab lookup succeeds.',
+      disabled: true
+    })
+  })
+
   it('returns a clickable Create PR header notice path when the branch has nothing to publish yet', () => {
     expect(
       resolveCreatePrHeaderAction(

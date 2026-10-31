@@ -11,8 +11,15 @@ export class OpenCodeCopyServerRouteError extends Error {
 }
 
 /** A configured server may not hold the copy saved by this execution host. */
-export function assertOpenCodeCopyUsesLocalStore(args: readonly string[]): void {
-  if (findOptionOccurrence(args, ['--server'], true)) {
+export function assertOpenCodeCopyUsesLocalStore(
+  args: readonly string[],
+  prefixArgs: readonly string[] = []
+): void {
+  // An opaque launcher prefix can contain its own terminators before the provider's flags.
+  if (
+    findOptionOccurrence(prefixArgs, ['--server'], false) ||
+    findOptionOccurrence(args, ['--server'], true)
+  ) {
     throw new OpenCodeCopyServerRouteError()
   }
 }

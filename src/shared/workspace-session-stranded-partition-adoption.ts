@@ -12,50 +12,9 @@ import {
 } from './workspace-session-host-records'
 import { keepUnsavedDrafts } from './workspace-session-draft-retention'
 
-/**
- * Fold rows a host partition holds alone back into the session the readers assemble.
- *
- * Shipping builds split one SSH workspace's session across two partitions: the renderer wrote
- * `local`, the main-process runtime wrote `ssh:<targetId>` (#12723). `workspaceSessionPartitionHostId`
- * now names a single owner, but both stores still hold real data, so every reader has to reunite
- * them once before the write path returns the result to that owner.
- *
- * **A workspace is adopted whenever the host partition names it at all — not only when it has
- * terminal tabs.** The write path routes EVERY worktree-scoped field to the owning partition, so a
- * workspace with open editor files, browser tabs or tab groups and no terminals lives there just as
- * completely as one with terminals. Gating on tabs would strand exactly those, and unlike terminal
- * state they cannot be recovered from the SSH host snapshot, which carries terminal fields only —
- * an unsaved `dirtyDraftContent` would be destroyed outright.
- *
- * That is why the walk below switches exhaustively over `WORKSPACE_SESSION_FIELD_OWNERSHIP` instead
- * of listing the fields it knows about: a hand-maintained list is what let editor and browser state
- * fall out, and a new ownership kind must not be able to fall out the same way.
- *
- * Adoption is told which session keys the read found **contested**. Every rule below rests on the
- * premise that `local` and `ssh:<targetId>` are one workspace written twice — and a bare
- * `repoId::path` id claimed by more than one host is exactly where that premise is false. The
- * contention split cannot answer it, because ssh slices are deliberately kept out of its claimant
- * set, so the caller reaches the verdict itself — from the repo catalog and from the other
- * partitions it read — and passes it in: a contested key may still be gap-filled, never replaced.
- * Without that, an SSH workspace's rows overwrote a different workspace's rows under the same id,
- * and routing then wrote them into that workspace's own partition.
- *
- * `adoptedWorkspaceIds` reports which workspaces came out of `host` uncontested. The write path
- * routes those back to that partition directly, so a row does not depend on a repo catalog naming
- * the host before it can be returned to where it was read from.
- *
- * The one thing the base keeps unconditionally is a workspace it holds **terminal tabs** for. That
- * is the live copy the user is looking at, and merging a stale partition into it would re-add tabs
- * they had closed on every launch. Leaving it alone keeps this a one-shot repair, at the cost of
- * not recovering rows stranded beside a populated workspace — which are stranded on main today too,
- * so it is never a new loss. An EMPTY tab row is not such a copy: an empty list is not evidence
- * that anything was closed (docs/reference/ssh-execution-boundary.md: "we could not see it" is
- * `unverifiable`, never proof of absence). Treating it as the truth is what published an empty tab
- * list and let `replace-session` delete the host's copy (#12721). Nor is a copy of a workspace the
- * repo catalog places on this host while the host holds its tabs: the base's rows there are residue
- * that dropped the host's agent-resume records on the first save (#23390, #25616), so they are
- * dropped before adoption — except unsaved drafts, which nothing else holds.
- */
+/** Repair sessions split between local and SSH partitions by older writers (#12723). Walk the ownership table exhaustively so terminal-less editor/browser state and future field kinds cannot be stranded; host terminal snapshots cannot recover them.
+ * Caller-supplied contested keys permit gap-filling only; foreign keys are never adopted. Report uncontested adopted IDs so writes return rows to their source even before catalog hydration.
+ * Keep populated base terminal workspaces to avoid resurrecting closed tabs, except catalog-proven host ownership with populated host tabs supersedes base residue. Empty rows never prove closure (docs/reference/ssh-execution-boundary.md); preserve unsaved drafts across replacement (#12721, #23390, #25616). */
 
 type KeyedRecord = Record<string, unknown>
 
@@ -77,7 +36,6 @@ function recordWorkspaceId(entry: unknown): string | null {
   return typeof worktreeId === 'string' ? worktreeId : null
 }
 
-/** A browser-workspace row is keyed by browser workspace id; its pages name the workspace. */
 function browserPagesWorkspaceId(entry: unknown): string | null {
   const first: unknown = Array.isArray(entry) ? entry[0] : null
   return recordWorkspaceId(first)
@@ -94,14 +52,7 @@ function workspacesTheBaseOwns(base: WorkspaceSessionState): Set<string> {
   return owned
 }
 
-/**
- * Every workspace a partition names in any scoped field.
- *
- * Exported because the caller has to ask the repo catalog about the same set before adoption runs:
- * a `worktreeKeyed` sweep alone misses an id a partition names only through
- * `browserPagesByWorkspace`, a sleeping-agent record or `activeWorktreeIdsOnShutdown`, and those
- * are adopted just like the rest.
- */
+/** Collect all scoped workspace references for caller catalog checks, including browser pages, sleeping records and shutdown IDs; worktree-keyed maps alone miss these. */
 export function workspaceIdsNamedByPartition(host: WorkspaceSessionState): Set<string> {
   return collectWorkspaceIds(host, () => false)
 }
@@ -129,8 +80,7 @@ function collectWorkspaceIds(
       collected.add(workspaceId)
     }
   }
-  // Tab-, pane- and file-keyed rows resolve to nothing here: the worktree-keyed rows they hang
-  // off already name their workspaces.
+  // Tab/pane/file rows route through worktree-keyed owners already counted here.
   const none = new Map<string, string>()
   for (const field of SESSION_FIELDS) {
     const workspaceOf = entryWorkspaceResolver(field, none, none)
@@ -145,15 +95,7 @@ function collectWorkspaceIds(
   return collected
 }
 
-/**
- * Whether the host has nothing to say about a key. `[]`, `{}` and null/undefined all mean the host
- * holds no rows, which is never evidence that the base's rows are wrong — the same reading the base
- * side already gives an empty tab row, and `docs/reference/ssh-execution-boundary.md` generalises.
- * Without this an empty host `openFilesByWorktree` row replaced a populated base one and destroyed
- * an unsaved `dirtyDraftContent`, which no other channel can recover. The symmetric cost is that a
- * row the host really did empty stays visible for one more launch, and a resurrected editor tab is
- * non-destructive where a destroyed draft is not.
- */
+/** Empty host rows do not prove base rows wrong. Prefer one-launch stale tabs over destroying base-only drafts; the SSH boundary treats unseen state as unverifiable. */
 function hostHasNothingFor(entry: unknown): boolean {
   if (entry === null || entry === undefined) {
     return true
@@ -169,9 +111,7 @@ function adoptRecord(
   host: WorkspaceSessionState,
   field: keyof WorkspaceSessionState,
   shouldAdopt: (key: string, entry: unknown) => boolean,
-  /** Whether this key's host row may replace the base's, rather than only fill a gap. An adoptable
-   *  workspace is host-owned, so its populated rows supersede the base's leftovers — but only where
-   *  the id names one workspace and the host actually holds something. */
+  /** Permit replacement only for owned, uncontested workspaces with populated host rows; otherwise fill gaps. */
   mayReplace: boolean | ((key: string) => boolean) = false
 ): void {
   const hostRecord = asRecord(host[field])
@@ -190,17 +130,7 @@ function adoptRecord(
   ;(next as KeyedRecord)[field] = merged
 }
 
-/**
- * The worktree-keyed rows a partition holds for workspaces the write will not route back to it.
- *
- * Parked rather than dropped. A partition write replaces each field with exactly what the unified
- * session routed there, so a row this read left out — declined as residue, withheld as contested,
- * or skipped because the base already holds the live copy — is erased the moment any sibling
- * workspace writes the same partition. `attachHostSessionShadow` puts these back into the slice
- * first, which is the protection a contested runtime co-claimant already gets. Declining to show a
- * row must never mean deleting it: docs/reference/ssh-execution-boundary.md makes leak, never kill,
- * the safe direction, and a row no partition holds at all is unrecoverable.
- */
+/** Park rows this read will not route back (residue, contested or base-live copies). Replacement partition writes would erase them unless attachHostSessionShadow restores them first. Declining to display a row must never delete its only persisted copy. */
 export function partitionRowsTheWriteWontReturn(
   host: WorkspaceSessionState,
   adoptedWorkspaceIds: ReadonlySet<string>
@@ -251,18 +181,15 @@ function entryWorkspaceResolver(
       return (key) => worktreeIdForPaneKey(worktreeIdByTabId, key)
     case 'sleepingAgentKeyed':
     case 'surfaceTombstoneKeyed':
-      // Keyed opaquely, but each record names its own workspace — the only routing left once the
-      // tab or pane it describes is gone, and the same one `splitWorkspaceSessionByHost` uses.
+      // After tab/pane removal, route records by their own workspace field, matching the split.
       return (_key, entry) => recordWorkspaceId(entry)
     case 'browserWorkspaceKeyed':
       return (_key, entry) => browserPagesWorkspaceId(entry)
     case 'fileKeyed':
-      // Routed by the open file's workspace, through the same index the split routed it by.
       return (key) => worktreeIdByFileId.get(key)
   }
 }
 
-/** The base without any rows for these workspaces, routed by the same indexes the split uses. */
 export function withoutWorkspaces(
   base: WorkspaceSessionState,
   workspaceIds: ReadonlySet<string>
@@ -270,7 +197,6 @@ export function withoutWorkspaces(
   return filterWorkspaceRows(base, (workspaceId) => !workspaceIds.has(workspaceId))
 }
 
-/** The scoped rows of the workspaces kept, by the same routing; global fields stay as they are. */
 export function filterWorkspaceRows(
   base: WorkspaceSessionState,
   keepsWorkspace: (workspaceId: string) => boolean
@@ -313,12 +239,7 @@ export function workspacesTheHostSupersedes(
 export type StrandedPartitionAdoptionOptions = {
   /** Session keys the read found claimed by more than one partition. */
   contestedSessionKeys?: ReadonlySet<string>
-  /**
-   * Keys the repo catalog positively attributes to a DIFFERENT host: residue this partition holds
-   * but does not own. Not adopted at all — gap-filling a stale row would put it in front of the
-   * live one and then route it into the live partition on the next write. Nothing is deleted; the
-   * rows stay where they are, which is the leak direction the boundary doc asks for.
-   */
+  /** Catalog-proven foreign rows cannot even gap-fill: that would route stale rows into the real owner’s partition on save. Leave their source rows intact. */
   foreignSessionKeys?: ReadonlySet<string>
   /** Keys the repo catalog attributes to this host. */
   ownedSessionKeys?: ReadonlySet<string>
@@ -363,19 +284,12 @@ export function adoptStrandedHostPartitionSession(
     if (!adopts(key) || !Array.isArray(tabs)) {
       continue
     }
-    // A contested id is not this workspace written twice, so the base's own row stays — but an
-    // EMPTY base row is not a row, it is the gap this repair exists to fill. Reading `hasOwn` as
-    // "the base has tabs here" is what let #12721's empty local list win over the host's real one
-    // whenever the id happened to be contested.
+    // Contested populated base rows stay; an empty base row is still a gap, not evidence of closure (#12721).
     if (!isContested(key) || hostHasNothingFor(next.tabsByWorktree[key])) {
       next.tabsByWorktree[key] = tabs
     }
   }
-  // Why the split's own indexes: they are what decided which partition each tab-, pane- and
-  // file-keyed row was written to, so reading them back through anything else lets the two walks
-  // disagree. `buildWorktreeIdByTabId` also covers unified-only tabs, whose layout and PTY records
-  // the split routes here and a `tabsByWorktree`-only walk never adopted back. Computed up front so
-  // the keyed fields do not depend on the ownership table's declaration order.
+  // Reuse the split’s tab/pane/file indexes, including unified-only tabs, so reads agree with writes. Build first to avoid ownership-table declaration-order dependencies.
   const worktreeIdByTabId = buildWorktreeIdByTabId(host)
   const worktreeIdByFileId = buildWorktreeIdByFileId(host)
   for (const field of SESSION_FIELDS) {
@@ -387,11 +301,7 @@ export function adoptStrandedHostPartitionSession(
         break
       case 'worktreeKeyed':
         if (field !== 'tabsByWorktree') {
-          // Why a bare recency key only fills a gap: `lastVisitedAtByWorktreeId` is the one field in
-          // this kind whose key may carry a host (`<hostId>|<worktreeId>`), and the split has its
-          // own branch for that. A qualified key names its owner and cannot collide; a bare one is
-          // indistinguishable from another host's entry for the same id, and replacing moved a
-          // local workspace's Cmd+J position permanently.
+          // Qualified recency keys name their owner; bare keys may collide across hosts and must only gap-fill to preserve local Cmd+J ordering.
           adoptRecord(
             next,
             host,
@@ -430,8 +340,7 @@ export function adoptStrandedHostPartitionSession(
     }
   }
   keepUnsavedDrafts(next, originalBase)
-  // Why contested ids are withheld: the write path would route the whole bare id here, carrying the
-  // co-claimant's rows into this host's partition — the loss the gap-fill above exists to prevent.
+  // Withhold contested adopted IDs or the write would move a co-claimant’s whole bare workspace here.
   const adoptedWorkspaceIds = new Set(
     [...adoptable].filter((workspaceId) => !contested.has(workspaceId))
   )

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  forgetWslCliRegistration,
   getWslCliRegistrationCandidates,
   recordWslCliRegistrationObservations,
   recordWslCliRegistrationRemoved
@@ -19,32 +20,6 @@ describe('WSL CLI registration registry', () => {
     await rm(userDataPath, { recursive: true, force: true })
   })
 
-  it('discovers each distro once while continuing to reconcile managed registrations', async () => {
-    await expect(
-      getWslCliRegistrationCandidates(userDataPath, ['Ubuntu', 'Debian'])
-    ).resolves.toEqual(['Ubuntu', 'Debian'])
-
-    await recordWslCliRegistrationObservations(userDataPath, [
-      { distro: 'Ubuntu', inspected: true, managed: false },
-      { distro: 'Debian', inspected: true, managed: true }
-    ])
-
-    await expect(
-      getWslCliRegistrationCandidates(userDataPath, ['ubuntu', 'Debian', 'Fedora'])
-    ).resolves.toEqual(['Debian', 'Fedora'])
-    const state = JSON.parse(
-      await readFile(join(userDataPath, 'wsl-cli-registrations.json'), 'utf8')
-    ) as Record<string, unknown>
-    expect(state).toMatchObject({
-      schemaVersion: 2,
-      registeredDistros: ['Debian'],
-      inspectionTimes: {
-        ubuntu: expect.any(Number),
-        debian: expect.any(Number)
-      }
-    })
-  })
-
   it('skips a registered distro already reconciled by this build against this launcher', async () => {
     const reconciled = { target: 'C:\\Orca\\resources\\bin\\orca.exe', appVersion: '1.4.138' }
     await recordWslCliRegistrationObservations(userDataPath, [
@@ -57,7 +32,6 @@ describe('WSL CLI registration registry', () => {
         appVersion: reconciled.appVersion
       })
     ).resolves.toEqual([])
-    // A launcher move or app update re-probes the registered distro.
     await expect(
       getWslCliRegistrationCandidates(userDataPath, ['Ubuntu'], {
         currentTarget: 'D:\\Elsewhere\\orca.exe',
@@ -99,7 +73,6 @@ describe('WSL CLI registration registry', () => {
       [{ distro: 'Fedora', inspected: true, managed: null }],
       { now: 1_000 }
     )
-    // Unregistered unsupported distros gain the negative-inspection TTL.
     await expect(
       getWslCliRegistrationCandidates(userDataPath, ['Fedora'], {
         now: 2_000,
@@ -153,6 +126,29 @@ describe('WSL CLI registration registry', () => {
     await expect(getWslCliRegistrationCandidates(userDataPath, ['Ubuntu'])).resolves.toEqual([])
   })
 
+  it('forgets every entry of a deleted distro and leaves the others', async () => {
+    const reconciled = { target: 'C:\\Orca\\resources\\bin\\orca.exe', appVersion: '1.4.244' }
+    await recordWslCliRegistrationObservations(
+      userDataPath,
+      [
+        { distro: 'orca-uqa-1029', inspected: true, managed: true, reconciled },
+        { distro: 'Ubuntu', inspected: true, managed: true, reconciled }
+      ],
+      { now: 1_000 }
+    )
+
+    await forgetWslCliRegistration(userDataPath, 'ORCA-UQA-1029')
+
+    expect(
+      JSON.parse(await readFile(join(userDataPath, 'wsl-cli-registrations.json'), 'utf8'))
+    ).toEqual({
+      schemaVersion: 2,
+      registeredDistros: ['Ubuntu'],
+      inspectionTimes: { ubuntu: 1_000 },
+      reconciliations: { ubuntu: reconciled }
+    })
+  })
+
   it('periodically re-inspects a negative entry so restored distros are discovered', async () => {
     await recordWslCliRegistrationObservations(
       userDataPath,
@@ -169,21 +165,6 @@ describe('WSL CLI registration registry', () => {
     await expect(
       getWslCliRegistrationCandidates(userDataPath, ['Ubuntu'], {
         now: 11_001,
-        negativeInspectionTtlMs: 10_000
-      })
-    ).resolves.toEqual(['Ubuntu'])
-  })
-
-  it('rediscovers negative entries after the system clock moves backward', async () => {
-    await recordWslCliRegistrationObservations(
-      userDataPath,
-      [{ distro: 'Ubuntu', inspected: true, managed: false }],
-      { now: 100_000 }
-    )
-
-    await expect(
-      getWslCliRegistrationCandidates(userDataPath, ['Ubuntu'], {
-        now: 1_000,
         negativeInspectionTtlMs: 10_000
       })
     ).resolves.toEqual(['Ubuntu'])

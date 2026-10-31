@@ -14,12 +14,6 @@
       "ordinal": 12,
       "value": []
     },
-    "1e54d4dce85b": {
-      "error": "",
-      "items": [],
-      "loading": false,
-      "refreshing": false
-    },
     "34d17f188229": {
       "name": "refreshing",
       "ordinal": 14,
@@ -66,11 +60,10 @@
       "loading": false,
       "refreshing": false
     },
-    "40cf838c0930": {
-      "error": "transport failure",
-      "items": [],
-      "loading": false,
-      "refreshing": false
+    "44679ef67a40": {
+      "name": "loading",
+      "ordinal": 12,
+      "value": false
     },
     "5b1f238d80cf": {
       "name": "loading",
@@ -118,37 +111,20 @@
       "ordinal": 2,
       "value": true
     },
-    "6471b12e6bc2": {
-      "error": "The host sent a reply this app could not read (linear.searchIssues)",
-      "items": [],
-      "loading": false,
-      "refreshing": false
-    },
-    "68051d50754d": {
-      "name": "error",
-      "ordinal": 13,
-      "value": "The host sent a reply this app could not read (linear.searchIssues)"
-    },
     "6d7869e6f6ea": {
       "name": "loading",
       "ordinal": 6,
       "value": false
     },
-    "7560584e376a": {
+    "7b4c61c0d46c": {
       "name": "error",
       "ordinal": 13,
-      "value": "Connection closed"
+      "value": "Unable to load Linear issues. Try again."
     },
     "7b6df16c2cf0": {
       "name": "linear.listIssues#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"all\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
-    },
-    "820944a2683d": {
-      "error": "outer refused",
-      "items": [],
-      "loading": false,
-      "refreshing": false
     },
     "83e72fb8e8cd": {
       "name": "loading",
@@ -270,11 +246,6 @@
       "loading": false,
       "refreshing": false
     },
-    "9801ed51fc62": {
-      "name": "error",
-      "ordinal": 13,
-      "value": ""
-    },
     "99f1aeb70deb": {
       "error": "",
       "items": [
@@ -311,10 +282,11 @@
       "loading": true,
       "refreshing": false
     },
-    "9bbd0ce5ed3e": {
-      "name": "error",
-      "ordinal": 13,
-      "value": "outer refused"
+    "9d1b472cf8a3": {
+      "error": "Unable to load Linear issues. Try again.",
+      "items": [],
+      "loading": false,
+      "refreshing": false
     },
     "a040da640d3d": {
       "name": "linear.searchIssues#1",
@@ -631,6 +603,11 @@
         }
       }
     },
+    "cf9696e63483": {
+      "name": "refreshing",
+      "ordinal": 13,
+      "value": false
+    },
     "d0a895d46972": {
       "name": "refreshing",
       "ordinal": 15,
@@ -709,11 +686,6 @@
           "ok": false
         }
       }
-    },
-    "de4b750ac01e": {
-      "name": "error",
-      "ordinal": 13,
-      "value": "transport failure"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -811,17 +783,6 @@
           "ok": true
         }
       }
-    },
-    "f11183466799": {
-      "error": "Unknown method",
-      "items": [],
-      "loading": false,
-      "refreshing": false
-    },
-    "feccf8d2ccba": {
-      "name": "error",
-      "ordinal": 13,
-      "value": "Unknown method"
     }
   },
   "recording": {
@@ -886,10 +847,8 @@
             "88d78bf42794",
             "104bf14d3af8",
             "5b1f238d80cf",
-            "126a1c470845",
-            "7560584e376a",
-            "83e72fb8e8cd",
-            "d0a895d46972"
+            "44679ef67a40",
+            "cf9696e63483"
           ]
         }
       },
@@ -930,7 +889,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "6471b12e6bc2",
+          "state": "9d1b472cf8a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -940,7 +899,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "68051d50754d",
+            "7b4c61c0d46c",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -957,7 +916,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "6471b12e6bc2",
+          "state": "9d1b472cf8a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -967,7 +926,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "68051d50754d",
+            "7b4c61c0d46c",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -984,7 +943,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "6471b12e6bc2",
+          "state": "9d1b472cf8a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -994,7 +953,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "68051d50754d",
+            "7b4c61c0d46c",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -1011,7 +970,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "6471b12e6bc2",
+          "state": "9d1b472cf8a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -1021,7 +980,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "68051d50754d",
+            "7b4c61c0d46c",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -1038,7 +997,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "6471b12e6bc2",
+          "state": "9d1b472cf8a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -1048,7 +1007,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "68051d50754d",
+            "7b4c61c0d46c",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -1065,7 +1024,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "820944a2683d",
+          "state": "9d1b472cf8a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -1075,7 +1034,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "9bbd0ce5ed3e",
+            "7b4c61c0d46c",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -1092,7 +1051,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "1e54d4dce85b",
+          "state": "9d1b472cf8a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -1102,7 +1061,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "9801ed51fc62",
+            "7b4c61c0d46c",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -1119,7 +1078,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "f11183466799",
+          "state": "9d1b472cf8a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -1129,7 +1088,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "feccf8d2ccba",
+            "7b4c61c0d46c",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -1146,7 +1105,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "40cf838c0930",
+          "state": "9d1b472cf8a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -1156,7 +1115,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "de4b750ac01e",
+            "7b4c61c0d46c",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -1173,7 +1132,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "1e54d4dce85b",
+          "state": "9d1b472cf8a3",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -1183,7 +1142,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "9801ed51fc62",
+            "7b4c61c0d46c",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]

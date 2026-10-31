@@ -2,6 +2,7 @@ import {
   parseAgentChildWorkAliasInput,
   parseAgentChildWorkAliasRecord
 } from './agent-status-child-work-alias'
+import { isBoundedString } from './agent-status-child-work-value-guards'
 import {
   parseAgentChildWorkInput,
   parseAgentChildWorkRecord
@@ -49,26 +50,8 @@ function isRevision(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
-function isBoundedKey(value: unknown, maxLength: number): value is string {
-  if (
-    typeof value !== 'string' ||
-    value.length === 0 ||
-    value.length > maxLength ||
-    value !== value.trim()
-  ) {
-    return false
-  }
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (code <= 0x1f || code === 0x7f) {
-      return false
-    }
-  }
-  return true
-}
-
 export function isAgentStatusStoreEpoch(value: unknown): value is string {
-  return isBoundedKey(value, MAX_EPOCH_LENGTH)
+  return isBoundedString(value, MAX_EPOCH_LENGTH)
 }
 
 function isTombstoneEntity(value: unknown): value is AgentStatusTombstoneEntity {
@@ -80,7 +63,7 @@ export function parseAgentStatusTombstoneInput(value: unknown): AgentStatusTombs
     !isRecord(value) ||
     !hasOnlyKeys(value, ['entity', 'key']) ||
     !isTombstoneEntity(value.entity) ||
-    !isBoundedKey(value.key, MAX_TOMBSTONE_KEY_LENGTH)
+    !isBoundedString(value.key, MAX_TOMBSTONE_KEY_LENGTH)
   ) {
     return null
   }
@@ -118,7 +101,7 @@ function parseArray<T>(
 
 function parseStringArray(value: unknown): string[] | null {
   return parseArray(value, (candidate) =>
-    isBoundedKey(candidate, MAX_TOMBSTONE_KEY_LENGTH) ? candidate : null
+    isBoundedString(candidate, MAX_TOMBSTONE_KEY_LENGTH) ? candidate : null
   )
 }
 

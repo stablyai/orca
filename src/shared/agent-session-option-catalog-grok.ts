@@ -3,12 +3,10 @@ import type {
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { removeAgentArgOption } from './agent-session-option-agent-args'
+import { agentChoiceCliApply } from './agent-choice-cli-apply'
 import { parseGrokModelList } from './grok-model-list-probe'
 
-// The offered slice of grok's canonical ladder, low to high. Its `none` tier is
-// omitted because `native-chat-session-option-labels.ts` leaves it untranslated;
-// `minimal` and `max` because no grok model's menu has ever advertised them.
+// Omit none (untranslated), minimal and max (never advertised by a grok menu) from the canonical effort ladder.
 const GROK_EFFORT_CHOICES = [
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
@@ -16,42 +14,45 @@ const GROK_EFFORT_CHOICES = [
   { value: 'xhigh', label: 'Extra high' }
 ]
 
-// Why: grok accepts only the tiers the model's own menu advertises and merely warns
-// on the rest, so expose each model's ceiling rather than one shared menu.
+// Expose each model's advertised ceiling; grok merely warns on unsupported tiers.
 function grokEffort(ceiling: 'high' | 'xhigh'): CatalogOption {
   const ceilingIndex = GROK_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
   return {
-    // Why: `LaunchPreferences` is a strict zod object over model/effort/mode, so a
-    // novel id is dropped client-side and rejected on the wire.
+    // Keep effort: strict LaunchPreferences drops/rejects novel IDs at client/wire boundaries.
     id: 'effort',
     label: 'Reasoning effort',
     category: 'thought_level',
     kind: {
       type: 'select',
       choices: GROK_EFFORT_CHOICES.slice(0, ceilingIndex + 1),
-      // Why: every grok model reports `reasoning_effort: "high"` as its own default,
-      // so an untouched picker must not silently escalate past it.
+      // Every grok model defaults to high; an untouched picker must not silently escalate.
       defaultValue: 'high'
     },
     apply: {
-      launchArgs: (value) => ['--reasoning-effort', String(value)],
-      // Why: grok reads both spellings.
-      removeAgentArgs: (tokens) =>
-        removeAgentArgOption('grok', tokens, ['--effort', '--reasoning-effort']),
+      ...agentChoiceCliApply(
+        'grok',
+        [
+          {
+            kind: 'value',
+            names: ['--effort', '--reasoning-effort'],
+            lift: 'separate-and-long-equals'
+          }
+        ],
+        '--reasoning-effort'
+      ),
       midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
     }
   }
 }
 
-// The enrichment gate reads only `listModels`' presence; the probe itself parses
-// through `agent-model-probe-spec.ts`, so keep this private to that gate.
+// Private enrichment-gate parser; actual probes parse through agent-model-probe-spec.ts.
 function parseGrokCatalogModels(stdout: string): CatalogModel[] {
   return parseGrokModelList(stdout).map((model) => ({ ...model, options: [] }))
 }
 
 export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
-  // Why: Grok model access depends on the signed-in account and on [model.*]
-  // config. Seed only what is verified; discovery supplies the rest.
+  supportsWorkerLaunchPreferences: true,
+  // Account and model config scope access; seed verified models and discover the rest.
   models: [
     {
       id: 'grok-4.7',
@@ -74,22 +75,19 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   ],
   modelApply: {
-    launchArgs: (value) => ['-m', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption('grok', tokens, ['-m', '--model']),
-    // Why: `agent-picker` would replace the whole model list with "Choose in
-    // agent picker…" and never persist a model, so `-m` would never be emitted.
+    ...agentChoiceCliApply(
+      'grok',
+      [{ kind: 'value', names: ['-m', '--model'], lift: 'separate-and-long-equals' }],
+      '-m'
+    ),
+    // agent-picker replaces the list and never persists a model, preventing -m emission.
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
-  // Why: launch resolves against this static seed, so without it a discovered id the
-  // seed does not carry shows the effort menu but launches with the flag dropped. The
-  // widest menu is the safe guess: grok warns on a tier a model lacks, but a tier the
-  // menu withholds is unreachable.
+  // Supply effort for IDs absent from the launch seed. Use the widest menu: unsupported tiers warn, withheld tiers are unreachable.
   unknownModelOptions: [grokEffort('xhigh')],
-  // Why: grok's selectable ids retire between releases, so a stale seed entry
-  // must be droppable — picking one is a fatal launch, not a warning.
+  // Authoritative discovery must retire stale IDs because grok fails launch on them.
   discoveredModelsAreAuthoritative: true,
-  // Why: `grok models` prints `Default model: grok-4.7` and marks the row `(default)`,
-  // so the seed states the CLI's own choice rather than a preference of ours.
+  // Match the CLI's reported Default model and (default) row marker.
   defaultModelIsCliDefault: true,
   listModels: { command: 'grok models', parse: parseGrokCatalogModels }
 }

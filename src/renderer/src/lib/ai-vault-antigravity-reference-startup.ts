@@ -1,16 +1,14 @@
 import { isAntigravityReferenceSession } from '../../../shared/antigravity-session-origin'
+import { canResumeAiVaultSessionOnTarget } from '../../../shared/ai-vault-resume-target'
 import {
-  canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from './ai-vault-resume-target'
 import { getAiVaultResumeWorkspaceWslDistro } from './ai-vault-resume-shell'
 import { buildAiVaultResumeCommand } from '../../../shared/ai-vault-resume-command'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
+import type { AgentLaunchProfileSettings } from '../../../shared/tui-agent-launch-defaults'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type {
@@ -25,22 +23,26 @@ export function buildAntigravityReferenceStartup(args: {
   platform: NodeJS.Platform
   shell?: AgentStartupShell
   commandOverride?: string | null
-  settings?: Partial<
-    Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv'>
-  > | null
+  settings?:
+    | (Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> & AgentLaunchProfileSettings)
+    | null
 }): AiVaultResumeStartup | null {
   const plan = buildAgentStartupPlan({
-    agent: 'antigravity',
+    ...resolveAgentStartupPlanInputs({
+      agent: 'antigravity',
+      platform: args.platform,
+      shell: args.shell,
+      isRemote: false,
+      settings: {
+        ...args.settings,
+        agentCmdOverrides: {
+          ...args.settings?.agentCmdOverrides,
+          ...(args.commandOverride?.trim() ? { antigravity: args.commandOverride } : {})
+        }
+      }
+    }),
     prompt: '',
-    allowEmptyPromptLaunch: true,
-    platform: args.platform,
-    shell: args.shell,
-    cmdOverrides: {
-      ...args.settings?.agentCmdOverrides,
-      ...(args.commandOverride?.trim() ? { antigravity: args.commandOverride } : {})
-    },
-    agentArgs: resolveTuiAgentLaunchArgs('antigravity', args.settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv('antigravity', args.settings?.agentDefaultEnv)
+    allowEmptyPromptLaunch: true
   })
   if (!plan) {
     return null

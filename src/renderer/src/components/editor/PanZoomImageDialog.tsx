@@ -26,7 +26,7 @@ import {
 
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
-  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'onCloseAutoFocus' | 'size'
+  'children' | 'className' | 'showCloseButton' | 'onOpenAutoFocus' | 'size'
 > & {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -39,6 +39,7 @@ type PanZoomImageDialogProps = Omit<
   background?: string
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
+  toolbarActions?: React.ReactNode
 }
 
 function ToolbarButton({
@@ -60,7 +61,6 @@ function ToolbarButton({
   )
 }
 
-/** Full-window image preview the user can drag, wheel or pinch to pan and zoom. */
 export function PanZoomImageDialog({
   open,
   onOpenChange,
@@ -70,6 +70,8 @@ export function PanZoomImageDialog({
   showTitle = false,
   background,
   fallback,
+  toolbarActions,
+  onCloseAutoFocus,
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
   const openerRef = useRef<Element | null>(null)
@@ -81,18 +83,22 @@ export function PanZoomImageDialog({
         showCloseButton={false}
         className="h-[90dvh] w-[90vw] max-w-[90vw] overflow-hidden sm:max-w-[90vw]"
         onOpenAutoFocus={(event) => {
-          // Why: a dialog opened without a trigger has nothing to return to, so remember the opener.
+          // Dialogs without triggers need an explicit opener for focus restoration.
           openerRef.current = document.activeElement
-          // Why: focusing a toolbar button would pop its tooltip, and the first Escape would only close that.
+          // Toolbar focus opens a tooltip that would consume the first Escape.
           if (event.currentTarget instanceof HTMLElement) {
             event.preventDefault()
             event.currentTarget.focus()
           }
         }}
         onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          if (event.defaultPrevented) {
+            return
+          }
           event.preventDefault()
           const opener = openerRef.current
-          // Why: a modal that replaced this one owns focus now.
+          // Do not reclaim focus from a replacement modal.
           if (
             opener instanceof HTMLElement &&
             opener.isConnected &&
@@ -103,7 +109,7 @@ export function PanZoomImageDialog({
         }}
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
-        {/* Why: mounted with the content, so every opening starts from the fitted view. */}
+        {/* Mount with dialog content so each opening starts fitted. */}
         <PanZoomImageCanvas
           src={src}
           size={size}
@@ -111,6 +117,7 @@ export function PanZoomImageDialog({
           showTitle={showTitle}
           background={background}
           fallback={fallback}
+          toolbarActions={toolbarActions}
           onClose={() => onOpenChange(false)}
         />
       </DialogContent>
@@ -125,12 +132,13 @@ function PanZoomImageCanvas({
   showTitle,
   background,
   fallback,
+  toolbarActions,
   onClose
 }: Pick<
   PanZoomImageDialogProps,
-  'src' | 'size' | 'title' | 'showTitle' | 'background' | 'fallback'
+  'src' | 'size' | 'title' | 'showTitle' | 'background' | 'fallback' | 'toolbarActions'
 > & { onClose: () => void }): React.JSX.Element {
-  // Why: state, not a ref — the dialog portal mounts the canvas after this component's first effects.
+  // Use state: the portal canvas mounts after this component’s first effects.
   const [canvas, setCanvas] = useState<HTMLDivElement | null>(null)
   const dragRef = useRef<PanZoomPoint | null>(null)
   const [viewport, setViewport] = useState<PanZoomSize | null>(null)
@@ -144,7 +152,7 @@ function PanZoomImageCanvas({
   const [dragging, setDragging] = useState(false)
 
   const imageSrc = src && src !== failedSrc ? src : null
-  // Why: a view is in its image's pixels, and a pasted thumbnail is swapped for the larger saved file.
+  // Reset pixel-based view state when a pasted thumbnail becomes the saved full-size image.
   const [viewSrc, setViewSrc] = useState(imageSrc)
   if (viewSrc !== imageSrc) {
     setViewSrc(imageSrc)
@@ -197,7 +205,7 @@ function PanZoomImageCanvas({
         })
         return
       }
-      // Why: Windows and Linux report Shift+wheel as vertical; macOS already swaps the axis.
+      // Shift+wheel needs an axis swap on Windows/Linux; macOS already supplies horizontal deltas.
       const sideways = event.shiftKey && event.deltaX === 0
       const deltaX = getWheelDeltaPixels(event.deltaX, event.deltaMode)
       const deltaY = getWheelDeltaPixels(event.deltaY, event.deltaMode)
@@ -207,7 +215,7 @@ function PanZoomImageCanvas({
         return panView(from, delta, geometry.fitScale * from.zoom, geometry.content)
       })
     }
-    // Why: React's wheel listener is passive, so it cannot stop the page zooming on pinch.
+    // Use a non-passive listener so pinch can cancel browser zoom.
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
   }, [canvas, geometry])
@@ -239,7 +247,7 @@ function PanZoomImageCanvas({
 
   return (
     <>
-      {/* Why: pinned to the dialog edges so its own padding does not frame the canvas. */}
+      {/* Anchor to dialog edges so padding cannot frame the canvas. */}
       <div
         ref={setCanvas}
         data-testid="pan-zoom-image-canvas"
@@ -266,7 +274,7 @@ function PanZoomImageCanvas({
             x: event.clientX - last.x,
             y: event.clientY - last.y
           }
-          // Why: several moves can land before one render, so each must build on the last.
+          // Compose every pointer move even when several arrive before React renders.
           setManualView((current) => {
             const from = current ?? getFittedPanZoomView(geometry.content)
             return panView(from, delta, geometry.fitScale * from.zoom, geometry.content)
@@ -295,7 +303,7 @@ function PanZoomImageCanvas({
             style={
               content && offset
                 ? {
-                    // Why: sizing the box, not scaling it, makes an SVG redraw sharply at every zoom.
+                    // Size the SVG box so it redraws sharply instead of scaling a rasterized surface.
                     width: content.width * scale,
                     height: content.height * scale,
                     transform: `translate(${offset.x}px, ${offset.y}px)`
@@ -307,44 +315,47 @@ function PanZoomImageCanvas({
           <div className="flex size-full items-center justify-center">{fallback}</div>
         )}
       </div>
-      {showTitle ? (
-        <span
-          aria-hidden
-          className="absolute top-3 left-3 max-w-[calc(100%-10rem)] truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs"
-        >
-          {title}
-        </span>
-      ) : null}
-      {/* Why: the dialog opens from surfaces outside the app's tooltip provider. */}
+      {/* These dialogs can open outside the app tooltip provider. */}
       <TooltipProvider>
-        <div className="absolute top-3 right-3 flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-xs">
-          <ToolbarButton
-            label={translate('auto.components.editor.PanZoomImageDialog.zoomOut', 'Zoom out')}
-            disabled={!view || view.zoom <= MIN_IMAGE_VIEWER_ZOOM}
-            onClick={() => stepZoom(1 / IMAGE_VIEWER_ZOOM_STEP)}
-          >
-            <ZoomOut />
-          </ToolbarButton>
-          <ToolbarButton
-            label={translate('auto.components.editor.PanZoomImageDialog.zoomIn', 'Zoom in')}
-            disabled={!view || !geometry || view.zoom >= getMaxPanZoom(geometry.fitScale)}
-            onClick={() => stepZoom(IMAGE_VIEWER_ZOOM_STEP)}
-          >
-            <ZoomIn />
-          </ToolbarButton>
-          <ToolbarButton
-            label={translate('auto.components.editor.PanZoomImageDialog.fit', 'Fit to screen')}
-            disabled={manualView === null}
-            onClick={() => setManualView(null)}
-          >
-            <Maximize />
-          </ToolbarButton>
-          <ToolbarButton
-            label={translate('auto.components.editor.PanZoomImageDialog.close', 'Close')}
-            onClick={onClose}
-          >
-            <X />
-          </ToolbarButton>
+        <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start gap-3">
+          {showTitle ? (
+            <span
+              aria-hidden
+              className="min-w-0 truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground shadow-xs"
+            >
+              {title}
+            </span>
+          ) : null}
+          <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-xs">
+            <ToolbarButton
+              label={translate('auto.components.editor.PanZoomImageDialog.zoomOut', 'Zoom out')}
+              disabled={!view || view.zoom <= MIN_IMAGE_VIEWER_ZOOM}
+              onClick={() => stepZoom(1 / IMAGE_VIEWER_ZOOM_STEP)}
+            >
+              <ZoomOut />
+            </ToolbarButton>
+            <ToolbarButton
+              label={translate('auto.components.editor.PanZoomImageDialog.zoomIn', 'Zoom in')}
+              disabled={!view || !geometry || view.zoom >= getMaxPanZoom(geometry.fitScale)}
+              onClick={() => stepZoom(IMAGE_VIEWER_ZOOM_STEP)}
+            >
+              <ZoomIn />
+            </ToolbarButton>
+            <ToolbarButton
+              label={translate('auto.components.editor.PanZoomImageDialog.fit', 'Fit to screen')}
+              disabled={manualView === null}
+              onClick={() => setManualView(null)}
+            >
+              <Maximize />
+            </ToolbarButton>
+            {toolbarActions}
+            <ToolbarButton
+              label={translate('auto.components.editor.PanZoomImageDialog.close', 'Close')}
+              onClick={onClose}
+            >
+              <X />
+            </ToolbarButton>
+          </div>
         </div>
       </TooltipProvider>
     </>

@@ -1,7 +1,4 @@
-// Why: this selector runs on every store write; index each immutable status snapshot once.
-// Why resettable: every production writer replaces the map, but test fixtures commonly
-// mutate `mockStoreState.agentStatusByPaneKey[key]` in place, which would keep serving the
-// key cached for the identity they mutated.
+// Index each immutable snapshot once; reset for test fixtures that mutate the map in place.
 let agentSessionIdsKeyBySnapshot = new WeakMap<object, string>()
 
 export function getAgentSessionIdsKey(

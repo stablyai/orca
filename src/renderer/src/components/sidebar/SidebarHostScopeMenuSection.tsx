@@ -17,6 +17,9 @@ import {
   toggleVisibleHostRow
 } from '../../../../shared/workspace-view/workspace-host-visibility'
 import { getSidebarHostHealthLabel, type SidebarHostOption } from './sidebar-host-options'
+import { useBoundedHostRows } from '../host-picker/use-bounded-host-rows'
+import { HostListSearchField } from '../host-picker/HostListSearchField'
+import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'
 import { translate } from '@/i18n/i18n'
 
 type SidebarHostScopeMenuSectionProps = {
@@ -76,6 +79,9 @@ export function SidebarHostScopeMenuSection({
     ).map((host) => host.id)
   )
 
+  // Pin checked filter matches so users can still uncheck them.
+  const rows = useBoundedHostRows(hostRows, allVisible ? undefined : checkedRowIds)
+
   const toggleAllHosts = (): void => {
     const next = toggleAllVisibleHosts(hostOptions, visibleWorkspaceHostIds)
     if (next === null) {
@@ -92,8 +98,6 @@ export function SidebarHostScopeMenuSection({
     }
   }
 
-  // Why: one Sort-by-style row (label left, value right) — nested panel holds
-  // the multi-select, so the parent menu stays a flat list of single rows.
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -128,23 +132,30 @@ export function SidebarHostScopeMenuSection({
             </span>
           </span>
         </DropdownMenuCheckboxItem>
-        {hostRows.map((host) => (
-          <DropdownMenuCheckboxItem
-            key={host.id}
-            checked={!allVisible && checkedRowIds.has(host.id)}
-            disabled={!allVisible && checkedRowIds.has(host.id) && checkedRowIds.size <= 1}
-            onCheckedChange={() => toggleHost(host)}
-            onSelect={(e) => e.preventDefault()}
-            className="min-h-11 items-start py-1.5"
-          >
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="truncate">{host.label}</span>
-              <span className="text-[11px] font-normal text-muted-foreground">
-                {getHostMetadata(host)}
+        {rows.searchable ? (
+          <HostListSearchField value={rows.query} onChange={rows.setQuery} inMenu />
+        ) : null}
+        {/* Bound up to 50 host rows plus pinned matches so the menu stays on screen. */}
+        <div className="max-h-80 overflow-y-auto scrollbar-sleek">
+          {rows.shown.map((host) => (
+            <DropdownMenuCheckboxItem
+              key={host.id}
+              checked={!allVisible && checkedRowIds.has(host.id)}
+              disabled={!allVisible && checkedRowIds.has(host.id) && checkedRowIds.size <= 1}
+              onCheckedChange={() => toggleHost(host)}
+              onSelect={(e) => e.preventDefault()}
+              className="min-h-11 items-start py-1.5"
+            >
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate">{host.label}</span>
+                <span className="text-[11px] font-normal text-muted-foreground">
+                  {getHostMetadata(host)}
+                </span>
               </span>
-            </span>
-          </DropdownMenuCheckboxItem>
-        ))}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </div>
+        <HostListOverflowNote hiddenCount={rows.hiddenCount} />
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )
