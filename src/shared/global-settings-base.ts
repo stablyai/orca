@@ -3,6 +3,7 @@ import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
+import type { FileExplorerSettings } from './file-explorer-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
 import type { PluginAppearanceSettings } from './plugin-appearance-settings-types'
 import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/plugin-file-type'
@@ -18,6 +19,7 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   ClaudeAccountSwitchSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
+  FileExplorerSettings &
   BrowserLinkOpeningSettings &
   BrowserExtensionGlobalSettings &
   PluginAppearanceSettings &

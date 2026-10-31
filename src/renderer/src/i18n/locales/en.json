@@ -8152,7 +8152,9 @@
           "fb29a73a17": "Show a confirmation dialog before deleting a shared artifact and breaking its public link.",
           "bf46474e33": "Show a confirmation before deleting a shared artifact. Anyone holding its public link loses access.",
           "externalWorktrees": "External worktrees",
-          "externalWorktreesDescription": "Choose which worktrees created outside Orca appear by default on this host."
+          "externalWorktreesDescription": "Choose which worktrees created outside Orca appear by default on this host.",
+          "133d3339d1": "Follow Active File in Explorer",
+          "dd0b764c3f": "Select and scroll to the active editor file in the file explorer. Turn off to keep your place when switching or closing tabs."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",

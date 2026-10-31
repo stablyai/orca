@@ -6,6 +6,8 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 
 type UseFileExplorerAutoRevealParams = {
+  /** False leaves explorer selection and scroll alone when the active editor changes (#35887). */
+  followActiveFile: boolean
   activeFileId: string | null
   activeWorktreeId: string | null
   worktreePath: string | null
@@ -19,6 +21,7 @@ type UseFileExplorerAutoRevealParams = {
 
 /** Follow active editor files without flashing; expand collapsed ancestors through the reveal machinery. */
 export function useFileExplorerAutoReveal({
+  followActiveFile,
   activeFileId,
   activeWorktreeId,
   worktreePath,
@@ -48,7 +51,7 @@ export function useFileExplorerAutoReveal({
     }
     prevActiveFileIdRef.current = activeFileId
 
-    if (!activeFileId || !activeWorktreeId || !worktreePath) {
+    if (!followActiveFile || !activeFileId || !activeWorktreeId || !worktreePath) {
       return
     }
 
@@ -93,6 +96,7 @@ export function useFileExplorerAutoReveal({
       })
     }
   }, [
+    followActiveFile,
     activeFileId,
     activeWorktreeId,
     cancelScrollFrame,
