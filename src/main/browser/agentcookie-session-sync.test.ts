@@ -80,4 +80,37 @@ describe('AgentcookieSessionSync', () => {
     sync.stop()
     rmSync(dir, { recursive: true, force: true })
   })
+
+  it('keeps one timer across repeated start() calls and can restart after stop()', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ac-sync-'))
+    const exe = join(dir, 'agentcookie')
+    writeFileSync(exe, '#!/bin/sh\necho "[]"\n')
+    chmodSync(exe, 0o755)
+    process.env.PATH = dir
+    vi.useFakeTimers()
+    try {
+      const sync = new AgentcookieSessionSync({
+        targetPartition: 'persist:orca-browser',
+        isEnabled: () => true
+      })
+      const syncNow = vi
+        .spyOn(sync, 'syncNow')
+        .mockResolvedValue({ detected: true, lastSyncAt: null, lastImported: null })
+
+      sync.start()
+      sync.start()
+      expect(vi.getTimerCount()).toBe(1)
+      expect(syncNow).toHaveBeenCalledTimes(1)
+
+      sync.stop()
+      expect(vi.getTimerCount()).toBe(0)
+
+      sync.start()
+      expect(vi.getTimerCount()).toBe(1)
+      sync.stop()
+    } finally {
+      vi.useRealTimers()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

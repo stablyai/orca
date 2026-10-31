@@ -97,6 +97,9 @@ export class AgentcookieSessionSync {
   }
 
   start(): void {
+    if (this.timer) {
+      return
+    }
     const binary = detectAgentcookie()
     this.options.onStatus?.({ detected: binary !== null, lastSyncAt: null, lastImported: null })
     if (!binary || !this.options.isEnabled()) {
