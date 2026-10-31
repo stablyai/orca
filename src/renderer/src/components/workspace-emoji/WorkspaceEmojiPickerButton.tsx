@@ -92,7 +92,6 @@ export function WorkspaceEmojiPickerButton({
         align="end"
         side="bottom"
         portalContainer={portalContainer}
-        className="w-auto p-0"
         onCloseAutoFocus={(event) => {
           const cursor = pendingCursorRef.current
           if (cursor === null) {

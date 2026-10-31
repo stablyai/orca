@@ -56,7 +56,8 @@ export function WorktreeDisplayNameField({
             'auto.components.sidebar.WorktreeMetaDialog.7f21e0464f',
             'Custom display name...'
           )}
-          className="h-8 pr-8 text-xs"
+          adornment="trailing"
+          className="h-8 text-xs"
         />
         <WorkspaceEmojiPickerButton
           className="absolute top-1/2 right-1 -translate-y-1/2"
