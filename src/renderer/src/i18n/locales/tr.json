@@ -16144,19 +16144,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Yakınlaştır",
-          "6c89c73d9f": "Yakınlaştırmayı sıfırla",
           "be27304574": "Uzaklaştır",
-          "77bfc9b35a": "Görseli pop-up'ta aç",
           "3ef9551ba2": "Önizleme yükleniyor...",
           "d9d2944855": "Dosya önizlemesi yüklenemedi",
           "fitToView": "Görünüme sığdır",
           "actualSize": "Gerçek boyut",
           "expand": "Görseli büyüt"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Kapatmak için Esc tuşuna basın",
-          "535f4e2b56": "Kapat",
-          "9e27b2ecaf": "Tam boyutlu görsel önizlemesi"
         },
         "IpynbViewer": {
           "859bf9fc21": "Hücreyi çalıştır",
