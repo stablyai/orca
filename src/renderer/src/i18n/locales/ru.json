@@ -17880,7 +17880,6 @@
           "rowActions": "Действия с автоматизацией",
           "tableLastRun": "Последний запуск",
           "ownerChanged": "Сервер этой автоматизации изменился. Обновите данные и повторите попытку.",
-          "runError": "Ошибка:",
           "deleteAutomationDescription": "Удалить <name/> и историю запусков. Рабочие пространства, созданные предыдущими запусками, не будут удалены.",
           "deleteExternalAutomationDescription": "Удалить <name/> из <provider/> на <host/>.",
           "runUsageSummaryTokens_one": "Примерно {{cost}} · {{tokens}} токен",
@@ -18202,7 +18201,8 @@
           "runStatusSkippedMissed": "Пропущено",
           "runStatusSkippedUnavailable": "Недоступно",
           "runStatusSkippedNeedsInteractiveAuth": "Нужны учётные данные",
-          "runStatusDispatchFailed": "Ошибка"
+          "runStatusDispatchFailed": "Ошибка",
+          "runStatusCompletedWithWarnings": "Готово с предупреждениями"
         },
         "runContent": {
           "noOutput": "Нет доступного содержимого вывода."
@@ -18247,6 +18247,22 @@
           "partialFailureOfHosts_other": "Не удалось загрузить {{failed}} из {{count}} сервера",
           "partialFailureOfHosts_few": "Не удалось загрузить {{failed}} из {{count}} серверов",
           "partialFailureOfHosts_many": "Не удалось загрузить {{failed}} из {{count}} серверов"
+        },
+        "automationRunOutputActions": {
+          "saveFailed": "Не удалось сохранить «{{title}}»."
+        },
+        "AutomationRunResults": {
+          "download": "Скачать",
+          "evidence": "Подробности",
+          "noWarningsReported": "Предупреждений не поступало.",
+          "saveAndOpen": "Сохранить и открыть",
+          "attachments": "Вложения",
+          "resolved": "Решено",
+          "resolvedWith": "Решено: {{resolution}}",
+          "warnings": "Предупреждения"
+        },
+        "AutomationRunDetailsPage": {
+          "summary": "Сводка"
         }
       },
       "agent": {

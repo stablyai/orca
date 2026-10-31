@@ -1,14 +1,9 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import {
-  formatAutomationDateTime,
-  getAutomationRunStatusLabel,
-  getAutomationRunStatusVariant
-} from './automation-page-parts'
+import { formatAutomationDateTime, AutomationRunStatusBadge } from './automation-page-parts'
 import {
   formatAutomationCost,
   formatAutomationTokens,
@@ -34,7 +29,7 @@ const RUN_ROW_OVERSCAN = 10
 const RUNS_VIEWPORT_INITIAL_RECT = { width: 1024, height: 600 }
 
 const RUN_ROW_GRID_CLASS =
-  'grid w-full grid-cols-[minmax(9rem,1fr)_minmax(10rem,1.1fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] gap-3'
+  'grid w-full grid-cols-[minmax(9rem,1fr)_minmax(10rem,1.1fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_10rem] gap-3'
 // Share scroller width with rows, including scrollbar gutter; opaque sticky headers hide scrolled content.
 const RUN_ROW_HEADER_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_20%,var(--background))]'
@@ -345,10 +340,8 @@ export function AutomationRunHistory({
                             'n/a'
                           )}
                     </div>
-                    <div className="flex justify-start">
-                      <Badge variant={getAutomationRunStatusVariant(run.status)}>
-                        {getAutomationRunStatusLabel(run.status)}
-                      </Badge>
+                    <div className="flex min-w-0 justify-start">
+                      <AutomationRunStatusBadge run={run} />
                     </div>
                   </button>
                 </div>

@@ -16871,7 +16871,6 @@
           "rowActions": "自動化の操作",
           "tableLastRun": "最後の実行",
           "ownerChanged": "この自動化によりホストが変更されました。更新して再試行してください。",
-          "runError": "エラー:",
           "deleteAutomationDescription": "<name/> とその実行履歴を削除します。過去の実行で作成されたワークスペースは削除されません。",
           "deleteExternalAutomationDescription": "<host/> 上の <provider/> から <name/> を削除します。",
           "runUsageSummaryTokens_other": "推定 {{cost}} · {{tokens}} トークン"
@@ -17147,7 +17146,8 @@
           "runStatusSkippedMissed": "スキップ済み",
           "runStatusSkippedUnavailable": "利用不可",
           "runStatusSkippedNeedsInteractiveAuth": "認証情報が必要",
-          "runStatusDispatchFailed": "失敗"
+          "runStatusDispatchFailed": "失敗",
+          "runStatusCompletedWithWarnings": "警告ありで完了"
         },
         "runContent": {
           "noOutput": "出力内容はありません。"
@@ -17186,6 +17186,22 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "{{count}} 台中 {{failed}} 台のホストを読み込めませんでした"
+        },
+        "automationRunOutputActions": {
+          "saveFailed": "'{{title}}' を保存できませんでした。"
+        },
+        "AutomationRunResults": {
+          "download": "ダウンロード",
+          "evidence": "詳細",
+          "noWarningsReported": "警告は報告されていません。",
+          "saveAndOpen": "保存して開く",
+          "attachments": "添付ファイル",
+          "resolved": "解決済み",
+          "resolvedWith": "解決済み: {{resolution}}",
+          "warnings": "警告"
+        },
+        "AutomationRunDetailsPage": {
+          "summary": "概要"
         }
       },
       "agent": {

@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AutomationEditorDialog } from './AutomationEditorDialog'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
@@ -10,7 +9,7 @@ import type { AutomationHostRecoveryAction } from './automation-host-status-desc
 import { AutomationsPageTopBar } from './AutomationsPageTopBar'
 import type { AutomationsPageController } from './use-automations-page-controller'
 import { AutomationRunsDashboardSurface } from './AutomationRunsDashboardSurface'
-import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
+import { AutomationRunPageSurface } from './AutomationRunPageSurface'
 import { AutomationsPageDeleteDialogs } from './AutomationsPageDeleteDialogs'
 import { AutomationsPageListPanel } from './AutomationsPageListPanel'
 export function AutomationsPageSurface({
@@ -26,7 +25,6 @@ export function AutomationsPageSurface({
     runsDashboard,
     destinationForm,
     setup,
-    runPage,
     presentation,
     pageRefresh,
     draftEffects,
@@ -34,8 +32,7 @@ export function AutomationsPageSurface({
     saveAutomation,
     managementActions,
     runActions,
-    externalActions,
-    openRunWorkspace
+    externalActions
   } = controller
   const {
     projectHostSetups,
@@ -83,7 +80,6 @@ export function AutomationsPageSurface({
     setRunPageOrigin
   } = local
   const { hostCatalog, hasListItems, selected, selectedRow, selectedExternal } = list
-  const selectedAutomationRunPage = setup.selectedAutomationRunPage
   const selectedRunWorktreeMap = useMemo(() => {
     if (!selectedRow) {
       return worktreeMap
@@ -232,36 +228,11 @@ export function AutomationsPageSurface({
           setPendingAutomationRunNavigation={setPendingAutomationRunNavigation}
           setIsDetailOpen={setIsDetailOpen}
         />
-      ) : pageView === 'run' && store.pendingAutomationRunNavigation?.runId ? (
-        <div
-          role="status"
-          className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"
-        >
-          <LoadingSpinner className="size-4" />
-          {translate(
-            'auto.components.automations.AutomationRunsDashboard.loading',
-            'Loading runs…'
-          )}
-        </div>
-      ) : pageView === 'run' && selectedAutomationRunPage ? (
-        <AutomationRunDetailsPage
-          automation={selected}
-          run={selectedAutomationRunPage}
-          relativeNow={relativeNow}
-          workspaceDisplay={runPage.selectedAutomationRunPageWorkspaceDisplay}
-          viewState={runPage.selectedAutomationRunPageViewState}
-          canRerun={runPage.canRerunSelectedAutomationRunPage}
-          isRerunPending={runPage.isSelectedAutomationRunPageRerunPending}
-          onRerun={() =>
-            runSelectedRowAction((row) =>
-              runActions.rerunAutomationRun(row, selectedAutomationRunPage)
-            )
-          }
-          onOpenWorkspace={() => openRunWorkspace(selectedAutomationRunPage)}
+      ) : pageView === 'run' ? (
+        <AutomationRunPageSurface
+          controller={controller}
           onBack={runPageOrigin === 'automation' ? showAutomationDetails : showRunsDashboard}
         />
-      ) : pageView === 'run' ? (
-        <AutomationsPageSkeleton />
       ) : isLoading && !hasListItems ? (
         <AutomationsPageSkeleton />
       ) : isDetailOpen && (selected || selectedExternal) ? (

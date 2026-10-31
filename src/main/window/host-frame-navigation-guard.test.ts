@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AUTOMATION_OUTPUT_FRAME_NAME_PREFIX } from '../../shared/automation-output-preview'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../shared/plugins/frames/plugin-frame-bridge'
 import { NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX } from '../../shared/native-chat/native-chat-visual-shell'
 import { HostFrameNavigationRegistry, hostFrameKindForName } from './host-frame-navigation-guard'
@@ -54,6 +55,17 @@ describe('HostFrameNavigationRegistry', () => {
     expect(registry.shouldBlock(visual, null, 'https://example.com')).toBe(true)
     const child = frame({ id: 4 })
     expect(registry.shouldBlock(child, visual, 'https://example.com')).toBe(true)
+  })
+
+  it('contains automation output navigation, including refresh and child frames', () => {
+    const registry = new HostFrameNavigationRegistry()
+    const output = frame({ id: 5, name: `${AUTOMATION_OUTPUT_FRAME_NAME_PREFIX}report` })
+    registry.register(output)
+    expect(hostFrameKindForName(output.name)).toBe('automation-output')
+    expect(registry.shouldBlock(output, null, 'about:srcdoc')).toBe(false)
+    expect(registry.shouldBlock(output, null, 'https://example.com')).toBe(true)
+    expect(registry.shouldBlock(output, output, 'about:srcdoc')).toBe(true)
+    expect(registry.shouldBlock(frame({ id: 6 }), output, 'https://example.com')).toBe(true)
   })
 
   it('does not inspect unrelated guarded frames during registration or navigation', () => {
