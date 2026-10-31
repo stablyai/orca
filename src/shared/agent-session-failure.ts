@@ -25,6 +25,7 @@ import {
 export const AGENT_SESSION_FAILURE_KINDS = [
   /** Only an observed exit: the provider stopped while starting. */
   'providerStartFailed',
+  'providerResumeUnavailable',
   /** A start that did not land, with no one to blame: Orca's fault, a failed spawn, a close. */
   'startFailed',
   'notSignedIn',

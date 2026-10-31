@@ -87,7 +87,7 @@ describe('a worker for a registered native-chat agent', () => {
 
   it('starts an agent with no native chat as a terminal worker', () => {
     expect(
-      decideWorkerStartMode({ params: { agent: 'gemini' }, settings: STRUCTURED_PREFERENCE })
+      decideWorkerStartMode({ params: { agent: 'aider' }, settings: STRUCTURED_PREFERENCE })
     ).toMatchObject({ mode: 'terminal', reason: 'agent_without_structured_session' })
   })
 

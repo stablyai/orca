@@ -23,7 +23,7 @@ vi.mock('sonner', () => ({
 }))
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: () => ({
-    detectedIds: ['claude', 'gemini', 'goose'],
+    detectedIds: ['claude', 'gemini', 'goose', 'cursor'],
     detectionFailed: false,
     isRefreshing: false,
     refresh: vi.fn()
@@ -301,14 +301,14 @@ it('retains failed conversion through the ordinary callback and announces only t
 
 it('describes terminal-only conversion without claiming new native chats', async () => {
   render(<AgentsHarness />)
-  const input = argumentsInput('Gemini')
+  const input = argumentsInput('Cursor')
   fireEvent.change(input, { target: { value: '--yolo' } })
   fireEvent.blur(input)
   await waitFor(() =>
-    expect(toast.success).toHaveBeenCalledWith('Gemini set to Full access in terminals.')
+    expect(toast.success).toHaveBeenCalledWith('Cursor set to Full access in terminals.')
   )
-  expect(useAppStore.getState().settings?.agentPermissionOverrides?.gemini).toBe('full-access')
-  expect(useAppStore.getState().settings?.agentDefaultArgs?.gemini).toBe('')
+  expect(useAppStore.getState().settings?.agentPermissionOverrides?.cursor).toBe('full-access')
+  expect(useAppStore.getState().settings?.agentDefaultArgs?.cursor).toBe('')
 })
 
 function savedArguments(value: string, choice: 'ask' | 'full-access' = 'ask') {

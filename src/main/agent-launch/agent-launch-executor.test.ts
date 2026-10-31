@@ -409,7 +409,7 @@ describe('an agent with no structured session', () => {
   it('stays a terminal without asking the host', async () => {
     const h = harness({})
     const result = await h.run({
-      agent: 'gemini',
+      agent: 'aider',
       target: { kind: 'existing', worktree: 'wt-7' },
       chatOptions: { model: 'action-model', fastMode: 'false' }
     })

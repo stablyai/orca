@@ -148,8 +148,8 @@ describe('the permission verdict on a paired host', () => {
     await expect(
       readStructuredChatHostPermissionVerdict({ kind: 'local' }, 'claude', 'ask')
     ).resolves.toEqual({ kind: 'allowed' })
-    // Gemini chats have no modes of their own; Grok gained them in #29335.
-    await expect(readStructuredChatHostPermissionVerdict(PAIRED, 'gemini', 'ask')).resolves.toEqual(
+    // Cursor follows Agent Permissions rather than offering per-chat modes.
+    await expect(readStructuredChatHostPermissionVerdict(PAIRED, 'cursor', 'ask')).resolves.toEqual(
       { kind: 'allowed' }
     )
     expect(mocks.supportsCapability).not.toHaveBeenCalled()
