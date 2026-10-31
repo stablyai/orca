@@ -634,9 +634,9 @@ const row = (paneKey: string, extra: Record<string, unknown> = {}) => ({
   ...extra
 })
 // The clicked pane still shows its agent on this conversation, so continuing stops it.
-const showAgentInSource = () =>
+const showAgentInSource = (extra: Record<string, unknown> = {}) =>
   useAppStore.setState({
-    agentStatusByPaneKey: { [SOURCE.paneKey]: row(SOURCE.paneKey, { tabId: 'tab-1' }) }
+    agentStatusByPaneKey: { [SOURCE.paneKey]: row(SOURCE.paneKey, { tabId: 'tab-1', ...extra }) }
   })
 
 describe('close terminal then continue on capable hosts', () => {
@@ -757,25 +757,26 @@ describe('close terminal then continue on capable hosts', () => {
 })
 
 // The same host refusal on an older host (terminal kept, CLI source sent) and a capable one (closed first).
-// A capable host whose pane agent already quit keeps the terminal, exactly as an older host does.
+// A capable host whose pane agent already quit, or only has a row restored from before a
+// restart, keeps the terminal exactly as an older host does.
 describe.each([
-  { host: 'an older host', closeCapable: false, live: false },
-  { host: 'a capable host, agent already quit', closeCapable: true, live: false },
+  { host: 'an older host', closeCapable: false },
+  { host: 'a capable host, agent already quit', closeCapable: true },
+  { host: 'a capable host, agent unconfirmed since restart', closeCapable: true, restored: true },
   { host: 'a capable host, agent running', closeCapable: true, live: true }
-])('the same create outcome on $host', ({ closeCapable, live }) => {
+])('the same create outcome on $host', ({ closeCapable, live, restored }) => {
   const closes = closeCapable && live
   beforeEach(() => {
     mocks.closeCapability.mockResolvedValue(closeCapable)
-    if (live) {
-      showAgentInSource()
+    if (live || restored) {
+      showAgentInSource({ restoredUnconfirmed: restored })
     }
   })
-  const owner = { sessionId: 'owner-chat', workspaceId: 'owner-workspace' }
   it.each([
     { name: 'it opens', refusal: null, older: null, capable: null, opens: true },
     {
       name: 'a chat owns it',
-      refusal: held(owner),
+      refusal: held({ sessionId: 'owner-chat', workspaceId: 'owner-workspace' }),
       older: null,
       capable: null,
       activates: true
@@ -785,6 +786,9 @@ describe.each([
       refusal: held(),
       older:
         'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.',
+      // The kept terminal's own row names the conversation, so the older copy points here.
+      restoredOlder:
+        'Claude is still running this conversation in this terminal. Quit Claude here, then try again.',
       capable:
         "Claude's terminal was closed, but Claude is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History."
     },
@@ -815,7 +819,7 @@ describe.each([
       capable: null,
       recoveryTab: true
     }
-  ])('$name', async ({ refusal, older, capable, activates, recoveryTab, opens }) => {
+  ])('$name', async ({ refusal, older, restoredOlder, capable, activates, recoveryTab, opens }) => {
     if (refusal) {
       mocks.call.mockResolvedValue({ ok: false, refusal })
     }
@@ -826,7 +830,7 @@ describe.each([
     })
     expect(mocks.closeTerminal).toHaveBeenCalledTimes(closes ? 1 : 0)
     expect(mocks.activate).toHaveBeenCalledTimes(activates ? 1 : 0)
-    const expected = closes ? capable : older
+    const expected = closes ? capable : (restored && restoredOlder) || older
     expect(mocks.toast.mock.calls.map(([text]) => text)).toEqual(
       expected === null
         ? []
