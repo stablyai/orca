@@ -28,6 +28,13 @@ function ackAgentViaPopoutRelay(paneKey: string, intent: AgentSubjectReadIntent)
 }
 
 /** Reveal via main-window IPC; optional calls tolerate the same dev-HMR preload skew as acknowledgments. */
+function isPrimaryModifierClick(
+  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'altKey'>
+): boolean {
+  const primary = navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey
+  return primary && !event.altKey
+}
+
 function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
   void window.api.dashboard.revealAgent?.(args)
 }
@@ -73,7 +80,7 @@ function KanbanColumn({
   cards: DashboardCard[]
   repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
   now: number
-  onOpenTerminal: (card: DashboardCard) => void
+  onOpenTerminal: (card: DashboardCard, event: MouseEvent) => void
 }): React.JSX.Element {
   const label = bucketLabel(bucket)
 
@@ -211,12 +218,23 @@ export function AgentKanbanBoard({
   // Relay read acknowledgments through the shared app-wide map; the next snapshot clears unseen.
   const clickAcked = useRef<{ paneKey: string; stateChangedAt: number } | null>(null)
   const handleOpenTerminal = useCallback(
-    (card: DashboardCard) => {
+    (card: DashboardCard, event: MouseEvent) => {
       onAckAgent(card.paneKey, 'explicit')
       clickAcked.current = { paneKey: card.paneKey, stateChangedAt: card.stateChangedAt }
+      // Why: Mod+click jumps to the worktree without the preview, the dialog's Open worktree path (#36250).
+      if (isPrimaryModifierClick(event)) {
+        onRevealAgent({
+          repoId: card.repoId,
+          worktreeId: card.worktreeId,
+          executionHostId: card.executionHostId,
+          tabId: card.tabId,
+          leafId: card.leafId
+        })
+        return
+      }
       setOpenedCard(card)
     },
-    [onAckAgent]
+    [onAckAgent, onRevealAgent]
   )
   // Acknowledge state changes while watched so open-dialog cards do not become unseen again.
   useEffect(() => {
