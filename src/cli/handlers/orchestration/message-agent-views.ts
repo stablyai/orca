@@ -1,5 +1,3 @@
-import { renderCommand } from '../../orchestration-mutation-recovery'
-import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import {
   formatOrchestrationCheckText,
   formatUnacknowledgedDeliveryNotice,
@@ -9,8 +7,8 @@ import {
 } from '../../../shared/orchestration-check-output'
 import { escapeTerminalControlCharacters } from '../../../shared/terminal-control-character-escape'
 import {
+  orchestrationCliName,
   resolveOrcaCommandsInText,
-  resolveOrcaReplyHints,
   type OrchestrationAgentView
 } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
@@ -29,7 +27,17 @@ export type MessageView = {
   [payloadField: string]: unknown
 }
 
-const MESSAGE_VIEW_KEYS = new Set(['id', 'type', 'from', 'to', 'subject', 'body', 'priority'])
+// `payload` is reserved too: payload fields that collide with view keys are kept under it.
+const MESSAGE_VIEW_KEYS = new Set([
+  'id',
+  'type',
+  'from',
+  'to',
+  'subject',
+  'body',
+  'priority',
+  'payload'
+])
 
 export function toMessageView(
   message: OrchestrationMessageSummary,
@@ -144,7 +152,7 @@ function replyCommandFor(message: OrchestrationMessageSummary, view: MessageView
   const target = message.to_handle ?? checked
   const from =
     target.startsWith('run:') || target.startsWith('dispatch:') ? '' : ` --from ${target}`
-  return `${renderCommand([resolveOrchestrationCliExecutable()])} orchestration reply --id ${message.id}${from} --body "..."`
+  return `${orchestrationCliName()} orchestration reply --id ${message.id}${from} --body "..."`
 }
 
 export type CheckAgentResult = OrchestrationCheckOutput & { replayed?: boolean; next?: string }
@@ -186,7 +194,7 @@ export function checkView(
         connectionLost: value.connectionLost ? true : undefined,
         legacyCompatibility: value.legacyCompatibility,
         // --format asked for the agent-readable banners themselves.
-        formatted: value.formatted && resolveOrcaReplyHints(value.formatted),
+        formatted: value.formatted,
         next: value.next && resolveOrcaCommandsInText(value.next)
       }
     },
@@ -194,7 +202,7 @@ export function checkView(
       // Legacy and preformatted batches carry safety headers only the full formatter prints.
       if (fields.legacyCompatibility || value.formatted !== undefined || !fields.messages.length) {
         return withReceiptNext(
-          resolveOrcaReplyHints(formatOrchestrationCheckText(value, checkedTerminal)),
+          formatOrchestrationCheckText(value, checkedTerminal, orchestrationCliName()),
           fields
         )
       }
@@ -214,6 +222,8 @@ export function checkView(
       value.cancelled || value.connectionLost
         ? {
             code: value.connectionLost ? 'check_connection_closed' : 'check_cancelled',
+            // Newly classified as a failure; --full keeps the exit 0 scripts saw.
+            fullExitCode: 0,
             message: value.connectionLost
               ? 'Wait cancelled because the connection closed; no messages were consumed.'
               : 'Wait cancelled; no messages were consumed.'

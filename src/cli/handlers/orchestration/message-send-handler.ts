@@ -127,7 +127,6 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       { flags, json },
       {
         fields: sendFields,
-        text: formatSendFields,
         fullText: (value) => formatSendFields({ ...sendFields(value), next: value.next })
       }
     )

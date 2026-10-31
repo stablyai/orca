@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printOrchestrationResult } from './agent-view'
+import { orchestrationCliName, printOrchestrationResult } from './agent-view'
 import { checkView, type CheckAgentResult } from './message-agent-views'
 import { getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
@@ -66,7 +66,13 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     }
     result = {
       ...result,
-      result: prepareOrchestrationCheckOutput(result.result, callerLabel, flags.has('format'))
+      // --full keeps today's `orca` hints; the concise view names the executable in use.
+      result: prepareOrchestrationCheckOutput(
+        result.result,
+        callerLabel,
+        flags.has('format'),
+        flags.has('full') ? undefined : orchestrationCliName()
+      )
     }
     printOrchestrationResult(result, { flags, json }, checkView(callerLabel))
     const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds

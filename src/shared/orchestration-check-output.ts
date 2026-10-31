@@ -64,14 +64,17 @@ export function isLegacyReadOnlyMessage(
   )
 }
 
+/** `cliCommand` names the executable in Reply hints; relay-era terminals keep `orca`. */
 export function formatOrchestrationCheckText(
   result: OrchestrationCheckOutput,
-  checkedTerminal: string
+  checkedTerminal: string,
+  cliCommand = 'orca'
 ): string {
   const prepared = prepareOrchestrationCheckOutput(
     result,
     checkedTerminal,
-    result.formatted !== undefined
+    result.formatted !== undefined,
+    cliCommand
   )
   const compatibilityActive = Boolean(
     prepared.legacyCompatibility && !prepared.legacyCompatibility.readOnly
@@ -108,7 +111,8 @@ export function formatOrchestrationCheckText(
   const rendered = formatLegacyAwareCheckMessages(
     prepared.messages,
     checkedTerminal,
-    compatibilityActive
+    compatibilityActive,
+    cliCommand
   )
   const output = prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n${rendered}` : rendered
   return `${legacyHeader}${output}${deliveryNotice}`
@@ -123,7 +127,8 @@ export function formatUnacknowledgedDeliveryNotice(deliveryId: string | null | u
 export function prepareOrchestrationCheckOutput<T extends OrchestrationCheckOutput>(
   result: T,
   checkedTerminal: string,
-  formattedRequested: boolean
+  formattedRequested: boolean,
+  cliCommand = 'orca'
 ): T {
   const compatibilityActive = Boolean(
     result.legacyCompatibility && !result.legacyCompatibility.readOnly
@@ -136,7 +141,12 @@ export function prepareOrchestrationCheckOutput<T extends OrchestrationCheckOutp
   }
   return {
     ...result,
-    formatted: formatLegacyAwareCheckMessages(result.messages, checkedTerminal, compatibilityActive)
+    formatted: formatLegacyAwareCheckMessages(
+      result.messages,
+      checkedTerminal,
+      compatibilityActive,
+      cliCommand
+    )
   }
 }
 
@@ -154,7 +164,8 @@ function formatQuotedMessageField(label: string, value?: string): string {
 function formatLegacyAwareCheckMessages(
   messages: OrchestrationMessageSummary[],
   checkedTerminal: string,
-  legacyCompatibilityActive = false
+  legacyCompatibilityActive = false,
+  cliCommand = 'orca'
 ): string {
   return messages
     .map((message) => {
@@ -178,7 +189,9 @@ function formatLegacyAwareCheckMessages(
           replyTarget.startsWith('run:') || replyTarget.startsWith('dispatch:')
             ? ''
             : ` --from ${replyTarget}`
-        lines.push(`[Reply: orca orchestration reply --id ${message.id}${replyFrom} --body "..."]`)
+        lines.push(
+          `[Reply: ${cliCommand} orchestration reply --id ${message.id}${replyFrom} --body "..."]`
+        )
       }
       return lines.join('\n')
     })

@@ -37,7 +37,6 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
           messageId: value.message.id,
           next: value.next && resolveOrcaCommandsInText(value.next)
         }),
-        text: (fields) => withReceiptNext(`Replied ${fields.messageId}`, fields),
         fullText: (value) => withReceiptNext(`Replied ${value.message.id}`, value)
       }
     )

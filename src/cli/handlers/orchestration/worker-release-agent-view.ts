@@ -3,7 +3,6 @@ import {
   type OrchestrationAgentView,
   type OrchestrationFailure
 } from './agent-view'
-import { withReceiptNext } from './receipt-next-text'
 import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
 
 type WorkerReleaseFields = {
@@ -31,15 +30,6 @@ export const WORKER_RELEASE_VIEW: OrchestrationAgentView<
     lastError: value.lastError,
     next: value.recovery && resolveOrcaCommandsInText(value.recovery)
   }),
-  text: (fields) =>
-    withReceiptNext(
-      [
-        `Worker ${fields.dispatchId} terminal [${fields.state}]${fields.reason ? ` reason=${fields.reason}` : ''} process=${fields.processAction}`,
-        ...(fields.archive ? [`archive ${fields.archive}`] : []),
-        ...(fields.lastError ? [fields.lastError] : [])
-      ].join('\n'),
-      fields
-    ),
   fullText: formatWorkerRelease,
   // Retained, pending, and already-released are settled outcomes; only release_unknown fails.
   failure: (value) =>
