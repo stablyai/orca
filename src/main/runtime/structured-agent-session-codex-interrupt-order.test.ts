@@ -23,10 +23,11 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
-  liveTestJournalRows,
+  closeTestJournalHostDatabases,
+  readTestJournalOutcomes,
   openTestJournalHostDatabase
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { parseJournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
+import { fields } from '../native-chat/agent-session-journal/journal-state-schema'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import {
   ensureStructuredAgentSessionHost,
@@ -97,21 +98,14 @@ async function stop(turnId?: string): Promise<void> {
 
 /** Every end row written for turn-1, as a row or a lifecycle batch's mutation, in order. */
 function turnEndRows(): AgentJournalTurnItem[] {
-  return liveTestJournalRows(openTestJournalHostDatabase(root).db, SESSION).flatMap((stored) => {
-    const parsed = parseJournalRow(stored.rowJson)
-    if (!parsed.ok) {
+  return readTestJournalOutcomes(openTestJournalHostDatabase(root).db, SESSION).flatMap((value) => {
+    if (value.field !== 'items' || value.deleted) {
       return []
     }
-    const { row } = parsed
-    const bodies = row.kind === 'lifecycle-batch' ? row.mutations : [row]
-    return bodies.flatMap((entry) =>
-      entry.kind === 'item' &&
-      entry.body.kind === 'turn' &&
-      entry.body.turnId === 'turn-1' &&
-      entry.body.state !== 'running'
-        ? [entry.body]
-        : []
-    )
+    const { body } = fields.items.element.parse(JSON.parse(value.json))
+    return body.kind === 'turn' && body.turnId === 'turn-1' && body.state !== 'running'
+      ? [body]
+      : []
   })
 }
 
@@ -237,6 +231,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await stopStructuredAgentSessionRuntime()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

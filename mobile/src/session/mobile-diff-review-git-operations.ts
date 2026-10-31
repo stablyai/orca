@@ -4,7 +4,7 @@ import { reviewGitMutationSchema } from './diff-review-reply-schema'
 import type { GitMutationMethod } from './mobile-diff-review-screen-model'
 
 // Single-file refusals surface host text; bulk stage tallies failures and continues so one locked file cannot abort the sweep.
-function reviewGitMutation(name: string, method: GitMutationMethod) {
+function reviewGitMutation(name: string, method: GitMutationMethod | 'git.bulkUnstage') {
   return bindDeferredRpcOperation(
     defineRpcOperation({
       name,
@@ -18,6 +18,7 @@ function reviewGitMutation(name: string, method: GitMutationMethod) {
 
 export const reviewGitStage = reviewGitMutation('git.review-stage', 'git.stage')
 export const reviewGitUnstage = reviewGitMutation('git.review-unstage', 'git.unstage')
+export const reviewGitBulkUnstage = reviewGitMutation('git.review-bulk-unstage', 'git.bulkUnstage')
 export const reviewGitDiscard = reviewGitMutation('git.review-discard', 'git.discard')
 
 export const reviewGitStageRun = bindDeferredRpcOperation(

@@ -215,7 +215,31 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     }
   )
 
-  it('drops the cached provider session when an OSC status starts a new turn', () => {
+  // Claude reports hookless slash commands (`/context`) as OSC 7501 working then done; the session lives on (#36033).
+  it('keeps the cached provider session when an OSC status starts a turn after done', () => {
+    const server = new AgentHookServer()
+    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        providerSession,
+        payload: { state: 'done', prompt: 'first', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    for (const state of ['working', 'done'] as const) {
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        connectionId: 'conn-1',
+        payload: { state, prompt: '', agentType: 'claude' }
+      })
+    }
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', providerSession })
+  })
+
+  it('drops the cached provider session when a relaunched agent starts a turn after the old one exited', () => {
     const server = new AgentHookServer()
 
     server.ingestRemote(
@@ -226,10 +250,12 @@ describe('AgentHookServer ingestTerminalStatus', () => {
       },
       'conn-1'
     )
+    server.reconcileEndedProcessForPaneKeys([PANE], { preserveResumeIdentity: true })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ providerSessionOnly: true })
     server.ingestTerminalStatus({
       paneKey: PANE,
       connectionId: 'conn-1',
-      payload: { state: 'working', prompt: 'second', agentType: 'claude' }
+      payload: { state: 'working', prompt: '', agentType: 'claude' }
     })
 
     expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()

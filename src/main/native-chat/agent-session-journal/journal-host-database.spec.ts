@@ -46,7 +46,7 @@ export function registerJournalHostDatabaseTests(): void {
   }
 
   let root: string
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
 
   function item(ordinal: number): AgentJournalItemIdentity {
     return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
@@ -55,11 +55,11 @@ export function registerJournalHostDatabaseTests(): void {
   /** Deferred foreign-key failures leave COMMIT open, exercising shared-connection rollback recovery. */
   function failCommits(db: Database.Database): () => void {
     db.exec(`CREATE TEMP TABLE commit_probe_parent (id INTEGER PRIMARY KEY);
-CREATE TEMP TABLE commit_probe_child (
-  parent INTEGER REFERENCES commit_probe_parent (id) DEFERRABLE INITIALLY DEFERRED
-);
-CREATE TEMP TRIGGER commit_probe AFTER INSERT ON main.journal_rows
-BEGIN INSERT INTO commit_probe_child (parent) VALUES (1); END`)
+  CREATE TEMP TABLE commit_probe_child (
+    parent INTEGER REFERENCES commit_probe_parent (id) DEFERRABLE INITIALLY DEFERRED
+  );
+  CREATE TEMP TRIGGER commit_probe AFTER INSERT ON main.journal_rows
+  BEGIN INSERT INTO commit_probe_child (parent) VALUES (1); END`)
     return () => db.exec('DROP TRIGGER temp.commit_probe')
   }
 
@@ -89,10 +89,10 @@ BEGIN INSERT INTO commit_probe_child (parent) VALUES (1); END`)
         args: [
           '-e',
           `const { DatabaseSync } = require('node:sqlite')
-const db = new DatabaseSync(process.argv[1])
-db.exec('BEGIN IMMEDIATE')
-process.stdout.write('holding')
-setTimeout(() => { db.exec('COMMIT'); db.close() }, 200)`,
+  const db = new DatabaseSync(process.argv[1])
+  db.exec('BEGIN IMMEDIATE')
+  process.stdout.write('holding')
+  setTimeout(() => { db.exec('COMMIT'); db.close() }, 200)`,
           journalDatabasePath(root)
         ],
         timeoutMs: 30_000
@@ -258,7 +258,7 @@ setTimeout(() => { db.exec('COMMIT'); db.close() }, 200)`,
       await tearDownRuntime(installed, 'quit')
 
       expect(database.isClosed).toBe(true)
-      closeTestJournalHostDatabases()
+      await closeTestJournalHostDatabases()
       const reopened = openTestJournalHostDatabase(root)
       expect(
         readTestJournalRows(reopened.db, IDENTITY.sessionId, journal.epoch).map((row) => row.seq)

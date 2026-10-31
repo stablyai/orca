@@ -4,10 +4,16 @@ import os from 'node:os'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
 import {
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
+import {
+  observeTranscriptPaneLifetime,
   claudeTranscriptLines,
-  enableNativeChatSetting,
   seedClaudeProviderSession,
   toggleTerminalTabToChatView
 } from './helpers/native-chat-transcript-fixture'
@@ -113,15 +119,23 @@ test('keeps named output owners and accepted tasks while retaining a standalone 
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
+  const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+  const ptyId = await waitForActivePanePtyId(orcaPage)
+  await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
   const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+  expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
   const [tabId] = descriptor.paneKey.split(':')
   const sessionId = `e2e-tool-pairing-${randomUUID()}`
   const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-tool-pairing-'))
   const transcriptPath = path.join(scratchDir, `${sessionId}.jsonl`)
 
+  const finishLifetime = await observeTranscriptPaneLifetime(orcaPage, {
+    tabId,
+    worktreeId: descriptor.worktreeId,
+    paneKey: descriptor.paneKey
+  })
   try {
     writeFileSync(transcriptPath, pairingTranscript(sessionId))
-    await enableNativeChatSetting(orcaPage)
     await seedClaudeProviderSession(orcaPage, {
       paneKey: descriptor.paneKey,
       worktreeId: descriptor.worktreeId,
@@ -170,7 +184,10 @@ test('keeps named output owners and accepted tasks while retaining a standalone 
       contentType: 'image/png'
     })
 
-    const taskToggle = chat.getByRole('button', { name: /Tasks.*0 of 1 tasks completed/ })
+    const taskToggle = chat.getByRole('button', {
+      name: 'Tasks 0 of 1 task completed',
+      exact: true
+    })
     await expect(taskToggle).toBeVisible()
     await taskToggle.click()
     const composerTaskList = taskToggle.locator('..').getByRole('list', { name: 'Tasks' })
@@ -217,7 +234,16 @@ test('keeps named output owners and accepted tasks while retaining a standalone 
         BrowserWindow.getAllWindows().every((window) => !window.isVisible() && !window.isFocused())
       )
     ).toBe(true)
+    const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    expect(finalPane.tabId).toBe(boundPane.tabId)
+    expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+    expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+    await expect(chat).toBeVisible()
   } finally {
+    await testInfo.attach('transcript-pane-lifetime', {
+      body: JSON.stringify(await finishLifetime()),
+      contentType: 'application/json'
+    })
     rmSync(scratchDir, { recursive: true, force: true })
   }
 })

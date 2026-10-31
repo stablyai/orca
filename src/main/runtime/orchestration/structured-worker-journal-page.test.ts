@@ -10,6 +10,7 @@ import type {
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionHistoryRequest } from '../../../shared/agent-session-wire'
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import type { AgentSessionHistoryScope } from '../../native-chat/agent-session-wire/agent-session-history-page'
 import { readStructuredAgentSessionHistoryResult } from '../../native-chat/agent-session-wire/structured-agent-session-history-result'
@@ -107,7 +108,21 @@ describe("a worker's journal page", () => {
       await append(`child-${index}`, subagent)
     }
 
+    const before = await readStructuredJournalPage('session-1')
+    await host.journal!.close()
+    host.journal = await journals.open({
+      identity: {
+        sessionId: 'session-1',
+        workspaceId: 'ws-1',
+        hostId: 'host-1',
+        agent: 'claude',
+        providerHandle: claudeProviderHandle('claude-1', null)
+      },
+      stateDirectory: root,
+      now: () => ++clock
+    })
     const page = await readStructuredJournalPage('session-1')
+    expect(page).toStrictEqual(before)
 
     expect(page?.items.map((item) => item.body)).toEqual([
       said('worker-older'),
@@ -135,6 +150,8 @@ it.each(['normal', 'empty-earlier'] as const)(
   'projects %s text history through worker, public, activity and quit consumers after reopen',
   async (historyShape) => {
     const journal = host.journal!
+    const committedRows: JournalRow[] = []
+    journal.observeCommits((rows) => committedRows.push(...(rows ?? [])))
     const turn = { provider: 'claude', sessionId: 'claude-1', uuid: 'turn' } as const
     const scope = { kind: 'turn', turnItemId: 'claude:claude-1:turn' } as const
     await journal.appendItem(
@@ -164,11 +181,16 @@ it.each(['normal', 'empty-earlier'] as const)(
       throw new Error('missing rows')
     }
     expect(
-      rows.rows
+      committedRows
         .filter((row) => row.kind === 'item' && row.itemId === 'claude:claude-1:reply')
         .map((row) => (row.kind === 'item' ? row.body : null))
     ).toEqual(values.map(said))
-    const first = rows.rows.find(
+    expect(
+      rows.rows.filter(
+        (row) => row.kind === 'outcome' && row.itemIds.includes('claude:claude-1:reply')
+      )
+    ).toHaveLength(values.length)
+    const first = committedRows.find(
       (row) => row.kind === 'item' && row.itemId === 'claude:claude-1:reply'
     )
     expect(first).toMatchObject({

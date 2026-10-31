@@ -7,7 +7,7 @@ import {
   showWindowWithoutStealingFocus
 } from '../../window/foreground-activation-policy'
 import { emitBrowserExtensionEvent } from './browser-extension-api-host'
-import { watchBrowserExtensionMainWindowReadiness } from './browser-extension-main-window-readiness'
+import { watchBrowserMainWindowReadiness } from '../browser-main-window-readiness'
 
 /** chrome.windows constants. */
 export const WINDOW_ID_NONE = -1
@@ -87,7 +87,7 @@ function watchWindowEvents(
  */
 export function trackBrowserExtensionMainWindow(window: BrowserWindow): void {
   mainWindow = window
-  watchBrowserExtensionMainWindowReadiness(window)
+  watchBrowserMainWindowReadiness(window)
   watchWindowEvents(window, undefined, () => {
     if (mainWindow === window) {
       mainWindow = null

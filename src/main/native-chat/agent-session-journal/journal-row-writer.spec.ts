@@ -48,7 +48,7 @@ export function registerJournalRowWriterTests(): void {
     afterEach(async () => {
       vi.restoreAllMocks()
       try {
-        database.close()
+        await database.close()
       } catch {}
       await rm(root, { recursive: true, force: true })
     })

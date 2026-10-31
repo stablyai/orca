@@ -36,6 +36,7 @@ export type NativeChatComposerFieldProps = {
   editSession?: { cancel: () => void }
   /** Own draft persistence and native-drop routing by this pane so drops cannot land in another composer. */
   draftScopeKey: string
+  positionTarget?: string
   textareaRef: RefObject<NativeChatComposerInput | null>
   draft: string
   disabled: boolean
@@ -123,6 +124,7 @@ function imeComposedSegment(base: string, settled: string): string {
 export function NativeChatComposerField({
   editSession,
   draftScopeKey,
+  positionTarget,
   textareaRef,
   draft,
   disabled,
@@ -318,6 +320,7 @@ export function NativeChatComposerField({
             <NativeChatPromptEditor
               key={draftScopeKey}
               scopeKey={draftScopeKey}
+              positionTarget={positionTarget}
               imageRow={imageRow}
               inputRef={textareaRef}
               initialValue={draft}

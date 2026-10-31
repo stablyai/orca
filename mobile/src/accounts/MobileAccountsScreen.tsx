@@ -29,6 +29,8 @@ import {
 import { CodexResetCreditAction } from '../components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../components/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useRouteHandoff } from '../navigation/route-handoff'
 
 type AccountsNotice = { title: string; message: string }
@@ -327,38 +329,25 @@ export function MobileAccountsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.topRow}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Back')}
-        >
-          <ChevronLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <View style={styles.titleWrap}>
-          <Text style={styles.heading}>{t('accounts.screen.title', 'Accounts')}</Text>
-          {hostName ? (
-            <Text style={styles.subheading} numberOfLines={1}>
-              {hostName}
-            </Text>
-          ) : null}
-        </View>
-        <Pressable
-          style={styles.iconButton}
-          onPress={refresh}
-          disabled={!client || refreshing || connState !== 'connected'}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('accounts.screen.refreshAccounts', 'Refresh accounts')}
-        >
-          {refreshing ? (
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-          ) : (
-            <RefreshCw size={18} color={colors.textSecondary} />
-          )}
-        </Pressable>
-      </View>
+      <NavBar
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            onPress={() => router.back()}
+            accessibilityLabel={t('common.back', 'Back')}
+          />
+        }
+        title={t('accounts.screen.title', 'Accounts')}
+        subtitle={hostName || undefined}
+        trailing={
+          <NavBarButton
+            icon={refreshing ? RefreshingIcon : RefreshCw}
+            onPress={() => void refresh()}
+            disabled={!client || refreshing || connState !== 'connected'}
+            accessibilityLabel={t('accounts.screen.refreshAccounts', 'Refresh accounts')}
+          />
+        }
+      />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]}
@@ -417,4 +406,8 @@ export function MobileAccountsScreen() {
       />
     </SafeAreaView>
   )
+}
+
+function RefreshingIcon({ color }: { color?: string }) {
+  return <ActivityIndicator size="small" color={color} />
 }

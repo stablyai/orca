@@ -14,6 +14,7 @@ import { usesInstalledAgentModelCatalog } from './agent-model-catalog-ownership'
 import { structuredAgentSessionShownModel } from './structured-agent-session-option-snapshot'
 import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import type { AgentSessionAcceptedInputSources } from './agent-session-options-result'
+import { labelFromModelId } from './model-id-label'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionsResult
@@ -31,15 +32,17 @@ export {
 
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
-  result: AgentSessionOptionsResult
+  result: AgentSessionOptionsResult,
+  agent: StructuredAgentSessionOptionRecord['agent']
 ): AgentSessionOptionCatalog {
   const models: CatalogModel[] = result.models.map((model) =>
-    discoveredModel(model, result.fastModeSupport?.supported === true)
+    discoveredModel(model, result.fastModeSupport?.supported === true, agent)
   )
   if (result.current.model && !models.some((model) => model.id === result.current.model)) {
     models.push({
       id: result.current.model,
-      label: result.current.model,
+      label: labelFromModelId(result.current.model),
+      description: result.current.model,
       options: seed.unknownModelOptions ?? []
     })
   }
@@ -48,8 +51,8 @@ export function structuredAgentSessionOptionCatalog(
 
 export type StructuredAgentSessionOptionState = {
   catalog: AgentSessionOptionCatalog | null
-  /** Catalog provenance, not current-child eligibility: seed stays a placeholder until the host answers;
-   * builtin then enables the static list without naming a model the host may replace. */
+  /** Catalog provenance, independent of known input: seed offers no replacement models;
+   * builtin enables static rows only after unavailable discovery. */
   catalogSource: 'seed' | 'builtin' | 'host' | 'live' | null
   /** Live-answer IDs verified by the agent’s listing; extra rows name the chat’s own model, not listed capabilities. Old hosts omit this. */
   verifiedModelIds?: readonly string[]
@@ -66,12 +69,13 @@ export type StructuredAgentSessionOptionState = {
   permissionMode: string | null
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
+  reportedEffort?: string
   pendingId: string | null
   listingInProgress?: boolean
   fastModeRestricted?: boolean
 }
 
-/** Install a static seed immediately, but show the placeholder until the host answers; later sources only upgrade it. */
+/** Seed definitions supply geometry; only accepted input or host inventory can name a model. */
 export function createStructuredAgentSessionOptionState(
   agent = 'codex',
   seedCatalog?: AgentSessionOptionCatalog | null
@@ -91,7 +95,8 @@ export function settleStructuredAgentSessionBuiltinCatalog(
   state: StructuredAgentSessionOptionState,
   listingInProgress = state.listingInProgress
 ): StructuredAgentSessionOptionState {
-  const catalogSource = state.catalogSource === 'seed' ? 'builtin' : state.catalogSource
+  const catalogSource =
+    state.catalogSource === 'seed' && !listingInProgress ? 'builtin' : state.catalogSource
   return catalogSource === state.catalogSource && state.listingInProgress === listingInProgress
     ? state
     : { ...state, catalogSource, listingInProgress }
@@ -128,7 +133,7 @@ export function applyStructuredAgentSessionModelCatalog(
   options: { newLaunch: boolean; coherentCatalog?: boolean }
 ): StructuredAgentSessionOptionState {
   const installed = usesInstalledAgentModelCatalog(state.record.agent, options.coherentCatalog)
-  const listingInProgress = installed && catalog.listingInProgress === true
+  const listingInProgress = catalog.listingInProgress === true
   if (Boolean(state.listingInProgress) !== listingInProgress) {
     state = { ...state, listingInProgress }
   }
@@ -139,7 +144,7 @@ export function applyStructuredAgentSessionModelCatalog(
     catalog.origin === 'unknown'
       ? []
       : catalog.models.map((model) =>
-          discoveredModel(model, catalog.fastModeSupport?.supported === true)
+          discoveredModel(model, catalog.fastModeSupport?.supported === true, state.record.agent)
         )
   if (catalog.origin === 'unknown' || (!installed && models.length === 0)) {
     return settleStructuredAgentSessionBuiltinCatalog(state)
@@ -181,6 +186,7 @@ export function applyStructuredAgentSessionOptions(
 ): StructuredAgentSessionOptionState {
   const { current } = result
   const installed = usesInstalledAgentModelCatalog(state.record.agent, launch.coherentCatalog)
+  const keepCatalog = installed || result.modelsKnown === false
   // Catalog defaults supply picker context without claiming the chat chose them.
   replaceStructuredAgentSessionAnsweredValues(
     state.record,
@@ -203,16 +209,26 @@ export function applyStructuredAgentSessionOptions(
   return {
     ...state,
     optionsAnswerPresent: true,
-    catalog: installed ? state.catalog : structuredAgentSessionOptionCatalog(seed, result),
+    reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
+    catalog: keepCatalog
+      ? state.catalog
+      : structuredAgentSessionOptionCatalog(seed, result, state.record.agent),
     fastModeRestricted:
       installed &&
       result.fastModeSupport?.supported === false &&
       result.fastModeSupport.reason !== 'model-not-supported',
-    catalogSource: installed && state.catalogSource === 'seed' ? 'seed' : 'live',
+    catalogSource:
+      result.modelsKnown === false
+        ? state.catalogSource === 'live'
+          ? 'host'
+          : state.catalogSource
+        : installed && state.catalogSource === 'seed'
+          ? 'seed'
+          : 'live',
     acceptedInputSources: current.acceptedInputSources,
     olderHost: current.defaulted === undefined ? true : undefined,
     defaultsUnsent: current.defaulted !== undefined && !launch.newLaunch ? true : undefined,
-    verifiedModelIds: installed
+    verifiedModelIds: keepCatalog
       ? state.verifiedModelIds
       : result.listedModelIds?.length
         ? result.listedModelIds
@@ -238,6 +254,9 @@ export function commitStructuredAgentSessionOption(
   value: string,
   origin: 'picked' | 'seeded' = 'picked'
 ): StructuredAgentSessionOptionState {
+  if (id === 'model' || id === 'effort') {
+    state = { ...state, reportedEffort: undefined }
+  }
   if (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
     return { ...state, permissionMode: value, reportedPermissionMode: undefined, pendingId: null }
   }

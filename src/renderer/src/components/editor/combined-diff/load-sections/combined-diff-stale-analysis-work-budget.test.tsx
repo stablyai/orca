@@ -18,7 +18,15 @@ import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
 import { withDiffSectionLoadTimeout } from './combined-diff-section-load-timeout'
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn() }))
-vi.mock('./fetch-combined-diff-section', () => ({ fetchCombinedDiffSection: mocks.fetch }))
+vi.mock('./fetch-combined-diff-section', () => ({
+  fetchCombinedDiffSection: async (args: { operation: unknown }) => ({
+    result: await mocks.fetch(args),
+    operation: args.operation
+  })
+}))
+vi.mock('./combined-diff-section-connection', () => ({
+  acquireCombinedDiffSectionOperation: () => ({ assertCurrent: () => undefined })
+}))
 import { useCombinedDiffSectionLoader } from './use-combined-diff-section-loader'
 
 const file: OpenFile = {
@@ -161,7 +169,8 @@ async function startViewer(props = viewer) {
     file: props.file,
     isAllMode: props.entrySet.isAllMode,
     isBranchMode: props.entrySet.isBranchMode,
-    isCommitMode: props.entrySet.isCommitMode
+    isCommitMode: props.entrySet.isCommitMode,
+    operation: expect.any(Object)
   })
   return hook
 }
@@ -184,6 +193,7 @@ function expectedSection(initial: DiffSection, result: GitDiffResult, error?: st
   const prune = largeDiffRenderLimit?.limited === true
   return {
     ...initial,
+    operation: expect.objectContaining({ assertCurrent: expect.any(Function) }),
     originalContent: result.kind === 'text' && !prune ? result.originalContent : '',
     modifiedContent: result.kind === 'text' && !prune ? result.modifiedContent : '',
     diffResult: prune ? { ...result, originalContent: '', modifiedContent: '' } : result,

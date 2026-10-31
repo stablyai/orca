@@ -78,7 +78,7 @@ beforeEach(async () => {
 afterEach(async () => {
   Object.assign(writes, { failing: false, grants: Infinity, refused: 0 })
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
@@ -162,7 +162,7 @@ async function seedProfile(
     })
     await journal.close()
   }
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   if (options.newer) {
     await seedTestAgentSessionStoreFromNewerBuild(root)
   }
@@ -275,7 +275,7 @@ describe('restoring the chat tabs open at quit', () => {
     for (const row of recordedRows) {
       insertTestJournalRowJson(database.db, sessionId, row.seq, row.json, row.ts)
     }
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
 
     const installs: {
       host: StructuredAgentSessionHost
@@ -352,7 +352,7 @@ describe('restoring the chat tabs open at quit', () => {
       clock.restore()
       await stopStructuredAgentSessionRuntime()
       expect(firstDatabase.isClosed).toBe(true)
-      closeTestJournalHostDatabases()
+      await closeTestJournalHostDatabases()
       opens.mockClear()
       const nextRuntime = startupRuntime({
         profileChats: [sessionId],

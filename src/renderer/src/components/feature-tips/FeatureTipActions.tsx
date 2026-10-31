@@ -23,7 +23,8 @@ export function FeatureTipActions({
   showSkip = true,
   fullWidth = false,
   primaryButtonRef,
-  label
+  label,
+  secondaryLabel
 }: {
   currentTip: FeatureTip
   primaryBusy: boolean
@@ -35,12 +36,15 @@ export function FeatureTipActions({
   primaryButtonRef?: Ref<HTMLButtonElement>
   /** Overrides the tip's CTA for tips whose button changes with their state. */
   label?: string
+  /** Overrides the secondary button's default "Maybe Later". */
+  secondaryLabel?: string
 }): JSX.Element {
   return (
     <>
       {showSkip ? (
         <Button variant="ghost" onClick={onSkip} disabled={primaryBusy}>
-          {translate('auto.components.feature.tips.FeatureTipActions.eb04abece8', 'Maybe Later')}
+          {secondaryLabel ??
+            translate('auto.components.feature.tips.FeatureTipActions.eb04abece8', 'Maybe Later')}
         </Button>
       ) : null}
       <Button

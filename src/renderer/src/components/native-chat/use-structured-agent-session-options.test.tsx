@@ -19,11 +19,12 @@ import {
   LIVE_OPTIONS,
   SAVED_LIST,
   SEED,
-  tick
+  tick,
+  type RenderProps
 } from './use-structured-agent-session-options.test-fixture'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
 import { act, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   structuredAgentSessionSendSelection,
@@ -37,6 +38,7 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environmen
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 describe('useStructuredAgentSessionOptions', () => {
   beforeEach(() => {
+    mocks.sendSelection = false
     forgetStructuredSessionSelection('session-1')
     mocks.call.mockReset()
     mocks.enqueue.mockReset()
@@ -58,7 +60,7 @@ describe('useStructuredAgentSessionOptions', () => {
       })),
       current: { model, ...(effort ? { effort } : {}) }
     })
-    const initial = menu('family')
+    const initial = { ...menu('family'), acceptsImages: true }
     const older = Promise.withResolvers<AgentSessionOptionsResult>()
     const latest = Promise.withResolvers<AgentSessionOptionsResult>()
     let reads = 0
@@ -89,9 +91,10 @@ describe('useStructuredAgentSessionOptions', () => {
     rerender({ ...REOPENED, agent: 'antigravity', hidden: true })
     rerender({ ...REOPENED, agent: 'antigravity' })
     await waitFor(() => expect(reads).toBe(3))
-    await act(async () => latest.resolve(menu('newer', 'high')))
+    await act(async () => latest.resolve({ ...menu('newer', 'high'), acceptsImages: true }))
     await waitFor(() => expect(currentValue(result.current.optionSnapshot, 'effort')).toBe('high'))
-    await act(async () => older.resolve(menu('family', 'low')))
+    await act(async () => older.resolve({ ...menu('family', 'low'), acceptsImages: false }))
+    expect(result.current.acceptsImages).toBe(true)
     expect(currentValue(result.current.optionSnapshot, 'model')).toBe('newer')
     expect(descriptor(result.current.optionSnapshot, 'effort')).toMatchObject({
       settable: true,
@@ -215,7 +218,7 @@ describe('useStructuredAgentSessionOptions', () => {
     unmount()
   })
 
-  it('treats method_not_found and forbidden as no list: the built-in one, naming nothing', async () => {
+  it('treats method_not_found and forbidden as unavailable discovery without hiding saved input', async () => {
     for (const code of ['method_not_found', 'forbidden']) {
       answer({ modelCatalog: () => Promise.reject(new FakeRpcCallError(code)) })
       const { result, unmount } = renderOptions(
@@ -223,11 +226,10 @@ describe('useStructuredAgentSessionOptions', () => {
         mutateWith(async () => null).mutate
       )
       await waitFor(() =>
-        expect(descriptor(result.current.optionSnapshot, 'model')?.settable).toBe(true)
+        expect(result.current.sendSource.optionStateRef.current.catalogSource).toBe('builtin')
       )
       expect(modelChoiceCount(result.current.optionSnapshot)).toBeGreaterThan(0)
-      // Wait for host labels instead of flashing built-in labels for saved picks.
-      expect(currentValue(result.current.optionSnapshot, 'model')).toBeNull()
+      expect(currentValue(result.current.optionSnapshot, 'model')).toBe(SEED.model)
       unmount()
     }
   })
@@ -746,6 +748,99 @@ describe('useStructuredAgentSessionOptions', () => {
       )
       expect(result.current.acceptsImages).toBe(acceptsImages)
       unmount()
+    }
+  )
+})
+
+import type {
+  PiRefreshFixtureModule,
+  PiRefreshMount
+} from '../../../../shared/structured-agent-session-option-refresh.test-fixture-contract'
+const { piOptionRefreshContract } = await vi.importActual<PiRefreshFixtureModule>(
+  '../../../../main/native-chat/agent-session-wire/structured-agent-session-option-refresh.test-fixture'
+)
+
+describe('Pi catalog refresh completion', () => {
+  beforeEach(() => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'server-1', createdAt: 1 }])
+    mocks.sendSelection = true
+    mocks.call.mockReset()
+    mocks.enqueue.mockReset()
+    mocks.hold.mockReset()
+    resetHostModelCatalogSnapshotsForTests()
+  })
+
+  const hosts = new Map<string, Parameters<PiRefreshMount>[0]>()
+  piOptionRefreshContract(
+    async (host) => {
+      forgetStructuredSessionSelection(host.record.sessionId)
+      hosts.set(host.record.sessionId, host)
+      mocks.call.mockImplementation(
+        (
+          _target: unknown,
+          method: string,
+          params: {
+            sessionId?: string
+            envelope?: { sessionId?: string }
+            key?: string
+            value?: string
+          }
+        ) => {
+          const id = params?.sessionId ?? params?.envelope?.sessionId
+          const current = id ? hosts.get(id) : undefined
+          if (method === 'agentSession.options' && current) {
+            return current.options()
+          }
+          if (method === 'agentSession.modelCatalog' && current) {
+            return current.catalog()
+          }
+          if (
+            method === 'agentSession.setOption' &&
+            current &&
+            params.key === 'effort' &&
+            typeof params.value === 'string'
+          ) {
+            return current.acceptEffort(params.value).then((value) => ({ ok: true, value }))
+          }
+          return new Promise(() => {})
+        }
+      )
+      const { mutate } = mutateWith(async (_method, _fingerprint, fields) => {
+        if (
+          typeof fields !== 'object' ||
+          fields === null ||
+          !('value' in fields) ||
+          typeof fields.value !== 'string'
+        ) {
+          throw new Error('missing effort')
+        }
+        return host.acceptEffort(fields.value)
+      })
+      const props: RenderProps = { ...REOPENED, agent: 'pi', sessionId: host.record.sessionId }
+      const harness = renderOptions(props, mutate)
+      await act(async () => {
+        await Promise.resolve()
+      })
+      return {
+        snapshot: () => harness.result.current.optionSnapshot,
+        capture: () => harness.result.current.capture().selection,
+        demand: () => harness.result.current.optionSurface.demandModelCatalog?.(),
+        pick: (value) => harness.result.current.setStructuredOption('effort', value),
+        replace: async (fence, otherHost) => {
+          await act(async () => harness.rerender({ ...props, fence, paired: otherHost }))
+        },
+        close: async () => {
+          harness.unmount()
+          hosts.delete(host.record.sessionId)
+        }
+      }
+    },
+    async (work) => {
+      await act(async () => {
+        work()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
     }
   )
 })

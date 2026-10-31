@@ -1,3 +1,4 @@
+import { isTuiAgent } from './tui-agent-config'
 import { isAgentSessionOptions } from './agent-session-record'
 import type { TuiAgent } from './tui-agent'
 import type { AgentPermissionChoice } from './tui-agent-permission-choice'
@@ -15,6 +16,7 @@ export type AgentLaunchChoices = Partial<Record<TuiAgent, AgentModelOptionChoice
 export type AgentChoiceCliForm =
   | { kind: 'value'; names: readonly string[]; lift: 'separate-and-long-equals' | 'never' }
   | { kind: 'config'; names: readonly string[]; key: string; lift: 'codex-bare-string' | 'never' }
+  | { kind: 'settings'; names: readonly string[]; key: string; lift: 'merged-json' }
   | { kind: 'recipe'; words: readonly string[]; value: AgentPermissionChoice }
 
 export function normalizeAgentModelOptionChoices(
@@ -44,4 +46,23 @@ export function normalizeAgentModelOptionChoices(
         ...(Object.keys(options).length ? { options } : {})
       }
     : undefined
+}
+
+export const AGENT_LAUNCH_CHOICE_KEYS: ReadonlySet<string> = new Set([
+  'model',
+  'effort',
+  'permissionMode'
+])
+
+export function normalizeAgentLaunchChoices(value: unknown): AgentLaunchChoices {
+  const choices: AgentLaunchChoices = {}
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [agent, entry] of Object.entries(value)) {
+      const normalized = normalizeAgentModelOptionChoices(entry)
+      if (isTuiAgent(agent) && normalized) {
+        choices[agent] = normalized
+      }
+    }
+  }
+  return choices
 }

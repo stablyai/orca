@@ -41,6 +41,12 @@ import { WorktreeIdRequiresFullPathError } from '../../runtime-worktree-lineage-
 import { triggerTerminalSpawnPushTargetMaterialization } from '../../runtime-terminal-spawn-push-target-materialization'
 import { resolveCreatedWorktreeTerminalTarget } from '../../runtime-created-worktree-terminal-target'
 
+export type TerminalWorkspaceCreationEvidence = [
+  createdWorktree?: Worktree,
+  resolvedWorktree?: ResolvedWorktree,
+  resolvedFolder?: FolderWorkspace
+]
+
 // Why: folder and floating workspaces have no worktree row, so no parent, children or lineage.
 function withoutWorktreeLineage(worktree: Worktree): ResolvedWorktree {
   return {
@@ -121,16 +127,28 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   async resolveTerminalWorkspaceLaunchScope(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean } = {}
+    options: { wslUserAct?: boolean } = {},
+    resolvedWorktree?: ResolvedWorktree,
+    resolvedFolder?: FolderWorkspace
   ): Promise<TerminalWorkspaceLaunchScope> {
-    return (await this.resolveTerminalWorkspaceLaunchTarget(selector, createdWorktree, options))
-      .scope
+    return (
+      await this.resolveTerminalWorkspaceLaunchTarget(
+        selector,
+        createdWorktree,
+        options,
+        resolvedWorktree,
+        resolvedFolder
+      )
+    ).scope
   }
 
   protected async resolveTerminalWorkspaceLaunchTarget(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean } = {}
+    options: { wslUserAct?: boolean } = {},
+    resolvedWorktree?: ResolvedWorktree,
+    resolvedFolder?: FolderWorkspace,
+    checkPath = true
   ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
     if (isFloatingWorkspaceSelector(selector)) {
       // Why no managed worktree: the floating sentinel has no repo or worktree record behind it.
@@ -146,7 +164,12 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       }
     }
 
-    const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector, options)
+    const folderScope = await this.resolveFolderWorkspaceLaunchScope(
+      selector,
+      options,
+      resolvedFolder,
+      checkPath
+    )
     if (folderScope) {
       return {
         scope: folderScope,
@@ -158,6 +181,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     const parsed = parseWorkspaceKey(workspaceSelector)
     const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
     const worktree =
+      resolvedWorktree ??
       resolveCreatedWorktreeTerminalTarget(this.store, selector, createdWorktree) ??
       (await this.resolveGitWorktreeSelector(worktreeSelector))
     // Repo ids are host-blind; resolve the worktree owner or refuse as unresolved rather than spawn locally with a remote cwd (#11163).

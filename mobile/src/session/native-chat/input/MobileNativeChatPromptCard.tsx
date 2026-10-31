@@ -77,7 +77,7 @@ export function MobileNativeChatPromptCard({
         prompt={ask}
         onAnswer={async (selections) => {
           const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
-          if (accepted) {
+          if (accepted && !ask.replyAsMessage) {
             onDismissAsk?.()
           }
           return accepted
@@ -151,7 +151,7 @@ const styles = themedStyleSheet(() => ({
     minHeight: 44,
     justifyContent: 'center',
     backgroundColor: colors.surfaceBright,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md
   },
   terminalButtonText: {

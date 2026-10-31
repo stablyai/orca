@@ -242,6 +242,10 @@ export function FileExplorerRow({
                   : undefined
             }
             onDoubleClick={(e) => {
+              // Outside-link rows are browse-only, so their name double-click pins the preview instead.
+              if (node.outsideProject) {
+                return
+              }
               // Keep icon/empty-row double-clicks available for pin preview and directory toggling.
               e.stopPropagation()
               onStartRename(node)

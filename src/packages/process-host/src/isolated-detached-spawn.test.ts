@@ -62,6 +62,7 @@ describe('spawnDetachedWithoutInheritance', () => {
     setIsolatedSpawner(null)
     onPlatform(originalPlatform)
     vi.unstubAllEnvs()
+    vi.restoreAllMocks()
     spawnProcess.mockReset()
   })
 
@@ -158,6 +159,39 @@ describe('spawnDetachedWithoutInheritance', () => {
     expect(await stoppedExit).toEqual([1, null])
     expect(await killedExit).toEqual([null, 'SIGTERM'])
     expect(killed.kill()).toBe(false)
+  })
+
+  it('logs a child whose breakaway from our job was denied, and still starts it', async () => {
+    onPlatform('win32')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    setIsolatedSpawner(() => ({ pid: 7, exitWatchError: null, breakawayDenied: true }))
+
+    const child = spawnDetachedWithoutInheritance({ program: 'C:\\wsl.exe' })
+    await once(child, 'spawn')
+
+    expect(child.pid).toBe(7)
+    expect(warn).toHaveBeenCalledWith(
+      "[process-host] pid 7 could not break away from this process's job"
+    )
+    warn.mockClear()
+    setIsolatedSpawner(() => ({ pid: 8, exitWatchError: null, breakawayDenied: false }))
+    spawnDetachedWithoutInheritance({ program: 'C:\\wsl.exe' })
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('refuses to kill a child whose exit it cannot watch, since its pid may be reused', async () => {
+    onPlatform('win32')
+    setIsolatedSpawner(() => ({ pid: 77, exitWatchError: 5, breakawayDenied: false }))
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const child = spawnDetachedWithoutInheritance({ program: 'C:\\wsl.exe' })
+    await once(child, 'spawn')
+
+    expect(child.pid).toBe(77)
+    expect(child.kill()).toBe(false)
+    expect(processKill).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('pid 77 is untracked'))
   })
 
   it('reports a native spawn failure as an error event, like libuv', async () => {

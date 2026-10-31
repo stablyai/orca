@@ -1,3 +1,4 @@
+import { watchMovedWorkerResumeSessions } from './rpc/methods/orchestration/worker/worker-resume-session-capture'
 import { AgentTransitionDetector } from '../agent-hooks/agent-transition-detector'
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
@@ -10,10 +11,21 @@ import { OrcaRuntimeWithMigrationCatalog } from './orca-runtime-migration-catalo
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { AgentStatusStoreView } from './sidebar-inputs/workspace-activity-facts-producer'
 import { subscribeHookStatusTitles } from './terminal/layout/hook-status-title-subscription'
+import { TerminalWorkerTurnStops } from './orchestration/terminal-worker-turn-stops'
+import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
+import { resolveStructuredWorkerIdentity } from './structured-worker-authority'
+import { chatStatusInTurn, terminalPhaseInTurn } from './orchestration/worker-auto-release-activity'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
 } from './terminal-agent-phone-push'
+
+function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
+  const timer = setTimeout(run, delayMs)
+  timer.unref?.()
+  return { cancel: () => clearTimeout(timer) }
+}
 
 /** All hosts/builds own transition detection and windowless phone pushes. */
 export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMigrationCatalog {
@@ -36,12 +48,17 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
     translate: (key, fallback) =>
       getRuntimeDesktopSurface().translateNotification?.(key, fallback) ?? fallback,
     dispatch: (event) => this.mobileNotifications.dispatch(event),
-    setTimer: (run, delayMs) => {
-      const timer = setTimeout(run, delayMs)
-      timer.unref?.()
-      return { cancel: () => clearTimeout(timer) }
-    },
+    setTimer: unrefTimer,
     now: Date.now
+  })
+  // The execution host observes its own panes, so local, SSH and paired-server workers are all seen.
+  private readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
+    ...this.workerTurnStopReportDeps,
+    readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
+    setTimer: unrefTimer,
+    getHandle: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+    getProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
+    readScreen: (handle) => this.readTerminal(handle, { screen: true, limit: 15 })
   })
 
   private readonly externalConversations = installExternalConversations(this.store, this)
@@ -65,6 +82,38 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
   constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithMigrationCatalog>) {
     super(...args)
     this.agentTransitions.subscribe((change) => this.terminalAgentPhonePush.observe(change))
+    this.agentTransitions.subscribe((change) => this.terminalWorkerTurnStops.observe(change))
+    this.agentTransitions.subscribe((change) => this.workerAutoReleaseActivity.observePane(change))
+    const saveMovedWorkerSessions = watchMovedWorkerResumeSessions(
+      this,
+      () => this._orchestrationDb
+    )
+    this.subscribeAgentProviderSessionChangesFn?.((sessions) => {
+      try {
+        saveMovedWorkerSessions(sessions)
+      } catch (error) {
+        console.warn('[orchestration] a worker conversation change was not saved', error)
+      }
+    })
+  }
+
+  /** Whether a worker's agent is in a turn now, working or waiting on the user; an automatic close never takes one. */
+  isWorkerAgentInTurn(
+    resource: Pick<WorkerTerminalResourceRow, 'pane_key' | 'terminal_handle'>
+  ): boolean {
+    const structured = resolveStructuredWorkerIdentity(
+      resource.terminal_handle,
+      this._orchestrationDb
+    )
+    if (structured) {
+      return chatStatusInTurn(
+        getStructuredAgentSessionHost()?.readStatusSummary(structured.sessionId)?.status
+      )
+    }
+    return (
+      resource.pane_key !== null &&
+      terminalPhaseInTurn(this.agentTransitions.phaseOf(resource.pane_key))
+    )
   }
 
   /** Attach after higher layers subscribe; also drive generated tab titles. */

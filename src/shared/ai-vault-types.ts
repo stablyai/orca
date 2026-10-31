@@ -1,5 +1,6 @@
 import type { AiVaultScanIssueText } from './ai-vault-scan-issue-copy'
 import type { TuiAgent } from './tui-agent'
+import type { AgentSessionAccountHome } from './agent-session-account-home'
 import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 
 export const AI_VAULT_AGENTS = [
@@ -107,6 +108,9 @@ export type AiVaultSessionSubagentInfo = {
 }
 
 export type AiVaultSession = {
+  /** Recorded account home; null proves System default, absent means unknown. */
+  accountHome?: AgentSessionAccountHome | null
+  accountWslDistro?: string | null
   id: string
   executionHostId: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null

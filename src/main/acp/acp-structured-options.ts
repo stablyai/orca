@@ -51,7 +51,7 @@ export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
       AcpDialect,
-      'modelEfforts' | 'withheldCommands' | 'effortChangesModel'
+      'modelEfforts' | 'withheldCommands' | 'effortChangesModel' | 'clampsUnlistedEffort'
     > = {}
   ) {}
 
@@ -136,7 +136,7 @@ export class AcpStructuredOptions {
     return null
   }
 
-  /** Effort menus describe models; current session values never establish catalog defaults. */
+  /** Native choices never establish an unobserved model's capability or configured default. */
   read(): Pick<AgentSessionOptionsResult, 'models' | 'current'> {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
@@ -167,7 +167,10 @@ export class AcpStructuredOptions {
         model.id === currentModel
           ? { efforts: sessionEfforts }
           : (modelOption || effortOption) && !advertised
-            ? { efforts: [], effortsKnown: false as const }
+            ? {
+                efforts: this.dialect.clampsUnlistedEffort ? sessionEfforts : [],
+                effortsKnown: false as const
+              }
             : { efforts: [] }
       return {
         ...model,
@@ -175,7 +178,10 @@ export class AcpStructuredOptions {
         // Fall back to the running session's menu when the advertised menu is empty.
         ...(advertised && (advertised.efforts.length > 0 || model.id !== currentModel)
           ? advertised
-          : sessionMenu)
+          : sessionMenu),
+        ...(advertised?.declaredDefaultEffort !== undefined
+          ? { declaredDefaultEffort: advertised.declaredDefaultEffort }
+          : {})
       }
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]

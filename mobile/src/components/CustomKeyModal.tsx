@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, Pressable, TextInput, Switch } from 'react-native'
+import { View, Text, Pressable, TextInput } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
+import { TextField } from './composer-input/TextField'
 import {
   buildTerminalShortcutKey,
   normalizeShortcutKeyInput,
@@ -15,6 +16,7 @@ import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
 import { updateStoredCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { MobileSwitch } from './MobileSwitch'
 
 type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
@@ -378,24 +380,21 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
         <View style={styles.group}>
           <View style={styles.macroForm}>
             <Text style={styles.fieldLabel}>{t('components.customKeyModal.label', 'Label')}</Text>
-            <TextInput
-              style={styles.fieldInput}
+            <TextField
               value={macroLabel}
               onChangeText={setMacroLabel}
               placeholder={t('components.customKeyModal.labelPlaceholder', 'e.g. Build')}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
             />
             <Text style={styles.fieldLabel}>
               {t('components.customKeyModal.command', 'Command')}
             </Text>
-            <TextInput
-              style={styles.fieldInput}
+            <TextField
+              monospace
               value={macroText}
               onChangeText={setMacroText}
               placeholder={t('components.customKeyModal.commandPlaceholder', 'e.g. pnpm build')}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -403,11 +402,10 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               <Text style={styles.switchLabel}>
                 {t('components.customKeyModal.pressEnter', 'Press Enter')}
               </Text>
-              <Switch
+              <MobileSwitch
+                accessibilityLabel={t('components.customKeyModal.pressEnter', 'Press Enter')}
                 value={macroEnter}
                 onValueChange={setMacroEnter}
-                trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-                thumbColor={colors.textPrimary}
               />
             </View>
             <Pressable

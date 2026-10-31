@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY
@@ -94,5 +95,57 @@ describe('extra agent args capability gate', () => {
       { selector: { kind: 'self' } }
     )
     expect(callRuntimeRpc.mock.calls[0]?.[2]).toMatchObject({ extraAgentArgs: '--model opus' })
+  })
+  it('preserves a surface-only patch on an intermediate host without claiming complete picker setup', async () => {
+    const { createAutomationForDestination } = await client()
+    getRuntimeEnvironmentStatus.mockResolvedValue({
+      capabilities: [...CURRENT_HOST.capabilities, AUTOMATION_SURFACE_RUNTIME_CAPABILITY]
+    })
+    callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
+    await createAutomationForDestination(
+      RUNTIME,
+      {
+        ...INPUT,
+        launchSetupPatch: {
+          surface: 'chat',
+          arguments: { kind: 'legacy-extras', value: '--model opus' }
+        }
+      },
+      { selector: { kind: 'self' } }
+    )
+    expect(callRuntimeRpc.mock.calls[0]?.[2]).toMatchObject({
+      launchSetupPatch: {
+        surface: 'chat',
+        arguments: { kind: 'legacy-extras', value: '--model opus' }
+      }
+    })
+    expect(callRuntimeRpc.mock.calls[0]?.[2]).not.toHaveProperty('extraAgentArgs')
+  })
+  it('keeps old-host Terminal writes legacy-shaped and refuses Chat before a move can write', async () => {
+    const { createAutomationForDestination } = await client()
+    getRuntimeEnvironmentStatus.mockResolvedValue(CURRENT_HOST)
+    callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
+    await createAutomationForDestination(
+      RUNTIME,
+      {
+        ...INPUT,
+        launchSetupPatch: {
+          surface: 'terminal',
+          arguments: { kind: 'legacy-extras', value: '--model opus' }
+        }
+      },
+      { selector: { kind: 'self' } }
+    )
+    expect(callRuntimeRpc.mock.calls[0]?.[2]).toMatchObject({ extraAgentArgs: '--model opus' })
+    expect(callRuntimeRpc.mock.calls[0]?.[2]).not.toHaveProperty('launchSetupPatch')
+    callRuntimeRpc.mockClear()
+    await expect(
+      createAutomationForDestination(
+        RUNTIME,
+        { ...INPUT, launchSetupPatch: { surface: 'chat' } },
+        { selector: { kind: 'self' } }
+      )
+    ).rejects.toThrow('Update Orca on this host')
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
   })
 })

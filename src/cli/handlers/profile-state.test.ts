@@ -43,7 +43,14 @@ vi.mock('../runtime-client', () => {
   }
 
   class RuntimeClient {
-    getCliStatus = getCliStatusMock
+    async getOfflineRuntimeAdmission() {
+      const status = await getCliStatusMock()
+      return {
+        reachable: status.result.runtime.reachable,
+        legacyPidRunning: status.result.app.running,
+        pid: status.result.app.pid ?? null
+      }
+    }
 
     constructor(
       _userDataPath?: string,

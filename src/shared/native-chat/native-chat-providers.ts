@@ -1,37 +1,32 @@
-// Persist explicit choices only; Chat UI routes unchosen agents to chat and Settings enables installed non-built-ins.
+// Persist the default surface independently from per-agent overrides.
 
-import { isAgentSessionHandleProvider } from '../agent-session-provider-handle'
 import type { GlobalSettings } from '../global-settings-types'
 import type { TuiAgent } from '../tui-agent'
-import { isTuiAgent } from '../tui-agent-config'
+import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
+import type { AgentDefaultSurface } from './native-chat-appearance-settings'
 
-export type NativeChatProviderChoices = Partial<Record<TuiAgent, boolean>>
+export type NativeChatProviderChoices = Partial<Record<string, boolean>>
 
-export type NativeChatProviderSettings = Pick<GlobalSettings, 'nativeChatProviders'>
+export type NativeChatProviderSettings = Pick<
+  GlobalSettings,
+  'nativeChatProviders' | 'agentDefaultSurface'
+>
+
+export function normalizeAgentDefaultSurface(value: unknown): AgentDefaultSurface {
+  return value === 'chat' ? 'chat' : 'terminal'
+}
 
 export function normalizeNativeChatProviderChoices(value: unknown): NativeChatProviderChoices {
   const choices: NativeChatProviderChoices = {}
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return choices
   }
   for (const [agent, on] of Object.entries(value)) {
-    if (isTuiAgent(agent) && typeof on === 'boolean') {
+    if (isStructuredAgentId(agent) && typeof on === 'boolean') {
       choices[agent] = on
     }
   }
   return choices
-}
-
-/** The switch's displayed value, independent of launch feasibility. */
-export function isNativeChatProviderDisplayedOn(
-  settings: Partial<NativeChatProviderSettings> | null | undefined,
-  agent: TuiAgent,
-  installedHere: readonly TuiAgent[] | null
-): boolean {
-  return (
-    settings?.nativeChatProviders?.[agent] ??
-    (isAgentSessionHandleProvider(agent) || installedHere?.includes(agent) === true)
-  )
 }
 
 export function buildNativeChatProviderUpdate(
@@ -39,10 +34,26 @@ export function buildNativeChatProviderUpdate(
   agent: TuiAgent,
   on: boolean
 ): Pick<GlobalSettings, 'nativeChatProviders'> {
+  const choices = normalizeNativeChatProviderChoices(settings?.nativeChatProviders)
+  if (on === (settings?.agentDefaultSurface === 'chat')) {
+    delete choices[agent]
+  } else {
+    choices[agent] = on
+  }
+  return { nativeChatProviders: choices }
+}
+
+/** Carry effective legacy intent without pinning an agent inventory to the old switch. */
+export function carriedChatUiLaunchSettings(
+  savedChoices: unknown,
+  chatUiOn: boolean
+): NativeChatProviderSettings {
   return {
-    nativeChatProviders: {
-      ...normalizeNativeChatProviderChoices(settings?.nativeChatProviders),
-      [agent]: on
-    }
+    agentDefaultSurface: chatUiOn ? 'chat' : 'terminal',
+    nativeChatProviders: chatUiOn
+      ? Object.fromEntries(
+          Object.entries(normalizeNativeChatProviderChoices(savedChoices)).filter(([, on]) => !on)
+        )
+      : {}
   }
 }

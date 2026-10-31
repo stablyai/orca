@@ -372,4 +372,14 @@ describe('plugin terminal themes', () => {
       resolveEffectiveTerminalAppearance({ ...settings, terminalPluginPalettes: [] }, true).theme
     ).toEqual(getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK))
   })
+
+  it('repaints the default theme while the plugin is off, keeping the choice for re-enable', () => {
+    const off = { ...settings, disabledPlugins: [pluginTheme.pluginKey] }
+    expect(resolveEffectiveTerminalAppearance(off, true).theme).toEqual(
+      getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK)
+    )
+    expect(
+      resolveEffectiveTerminalAppearance({ ...off, disabledPlugins: [] }, true).theme?.background
+    ).toBe('#010203')
+  })
 })

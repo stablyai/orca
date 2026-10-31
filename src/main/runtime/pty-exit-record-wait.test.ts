@@ -15,7 +15,11 @@ describe('waitForPtyExitRecord', () => {
     const wait = runtime.waitForPtyExitRecord(PTY_ID, 10_000)
     runtime.onPtyExit(PTY_ID, 0)
     await expect(wait).resolves.toBe(true)
-    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toEqual({ status: 'exited' })
+    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toEqual({
+      status: 'exited',
+      incarnationId: undefined,
+      cause: { kind: 'unknown', reason: 'cause_unreported' }
+    })
   })
 
   it('resolves false when no exit arrives within the budget', async () => {

@@ -104,6 +104,41 @@ function visitDirectory(
   }
 }
 
+/** Rows whose name contains the query, across every folder loaded so far, with their parent folders. */
+export function filterDirectoryCache(cache: DirectoryCache, query: string): TreeNode[] {
+  const needle = query.trim().toLowerCase()
+  const rows: TreeNode[] = []
+  if (needle !== '') {
+    collectMatches('', 0, cache, needle, rows)
+  }
+  return rows
+}
+
+function collectMatches(
+  relativePath: string,
+  depth: number,
+  cache: DirectoryCache,
+  needle: string,
+  rows: TreeNode[]
+): boolean {
+  const entries = (getDirectoryCacheState(cache, relativePath)?.entries ?? [])
+    .filter(shouldIncludeMobileFileExplorerEntry)
+    .sort(compareDirectoryEntries)
+  let matched = false
+  for (const entry of entries) {
+    const childPath = joinRelativePath(relativePath, entry.name)
+    const nameMatches = entry.name.toLowerCase().includes(needle)
+    const childRows: TreeNode[] = []
+    const childMatches =
+      entry.isDirectory && collectMatches(childPath, depth + 1, cache, needle, childRows)
+    if (nameMatches || childMatches) {
+      rows.push(toTreeNode(entry, childPath, depth), ...childRows)
+      matched = true
+    }
+  }
+  return matched
+}
+
 function toTreeNode(entry: MobileDirEntry, relativePath: string, depth: number): TreeNode {
   return {
     id: `${entry.isDirectory ? 'dir' : 'file'}:${relativePath}`,

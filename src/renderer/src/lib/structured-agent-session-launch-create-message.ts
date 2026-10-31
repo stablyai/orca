@@ -106,6 +106,22 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
     worktree: intent.params.worktree,
     seedsModel: intent.seedOptions?.model !== undefined
   })
+  if (intent.params.resumeFrom) {
+    holdStructuredLaunchCreatePicks(state)
+    const options = { ...requested, ...overlay }
+    const view = structuredAgentSessionOptionView(
+      firstFrame,
+      undefined,
+      options,
+      state.selection.explicit
+    )
+    return {
+      ...(Object.keys(options).length ? { options } : {}),
+      ...(intent.sendSelectionSupport
+        ? { selection: structuredAgentSessionMessageSelection(view) }
+        : {})
+    }
+  }
   // Create has always carried options, so any host takes what the chat shows.
   const view = structuredAgentSessionOptionView(
     firstFrame,
@@ -114,10 +130,10 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
     state.selection.explicit
   )
   const drawn = structuredAgentSessionDrawnValues(view)
-  // Each held value as the picker draws it; the held picks themselves stay as the user made them.
+  // Model and effort remain raw action input; tier retains its existing display projection.
   const held = Object.fromEntries(
     Object.entries(overlay).map(([id, encoded]) => {
-      const value = id === 'model' ? undefined : drawn[id]?.value
+      const value = id === 'model' || id === 'effort' ? undefined : drawn[id]?.value
       const shown = value === undefined ? null : encodeStructuredAgentSessionOptionValue(id, value)
       return [id, shown ?? encoded]
     })

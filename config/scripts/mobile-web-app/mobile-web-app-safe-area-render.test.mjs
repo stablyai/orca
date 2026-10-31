@@ -86,11 +86,11 @@ async function openHostRoute(safeAreaInsets, envInsets = ENV_INSETS) {
 function readEdges(page) {
   return page.evaluate((name) => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    // The list's page title is the last copy of the name; the bar holds a hidden one until the list scrolls.
     let title = null
     for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
       if (node.textContent === name) {
         title = node
-        break
       }
     }
     const range = document.createRange()
@@ -161,7 +161,7 @@ describeRender('the page pads for the system bars once, by the shell insets', ()
     )
     await opened.page.waitForFunction(
       ({ name, top }) => {
-        const found = [...document.querySelectorAll('div')].some(
+        const found = [...document.querySelectorAll('*')].some(
           (element) => element.textContent === name && element.getBoundingClientRect().top > top
         )
         return found
