@@ -67,18 +67,18 @@ vi.mock('@/store', () => {
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
-async function renderNudge(): Promise<void> {
+async function renderNudge(startupPromptsFinished = true): Promise<void> {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(<SkillFreshnessNudge />)
+    root?.render(<SkillFreshnessNudge startupPromptsFinished={startupPromptsFinished} />)
   })
 }
 
-async function rerenderNudge(): Promise<void> {
+async function rerenderNudge(startupPromptsFinished = true): Promise<void> {
   await act(async () => {
-    root?.render(<SkillFreshnessNudge />)
+    root?.render(<SkillFreshnessNudge startupPromptsFinished={startupPromptsFinished} />)
   })
 }
 
@@ -107,6 +107,24 @@ describe('SkillFreshnessNudge', () => {
     root = null
     container?.remove()
     container = null
+  })
+
+  it('defers the nudge until startup prompts finish without consuming its fingerprint', async () => {
+    await renderNudge(false)
+    await rerenderNudge(false)
+    expect(mocks.toastInfo).not.toHaveBeenCalled()
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+
+    await rerenderNudge(true)
+    await rerenderNudge(true)
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not show an update resolved while startup prompts were open', async () => {
+    await renderNudge(false)
+    mocks.plan = planOf([sharedEntry('orca-cli', 'keep')])
+    await rerenderNudge(true)
+    expect(mocks.toastInfo).not.toHaveBeenCalled()
   })
 
   it('lingers without an auto-close timer or auto-close dismissal write', async () => {

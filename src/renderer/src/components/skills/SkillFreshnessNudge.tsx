@@ -21,7 +21,11 @@ type ActiveFreshnessNudge = {
   persistDismissal: boolean
 }
 
-export function SkillFreshnessNudge(): null {
+export function SkillFreshnessNudge({
+  startupPromptsFinished
+}: {
+  startupPromptsFinished: boolean
+}): null {
   const target = useActiveProjectSkillRuntime().bundledSkillTarget
   const targetKey = target ? bundledSkillTargetKey(target) : null
   const state = useSkillFreshness(target)
@@ -79,7 +83,7 @@ export function SkillFreshnessNudge(): null {
       activeNudgeRef.current = null
       toast.dismiss(active.id)
     }
-    if (shownFingerprints.current.has(fingerprint)) {
+    if (!startupPromptsFinished || shownFingerprints.current.has(fingerprint)) {
       return
     }
     shownFingerprints.current.add(fingerprint)
@@ -161,7 +165,15 @@ export function SkillFreshnessNudge(): null {
       }
     )
     activeNudgeRef.current = nextActive
-  }, [targetKey, dismissed, settingsLoaded, state.error, state.plan, updateSettings])
+  }, [
+    targetKey,
+    dismissed,
+    settingsLoaded,
+    startupPromptsFinished,
+    state.error,
+    state.plan,
+    updateSettings
+  ])
 
   return null
 }

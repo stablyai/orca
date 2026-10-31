@@ -22,6 +22,7 @@ export function useOnboardingAndFeatureTips() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   const [onboardingLoaded, setOnboardingLoaded] = useState(false)
   const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
+  const [startupDecisionResolved, setStartupDecisionResolved] = useState(false)
   const promptedThisSessionRef = useRef(false)
   const suppressedByOnboardingThisSessionRef = useRef(false)
 
@@ -132,14 +133,20 @@ export function useOnboardingAndFeatureTips() {
 
     if (featureTipsDecision.kind === 'suppress-for-onboarding') {
       // Avoid a second education modal during first-run onboarding.
+      setStartupDecisionResolved(true)
       suppressedByOnboardingThisSessionRef.current = true
       return
     }
 
+    if (featureTipsDecision.kind === 'skip') {
+      setStartupDecisionResolved(true)
+      return
+    }
     if (featureTipsDecision.kind !== 'open') {
       return
     }
 
+    setStartupDecisionResolved(true)
     promptedThisSessionRef.current = true
     if (featureTipsDecision.tipId === 'orca-cli') {
       trackOrcaCliFeatureTipShown('app_open')
@@ -167,8 +174,16 @@ export function useOnboardingAndFeatureTips() {
   ])
 
   const shouldRender = onboarding !== null && shouldShowOnboarding(onboarding)
+  const startupPromptsFinished =
+    startupDecisionResolved && onboardingLoaded && !shouldRender && activeModal === 'none'
   return useMemo(
-    () => ({ applyStartupOnboardingState, onboarding, setOnboarding, shouldRender }),
-    [applyStartupOnboardingState, onboarding, shouldRender]
+    () => ({
+      applyStartupOnboardingState,
+      onboarding,
+      setOnboarding,
+      shouldRender,
+      startupPromptsFinished
+    }),
+    [applyStartupOnboardingState, onboarding, shouldRender, startupPromptsFinished]
   )
 }

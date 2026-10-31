@@ -121,7 +121,7 @@ function App(): React.JSX.Element {
         )}
         <PlainSshTerminalPanels />
       </TooltipProvider>
-      <SkillFreshnessNudge />
+      <SkillFreshnessNudge startupPromptsFinished={onboardingGate.startupPromptsFinished} />
       <WorktreeBaseFallbackDialog />
       <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
