@@ -6,6 +6,12 @@ const wakeRequests = vi.hoisted(() => ({ take: vi.fn(() => false) }))
 vi.mock('@/lib/sleeping-agent-wake-requests', () => ({
   takeSleepingAgentWakeRequest: wakeRequests.take
 }))
+const paneStarts = vi.hoisted(() => ({ byPaneKey: {} as Record<string, { status: string }> }))
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState: () => ({ terminalPaneStartsByPaneKey: paneStarts.byPaneKey })
+  }
+}))
 vi.mock('./deferred-session-reattach-connect', () => ({ startDeferredSessionReattach: vi.fn() }))
 
 import {
@@ -70,14 +76,21 @@ describe('deferHiddenAgentResume', () => {
     expect(wakeRequests.take).toHaveBeenCalledTimes(2)
     // The visible pane keeps attempt-scoped ownership while its restore is in flight…
     expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(true)
-    // A pane disposed mid-attempt releases the hold through the shared disposal path, so the
-    // registry entry cannot pin the pane's session graph until its pane key is reused.
+    // …through main's start handoff too: no renderer connect or spawn pending, but main's start of
+    // the pane is in flight, and the sweep must not fork a duplicate across that window.
+    visible.transportConnectInFlightSince = null
+    paneStarts.byPaneKey = { 'tab-1:leaf-1': { status: 'starting' } }
+    expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(true)
+    // Once everything settles the hold reads false and self-releases (one attempt, one hold).
+    paneStarts.byPaneKey = {}
+    expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(false)
+    // A pane disposed mid-attempt releases a re-armed hold through the shared disposal path, so
+    // the registry entry cannot pin the pane's session graph until its pane key is reused.
+    visible.transportConnectInFlightSince = 1
+    expect(deferHiddenAgentResume(visible, startup)).toBe(false)
+    expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(true)
     visible.disposed = true
     releaseHiddenAgentResumeHold(visible)
-    expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(false)
-    // A settled attempt self-releases on its next read and stays released (one attempt, one hold).
-    visible.disposed = false
-    visible.transportConnectInFlightSince = null
     expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(false)
   })
 
