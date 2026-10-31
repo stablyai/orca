@@ -28,7 +28,8 @@ import {
 import { executeStructuredSessionTerminalSwitch } from './structured-agent-session-switch-terminal-execution'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
 import {
-  requireTerminalSwitchConsent,
+  admitTerminalSwitch,
+  refuseSwitchOfPausedAgent,
   stopStructuredSwitchTerminalSource
 } from './structured-agent-session-switch-terminal-stop'
 import { agentSessionLeasePossiblyWriting } from '../../../../shared/agent-session-lease-adjudication'
@@ -146,7 +147,7 @@ async function switchToChat(
   const paneKey = close ? `${close.source.tabId}:${close.source.leafId}` : undefined
   const row = paneKey ? ctx.runtime.agentTransitions.latestRow(paneKey) : null
   // A replying agent without consent is refused before the transcript is read; the stop re-checks.
-  requireTerminalSwitchConsent(row, execution.consented)
+  const { paused } = await admitTerminalSwitch(ctx, close?.source.ptyId, row, execution.consented)
   const adopt = createIdentity?.adopt
   const retainedSource =
     !adopt && source
@@ -175,6 +176,7 @@ async function switchToChat(
     : undefined
   deadline.check()
   if (close && paneKey) {
+    await refuseSwitchOfPausedAgent(paused)
     await stopStructuredSwitchTerminalSource({
       ctx,
       host,

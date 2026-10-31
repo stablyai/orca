@@ -170,9 +170,13 @@ it('settles a CLI turn left open once no writer is left, after the census', asyn
   expect(turns[0]).not.toHaveProperty('outcome')
 })
 
-it.each([false, true])(
-  'refuses a replying terminal agent without consent, stopping nothing (replying from the start=%s)',
-  async (fromStart) => {
+it.each([
+  [false, false],
+  [true, false],
+  [true, true]
+])(
+  'refuses a replying terminal agent without consent, stopping nothing (replying from the start=%s, paused with Ctrl+Z=%s)',
+  async (fromStart, paused) => {
     await openCliTurn()
     const { runtime } = setupMainOwnedWorkspace()
     const incarnationId = '11111111-1111-4111-8111-111111111111'
@@ -204,6 +208,8 @@ it.each([false, true])(
           }
         : null
     )
+    // A paused pane still reads as replying (Ctrl+Z sends no Stop hook): it is refused as paused.
+    vi.spyOn(runtime, 'terminalAgentPaused').mockResolvedValue(paused)
     const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
     const readable = prepare.getMockImplementation()!
     prepare.mockImplementation(async (...args) => {
@@ -228,7 +234,10 @@ it.each([false, true])(
     )
     expect(answer).toMatchObject({
       status: 'refused',
-      refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: paused ? 'agentPaused' : 'turnActive' }
+      }
     })
     expect(written).not.toHaveBeenCalled()
     expect(stopped).not.toHaveBeenCalled()

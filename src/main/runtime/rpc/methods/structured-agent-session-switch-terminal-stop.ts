@@ -23,6 +23,34 @@ export function requireTerminalSwitchConsent(
   }
 }
 
+/** A paused agent (Ctrl+Z) is the user's to resume or quit: nothing is stopped and the tab stays. */
+export async function refuseSwitchOfPausedAgent(paused: Promise<boolean>): Promise<void> {
+  if (await paused) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'agentPaused' })
+  }
+}
+
+/**
+ * The pane's one process-table read begins beside the transcript's and is awaited before the
+ * stop; a consent refusal waits for it, so a paused pane (which still reads as replying, as Ctrl+Z
+ * sends no Stop hook) is refused as paused, never asked whether to stop a reply.
+ */
+export async function admitTerminalSwitch(
+  ctx: RpcContext,
+  ptyId: string | null | undefined,
+  row: ReturnType<RpcContext['runtime']['agentTransitions']['latestRow']>,
+  consented: boolean | undefined
+): Promise<{ paused: Promise<boolean> }> {
+  const paused = ptyId ? ctx.runtime.terminalAgentPaused(ptyId) : Promise.resolve(false)
+  try {
+    requireTerminalSwitchConsent(row, consented)
+  } catch (refusal) {
+    await refuseSwitchOfPausedAgent(paused)
+    throw refusal
+  }
+  return { paused }
+}
+
 /**
  * A terminal source's stop: Escape a replying agent, let it record its own end of that turn
  * (bounded), then stop the exact process with exit proof. Nothing here waits on the transcript to
@@ -53,11 +81,6 @@ export async function stopStructuredSwitchTerminalSource(input: {
       input.consented
     )
   requireConsent()
-  // A paused agent (Ctrl+Z) is the user's to resume or quit: nothing is stopped and the tab stays.
-  const { ptyId } = close.source
-  if (ptyId !== null && (await ctx.runtime.terminalAgentPaused(ptyId))) {
-    throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'agentPaused' })
-  }
   const awaitBoundary = input.boundary
     ? await armSwitchTurnBoundaryWait(
         input.boundary.source,
