@@ -62,7 +62,7 @@ beforeEach(() => {
   store.setState((state) => ({
     settings: {
       ...state.settings,
-      ...getDefaultSettings(),
+      ...getDefaultSettings('/home/test'),
       terminalLigatures: false,
       terminalLinkClickBehavior: 'actions',
       terminalRightClickToPaste: false,
@@ -271,12 +271,12 @@ function seedRemoteWorkspace(hostId: string, environmentId: string, streaming: b
     runtimeStatusByEnvironmentId: new Map([
       [environmentId, runtimeStatuses(streaming ? ['browser.screencast.v1'] : []).get('env-1')!]
     ]),
-    settings: { ...state.settings!, browserClientHostedRemoteEnabled: false }
+    settings: { ...state.settings!, browserClientHostedRemoteEnabled: false, openLinksInApp: true }
   }))
 }
 
 it.each([false, true])(
-  'routes the actual paired SSH card/remote PTY through its resolved serving endpoint (streaming=%s)',
+  'keeps paired SSH OSC actions system-only with exact Copy despite the in-app preference (streaming=%s)',
   async (streaming) => {
     const hostId = 'ssh:private-target'
     const ptyId = 'remote:hub-a@@handle-1'
@@ -290,9 +290,11 @@ it.each([false, true])(
     const screen = screenFor(view.container)
     pointer(screen, 'mousedown')
     pointer(screen, 'mouseup')
-    await waitFor(() => expect(view.getByRole('button', { name: /System Browser/ })).toBeTruthy())
-    expect(Boolean(view.queryByRole('button', { name: /Orca Browser/ }))).toBe(streaming)
-    fireEvent.click(view.getByRole('button', { name: /System Browser/ }))
+    const system = await view.findByRole('button', { name: /System Browser/ })
+    expect(view.queryByRole('button', { name: /Orca Browser|Open in this group/ })).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'Copy link' }))
+    await waitFor(() => expect(window.api.ui.writeClipboardText).toHaveBeenCalledWith(URL_TO_OPEN))
+    fireEvent.click(system)
     await waitFor(() => expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN))
     pointer(screen, 'mousedown', { ctrlKey: true })
     pointer(screen, 'mouseup', { ctrlKey: true })
@@ -324,7 +326,6 @@ it('gives one useful refusal when a real saved chooser action loses runtime brow
   const linkSource = { ...source, executionHostId: hostId, ptyId }
   const foreground = vi.fn()
   seedRemoteWorkspace(hostId, 'e', true)
-  store.setState((state) => ({ settings: { ...state.settings!, openLinksInApp: true } }))
   const props = { ptyId, linkSource, onBrowserForeground: foreground }
   const view = render(<AgentTerminalPreview {...props} />)
   await waitFor(() => screenFor(view.container))

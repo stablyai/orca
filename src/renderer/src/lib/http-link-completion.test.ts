@@ -1,3 +1,5 @@
+import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
@@ -16,6 +18,10 @@ import { openWorkspaceBrowserTabForLink } from './workspace-browser-tab-open'
 import { beginLinkOpenRequest } from './link-open-request'
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.getState() } }))
+vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
+  ...(await importOriginal<typeof BrowserFocusModule>()),
+  requestBrowserFocus: vi.fn()
+}))
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() }
 }))
@@ -94,6 +100,11 @@ it.each([false, true])(
     await completed
     expect(results).toEqual([{ pageId: expect.any(String), background }])
     const pageId = results[0]!.pageId
+    if (background) {
+      expect(requestBrowserFocus).not.toHaveBeenCalled()
+    } else {
+      expect(requestBrowserFocus).toHaveBeenCalledExactlyOnceWith({ pageId, target: 'webview' })
+    }
     expect(
       Object.values(store.getState().browserPagesByWorkspace)
         .flat()

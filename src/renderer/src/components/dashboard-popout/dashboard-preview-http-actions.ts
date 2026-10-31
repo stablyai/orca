@@ -79,6 +79,7 @@ export function dashboardPreviewHttpActions(
   const canOpen = Boolean(
     onForegroundOpen &&
     qualified.kind === 'resolved' &&
+    !(endpoint?.kind === 'environment' && qualified.owner.at !== 'local') &&
     route?.executionHostId &&
     matchesHost(route.executionHostId) &&
     getWorkspaceClientCreationActionPolicy(state, source.worktreeId)['managed-browser'].state ===
