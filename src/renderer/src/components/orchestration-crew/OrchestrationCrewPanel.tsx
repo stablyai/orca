@@ -3,12 +3,6 @@ import { ChevronDown, ChevronRight, ExternalLink, PanelRight, PanelRightClose } 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
-import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
-import { isAgentStatusState } from '../../../../shared/agent-status-types'
-import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status'
-import StatusIndicator from '../sidebar/StatusIndicator'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type {
   OrchestrationCrewRow,
   OrchestrationCrewSnapshot
@@ -22,47 +16,8 @@ import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { CrewRowDetails, CrewRowTime as Time } from './CrewRowDetails'
 import { CrewRowMenu } from './CrewRowMenu'
+import { CrewAgentAvatar } from './CrewAgentAvatar'
 
-function Avatar({ row, tooltip = false }: { row: OrchestrationCrewRow; tooltip?: boolean }) {
-  const agent = isTuiAgent(row.agentKind) ? row.agentKind : null
-  const label = agent ? getAgentLabel(agent) : formatAgentTypeLabel(row.agentKind)
-  const description = row.hostLabel ? `${label} · ${row.hostLabel}` : label
-  const icon = (
-    <span
-      aria-hidden={tooltip ? undefined : true}
-      role={tooltip ? 'img' : undefined}
-      aria-label={tooltip ? description : undefined}
-      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground"
-    >
-      <AgentIcon agent={agent} />
-    </span>
-  )
-  return tooltip ? (
-    <Tooltip>
-      <TooltipTrigger asChild>{icon}</TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {description}
-      </TooltipContent>
-    </Tooltip>
-  ) : (
-    icon
-  )
-}
-function CrewStatusIndicator({ row }: { row: OrchestrationCrewRow }) {
-  return (
-    <StatusIndicator
-      aria-label={row.status}
-      showTooltip={false}
-      status={
-        row.pendingQuestion
-          ? 'permission'
-          : isAgentStatusState(row.status)
-            ? mapAgentStatusStateToVisualStatus(row.status)
-            : 'inactive'
-      }
-    />
-  )
-}
 function IconButton({
   label,
   children,
@@ -228,7 +183,7 @@ export function CrewPanelContent({
               ref={tab}
               variant="outline"
               size="xs"
-              className="pointer-events-auto absolute right-0 top-2 max-w-full"
+              className="pointer-events-auto absolute right-0 top-2 h-auto max-w-full"
               aria-label={translate('components.orchestrationCrew.show', 'Show crew: {{label}}', {
                 label
               })}
@@ -238,15 +193,10 @@ export function CrewPanelContent({
               <PanelRight />
               <span className="flex -space-x-2">
                 {summary.slice(0, 3).map((row) => (
-                  <Avatar key={row.partyKey} row={row} />
+                  <CrewAgentAvatar key={row.partyKey} row={row} target={target} />
                 ))}
               </span>
               <span className="truncate">{label}</span>
-              <span className="flex gap-0.5">
-                {managing.map((row) => (
-                  <CrewStatusIndicator key={row.partyKey} row={row} />
-                ))}
-              </span>
               {pending > 0 ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -302,10 +252,9 @@ function CrewRowView({
           aria-expanded={expanded}
           onClick={() => setDisclosure({ question, expanded: !expanded })}
         >
-          <Avatar row={row} tooltip />
+          <CrewAgentAvatar row={row} target={target} tooltip />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
-              <CrewStatusIndicator row={row} />
               <span className="truncate text-sm font-medium">{row.label}</span>
             </span>
             <span
