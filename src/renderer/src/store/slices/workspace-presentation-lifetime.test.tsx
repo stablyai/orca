@@ -8,7 +8,13 @@ import type { AppState } from '../types'
 import type { WorkspacePresentationDelta } from '../../../../shared/workspace-presentation'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { seed, seedEditors, O, D } from './workspace-presentation-test-fixture'
-import { makeOpenFile, makeUnifiedTab, makeWorktree, createTestStore } from './store-test-helpers'
+import {
+  makeOpenFile,
+  makeUnifiedTab,
+  makeWorktree,
+  makeTab,
+  createTestStore
+} from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 import { rawWorkspaceState } from '../workspace-source-state'
 import { workspaceAdmittedFiles } from '../workspace-admitted-files'
@@ -427,3 +433,80 @@ it('delivers relevant catalog and binding changes through the production file ho
   hooked.unmount()
   mirror.close()
 })
+
+it.each([false, true])(
+  'settles a held display removal with replaced backing resources=%s',
+  async (replace) => {
+    const store = editors()
+    Object.assign(window.api, { ephemeralVm: { listRuntimes: vi.fn(async () => []) } })
+    const raw = rawWorkspaceState(store.getState())
+    const original = makeTab({
+      id: 'removal-pty',
+      worktreeId: O,
+      generation: 1,
+      ptyId: 'original-pty'
+    })
+    store.setState({
+      unifiedTabsByWorktree: {
+        [O]: [
+          ...raw.unifiedTabsByWorktree[O].filter((tab) => tab.id === 'editor'),
+          makeUnifiedTab({
+            id: 'removal-terminal',
+            entityId: original.id,
+            contentType: 'terminal',
+            worktreeId: O,
+            executionHostId: 'local',
+            groupId: 'source'
+          })
+        ],
+        [D]: []
+      },
+      tabsByWorktree: { [O]: [original] },
+      ptyIdsByTabId: { [original.id]: ['original-pty'] }
+    })
+    let finish: (result: {}) => void = () => {
+      throw new Error('not started')
+    }
+    api.worktrees.remove.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const calls = api.worktrees.remove.mock.calls.length
+    const pending = store.getState().removeWorktree({ id: D, executionHostId: 'local' }, true)
+    await waitFor(() => expect(api.worktrees.remove).toHaveBeenCalledTimes(calls + 1))
+    const current = rawWorkspaceState(store.getState())
+    const replacement = { ...original, generation: 2, ptyId: 'replacement-pty' }
+    if (replace) {
+      store.setState({
+        tabsByWorktree: { [O]: [replacement] },
+        ptyIdsByTabId: { [original.id]: ['replacement-pty'] },
+        openFiles: current.openFiles.map((file) =>
+          file.id === 'owned' ? { ...file, filePath: 'C:/repo/replacement.ts' } : file
+        )
+      })
+    }
+    finish({})
+    expect(await pending).toEqual({ ok: true })
+    const after = rawWorkspaceState(store.getState())
+    expect(after.worktreesByRepo.r).toEqual([])
+    if (!replace) {
+      expect(after.tabsByWorktree[O] ?? []).toEqual([])
+      expect(after.unifiedTabsByWorktree[O] ?? []).toEqual([])
+      expect(after.openFiles.map((file) => file.id)).toEqual(['foreign'])
+      expect(Object.keys(after.workspacePresentations ?? {})).toHaveLength(0)
+      return
+    }
+    expect(after.tabsByWorktree[O]).toEqual([replacement])
+    expect(after.ptyIdsByTabId[original.id]).toEqual(['replacement-pty'])
+    expect(after.openFiles.find((file) => file.id === 'owned')?.filePath).toBe(
+      'C:/repo/replacement.ts'
+    )
+    expect(after.unifiedTabsByWorktree[O].map((tab) => tab.id)).toEqual([
+      'editor',
+      'removal-terminal'
+    ])
+    expect(Object.keys(after.workspacePresentations ?? {})).toHaveLength(1)
+  }
+)

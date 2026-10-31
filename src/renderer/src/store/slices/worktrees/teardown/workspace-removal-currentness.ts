@@ -80,7 +80,7 @@ export function currentWorkspaceRemovalSources(
     .map((captured) => {
       const id = captured.source.workspaceId
       const liveTabs = new Map((state.unifiedTabsByWorktree[id] ?? []).map((tab) => [tab.id, tab]))
-      const tabs = captured.tabs.filter((old) => {
+      const matchingTabs = captured.tabs.filter((old) => {
         const tab = liveTabs.get(old.id)
         return (
           !tab ||
@@ -124,9 +124,25 @@ export function currentWorkspaceRemovalSources(
             (tab) =>
               tab.contentType === 'browser' &&
               tab.entityId === old.id &&
-              !tabs.some((current) => current.id === tab.id)
+              !matchingTabs.some((current) => current.id === tab.id)
           )
       )
+      const tabs = matchingTabs.filter((tab) => {
+        if (tab.contentType === 'terminal') {
+          return liveTerminals.has(tab.entityId)
+            ? terminals.some((old) => old.id === tab.entityId)
+            : collectPtyIdsForTab(state, tab.entityId, null).every((pty) =>
+                captured.ptys.get(tab.entityId)?.includes(pty)
+              )
+        }
+        if (tab.contentType === 'editor' && indexedOpenFileById(state.openFiles, tab.entityId)) {
+          return files.some((old) => old.id === tab.entityId)
+        }
+        if (tab.contentType === 'browser') {
+          return browsers.some((old) => old.id === tab.entityId)
+        }
+        return true
+      })
       const intersection = (a: ReadonlySet<string>, b: ReadonlySet<string>): Set<string> =>
         new Set([...a].filter((id) => b.has(id)))
       return {
