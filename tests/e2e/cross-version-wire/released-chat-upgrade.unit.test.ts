@@ -12,6 +12,7 @@ import {
 import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
 import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-codec'
 import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
+import type { AgentJournalSnapshot } from '../../../src/shared/agent-session-journal-types'
 import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
 import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/journal-write-projection'
@@ -55,6 +56,20 @@ afterEach(() => {
 const view = (journal: ContinuedJournal) => ({
   snapshot: journal.snapshot(),
   cards: [...journal.queuedMessages.list()]
+})
+
+/** What the release wrote: its items, sends and cards, in order. Fields a later build adds to them
+ * are not compared (`toMatchObject`), so main may add one; a changed value or order still fails. */
+const releaseWritten = ({
+  snapshot,
+  cards
+}: {
+  snapshot: AgentJournalSnapshot
+  cards: unknown[]
+}) => ({
+  items: snapshot.items,
+  submissions: snapshot.submissions,
+  cards
 })
 
 const kept = (items: ReturnType<ContinuedJournal['snapshot']>['items']) =>
@@ -173,7 +188,7 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
         if (build !== 'the oldest release with this chat database') {
           // A release in the window wrote the shapes this build reads, so it opens as written,
           // and the edit records the card the old rows hold in its place among them.
-          expect(ours.opened).toEqual({ snapshot: written.snapshot, cards: written.cards })
+          expect(releaseWritten(ours.opened)).toMatchObject(releaseWritten(written))
           const edits = openTestJournalHostDatabase(directory)
             .db.prepare(`SELECT ordinal FROM journal_outcomes
             WHERE field = 'queue.cards' AND entry_key = '"card-2"'`)
@@ -183,7 +198,9 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
         }
         // This build opens the chat as the newest release does.
         const newest = await releasedJournalOpener(RELEASES['the newest release']())
-        expect(ours.opened).toEqual(await openedBy(newest, agent, shipped))
+        expect(releaseWritten(ours.opened)).toMatchObject(
+          releaseWritten(await openedBy(newest, agent, shipped))
+        )
       } finally {
         rmSync(directory, { recursive: true, force: true })
         rmSync(shipped, { recursive: true, force: true })
