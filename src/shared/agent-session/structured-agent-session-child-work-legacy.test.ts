@@ -1,7 +1,7 @@
 // Pre-child-view clients read flat Codex shell-child rosters derived from the host views.
 
 import { describe, expect, it } from 'vitest'
-import type { AgentChildWorkView } from './agent-status-child-work-view'
+import type { AgentChildWorkView } from '../agent-status-child-work-view'
 import { structuredChildWorkLegacyTasks } from './structured-agent-session-child-work-legacy'
 
 const invocation = { invocationId: 'spawn', generation: 1 }

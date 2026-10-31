@@ -4,15 +4,15 @@
 // summary backgroundTasks, channel tasks/settledTasks and withoutChildViews together. New child facts must serve old readers until then.
 // structuredChildWorkLegacySubagents is in-app, not wire; retain it until AgentStatusEntry.subagents readers use children.
 
-import type { StructuredAgentId } from './agent-session-provider-handle'
-import { codexChildCommandDescription } from './codex-child-command-description'
+import type { StructuredAgentId } from '../agent-session-provider-handle'
+import { codexChildCommandDescription } from '../codex-child-command-description'
 import {
   projectAgentChildWorkLegacyBackgroundTasks,
   projectAgentChildWorkLegacySubagents,
   type AgentChildWorkLegacyBackgroundProjection
-} from './agent-status-child-work-projection'
-import type { AgentChildWorkView } from './agent-status-child-work-view'
-import type { AgentSubagentSnapshot } from './agent-status-types'
+} from '../agent-status-child-work-projection'
+import type { AgentChildWorkView } from '../agent-status-child-work-view'
+import type { AgentSubagentSnapshot } from '../agent-status-subagent-snapshot'
 
 /** Keep the pre-view Codex background-task ID; journal links use the bare thread ID. */
 export function codexAgentBackgroundTaskId(threadId: string): string {
