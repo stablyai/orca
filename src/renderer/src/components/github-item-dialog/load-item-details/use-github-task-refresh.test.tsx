@@ -193,10 +193,7 @@ describe('Refresh task with real shared record and mounted copy', () => {
     const cache = mocks.store!.getState().githubTaskCache
     let settle!: (success: boolean) => GitHubWorkItem
     await act(async () => {
-      settle = cache.operation(row, cache.capture(repo, source)!, (base) => ({
-        ...base,
-        labels: ['edited']
-      }))
+      settle = cache.operation(row, cache.capture(repo, source)!, { labels: { edited: true } })
       await Promise.resolve()
     })
     first.resolve({ ...details, item: { ...row, title: 'Pre-edit' } })
@@ -321,10 +318,7 @@ describe('Refresh task with real shared record and mounted copy', () => {
   it('waits when Refresh begins during a pending edit without disabling the edit', async () => {
     await render()
     const cache = mocks.store!.getState().githubTaskCache
-    const settle = cache.operation(row, cache.capture(repo, source)!, (base) => ({
-      ...base,
-      labels: ['pending']
-    }))
+    const settle = cache.operation(row, cache.capture(repo, source)!, { labels: { pending: true } })
     mocks.details.mockResolvedValueOnce({ ...details, item: { ...row, title: 'After pending' } })
     let refresh!: Promise<void>
     await act(async () => {

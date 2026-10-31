@@ -1,13 +1,11 @@
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import {
-  buildTaskPageGitHubWorkItemMutationPatch,
-  applyTaskPageGitHubListOps
-} from '@/components/task-page/github/task-page-github-work-item-mutation-patches'
+import { buildTaskPageGitHubWorkItemMutationPatch } from '@/components/task-page/github/task-page-github-work-item-mutation-patches'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { ParsedTaskQuery } from '../../../shared/task-query'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { useAppStore } from '@/store'
 import {
@@ -153,13 +151,22 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
       })
 
       if (settleAccepted && binding) {
-        settle = cache.operation(currentItem, binding, (base) =>
-          built.kind === 'list'
+        const { listOp } = built.kind === 'list' ? built : { listOp: undefined }
+        settle = cache.operation(
+          currentItem,
+          binding,
+          listOp
             ? {
-                ...base,
-                assignees: applyTaskPageGitHubListOps(base.assignees ?? [], [built.listOp])
+                assignees: Object.fromEntries(
+                  listOp.logins.map((login, index): [string, GitHubAssignableUser | null] => [
+                    login,
+                    listOp.kind === 'add'
+                      ? (listOp.users?.[index] ?? { login, name: null, avatarUrl: '' })
+                      : null
+                  ])
+                )
               }
-            : { ...base, ...built.next }
+            : { state: built.next.state }
         )
       }
       try {

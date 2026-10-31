@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { untrackedTaskOperation, type TaskDelta } from '@/store/github/task-record-cache'
+import { untrackedTaskOperation, type TaskChange } from '@/store/github/task-change'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 
@@ -8,13 +8,13 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 export function beginEdit(
   item: GitHubWorkItem,
   source: TaskSourceContext | null | undefined,
-  delta: TaskDelta
+  change: TaskChange
 ) {
   const state = useAppStore.getState()
   const cache = state.githubTaskCache
   const binding = cache?.capture(getWorkItemRepo(state.repos, item), source)
   if (cache && binding) {
-    return cache.operation(item, binding, delta)
+    return cache.operation(item, binding, change)
   }
-  return untrackedTaskOperation(useAppStore, item, delta, [source])
+  return untrackedTaskOperation(useAppStore, item, change, [source])
 }

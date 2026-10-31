@@ -42,10 +42,12 @@ const row: GitHubWorkItem = {
 const user = { login: 'alice', name: 'Alice', avatarUrl: 'alice.png' }
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((r) => {
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((r, fail) => {
     resolve = r
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 async function flush() {
   await Promise.resolve()
@@ -134,6 +136,41 @@ function projectRow(id = 'r'): GitHubProjectTable['rows'][number] {
   }
 }
 
+/** F1 input: the board was fetched after the cached Tasks row and is fresher. */
+function freshBoardRow(): GitHubProjectTable['rows'][number] {
+  const source = projectRow()
+  return {
+    ...source,
+    content: {
+      ...source.content,
+      title: 'Renamed on GitHub',
+      state: 'CLOSED',
+      labels: [{ name: 'triaged', color: 'abcdef' }]
+    }
+  }
+}
+function boardFacts(table: GitHubProjectTable) {
+  const { title, state, labels } = table.rows[0].content
+  return { title, state, labels: labels.map((label) => label.name) }
+}
+function taskFacts(item: GitHubWorkItem) {
+  return { title: item.title, state: item.state, labels: item.labels }
+}
+/** A board in the Project view cache, read back the way the board renders it. */
+function cachedBoard(store: ReturnType<typeof createTestStore>) {
+  const cacheKey = projectViewCacheKey('organization', 'acme', 1, 'v')
+  store.setState({
+    projectViewCache: { [cacheKey]: { data: board([freshBoardRow()]), fetchedAt: Date.now() } }
+  })
+  const shown = () =>
+    boardFacts(
+      store
+        .getState()
+        .githubTaskCache.projectTable(store.getState().projectViewCache[cacheKey].data!, 'local')
+    )
+  return { cacheKey, shown }
+}
+
 describe('shared GitHub task records through production store actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -151,14 +188,8 @@ describe('shared GitHub task records through production store actions', () => {
       const { cache, binding } = setup()
       const canonical = deferred<GitHubWorkItem>()
       lookup.mockReturnValue(canonical.promise)
-      const a = cache.operation(row, binding, (base) => ({
-        ...base,
-        assignees: [...(base.assignees ?? []), user]
-      }))
-      const b = cache.operation(row, binding, (base) => ({
-        ...base,
-        labels: [...base.labels, 'bug']
-      }))
+      const a = cache.operation(row, binding, { assignees: { alice: user } })
+      const b = cache.operation(row, binding, { labels: { bug: true } })
       a(true)
       a(true)
       expect(lookup).not.toHaveBeenCalled()
@@ -183,7 +214,7 @@ describe('shared GitHub task records through production store actions', () => {
     const c2 = deferred<GitHubWorkItem>()
     lookup.mockReturnValue(c2.promise)
     const read = cache.readCanonical(row, binding, () => c.promise)
-    const b = cache.operation(row, binding, (base) => ({ ...base, labels: ['new'] }))
+    const b = cache.operation(row, binding, { labels: { new: true } })
     b(true)
     expect(lookup).not.toHaveBeenCalled()
     c.resolve(row)
@@ -198,7 +229,7 @@ describe('shared GitHub task records through production store actions', () => {
     const { cache, binding } = setup()
     const first = deferred<GitHubWorkItem>()
     lookup.mockReturnValue(first.promise)
-    const edit = cache.operation(row, binding, (base) => ({ ...base, assignees: [user] }))
+    const edit = cache.operation(row, binding, { assignees: { alice: user } })
     edit(true)
     const full = vi.fn(async () => row)
     const refresh = cache.readCanonical(row, binding, full)
@@ -212,12 +243,13 @@ describe('shared GitHub task records through production store actions', () => {
   it('keeps failed canonical data, retries on the next conflicting search and adopts recovery', async () => {
     const { cache, binding } = setup()
     lookup.mockRejectedValueOnce(new Error('offline'))
-    const edit = cache.operation(row, binding, (base) => ({ ...base, labels: ['confirmed'] }))
+    const edit = cache.operation(row, binding, { labels: { confirmed: true } })
     edit(true)
     await flush()
     const external = { ...row, labels: ['outside'], updatedAt: '2026-10-31T12:00:03Z' }
     lookup.mockResolvedValueOnce(external)
-    expect(cache.acceptSearch([external], binding)[0].labels).toEqual(['confirmed'])
+    // Before any accepted reading, the search row keeps its own facts plus the confirmed edit.
+    expect(cache.acceptSearch([external], binding)[0].labels).toEqual(['outside', 'confirmed'])
     await flush()
     expect(cache.projectItem(row).labels).toEqual(['outside'])
     expect(lookup).toHaveBeenCalledTimes(2)
@@ -289,9 +321,7 @@ describe('shared GitHub task records through production store actions', () => {
       number: 7,
       url: 'https://github.com/acme/widgets/pull/7'
     }
-    expect(
-      cache.operation(pr, binding, (base) => ({ ...base, state: 'merged' }))(true)?.state
-    ).toBe('merged')
+    expect(cache.operation(pr, binding, { state: 'merged' })(true).state).toBe('merged')
     expect(await cache.readCanonical(pr, binding, async () => pr)).toBe(false)
     expect(cache.projectItem({ ...pr, state: 'merged' }).state).toBe('merged')
   })
@@ -398,12 +428,10 @@ describe('shared GitHub task records through production store actions', () => {
         error: { code: 'method_not_found', message: 'unsupported' }
       })
     )
-    cache.operation(row, binding, (base) => ({ ...base, labels: ['first'] }))(true)
+    cache.operation(row, binding, { labels: { first: true } })(true)
     await flush()
     expect(cache.canTrack(binding)).toBe(false)
-    expect(
-      cache.operation(row, binding, (base) => ({ ...base, labels: ['next'] }))(true).labels
-    ).toEqual(['next'])
+    expect(cache.operation(row, binding, { labels: { next: true } })(true).labels).toEqual(['next'])
     expect(lookup).toHaveBeenCalledTimes(1)
   })
 
@@ -455,23 +483,152 @@ describe('shared GitHub task records through production store actions', () => {
     store.setState({ repos: [{ ...repo, ghAccount: { host: 'github.com', user: 'bob' } }] })
     expect(cache.projectTable(board([projectRow()]), 'local').rows[0].content.title).toBe('Indexed')
   })
+  it.each([false, true])(
+    'shows a Project edit only as its own change on every copy until a reading is accepted (ok %s)',
+    async (ok) => {
+      const { store } = setup()
+      const { copy, search } = await tasksRow(store)
+      const cache = store.getState().githubTaskCache
+      const { cacheKey, shown } = cachedBoard(store)
+      const tasks = () => taskFacts(cache.projectItem(copy()))
+      const update = deferred<{ ok: boolean }>()
+      mockApi.gh.updateIssueBySlug.mockReturnValue(update.promise)
+      const verification = deferred<GitHubWorkItem>()
+      lookup.mockReturnValueOnce(verification.promise)
+      const edit = store.getState().patchProjectIssueOrPr(cacheKey, 'r', { addLabels: ['bug'] })
+      const board = { title: 'Renamed on GitHub', state: 'CLOSED', labels: ['triaged', 'bug'] }
+      const taskRow = { title: 'Original', state: 'open', labels: ['bug'] }
+      expect(shown()).toEqual(board)
+      expect(tasks()).toEqual(taskRow)
+      update.resolve({ ok })
+      await edit
+      await flush()
+      if (!ok) {
+        expect(shown()).toEqual({ ...board, labels: ['triaged'] })
+        expect(tasks()).toEqual({ ...taskRow, labels: [] })
+        expect(copy().labels).toEqual([])
+        expect(lookup).not.toHaveBeenCalled()
+        return
+      }
+      // Delayed, then failed verification: each copy keeps its own facts plus only the edit.
+      expect(lookup).toHaveBeenCalledOnce()
+      expect([shown(), tasks()]).toEqual([board, taskRow])
+      verification.reject(new Error('offline'))
+      await flush()
+      expect([shown(), tasks()]).toEqual([board, taskRow])
+      // A stale search can't erase the confirmed change; it wakes the owed read, whose answer then wins.
+      const truth = {
+        ...row,
+        title: 'Renamed on GitHub',
+        state: 'closed' as const,
+        labels: ['triaged', 'bug']
+      }
+      lookup.mockResolvedValueOnce({ ...truth, updatedAt: '2026-10-31T12:00:05Z' })
+      expect((await search()).labels).toEqual(['bug'])
+      await flush()
+      expect(lookup).toHaveBeenCalledTimes(2)
+      expect(tasks()).toEqual(taskFacts(truth))
+      expect(shown()).toEqual(board)
+    }
+  )
+  it('installs nothing from a first Refresh while it runs or after it fails', async () => {
+    const { store } = setup()
+    const { copy, capture } = await tasksRow(store)
+    const cache = store.getState().githubTaskCache
+    const table = board([freshBoardRow()])
+    const response = deferred<GitHubWorkItem | null>()
+    const refresh = cache.readCanonical(copy(), capture(), () => response.promise)
+    expect(cache.projectTable(table, 'local')).toBe(table)
+    expect(cache.projectItem(copy())).toBe(copy())
+    response.resolve(null)
+    expect(await refresh).toBe(false)
+    cache.observeProject(table, { kind: 'local' })
+    await flush()
+    expect(cache.projectTable(table, 'local')).toBe(table)
+    expect(lookup).not.toHaveBeenCalled()
+  })
+  it('establishes from the read after the last of two overlapping edits', async () => {
+    const { store } = setup()
+    const { capture } = await tasksRow(store)
+    const cache = store.getState().githubTaskCache
+    const r1 = deferred<GitHubWorkItem>(),
+      r2 = deferred<GitHubWorkItem>()
+    lookup.mockReturnValueOnce(r1.promise).mockReturnValueOnce(r2.promise)
+    cache.operation(row, capture(), { labels: { a: true } })(true)
+    cache.operation(row, capture(), { labels: { b: true } })(true)
+    expect(lookup).toHaveBeenCalledOnce()
+    r1.resolve({ ...row, labels: ['a'], updatedAt: '2026-10-31T12:00:03Z' })
+    await flush()
+    expect(lookup).toHaveBeenCalledTimes(2)
+    expect(cache.projectItem(row).labels).toEqual(['a', 'b'])
+    const after = {
+      ...row,
+      title: 'After B',
+      labels: ['a', 'b'],
+      updatedAt: '2026-10-31T12:00:04Z'
+    }
+    r2.resolve(after)
+    await flush()
+    expect(taskFacts(cache.projectItem(row))).toEqual(taskFacts(after))
+    cache.acceptSearch([after], capture())
+    await flush()
+    expect(lookup).toHaveBeenCalledTimes(2)
+  })
+  it('wakes an owner without a base from the next board fetch, never from renders', async () => {
+    const { store } = setup()
+    const { capture } = await tasksRow(store)
+    const cache = store.getState().githubTaskCache
+    lookup.mockRejectedValueOnce(new Error('offline'))
+    cache.operation(row, capture(), { labels: { bug: true } })(true)
+    await flush()
+    for (let render = 0; render < 3; render++) {
+      cache.projectTable(board([freshBoardRow()]), 'local')
+    }
+    expect(lookup).toHaveBeenCalledOnce()
+    lookup.mockResolvedValueOnce({ ...row, title: 'Renamed on GitHub', labels: ['bug'] })
+    cache.observeProject(board([freshBoardRow()]), { kind: 'local' })
+    await flush()
+    expect(lookup).toHaveBeenCalledTimes(2)
+    expect(cache.projectItem(row).title).toBe('Renamed on GitHub')
+  })
+  it('keeps a body-only Project save out of the record: no metadata change and no read', async () => {
+    const { store } = setup()
+    const { copy, capture } = await tasksRow(store)
+    const { cacheKey, shown } = cachedBoard(store)
+    const cache = store.getState().githubTaskCache
+    const update = deferred<{ ok: boolean }>()
+    mockApi.gh.updateIssueBySlug.mockReturnValue(update.promise)
+    const board = shown()
+    const edit = store.getState().patchProjectIssueOrPr(cacheKey, 'r', { body: 'New body' })
+    expect(shown()).toEqual(board)
+    expect(cache.projectItem(copy())).toBe(copy())
+    update.resolve({ ok: true })
+    await edit
+    await flush()
+    expect(store.getState().projectViewCache[cacheKey].data!.rows[0].content.body).toBe('New body')
+    expect(shown()).toEqual(board)
+    expect(cache.readRevision(row, capture())).toBe(0)
+    expect(lookup).not.toHaveBeenCalled()
+  })
   it.each([
-    ['close', true],
-    ['close', false],
-    ['label', true],
-    ['label', false]
+    ['close', true, false],
+    ['close', false, false],
+    ['label', true, false],
+    ['label', false, false],
+    ['close', false, true],
+    ['label', false, true]
   ] as const)(
-    'settles a disposed owner through its reducer (%s settles first, label success %s)',
-    async (first, labelOk) => {
+    'settles a disposed owner through its reducer (%s first, label ok %s, accepted base %s)',
+    async (first, labelOk, accepted) => {
       const { store } = setup()
       const { copy, capture } = await tasksRow(store)
       const cache = store.getState().githubTaskCache
-      const close = cache.operation(row, capture(), (base) => ({ ...base, state: 'closed' }))
-      const label = cache.operation(row, capture(), (base) => ({
-        ...base,
-        labels: [...base.labels, 'bug']
-      }))
-      expect(copy()).toMatchObject({ state: 'closed', labels: ['bug'] })
+      if (accepted) {
+        await cache.readCanonical(row, capture(), async () => row)
+      }
+      const close = cache.operation(row, capture(), { state: 'closed' })
+      const label = cache.operation(row, capture(), { labels: { bug: true } })
+      expect(cache.projectItem(copy())).toMatchObject({ state: 'closed', labels: ['bug'] })
       rebind(store)
       const settles =
         first === 'close'
@@ -485,37 +642,39 @@ describe('shared GitHub task records through production store actions', () => {
       expect(lookup).not.toHaveBeenCalled()
     }
   )
-  it('removes only the failed member of disjoint list edits after disposal', async () => {
-    const { store } = setup()
-    const { copy, capture } = await tasksRow(store)
-    const cache = store.getState().githubTaskCache
-    const add = (label: string) =>
-      cache.operation(row, capture(), (base) => ({ ...base, labels: [...base.labels, label] }))
-    const a = add('a'),
-      b = add('b')
-    rebind(store)
-    // A member the copy gained after disposal is not this owner's to remove.
-    store.getState().patchWorkItem(row.id, { labels: [...copy().labels, 'external'] }, repo.id)
-    expect(a(false).labels).toEqual(['b'])
-    expect(b(true).labels).toEqual(['b'])
-    expect(copy().labels).toEqual(['b', 'external'])
-  })
+  it.each([false, true])(
+    'removes only the failed member of disjoint list edits after disposal (accepted base %s)',
+    async (accepted) => {
+      const { store } = setup()
+      const { copy, capture } = await tasksRow(store)
+      const cache = store.getState().githubTaskCache
+      if (accepted) {
+        await cache.readCanonical(row, capture(), async () => row)
+      }
+      const a = cache.operation(row, capture(), { labels: { a: true } })
+      const b = cache.operation(row, capture(), { labels: { b: true } })
+      rebind(store)
+      // A member the copy gained after disposal is not this owner's to remove.
+      store.getState().patchWorkItem(row.id, (current) => ({ labels: [...current.labels, 'x'] }))
+      expect(a(false).labels).toEqual(['b'])
+      expect(b(true).labels).toEqual(['b'])
+      expect([...copy().labels].sort()).toEqual(['b', 'x'])
+    }
+  )
   it('leaves copies to a replacement incarnation and reconciles them with its own read', async () => {
     const { store } = setup()
     const { copy, capture } = await tasksRow(store)
     const cache = store.getState().githubTaskCache
-    const old = cache.operation(row, capture(), (base) => ({ ...base, labels: ['old'] }))
+    await cache.readCanonical(row, capture(), async () => row)
+    const old = cache.operation(row, capture(), { labels: { old: true } })
+    expect(copy().labels).toEqual(['old'])
     rebind(store)
-    const next = cache.operation(copy(), capture(), (base) => ({
-      ...base,
-      labels: [...base.labels, 'new']
-    }))
-    expect(copy().labels).toEqual(['old', 'new'])
+    const next = cache.operation(copy(), capture(), { labels: { new: true } })
+    expect(cache.projectItem(copy()).labels).toEqual(['old', 'new'])
     expect(old(false).labels).toEqual([])
-    expect(copy().labels).toEqual(['old', 'new'])
-    expect(lookup).not.toHaveBeenCalled()
+    expect(copy().labels).toEqual(['old'])
     lookup.mockResolvedValue({ ...row, updatedAt: '2026-10-31T12:00:03Z' })
-    expect(next(false).labels).toEqual(['old'])
+    next(false)
     await flush()
     expect(lookup).toHaveBeenCalledOnce()
     expect(copy().labels).toEqual([])
@@ -524,18 +683,13 @@ describe('shared GitHub task records through production store actions', () => {
     const { store } = setup()
     const { copy, capture } = await tasksRow(store)
     const cache = store.getState().githubTaskCache
-    let reject!: (error: Error) => void
-    lookup.mockReturnValueOnce(
-      new Promise((_resolve, fail) => {
-        reject = fail
-      })
-    )
+    const read = deferred<GitHubWorkItem>()
+    lookup.mockReturnValueOnce(read.promise)
     const binding = capture()
-    cache.operation(row, binding, (base) => ({ ...base, state: 'closed' }))(true)
-    const add = (label: string) =>
-      cache.operation(row, binding, (base) => ({ ...base, labels: [...base.labels, label] }))
+    cache.operation(row, binding, { state: 'closed' })(true)
+    const add = (label: string) => cache.operation(row, binding, { labels: { [label]: true } })
     const b = add('b')
-    reject(
+    read.reject(
       new RuntimeRpcCallError({
         id: 'old-server',
         ok: false,
@@ -545,56 +699,16 @@ describe('shared GitHub task records through production store actions', () => {
     await flush()
     expect(cache.canTrack(binding)).toBe(false)
     const c = add('c')
-    expect(copy()).toMatchObject({ state: 'closed', labels: ['b', 'c'] })
+    const view = () => cache.projectItem(copy())
+    expect(view()).toMatchObject({ state: 'closed', labels: ['b', 'c'] })
     expect(b(true).labels).toEqual(['b', 'c'])
-    expect(copy().labels).toEqual(['b', 'c'])
+    expect(view().labels).toEqual(['b', 'c'])
     expect(c(false)).toMatchObject({ state: 'closed', labels: ['b'] })
     expect(copy()).toMatchObject({ state: 'closed', labels: ['b'] })
+    expect(view()).toBe(copy())
     expect(cache.canTrack(binding, row)).toBe(false)
     await flush()
     expect(lookup).toHaveBeenCalledOnce()
-  })
-  it.each([true, false])(
-    'publishes a Project edit to a cached Tasks row with no prior record, through a stale search (%s)',
-    async (ok) => {
-      const { store } = setup()
-      const { copy, search } = await tasksRow(store)
-      const cacheKey = projectViewCacheKey('organization', 'acme', 1, 'v')
-      store.setState({
-        projectViewCache: { [cacheKey]: { data: board([projectRow()]), fetchedAt: Date.now() } }
-      })
-      const update = deferred<{ ok: boolean }>()
-      mockApi.gh.updateIssueBySlug.mockReturnValue(update.promise)
-      lookup.mockResolvedValue({ ...row, labels: ['bug'], updatedAt: '2026-10-31T12:00:03Z' })
-      const edit = store.getState().patchProjectIssueOrPr(cacheKey, 'r', { addLabels: ['bug'] })
-      // Seeded from the complete Tasks row, never the board's partial labels.
-      expect(copy().labels).toEqual(['bug'])
-      update.resolve({ ok })
-      await edit
-      await flush()
-      expect(lookup).toHaveBeenCalledTimes(ok ? 1 : 0)
-      expect(copy().labels).toEqual(ok ? ['bug'] : [])
-      expect((await search()).labels).toEqual(ok ? ['bug'] : [])
-    }
-  )
-  it('establishes the record by an item read when only a partial Tasks row exists', async () => {
-    const { store } = setup()
-    const { copy } = await tasksRow(store, { ...row, assignees: undefined })
-    const cache = store.getState().githubTaskCache
-    lookup.mockResolvedValue({ ...row, labels: ['bug'], assignees: [user] })
-    const finish = cache.projectOperation(
-      projectRow(),
-      undefined,
-      { kind: 'local' },
-      {
-        addLabels: ['bug']
-      }
-    )
-    expect(copy().labels).toEqual([])
-    finish(true)
-    await flush()
-    expect(lookup).toHaveBeenCalledOnce()
-    expect(copy()).toMatchObject({ labels: ['bug'], assignees: [user] })
   })
   it.each(['source', 'enterprise'] as const)(
     'leaves Tasks copies alone for a Project edit on another %s',
@@ -618,7 +732,7 @@ describe('shared GitHub task records through production store actions', () => {
           { addLabels: ['bug'] }
         )(true)
       await flush()
-      expect(copy().labels).toEqual([])
+      expect(store.getState().githubTaskCache.projectItem(copy()).labels).toEqual([])
       expect(lookup).not.toHaveBeenCalled()
     }
   )

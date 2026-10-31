@@ -6,7 +6,6 @@ import {
   type TaskPageGitHubCloseAction
 } from '@/components/task-page/github/task-page-github-status-actions'
 import { beginEdit } from './gh-edit-task-record'
-import type { TaskDelta } from '@/store/github/task-record-cache'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
@@ -76,7 +75,7 @@ export function runGHEditStateChange({
             : { state: newState }
       }),
     onOptimistic: () => {
-      settle = beginEdit(item, sourceContext, (base) => ({ ...base, state: newState }))
+      settle = beginEdit(item, sourceContext, { state: newState })
       onStateChange(newState)
       patchProjectRowIfNeeded({ state: newState })
     },
@@ -133,12 +132,7 @@ export function runGHEditLabelToggle({
         updates: isAdding ? { addLabels: [label] } : { removeLabels: [label] }
       }),
     onOptimistic: () => {
-      settle = beginEdit(item, sourceContext, (base) => ({
-        ...base,
-        labels: isAdding
-          ? [...new Set([...base.labels, label])]
-          : base.labels.filter((value) => value !== label)
-      }))
+      settle = beginEdit(item, sourceContext, { labels: { [label]: isAdding } })
       onLabelsChange(newLabels)
       patchProjectRowIfNeeded({ labels: newLabels })
     },
@@ -181,16 +175,8 @@ export function runGHEditAssigneeToggle({
     ? prevAssignees.filter((l) => l !== login)
     : [...prevAssignees, login]
 
-  const delta: TaskDelta = (base) => {
-    const current = base.assignees ?? []
-    return {
-      ...base,
-      assignees: isAssigned
-        ? current.filter((user) => user.login.toLowerCase() !== login.toLowerCase())
-        : current.some((user) => user.login.toLowerCase() === login.toLowerCase())
-          ? current
-          : [...current, { login, name: null, avatarUrl: '' }]
-    }
+  const change = {
+    assignees: { [login.toLowerCase()]: isAssigned ? null : { login, name: null, avatarUrl: '' } }
   }
   let settle: (success: boolean) => GitHubWorkItem = () => item
   void run('assignees', {
@@ -218,7 +204,7 @@ export function runGHEditAssigneeToggle({
           )
         },
         sourceContext,
-        delta
+        change
       )
       setLocalAssignees(newAssignees)
       patchProjectRowIfNeeded({ assignees: newAssignees })

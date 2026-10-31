@@ -13,6 +13,9 @@ import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
+import { parseTaskQuery } from '../../../../../shared/task-query'
+import type { GitHubProjectTable } from '../../../../../shared/github/project-types'
 import { toast } from 'sonner'
 import { workItemDetailsCache } from '../load-item-details/work-item-details-cache'
 import GitHubItemDialog from './github-item-dialog'
@@ -122,10 +125,69 @@ let root: Root, node: HTMLDivElement
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((r) => {
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((r, fail) => {
     resolve = r
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
+}
+const bob = { login: 'bob', name: null, avatarUrl: 'bob.png' }
+/** F1 input: a board fetched after the Tasks row, so its title, state and members are fresher. */
+const freshBoard: GitHubProjectTable = {
+  project: {
+    id: 'p',
+    owner: 'acme',
+    ownerType: 'organization',
+    number: 1,
+    title: 'Board',
+    url: 'https://github.com/orgs/acme/projects/1'
+  },
+  selectedView: {
+    id: 'v',
+    number: 1,
+    name: 'Table',
+    layout: 'TABLE_LAYOUT',
+    filter: '',
+    fields: [],
+    groupByFields: [],
+    sortByFields: []
+  },
+  rows: [
+    {
+      id: 'r',
+      position: 0,
+      itemType: 'ISSUE',
+      updatedAt: '2099-01-01T00:00:00Z',
+      fieldValuesByFieldId: {},
+      content: {
+        title: 'Renamed on GitHub',
+        body: '',
+        url: row.url,
+        repository: 'acme/widgets',
+        number: 42,
+        state: 'CLOSED',
+        stateReason: null,
+        isDraft: null,
+        parentIssue: null,
+        issueType: null,
+        labels: [{ name: 'triaged', color: 'abcdef' }],
+        assignees: [bob]
+      }
+    }
+  ],
+  totalCount: 1,
+  parentFieldDropped: false
+}
+let tasks: ReturnType<typeof useTaskPageGitHubWorkItemMutation>
+function TasksMutations() {
+  tasks = useTaskPageGitHubWorkItemMutation({
+    queryKey: 'f1',
+    query: parseTaskQuery('is:open'),
+    viewerLogin: 'alice',
+    patchWorkItem: mocks.store!.getState().patchWorkItem
+  })
+  return null
 }
 async function settle() {
   await act(async () => {
@@ -165,6 +227,10 @@ async function click(label: string) {
 describe('issue dialog edits reach the Tasks row through the shared record', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // One-shot responses a case queued but never consumed must not leak into the next case.
+    for (const mock of [mocks.details, mocks.item, mocks.update]) {
+      mock.mockReset()
+    }
     resetRemoteRuntimeMocks()
     workItemDetailsCache.clear()
     mocks.store = createTestStore()
@@ -217,6 +283,110 @@ describe('issue dialog edits reach the Tasks row through the shared record', () 
     await click('Start')
     expect(mocks.onUse).toHaveBeenCalledWith(expect.objectContaining({ id: row.id }))
   })
+
+  it.each([
+    ['tasks', false],
+    ['tasks', true],
+    ['dialog', false],
+    ['dialog', true]
+  ] as const)(
+    'a %s assignee edit from an older row changes only its own member on every copy (ok %s)',
+    async (creator, ok) => {
+      const rows = await mocks.store!.getState().fetchWorkItems(repo.id, repo.path, 20, '')
+      const cache = mocks.store!.getState().githubTaskCache
+      const raw = () =>
+        Object.values(mocks.store!.getState().workItemsCache).flatMap((e) => e.data ?? [])[0]
+      const shown = () => {
+        const content = cache.projectTable(freshBoard, 'local').rows[0].content
+        const item = cache.projectItem(raw())
+        return {
+          board: [
+            content.title,
+            content.state,
+            content.labels.map((l) => l.name),
+            content.assignees.map((u) => u.login)
+          ],
+          tasks: [item.title, item.state, item.labels, item.assignees?.map((u) => u.login)]
+        }
+      }
+      const before = shown()
+      const update = deferred<{ ok: boolean }>()
+      const verification = deferred<GitHubWorkItem>()
+      mocks.item.mockReturnValueOnce(verification.promise)
+      mocks.update.mockReturnValue(update.promise)
+      await act(async () => {
+        root.render(
+          <>
+            <TasksMutations />
+            {creator === 'dialog' && (
+              <GitHubItemDialog
+                workItem={rows[0]}
+                repoPath={repo.path}
+                repoId={repo.id}
+                sourceContext={source}
+                onUse={mocks.onUse}
+                onClose={() => {}}
+              />
+            )}
+          </>
+        )
+      })
+      // The dialog's own control, or the Tasks row's assignee toggle, starts the same edit.
+      const start = () =>
+        tasks.run({
+          item: rows[0],
+          intent: { type: 'toggleAssignee', user: alice },
+          sourceContext: source,
+          mutate: () => update.promise,
+          errorToast: 'Failed'
+        })
+      await (creator === 'dialog'
+        ? click('Assign me')
+        : act(async () => {
+            void start()
+            await Promise.resolve()
+          }))
+      const pending = {
+        board: ['Renamed on GitHub', 'CLOSED', ['triaged'], ['bob', 'alice']],
+        tasks: ['Assign then start', 'open', [], ['alice']]
+      }
+      expect(shown()).toEqual(pending)
+      await act(async () => {
+        if (ok) {
+          update.resolve({ ok: true })
+        } else {
+          update.reject(new Error('denied'))
+        }
+        await Promise.resolve()
+      })
+      await settle()
+      if (!ok) {
+        expect(shown()).toEqual(before)
+        expect(mocks.item).not.toHaveBeenCalled()
+        return
+      }
+      expect(mocks.item).toHaveBeenCalledOnce()
+      expect(shown()).toEqual(pending)
+      await act(async () => verification.reject(new Error('offline')))
+      await settle()
+      expect(shown()).toEqual(pending)
+      const truth = {
+        ...row,
+        title: 'Renamed on GitHub',
+        state: 'closed' as const,
+        labels: ['triaged'],
+        assignees: [bob, alice],
+        updatedAt: '2026-10-31T12:00:05Z'
+      }
+      mocks.item.mockResolvedValueOnce(truth)
+      const stale = await mocks
+        .store!.getState()
+        .fetchWorkItems(repo.id, repo.path, 20, '', { force: true })
+      expect(stale[0].assignees?.map((u) => u.login)).toEqual(['alice'])
+      await settle()
+      expect(shown().tasks).toEqual(['Renamed on GitHub', 'closed', ['triaged'], ['bob', 'alice']])
+    }
+  )
 
   it('keeps the first ordinary load when Refresh is clicked during it and reports a strict failure once', async () => {
     const ordinary = deferred<unknown>()
