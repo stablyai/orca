@@ -28,6 +28,7 @@ import {
 } from './bottom-drawer-modal-host-scope'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
+import { useReleasedSideInset } from '../layout/released-side-inset'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
 import { hostOs } from '../platform/host-os'
@@ -84,6 +85,8 @@ export function MountedBottomDrawer({
   const { height: screenHeight } = useWindowDimensions()
   const sheetHeight = useSharedValue(screenHeight)
   const insets = useWindowSafeAreaInsets()
+  // In a session that spans the Duo's status column, sheets span it too, matching the composer.
+  const released = useReleasedSideInset()
   // Cap/center tablet width while retaining phone’s bottom anchor and drag/keyboard transforms.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const insideModalHost = useBottomDrawerModalHost() !== null
@@ -285,7 +288,10 @@ export function MountedBottomDrawer({
           style={[
             styles.anchor,
             isWideLayout && styles.anchorWide,
-            { paddingLeft: insets.left, paddingRight: insets.right }
+            {
+              paddingLeft: released?.side === 'left' ? 0 : insets.left,
+              paddingRight: released?.side === 'right' ? 0 : insets.right
+            }
           ]}
           pointerEvents="box-none"
         >
