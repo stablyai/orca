@@ -29,8 +29,7 @@ export function mapGitLabReview(mr: MRInfo): HostedReviewInfo {
     mergeable: mr.mergeable,
     ...(mr.mergeStateStatus !== undefined ? { mergeStateStatus: mr.mergeStateStatus } : {}),
     ...(mr.headSha ? { headSha: mr.headSha } : {}),
-    ...(mr.conflictSummary ? { conflictSummary: mr.conflictSummary } : {}),
-    ...(mr.approval ? { approval: mr.approval } : {})
+    ...(mr.conflictSummary ? { conflictSummary: mr.conflictSummary } : {})
   }
 }
 

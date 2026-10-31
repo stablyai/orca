@@ -6,10 +6,7 @@ import type {
   PRConflictSummary,
   ProviderCheckSummary
 } from './github/pull-request-types'
-import type {
-  HostedReviewApproval,
-  HostedReviewDecision
-} from './source-control/hosted-review/hosted-review-contracts'
+import type { HostedReviewDecision } from './source-control/hosted-review/hosted-review-contracts'
 
 // Why: flat owner/repo is inadequate — projects nest (`group/subgroup/project`) and self-hosted hosts must travel with the path for URL/glab targeting.
 export type GitLabProjectRef = { host: string; path: string }
@@ -57,7 +54,6 @@ export type MRInfo = {
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
   conflictSummary?: PRConflictSummary
-  approval?: HostedReviewApproval
 }
 
 // Why: GitLab emoji awards are open-ended, so we carry the raw award name and let the renderer decide.
