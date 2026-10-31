@@ -15021,7 +15021,6 @@
             "cd8a3a39d7": "3 commits adiante"
           },
           "AgentCapabilitiesSetupAction": {
-            "b8dc9dd8a2": "Instalado",
             "1b51644c2d": "Permita que os agentes controlem a área de trabalho, movendo o cursor, clicando e digitando em qualquer aplicativo.",
             "362a07517d": "Uso do Computador",
             "5e8fe5a72d": "Dê aos agentes acesso direto ao navegador do Orca para que possam testar páginas, capturar screenshots e agir sobre o que veem.",
