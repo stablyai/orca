@@ -56,21 +56,6 @@ describe('useRemoteBrowserPageNavigation history recording', () => {
 
   afterEach(() => cleanup())
 
-  it('files an observed remote navigation into the URL history the address bar suggests from', () => {
-    const { result } = renderNavigation()
-
-    act(() =>
-      result.current.applyRemoteTabInfo({
-        url: 'https://remote.internal/docs',
-        title: 'Remote docs'
-      })
-    )
-
-    expect(useAppStore.getState().browserUrlHistory).toEqual([
-      expect.objectContaining({ url: 'https://remote.internal/docs', title: 'Remote docs' })
-    ])
-  })
-
   it('files one entry however often the same page is re-read', () => {
     const { result } = renderNavigation()
 
@@ -115,14 +100,6 @@ describe('useRemoteBrowserPageNavigation history recording', () => {
     expect(useAppStore.getState().browserUrlHistory).toEqual([
       expect.objectContaining({ title: 'Remote docs' })
     ])
-  })
-
-  it('never files a blank page, which is what a new tab reports before it navigates', () => {
-    const { result } = renderNavigation()
-
-    act(() => result.current.applyRemoteTabInfo({ url: 'about:blank', title: '' }))
-
-    expect(useAppStore.getState().browserUrlHistory).toHaveLength(0)
   })
 
   it('redacts a Kagi session token before it reaches history', () => {

@@ -2563,7 +2563,11 @@
       "placeholder": "Ask anything, @ to mention files, / for commands",
       "cancelEditing": "Cancel editing",
       "saveEditedMessage": "Save edited message",
-      "sendMessage": "Send message"
+      "sendMessage": "Send message",
+      "sendQueue": "Queue",
+      "sendSteer": "Steer",
+      "sendQueueHint": "Runs after the current turn",
+      "sendSteerHint": "Goes into what the agent is doing now"
     },
     "composerAttachments": {
       "file": "File",

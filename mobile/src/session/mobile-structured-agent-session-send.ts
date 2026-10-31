@@ -27,7 +27,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   attachments: readonly StructuredAgentSessionAttachment[]
   /** Sent only when the host advertises `agent-session.send-skills.v1`. */
   skills?: readonly AgentJournalSkillRef[]
-  /** Sent only when the host advertises `agent-session.queued-messages.v1`. */
+  /** Sent only when the host advertises `agent-session.queued-messages.v2`. */
   delivery?: 'queue-if-active'
   /** Sent only when the host advertises `agent-session.send-selection.v1`. */
   selection?: Readonly<Record<string, string>>

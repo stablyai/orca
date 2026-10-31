@@ -29,10 +29,10 @@ afterEach(() => rig.dispose())
 
 const journal = () => rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
 const db = () => openTestJournalHostDatabase(rig.root).db
-const rawPrefix = (sequence: number) =>
+const canonicalPrefix = (sequence: number) =>
   db()
     .prepare(
-      'SELECT seq, row_json FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq <= ? ORDER BY seq'
+      'SELECT seq, field, entry_key, ordinal, value_json, deleted FROM journal_outcomes WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ? AND epoch = ?) AND seq <= ? ORDER BY seq, field, entry_key'
     )
     .all(SESSION, journal().cursor().epoch, sequence)
 
@@ -62,7 +62,7 @@ async function seed() {
   const prefix = journal()
     .snapshot()
     .items.filter((item) => item.sequence <= floor.sequence)
-  const raw = rawPrefix(floor.sequence)
+  const raw = canonicalPrefix(floor.sequence)
   const kept = await send('kept after clear', 'kept')
   const target = await send('rewound after clear', 'target')
   const fields = { itemId: target, expectedEpoch: journal().cursor().epoch }
@@ -215,7 +215,7 @@ describe('rewind behind a clear boundary', () => {
         .snapshot()
         .items.filter((item) => item.sequence <= floor.sequence)
     ).toEqual(prefix)
-    expect(rawPrefix(floor.sequence)).toEqual(raw)
+    expect(canonicalPrefix(floor.sequence)).toEqual(raw)
     expect(
       journal()
         .snapshot()
@@ -257,7 +257,7 @@ describe('rewind behind a clear boundary', () => {
       rig.store.getRecord(SESSION)!.lease.runtimeFence
     )
     expect(journal().snapshot()).toEqual(recovered)
-    expect(rawPrefix(floor.sequence)).toEqual(raw)
+    expect(canonicalPrefix(floor.sequence)).toEqual(raw)
     expect(rewind).toHaveBeenCalledOnce()
     expect(await rig.host.rewind(CALLER, params)).toMatchObject({ ok: true, replayed: true })
   })

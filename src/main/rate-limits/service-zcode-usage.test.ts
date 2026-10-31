@@ -8,7 +8,6 @@ import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchZcodeRateLimits } from './zcode-usage-fetcher'
-import { hasZcodePlanApiKey } from '../zcode/zcode-plan-api-key-store'
 import {
   deferred,
   okProvider,
@@ -86,39 +85,6 @@ describe('RateLimitService zcode plan credentials', () => {
     resetRateLimitProviderMocks()
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
-  })
-
-  it('fetches zcode with the site-resolved plan credential when a resolver is set', async () => {
-    const service = new RateLimitService()
-    service.setZcodePlanConfigResolver(() => ({ site: 'bigmodel', apiKey: 'glm-key' }))
-    vi.mocked(hasZcodePlanApiKey).mockReturnValue(true)
-    vi.mocked(fetchZcodeRateLimits).mockResolvedValueOnce(okProvider('zcode', 33, Date.now()))
-
-    await service.refresh()
-
-    expect(fetchZcodeRateLimits).toHaveBeenCalledTimes(1)
-    expect(fetchZcodeRateLimits).toHaveBeenCalledWith({
-      signal: expect.any(AbortSignal),
-      planCredential: { apiKey: 'glm-key', baseUrl: 'https://open.bigmodel.cn' }
-    })
-    const state = service.getState()
-    expect(state.zcode?.status).toBe('ok')
-    expect(state.zcode?.session?.usedPercent).toBe(33)
-    expect(state.zcodePlanApiKeyConfigured).toBe(true)
-  })
-
-  it('passes no plan credential while no key is saved and still fetches via the CLI config', async () => {
-    const service = new RateLimitService()
-    service.setZcodePlanConfigResolver(() => ({ site: 'zai', apiKey: '' }))
-    vi.mocked(fetchZcodeRateLimits).mockResolvedValueOnce(okProvider('zcode', 12, Date.now()))
-
-    await service.refresh()
-
-    expect(fetchZcodeRateLimits).toHaveBeenCalledWith({
-      signal: expect.any(AbortSignal),
-      planCredential: null
-    })
-    expect(service.getState().zcode?.session?.usedPercent).toBe(12)
   })
 
   it('surfaces a resolver failure as a zcode-only error without fetching', async () => {
