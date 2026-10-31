@@ -3,6 +3,7 @@ import type {
   AgentSessionPromptResponse,
   AgentSessionQuestionAnswer
 } from '../../shared/agent-session-question-answer'
+import type { StructuredAgentSessionAdapterStop } from '../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
 import {
   claudePromptQuestions,
   isClaudePromptRecord,
@@ -18,8 +19,28 @@ export {
   type ClaudePromptSettle
 } from './claude-prompt-registry'
 
+/** Keep `cancel` for older cards; it now means dismissal. */
 export const CLAUDE_APPROVAL_DECISIONS = ['allow', 'allowForSession', 'deny', 'cancel'] as const
 export type ClaudeApprovalDecision = (typeof CLAUDE_APPROVAL_DECISIONS)[number]
+
+/** Questions require Stop; approvals can be dismissed without interrupting the session. */
+export const claudePromptCancelRoute: NonNullable<
+  StructuredAgentSessionAdapterStop['routePromptCancel']
+> = ({ prompt }) => (prompt.kind === 'question' ? { kind: 'stop' } : { kind: 'dismiss' })
+
+/** Dismissed plans and questions ask Claude to wait rather than revise or ask again. */
+export function claudePromptDismissal(prompt: ClaudePendingPrompt): PermissionResult {
+  return {
+    behavior: 'deny',
+    message:
+      prompt.kind === 'question'
+        ? 'The user dismissed these questions without answering. End your turn and wait for them.'
+        : prompt.subject?.kind === 'plan'
+          ? 'The user dismissed this plan without approving it. End your turn and wait for them to say what to change.'
+          : 'User denied this action.',
+    toolUseID: prompt.toolUseId
+  }
+}
 
 function isClaudeApprovalDecision(optionId: string): optionId is ClaudeApprovalDecision {
   return CLAUDE_APPROVAL_DECISIONS.some((decision) => decision === optionId)
@@ -93,15 +114,15 @@ function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): Permis
       toolUseID: prompt.toolUseId
     }
   }
+  if (decision === 'cancel') {
+    return claudePromptDismissal(prompt)
+  }
   return {
     behavior: 'deny',
     message:
-      decision === 'cancel'
-        ? 'User stopped this turn.'
-        : prompt.subject?.kind === 'plan'
-          ? 'The user asked you to keep planning. Revise the plan and call ExitPlanMode again.'
-          : 'User denied this action.',
-    ...(decision === 'cancel' ? { interrupt: true } : {}),
+      prompt.subject?.kind === 'plan'
+        ? 'The user asked you to keep planning. Revise the plan and call ExitPlanMode again.'
+        : 'User denied this action.',
     toolUseID: prompt.toolUseId
   }
 }
@@ -147,8 +168,7 @@ function questionResponse(
   }
 }
 
-/** Builds Claude's reply without touching the prompt, so a reply that cannot be built refuses the
- *  answer before anything is recorded. */
+/** Validate the reply before committing the answer or mutating the pending prompt. */
 export function buildClaudePromptReply(
   prompt: ClaudePendingPrompt,
   response: AgentSessionPromptResponse

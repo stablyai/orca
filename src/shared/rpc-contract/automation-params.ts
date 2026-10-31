@@ -67,9 +67,7 @@ export const TaskProviderIdentity = z
     z
       .object({
         provider: z.literal('github'),
-        // Why refine, not .trim(): normalizeTaskProviderIdentity treats a blank owner or repo as
-        // no identity at all, so blank must be rejected here — but trimming would rewrite the
-        // parsed value and change what the handler receives.
+        // Reject blank identity without trimming: normalization treats it as absent, but parsing must preserve nonblank bytes.
         owner: GithubIdentityField,
         repo: GithubIdentityField,
         host: z.string().optional()
@@ -183,12 +181,26 @@ export const AutomationRuns = z.object({
   cursor: OptionalString
 })
 
+// Why strict: null or a non-string must fail rather than fall back to "omitted", which preserves.
+const ExtraAgentArgs = z.string({ message: 'Extra agent arguments must be text.' }).optional()
+
+export const AutomationLaunchSetupPatch = z
+  .strictObject({
+    surface: z.enum(['chat', 'terminal']).optional(),
+    arguments: z.strictObject({ kind: z.literal('legacy-extras'), value: z.string() }).optional()
+  })
+  .refine((patch) => patch.surface !== undefined || patch.arguments !== undefined, {
+    message: 'Choose an automation launch change.'
+  })
+
 export const AutomationCreate = z.object({
   creationKey: OptionalString,
   name: requiredString('Missing automation name'),
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
+  extraAgentArgs: ExtraAgentArgs,
+  launchSetupPatch: AutomationLaunchSetupPatch.optional(),
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -210,6 +222,8 @@ export const AutomationUpdateFields = z.object({
   prompt: OptionalString,
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
+  extraAgentArgs: ExtraAgentArgs,
+  launchSetupPatch: AutomationLaunchSetupPatch.optional(),
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

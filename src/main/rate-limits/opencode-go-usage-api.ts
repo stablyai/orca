@@ -1,31 +1,28 @@
-import { net, session } from 'electron'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
+import { getMainHttpClient } from '../network/http-client'
+import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import {
   parseOpenCodeGoUsageApiPayload,
   type OpenCodeGoUsageWindows
 } from './opencode-go-status-parsing'
+import { classifyThrownUsageRequestError } from './usage-request-failure-kind'
+import type { UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
 
 export const OPENCODE_GO_USAGE_API_URL = 'https://opencode.ai/zen/go/v1/usage'
 const API_TIMEOUT_MS = 15_000
 const MAX_ERROR_BODY_CHARS = 4_000
 
-/**
- * Outcome of one Bearer-authenticated usage request.
- *
- * `unauthorized` and `no-subscription` are the server's two definitive verdicts
- * about the key; `failed` covers everything Orca could not get an answer from.
- */
+/** Unauthorized/no-subscription are definitive key verdicts; failed means no usable answer. */
 export type OpenCodeGoUsageApiOutcome =
   | { kind: 'ok'; windows: OpenCodeGoUsageWindows }
   | { kind: 'unauthorized' }
   | { kind: 'no-subscription' }
-  | { kind: 'failed'; message: string }
+  | { kind: 'failed'; message: string; failureKind?: UsageRateLimitFailureKind }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Error type names the console returns; see `routes/zen/go/v1/usage.ts`. */
 function readErrorType(body: string): string | null {
   if (!body || body.length > MAX_ERROR_BODY_CHARS) {
     return null
@@ -44,8 +41,7 @@ function readErrorType(body: string): string | null {
 
 function classifyFailure(status: number, body: string): OpenCodeGoUsageApiOutcome {
   const errorType = readErrorType(body)
-  // Why type-first: a migrated account's request is proxied to the new console,
-  // which owns its own status codes; the error name is the stable signal.
+  // Migrated requests reach a new console with different status codes; error names remain stable.
   if (errorType === 'EntitlementError' || status === 403) {
     return { kind: 'no-subscription' }
   }
@@ -55,45 +51,31 @@ function classifyFailure(status: number, body: string): OpenCodeGoUsageApiOutcom
   return { kind: 'failed', message: `OpenCode Go usage request failed (${status})` }
 }
 
-/**
- * Fetch OpenCode Go usage with the account's API key.
- *
- * Runs on the default Electron session so the app-wide proxy guard covers it.
- * The key is sent only as an `Authorization` header and never reaches a log,
- * a returned message, or telemetry.
- * @param apiKey - The resolved OpenCode Go API key.
- * @param signal - Optional cancellation signal for the enclosing fetch cycle.
- * @returns The parsed usage windows or a classified failure.
- */
+/** Fetch via the default Electron session for app-wide proxy handling; the key stays in Authorization, never logs/results/telemetry. */
 export async function fetchOpenCodeGoUsageWithApiKey(
   apiKey: string,
   signal?: AbortSignal
 ): Promise<OpenCodeGoUsageApiOutcome> {
   await ensureElectronProxyFromEnvironment({
-    proxySession: session.defaultSession,
     probeUrl: OPENCODE_GO_USAGE_API_URL
   }).catch(() => {})
 
-  const requestSignal = signal
-    ? AbortSignal.any([signal, AbortSignal.timeout(API_TIMEOUT_MS)])
-    : AbortSignal.timeout(API_TIMEOUT_MS)
-
   let response: Response
   try {
-    response = await net.fetch(OPENCODE_GO_USAGE_API_URL, {
+    response = await getMainHttpClient().fetch(OPENCODE_GO_USAGE_API_URL, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         Accept: 'application/json'
       },
-      signal: requestSignal
+      signal: abortSignalWithTimeout(signal, API_TIMEOUT_MS)
     })
   } catch (error) {
-    // Why fixed prefix: the thrown message can embed the request, and the
-    // request carries the key.
+    // Exception messages may embed the authenticated request; return a fixed prefix.
     return {
       kind: 'failed',
-      message: `OpenCode Go usage request failed (${error instanceof Error ? error.name : 'network error'})`
+      message: `OpenCode Go usage request failed (${error instanceof Error ? error.name : 'network error'})`,
+      failureKind: classifyThrownUsageRequestError(error)
     }
   }
 
@@ -103,7 +85,7 @@ export async function fetchOpenCodeGoUsageWithApiKey(
   }
   const windows = parseOpenCodeGoUsageApiPayload(body)
   if (!windows) {
-    // Why: Electron follows redirects, so a key bounced to console sign-in arrives as a 200 page.
+    // Redirected sign-in pages can arrive as successful HTML responses.
     if (response.headers.get('content-type')?.includes('text/html')) {
       return { kind: 'unauthorized' }
     }

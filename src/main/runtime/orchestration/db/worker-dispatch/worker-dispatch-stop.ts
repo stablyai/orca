@@ -5,6 +5,7 @@ import {
   type ContextOnlyDispatchReleaseResult
 } from '../../context-only-dispatch-release'
 import { isEquivalentPaneKey } from '../pane-key-match'
+import { refuseStopWhileKeptOpen } from '../worker-terminal/worker-terminal-user-keep'
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
 import {
@@ -30,6 +31,14 @@ export function isDispatchProcessCurrent(
     dispatch.process_incarnation &&
     params.processIncarnation === dispatch.process_incarnation
   )
+}
+
+/** A `stopping` row whose stop belongs to a runtime that can no longer report its outcome. */
+export function isStopStrandedByAnotherRuntime(
+  worker: WorkerDispatchRow,
+  runtimeEpoch: string
+): boolean {
+  return worker.state === 'stopping' && worker.runtime_epoch !== runtimeEpoch
 }
 
 export function beginWorkerStop(
@@ -59,19 +68,12 @@ export function beginWorkerStop(
       this.db.exec('COMMIT')
       return { disposition: 'already_settled', worker, dispatch }
     }
-    // Why `stopping` under a DIFFERENT epoch is accepted: a stop whose runtime died mid-flight
-    // leaves the row here forever, and refusing the re-issue was the only operator escape
-    // (#16904). Re-running the stop earns the honest outcome — settled, or `stop_unknown`, from
-    // which the worker can be abandoned. It never asserts an exit the runtime did not observe.
-    //
-    // Why the epoch and not just the state: this runtime's own `stopping` row means its stop is
-    // still in flight, and a second pass would record `stop_unknown` over it. The exit event that
-    // follows claims a clean stop only from `stopping` under its own epoch
-    // (failActiveDispatchOnExit), so it would then read the operator's stop as a crash and
-    // escalate it. Same predicate as that reader, so both agree on whose stop this is.
-    const stopStrandedByAnotherRuntime =
-      worker.state === 'stopping' && worker.runtime_epoch !== runtimeEpoch
-    if (!['ready', 'start_unknown'].includes(worker.state) && !stopStrandedByAnotherRuntime) {
+    refuseStopWhileKeptOpen(this, dispatchId)
+    // A different runtime epoch may retry a stranded stop; this epoch must preserve its in-flight stopping verdict for the exit event.
+    if (
+      !['ready', 'start_unknown'].includes(worker.state) &&
+      !isStopStrandedByAnotherRuntime(worker, runtimeEpoch)
+    ) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${dispatchId} cannot stop from ${worker.state}.`
@@ -136,6 +138,8 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
       })
     }
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
+    // Move helper mail received while the creator was stopping.
+    this.closeQuestionsForDispatch(dispatchId)
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
@@ -192,6 +196,7 @@ export function reconcileFederatedWorkerStop(
       })
     }
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
+    this.closeQuestionsForDispatch(dispatchId)
     commitLifecycleWriteTransaction(this.db, transaction)
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {

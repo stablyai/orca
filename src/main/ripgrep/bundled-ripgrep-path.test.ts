@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { toBundledRipgrepPlatform } from '../../shared/bundled-ripgrep'
 import {
   bundledRipgrepCommand,
@@ -73,7 +73,8 @@ describe('bundled ripgrep path', () => {
     const key = bundledRipgrepContentKey(platform)
 
     expect(key).toMatch(/^[0-9a-f]{16}$/)
-    expect(bundledRipgrepContentKey('win32-x64')).not.toBe(key)
+    const otherPlatform = platform === 'win32-x64' ? 'linux-x64' : 'win32-x64'
+    expect(bundledRipgrepContentKey(otherPlatform)).not.toBe(key)
   })
 
   it('picks the distro-arch Linux build and fails closed when its drive is unavailable', () => {

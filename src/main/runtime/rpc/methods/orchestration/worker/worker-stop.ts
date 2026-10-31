@@ -5,16 +5,19 @@ import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../.
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { inspectWorkerTerminal, resolvePinnedFederatedServer } from './worker-observation'
+import { refuseFederatedStopWhileKeptOpen } from './worker-keep-open'
+import { archiveWorkerOutputBeforeStop } from './worker-stop-archive'
 import {
   resolveStructuredWorkerForDispatch,
   stopStructuredWorker
 } from '../../orchestration-structured-worker-lifecycle'
-import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineMethod({
     name: 'orchestration.workerStop',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationMutation }) =>
       dedupeWorkerStop(runtime, params.dispatch, async () => {
@@ -27,6 +30,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
               'Remote worker-stop requires a durable retry request.'
             )
           }
+          await refuseFederatedStopWhileKeptOpen(runtime, federated)
           const server = resolvePinnedFederatedServer(runtime, federated)
           const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
           if (begun.disposition === 'already_settled') {
@@ -129,9 +133,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
           )
         }
         if (isStructuredWorkerHandle(handle)) {
-          // The same install release performs, for the same reason: after a restart nothing has
-          // installed the structured host, and both the observation below and the close read it.
-          // Without this a restarted worker answers `unknown` forever and can never be stopped.
+          // Install the structured host after restart or observation/close stay unknown forever.
           await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
             console.warn(
               '[orchestration] structured host install failed before stop',
@@ -152,11 +154,12 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             processAction: 'none'
           }
         }
-        // Why `unverifiable` still proceeds: losing contact is a reason to report
-        // the outcome honestly, never a reason to stop trying to stop the worker.
+        // Still attempt stop on unverifiable contact. Structured exited is also addressable: close/hide its current /clear session to prevent restart on mail.
         if (
           !observation.exact ||
-          (observation.status !== 'live' && observation.status !== 'unverifiable')
+          (observation.status !== 'live' &&
+            observation.status !== 'unverifiable' &&
+            !isStructuredWorkerHandle(handle))
         ) {
           return unknownReceipt(
             params.dispatch,
@@ -179,13 +182,18 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             'none'
           )
         }
+        await archiveWorkerOutputBeforeStop({
+          runtime,
+          db,
+          dispatchId: params.dispatch,
+          terminalHandle: liveHandle,
+          attachedAt: begun.worker.created_at
+        })
         const structured = resolveStructuredWorkerForDispatch(db, params.dispatch)
         if (structured) {
-          const stop = await stopStructuredWorker(structured, params.dispatch, runtime)
+          const stop = await stopStructuredWorker(structured, runtime)
           if (!stop.stopped) {
-            // Close is retried by the host; only a proven exit may settle the dispatch. And when no
-            // close was issued at all — no host in this runtime generation — the receipt says so
-            // rather than crediting this runtime with a terminal it never touched.
+            // Only proven exit settles; if no close was issued, the receipt must not claim one.
             return unknownReceipt(
               params.dispatch,
               db.markWorkerStopUnknown(params.dispatch, stop.reason ?? 'The close was not proven.'),
@@ -208,8 +216,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             (error: unknown) =>
               ({ error: error instanceof Error ? error.message : String(error) }) as const
           )
-        // The process exit can land mid-close and settle the stop from the exit path; that exit
-        // is this stop's proof of success, so do not re-settle it or report it as unknown.
+        // A concurrent process exit already proves and settles stop; do not re-settle or report uncertainty.
         if (db.getWorkerDispatch(params.dispatch)?.state !== 'stopped') {
           if ('error' in closed) {
             return unknownReceipt(
@@ -219,8 +226,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             )
           }
           if (!closed.close.ptyKilled) {
-            // The tab is retired, but the agent process was never confirmed stopped —
-            // settling here is the false success this receipt exists to prevent.
+            // Tab retirement alone does not prove the agent stopped.
             return unknownReceipt(
               params.dispatch,
               db.markWorkerStopUnknown(params.dispatch, describeUnconfirmedAgentStop(closed.close)),
@@ -243,9 +249,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
 
 const activeStopByRuntime = new WeakMap<OrcaRuntimeService, Map<string, Promise<unknown>>>()
 
-/** Two callers stopping one Dispatch: coalesced so only one of them closes the terminal. Both are
- *  in this runtime and so carry one epoch, which `beginWorkerStop` refuses a second time anyway;
- *  the epoch it does accept belongs to a row a dead runtime stranded, and no caller here holds one. */
+/** Coalesce same-runtime stops so only one closes; beginWorkerStop admits this epoch only to recover a row stranded by a dead runtime. */
 function dedupeWorkerStop(
   runtime: OrcaRuntimeService,
   dispatchId: string,

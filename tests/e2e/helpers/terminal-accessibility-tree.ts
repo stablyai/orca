@@ -1,18 +1,8 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 
-/**
- * Reads a tab's `.xterm-accessibility-tree` text, enabling screen-reader mode on the pane it
- * finds each time it is called.
- *
- * Why re-apply rather than set it once up front: `screenReaderMode` is an option on the xterm
- * instance, and the node it renders belongs to that instance's DOM. A pane that parks and
- * remounts, or rebinds after a reconnect, comes back as a new instance with the option off and
- * no tree — so a one-shot mutation before the read stops producing the very node the read is
- * waiting for, and the wait fails as "element not found" rather than as a content mismatch.
- *
- * Returns null when the pane or the node is not there yet, so a poll keeps retrying.
- */
+// Re-enable screenReaderMode on each read: parking or reconnect can replace the xterm instance and its accessibility DOM.
+// Return null while the pane/tree is absent so callers keep polling.
 export function readTerminalAccessibilityText(page: Page, tabId: string): Promise<string | null> {
   return page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)

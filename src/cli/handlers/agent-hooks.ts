@@ -10,9 +10,7 @@ import {
 } from '../runtime-client'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles'
-import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { prepareManagedCodexHomeBeforeShellLaunch } from '../../main/codex/managed-home-shell-preflight'
 import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/profile-state-offline-settings'
 
 type AgentHookCommandResult = {
@@ -68,26 +66,6 @@ async function readAdmittedHookSettingsFromDisk(): Promise<
   )
 }
 
-async function readHookSettings(
-  client: RuntimeClient
-): Promise<Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>> {
-  try {
-    const response = await client.call<{
-      settings?: Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
-    }>('settings.get', undefined, { timeoutMs: 1_000 })
-    const settings = response.result.settings
-    if (settings && typeof settings.agentStatusHooksEnabled === 'boolean') {
-      return {
-        agentStatusHooksEnabled: settings.agentStatusHooksEnabled,
-        disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents)
-      }
-    }
-  } catch {
-    // The active profile on disk is the offline fallback.
-  }
-  return readHookSettingsFromDisk()
-}
-
 async function updateEnabledOnDisk(enabled: boolean): Promise<{
   settingsPath: string
   settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
@@ -136,9 +114,9 @@ async function updateAdmittedEnabledOnDisk(enabled: boolean): Promise<{
 }
 
 async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Promise<boolean> {
-  const status = await client.getCliStatus()
-  if (!status.result.runtime.reachable) {
-    if (status.result.app.running) {
+  const status = await client.getOfflineRuntimeAdmission()
+  if (!status.reachable) {
+    if (status.legacyPidRunning) {
       throw new RuntimeClientError(
         'runtime_error',
         'Orca is running but unavailable. Retry when it responds, or stop Orca before changing agent hooks offline.'
@@ -162,8 +140,12 @@ function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
 }
 
 function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
+  // The CLI and app panes may use different homes; identify the one this status describes.
   const statusSummary = result.statuses
-    .map((status) => `${status.agent}: ${status.state}`)
+    .map(
+      (status) =>
+        `${status.agent}: ${status.state}${status.configPath ? ` (${status.configPath})` : ''}`
+    )
     .join('\n')
   return [
     `agentStatusHooksEnabled: ${result.enabled}`,
@@ -198,28 +180,23 @@ async function setAgentHooksEnabled(
 export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   'agent hooks prepare-codex': async ({ client, flags }) => {
     rejectRemoteHookSelection(flags)
-    if (process.env.WSL_DISTRO_NAME?.trim()) {
-      try {
-        await client.call(
-          'agentHooks.prepareCodexForWslPane',
-          {
-            codexHome: process.env.CODEX_HOME ?? '',
-            orcaCodexHome: process.env.ORCA_CODEX_HOME ?? '',
-            wslDistro: process.env.WSL_DISTRO_NAME
-          },
-          { timeoutMs: WSL_CODEX_PREPARE_TIMEOUT_MS }
-        )
-      } catch {
-        // Best effort: old or unavailable runtimes must not block Codex launch.
-      }
+    if (!process.env.WSL_DISTRO_NAME?.trim()) {
+      // Native wrappers through v1.4.216 still call this; retain the no-op until they are unsupported.
       return
     }
-    const settings = await readHookSettings(client)
-    await prepareManagedCodexHomeBeforeShellLaunch({
-      userDataPath: getDefaultUserDataPath(),
-      hooksEnabled:
-        settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')
-    })
+    try {
+      await client.call(
+        'agentHooks.prepareCodexForWslPane',
+        {
+          codexHome: process.env.CODEX_HOME ?? '',
+          orcaCodexHome: process.env.ORCA_CODEX_HOME ?? '',
+          wslDistro: process.env.WSL_DISTRO_NAME
+        },
+        { timeoutMs: WSL_CODEX_PREPARE_TIMEOUT_MS }
+      )
+    } catch {
+      // Best effort: old or unavailable runtimes must not block Codex launch.
+    }
   },
   'agent hooks status': async ({ json, flags }) => {
     rejectRemoteHookSelection(flags)

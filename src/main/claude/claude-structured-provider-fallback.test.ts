@@ -9,14 +9,20 @@ import type {
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'provider-1', leafUuid: 'leaf-1' }
+  providerHandle: claudeProviderHandle('provider-1', 'leaf-1')
 }
 
 let root = ''
@@ -43,6 +49,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -75,11 +82,11 @@ describe('Claude provider fallback', () => {
   it('keeps provider-fallback rows distinct across acquisitions', async () => {
     const journal = await openAgentSessionJournal({
       identity: IDENTITY,
-      journalDir: root,
+      database: openTestJournalHostDatabase(root),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({
       journal,
       fence: 1,

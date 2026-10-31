@@ -22,7 +22,8 @@ import { Switch } from '../ui/switch'
 import { getAutoRenameBranchAdvancedSearchEntries } from './auto-rename-branch-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 
 type AutoRenameBranchFromWorkSettingProps = {
   settings: GlobalSettings
@@ -84,8 +85,7 @@ export function AutoRenameBranchFromWorkSetting({
 
   useEffect(() => {
     setBranchNameTemplateDraft(persistedBranchNameTemplateRef.current)
-    // Why: Settings owns the discard confirmation, but the draft lives here so
-    // the row can keep its prompt-specific save/discard affordances.
+    // Settings owns discard confirmation; keep the draft here for row-specific save/discard controls.
   }, [branchPromptDiscardSignal])
 
   useEffect(() => {
@@ -98,8 +98,7 @@ export function AutoRenameBranchFromWorkSetting({
     if (node !== null) {
       return
     }
-    // Why: Settings owns the global unsaved-branch-prompt guard; reset it
-    // when this setting detaches without a passive cleanup-only Effect.
+    // Clear Settings’ global dirty guard when this row detaches.
     onBranchPromptDirtyChangeRef.current?.(false)
   }, [])
 
@@ -215,78 +214,20 @@ export function AutoRenameBranchFromWorkSetting({
                   )}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  {translate(
-                    'auto.components.settings.AutoRenameBranchFromWorkSetting.9241b59bf5',
-                    'Use'
-                  )}{' '}
-                  <code className="font-mono">
-                    {translate(
-                      'auto.components.settings.AutoRenameBranchFromWorkSetting.c71770c455',
-                      '{basePrompt}'
+                  <Trans
+                    i18n={i18n}
+                    defaults={translate(
+                      'auto.components.settings.AutoRenameBranchFromWorkSetting.commandTemplateDescription',
+                      "Use <basePrompt>{basePrompt}</basePrompt> to include Orca's <promptLink>built-in branch-name prompt</promptLink>. You can also reference <firstPrompt>{firstPrompt}</firstPrompt> and <assistantMessage>{assistantMessage}</assistantMessage>. Orca generates only the final segment, like <example>fix-login-flow</example>; your branch prefix setting still applies."
                     )}
-                  </code>{' '}
-                  {translate(
-                    'auto.components.settings.AutoRenameBranchFromWorkSetting.69bf4830c2',
-                    "to include Orca's"
-                  )}{' '}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="inline rounded-sm font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      >
-                        {translate(
-                          'auto.components.settings.AutoRenameBranchFromWorkSetting.9c9b54e4ea',
-                          'built-in branch-name prompt'
-                        )}
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="start"
-                      side="bottom"
-                      className="w-[520px] max-w-[calc(100vw-2rem)] p-3"
-                    >
-                      <div>
-                        <pre className="scrollbar-sleek max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                          {BUILT_IN_BRANCH_NAME_PROMPT}
-                        </pre>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  {translate(
-                    'auto.components.settings.AutoRenameBranchFromWorkSetting.56580dcf60',
-                    '. You can also reference'
-                  )}{' '}
-                  <code className="font-mono">
-                    {translate(
-                      'auto.components.settings.AutoRenameBranchFromWorkSetting.2ee2779c05',
-                      '{firstPrompt}'
-                    )}
-                  </code>{' '}
-                  {translate(
-                    'auto.components.settings.AutoRenameBranchFromWorkSetting.570817d126',
-                    'and'
-                  )}{' '}
-                  <code className="font-mono">
-                    {translate(
-                      'auto.components.settings.AutoRenameBranchFromWorkSetting.a4fa380b67',
-                      '{assistantMessage}'
-                    )}
-                  </code>
-                  {translate(
-                    'auto.components.settings.AutoRenameBranchFromWorkSetting.5d569f5199',
-                    '. Orca generates only the final segment, like'
-                  )}{' '}
-                  <code className="font-mono">
-                    {translate(
-                      'auto.components.settings.AutoRenameBranchFromWorkSetting.800edb1e54',
-                      'fix-login-flow'
-                    )}
-                  </code>
-                  {translate(
-                    'auto.components.settings.AutoRenameBranchFromWorkSetting.f19a56498d',
-                    '; your branch prefix setting still applies.'
-                  )}
+                    components={{
+                      basePrompt: <code className="font-mono" />,
+                      promptLink: <BuiltInBranchNamePromptLink />,
+                      firstPrompt: <code className="font-mono" />,
+                      assistantMessage: <code className="font-mono" />,
+                      example: <code className="font-mono" />
+                    }}
+                  />
                 </p>
               </div>
               <textarea
@@ -361,5 +302,35 @@ export function AutoRenameBranchFromWorkSetting({
         </CollapsibleContent>
       </Collapsible>
     </SearchableSetting>
+  )
+}
+
+function BuiltInBranchNamePromptLink({
+  children
+}: {
+  children?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline rounded-sm font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {children}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        className="w-[520px] max-w-[calc(100vw-2rem)] p-3"
+      >
+        <div>
+          <pre className="scrollbar-sleek max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+            {BUILT_IN_BRANCH_NAME_PROMPT}
+          </pre>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

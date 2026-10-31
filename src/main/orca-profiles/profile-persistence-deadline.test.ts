@@ -6,7 +6,7 @@ import { flushActiveProfileBeforeFileMutation } from './profile-persistence-dead
 afterEach(() => vi.useRealTimers())
 
 describe('profile persistence deadline', () => {
-  it('allows the writer request deadline to finish before imposing maintenance cancellation', async () => {
+  it('allows a slow writer request to finish before imposing maintenance cancellation', async () => {
     vi.useFakeTimers()
     const result = Promise.withResolvers<ProfileStateMaintenance>()
     const beginProfileMaintenance = vi.fn(

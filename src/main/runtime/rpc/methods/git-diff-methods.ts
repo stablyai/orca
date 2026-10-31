@@ -1,9 +1,8 @@
 import { defineMethod } from '../core'
 import { remoteRpcContentBudget } from '../../../../shared/remote-rpc-content-budget'
-import { GitBranchDiff, GitCommitDiff, GitDiff } from './git-params'
+import { GitBranchDiff, GitCommitDiff, GitDiff } from '../../../../shared/rpc-contract/git-params'
 
-// Why: clientKind is set only for WebSocket-transported requests, so desktop-local and in-process
-// callers keep uncapped full-fidelity diffs.
+// Only WebSocket callers set clientKind; local/in-process diffs retain uncapped fidelity.
 function remoteDiffContentBudget(
   clientKind: 'mobile' | 'runtime' | undefined,
   requestId: string | undefined
@@ -14,6 +13,7 @@ function remoteDiffContentBudget(
 export const GIT_DIFF_METHODS = [
   defineMethod({
     name: 'git.diff',
+    permission: 'workspace',
     params: GitDiff,
     handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.getRuntimeGitDiff(
@@ -21,11 +21,13 @@ export const GIT_DIFF_METHODS = [
         params.filePath,
         params.staged,
         params.compareAgainstHead,
-        remoteDiffContentBudget(clientKind, requestId)
+        remoteDiffContentBudget(clientKind, requestId),
+        ...(params.oldPath ? ([params.oldPath] as const) : [])
       )
   }),
   defineMethod({
     name: 'git.branchDiff',
+    permission: 'workspace',
     params: GitBranchDiff,
     handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.getRuntimeGitBranchDiff(
@@ -38,6 +40,7 @@ export const GIT_DIFF_METHODS = [
   }),
   defineMethod({
     name: 'git.commitDiff',
+    permission: 'workspace',
     params: GitCommitDiff,
     handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.getRuntimeGitCommitDiff(

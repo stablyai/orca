@@ -1,5 +1,3 @@
-/** Candidate SQLite terminal restart/profile journeys. */
-
 import { readFileSync, existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
@@ -54,9 +52,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
               name,
               prompt,
               repo: `id:${repo.id}`,
-              // Keep a full run context in the persisted definition so `runNow`
-              // exercises the same runtime RPC and normalized automationRuns
-              // path used by real scheduled work.
+              // Persist a full run context so runNow follows scheduled work’s real RPC and normalized automationRuns path.
               runContext: {
                 kind: 'workspace-run',
                 projectId: repo.id,
@@ -127,14 +123,11 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       const databasePath = path.join(profileDirectory, 'profile-state.db')
       expect(existsSync(databasePath)).toBe(true)
       expect(existsSync(legacyProfileState)).toBe(true)
+      const legacyBytesBeforeQuit = readFileSync(legacyProfileState)
 
       await session.close(firstApp)
       firstApp = null
-      expect(JSON.parse(readFileSync(legacyProfileState, 'utf8'))).toMatchObject({
-        automations: expect.arrayContaining([
-          expect.objectContaining({ id: automationLifecycle.automationId, name: automationName })
-        ])
-      })
+      expect(readFileSync(legacyProfileState).equals(legacyBytesBeforeQuit)).toBe(true)
       // Prove the next launch has only the SQLite authority available.
       rmSync(legacyProfileState, { force: true })
       rmSync(legacyRootState, { force: true })
@@ -146,8 +139,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       await bootstrapRestoredLaunch(secondLaunch.page, worktreeId)
       expect(existsSync(legacyProfileState)).toBe(false)
       expect(existsSync(legacyRootState)).toBe(false)
-      // The daemon survives the clean Electron restart, so a SQLite-only launch
-      // must reattach the same PTY binding instead of silently spawning a new shell.
+      // The daemon survives restart; require the original PTY binding on this SQLite-only launch.
       await expect
         .poll(() => waitForActivePanePtyId(secondLaunch.page), { timeout: 15_000 })
         .toBe(ptyId)
@@ -292,8 +284,8 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       await waitForElectronProcessExit(secondApp)
       secondApp = null
 
-      // Clean maintenance refreshes compatibility JSON before releasing the profile.
-      expect(existsSync(targetJson)).toBe(true)
+      // Profile switching durably saves SQLite without publishing compatibility JSON.
+      expect(existsSync(targetJson)).toBe(false)
       for (const legacyPath of [targetJson, defaultJson, rootJson]) {
         rmSync(legacyPath, { force: true })
       }
@@ -418,8 +410,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       await waitForElectronProcessExit(thirdApp)
       thirdApp = null
 
-      // The move commits both SQLite participants before relaunch. Remove every JSON mirror to
-      // prove the target and source are both reopened from their databases alone.
+      // Remove all JSON mirrors after both SQLite commits to require database-only source/target recovery.
       for (const legacyPath of [sourceJson, targetJson, rootJson]) {
         rmSync(legacyPath, { force: true })
       }
@@ -449,7 +440,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       await waitForElectronProcessExit(secondApp)
       secondApp = null
 
-      // Switching away refreshes the target export; remove it before the SQL-only source launch.
+      // Keep the source relaunch SQL-only even if a legacy target file was seeded.
       rmSync(targetJson, { force: true })
       const sourceLaunch = await session.launch()
       thirdApp = sourceLaunch.app
@@ -521,8 +512,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       const databasePath = path.join(profileDirectory, 'profile-state.db')
       expect(existsSync(databasePath)).toBe(true)
 
-      // Remove both JSON mirrors before the kill. Any state recovered by the next
-      // launch must therefore come from SQLite, including the terminal topology.
+      // Remove JSON before the kill so only SQLite can recover terminal topology.
       rmSync(legacyProfileState, { force: true })
       rmSync(legacyRootState, { force: true })
       expect(existsSync(legacyProfileState)).toBe(false)
@@ -561,8 +551,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       await bootstrapRestoredLaunch(secondLaunch.page, worktreeId)
       expect(existsSync(legacyProfileState)).toBe(false)
       expect(existsSync(legacyRootState)).toBe(false)
-      // The daemon survives the Electron crash, so a SQLite-only restart must
-      // reattach the same PTY binding instead of silently spawning a new shell.
+      // The daemon survives the crash; require the original PTY on SQLite-only restart.
       await expect
         .poll(() => waitForActivePanePtyId(secondLaunch.page), { timeout: 15_000 })
         .toBe(ptyId)

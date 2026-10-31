@@ -1,7 +1,7 @@
-import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hostScreenSecondaryStyles = StyleSheet.create({
+export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   errorText: {
     color: colors.statusRed,
     fontSize: typography.bodySize
@@ -34,64 +34,48 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     color: colors.textMuted,
     marginLeft: spacing.xs
   },
+  sectionPendingSpinner: {
+    marginLeft: spacing.sm
+  },
   separator: {
     height: 1,
     backgroundColor: colors.borderSubtle,
     marginLeft: spacing.lg + 24,
     marginRight: spacing.lg
   },
-  filterModalHeader: {
+  filterModalSubtitle: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted
+  },
+  optionPending: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm
+  },
+  optionSectionGap: {
+    height: spacing.xs
+  },
+  optionGroup: {
     marginBottom: spacing.md
   },
-  filterModalTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
+  optionSearch: {
+    marginBottom: spacing.sm
   },
-  clearFiltersText: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  filterSectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  filterGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
+  optionSegmented: {
     marginBottom: spacing.md
   },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2,
-    gap: spacing.sm
-  },
-  filterRowText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  filterSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
+  // Over the sheet header's empty leading side, centred in its 52pt row.
+  optionPageBack: {
+    position: 'absolute',
+    top: 8,
+    left: spacing.xs
   },
   filterRepoDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   confirmContent: {
     paddingBottom: spacing.lg
@@ -114,11 +98,11 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
   confirmBtn: {
     flex: 1,
     paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   confirmBtnCancel: {
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.sheetGroup
   },
   confirmBtnDestructive: {
     backgroundColor: colors.statusRed
@@ -136,4 +120,4 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff'
   }
-})
+}))

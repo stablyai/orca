@@ -12,7 +12,7 @@ import {
   completedWorkerFakeCodexCommand,
   completedWorkerLaunchEnv,
   listRuntimeTerminals,
-  readCompletedWorkerDispatchCapability,
+  hasCompletedWorkerReceivedPreamble,
   readCompletedWorkerLedger,
   readPersistedWorkerRecoveryRecord,
   runBuiltOrcaCli,
@@ -26,7 +26,7 @@ import { splitWorktreeIdForFilesystem } from '../../src/shared/worktree/id'
 const PROVIDER_SESSION_ID = '019feb51-2269-71c2-89c6-faa8dc65c8dc'
 
 const test = base.extend({
-  launchEnv: [completedWorkerLaunchEnv, { option: true }]
+  launchEnv: completedWorkerLaunchEnv
 })
 
 test.describe.configure({ mode: 'serial' })
@@ -79,7 +79,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     }
     const coordinatorBefore = terminalIdentity(coordinator)
 
-    let targetWorktreeId: string | null = null
+    let polledWorktreeId: string | null | undefined
     await expect
       .poll(
         async () => {
@@ -89,19 +89,20 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
               .flat()
               .map((worktree) => worktree.id)
           )
-          targetWorktreeId =
+          polledWorktreeId =
             listed.result.worktrees.find(
               (worktree) =>
                 worktree.id !== coordinatorWorktreeId && rendererWorktreeIds.includes(worktree.id)
             )?.id ?? null
-          return targetWorktreeId
+          return polledWorktreeId
         },
         { timeout: 60_000, message: 'runtime never registered the secondary worktree' }
       )
       .not.toBeNull()
-    if (!targetWorktreeId) {
+    if (!polledWorktreeId) {
       throw new Error('The seeded repository did not expose its secondary worktree')
     }
+    const targetWorktreeId = polledWorktreeId
     const targetWorktreePath = splitWorktreeIdForFilesystem(targetWorktreeId)?.worktreePath
     if (!targetWorktreePath) {
       throw new Error('The secondary worktree did not expose a filesystem path')
@@ -176,13 +177,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     await expect
       .poll(() => readCompletedWorkerLedger().filter((event) => event.event === 'spawn'))
       .toHaveLength(1)
-    let dispatchCapability: string | null = null
-    await expect
-      .poll(() => {
-        dispatchCapability = readCompletedWorkerDispatchCapability()
-        return dispatchCapability
-      })
-      .not.toBeNull()
+    await expect.poll(() => hasCompletedWorkerReceivedPreamble()).toBe(true)
     await expect
       .poll(() =>
         readCompletedWorkerLedger()
@@ -190,9 +185,6 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
           .map((event) => event.mode)
       )
       .toEqual(['bracketed'])
-    if (!dispatchCapability) {
-      throw new Error('Background worker did not receive its dispatch capability')
-    }
 
     seedCurrentCodexTranscript(isolatedHome, PROVIDER_SESSION_ID, targetWorktreePath)
 
@@ -237,21 +229,17 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       )
       .toEqual(expectedRecovery)
 
-    const completed = await client.call<{ message: { type: string } }>(
-      'orchestration.send',
-      {
-        from: workerHandle,
-        subject: 'Completed',
-        body: 'The fixture completed. It found no work. Nothing remains.',
-        type: 'worker_done',
-        payload: JSON.stringify({
-          taskId: task.result.task.id,
-          dispatchId: started.result.dispatchId,
-          outcome: 'succeeded'
-        })
-      },
-      { orchestrationCapability: dispatchCapability }
-    )
+    const completed = await client.call<{ message: { type: string } }>('orchestration.send', {
+      from: workerHandle,
+      subject: 'Completed',
+      body: 'The fixture completed. It found no work. Nothing remains.',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.result.task.id,
+        dispatchId: started.result.dispatchId,
+        outcome: 'succeeded'
+      })
+    })
     expect(completed.result.message.type).toBe('worker_done')
     await expect
       .poll(

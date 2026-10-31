@@ -6,6 +6,7 @@ export function resolveRuntimeNavigationTarget(args: {
   navigation?: RuntimeNavigationTarget
   notifyClients?: boolean
   clientKind?: 'mobile' | 'runtime'
+  defaultTarget?: RuntimeNavigationTarget
 }): RuntimeNavigationTarget {
   if (args.navigation) {
     return args.navigation
@@ -14,7 +15,7 @@ export function resolveRuntimeNavigationTarget(args: {
     // Why: legacy paired clients sent notifyClients:true; treating that as navigation lets one device steer every UI.
     return 'caller'
   }
-  return args.notifyClients === false ? 'caller' : 'all'
+  return args.notifyClients === false ? 'caller' : (args.defaultTarget ?? 'all')
 }
 
 export function navigationTargetsHost(target: RuntimeNavigationTarget): boolean {

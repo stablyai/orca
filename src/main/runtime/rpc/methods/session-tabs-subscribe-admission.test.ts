@@ -1,3 +1,6 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
+import { RuntimeClientCapabilities } from '../runtime-client-capabilities'
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -35,7 +38,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     getClientSettings: () => ({
-      experimentalStructuredNativeChat: options.structuredChat === true
+      nativeChatProviders: options.structuredChat === true ? EVERY_AGENT_CHAT : {}
     }),
     restoreStructuredAgentSessionTabs: restore,
     listMobileSessionTabs,
@@ -69,7 +72,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
     dispatch: (
       request: RpcRequest,
       messages: Frame[] = [],
-      extra: { signal?: AbortSignal } = {}
+      extra: { signal?: AbortSignal; capabilitySource?: RuntimeClientCapabilities } = {}
     ): Promise<void> =>
       dispatcher.dispatchStreaming(request, (message) => messages.push(JSON.parse(message)), {
         connectionId: CONNECTION,
@@ -267,9 +270,9 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
     const listing = deferred<RuntimeMobileSessionTabsResult>()
     host.listMobileSessionTabs.mockReturnValueOnce(listing.promise)
 
-    // Old phones send no request id, so the host sweeps every stream for the worktree.
+    // Non-id selectors still await resolution; newer streams must survive that delay.
     const unsubscribing = host.dispatch(
-      request('unsub-1', 'session.tabs.unsubscribe', { worktree: 'id:wt-1' })
+      request('unsub-1', 'session.tabs.unsubscribe', { worktree: 'name:workspace' })
     )
     await settle()
     await host.dispatch(request('sub-2', 'session.tabs.subscribe', { worktree: 'id:wt-1' }), second)
@@ -340,3 +343,30 @@ describe('session.tabs.subscribeAll registers before restoring structured tabs',
     ).toBe(0)
   })
 })
+
+it.each(['abort', 'failure'] as const)(
+  'disposes capability observation on %s before workspace identity resolves',
+  async (outcome) => {
+    const host = makeHost()
+    const source = new RuntimeClientCapabilities()
+    const observe = vi.spyOn(source, 'observe')
+    const stop = vi.fn()
+    observe.mockImplementation(() => stop)
+    const listing = deferred<RuntimeMobileSessionTabsResult>()
+    host.listMobileSessionTabs.mockReturnValueOnce(listing.promise)
+    const abort = new AbortController()
+    const pending = host.dispatch(
+      request('unresolved', 'session.tabs.subscribe', { worktree: '/unresolved/path' }),
+      [],
+      { capabilitySource: source, signal: abort.signal }
+    )
+    await settle()
+    if (outcome === 'abort') {
+      abort.abort()
+    }
+    listing.reject(new Error('identity resolution failed'))
+    await pending
+    expect(stop).toHaveBeenCalledOnce()
+    expect(host.runtime.onMobileSessionTabsChanged).not.toHaveBeenCalled()
+  }
+)

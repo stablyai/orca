@@ -1,13 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { Tab, TabContentType } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/tab-types'
 import type { TopLevelView } from '../../../../shared/ui-chrome-types'
-
-export const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
-  'editor',
-  'diff',
-  'conflict-review',
-  'check-details'
-])
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 type EditorCmdSaveState = {
   activeFileId: string | null
@@ -21,15 +15,11 @@ export function getEditorCmdSaveFileId(
   floatingPanelOwnsEvent: boolean
 ): string | null {
   if (!floatingPanelOwnsEvent) {
-    // Why: outside the workspace view no mounted panel claims the request, so
-    // returning an id would swallow Cmd/Ctrl+S on Tasks/Settings without saving.
-    // The floating panel floats above every view and keeps its own ownership.
+    // Only mounted workspace editors claim saves; floating panels retain ownership above other views so Tasks/Settings cannot swallow Cmd/Ctrl+S.
     return state.activeView === 'terminal' && state.activeTabType === 'editor'
       ? state.activeFileId
       : null
   }
   const activeTab = state.getActiveTab(FLOATING_TERMINAL_WORKTREE_ID)
-  return activeTab && EDITOR_TAB_CONTENT_TYPES.has(activeTab.contentType)
-    ? activeTab.entityId
-    : null
+  return activeTab && isEditorTabContentType(activeTab.contentType) ? activeTab.entityId : null
 }

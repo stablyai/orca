@@ -62,7 +62,6 @@ describe('agent-status pane routing index memoization', () => {
     const { paneKeys } = seedLineage(store)
     resetAgentStatusPaneRoutingIndexCounters()
 
-    // 100 status commits: each replaces the live status map, none replaces the tab map.
     for (let commit = 0; commit < 100; commit += 1) {
       const index = createAgentStatusPaneRoutingIndex(store.getState())
       expect(resolvePaneKeyFromRoutingIndex(index, paneKeys[commit % paneKeys.length]).exists).toBe(
@@ -77,7 +76,6 @@ describe('agent-status pane routing index memoization', () => {
     expect(agentStatusPaneRoutingIndexCounters.indexBuilds).toBe(1)
     expect(agentStatusPaneRoutingIndexCounters.tabIndexBuilds).toBe(1)
     expect(agentStatusPaneRoutingIndexCounters.tabVisits).toBe(WORKTREE_COUNT)
-    // Only the worktrees actually routed to pay for a unified-label map.
     expect(agentStatusPaneRoutingIndexCounters.unifiedLabelIndexBuilds).toBeLessThanOrEqual(
       paneKeys.length
     )
@@ -164,7 +162,6 @@ describe('agent-status leading-edge and batched pane resolution', () => {
           makeTab({ id: duplicateTabId, worktreeId: 'wt-a', title: 'Owner A' }),
           makeTab({ id: splitTabId, worktreeId: 'wt-a', title: 'Split owner' })
         ],
-        // The same tab id under a second worktree: first worktree must keep ownership.
         'wt-b': [makeTab({ id: duplicateTabId, worktreeId: 'wt-b', title: 'Owner B' })],
         'wt-missing': [makeTab({ id: orphanTabId, worktreeId: 'wt-missing', title: 'Orphan' })]
       },

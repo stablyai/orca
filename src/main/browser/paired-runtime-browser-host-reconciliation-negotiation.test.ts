@@ -1,16 +1,17 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
-} from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
@@ -178,7 +179,6 @@ describe('paired runtime browser-host reconciliation negotiation', () => {
     callbacks.current!.onResponse(readyResponse({ pageReconciliationProtocolVersion: 1 }))
     await starting
 
-    // Why: a host that negotiated reconciliation must never issue a command that omits it.
     callbacks.current!.onResponse({
       id: 'browser-host',
       ok: true,
@@ -214,7 +214,7 @@ function createLease(
   overrides: Partial<PairedRuntimeBrowserHostLeaseOptions> = {}
 ): PairedRuntimeBrowserHostLease {
   return new PairedRuntimeBrowserHostLease({
-    pairing,
+    connection: pairedRuntimeConnectionFromOffer(pairing),
     authorityRuntimeId: 'runtime-a',
     browserHostClientId: 'host-a',
     hostCapabilities: ['webview'],

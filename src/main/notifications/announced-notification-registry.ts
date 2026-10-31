@@ -1,22 +1,21 @@
-/**
- * The notification ids main actually announced — a desktop banner shown or a mobile alert sent —
- * per subject pane, until an acknowledgement of that subject retires them.
- *
- * Why by subject rather than by an id the renderer rebuilds: an id is minted from the status row's
- * `stateStartedAt`, and that field moves after the fact (settling pushes the working start into
- * history, and a settled structured row is re-stamped by later journal rows such as a cancel's
- * status note). Main is where the announcement happens, so main is where the record belongs.
- *
- * In memory only, like the banner registry it sits beside; after a restart the renderer's id
- * rebuilt from the current row is the fallback.
- */
+// Record actual announcements by subject: journal updates can change renderer-reconstructed IDs.
+// Memory-only; after restart, the current status row supplies the fallback ID.
+import {
+  attentionOriginWasRead,
+  type StructuredAttentionOrigin,
+  type StructuredAttentionRead
+} from '../../shared/agent-session-attention'
 const DEFAULT_MAX_SUBJECTS = 256
 const DEFAULT_MAX_IDS_PER_SUBJECT = 20
 
+export type AnnouncedNotification = { id: string; origin?: StructuredAttentionOrigin }
+
 export type AnnouncedNotificationRegistry = {
-  record: (paneKey: string, notificationId: string) => void
-  /** Every id announced for this subject since the last take; the entry is dropped. */
-  take: (paneKey: string) => readonly string[]
+  record: (paneKey: string, notificationId: string, origin?: StructuredAttentionOrigin) => void
+  /** Journal-positioned announcements require a covering read to retire. */
+  isBounded: (notificationId: string) => boolean
+  /** Take unpositioned announcements and those covered by this read. */
+  take: (paneKey: string, read?: StructuredAttentionRead) => readonly AnnouncedNotification[]
 }
 
 export function createAnnouncedNotificationRegistry(limits?: {
@@ -25,13 +24,13 @@ export function createAnnouncedNotificationRegistry(limits?: {
 }): AnnouncedNotificationRegistry {
   const maxSubjects = limits?.maxSubjects ?? DEFAULT_MAX_SUBJECTS
   const maxIdsPerSubject = limits?.maxIdsPerSubject ?? DEFAULT_MAX_IDS_PER_SUBJECT
-  const idsBySubject = new Map<string, string[]>()
+  const idsBySubject = new Map<string, AnnouncedNotification[]>()
 
   return {
-    record: (paneKey, notificationId) => {
-      const ids = (idsBySubject.get(paneKey) ?? []).filter((id) => id !== notificationId)
-      ids.push(notificationId)
-      // Re-insert so eviction drops the subject least recently announced, not the first ever seen.
+    record: (paneKey, notificationId, origin) => {
+      const ids = (idsBySubject.get(paneKey) ?? []).filter((entry) => entry.id !== notificationId)
+      ids.push({ id: notificationId, origin })
+      // Reinsertion evicts the least recently announced subject.
       idsBySubject.delete(paneKey)
       idsBySubject.set(paneKey, ids.slice(-maxIdsPerSubject))
       if (idsBySubject.size > maxSubjects) {
@@ -41,10 +40,23 @@ export function createAnnouncedNotificationRegistry(limits?: {
         }
       }
     },
-    take: (paneKey) => {
+    isBounded: (notificationId) =>
+      [...idsBySubject.values()].some((entries) =>
+        entries.some((entry) => entry.id === notificationId && entry.origin !== undefined)
+      ),
+    take: (paneKey, read) => {
       const ids = idsBySubject.get(paneKey) ?? []
-      idsBySubject.delete(paneKey)
-      return ids
+      // Legacy hosts have no journal position or prompt races.
+      const selected = ids.filter(
+        (entry) => !entry.origin || (read && attentionOriginWasRead(entry.origin, read))
+      )
+      const kept = ids.filter((entry) => !selected.includes(entry))
+      if (kept.length > 0) {
+        idsBySubject.set(paneKey, kept)
+      } else {
+        idsBySubject.delete(paneKey)
+      }
+      return selected
     }
   }
 }

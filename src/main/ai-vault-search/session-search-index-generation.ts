@@ -13,10 +13,7 @@ export const SESSION_SEARCH_GENERATION_TRIGGERS = [
 const BUMP = `INSERT INTO meta(key, value) VALUES ('${GENERATION_KEY}', '1')
     ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;`
 
-/**
- * Triggers commit the generation with writes from any connection.
- * Orphan reclamation also changes the vocabulary used for typo suggestions.
- */
+/** Bump atomically across connections, including orphan reclamation that changes typo vocabulary. */
 export const SESSION_SEARCH_GENERATION_SQL = `
 CREATE TRIGGER IF NOT EXISTS search_generation_file_insert AFTER INSERT ON files BEGIN
   ${BUMP}

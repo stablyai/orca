@@ -1,4 +1,6 @@
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status-worktree-attribution'
+import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
@@ -75,7 +77,14 @@ export function appendUnsupportedAndRetainedEvents(context: {
   }
 
   for (const [paneKey, retained] of Object.entries(args.retainedAgentsByPaneKey)) {
-    if (!parsePaneKey(paneKey)) {
+    if (
+      !parseAgentStatusPaneIdentity(
+        paneKey,
+        args.unifiedTabsByWorktree
+          ? getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree).get(paneKey)
+          : undefined
+      )
+    ) {
       continue
     }
     const owner = resolveOwner(

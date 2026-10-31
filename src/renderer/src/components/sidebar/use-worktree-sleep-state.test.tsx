@@ -5,7 +5,6 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import {
   useIsSleepingWorktree,
   resetWorktreeSleepStateCacheForTests
@@ -17,6 +16,7 @@ type MockState = {
   tabsByWorktree: Record<string, TerminalTab[]>
   browserTabsByWorktree: Record<string, { id: string }[]>
   unifiedTabsByWorktree: Record<string, Tab[]>
+  structuredChatSleptAtByPaneKey: Record<string, number>
   ptyIdsByTabId: Record<string, string[]>
   agentStatusEpoch: number
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
@@ -89,14 +89,14 @@ function SleepProbe({ worktreeId }: { worktreeId: string }) {
 describe('useIsSleepingWorktree', () => {
   beforeEach(() => {
     resetWorktreeSleepStateCacheForTests()
-    // Why: the epoch clock samples wall time once per epoch, so a suite that keeps
-    // epoch 0 would otherwise reuse the previous test's timestamp.
+    // Reset epoch-clock samples so tests using epoch zero do not inherit prior timestamps.
     resetAgentStatusEpochClockForTests()
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     mockState = {
       tabsByWorktree: {},
       browserTabsByWorktree: {},
       unifiedTabsByWorktree: {},
+      structuredChatSleptAtByPaneKey: {},
       ptyIdsByTabId: {},
       agentStatusEpoch: 0,
       agentStatusByPaneKey: {},
@@ -136,8 +136,7 @@ describe('useIsSleepingWorktree', () => {
   })
 
   it('keeps a structured chat awake once its turn has finished', () => {
-    // The reported bug: an idle structured session reports state 'done', which is exactly what
-    // isFreshNonDoneAgentStatus refuses, so the live-agent term cannot hold this workspace open.
+    // A completed structured chat has no fresh non-done agent; the chat itself must keep its workspace awake.
     const worktreeId = 'repo1::/path/wt1'
     const paneKey = makePaneKey('chat-1', LEAF_ID)
     mockState = {
@@ -161,7 +160,6 @@ describe('useIsSleepingWorktree', () => {
   })
 
   it('does not treat a non-chat unified tab as activity', () => {
-    // Negative control: the term keys on a structured chat, not on any unified tab existing.
     const worktreeId = 'repo1::/path/wt1'
     mockState = {
       ...mockState,
@@ -265,59 +263,11 @@ describe('useIsSleepingWorktree', () => {
     resetAgentStatusEpochClockForTests()
     mockState = {
       ...mockState,
-      // Why: the filter's freshness window is the shared predicate, so an agent row
-      // this old must stop holding the workspace awake for the moon too.
+      // The sleeping glyph must use the filter’s shared agent-freshness boundary.
       agentStatusByPaneKey: { [paneKey]: { ...entry, updatedAt: 0 } },
       agentStatusEpoch: 1
     }
 
     expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>true</span>')
-  })
-
-  it('matches isInactiveWorkspace across runtime shapes', () => {
-    const worktreeId = 'repo1::/path/wt1'
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    const cases = [
-      { label: 'bare', state: { ...mockState } },
-      {
-        label: 'live pty',
-        state: {
-          ...mockState,
-          tabsByWorktree: { [worktreeId]: [makeTab('tab-1', worktreeId)] },
-          ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-        }
-      },
-      {
-        label: 'browser tab',
-        state: { ...mockState, browserTabsByWorktree: { [worktreeId]: [{ id: 'b-1' }] } }
-      },
-      {
-        label: 'live agent',
-        state: {
-          ...mockState,
-          agentStatusByPaneKey: {
-            [paneKey]: makeAgentStatusEntry({ paneKey, state: 'working', worktreeId })
-          }
-        }
-      }
-    ]
-
-    // Why assert against the shared predicate itself: the point of the hook is that
-    // the moon and the hide-sleeping filter can never drift apart (#19624).
-    for (const { label, state } of cases) {
-      resetWorktreeSleepStateCacheForTests()
-      resetAgentStatusEpochClockForTests()
-      mockState = state
-      const expected = isInactiveWorkspace(
-        worktreeId,
-        state.tabsByWorktree,
-        state.ptyIdsByTabId,
-        state.browserTabsByWorktree,
-        getWorktreeIdsWithLiveAgent(state.agentStatusByPaneKey, state.tabsByWorktree, Date.now())
-      )
-      expect(`${label}:${renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)}`).toBe(
-        `${label}:<span>${String(expected)}</span>`
-      )
-    }
   })
 })

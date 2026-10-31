@@ -1,6 +1,8 @@
 import { PATH_EXISTENCE_BATCH_MAX } from '../path-existence-batch'
+import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../file-dir-page'
 import { z } from 'zod'
 import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from '../quick-open-path-search'
+import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { FileOpen, WorktreeSelector } from './files-target-params'
 
 export const FilePathsExist = WorktreeSelector.extend({
@@ -8,11 +10,16 @@ export const FilePathsExist = WorktreeSelector.extend({
 })
 
 export const FilePathSearch = WorktreeSelector.extend({
+  allowLegacyIncludeIgnored: z.boolean().optional(),
+  includeIgnored: z.boolean().optional(),
+  followSymlinks: z.boolean().optional(),
   query: z.string().max(QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS).default(''),
   limit: z.number().int().positive().max(32).default(16),
   excludePaths: z.array(z.string()).optional(),
   mode: z.literal('quick-open').optional()
 })
+
+export const ChatImageRead = WorktreeSelector.extend({ path: z.string().min(1).max(4096) })
 
 export const ResolveTerminalPath = WorktreeSelector.extend({
   pathText: z
@@ -41,8 +48,22 @@ export const ResolveTerminalPath = WorktreeSelector.extend({
     .optional()
 })
 
-export const FileOpenDiff = FileOpen.extend({
-  staged: z.boolean().optional()
+// Why: absent `navigation` (phones, older CLIs) keeps the original host switch; 'caller'/'clients' open without moving it.
+const FileOpenTarget = FileOpen.extend({
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
+})
+
+export const FileOpenTab = FileOpenTarget.extend({
+  line: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  column: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional()
+}).refine((params) => params.column === undefined || params.line !== undefined, {
+  message: 'column requires line',
+  path: ['column']
+})
+
+export const FileOpenDiff = FileOpenTarget.extend({
+  staged: z.boolean().optional(),
+  oldPath: z.string().optional()
 })
 
 export const DocPreviewFileRead = FileOpen.extend({
@@ -52,10 +73,17 @@ export const DocPreviewFileRead = FileOpen.extend({
 })
 
 export const FileTreePath = WorktreeSelector.extend({
+  followSymlinks: z.boolean().optional(),
   relativePath: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string())
+})
+
+/** With `after` or `limit` the reply is a `DirEntryPage`; without both it stays the bare entry array. */
+export const FileDirRead = FileTreePath.extend({
+  after: z.object({ name: z.string().min(1).max(4096), isDirectory: z.boolean() }).optional(),
+  limit: z.number().int().positive().max(FILE_READ_DIR_MAX_PAGE_ENTRIES).optional()
 })
 
 export const ServerDirectoryBrowse = z.object({
@@ -65,14 +93,18 @@ export const ServerDirectoryBrowse = z.object({
     .pipe(z.string())
 })
 
-export const FileReadChunk = FileOpen.extend({
+const FileChunkRange = {
   offset: z.number().int().nonnegative(),
   length: z
     .number()
     .int()
     .positive()
     .max(512 * 1024)
-})
+}
+
+export const FileReadChunk = FileOpen.extend(FileChunkRange)
+
+export const DocPreviewFileReadChunk = DocPreviewFileRead.extend(FileChunkRange)
 
 export const FileSearch = WorktreeSelector.extend({
   query: z
@@ -87,11 +119,14 @@ export const FileSearch = WorktreeSelector.extend({
   maxResults: z.number().int().positive().optional()
 })
 
-// Why: `maxResults` is a new optional field (wire rule 1) — an older host strips it and keeps its
-// own default. It existed only on the Electron IPC hop, so "the client names its cap and a full page
-// means there is more" was true for desktop and merely incidental for web and mobile, which were
-// saved by `remoteFileContentBudget` defaulting the cap inside `listRuntimeFiles`.
+// Optional maxResults aligns remote callers with desktop caps; older hosts strip it and retain their defaults.
 export const FileListAll = WorktreeSelector.extend({
+  candidatePaths: z
+    .array(z.string().max(64 * 1024))
+    .max(100)
+    .optional(),
+  includeIgnored: z.boolean().optional(),
+  followSymlinks: z.boolean().optional(),
   excludePaths: z.array(z.string()).optional(),
   maxResults: z.number().int().positive().optional()
 })

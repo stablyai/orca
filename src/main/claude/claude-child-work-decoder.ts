@@ -1,15 +1,9 @@
-// Claude task frames, read as each child's own account of itself.
-//
-// A child is live from its `task_started` until its own terminal `task_updated` or
-// `task_notification`; nothing else ends it. A roster (`background_tasks_changed`), a turn ending
-// or a spawn call returning is the parent's view of the child, not the child's, and the CLI sends
-// every child its own terminal frame, so none of them settles one. When the session ends, the
-// host settles whatever is still live. Edges wait here until the frame is journaled, then take
-// the host clock.
+// Roster changes, turn endings and spawn results cannot settle a child.
 
 import type {
   AgentChildWorkKind,
-  AgentChildWorkOperation
+  AgentChildWorkOperation,
+  AgentChildWorkOutcome
 } from '../../shared/agent-status-child-work'
 import type {
   AgentChildWorkEvidence,
@@ -27,24 +21,20 @@ import {
   taskUsageTotalTokens,
   terminalClaudeTaskRunState
 } from './claude-background-task-frames'
+import { isClaudeSubagentTask } from './claude-subagent-task-frames'
 import {
   claudeChildWorkOutcome,
   claudeTaskProgressFacts,
   type ClaudeTaskFacts
 } from './claude-child-work-evidence'
 
-/** Live children one session tracks, and the ended ids it remembers to recognise a restart. */
-const MAX_LIVE_TASKS = 256
-const MAX_ENDED_TASKS = 256
-
 type DecodedClaudeTask = {
   kind: AgentChildWorkKind
   backgrounded: boolean
-  /** The provider has reported it running; a monitor that never has reads as monitoring. */
+  /** Monitors stay monitoring until the provider reports them running. */
   running: boolean
   name?: string
   description?: string
-  /** The spawn call of the current run. */
   toolUseId?: string
 }
 
@@ -54,7 +44,8 @@ function observation(
   id: string,
   task: DecodedClaudeTask,
   facts: ClaudeTaskFacts,
-  observedAt: number
+  observedAt: number,
+  waiting: boolean
 ): AgentChildWorkLiveObservation {
   const operation: AgentChildWorkOperation | undefined = facts.toolName
     ? { toolName: facts.toolName, basis: 'reported', observedAt }
@@ -67,22 +58,25 @@ function observation(
     },
     kind: task.kind,
     residency: task.backgrounded ? 'background' : 'foreground',
-    state: task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
-    // The published row names a task's type as both its name and its agent type.
+    state: waiting ? 'waiting' : task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
     ...(task.name ? { name: task.name, agentType: task.name } : {}),
     ...(task.description ? { description: task.description } : {}),
     ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),
     ...(operation ? { operation } : {}),
     ...(facts.lastMessage ? { lastMessage: facts.lastMessage } : {}),
-    // Only a backgrounded task has a stop the host can target.
+    // Only background tasks expose a stop target.
     stoppable: task.backgrounded
   }
 }
 
 export class ClaudeChildWorkDecoder {
   private readonly live = new Map<string, DecodedClaudeTask>()
-  /** Ended task ids, with the spawn call each ended under. */
-  private readonly ended = new Map<string, string | undefined>()
+  /** Retain ended runs for the session to distinguish wakes from late starts. */
+  private readonly ended = new Map<
+    string,
+    { run: string | undefined; outcome: AgentChildWorkOutcome }
+  >()
+  private waiting: ReadonlySet<string> = new Set()
   private pending: PendingEdge[] = []
 
   observe(message: Record<string, unknown>): void {
@@ -104,7 +98,6 @@ export class ClaudeChildWorkDecoder {
         this.updated(id, record(message.patch))
         return
       case 'task_notification':
-        // Its `tool_use_id` names the run that ended (captured on a resumed agent's second run).
         this.end(id, message.status, {
           runId: taskAliasId(message.tool_use_id),
           lastMessage: taskText(message.summary),
@@ -113,10 +106,21 @@ export class ClaudeChildWorkDecoder {
     }
   }
 
-  /** The provider session is gone: the host settles what it still holds live. */
+  observeWaiting(waiting: ReadonlySet<string>): void {
+    const previous = this.waiting
+    this.waiting = waiting
+    for (const id of new Set([...previous, ...waiting])) {
+      const task = this.live.get(id)
+      if (task && previous.has(id) !== waiting.has(id)) {
+        this.report(id, task, {})
+      }
+    }
+  }
+
   clear(): void {
     this.live.clear()
     this.ended.clear()
+    this.waiting = new Set()
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
   }
 
@@ -127,18 +131,18 @@ export class ClaudeChildWorkDecoder {
   }
 
   private started(id: string, message: Record<string, unknown>): void {
-    // Work the CLI hides from its own transcript is not a child the user sees.
     if (message.ambient === true || message.skip_transcript === true) {
       return
     }
     const toolUseId = taskAliasId(message.tool_use_id)
     const existing = this.live.get(id)
-    const restart = !existing && this.ended.has(id)
-    // A start under the spawn call a run ended with is that run's late start, not a new run.
-    if (restart && toolUseId !== undefined && this.ended.get(id) === toolUseId) {
+    const ended = existing ? undefined : this.ended.get(id)
+    const restart = ended !== undefined
+    // Only successful runs can wake under the same spawn call; other starts are late frames.
+    if (ended?.run !== undefined && ended.run === toolUseId && ended.outcome !== 'succeeded') {
       return
     }
-    const kind = classifyClaudeBackgroundTaskKind(message.task_type)
+    const kind = startedTaskKind(message)
     this.upsert(
       id,
       {
@@ -163,7 +167,7 @@ export class ClaudeChildWorkDecoder {
     if (!task) {
       return
     }
-    // Progress `description` is the current activity ("Running <tool>"), not the task's name.
+    // Progress descriptions describe the current activity, not the task.
     this.upsert(
       id,
       { ...task, name: task.name ?? taskName(message) },
@@ -180,7 +184,7 @@ export class ClaudeChildWorkDecoder {
       return
     }
     const existing = this.live.get(id)
-    // Only a start re-opens an ended task; a late update from its run does not.
+    // Late updates cannot reopen an ended task.
     if (!existing && this.ended.has(id)) {
       return
     }
@@ -213,15 +217,17 @@ export class ClaudeChildWorkDecoder {
     facts: ClaudeTaskFacts,
     restart = false
   ): void {
-    if (!this.live.has(id) && this.live.size >= MAX_LIVE_TASKS) {
-      return
-    }
     this.ended.delete(id)
     this.live.set(id, task)
+    this.report(id, task, facts, restart)
+  }
+
+  /** Read waiting state at drain so all queued live edges agree. */
+  private report(id: string, task: DecodedClaudeTask, facts: ClaudeTaskFacts, restart = false) {
     this.pending.push((observedAt) => ({
       type: 'live',
       observedAt,
-      child: observation(id, task, facts, observedAt),
+      child: observation(id, task, facts, observedAt, this.waiting.has(id)),
       ...(restart ? { restart: true } : {})
     }))
   }
@@ -229,19 +235,16 @@ export class ClaudeChildWorkDecoder {
   private end(
     id: string,
     status: unknown,
-    reported: { runId?: string; lastMessage?: string; totalTokens?: number }
+    reported: {
+      runId?: string
+      lastMessage?: string
+      totalTokens?: number
+    }
   ): void {
     const task = this.live.get(id)
     this.live.delete(id)
-    this.ended.delete(id)
-    this.ended.set(id, reported.runId ?? task?.toolUseId)
-    if (this.ended.size > MAX_ENDED_TASKS) {
-      const [oldest] = this.ended.keys()
-      if (oldest !== undefined) {
-        this.ended.delete(oldest)
-      }
-    }
     const outcome = claudeChildWorkOutcome(status)
+    this.ended.set(id, { run: reported.runId ?? task?.toolUseId, outcome })
     this.pending.push((observedAt) => ({
       type: 'ended',
       observedAt,
@@ -255,4 +258,11 @@ export class ClaudeChildWorkDecoder {
       ...(reported.totalTokens !== undefined ? { totalTokens: reported.totalTokens } : {})
     }))
   }
+}
+
+/** Releases predating `task_type` still name an agent in `subagent_type`. */
+function startedTaskKind(message: Record<string, unknown>): AgentChildWorkKind {
+  return isClaudeSubagentTask(message)
+    ? 'agent'
+    : classifyClaudeBackgroundTaskKind(message.task_type)
 }

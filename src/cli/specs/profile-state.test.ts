@@ -1,16 +1,43 @@
 import { describe, expect, it } from 'vitest'
-import { parseArgs, validateCommandAndFlags } from '../args'
+import { findCommandSpec, parseArgs, validateCommandAndFlags } from '../args'
+import { formatCommandHelp } from '../help'
 import { PROFILE_STATE_COMMAND_SPECS } from './profile-state'
 
 describe('profile state rollback discovery', () => {
-  it.each([
-    { argv: ['profile', 'state', 'rollback', '--current-json'] },
-    { argv: ['--current-json', 'profile', 'state', 'rollback'] },
-    { argv: ['profile', '--current-json', 'state', 'rollback'] }
-  ])('parses the current JSON selector as a boolean: $argv', ({ argv }) => {
+  it.each(PROFILE_STATE_COMMAND_SPECS)('renders supported flags for $path', (spec) => {
+    const help = formatCommandHelp(spec)
+
+    expect(help).toContain('--help')
+    expect(help).toContain('--json')
+    expect(help).toContain('--profile-id')
+    expect(help).not.toContain('--environment')
+    expect(help).not.toContain('--pairing-code')
+    expect(help).not.toContain('--page')
+  })
+
+  it.each(PROFILE_STATE_COMMAND_SPECS)('rejects --page for $path', (spec) => {
+    const parsed = parseArgs([...spec.path, '--page', '1'])
+
+    expect(() => validateCommandAndFlags(PROFILE_STATE_COMMAND_SPECS, parsed)).toThrow(
+      `Unknown flag --page for command: ${spec.path.join(' ')}`
+    )
+  })
+
+  it.each(['exports', 'rollback'])('accepts an explicit profile for %s', (command) => {
+    const parsed = parseArgs(['profile', 'state', command, '--profile-id', 'inactive'])
+    expect(parsed.flags.get('profile-id')).toBe('inactive')
+    expect(() => validateCommandAndFlags(PROFILE_STATE_COMMAND_SPECS, parsed)).not.toThrow()
+  })
+  it.each(
+    ['current-json', 'latest-json'].flatMap((selector) => [
+      { selector, argv: ['profile', 'state', 'rollback', `--${selector}`] },
+      { selector, argv: [`--${selector}`, 'profile', 'state', 'rollback'] },
+      { selector, argv: ['profile', `--${selector}`, 'state', 'rollback'] }
+    ])
+  )('parses the JSON selector as a boolean: $argv', ({ argv, selector }) => {
     const parsed = parseArgs(argv)
     expect(parsed.commandPath).toEqual(['profile', 'state', 'rollback'])
-    expect(parsed.flags.get('current-json')).toBe(true)
+    expect(parsed.flags.get(selector)).toBe(true)
     expect(() => validateCommandAndFlags(PROFILE_STATE_COMMAND_SPECS, parsed)).not.toThrow()
   })
 
@@ -20,10 +47,18 @@ describe('profile state rollback discovery', () => {
     expect(() => validateCommandAndFlags(PROFILE_STATE_COMMAND_SPECS, parsed)).not.toThrow()
   })
 
-  it('explains that adoption selects one full state and preserves both copies', () => {
-    const spec = PROFILE_STATE_COMMAND_SPECS.find((item) => item.path.at(-1) === 'rollback')
-    expect(spec?.usage).toContain('--current-json')
-    expect(spec?.notes?.join('\n')).toContain('without merging; both copies are archived')
-    expect(spec?.examples).toContain('orca profile state rollback --current-json')
+  it('renders rollback help explaining state selection and archival', () => {
+    const spec = findCommandSpec(PROFILE_STATE_COMMAND_SPECS, ['profile', 'state', 'rollback'])
+    if (!spec) {
+      throw new Error('Missing profile state rollback spec')
+    }
+    const help = formatCommandHelp(spec)
+
+    expect(help).toContain('--current-json')
+    expect(help).toContain('without merging; both copies are archived')
+    expect(help).toContain('$ orca profile state rollback --current-json')
+    expect(help).toContain('--latest-json')
+    expect(help).toContain('exports the latest SQLite state')
+    expect(help).toContain('$ orca profile state rollback --latest-json')
   })
 })

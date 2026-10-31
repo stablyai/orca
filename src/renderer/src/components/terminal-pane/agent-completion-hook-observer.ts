@@ -36,6 +36,7 @@ type HookObserverOptions = {
   consumePendingStampedTailForAgent: (agent: string | null, identity: string | null) => boolean
   consumeStampedTailForCurrentCoordinator: (timestamp: number) => void
   clearOriginStampedTail: () => void
+  clearProcessExitCompletion: () => void
   recordWorkingBoundary: (timestamp: number | undefined) => void
   dropPendingTitle: () => void
 }
@@ -67,6 +68,7 @@ export function createAgentCompletionHookObserver({
   consumePendingStampedTailForAgent,
   consumeStampedTailForCurrentCoordinator,
   clearOriginStampedTail,
+  clearProcessExitCompletion,
   recordWorkingBoundary,
   dropPendingTitle
 }: HookObserverOptions) {
@@ -114,6 +116,8 @@ export function createAgentCompletionHookObserver({
         return
       }
       clearOriginStampedTail()
+      // Clear exit identity on a new turn or agent-only matching would swallow every later Done from that agent.
+      clearProcessExitCompletion()
       recordWorkingBoundary(payload.stateStartedAt)
       clearPendingHookDone()
       state.workingStatusObserved = true
@@ -174,7 +178,8 @@ export function createAgentCompletionHookObserver({
       !state.workingStatusObserved &&
       state.lastCompletionSource === 'hook' &&
       state.lastCompletedTurn === state.currentTurn &&
-      Date.now() - state.lastCompletionAt >= 1_000
+      // Why: a new host turn-end stamp is a real end even right after a banner; replays restate it.
+      (Date.now() - state.lastCompletionAt >= 1_000 || payload.turnEndedAt !== undefined)
     ) {
       state.currentTurn += 1
     }

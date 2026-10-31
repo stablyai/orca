@@ -6,12 +6,27 @@ export const GUEST_ELECTRON_UA =
 export const GUEST_CLEAN_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
 
-// Why: viewport UA writes are queued on the per-tab chain, so draining it takes more than one
-// microtask hop; loop until the chain is empty rather than guessing a tick count.
+// Queued viewport writes need several microtask turns.
 export async function flushViewportOps(): Promise<void> {
   for (let i = 0; i < 20; i++) {
     await Promise.resolve()
   }
+}
+
+// Chromium validates maxTouchPoints even when disabling touch.
+async function rejectInvalidTouchPoints(
+  method: string,
+  params?: { maxTouchPoints?: number }
+): Promise<undefined> {
+  const points = params?.maxTouchPoints
+  if (
+    method === 'Emulation.setTouchEmulationEnabled' &&
+    points !== undefined &&
+    (points < 1 || points > 16)
+  ) {
+    throw new Error('Touch points must be between 1 and 16')
+  }
+  return undefined
 }
 
 export type ViewportGuestHandle = {
@@ -19,30 +34,28 @@ export type ViewportGuestHandle = {
   debuggerSendCommand: ReturnType<typeof vi.fn>
   debuggerIsAttached: ReturnType<typeof vi.fn>
   debuggerAttach: ReturnType<typeof vi.fn>
+  setRendererCrashed: (crashed: boolean) => void
   setGuestUserAgent: (ua: string) => void
   commitNavigationTo: (nextUrl: string) => void
   webContentsUserAgent: () => string
-  /** What navigator.userAgent reports: the latest applied CDP override, else the WebContents UA. */
+  /** CDP identity takes precedence over the WebContents UA. */
   presentedUserAgent: () => string
-  /** The CDP UA override Chromium holds, or null when none stands. */
   standingUserAgentOverride: () => Record<string, unknown> | null
 }
 
-// Why: the guest wires the file's own hoisted mocks, which cannot be imported here.
-// Why the process identity: the session UA and app.userAgentFallback both carry it, so that is what a
-// real guest's getUserAgent() reports until something writes the WebContents UA.
+// Inject each test file's hoisted mocks.
 export function createViewportGuestFactory(
   mocks: BrowserManagerMocks & { processUserAgent?: string }
 ): (id: number, url?: string) => ViewportGuestHandle {
   return function makeGuest(id: number, url = 'https://example.com/'): ViewportGuestHandle {
-    const debuggerSendCommand = vi.fn().mockResolvedValue(undefined)
+    const debuggerSendCommand = vi.fn(rejectInvalidTouchPoints)
     const debuggerIsAttached = vi.fn(() => true)
     const debuggerAttach = vi.fn()
     let currentUa = mocks.processUserAgent ?? GUEST_ELECTRON_UA
-    // Why: getURL() reports the last COMMITTED url — it does not move at did-start-navigation.
+    let rendererCrashed = false
+    // getURL() changes on commit, not did-start-navigation.
     let committedUrl = url
-    // Chromium applies CDP commands in issue order, so a later-issued write wins however they settle,
-    // and a rejected write changes nothing. An empty userAgent clears the override.
+    // Model issue order independently of promise completion; failed writes leave identity unchanged.
     let issuedUserAgentWrites = 0
     let appliedUserAgentWrite = 0
     let cdpOverride: Record<string, unknown> | null = null
@@ -65,6 +78,9 @@ export function createViewportGuestFactory(
     const guest = {
       id,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => rendererCrashed),
+      isCurrentlyAudible: vi.fn(() => false),
+      send: vi.fn(),
       getType: vi.fn(() => 'webview'),
       getURL: vi.fn(() => committedUrl),
       getUserAgent: vi.fn(() => currentUa),
@@ -91,6 +107,9 @@ export function createViewportGuestFactory(
       debuggerSendCommand,
       debuggerIsAttached,
       debuggerAttach,
+      setRendererCrashed: (crashed: boolean) => {
+        rendererCrashed = crashed
+      },
       setGuestUserAgent: (ua: string) => {
         currentUa = ua
       },

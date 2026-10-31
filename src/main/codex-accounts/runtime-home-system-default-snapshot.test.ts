@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import {
   chmodSync,
   existsSync,
@@ -19,7 +20,7 @@ import {
   getRuntimeCodexHomePath,
   getSharedRuntimeAuthProvenancePath,
   getSystemCodexAuthPath,
-  setShellStartupEnvProbeSupportedForTest,
+  setRealHomeRoutableForTest,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
   testState
@@ -30,9 +31,10 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -78,7 +80,6 @@ describe('CodexRuntimeHomeService', () => {
     )
     const authX = createCodexAuthJson('x@example.com', 'acct-x', 'x', 1)
     const authXRefreshed = createCodexAuthJson('x@example.com', 'acct-x', 'x-refreshed', 2)
-    // Two records for the same identity: one home unreadable, one readable.
     const homeX1 = createManagedAuth(testState.userDataDir, 'account-x1', authX)
     const homeX2 = createManagedAuth(testState.userDataDir, 'account-x2', authX)
     const homeB = createManagedAuth(
@@ -122,8 +123,6 @@ describe('CodexRuntimeHomeService', () => {
     )
     const renamedAuth = createCodexAuthJson('new@example.com', 'acct-user', 'managed')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', renamedAuth)
-    // Torn provenance can no longer vouch for the mirror, and the only remaining
-    // evidence is a credential whose email no longer matches the record.
     mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
     writeFileSync(runtimeAuthPath, renamedAuth, 'utf-8')
     writeFileSync(getSharedRuntimeAuthProvenancePath(), 'not-json', 'utf-8')
@@ -394,11 +393,8 @@ describe('CodexRuntimeHomeService', () => {
     settings.activeCodexManagedAccountId = 'account-1'
     service.syncForCurrentSelection()
 
-    // A stale or external process overwrites runtime with auth Orca cannot
-    // verify against the outgoing managed account.
     writeFileSync(runtimeAuthPath, '{"account":"external-login"}\n', 'utf-8')
 
-    // Deselect managed account
     settings.activeCodexManagedAccountId = null
     service.syncForCurrentSelection()
 
@@ -494,8 +490,7 @@ describe('CodexRuntimeHomeService', () => {
     service.syncForCurrentSelection()
     expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
 
-    setShellStartupEnvProbeSupportedForTest(true)
-    service.setRealHomeLaneGate(() => true)
+    setRealHomeRoutableForTest(true)
     writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
     service.reconcileLegacySharedHomeForRetainedPanes()
 

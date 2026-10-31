@@ -8,13 +8,22 @@ import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 import {
   browserOverlay,
   createBrowserSplit,
   createTerminalBrowserSplit,
+  guestModifier,
+  pressKeyInBrowserGuest,
   shortcutModifier,
-  waitForFocusedGroup
+  waitForFocusedGroup,
+  type GuestModifier
 } from './helpers/browser-split-fixture'
 import { waitForGuestUrl } from './helpers/browser-split-guest-probes'
 import {
@@ -23,9 +32,20 @@ import {
 } from './helpers/browser-split-page-server'
 
 const copyChord = `${shortcutModifier}+c`
+// Default annotate chord: Cmd+Shift+C on macOS, Alt+Shift+N on Linux and Windows.
+const annotateGuestChord: { keyCode: string; modifiers: GuestModifier[] } =
+  process.platform === 'darwin'
+    ? { keyCode: 'C', modifiers: [guestModifier, 'shift'] }
+    : { keyCode: 'N', modifiers: ['alt', 'shift'] }
 
 function grabBanner(page: Page, browserTabId: string) {
   return browserOverlay(page, browserTabId).getByText(/Click or hover an element|Grab failed/)
+}
+
+function annotateBanner(page: Page, browserTabId: string) {
+  return browserOverlay(page, browserTabId).getByText(
+    'Click an element to add feedback for the agent.'
+  )
 }
 
 function reloadButton(page: Page, browserTabId: string) {
@@ -54,7 +74,9 @@ async function expectToolbarCopyChordArmsGrab(page: Page, browserTabId: string):
 
 async function enableNativeChat(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    const nextSettings = await window.api.settings.set({ experimentalNativeChat: true })
+    const nextSettings = await window.api.settings.set({
+      nativeChatProviders: { claude: true, codex: true }
+    })
     window.__store?.setState({ settings: nextSettings })
   })
 }
@@ -171,12 +193,38 @@ test.describe('browser split grab shortcut', () => {
     await expect(grabBanner(orcaPage, fixture.secondBrowserTabId)).toBeHidden()
   })
 
+  test('annotate chord typed in one guest arms annotate only in that split', async ({
+    orcaPage
+  }) => {
+    const fixture = await createBrowserSplit(orcaPage, {
+      first: server.pageUrl('a', 1),
+      second: server.pageUrl('b', 1, 'localhost')
+    })
+    await waitForGuestUrl(orcaPage, fixture.firstBrowserTabId, server.pageUrl('a', 1))
+    await waitForGuestUrl(orcaPage, fixture.secondBrowserTabId, server.pageUrl('b', 1, 'localhost'))
+
+    await pressKeyInBrowserGuest(
+      orcaPage,
+      fixture.firstBrowserTabId,
+      fixture.firstBrowserPageId,
+      annotateGuestChord.keyCode,
+      annotateGuestChord.modifiers
+    )
+
+    await expect(annotateBanner(orcaPage, fixture.firstBrowserTabId)).toBeVisible()
+    await expect(annotateBanner(orcaPage, fixture.secondBrowserTabId)).toBeHidden()
+  })
+
   test('copy chord with native chat text selected copies instead of arming grab', async ({
     electronApp,
     orcaPage
   }) => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
     const fixture = await createTerminalBrowserSplit(orcaPage, server.pageUrl('a', 1))
     await waitForGuestUrl(orcaPage, fixture.browserTabId, server.pageUrl('a', 1))
     const reply = `Selectable transcript reply ${randomUUID()}`
@@ -207,5 +255,10 @@ test.describe('browser split grab shortcut', () => {
     await expect(grabBanner(orcaPage, fixture.browserTabId)).toBeHidden()
 
     await expectToolbarCopyChordArmsGrab(orcaPage, fixture.browserTabId)
+    const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    expect(finalPane.tabId).toBe(boundPane.tabId)
+    expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+    expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+    await expect(orcaPage.locator('[data-native-chat-root="true"]')).toBeVisible()
   })
 })

@@ -33,7 +33,11 @@ vi.mock('./popup-origin-bar-window', () => ({
 vi.mock('./browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({
     mode: mocks.processUserAgentMode,
-    userAgent: mocks.processUserAgent
+    userAgent: mocks.processUserAgent,
+    electronUserAgent:
+      mocks.processUserAgentMode === 'native'
+        ? mocks.processUserAgent
+        : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
   })
 }))
 
@@ -161,7 +165,8 @@ describe('browser viewport operation ownership', () => {
     expect(registeredGuests.get('replacement')).toBe(103)
     expect(presetIntents.get('replacement')).toEqual({
       guestWebContentsId: 103,
-      override: desktop
+      requested: desktop,
+      applied: desktop
     })
   })
 
@@ -176,12 +181,15 @@ describe('browser viewport operation ownership', () => {
     await browserManager.setViewportOverride('late-delete', mobile)
     gate.resolve()
     await expect(result).resolves.toBe(false)
-    expect(presetIntents.get('late-delete')).toEqual({ guestWebContentsId: 105, override: mobile })
+    expect(presetIntents.get('late-delete')).toEqual({
+      guestWebContentsId: 105,
+      requested: mobile,
+      applied: mobile
+    })
     expect(registeredGuests.get('late-delete')).toBe(105)
   })
 
-  // The request is still "no preset"; what survives the failure is the record that the mobile
-  // override stands, which is what lets the next navigation clear it.
+  // Requested and applied metrics may clear while the separate UA override remains tracked.
   it('same-owner clear failure keeps the standing mobile override tracked', async () => {
     const handle = register('same-owner', 106)
     await browserManager.setViewportOverride('same-owner', mobile)
@@ -190,7 +198,11 @@ describe('browser viewport operation ownership', () => {
     await gate.entered
     gate.reject(new Error('Protocol error'))
     await expect(result).resolves.toBe(false)
-    expect(presetIntents.get('same-owner')).toEqual({ guestWebContentsId: 106, override: null })
+    expect(presetIntents.get('same-owner')).toEqual({
+      guestWebContentsId: 106,
+      requested: null,
+      applied: null
+    })
     expect(handle.presentedUserAgent()).toContain('iPhone')
     expect(cdpUserAgentOverrides.has(106)).toBe(true)
   })
@@ -205,7 +217,11 @@ describe('browser viewport operation ownership', () => {
     await browserManager.setViewportOverride('late-apply', desktop)
     gate.resolve()
     await expect(pending).resolves.toBe(false)
-    expect(presetIntents.get('late-apply')).toEqual({ guestWebContentsId: 111, override: desktop })
+    expect(presetIntents.get('late-apply')).toEqual({
+      guestWebContentsId: 111,
+      requested: desktop,
+      applied: desktop
+    })
     expect(old.debuggerSendCommand).not.toHaveBeenCalledWith(
       'Emulation.setUserAgentOverride',
       expect.anything()
@@ -253,7 +269,8 @@ describe('browser viewport operation ownership', () => {
     expect(pendingOperations.size).toBe(0)
     expect(presetIntents.get('queued-replacement')).toEqual({
       guestWebContentsId: 115,
-      override: mobile
+      requested: mobile,
+      applied: mobile
     })
     expect(replacement.presentedUserAgent()).toContain('iPhone')
   })
@@ -267,18 +284,24 @@ describe('browser viewport operation ownership', () => {
     const third = browserManager.setViewportOverride('serialized', null)
     gate.resolve()
     expect(await Promise.all([first, second, third])).toEqual([true, true, true])
-    // Identity follows the last request, which was "no preset" before any identity write ran, so the
-    // mobile UA is never installed at all.
+    // Clear mobile identity when desktop metrics replace the mobile viewport.
     expect(handle.debuggerSendCommand.mock.calls.map(([method]) => method)).toEqual([
       'Emulation.setDeviceMetricsOverride',
       'Emulation.setTouchEmulationEnabled',
+      'Emulation.setUserAgentOverride',
       'Emulation.setDeviceMetricsOverride',
       'Emulation.setTouchEmulationEnabled',
+      'Emulation.setUserAgentOverride',
       'Emulation.clearDeviceMetricsOverride',
       'Emulation.setTouchEmulationEnabled'
     ])
+    expect(handle.presentedUserAgent()).toBe(GUEST_CLEAN_UA)
     expect(pendingOperations.size).toBe(0)
-    expect(presetIntents.get('serialized')).toEqual({ guestWebContentsId: 116, override: null })
+    expect(presetIntents.get('serialized')).toEqual({
+      guestWebContentsId: 116,
+      requested: null,
+      applied: null
+    })
   })
 
   it.each([false, true])(

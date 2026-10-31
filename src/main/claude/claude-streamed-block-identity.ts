@@ -1,45 +1,48 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 
-// Under --include-partial-messages every stream_event frame carries its own
-// uuid, and the block's final `assistant` frame carries yet another; only
-// `message.id` ties them together. The block's first stream frame mints the
-// journal identity, and the final frame lands on it in block order instead of
-// appending a duplicate under its own uuid.
+// Stream and final frames have different UUIDs; reconcile by message.id and block order to avoid duplicate rows.
 
 export type ClaudeStreamedTextDelta = {
   identity: AgentJournalItemIdentity
   text: string
-  /** The block's own scope, which this registry already keys its map on. Streamed
-   *  prose has no message envelope when it is persisted, so the producer travels
-   *  with the delta rather than being re-read from a frame that is long gone. */
+  /** Carry producer scope with deltas because checkpoint writes have no envelope. */
   parentToolUseId: string | null
+  /** Host time of block start, or first delta if absent; text may arrive seconds later. */
+  startedAt: number
 }
+
+export type StreamedBlock = { identity: AgentJournalItemIdentity; startedAt: number }
 
 type StreamedMessage = {
   messageId: string | null
-  blocks: Map<number, AgentJournalItemIdentity>
-  /** Streamed text blocks whose final assistant frame has not arrived, in block order. */
-  awaitingFinal: AgentJournalItemIdentity[]
+  blocks: Map<number, StreamedBlock>
+  /** Await final frames in block order for both text and thinking. */
+  awaitingFinal: StreamedBlock[]
 }
 
 export type ClaudeStreamedBlockRegistry = {
-  /** Text a stream_event frame appends to its block, or null when it carries none. */
-  observe: (frame: Record<string, unknown>) => ClaudeStreamedTextDelta | null
-  /** The streamed identity a final assistant frame reconciles onto, if its block streamed. */
+  observe: (frame: Record<string, unknown>, observedAt: number) => ClaudeStreamedTextDelta | null
   reconcile: (frame: {
     sessionId: string
     parentToolUseId: string | null
     messageId: string | null
-  }) => AgentJournalItemIdentity | null
+  }) => StreamedBlock | null
   clear: () => void
+}
+
+/** A content block's transcript-stable id: what a streamed row and its saved transcript row share. */
+export function claudeSourceBlockId(messageId: string, index: number): string {
+  return `block:${messageId}:${index}`
 }
 
 function scopeKey(sessionId: string, parentToolUseId: string | null): string {
   return `${sessionId}/${parentToolUseId ?? ''}`
 }
 
-export function createClaudeStreamedBlockRegistry(): ClaudeStreamedBlockRegistry {
+export function createClaudeStreamedBlockRegistry(
+  blockType: 'text' | 'thinking' = 'text'
+): ClaudeStreamedBlockRegistry {
   const messages = new Map<string, StreamedMessage>()
 
   const messageFor = (scope: string): StreamedMessage => {
@@ -55,16 +58,22 @@ export function createClaudeStreamedBlockRegistry(): ClaudeStreamedBlockRegistry
     streamed: StreamedMessage,
     sessionId: string,
     index: number,
-    uuid: string
-  ): AgentJournalItemIdentity => {
-    const identity: AgentJournalItemIdentity = { provider: 'claude', sessionId, uuid }
-    streamed.blocks.set(index, identity)
-    streamed.awaitingFinal.push(identity)
-    return identity
+    uuid: string,
+    startedAt: number
+  ): StreamedBlock => {
+    const identity: AgentJournalItemIdentity = {
+      provider: 'claude',
+      sessionId,
+      uuid: streamed.messageId ? claudeSourceBlockId(streamed.messageId, index) : uuid
+    }
+    const block = { identity, startedAt }
+    streamed.blocks.set(index, block)
+    streamed.awaitingFinal.push(block)
+    return block
   }
 
   return {
-    observe: (frame) => {
+    observe: (frame, observedAt) => {
       const event = claudeRecord(frame.event)
       const sessionId = claudeText(frame.session_id)
       const uuid = claudeText(frame.uuid)
@@ -84,24 +93,25 @@ export function createClaudeStreamedBlockRegistry(): ClaudeStreamedBlockRegistry
       const index = typeof event.index === 'number' ? event.index : 0
       if (event.type === 'content_block_start') {
         const block = claudeRecord(event.content_block)
-        if (block?.type !== 'text') {
+        if (block?.type !== blockType) {
           return null
         }
-        const identity = mint(messageFor(scope), sessionId, index, uuid)
-        const text = claudeText(block.text)
-        return text ? { identity, text, parentToolUseId } : null
+        const started = mint(messageFor(scope), sessionId, index, uuid, observedAt)
+        const text = claudeText(block[blockType])
+        return text ? { ...started, text, parentToolUseId } : null
       }
       if (event.type !== 'content_block_delta') {
         return null
       }
       const delta = claudeRecord(event.delta)
-      const text = delta?.type === 'text_delta' ? claudeText(delta.text) : null
+      const text = delta?.type === `${blockType}_delta` ? claudeText(delta[blockType]) : null
       if (!text) {
         return null
       }
       const streamed = messageFor(scope)
-      const identity = streamed.blocks.get(index) ?? mint(streamed, sessionId, index, uuid)
-      return { identity, text, parentToolUseId }
+      const started =
+        streamed.blocks.get(index) ?? mint(streamed, sessionId, index, uuid, observedAt)
+      return { ...started, text, parentToolUseId }
     },
     reconcile: (frame) => {
       const streamed = messages.get(scopeKey(frame.sessionId, frame.parentToolUseId))

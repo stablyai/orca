@@ -9,18 +9,13 @@ import {
   writeFileSync
 } from 'node:fs'
 import { readdir } from 'node:fs/promises'
-import { basename, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type {
   NativeChatBlock,
   NativeChatImageRefBlock,
   NativeChatMessage
 } from '../../shared/native-chat-types'
-import {
-  NodeFileReadTooLargeError,
-  readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
-import type { RuntimeFilePreviewResult } from '../../shared/runtime-file-contracts'
 import { isKnownRasterImageMimeType } from '../../shared/raster-image-preview-limits'
 import {
   PRIVATE_FILE_MODE,
@@ -33,14 +28,6 @@ import {
 export const NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES = 8 * 1024 * 1024
 const CACHE_DIR_NAME = 'native-chat-images'
 const CACHE_FILE_NAME = /^[0-9a-f]{64}\.(png|jpg|gif|webp|bmp|ico)$/
-const MIME_TYPE_BY_EXTENSION: Record<string, string> = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  bmp: 'image/bmp',
-  ico: 'image/x-icon'
-}
 
 function extensionForMimeType(mimeType: string): string {
   switch (mimeType.split('/', 2)[1] ?? '') {
@@ -267,36 +254,5 @@ function hydrateBlock(block: NativeChatBlock, cacheDir: string, refKey: string):
     }
   } catch {
     return block
-  }
-}
-
-/**
- * Read one cache entry back for a remote client. Only a content-hash file directly
- * inside the cache dir is served, so a client cannot turn this into a host file read.
- */
-export async function readNativeChatCachedImage(
-  path: string,
-  options: { maxBytes: number; cacheDir?: string }
-): Promise<RuntimeFilePreviewResult> {
-  const cacheDir = options.cacheDir ?? defaultCacheDir()
-  const name = basename(path)
-  const extension = CACHE_FILE_NAME.exec(name)?.[1]
-  if (!extension || resolve(path) !== join(resolve(cacheDir), name)) {
-    throw new Error('image_not_found')
-  }
-  let bytes: Buffer
-  try {
-    bytes = (await readNodeFileWithinLimit(join(cacheDir, name), options.maxBytes)).buffer
-  } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      throw new Error('file_too_large')
-    }
-    throw new Error('image_not_found')
-  }
-  return {
-    content: bytes.toString('base64'),
-    isBinary: true,
-    isImage: true,
-    mimeType: MIME_TYPE_BY_EXTENSION[extension]
   }
 }

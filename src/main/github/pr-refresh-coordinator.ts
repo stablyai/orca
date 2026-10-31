@@ -7,6 +7,7 @@ import { getPRForBranchOutcome } from './client'
 import {
   aliasFromCandidate,
   hostedReviewOptionArgs,
+  isBackground,
   MANUAL_MERGEABILITY_PENDING_REFRESH_MS,
   refreshKey,
   shouldBroadcastQueued,
@@ -18,10 +19,11 @@ import {
 } from './pr-refresh-event-publisher'
 import { PRRefreshPacing } from './pr-refresh-pacing'
 import { PRRefreshQueue } from './pr-refresh-queue'
-import { PRRefreshQueueDrainer } from './pr-refresh-queue-drainer'
+import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
+import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
 const retry = new PRRefreshRetryState()
 const queue = new PRRefreshQueue((key) => retry.reset(key))
@@ -32,6 +34,10 @@ const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, even
 
 export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
   events.setOutcomeObserver(observer)
+}
+
+export function setPRRefreshRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
+  drainer.setRegistrationCheck(check)
 }
 
 function removeInvisibleVisibleRefreshes(): void {
@@ -51,6 +57,8 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
   pacing.clearActiveBurstWindow(windowId)
   if (hadVisibleRefreshes) {
     removeInvisibleVisibleRefreshes()
+    queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
+    drainer.schedule()
   }
 }
 
@@ -75,6 +83,11 @@ export function enqueuePRRefresh(
   }
 
   const enqueued = queue.enqueue(candidate, reason, priority, windowId)
+  const pending = queue.get(key)
+  if (pending && reason === 'visible' && candidate.isSelected && priority >= 80) {
+    // Foreground exposure keeps retry gates while bypassing the list budget once.
+    pending.bypassBackgroundBudget = true
+  }
   events.record(enqueued.coalesced ? 'coalesced' : 'enqueued', reason)
   if (shouldBroadcastQueued(reason, enqueued.dueAt)) {
     events.broadcast({ aliases: [enqueued.alias], reason, status: 'queued' })
@@ -87,13 +100,27 @@ export function reportVisiblePRRefreshCandidates(
   generation: number,
   windowId: number
 ): void {
+  const newlyExposed = new Set(candidates.map(refreshKey).filter((key) => !visibility.has(key)))
   if (!visibility.report(candidates, generation, windowId)) {
     return
   }
   removeInvisibleVisibleRefreshes()
+  queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
   for (const candidate of candidates) {
-    enqueuePRRefresh(candidate, 'visible', 40, windowId)
+    const key = refreshKey(candidate)
+    if (validateCandidate(candidate)) {
+      enqueuePRRefresh(candidate, 'visible', 40, windowId)
+      continue
+    }
+    queue.enqueue(
+      visibility.candidate(key, candidate),
+      'visible',
+      40,
+      windowId,
+      newlyExposed.has(key)
+    )
   }
+  drainer.schedule()
 }
 
 export function _getVisiblePRRefreshWindowCountForTests(): number {
@@ -134,10 +161,26 @@ export async function refreshPRNow(
     events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason })
     return outcome
   }
+  // E9: renderer fallbacks reach here with automatic reasons; only a manual refresh may start a stopped distro.
+  if (
+    isBackground(reason) &&
+    wslDistroForPath(candidate.repoPath, candidate.localGitOptions?.wslDistro) &&
+    (await blockedWslDistroForPath(candidate.repoPath, candidate.localGitOptions?.wslDistro))
+  ) {
+    events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason: 'fresh' })
+    // Local callers keep their cached PR on an upstream error; nothing is recorded or retried here.
+    return {
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'WSL distro is not running',
+      fetchedAt: Date.now()
+    }
+  }
 
   const primaryGateUntil = await prRefreshRateLimitPausedUntil(candidate, false)
   const gateUntil = Math.max(primaryGateUntil ?? 0, retry.manualGateUntil(key))
   if (gateUntil > Date.now()) {
+    queue.protectBackgroundUntil(key, gateUntil)
     queue.set(key, {
       key,
       candidate,
@@ -168,6 +211,7 @@ export async function refreshPRNow(
   queue.delete(key)
   const requestSequence = events.nextSequence()
   const requestStartedAt = Date.now()
+  queue.noteRequestStarted(key, requestSequence)
   events.broadcast({ aliases, reason, status: 'in-flight', requestStartedAt }, requestSequence)
   const outcome = await getPRForBranchOutcome(
     candidate.repoPath,
@@ -177,10 +221,14 @@ export async function refreshPRNow(
     candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
     ...hostedReviewOptionArgs(candidate, reason)
   )
+  if (!queue.ownsRequest(key, requestSequence)) {
+    events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)
+    return outcome
+  }
   let plannedRetryAt: number | undefined
   let broadcastOutcome = outcome
   if (outcome.kind === 'upstream-error' && visibility.has(key)) {
-    plannedRetryAt = retry.nextVisibleErrorRetryAt(key)
+    plannedRetryAt = retry.nextVisibleErrorRetryAt(key, visibility.candidate(key, candidate))
     broadcastOutcome = retry.withErrorSchedule(outcome, plannedRetryAt)
   }
   events.observe(candidate, outcome)

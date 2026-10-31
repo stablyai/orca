@@ -18,7 +18,7 @@ export function selectExactWorkerProviderSession(args: {
     .filter(
       (entry) =>
         entry.paneKey === args.paneKey &&
-        connectionMatches(entry.connectionId, args.connectionId, args.wslDistro) &&
+        terminalHostConnectionMatches(entry.connectionId, args.connectionId, args.wslDistro) &&
         (!args.launchToken || entry.launchToken === args.launchToken) &&
         entry.providerSessionOnly !== true &&
         entry.providerSession !== undefined &&
@@ -50,7 +50,7 @@ function attestedWslDistro(
   return distro && connectionId === wslHookRelayConnectionId(distro) ? distro : undefined
 }
 
-function connectionMatches(
+export function terminalHostConnectionMatches(
   entryConnectionId: string | null,
   expectedConnectionId: string | null | undefined,
   wslDistro: string | null | undefined
@@ -58,9 +58,7 @@ function connectionMatches(
   if (expectedConnectionId === undefined || entryConnectionId === expectedConnectionId) {
     return true
   }
-  // WSL hook relays stamp their distro on the event, while the host PTY stays
-  // local (connectionId null). Require the PTY's known distro to avoid mixing
-  // same-pane events from another WSL transport.
+  // WSL PTYs stay local; require their attested distro to avoid same-pane events from another guest.
   return (
     expectedConnectionId === null &&
     typeof wslDistro === 'string' &&

@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "nativeChat.image-upload",
   "family": "nativeChat.image-upload",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
-  "scenarioSha256": "1f513883eb62cdd1673eb58809817e2b2f5fd64b74f80ed6e3b9d8c2ef2d33e9",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "25716369cd8f": {
       "status": "fulfilled",

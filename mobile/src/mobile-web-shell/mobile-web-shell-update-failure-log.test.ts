@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
+import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
-import { createGenerationStore } from './generation-store'
+import { createGenerationStore, MAX_CACHED_HOSTS } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
 import {
@@ -45,9 +47,22 @@ describe('appendUpdateFailure', () => {
   })
 
   it('holds a ceiling across hosts, evicting the oldest of all', () => {
-    const kept = appendAll(Array.from({ length: 30 }, (_, at) => failure(`host-${at}`, at)))
+    const kept = appendAll(
+      Array.from({ length: MAX_UPDATE_FAILURES + 10 }, (_, at) => failure(`host-${at}`, at))
+    )
     expect(kept).toHaveLength(MAX_UPDATE_FAILURES)
     expect(kept[0]?.at).toBe(10)
+  })
+
+  it('keeps a full per-host history for every cached host', () => {
+    const entries = Array.from({ length: MAX_CACHED_HOSTS }, (_, host) =>
+      Array.from({ length: MAX_UPDATE_FAILURES_PER_HOST }, (_, offset) =>
+        failure(`host-${host}`, host * MAX_UPDATE_FAILURES_PER_HOST + offset)
+      )
+    ).flat()
+    expect(appendAll(entries)).toEqual(entries)
+    const extra = failure('host-0', entries.length)
+    expect(appendAll([...entries, extra])).toEqual([...entries.slice(1), extra])
   })
 
   it('drops a build id that is not a digest rather than keep host text', () => {
@@ -82,9 +97,38 @@ describe('the generation store keeps the log', () => {
   it("outlives the host's own cache, which a recovery deletes", async () => {
     const fileSystem = createFakeGenerationFileSystem()
     const store = createGenerationStore({ fileSystem })
-    await store.recordUpdateFailure(failure('host-1', 1))
-    await store.deleteHostCache(deriveHostCacheKey('host-1'))
-    expect(await store.readUpdateFailures()).toHaveLength(1)
+    const host = deriveHostCacheKey('host-1')
+    const assets = [
+      { path: 'index.html', sha256: '1'.repeat(64), byteLength: 1, contentType: 'text/html' }
+    ]
+    const buildId = computeMobileWebBundleId(assets)
+    const bundle: MobileWebBundleFetchResult = {
+      manifest: {
+        schemaVersion: 1,
+        buildId,
+        minCompatibleRuntimeProtocolVersion: 2,
+        runtimeProtocolVersion: 2,
+        entrypoint: 'index.html',
+        totalBytes: 1,
+        assets
+      },
+      assets: new Map([['index.html', new Uint8Array(1)]]),
+      reused: [],
+      totalBytes: 1,
+      elapsedMs: 1
+    }
+    await store.commitGeneration(await store.stageGeneration(host, bundle))
+    expect((await store.readActiveGeneration(host))?.buildId).toBe(buildId)
+    expect(fileSystem.paths()).toContain(`${host}/generations/${buildId}/manifest.json`)
+    expect(fileSystem.bytes(`${host}/generations/${buildId}/index.html`)).toEqual(new Uint8Array(1))
+    const recorded = failure('host-1', 1)
+    await store.recordUpdateFailure(recorded)
+    await store.deleteHostCache(host)
+    expect(fileSystem.paths().some((path) => path === host || path.startsWith(`${host}/`))).toBe(
+      false
+    )
+    expect(await store.readActiveGeneration(host)).toBeNull()
+    expect(await store.readUpdateFailures()).toEqual([recorded])
   })
 
   it('reads a corrupt log as empty and keeps the entries that still parse', async () => {

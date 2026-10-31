@@ -1,8 +1,7 @@
 import type { DiffComment } from '../shared/diff-comment-types'
 import type { FolderWorkspace } from '../shared/folder-workspace-types'
 
-// Why shape-only: this replaces folder-workspaces.ts's verbatim `Array.isArray(raw.diffComments)` read.
-// Filtering members would make the fix itself a new deletion path for user-authored prose.
+// Preserve members without filtering so normalization cannot delete user-authored comments.
 export function normalizeFolderWorkspaceDiffComments(
   value: unknown
 ): Record<string, DiffComment[]> | undefined {
@@ -21,7 +20,7 @@ export function normalizeFolderWorkspaceDiffComments(
   return kept ? normalized : undefined
 }
 
-// Why derive on every write: the map self-GCs, so delete paths need no pruning code.
+// Rebuilding on write drops stale entries without separate pruning on deletion.
 export function collectFolderWorkspaceDiffComments(
   workspaces: readonly FolderWorkspace[] | undefined
 ): Record<string, DiffComment[]> | undefined {

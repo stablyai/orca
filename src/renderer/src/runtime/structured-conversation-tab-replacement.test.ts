@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
 import { buildMirroredAgentTabs } from './web-session-tabs-sync/terminal-surfaces'
-import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import {
   makeSnapshot,
   makeState,
@@ -144,7 +144,7 @@ describe('clear pane identity', () => {
         isActive: true
       }
     ])
-    const tabs = buildMirroredAgentTabs(snapshot, new Map(), 'g', 0, current, NOW)
+    const tabs = buildMirroredAgentTabs(snapshot, 'local', new Map(), 'g', 0, current, NOW)
     expect(new Set(tabs.map((tab) => tab.unifiedTab.id)).size).toBe(2)
     expect(tabs[0]!.unifiedTab.id).toBe(current[0]!.id)
     expect(tabs[1]!.unifiedTab.entityId).toBe('old-session')

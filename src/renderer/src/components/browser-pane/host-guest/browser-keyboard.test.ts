@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 
-// Why: the old fakes passed a single joined selector to `closest`, so any
-// `selector.includes(token)` check matched every token. Use the real DOM instead.
+// Use real closest(): substring-based fakes matched every token in the joined selector.
 function targetInside(hostHtml: string): Element {
   const host = document.createElement('div')
   host.innerHTML = `${hostHtml}`
@@ -33,25 +32,6 @@ describe('isEditableKeyboardTarget', () => {
     ]
   ])('returns true for a target inside %s', (_token, html) => {
     expect(isEditableKeyboardTarget(targetInside(html))).toBe(true)
-  })
-
-  it('queries every editable host in one selector', () => {
-    const closest = vi.fn((_selector: string) => null)
-    isEditableKeyboardTarget({ isContentEditable: false, closest })
-
-    const selector = closest.mock.calls[0][0]
-    const tokens = selector.split(',').map((part) => part.trim())
-    expect(tokens).toEqual([
-      'input',
-      'textarea',
-      'select',
-      '[contenteditable=""]',
-      '[contenteditable="true"]',
-      '.monaco-editor',
-      '.diff-editor',
-      '.rich-markdown-editor',
-      '.rich-markdown-editor-shell'
-    ])
   })
 
   it('falls back to isContentEditable when no host selector matches', () => {

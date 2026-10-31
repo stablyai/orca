@@ -30,21 +30,20 @@ describe('OSC 9999 pending storage', () => {
     [1024 * 1024, 16]
   ])('keeps %i-character chunks with %i incomplete statuses byte-exact', (size, count) => {
     const parsers: ReturnType<typeof createAgentStatusOscProcessor>[] = []
-    let cleanChars = 0
 
     for (let index = 0; index < count; index += 1) {
       const process = createAgentStatusOscProcessor()
-      cleanChars += process(String.fromCharCode(65 + (index % 26)).repeat(size) + INCOMPLETE_STATUS)
-        .cleanData.length
+      const ordinary = String.fromCharCode(65 + (index % 26)).repeat(size)
+      expect(process(ordinary + INCOMPLETE_STATUS).cleanData).toBe(ordinary)
       parsers.push(process)
     }
 
-    expect(cleanChars).toBe(size * count)
     for (const process of parsers) {
       expect(process('"}\x07after')).toEqual({
         cleanData: 'after',
         payloads: [{ state: 'working', prompt: 'fragment' }],
-        lastPayloadCleanOffset: 0
+        lastPayloadCleanOffset: 0,
+        payloadCleanOffsets: [0]
       })
     }
   })
@@ -64,12 +63,13 @@ describe('OSC 9999 pending storage', () => {
       expect(process(`\ude00"}${terminator}after`)).toEqual({
         cleanData: 'after',
         payloads: [{ state: 'working', prompt: '漢字\ud800|\udc00|😀' }],
-        lastPayloadCleanOffset: 0
+        lastPayloadCleanOffset: 0,
+        payloadCleanOffsets: [0]
       })
     }
   )
 
-  it('drops an owned frame that grows past the pending cap', () => {
+  it('retains an owned frame at the pending cap and drops one past it', () => {
     const process = createAgentStatusOscProcessor()
     const marker = '\x1b]9999;{"state":"working"}'
     const pending = marker + ' '.repeat(64 * 1024 - marker.length)
@@ -80,7 +80,19 @@ describe('OSC 9999 pending storage', () => {
     expect(process('\x07after')).toEqual({
       cleanData: 'after',
       payloads: [{ state: 'working', prompt: '' }],
-      lastPayloadCleanOffset: 0
+      lastPayloadCleanOffset: 0,
+      payloadCleanOffsets: [0]
+    })
+
+    const oversized = createAgentStatusOscProcessor()
+    for (let offset = 0; offset < pending.length; offset += 512) {
+      oversized(pending.slice(offset, offset + 512))
+    }
+    oversized(' ')
+    expect(oversized('\x07after')).toEqual({
+      cleanData: '\x07after',
+      payloads: [],
+      lastPayloadCleanOffset: null
     })
   })
 })

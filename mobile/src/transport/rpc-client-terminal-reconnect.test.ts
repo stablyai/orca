@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
-import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import {
+  encodeTerminalStreamFrame,
+  TerminalStreamOpcode
+} from '../../../src/shared/terminal-stream-protocol'
+
+vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({
@@ -65,25 +70,26 @@ function authenticate(socket: MockWebSocket): void {
   socket.receive('encrypted:{"type":"e2ee_authenticated"}')
 }
 
-function sentRequest(socket: MockWebSocket, method: string): { id: string } {
-  for (const payload of socket.sent) {
-    const decoded = JSON.parse(payload.replace(/^encrypted:/, '')) as {
-      id: string
-      method: string
-    }
-    if (decoded.method === method) {
-      return { id: decoded.id }
-    }
-  }
-  throw new Error(`Request not sent: ${method}`)
+function sentRequests(socket: MockWebSocket, method: string): { id: string }[] {
+  return socket.sent.flatMap((payload) => {
+    const value: unknown = JSON.parse(payload.replace(/^encrypted:/, ''))
+    return value &&
+      typeof value === 'object' &&
+      'method' in value &&
+      value.method === method &&
+      'id' in value &&
+      typeof value.id === 'string'
+      ? [{ id: value.id }]
+      : []
+  })
 }
 
-function sentRequests(socket: MockWebSocket, method: string): Array<{ id: string }> {
-  return socket.sent
-    .map(
-      (payload) => JSON.parse(payload.replace(/^encrypted:/, '')) as { id: string; method: string }
-    )
-    .filter((request) => request.method === method)
+function sentRequest(socket: MockWebSocket, method: string): { id: string } {
+  const request = sentRequests(socket, method)[0]
+  if (!request) {
+    throw new Error(`Request not sent: ${method}`)
+  }
+  return request
 }
 
 function encryptedStreamingReady(id: string, streamId: number): string {
@@ -116,6 +122,7 @@ describe('rpc-client terminal reconnect streams', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockSockets.length = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the socket constructor, states, handlers, send and close consumed by the client.
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
   })
 
@@ -143,9 +150,13 @@ describe('rpc-client terminal reconnect streams', () => {
 
     await vi.advanceTimersByTimeAsync(500)
     const second = mockSockets.at(-1)!
+    expect(mockSockets).toHaveLength(2)
+    expect(second).not.toBe(first)
     authenticate(second)
+    expect(client.getState()).toBe('connected')
     expect(sentRequests(second, 'terminal.subscribe')).toHaveLength(1)
     const resumedSubscribe = sentRequest(second, 'terminal.subscribe')
+    expect(resumedSubscribe.id).toBe(initialSubscribe.id)
     second.receive(encryptedStreamingReady(resumedSubscribe.id, 77))
     second.receive(encodeTerminalOutput(77, 'after-reconnect'))
     second.receive(encodeTerminalOutput(76, 'stale-before-reconnect'))

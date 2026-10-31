@@ -37,12 +37,16 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
           activate: false,
           id: 'agent-dashboard-burst-tab'
         })
+      const settings = store.getState().settings
+      if (!settings) {
+        throw new Error('Settings are not loaded')
+      }
       store.setState({
         agentDashboardDrawerOpen: false,
         settings: {
-          ...store.getState().settings,
+          ...settings,
           experimentalAgentDashboardPopout: true,
-          experimentalAgentDashboardMode: 'drawer',
+          experimentalAgentDashboardMode: 'in-window',
           experimentalAgentDashboardShowIdle: true,
           tabAutoGenerateTitle: false
         }

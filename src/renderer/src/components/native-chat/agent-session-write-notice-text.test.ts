@@ -1,41 +1,82 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { i18n } from '@/i18n/i18n'
-import en from '@/i18n/locales/en.json'
-import { agentSessionWriteNoticeEnglish } from '../../../../shared/agent-session-refusal-notice'
-import {
-  AGENT_SESSION_WRITE_NOTICE_COPY,
-  type AgentSessionWriteNoticeSentence
-} from '../../../../shared/agent-session-write-notice-copy'
-import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
+import { i18n, setRendererPluginLanguagePacks } from '@/i18n/i18n'
 
-const SENTENCES = Object.keys(AGENT_SESSION_WRITE_NOTICE_COPY).filter(
-  (key): key is AgentSessionWriteNoticeSentence => key in AGENT_SESSION_WRITE_NOTICE_COPY
-)
+import { pluginLanguageResourceId } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
+
+import {
+  agentSessionWriteFailureText,
+  agentSessionWriteNoticeText
+} from './agent-session-write-notice-text'
 
 afterEach(async () => {
+  setRendererPluginLanguagePacks([])
   await i18n.changeLanguage('en')
 })
 
 describe('desktop words for a write that did not happen', () => {
-  it('says exactly what the phone says in English', () => {
-    for (const sentence of SENTENCES) {
-      expect(agentSessionWriteNoticeText([sentence])).toBe(
-        agentSessionWriteNoticeEnglish([sentence])
-      )
+  it('does not promise the old goal survived a refused replacement, including older translations', async () => {
+    const id = 'plugin:example.older-french/fr' as const
+    const resourceLanguage = pluginLanguageResourceId(id)
+    setRendererPluginLanguagePacks([
+      {
+        id,
+        resourceLanguage,
+        pluginKey: 'example.older-french',
+        coverage: 100,
+        locale: 'fr',
+        catalog: {}
+      }
+    ])
+    for (const [language, expected] of [
+      ['en', "Couldn't finish changing the goal. Check the chat."],
+      ['fr', 'Impossible de terminer la modification de l’objectif. Consultez le chat.'],
+      [resourceLanguage, "Couldn't finish changing the goal. Check the chat."]
+    ]) {
+      await i18n.changeLanguage(language)
+      expect(
+        agentSessionWriteFailureText(
+          {
+            kind: 'refused',
+            code: 'agent_session_operation_invalid',
+            details: { reason: 'providerRejected' }
+          },
+          'goal'
+        )
+      ).toContain(expected)
     }
   })
 
-  it('keeps the English catalog in step with the shared copy', () => {
-    expect(en.components['native-chat'].writeNotice).toEqual(AGENT_SESSION_WRITE_NOTICE_COPY)
-  })
-
-  it('translates each sentence whole and shows a provider reason as written', async () => {
-    await i18n.changeLanguage('fr')
+  it("runs on after a plugin language's full stop, and keeps the space after English it left", async () => {
+    const id = 'plugin:example.chinese/zh-TW' as const
+    setRendererPluginLanguagePacks([
+      {
+        id,
+        resourceLanguage: pluginLanguageResourceId(id),
+        pluginKey: 'example.chinese',
+        locale: 'zh-TW',
+        catalog: {
+          components: {
+            'native-chat': {
+              writeNotice: {
+                restartFailed: '智能體無法重新啟動。',
+                notDoneSend: '您的訊息未傳送。'
+              }
+            }
+          }
+        },
+        coverage: 100
+      }
+    ])
+    await i18n.changeLanguage(pluginLanguageResourceId(id))
     expect(agentSessionWriteNoticeText(['restartFailed', 'notDoneSend'])).toBe(
-      "L'agent n'a pas pu redémarrer. Votre message n'a pas été envoyé."
+      '智能體無法重新啟動。您的訊息未傳送。'
     )
+    // The pack predates the failure words, so they fall back to English.
     expect(
-      agentSessionWriteNoticeText([{ text: 'Claude messages support at most 20 images' }])
-    ).toBe('Claude messages support at most 20 images')
+      agentSessionWriteNoticeText([
+        'notDoneSend',
+        { failure: { kind: 'startFailed' }, surface: 'rejection', context: { agentName: 'Claude' } }
+      ])
+    ).toBe("您的訊息未傳送。Claude couldn't start. Send your message to try again.")
   })
 })

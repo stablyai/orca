@@ -1,6 +1,6 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import {
   agentMainAgentVerdict,
@@ -21,19 +21,20 @@ import type {
   ActivityLiveAgentState,
   AgentPaneThread
 } from './activity-thread-types'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
 
-const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
+const ABSOLUTE_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit'
-})
+}
 
 export function formatAbsoluteDate(timestamp: number): string {
-  return absoluteDateFormatter.format(new Date(timestamp))
+  return uiDateTimeFormat(ABSOLUTE_DATE_OPTIONS).format(new Date(timestamp))
 }
 
 export function formatRelativeTime(timestamp: number, now = Date.now()): string {
@@ -72,12 +73,20 @@ export function agentTitle(event: ActivityEvent): string {
     return 'Agent working'
   }
   if (event.state === 'done') {
-    const verdict = agentMainAgentVerdict(event.entry)
-    return verdict === 'failure'
-      ? 'Agent failed'
-      : verdict === 'cancellation'
-        ? 'Agent interrupted'
-        : 'Agent finished'
+    switch (agentMainAgentVerdict(event.entry)) {
+      // A turn cut short by anything but the user is a fault, as a failure is.
+      case 'failure':
+      case 'interruption':
+        return 'Agent failed'
+      case 'cancellation':
+      case 'superseded':
+        return 'Agent interrupted'
+      case 'unconfirmed':
+        return 'Couldn’t confirm agent finished'
+      case 'success':
+      case null:
+        return 'Agent finished'
+    }
   }
   return event.state === 'waiting' ? 'Agent waiting for input' : 'Agent needs input'
 }
@@ -100,12 +109,19 @@ export function agentMeta(event: ActivityEvent): string {
     return `${agent} ${event.state}`
   }
   if (event.state === 'done') {
-    const verdict = agentMainAgentVerdict(event.entry)
-    return verdict === 'failure'
-      ? `${agent} failed`
-      : verdict === 'cancellation'
-        ? `${agent} interrupted`
-        : `${agent} completed`
+    switch (agentMainAgentVerdict(event.entry)) {
+      case 'failure':
+      case 'interruption':
+        return `${agent} failed`
+      case 'cancellation':
+      case 'superseded':
+        return `${agent} interrupted`
+      case 'unconfirmed':
+        return `${agent} unconfirmed`
+      case 'success':
+      case null:
+        return `${agent} completed`
+    }
   }
   return event.state === 'waiting' ? `${agent} waiting` : `${agent} blocked`
 }
@@ -133,21 +149,23 @@ export function statusPreviewForEntry(
 
 export type ActivityThreadStatusId = AgentDotState
 
-/** Single classifier behind grouping, labels, and clear-completed; the only place the
- *  verdict predicate is spelled. */
+/** Keep grouping, labels and clear-completed on one verdict classifier. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
   // Why: a failed main agent outranks the subagent work still holding its row live.
   if (thread.currentAgentEntry && agentVerdictDisplayMark(thread.currentAgentEntry) === 'failed') {
     return 'failed'
   }
-  const paneEntry = paneActivityEntry(thread)
   const state = threadCurrentState(thread) ?? 'done'
-  const verdictEntry = paneEntry ?? thread.latestEvent?.entry
+  const verdictEntry = threadVerdictEntry(thread)
   const verdictDot = verdictEntry ? agentVerdictDisplayMark(verdictEntry) : null
   if (!thread.currentAgentState && state === 'done' && verdictDot) {
     return verdictDot
   }
   return state
+}
+
+function threadVerdictEntry(thread: AgentPaneThread): AgentStatusEntry | undefined {
+  return paneActivityEntry(thread) ?? thread.latestEvent?.entry
 }
 
 // Why the pane's row: an answered ask's done predates the blocked event, and a clear can hide it.
@@ -168,15 +186,8 @@ function threadCurrentState(
   )
 }
 
-// Interrupted rows deliberately keep the done glyph (#2569); a failure is a fault and does not.
-export function threadAgentState(thread: AgentPaneThread): AgentDotState {
-  const id = activityThreadStatusId(thread)
-  return id === 'interrupted' ? 'done' : id
-}
-
 export function threadAgentStateLabel(thread: AgentPaneThread): string {
-  // Literal keys with literal fallbacks: a dynamic key registers no catalog reference
-  // and forces every state string into the boot bundle.
+  // Literal translation keys/fallbacks register catalog references and avoid bundling every state string at boot.
   switch (activityThreadStatusId(thread)) {
     case 'working':
       return translate('auto.components.activity.ActivityPrototypePage.state.working', 'Working')
@@ -204,6 +215,11 @@ export function threadAgentStateLabel(thread: AgentPaneThread): string {
       return translate(
         'auto.components.activity.ActivityPrototypePage.state.unverifiable',
         'No recent update'
+      )
+    case 'unconfirmed':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.unconfirmed',
+        'Couldn’t confirm'
       )
     case 'permission':
       return translate(
@@ -243,7 +259,7 @@ export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRo
   })
   const liveState = threadCurrentState(thread)
   const toolPreviewState = liveState === 'monitoring' ? null : liveState
-  const state = threadAgentState(thread)
+  const state = activityThreadStatusId(thread)
   const needsAttention = state === 'waiting' || state === 'blocked' || state === 'permission'
   if (renderedPreview && !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)) {
     return {

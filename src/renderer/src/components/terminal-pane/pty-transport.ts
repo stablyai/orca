@@ -1,3 +1,4 @@
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import { attachIpcPty } from './ipc-pty-attach'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
@@ -6,30 +7,6 @@ import { createPtyOutputProcessor } from './pty-output-processor'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
-
-export {
-  ensurePtyDispatcher,
-  getEagerPtyBufferHandle,
-  registerEagerPtyBuffer,
-  restorePtyDataHandlersAfterFailedShutdown,
-  subscribeToPtyExit,
-  unregisterPtyDataHandlers
-} from './pty-dispatcher'
-export type { EagerPtyHandle } from './pty-dispatcher'
-export { extractLastOscTitle } from '../../../../shared/agent-detection'
-export { createPtyOutputProcessor } from './pty-output-processor'
-export {
-  MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY,
-  MAX_PENDING_PTY_SIDE_EFFECTS
-} from './pty-output-side-effect-queue'
-export type {
-  IpcPtyTransportOptions,
-  LocalPtySessionMetadata,
-  PtyBufferSnapshot,
-  PtyConnectResult,
-  PtyReplayDataMeta,
-  PtyTransport
-} from './pty-transport-types'
 
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
@@ -48,6 +25,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let onAbandonedConnect: ((ptyId: string) => boolean) | undefined
   let ptyId: string | null = null
   let lifecycleGeneration = 0
+  let pendingConnectGeneration: number | null = null
   let lastExitGeneration: number | null = null
   let suppressAttentionEvents = false
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
@@ -75,9 +53,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
-    onAgentBecameIdle: (title) => {
+    onAgentBecameIdle: (title, meta) => {
       if (!suppressAttentionEvents) {
-        onAgentBecameIdle?.(title)
+        onAgentBecameIdle?.(title, meta)
       }
     },
     onAgentBecameWorking,
@@ -105,13 +83,30 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
     storedCallbacks = callbacks
   }
+  const dropPreconnectInput = (reason: string): void => {
+    if (preconnectInputBuffer?.hasPendingInput()) {
+      console.warn(
+        `[pty-transport] dropped keys typed while the terminal was connecting: ${reason}`
+      )
+    }
+    preconnectInputBuffer?.clear()
+  }
   const flushPreconnectInput = async (): Promise<void> => {
     if (!preconnectInputBuffer?.isBuffering()) {
       return
     }
     const id = ptyId
     if (destroyed || !connected || !id) {
-      preconnectInputBuffer.clear()
+      // Why: a closed pane's keys have no owner; only a failed attach is worth reporting.
+      if (destroyed) {
+        preconnectInputBuffer.clear()
+      } else {
+        dropPreconnectInput('the terminal did not attach')
+      }
+      return
+    }
+    if (opts.releasePreconnectInput && !opts.releasePreconnectInput()) {
+      dropPreconnectInput('startup work appeared before it attached')
       return
     }
     await preconnectInputBuffer.flush({
@@ -131,6 +126,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     getPendingEscapeTailAnsi: outputProcessor.getPendingEscapeTailAnsi,
     connect: async (options) => {
       const connectGeneration = advancePtyLifecycle()
+      pendingConnectGeneration = connectGeneration
       try {
         return await connectIpcPty(options, {
           transportOptions: opts,
@@ -148,11 +144,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           getCallbacks: () => storedCallbacks
         })
       } finally {
+        if (pendingConnectGeneration === connectGeneration) {
+          pendingConnectGeneration = null
+        }
         if (lifecycleGeneration === connectGeneration) {
           await flushPreconnectInput()
         }
       }
     },
+
+    isConnectPending: () =>
+      !destroyed && ptyId === null && pendingConnectGeneration === lifecycleGeneration,
 
     attach: (options) => {
       const attachGeneration = advancePtyLifecycle()
@@ -178,7 +180,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     abandonPreconnectInput() {
-      preconnectInputBuffer?.clear()
+      dropPreconnectInput('its pending connection was abandoned')
     },
 
     disconnect() {
@@ -216,6 +218,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInput(data, inputKind) {
+      if (!destroyed && inputKind === 'driving') {
+        opts.onDrivingInputAttempt?.(ptyId)
+      }
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
         return preconnectInputBuffer.enqueue(data, 'ordinary', inputKind, opts.onPreconnectInput)
       }
@@ -242,6 +247,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       ? {}
       : {
           async sendInputAccepted(data: string, inputKind: TerminalInputKind): Promise<boolean> {
+            if (!destroyed && inputKind === 'driving') {
+              opts.onDrivingInputAttempt?.(ptyId)
+            }
             if (!destroyed && preconnectInputBuffer?.isBuffering()) {
               return preconnectInputBuffer.enqueueAccepted(data, inputKind, opts.onPreconnectInput)
             }
@@ -274,6 +282,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     isConnected: () => connected,
     getPtyId: () => ptyId,
     getConnectionId: () => connectionId ?? null,
+    getExecutionHostId: () => getConnectionExecutionHostId(connectionId),
+    getRuntimeEnvironmentId: () => null,
     getLocalSessionMetadata: () =>
       connectionId
         ? null

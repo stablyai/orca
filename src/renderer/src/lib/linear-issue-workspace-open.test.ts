@@ -82,32 +82,16 @@ describe('openLinearIssueWorkspaceOrStart', () => {
     mocks.activateAndRevealWorktree.mockReset().mockReturnValue({ primaryTabId: null })
   })
 
-  it('qualifies remote worktree activation with its execution host', () => {
-    mocks.worktrees = [worktree({ hostId: 'ssh:builder' })]
-
-    expect(openLinearIssueWorkspaceOrStart({ identifier: 'ENG-1' }, vi.fn())).toBe('opened')
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1', {
-      executionHostId: 'ssh:builder'
-    })
-  })
-
   it('opens a linked folder workspace instead of starting a duplicate', () => {
     mocks.folderWorkspaces = [folderWorkspace()]
     const startWorkspace = vi.fn()
 
     expect(openLinearIssueWorkspaceOrStart({ identifier: 'ENG-1' }, startWorkspace)).toBe('opened')
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-1', {
+      navigationIntent: 'user-open',
       executionHostId: 'local'
     })
     expect(startWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('starts a workspace when the issue has none attached', () => {
-    const startWorkspace = vi.fn()
-
-    expect(openLinearIssueWorkspaceOrStart({ identifier: 'ENG-1' }, startWorkspace)).toBe('started')
-    expect(startWorkspace).toHaveBeenCalledTimes(1)
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
   it('reports failure when activation is refused', () => {

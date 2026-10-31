@@ -1,65 +1,40 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   ExecutionHostNotDispatchableError,
-  requireFilesystemProviderForHost,
-  requireGitProviderForHost,
+  requireReachableFilesystemRoute,
+  requireReachableGitRoute,
   resolveFilesystemRouteForHost,
   resolveGitRouteForHost,
   UnresolvableExecutionHostError
 } from './execution-host-provider-dispatch'
-import { registerSshGitProvider, unregisterSshGitProvider } from './ssh-git-dispatch'
-import {
-  registerSshFilesystemProvider,
-  unregisterSshFilesystemProvider
-} from './ssh-filesystem-dispatch'
+import { createLocalFilesystemProvider } from './local-filesystem-provider'
+import { createLocalGitProvider } from './local-git-provider'
+import { SSH_HOST_NOT_SERVED_MESSAGE, SshHostNotServedError } from './ssh-host-not-served-error'
 
 const connectionId = 'host-dispatch-target'
-const gitProvider = { listWorktrees: async () => [] } as never
-const filesystemProvider = { readDir: async () => [] } as never
 
 describe('execution host provider dispatch', () => {
-  afterEach(() => {
-    unregisterSshGitProvider(connectionId)
-    unregisterSshFilesystemProvider(connectionId)
+  it('routes `local` to a per-call local provider factory, never a cached provider', () => {
+    expect(resolveGitRouteForHost('local')).toEqual({
+      kind: 'local',
+      hostId: 'local',
+      createProvider: createLocalGitProvider
+    })
+    expect(resolveFilesystemRouteForHost('local')).toEqual({
+      kind: 'local',
+      hostId: 'local',
+      createProvider: createLocalFilesystemProvider
+    })
   })
 
-  it('routes `local` to the local entry rather than to a provider', () => {
-    expect(resolveGitRouteForHost('local')).toEqual({ kind: 'local', hostId: 'local' })
-    expect(resolveFilesystemRouteForHost('local')).toEqual({ kind: 'local', hostId: 'local' })
-  })
-
-  it('routes an ssh host to its registered provider', () => {
-    registerSshGitProvider(connectionId, gitProvider)
-    registerSshFilesystemProvider(connectionId, filesystemProvider)
-
-    expect(resolveGitRouteForHost(`ssh:${connectionId}`)).toEqual({
+  it('routes an ssh host to a provider-less entry', () => {
+    const expected = {
       kind: 'ssh',
       hostId: `ssh:${connectionId}`,
-      connectionId,
-      provider: gitProvider
-    })
-    expect(resolveFilesystemRouteForHost(`ssh:${connectionId}`)).toEqual({
-      kind: 'ssh',
-      hostId: `ssh:${connectionId}`,
-      connectionId,
-      provider: filesystemProvider
-    })
-    expect(requireGitProviderForHost(`ssh:${connectionId}`)).toBe(gitProvider)
-    expect(requireFilesystemProviderForHost(`ssh:${connectionId}`)).toBe(filesystemProvider)
-  })
-
-  it('answers `unreachable`, not `local`, for an ssh host with no registered provider', () => {
-    const route = resolveGitRouteForHost(`ssh:${connectionId}`)
-
-    // The distinction the old `connectionId ? ssh : local` shape could not spell.
-    expect(route.kind).toBe('ssh')
-    expect(route.kind === 'ssh' && route.provider).toBeNull()
-    expect(() => requireGitProviderForHost(`ssh:${connectionId}`)).toThrow(
-      /Remote connection dropped/
-    )
-    expect(() => requireFilesystemProviderForHost(`ssh:${connectionId}`)).toThrow(
-      /Remote connection dropped/
-    )
+      connectionId
+    }
+    expect(resolveGitRouteForHost(`ssh:${connectionId}`)).toStrictEqual(expected)
+    expect(resolveFilesystemRouteForHost(`ssh:${connectionId}`)).toStrictEqual(expected)
   })
 
   it('routes a runtime host to its own entry instead of collapsing it into local', () => {
@@ -75,26 +50,6 @@ describe('execution host provider dispatch', () => {
     })
   })
 
-  it('refuses to hand a runtime host to this process’s ssh table', () => {
-    // A runtime repo row carries the *server's* nested target id. Dialling it here would reach a
-    // same-named target in this client's namespace.
-    registerSshGitProvider(connectionId, gitProvider)
-
-    expect(() => requireGitProviderForHost('runtime:env-7')).toThrow(
-      ExecutionHostNotDispatchableError
-    )
-    expect(() => requireFilesystemProviderForHost('runtime:env-7')).toThrow(
-      ExecutionHostNotDispatchableError
-    )
-  })
-
-  it('refuses to serve a local host from the remote-only accessor', () => {
-    expect(() => requireGitProviderForHost('local')).toThrow(ExecutionHostNotDispatchableError)
-    expect(() => requireFilesystemProviderForHost('local')).toThrow(
-      ExecutionHostNotDispatchableError
-    )
-  })
-
   it.each([null, undefined, '', 'nonsense', 'ssh:', 'runtime:', 'ssh:a|b'])(
     'throws instead of answering local for the unresolvable host %p',
     (hostId) => {
@@ -102,4 +57,39 @@ describe('execution host provider dispatch', () => {
       expect(() => resolveFilesystemRouteForHost(hostId)).toThrow(UnresolvableExecutionHostError)
     }
   )
+
+  describe('reachable routes for work this process runs', () => {
+    it('keeps `local` explicit', () => {
+      expect(requireReachableGitRoute('local')).toMatchObject({ kind: 'local', hostId: 'local' })
+      expect(requireReachableFilesystemRoute('local')).toMatchObject({ kind: 'local' })
+    })
+
+    it('throws the typed not-served error for an ssh host', () => {
+      for (const require of [requireReachableGitRoute, requireReachableFilesystemRoute]) {
+        expect(() => require(`ssh:${connectionId}`)).toThrow(SshHostNotServedError)
+        expect(() => require(`ssh:${connectionId}`)).toThrow(
+          'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+        )
+      }
+      expect(SSH_HOST_NOT_SERVED_MESSAGE).toBe(
+        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+      )
+    })
+
+    it('never hands an ssh host a local provider factory', () => {
+      expect(resolveGitRouteForHost(`ssh:${connectionId}`)).not.toHaveProperty('createProvider')
+      expect(resolveFilesystemRouteForHost(`ssh:${connectionId}`)).not.toHaveProperty(
+        'createProvider'
+      )
+    })
+
+    it('refuses a runtime host', () => {
+      expect(() => requireReachableGitRoute('runtime:env-7')).toThrow(
+        ExecutionHostNotDispatchableError
+      )
+      expect(() => requireReachableFilesystemRoute('runtime:env-7')).toThrow(
+        ExecutionHostNotDispatchableError
+      )
+    })
+  })
 })

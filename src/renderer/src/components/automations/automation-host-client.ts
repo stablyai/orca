@@ -1,12 +1,13 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
+import { prepareAutomationLaunchSetup } from './automation-capability-probe'
 import type {
   Automation,
   AutomationCreateInput,
   AutomationRun,
-  AutomationRunsPage,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
@@ -51,8 +52,18 @@ export function getAutomationTargetFromHostId(
     : { kind: 'local' }
 }
 
+/** Map paired web local/SSH hosts to the server runtime authority that the catalog lists. */
+export function getAutomationListedTargetFromHostId(
+  hostId: string | null | undefined,
+  state: { runtimeEnvironments?: readonly { id: string }[] }
+): AutomationHostTarget {
+  const target = getAutomationTargetFromHostId(hostId)
+  const environmentId = target.kind === 'local' ? getPairedWebClientEnvironmentId(state) : null
+  return environmentId ? { kind: 'environment', environmentId } : target
+}
+
 export function getAutomationAuthorityTarget(
-  authority: AutomationAuthorityRef
+  authority: StableAutomationAuthorityRef
 ): AutomationHostTarget {
   return authority.kind === 'runtime'
     ? { kind: 'environment', environmentId: authority.environmentId }
@@ -114,36 +125,19 @@ export async function listAutomationsForTarget(
   return result.automations
 }
 
-/**
- * One automation's history, never a host's. Usage totals for the list come from
- * the authority's own list projection; fetching every run to compute them made
- * the page's cost scale with retained history rather than with what is on screen.
- */
+/** Fetch one automation’s history; list usage comes from authority projections so page cost cannot scale with all retained runs. */
 export async function listAutomationRunsForTarget(
   target: AutomationHostTarget,
-  automationId: string
+  automationId: string,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<AutomationRun[]> {
   const result = await callRuntimeRpc<{ runs: AutomationRun[] }>(
     target,
     'automation.runs',
     { automationId },
-    { timeoutMs: 15_000 }
+    { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
   )
   return result.runs
-}
-
-export async function listAutomationRunsPageForTarget(
-  target: AutomationHostTarget,
-  automationId: string,
-  options: { limit?: number; cursor?: string } = {}
-): Promise<AutomationRunsPage> {
-  const result = await callRuntimeRpc<AutomationRunsPage | { runs: AutomationRun[] }>(
-    target,
-    'automation.runs',
-    { automationId, ...options },
-    { timeoutMs: 15_000 }
-  )
-  return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
 }
 
 export async function updateAutomationForTarget(
@@ -152,10 +146,16 @@ export async function updateAutomationForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
+  const prepared = await prepareAutomationLaunchSetup(
+    target.kind === 'environment'
+      ? { kind: 'runtime', environmentId: target.environmentId, pairingRevision: 0 }
+      : { kind: 'desktop' },
+    updates
+  )
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.update',
-    { id: automation.id, updates: toRuntimeAutomationUpdateInput(updates) },
+    { id: automation.id, updates: toRuntimeAutomationUpdateInput(prepared) },
     { timeoutMs: 15_000 }
   )
   return result.automation

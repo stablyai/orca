@@ -1,36 +1,35 @@
 import { lstat } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { resolve, sep } from 'node:path'
 import { resolveWorktreeHostPath } from '../../shared/git-metadata-path'
 
-// Why this is a leaf module rather than part of ipc/worktree-symlinks: status
-// and review-creation need only the read-only "is this a symlink" question, and
-// importing the materialization module would pull APFS cloning — and its
-// child_process dependency — into their graph.
+// Keep read-only symlink detection independent of APFS materialization and child-process imports.
 
 export type SafeRelativePathResult = { safe: true; rel: string } | { safe: false }
 
-// Why a regex rather than `path.isAbsolute`: the strip below already removed
-// every leading `/` and `\`, so the only rooted spelling that can still reach
-// the guard is a Windows drive designator — and `win32.isAbsolute` misses the
-// drive-RELATIVE form (`C:foo`), which `win32.resolve` still resolves against
-// that drive's current directory instead of the worktree root.
+// isAbsolute misses drive-relative C:foo, which still escapes the worktree on Windows.
 const WINDOWS_DRIVE_DESIGNATOR = /^[a-zA-Z]:/
 
 export function getSafeRelativePath(rawPath: string): SafeRelativePathResult {
-  // Why: strip leading separators (both `/` and `\`) before the guard so
-  // Windows-style input like `\foo` is normalized the same way POSIX `/foo`
-  // is, and the traversal check below sees the already-relative form.
+  // Strip either separator style before validating so host syntax cannot change the verdict.
   const rel = rawPath.trim().replace(/^[\\/]+/, '')
-  // Why: split on both separators so a Windows-authored `..\escape` is
-  // rejected the same way POSIX `../escape` is; the split catches relative
-  // backslash traversal that `.split('/')` would otherwise miss.
-  // Why the drive check runs on every host: the same entry — per-user Shared
-  // Paths setting or repo `orca.yaml` — is evaluated on every host Orca runs
-  // on, so the verdict must not depend on which one is asking.
-  if (!rel || WINDOWS_DRIVE_DESIGNATOR.test(rel) || rel.split(/[\\/]/).includes('..')) {
+  // Validate both separator styles and drive prefixes after ./ normalization on every host.
+  const segments = rel.split(/[\\/]/).filter((segment) => segment !== '' && segment !== '.')
+  if (
+    segments.length === 0 ||
+    WINDOWS_DRIVE_DESIGNATOR.test(segments[0]) ||
+    segments.includes('..')
+  ) {
     return { safe: false }
   }
-  return { safe: true, rel }
+  // Match Git's normalized spelling, using only separators the host filesystem resolves.
+  const gitRel =
+    sep === '\\'
+      ? segments.join('/')
+      : rel
+          .split('/')
+          .filter((segment) => segment !== '' && segment !== '.')
+          .join('/')
+  return gitRel ? { safe: true, rel: gitRel } : { safe: false }
 }
 
 export type WorktreeSymlinkDetectionOptions = {
@@ -43,8 +42,7 @@ export async function findExistingWorktreeSymlinkPaths(
   paths: readonly string[],
   options: WorktreeSymlinkDetectionOptions = {}
 ): Promise<string[]> {
-  // Why: git in a WSL distro reports the worktree in the guest namespace, but this lstat runs in
-  // the Windows main process, where that spelling names nothing.
+  // Node filesystem reads need host spelling even when WSL Git reported guest paths.
   const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
   const symlinkPaths: string[] = []
   for (const rawPath of paths) {

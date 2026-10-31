@@ -7,8 +7,11 @@ import { IpynbRunPrompt } from './IpynbCellToolbar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { IpynbCell, IpynbOutput } from './ipynb-parse'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('./use-document-dark-theme', () => ({ useDocumentDarkTheme: () => true }))
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string) => fallback
+}))
+vi.mock('@/hooks/use-document-dark-theme', () => ({ useDocumentDarkTheme: () => true }))
 vi.mock('@/lib/monaco-setup', () => ({ monaco: {} }))
 vi.mock('./MonacoCodeExcerpt', () => ({
   useMonacoColorizedLines: () => []
@@ -21,6 +24,7 @@ function cell(kind: IpynbCell['kind'], source: string, outputs: IpynbOutput[] = 
 function renderSource(target: IpynbCell, onActivate = vi.fn()) {
   render(
     <IpynbCellSource
+      modelKey={null}
       cell={target}
       source={target.source}
       active={false}
@@ -168,7 +172,6 @@ describe('notebook outputs', () => {
     )
     const frame = screen.getByTitle('Notebook HTML output')
     const source = frame.getAttribute('srcdoc') ?? ''
-    // An empty sandbox keeps the frame an opaque origin with scripts off.
     expect(frame.getAttribute('sandbox')).toBe('')
     expect(source).toContain("default-src 'none'; img-src data:")
     expect(source).not.toContain('<script')

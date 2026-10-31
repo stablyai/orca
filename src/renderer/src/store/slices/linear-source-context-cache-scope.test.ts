@@ -138,6 +138,145 @@ describe('createLinearSlice caching', () => {
     ).toBeNull()
   })
 
+  it('uses source-selected workspaces for searches, lists, and matching cache reads', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'focused-workspace' }
+    })
+    const sourceContext = linearSourceContext('source-runtime', 'source-workspace')
+    const options = { sourceContext, workspaceId: 'source-workspace' }
+    linearSearchIssues.mockResolvedValue([issue('SOURCE-1')])
+    linearListIssues.mockResolvedValue({ items: [issue('SOURCE-2')] })
+    await store.getState().searchLinearIssues('query', 12, options)
+    await store.getState().listLinearIssues({ kind: 'list', limit: 12 }, options)
+    expect(linearSearchIssues).toHaveBeenCalledWith(sourceContext, 'query', 12, 'source-workspace')
+    expect(linearListIssues).toHaveBeenCalledWith(
+      sourceContext,
+      'assigned',
+      12,
+      'source-workspace',
+      undefined
+    )
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'search', query: 'query', limit: 12 }, options)
+    ).toMatchObject([{ id: 'SOURCE-1' }])
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', limit: 12 }, options)
+    ).toMatchObject({ items: [{ id: 'SOURCE-2' }] })
+    store.getState().prefetchLinearIssues({ kind: 'search', query: 'query', limit: 12 }, options)
+    expect(linearSearchIssues).toHaveBeenCalledTimes(1)
+    expect(
+      store
+        .getState()
+        .getCachedLinearIssues({ kind: 'search', query: 'query', limit: 12 }, { sourceContext })
+    ).toBeNull()
+  })
+
+  it.each([2, 20])(
+    'admits one source-host runtime read per fresh composer scope at W=%i',
+    async (workspaceCount) => {
+      const store = createTestStore()
+      const workspaces = Array.from({ length: workspaceCount }, (_, index) => ({
+        id: `workspace-${index}`,
+        organizationId: `organization-${index}`,
+        organizationName: `Workspace ${index}`,
+        displayName: 'Ada',
+        email: null
+      }))
+      store.setState({
+        linearStatus: {
+          connected: true,
+          viewer: null,
+          selectedWorkspaceId: 'workspace-0',
+          workspaces
+        }
+      })
+      const sourceContext = linearSourceContext(`count-contract-${workspaceCount}`)
+      const rows = workspaces.slice(0, 12).map((workspace) => ({
+        ...issue(`${workspace.id}/issue`),
+        workspaceId: workspace.id
+      }))
+      const options = { sourceContext, workspaceId: 'all' }
+      for (const kind of ['search', 'list'] as const) {
+        const pendingSearch = deferred<LinearIssue[]>()
+        const pendingList = deferred<LinearCollectionResult<LinearIssue>>()
+        linearSearchIssues
+          .mockReset()
+          .mockResolvedValue(rows)
+          .mockReturnValueOnce(pendingSearch.promise)
+        linearListIssues
+          .mockReset()
+          .mockResolvedValue({ items: rows })
+          .mockReturnValueOnce(pendingList.promise)
+        const runtimeRead = kind === 'search' ? linearSearchIssues : linearListIssues
+        const read = (workspaceId = 'all', changed = false) =>
+          kind === 'search'
+            ? store.getState().searchLinearIssues(changed ? 'launch later' : 'launch', 12, {
+                ...options,
+                workspaceId
+              })
+            : store
+                .getState()
+                .listLinearIssues(
+                  { kind: 'list', filter: changed ? 'created' : 'assigned', limit: 12 },
+                  { ...options, workspaceId }
+                )
+        const first = read()
+        const concurrent = read()
+        expect(runtimeRead).toHaveBeenCalledTimes(1)
+        expect(runtimeRead.mock.calls[0].slice(0, 4)).toEqual([
+          sourceContext,
+          kind === 'search' ? 'launch' : 'assigned',
+          12,
+          'all'
+        ])
+        store.setState({ linearIssueCache: {} })
+        expect(runtimeRead).toHaveBeenCalledTimes(1)
+        pendingSearch.resolve(rows)
+        pendingList.resolve({ items: rows })
+        await Promise.all([first, concurrent])
+        await read()
+        expect(runtimeRead).toHaveBeenCalledTimes(1)
+        expect(
+          store
+            .getState()
+            .getCachedLinearIssues(
+              kind === 'search'
+                ? { kind, query: 'launch', limit: 12 }
+                : { kind, filter: 'assigned', limit: 12 },
+              options
+            )
+        ).toEqual(kind === 'search' ? rows : { items: rows })
+        await read('workspace-0')
+        expect(runtimeRead).toHaveBeenCalledTimes(2)
+        expect(runtimeRead.mock.calls[1][3]).toBe('workspace-0')
+        await read('all', true)
+        expect(runtimeRead).toHaveBeenCalledTimes(3)
+        expect(runtimeRead.mock.calls[2][0]).toEqual(sourceContext)
+      }
+    }
+  )
+
+  it('distinguishes explicit default, all, and inherited focused workspace selections', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'focused-workspace' }
+    })
+    const sourceContext = linearSourceContext('source-runtime')
+    linearSearchIssues.mockResolvedValue([])
+    await store.getState().searchLinearIssues('query', 12, { sourceContext, workspaceId: null })
+    await store.getState().searchLinearIssues('query', 12, { sourceContext, workspaceId: 'all' })
+    await store
+      .getState()
+      .searchLinearIssues('query', 12, { sourceContext, workspaceId: undefined })
+    expect(linearSearchIssues.mock.calls.map((args) => args[3])).toEqual([
+      null,
+      'all',
+      'focused-workspace'
+    ])
+    expect(Object.keys(store.getState().linearSearchCache)).toHaveLength(3)
+  })
+
   it('scopes cached Linear teams, projects, and views to the explicit source context', async () => {
     const store = createTestStore()
     store.setState({
@@ -307,5 +446,31 @@ describe('createLinearSlice caching', () => {
       store.getState().linearListCache[`${remoteScope}::workspace-1::list::all::36`]?.data?.items[0]
         ?.title
     ).toBe('Remote title')
+  })
+  it('does not reuse an unscoped issue detail for an explicit source', async () => {
+    const store = createTestStore()
+    const sourceContext = linearSourceContext('source-runtime', 'source-workspace')
+    store.setState({
+      linearIssueCache: {
+        'same-id': { data: { ...issue('same-id'), title: 'Wrong source' }, fetchedAt: Date.now() }
+      }
+    })
+    linearGetIssue.mockResolvedValueOnce({ ...issue('same-id'), title: 'Correct source' })
+    await expect(
+      store.getState().fetchLinearIssue('same-id', 'source-workspace', { sourceContext })
+    ).resolves.toMatchObject({ title: 'Correct source' })
+    expect(linearGetIssue).toHaveBeenCalledWith(sourceContext, 'same-id', 'source-workspace')
+  })
+  it('keeps the previous scoped detail when a deadline aborts its revalidation', async () => {
+    const store = createTestStore()
+    const sourceContext = linearSourceContext('source-runtime', 'source-workspace')
+    const cacheKey = `${getTaskSourceCacheScope(sourceContext)}::source-workspace::same-id`
+    const previous = { data: issue('same-id'), fetchedAt: 0 }
+    store.setState({ linearIssueCache: { [cacheKey]: previous } })
+    linearGetIssue.mockRejectedValueOnce(new Error('Linear issue detail lookup timed out'))
+    await expect(
+      store.getState().fetchLinearIssue('same-id', 'source-workspace', { sourceContext })
+    ).resolves.toBeNull()
+    expect(store.getState().linearIssueCache[cacheKey]).toBe(previous)
   })
 })

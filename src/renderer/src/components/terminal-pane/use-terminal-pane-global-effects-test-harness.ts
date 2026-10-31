@@ -17,9 +17,7 @@ export function installGlobalEffectsTestWindow(): void {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     api: {
-      ui: {
-        onFileDrop: vi.fn(() => vi.fn())
-      },
+      ui: {},
       pty: {
         setActiveRendererPty: vi.fn()
       }
@@ -33,8 +31,7 @@ export function cleanupGlobalEffectsTestWindow(): void {
   delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver
 }
 
-// Why: the live-manager registry is module-global; unregister in afterEach
-// so a failed assertion cannot leak fake managers into later tests.
+// Unregister module-global fake managers even after failed assertions to isolate later suites.
 export function createLivePaneManagerRegistry(): {
   registerManagerForReset: <T extends { resetWebglTextureAtlases(): void }>(manager: T) => T
   unregisterAllManagers: () => void

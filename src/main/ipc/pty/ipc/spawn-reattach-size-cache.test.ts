@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { ptySizes } from '../delivery/visibility-state'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
 import { commitPtyIpcSpawn } from './spawn-commit'
@@ -9,7 +9,6 @@ import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 const SESSION_ID = 'orca-pty-session-1'
 /** What a pane that mounted while `display:none` reports: xterm's unmeasured default. */
 const HIDDEN_PANE_REQUEST = { cols: 80, rows: 24 }
-/** The grid the surviving daemon session is actually running at. */
 const LIVE_GRID = { cols: 211, rows: 57 }
 
 function makeRuntime() {
@@ -37,7 +36,7 @@ function makeCtx(args: PtySpawnIpcArgs, runtime: ReturnType<typeof makeRuntime>)
   ctx.effectiveSessionId = SESSION_ID
   ctx.effectiveSessionAppId = SESSION_ID
   // Mirrors spawn-preflight: a caller-supplied sessionId is an attach, never a fresh mint.
-  ctx.isMintedSessionId = args.sessionId === undefined
+  ctx.ownsNewIncarnation = args.sessionId === undefined
   return ctx
 }
 
@@ -74,7 +73,6 @@ describe('spawn size cache on reattach', () => {
       }
     )
 
-    // Pre-attach: an unmeasured request must not be published as the live PTY's size.
     expect(preAttachSize).toBeUndefined()
     expect(ptySizes.get(SESSION_ID)).toEqual(LIVE_GRID)
     expect(runtime.reflowHeadlessTerminalToPtyGrid).toHaveBeenCalledWith(
@@ -92,8 +90,7 @@ describe('spawn size cache on reattach', () => {
     expect(runtime.reflowHeadlessTerminalToPtyGrid).toHaveBeenCalledWith(SESSION_ID, 120, 40)
   })
 
-  // Why: the pre-attach seed is withheld for an unmeasured attach, and a daemon that restarted
-  // re-creates the session instead of attaching, so only the commit can size the model.
+  // Unmeasured attach skips pre-seeding; if the daemon recreates it, commit must size the model.
   it('reflows a hidden attach the daemon answered with a fresh session onto the request', async () => {
     const { runtime, preAttachSize } = await runSpawn(
       { cols: 100, rows: 30, sessionId: SESSION_ID, initiallyHidden: true },

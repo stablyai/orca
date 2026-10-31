@@ -4,19 +4,20 @@ import type {
   PRMergeableState,
   PRReviewDecision
 } from '../../../../shared/github/pull-request-types'
-import { gitExecFileAsync } from '../../gh-utils'
+import { gitExecFileAsync, type OwnerRepo } from '../../gh-utils'
 import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../../../providers/ssh-git-dispatch'
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
 import { mapPRState } from '../../mappers'
+import type { MergedPRCommitMembership } from '../../merged-pr-commit-membership'
 import {
   normalizePRMergeable,
   normalizeReviewDecision,
   isAutoMergeEnabled
 } from './../map/work-item-field-coercion'
+import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
+import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { githubRepositoryWebHost } from '../../github-repository-host'
 export type PullRequestLookupData = {
   number: number
   title: string
@@ -37,8 +38,18 @@ export type PullRequestLookupData = {
   headRefName?: string
   baseRefOid?: string
   headRefOid?: string
+  isCrossRepository?: boolean
+  headRepositoryOwner?: { login?: string } | null
+  headRepository?: { name?: string } | null
+  headDefaultBranchName?: string
   stack?: GitHubPRStack
   stackMetadataChecked?: boolean
+}
+
+export type PullRequestLookupPolicy = {
+  accepts: (data: PullRequestLookupData, prRepo: OwnerRepo | null) => Promise<boolean>
+  isRejected: (prRepo: OwnerRepo, number: number) => boolean
+  rejectedPRUrls: ReadonlySet<string>
 }
 
 export type RestPullRequest = {
@@ -52,8 +63,14 @@ export type RestPullRequest = {
   merged_at?: string | null
   mergeable?: boolean | null
   mergeable_state?: string | null
+  auto_merge?: unknown
   base?: { ref?: string; sha?: string }
-  head?: { ref?: string; sha?: string }
+  head?: {
+    ref?: string
+    sha?: string
+    repo?: { name?: string; owner?: { login?: string }; default_branch?: string } | null
+    user?: { login?: string }
+  }
   stack?: {
     number?: number
     position?: number
@@ -63,14 +80,14 @@ export type RestPullRequest = {
 }
 
 export const PR_LOOKUP_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid'
+  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export const PR_BRANCH_LIST_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
-  // Why: compare merged implicit PRs against the worktree HEAD, not main repo HEAD, without a worktree-scoped git call.
+  // Supply the actual worktree head without probing a different main-repo checkout.
   currentHeadOid?: string | null
 }
 
@@ -116,20 +133,83 @@ export function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
     updatedAt: pr.updated_at ?? '',
     isDraft: pr.draft,
     mergeable: mapRestPRMergeable(pr),
+    ...(pr.mergeable_state !== undefined
+      ? { mergeStateStatus: pr.mergeable_state?.toUpperCase() ?? null }
+      : {}),
+    ...('auto_merge' in pr ? { autoMergeRequest: pr.auto_merge } : {}),
     baseRefName: pr.base?.ref,
     headRefName: pr.head?.ref,
     baseRefOid: pr.base?.sha,
     headRefOid: pr.head?.sha,
+    headRepositoryOwner: pr.head?.repo?.owner ?? pr.head?.user,
+    headRepository: pr.head?.repo,
+    headDefaultBranchName: pr.head?.repo?.default_branch,
     stackMetadataChecked: true,
     ...(stack ? { stack } : {})
   }
+}
+
+export function pullRequestHeadRepository(
+  data: PullRequestLookupData,
+  prRepo: OwnerRepo | null
+): OwnerRepo | null {
+  const owner = data.headRepositoryOwner?.login?.trim()
+  const repo = data.headRepository?.name?.trim()
+  return owner && repo ? { owner, repo, ...(prRepo?.host ? { host: prRepo.host } : {}) } : null
+}
+
+export function pullRequestMatchesHeadRepository(
+  data: PullRequestLookupData,
+  prRepo: OwnerRepo | null,
+  expectedHeadRepo: OwnerRepo | null
+): boolean {
+  const actualHeadRepo = pullRequestHeadRepository(data, prRepo)
+  // A renamed repository still answers at its old remote URL; its own PRs report the new name.
+  if (sameOwnerRepo(expectedHeadRepo, prRepo) && isSameRepositoryPullRequest(data, prRepo)) {
+    return true
+  }
+  const owner = data.headRepositoryOwner?.login?.trim().toLowerCase()
+  const baseRepo = ownerRepoFromPullRequestUrl(data.url)
+  const isCrossRepository =
+    data.isCrossRepository ??
+    (actualHeadRepo && baseRepo
+      ? !sameOwnerRepo(actualHeadRepo, baseRepo)
+      : owner && baseRepo && owner !== baseRepo.owner.toLowerCase()
+        ? true
+        : undefined)
+  if (!expectedHeadRepo) {
+    return isCrossRepository !== true
+  }
+  const actualHostRepo = prRepo ?? baseRepo
+  if (
+    (actualHostRepo &&
+      githubRepositoryWebHost(actualHostRepo).toLowerCase() !==
+        githubRepositoryWebHost(expectedHeadRepo).toLowerCase()) ||
+    (owner && owner !== expectedHeadRepo.owner.toLowerCase())
+  ) {
+    return false
+  }
+  return actualHeadRepo
+    ? sameOwnerRepo(actualHeadRepo, expectedHeadRepo)
+    : isCrossRepository !== true || Boolean(owner)
+}
+
+// Canonical PR URLs name the current base repository even when remote URLs are stale.
+export function isSameRepositoryPullRequest(
+  data: PullRequestLookupData,
+  prRepo: OwnerRepo | null
+): boolean {
+  return sameOwnerRepo(
+    pullRequestHeadRepository(data, prRepo),
+    ownerRepoFromPullRequestUrl(data.url)
+  )
 }
 
 export function isMergedImplicitPR(
   data: PullRequestLookupData,
   linkedPRNumber?: number | null
 ): boolean {
-  // Why: a merged PR without an explicit link is just a historical branch match, not implicit review context.
+  // Historical merged branch matches alone do not establish current review context.
   return typeof linkedPRNumber !== 'number' && mapPRState(data.state, data.isDraft) === 'merged'
 }
 
@@ -141,8 +221,26 @@ export function shouldHideMergedImplicitPR(
   if (!data || !isMergedImplicitPR(data, linkedPRNumber)) {
     return false
   }
-  // Why: keep hiding historical merged branch matches, but preserve the merged PR for the exact commit currently checked out.
+  // Preserve historical merged reviews only when their head matches the current checkout.
   return !currentHeadOid || data.headRefOid !== currentHeadOid
+}
+
+export async function linkedMergedPRDivergedHeadOid(
+  data: PullRequestLookupData | null,
+  linkedPRNumber: number | null | undefined,
+  currentHeadOid: string | null,
+  containsHead: (data: PullRequestLookupData, headOid: string) => Promise<MergedPRCommitMembership>
+): Promise<string | null> {
+  if (
+    typeof linkedPRNumber !== 'number' ||
+    !data ||
+    mapPRState(data.state, data.isDraft) !== 'merged' ||
+    currentHeadOid === null ||
+    data.headRefOid === currentHeadOid
+  ) {
+    return null
+  }
+  return (await containsHead(data, currentHeadOid)) === 'not-contained' ? currentHeadOid : null
 }
 
 export function normalizePullRequestLookupData(data: PullRequestLookupData): PullRequestLookupData {
@@ -161,14 +259,7 @@ export async function getCurrentHeadOid(
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
 ): Promise<string | null> {
-  const provider = connectionId ? getSshGitProvider(connectionId) : null
-  if (connectionId && !provider) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-  }
-  if (provider) {
-    const result = await provider.exec(['rev-parse', 'HEAD'], repoPath)
-    return result.stdout.trim() || null
-  }
+  requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
   try {
     const result = await gitExecFileAsync(['rev-parse', 'HEAD'], {
       cwd: repoPath,

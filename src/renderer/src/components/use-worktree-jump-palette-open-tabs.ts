@@ -27,13 +27,14 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 import {
   encodePaletteIdentity,
   type PaletteSearchContext
-} from '@/lib/palette-match/palette-ranking'
+} from '../../../shared/palette-match/palette-ranking'
 import {
   buildBrowserPaletteItems,
   buildOpenTabPaletteItems,
   buildSimulatorPaletteItems,
   buildWorkspaceTabPaletteItems
 } from './worktree-jump-palette-open-tab-items'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 const EMPTY_BROWSER_PAGE_ENTRIES: SearchableBrowserPage[] = []
 const EMPTY_SIMULATOR_TAB_ENTRIES: SearchableSimulatorTab[] = []
@@ -49,7 +50,7 @@ type WorktreeJumpPaletteOpenTabsInput = WorktreeJumpPaletteStoreState &
 export function useWorktreeJumpPaletteOpenTabs({
   paletteStatusInputsActive,
   browserSortedWorktrees,
-  allWorktrees,
+  workspaces,
   repoMap,
   repoByHostIdentity,
   worktreeOrder,
@@ -81,13 +82,14 @@ export function useWorktreeJumpPaletteOpenTabs({
   worktreeMatches,
   resolveWorktree
 }: WorktreeJumpPaletteOpenTabsInput) {
+  const languageRevision = useUiLanguageRevision()
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
     if (!paletteStatusInputsActive) {
       return EMPTY_BROWSER_PAGE_ENTRIES
     }
     return buildSearchableBrowserPages({
       worktrees: browserSortedWorktrees,
-      ownershipWorktrees: allWorktrees,
+      ownershipWorktrees: workspaces,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -105,7 +107,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
-    allWorktrees,
+    workspaces,
     browserPagesByWorkspace,
     browserTabsByWorktree,
     browserSortedWorktrees,
@@ -127,7 +129,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     }
     return buildSearchableSimulatorTabs({
       worktrees: browserSortedWorktrees,
-      ownershipWorktrees: allWorktrees,
+      ownershipWorktrees: workspaces,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -144,7 +146,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
-    allWorktrees,
+    workspaces,
     browserSortedWorktrees,
     groupsByWorktree,
     repoByHostIdentity,
@@ -157,7 +159,8 @@ export function useWorktreeJumpPaletteOpenTabs({
       searchSimulatorTabs(simulatorTabEntries, deferredQuery.trim(), {
         context: paletteSearchContext
       }),
-    [simulatorTabEntries, deferredQuery, paletteSearchContext]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- simulator titles translate the default label.
+    [simulatorTabEntries, deferredQuery, paletteSearchContext, languageRevision]
   )
   const workspaceTabEntries = useMemo<SearchableWorkspaceTab[]>(() => {
     if (!paletteStatusInputsActive) {
@@ -165,7 +168,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     }
     return buildSearchableWorkspaceTabs({
       worktrees: browserSortedWorktrees,
-      ownershipWorktrees: allWorktrees,
+      ownershipWorktrees: workspaces,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -200,7 +203,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     activeTabTypeByWorktree,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
-    allWorktrees,
+    workspaces,
     agentStatusByPaneKey,
     browserSortedWorktrees,
     groupsByWorktree,

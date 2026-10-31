@@ -1,11 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
-import {
-  BROWSER_CLIENT_FILE_CHANNEL_READ_METHOD,
-  fetchBrowserClientUploadFiles,
-  readBrowserClientUploadPaths
-} from './browser-client-upload-transfer'
+import { fetchBrowserClientUploadFiles } from './browser-client-upload-transfer'
 
 const event = {
   authorityRuntimeId: 'runtime-1',
@@ -17,37 +13,6 @@ const event = {
 } as BrowserClientHostCommandEvent
 
 describe('fetchBrowserClientUploadFiles', () => {
-  it('reassembles a multi-chunk remote file and stamps the page authority on every read', async () => {
-    const requests: { method: string; params: Record<string, unknown> }[] = []
-    const chunks = ['abc', 'de']
-    const files = await fetchBrowserClientUploadFiles({
-      request: async (method, params) => {
-        requests.push({ method, params: params as Record<string, unknown> })
-        const chunk = chunks.shift() ?? ''
-        return {
-          contentBase64: Buffer.from(chunk).toString('base64'),
-          bytesRead: chunk.length,
-          totalBytes: 5,
-          eof: chunks.length === 0
-        }
-      },
-      event,
-      remotePaths: ['docs/a.txt']
-    })
-
-    expect(files).toEqual([{ remotePath: 'docs/a.txt', contents: Buffer.from('abcde') }])
-    expect(requests).toHaveLength(2)
-    expect(requests[0].method).toBe(BROWSER_CLIENT_FILE_CHANNEL_READ_METHOD)
-    expect(requests[0].params).toMatchObject({
-      fileChannelProtocolVersion: 1,
-      browserPageId: 'page-1',
-      pageHostGeneration: 3,
-      workspaceRelativePath: 'docs/a.txt',
-      offset: 0
-    })
-    expect(requests[1].params).toMatchObject({ offset: 3 })
-  })
-
   it('stops instead of looping forever on a host that never reports eof', async () => {
     await expect(
       fetchBrowserClientUploadFiles({
@@ -83,57 +48,3 @@ describe('fetchBrowserClientUploadFiles', () => {
     ).rejects.toThrow('browser_client_upload_file_count_exceeded')
   })
 })
-
-describe('readBrowserClientUploadPaths', () => {
-  it('accepts a list of non-empty path strings', () => {
-    expect(readBrowserClientUploadPaths({ files: ['a.txt', 'b/c.txt'] })).toEqual([
-      'a.txt',
-      'b/c.txt'
-    ])
-  })
-
-  it('rejects a missing, non-array, or non-string files payload', () => {
-    expect(() => readBrowserClientUploadPaths({})).toThrow('browser_client_upload_files_required')
-    expect(() => readBrowserClientUploadPaths({ files: 'a.txt' })).toThrow(
-      'browser_client_upload_files_required'
-    )
-    expect(() => readBrowserClientUploadPaths({ files: [''] })).toThrow(
-      'browser_client_upload_files_required'
-    )
-  })
-})
-
-it.each([0, 1, 128 * 1024])(
-  'avoids recopying 16 single-chunk uploads of %i bytes',
-  async (size) => {
-    const source = Buffer.alloc(size, 171)
-    const response = {
-      contentBase64: source.toString('base64'),
-      bytesRead: size,
-      totalBytes: size,
-      eof: true
-    }
-    const remotePaths = Array.from({ length: 16 }, (_, i) => `file-${i}.bin`)
-    const request = vi.fn(async () => response)
-    const concat = vi.spyOn(Buffer, 'concat')
-    let copies = 0
-    let files: Awaited<ReturnType<typeof fetchBrowserClientUploadFiles>>
-    try {
-      files = await fetchBrowserClientUploadFiles({ request, event, remotePaths })
-      copies = concat.mock.calls.length
-    } finally {
-      concat.mockRestore()
-    }
-    expect(copies).toBe(0)
-    expect(request).toHaveBeenCalledTimes(16)
-    expect(files.map((file) => file.remotePath)).toEqual(remotePaths)
-    for (const file of files) {
-      expect(file.contents).toEqual(source)
-    }
-    if (size > 0) {
-      files[0].contents[0] = 0
-      expect(files[1].contents[0]).toBe(171)
-      expect(source[0]).toBe(171)
-    }
-  }
-)

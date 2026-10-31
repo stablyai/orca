@@ -1,28 +1,47 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.diff-review-actions",
   "family": "session.diff-review-actions",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "dc3a746274b4197b02b0b3060bbf8ab0f67eb54355c8b9888e1f061e37f777af",
-  "scenarioSha256": "7099d7311b2046dde21a2750201718995c0869bc4f17fb7f3ce2b997ce0e6506",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "09ce77ea89fa": {
-      "name": "terminal.send#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"You are reviewing the current worktree. Address the following mobile review notes.\\n\\nFile: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\\n\\nAfter applying fixes:\\n1. Summarize changed files.\\n2. Run relevant tests.\\n3. Tell me if anything remains risky.\",\"enter\":true}}"
-    },
     "0db3b6958ec7": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": "terminal-1"
+    },
+    "148b65856bcb": {
+      "name": "terminal.send#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"File: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\",\"enter\":true}}"
+    },
+    "22d1249a1bc1": {
+      "name": "terminal.send#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "File: src/app.ts\nLine: 4\nUser comment: \"needs a test\""
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
     "2fc890e4b748": {
       "actionError": {
@@ -67,34 +86,6 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "9fb5d21c0986": {
-      "name": "terminal.send#2",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "enter": true,
-            "terminal": "terminal-1",
-            "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
     },
     "c638ffbb7699": {
       "name": "terminal.send#1",
@@ -142,8 +133,8 @@
       {
         "id": "healed",
         "observation": {
-          "sender": ["c638ffbb7699", "9fb5d21c0986"],
-          "payloads": ["5a2217c55af2", "09ce77ea89fa"],
+          "sender": ["c638ffbb7699", "22d1249a1bc1"],
+          "payloads": ["5a2217c55af2", "148b65856bcb"],
           "settlements": {
             "mark-stale": "0db3b6958ec7",
             "send-notes": "9270aeb7d9c6"

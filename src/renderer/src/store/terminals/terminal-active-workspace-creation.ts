@@ -1,7 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
@@ -27,15 +27,19 @@ export function createActiveWorkspaceTerminalActions(
       }
       const runtimeEnvironmentId = worktreeRoute
         ? worktreeRoute.route.runtimeEnvironmentId
-        : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+        : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
       if (runtimeEnvironmentId) {
-        const { createWebRuntimeSessionTerminal } = await import('@/runtime/web-runtime-session')
-        await createWebRuntimeSessionTerminal({
-          worktreeId,
-          environmentId: runtimeEnvironmentId,
-          targetGroupId: groupId,
-          activate: true
-        })
+        const { createWebRuntimeSessionTerminal } =
+          await import('@/runtime/web-runtime-terminal-creation')
+        await createWebRuntimeSessionTerminal(
+          {
+            worktreeId,
+            environmentId: runtimeEnvironmentId,
+            targetGroupId: groupId,
+            activate: true
+          },
+          { userAct: true }
+        )
         return
       }
       if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {

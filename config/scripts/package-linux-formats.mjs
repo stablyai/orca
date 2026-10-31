@@ -13,7 +13,8 @@ import {
 } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { copyPrivateTree } from './space-sharing-copy.mjs'
-import { spawnProcess } from './script-child-process.mjs'
+import { spawnProcess } from '@orca/process-host'
+import { preparePrAppImageTools } from './package-linux-formats-appimage.mjs'
 
 const require = createRequire(import.meta.url)
 const formats = ['AppImage', 'deb', 'rpm']
@@ -39,12 +40,12 @@ export function linuxFormatArguments({ format, appDirectory, outputDirectory }) 
   ]
 }
 
-function runElectronBuilder(args) {
+function runElectronBuilder(args, environment) {
   return new Promise((resolveBuild, reject) => {
     const child = spawnProcess({
       program: process.execPath,
       args: [require.resolve('electron-builder/cli.js'), ...args],
-      env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
+      env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', ...environment },
       stdio: 'inherit'
     })
     child.once('error', reject)
@@ -61,6 +62,7 @@ function runElectronBuilder(args) {
 export async function packageLinuxFormats({
   preparedDirectory = resolve('dist/linux-unpacked'),
   outputDirectory = resolve('dist'),
+  prepareAppImageTools = preparePrAppImageTools,
   runBuilder = runElectronBuilder
 } = {}) {
   const marker = join(preparedDirectory, 'resources/package-type')
@@ -82,8 +84,13 @@ export async function packageLinuxFormats({
         console.log(
           `[linux-package] ${format} copied in ${Math.round(performance.now() - startedFormatAt)}ms`
         )
+        const environment =
+          format === 'AppImage'
+            ? await prepareAppImageTools({ directory: join(staging, format, 'tools') })
+            : {}
         await runBuilder(
-          linuxFormatArguments({ format, appDirectory, outputDirectory: formatOutput })
+          linuxFormatArguments({ format, appDirectory, outputDirectory: formatOutput }),
+          environment
         )
         const artifacts = readdirSync(formatOutput).filter((name) => name.endsWith(`.${format}`))
         const artifactStats =

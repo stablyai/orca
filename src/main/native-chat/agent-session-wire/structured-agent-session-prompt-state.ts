@@ -2,8 +2,13 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
-import { refuse, type AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
-import type { AgentSessionTurnContext } from './structured-agent-session-turns'
+import {
+  refuse,
+  type AgentSessionCancelResult,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session-wire'
+import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 type PendingPromptBody = Extract<AgentJournalItemBody, { kind: 'approval' | 'question' }>
 
@@ -11,12 +16,34 @@ export type PendingPromptValidation =
   | { ok: true; item: AgentJournalRenderItem; prompt: PendingPromptBody }
   | { ok: false; refusal: AgentSessionWireRefusal }
 
-/** The prompt the client named is not one waiting on the user: nothing to answer. */
 function promptGone(message: string): PendingPromptValidation {
   return {
     ok: false,
     refusal: refuse('agent_session_operation_invalid', { reason: 'promptGone' }, message)
   }
+}
+
+export function settledPrompt(
+  ctx: Pick<AgentSessionTurnContext, 'journal'>,
+  itemId: string
+): { item: AgentJournalRenderItem; prompt: PendingPromptBody } | null {
+  const item = ctx.journal.snapshot().items.find((entry) => entry.itemId === itemId)
+  const prompt = item?.body.kind === 'approval' || item?.body.kind === 'question' ? item.body : null
+  return item && prompt && prompt.resolution.state !== 'pending' ? { item, prompt } : null
+}
+
+/** Repeated Cancel of a cancelled prompt succeeds without effects. */
+export function answerCancelOfSettledPrompt(
+  ctx: Pick<AgentSessionTurnContext, 'journal'>,
+  input: { turnId?: string; prompt: { itemId: string } },
+  refused: Extract<PendingPromptValidation, { ok: false }>
+): TurnOutcome<AgentSessionCancelResult> {
+  return settledPrompt(ctx, input.prompt.itemId)?.prompt.resolution.state === 'cancelled'
+    ? {
+        ok: true,
+        value: { ...(input.turnId !== undefined ? { turnId: input.turnId } : {}), cancelled: false }
+      }
+    : refused
 }
 
 export function validatePendingPrompt(
@@ -62,4 +89,12 @@ export function validatePendingPrompt(
     }
   }
   return { ok: true, item, prompt }
+}
+
+/** Ended-generation prompts have no live owner. */
+export function isEndedGenerationPrompt(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
+  pending: Extract<PendingPromptValidation, { ok: true }>
+): boolean {
+  return !contextStructuredAgentSessionCurrentWork(ctx).isCurrentItem(pending.item.itemId)
 }

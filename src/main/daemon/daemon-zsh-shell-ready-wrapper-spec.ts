@@ -1,7 +1,6 @@
 import type { ZshStartupHookSpec } from '../zsh-startup-wrapper-builder'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
-/** The zsh wrapper the daemon (local fork and SSH host) launches shells with. */
 export function getDaemonZshWrapperSpec(): ZshStartupHookSpec {
   return {
     headerLabel: 'Orca daemon zsh shell-ready wrapper',
@@ -14,8 +13,7 @@ export function getDaemonZshWrapperSpec(): ZshStartupHookSpec {
       managedWslCli: false,
       agentTeamsPath: true,
       remoteCliBinDir: false,
-      codexHome: true,
-      codexLaunchPreflight: true
+      codexHome: true
     }
   }
 }

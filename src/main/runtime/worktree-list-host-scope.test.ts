@@ -83,8 +83,7 @@ function queries(
 
 describe('worktree.list host coverage under the row cap', () => {
   it('returns remote rows that sit entirely past the cap', async () => {
-    // Why #18104: 497 local + 24 SSH rows, SSH at indices 496-520, and a 200-row cap returned
-    // `{local: 200}` — zero of 24 remote worktrees, with nothing saying the gap was a whole host.
+    // #18104: the cap once returned 200 local rows and hid all 24 SSH worktrees.
     const result = await queries(fleet(497, 24)).list(undefined, 200)
 
     expect(result.totalCount).toBe(521)
@@ -96,7 +95,7 @@ describe('worktree.list host coverage under the row cap', () => {
   })
 
   it('keeps the page a subsequence of the unbounded listing', async () => {
-    // Why: balancing decides which rows survive the cap, never how the survivors are ordered.
+    // Balancing selects survivors but must preserve their original order.
     const resolved = fleet(497, 24)
     const result = await queries(resolved).list(undefined, 200)
 
@@ -105,8 +104,7 @@ describe('worktree.list host coverage under the row cap', () => {
   })
 
   it('names a configured host that contributed no rows at all', async () => {
-    // Why: a repo whose scan failed contributes zero rows exactly like a host with no worktrees.
-    // docs/reference/ssh-execution-boundary.md forbids the listing from reading as absolute there.
+    // Failed repo scans and empty hosts both contribute no rows; scope must expose the uncertainty.
     const result = await queries(fleet(3, 0), ['local', 'ssh:box-1', 'runtime:paired']).list(
       undefined,
       200
@@ -119,7 +117,7 @@ describe('worktree.list host coverage under the row cap', () => {
   })
 
   it('does not report configured hosts as omitted from a --repo listing', async () => {
-    // Why: the caller scoped this themselves, so naming the hosts they excluded is noise.
+    // Caller-scoped listings must omit unrelated hosts.
     const result = await queries(fleet(0, 5)).list('id:repo-ssh', 200)
 
     expect(result.hostScope).toEqual({ hostIds: ['ssh:box-1'], omittedHostIds: [] })

@@ -17,16 +17,14 @@ export function detectAgentSendTitleStatus(title: string | null | undefined): Ag
     return status
   }
 
-  // Why: selected-target sends are immediate. A bare agent name proves identity,
-  // but not that the CLI is ready for submitted input yet.
+  // Immediate selected-target sends need readiness; a bare agent name proves only identity.
   return isExplicitIdleSendTitle(title) ? status : null
 }
 
 function isExplicitIdleSendTitle(title: string): boolean {
   return (
     EXPLICIT_IDLE_SEND_TITLE_RE.test(title) ||
-    // Why: this title-level filter exposes hookless OpenCode targets; the runtime
-    // still requires launch or foreground-process evidence before writing.
+    // Expose hookless OpenCode by title, but runtime still requires launch/process evidence before writing.
     isOpenCodeNativeTitle(title) ||
     title.startsWith(CLAUDE_IDLE_PREFIX) ||
     title.startsWith('* ') ||

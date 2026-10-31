@@ -1,15 +1,11 @@
-// LIVE-ONLY PIN for the renderer half of the completion feed.
-//
-// The point of most of these is not that the feed delivers, but that it REMEMBERS NOTHING: no
-// snapshot for a late listener, no buffer, and no catch-up across a reconnect. A refactor that
-// quietly adds a cursor or a replay arm to make reconnects "lossless" has to fail here, because
-// what it would actually do is light the dot for work the user already read.
+// Keep completion/prompt edges live-only: no late snapshot, buffering or reconnect catch-up, which would mark already-read work unread again.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionTurnCompletion,
   AgentSessionTurnCompletionEvent
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionAttentionEdge } from '../../../shared/agent-session-attention'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), supportsCapability: vi.fn() }))
 vi.mock('./structured-agent-session-client', () => ({
@@ -23,6 +19,10 @@ import {
   getStructuredAgentSessionTurnCompletionFeed,
   resetStructuredAgentSessionTurnCompletionFeedsForTests
 } from './structured-agent-session-turn-completion-feed'
+
+function label(edge: AgentSessionAttentionEdge): string {
+  return edge.type === 'completion' ? edge.completion.turnId : `prompt:${edge.prompt.promptId}`
+}
 
 type Subscription = {
   emit: (event: AgentSessionTurnCompletionEvent) => void
@@ -88,14 +88,37 @@ describe('structured turn completion feed (renderer)', () => {
     feed.activate()
     const first: string[] = []
     const second: string[] = []
-    feed.subscribe((event) => first.push(event.turnId))
-    feed.subscribe((event) => second.push(event.turnId))
+    feed.subscribe((edge) => first.push(label(edge)))
+    feed.subscribe((edge) => second.push(label(edge)))
     await vi.advanceTimersByTimeAsync(0)
 
     subscription().emit({ type: 'completion', completion: completion('turn-1') })
 
     expect(first).toEqual(['turn-1'])
     expect(second).toEqual(['turn-1'])
+  })
+
+  it('delivers prompt edges beside completions, and drops an arm it cannot name', async () => {
+    const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
+    feed.activate()
+    const seen: string[] = []
+    feed.subscribe((edge) => seen.push(label(edge)))
+    await vi.advanceTimersByTimeAsync(0)
+
+    subscription().emit({
+      type: 'prompt',
+      prompt: {
+        scope: completion('unused').scope,
+        sessionId: 'session-1',
+        promptId: 'approval-1',
+        raisedAt: 1
+      }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: simulates a newer host's arm this build cannot type.
+    subscription().emit({ type: 'future-edge' } as unknown as AgentSessionTurnCompletionEvent)
+    subscription().emit({ type: 'completion', completion: completion('turn-1') })
+
+    expect(seen).toEqual(['prompt:approval-1', 'turn-1'])
   })
 
   it('replays nothing to a listener that subscribes after a completion landed', async () => {
@@ -105,7 +128,7 @@ describe('structured turn completion feed (renderer)', () => {
     subscription().emit({ type: 'completion', completion: completion('turn-1') })
 
     const late: string[] = []
-    feed.subscribe((event) => late.push(event.turnId))
+    feed.subscribe((edge) => late.push(label(edge)))
 
     // There is no buffer to hand over. The edge already passed.
     expect(late).toEqual([])
@@ -115,7 +138,7 @@ describe('structured turn completion feed (renderer)', () => {
     const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
     feed.activate()
     const seen: string[] = []
-    feed.subscribe((event) => seen.push(event.turnId))
+    feed.subscribe((edge) => seen.push(label(edge)))
     await vi.advanceTimersByTimeAsync(0)
     subscription().emit({ type: 'completion', completion: completion('before-drop') })
 
@@ -123,16 +146,14 @@ describe('structured turn completion feed (renderer)', () => {
     await vi.advanceTimersByTimeAsync(5_000)
     expect(subscriptions).toHaveLength(2)
 
-    // NO CURSOR ANYWHERE: the reopen call carries the target and three callbacks and nothing
-    // else. A catch-up arm would have to add an argument here, so this assertion is the pin.
+    // Assert target plus callbacks only; adding a catch-up cursor must break this contract.
     for (const call of mocks.subscribe.mock.calls) {
       expect(call).toHaveLength(4)
       expect(call[0]).toEqual({ kind: 'local' })
       expect(call.slice(1).every((argument) => typeof argument === 'function')).toBe(true)
     }
 
-    // The reopened stream is empty until the host sends something new; whatever completed during
-    // the gap is gone, not queued.
+    // Reopened streams deliver only future edges; completions during the gap are lost.
     expect(seen).toEqual(['before-drop'])
     subscription(1).emit({ type: 'completion', completion: completion('after-reconnect') })
     expect(seen).toEqual(['before-drop', 'after-reconnect'])
@@ -193,7 +214,7 @@ describe('structured turn completion feed (renderer)', () => {
 
     // A late frame from the torn-down stream reaches nobody.
     const seen: string[] = []
-    feed.subscribe((event) => seen.push(event.turnId))
+    feed.subscribe((edge) => seen.push(label(edge)))
     opened.emit({ type: 'completion', completion: completion('after-stop') })
     expect(seen).toEqual([])
 
@@ -209,7 +230,7 @@ describe('structured turn completion feed (renderer)', () => {
     feed.subscribe(() => {
       throw new Error('listener exploded')
     })
-    feed.subscribe((event) => seen.push(event.turnId))
+    feed.subscribe((edge) => seen.push(label(edge)))
     await vi.advanceTimersByTimeAsync(0)
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

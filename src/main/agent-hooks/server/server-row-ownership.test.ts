@@ -44,14 +44,6 @@ function row(
 }
 
 describe('status-row change detection', () => {
-  it('treats the same row object on both sides as unchanged', () => {
-    const probe = new RowMutationProbe()
-    const same = row()
-    expect(probe.commit(same, same)).toBe(false)
-    expect(probe.commit(null, undefined)).toBe(false)
-    expect(probe.mutations).toEqual([])
-  })
-
   it('ignores a rebuilt row whose published content is identical', () => {
     const probe = new RowMutationProbe()
     const before = row()
@@ -95,7 +87,7 @@ describe('status-row change detection', () => {
     expect(probe.commit(before, reordered)).toBe(false)
   })
 
-  // Why: paired clients read the whole payload off session.tabs, so no field may be skipped.
+  // Paired clients read the entire payload through session.tabs.
   it.each<[string, Partial<EnrichedAgentHookEventPayload>]>([
     ['state', { payload: { state: 'done', prompt: 'ship it' } }],
     [

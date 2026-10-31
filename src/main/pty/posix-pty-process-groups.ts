@@ -1,163 +1,31 @@
+import { hasControllingTty } from '../../shared/posix-controlling-terminal'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
-import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
-  runProcess,
-  runProcessSync,
-  type ProcessResult
-} from '../../shared/child-process/run-process'
+  parseProcessRows,
+  readLinuxProcessSessionId,
+  readLinuxProcessSessionIdAsync,
+  readPosixPtyProcessTable,
+  readPosixPtyProcessTableSync
+} from './posix-pty-process-table'
 
-const PROCESS_TABLE_TIMEOUT_MS = 1_000
-const PROCESS_TABLE_MAX_BYTES = 1024 * 1024
-const SELECTED_COLUMNS = 'pid=,pgid=,tty=,stat='
-// Explicit widths prevent BusyBox from truncating device numbers into another terminal's identity.
-const ALL_PROCESS_ARGS = [
-  '-e',
-  '-o',
-  'pid=PROCESS_ID,pgid=PROCESS_GID,tty=TERMINAL_DEVICE_NUMBER,stat=PROCESS_STATE'
-]
-let psDialect: 'selected' | 'all' | undefined
-let dialectProbe: Promise<void> | undefined
-
-class UnsupportedPsSelectionError extends Error {}
-
-export function resetPosixPtyProcessTableDialectForTests(): void {
-  psDialect = undefined
-  dialectProbe = undefined
-}
-
-type ProcessRow = {
-  pid: number
-  pgid: number
-  tty: string
-  state?: string
-}
-
-export type PosixPtyProcessGroupTerminationDeps = {
+type PosixPtyGroupSignalDeps = {
   platform?: NodeJS.Platform
   currentPid?: number
-  readProcessTable?: () => string
   signalProcessGroup?: (pgid: number) => void
 }
 
-function readProcessTableResult(result: ProcessResult): string {
-  if (result.code !== 0 || result.timedOut || result.outputTruncated) {
-    throw new Error('PTY process table is unavailable')
-  }
-  return result.stdout
+export type PosixPtyProcessGroupTerminationDeps = PosixPtyGroupSignalDeps & {
+  readProcessTable?: () => string
+  /** Linux session id of a pid, or null when unreadable. */
+  readProcessSessionId?: (pid: number) => number | null
 }
 
-function readSelectionResult(result: ProcessResult, option: 'p' | 't'): string {
-  const rejectedOption =
-    /^ps: (?:invalid|illegal|unrecognized) option(?: -- |: | )['"]?-?([pt])['"]?\s*$/m.exec(
-      result.stderr ?? ''
-    )?.[1]
-  if (
-    result.code !== null &&
-    result.code !== 0 &&
-    !result.signal &&
-    !result.timedOut &&
-    !result.outputTruncated &&
-    rejectedOption === option
-  ) {
-    throw new UnsupportedPsSelectionError()
-  }
-  const output = readProcessTableResult(result)
-  if (psDialect === 'all') {
-    throw new UnsupportedPsSelectionError()
-  }
-  return output
-}
-
-function hasControllingTty(tty: string): boolean {
-  return tty !== '?' && tty !== '??' && tty !== '-' && tty !== '0' && !/^0,\d+$/.test(tty)
-}
-
-function* processTableQueries(rootPid: number): Generator<string[], string, ProcessResult> {
-  if (psDialect !== 'all') {
-    try {
-      const root = readSelectionResult(yield ['-p', String(rootPid), '-o', SELECTED_COLUMNS], 'p')
-      const rootRow = parseProcessRows(root).find((row) => row.pid === rootPid)
-      if (!rootRow || !hasControllingTty(rootRow.tty)) {
-        return root
-      }
-      const terminal = readSelectionResult(yield ['-t', rootRow.tty, '-o', SELECTED_COLUMNS], 't')
-      psDialect ??= 'selected'
-      return `${root}\n${terminal}`
-    } catch (error) {
-      if (!(error instanceof UnsupportedPsSelectionError)) {
-        throw error
-      }
-      psDialect = 'all'
-    }
-  }
-  return readProcessTableResult(yield ALL_PROCESS_ARGS)
-}
-
-function processTableSpec(args: string[]) {
-  return {
-    program: 'ps',
-    args,
-    env: { ...process.env, LC_ALL: 'C' },
-    timeoutMs: PROCESS_TABLE_TIMEOUT_MS,
-    maxOutputBytes: PROCESS_TABLE_MAX_BYTES
-  }
-}
-
-function readPtyProcessTable(rootPid: number): string {
-  const queries = processTableQueries(rootPid)
-  let next = queries.next()
-  while (!next.done) {
-    next = queries.next(runProcessSync(processTableSpec(next.value)))
-  }
-  return next.value
-}
-
-export async function readPosixPtyProcessTable(
-  rootPid: number,
-  signal?: AbortSignal
-): Promise<string> {
-  while (dialectProbe) {
-    await waitForPromiseWithSignal(dialectProbe, signal)
-  }
-  signal?.throwIfAborted()
-  let releaseProbe: (() => void) | undefined
-  if (psDialect === undefined) {
-    dialectProbe = new Promise<void>((resolve) => {
-      releaseProbe = resolve
-    })
-  }
-  try {
-    const queries = processTableQueries(rootPid)
-    let next = queries.next()
-    while (!next.done) {
-      signal?.throwIfAborted()
-      const result = await runProcess({ ...processTableSpec(next.value), signal })
-      signal?.throwIfAborted()
-      next = queries.next(result)
-    }
-    return next.value
-  } finally {
-    if (releaseProbe) {
-      dialectProbe = undefined
-      releaseProbe()
-    }
-  }
-}
-
-function parseProcessRows(output: string): ProcessRow[] {
-  const rows: ProcessRow[] = []
-  for (const line of output.split(/\r?\n/)) {
-    const match = /^\s*(\d+)\s+(\d+)\s+(\S+)(?:\s+(\S+))?/.exec(line)
-    if (!match) {
-      continue
-    }
-    const pid = Number(match[1])
-    const pgid = Number(match[2])
-    if (pid > 0 && pgid > 1) {
-      rows.push({ pid, pgid, tty: match[3], state: match[4] })
-    }
-  }
-  return rows
+export type PosixPtyProcessGroupSignalDeps = PosixPtyGroupSignalDeps & {
+  readProcessTable?: () => Promise<string>
+  /** Linux session id of a pid, or null when unreadable. */
+  readProcessSessionId?: (pid: number) => Promise<number | null>
+  /** False once the root has exited; its pid and TTY may then belong to another terminal. */
+  ownsRoot?: () => boolean
 }
 
 export function isPosixPtyRootStopped(output: string, rootPid: number): boolean {
@@ -168,36 +36,30 @@ export function isPosixPtyRootStopped(output: string, rootPid: number): boolean 
   )
 }
 
-/** The root was stopped by flow control; preserve independently stopped jobs. */
-export function getPosixPtyStoppedJobGroups(output: string, rootPid: number): Set<number> {
-  const rows = parseProcessRows(output)
-  const root = rows.find((row) => row.pid === rootPid)
-  return new Set(
-    rows
-      .filter(
-        (row) =>
-          root && row.tty === root.tty && row.pgid !== root.pgid && /^[Tt]/.test(row.state ?? '')
-      )
-      .map((row) => row.pgid)
-  )
-}
-
 export function getPosixPtyProcessGroups(
   output: string,
   rootPid: number,
-  currentPid = process.pid
+  currentPid = process.pid,
+  readSessionId?: (pid: number) => number | null
 ): number[] | null {
   const rows = parseProcessRows(output)
   const root = rows.find((row) => row.pid === rootPid)
   if (!root || !hasControllingTty(root.tty)) {
     return null
   }
-  // Why: a development daemon can inherit its launch TTY. Never group-signal
-  // when Orca itself shares the PTY; fall back to the already-scoped root kill.
+  // A dev daemon may share the PTY; never group-signal Orca itself.
   if (rows.some((row) => row.pid === currentPid && row.tty === root.tty)) {
     return null
   }
-  const groups = new Set(rows.filter((row) => row.tty === root.tty).map((row) => row.pgid))
+  let members = rows.filter((row) => row.tty === root.tty)
+  if (readSessionId) {
+    // Container devpts numbers overlap: prove the root leads this session; setsid descendants no longer own its TTY (#16714).
+    if (readSessionId(rootPid) !== rootPid) {
+      return null
+    }
+    members = members.filter((row) => readSessionId(row.pid) === rootPid)
+  }
+  const groups = new Set(members.map((row) => row.pgid))
   if (!groups.has(root.pgid)) {
     return null
   }
@@ -216,36 +78,104 @@ function isProcessAlreadyGone(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | undefined)?.code === 'ESRCH'
 }
 
-/** Force-kill every process group still attached to one POSIX PTY. */
+/** Force-kill every process group still attached to one POSIX PTY without blocking the event loop. */
 export function forceKillPosixPtyProcessGroups(
+  rootPid: number,
+  fallback: () => void,
+  deps: PosixPtyProcessGroupSignalDeps = {}
+): Promise<void> {
+  return signalPosixPtyProcessGroups(rootPid, 'SIGKILL', fallback, deps)
+}
+
+/** Blocking variant for synchronous in-process teardown such as app quit. */
+export function forceKillPosixPtyProcessGroupsSync(
   rootPid: number,
   fallback: () => void,
   deps: PosixPtyProcessGroupTerminationDeps = {}
 ): void {
-  signalPosixPtyProcessGroups(rootPid, 'SIGKILL', fallback, deps)
+  signalPosixPtyProcessGroupsSync(rootPid, 'SIGKILL', fallback, deps)
 }
 
 /** Signal every process group proven to belong to one POSIX PTY. */
-export function signalPosixPtyProcessGroups(
+export async function signalPosixPtyProcessGroups(
+  rootPid: number,
+  signal: NodeJS.Signals,
+  fallback: () => void,
+  deps: PosixPtyProcessGroupSignalDeps = {}
+): Promise<void> {
+  const platform = deps.platform ?? process.platform
+  if (platform === 'win32') {
+    fallback()
+    return
+  }
+  let groups: number[] | null
+  try {
+    const table = await (deps.readProcessTable ?? (() => readPosixPtyProcessTable(rootPid)))()
+    const readSessionId =
+      deps.readProcessSessionId ??
+      (platform === 'linux' ? readLinuxProcessSessionIdAsync : undefined)
+    groups = getPosixPtyProcessGroups(
+      table,
+      rootPid,
+      deps.currentPid ?? process.pid,
+      readSessionId ? await readSessionIds(table, rootPid, readSessionId) : undefined
+    )
+  } catch {
+    groups = null
+  }
+  if (deps.ownsRoot && !deps.ownsRoot()) {
+    return
+  }
+  deliverPosixPtyGroupSignal(groups, signal, fallback, deps)
+}
+
+function signalPosixPtyProcessGroupsSync(
   rootPid: number,
   signal: NodeJS.Signals,
   fallback: () => void,
   deps: PosixPtyProcessGroupTerminationDeps = {}
 ): void {
-  if ((deps.platform ?? process.platform) === 'win32') {
+  const platform = deps.platform ?? process.platform
+  if (platform === 'win32') {
     fallback()
     return
   }
   let groups: number[] | null
   try {
     groups = getPosixPtyProcessGroups(
-      (deps.readProcessTable ?? (() => readPtyProcessTable(rootPid)))(),
+      (deps.readProcessTable ?? (() => readPosixPtyProcessTableSync(rootPid)))(),
       rootPid,
-      deps.currentPid ?? process.pid
+      deps.currentPid ?? process.pid,
+      deps.readProcessSessionId ?? (platform === 'linux' ? readLinuxProcessSessionId : undefined)
     )
   } catch {
     groups = null
   }
+  deliverPosixPtyGroupSignal(groups, signal, fallback, deps)
+}
+
+/** Prefetch session ids for the root's terminal so group selection stays synchronous. */
+async function readSessionIds(
+  table: string,
+  rootPid: number,
+  readSessionId: (pid: number) => Promise<number | null>
+): Promise<(pid: number) => number | null> {
+  const rows = parseProcessRows(table)
+  const rootTty = rows.find((row) => row.pid === rootPid)?.tty
+  // The root's own row carries rootTty, so an absent root reads nothing.
+  const pids = rows.filter((row) => rootTty !== undefined && row.tty === rootTty)
+  const sessions = new Map(
+    await Promise.all(pids.map(async ({ pid }) => [pid, await readSessionId(pid)] as const))
+  )
+  return (pid) => sessions.get(pid) ?? null
+}
+
+function deliverPosixPtyGroupSignal(
+  groups: number[] | null,
+  signal: NodeJS.Signals,
+  fallback: () => void,
+  deps: PosixPtyGroupSignalDeps
+): void {
   if (!groups || groups.length === 0) {
     fallback()
     return
@@ -268,15 +198,13 @@ export function signalPosixPtyProcessGroups(
         }
         throw error
       }
-      // Why: the PTY exit callback may reap a group between `ps` and killpg.
-      // ESRCH is proof that this captured owner is already gone, not failure.
+      // Exit callbacks may reap captured groups before killpg; ESRCH already proves them gone.
       if (!isProcessAlreadyGone(error) && firstError === undefined) {
         firstError = error
       }
       continue
     }
-    // Outside the try: this catch is the ESRCH contract, and a throw from the
-    // breadcrumb path would be rethrown as a failed kill.
+    // Keep breadcrumbs outside the kill catch so diagnostic errors cannot be classified as signal failures.
     if (signal === 'SIGKILL') {
       recordSelfInitiatedTreeKill({
         pid: pgid,

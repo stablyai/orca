@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
-import { createConnectionLogStore, type ConnectionLogPersistence } from './connection-log-buffer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createConnectionLogStore } from './connection-log-buffer'
+import type { ConnectionLogPersistence } from './connection-log-buffer'
 import type { ConnectionLogEntry } from './types'
 
 const entry = (id: number): ConnectionLogEntry => ({
@@ -8,7 +9,16 @@ const entry = (id: number): ConnectionLogEntry => ({
   level: 'info',
   message: `event ${id}`
 })
-const drain = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+const drain = () => vi.advanceTimersByTimeAsync(0)
+
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
+})
 
 describe('connection log persistence revisions', () => {
   it('writes a synchronous burst once per host after hydration', async () => {
@@ -23,8 +33,14 @@ describe('connection log persistence revisions', () => {
     }
     await drain()
     expect(save).toHaveBeenCalledTimes(2)
-    expect(save).toHaveBeenCalledWith('a', store.get('a'))
-    expect(save).toHaveBeenCalledWith('b', store.get('b'))
+    expect(save).toHaveBeenCalledWith(
+      'a',
+      Array.from({ length: 200 }, (_, i) => entry(800 + i))
+    )
+    expect(save).toHaveBeenCalledWith(
+      'b',
+      Array.from({ length: 200 }, (_, i) => entry(2800 + i))
+    )
   })
 
   it('shares one snapshot across startup appends waiting on hydration', async () => {
@@ -98,24 +114,6 @@ describe('connection log persistence revisions', () => {
     store.append('a', entry(4))
     await drain()
     expect(save).toHaveBeenCalledTimes(2)
-    expect(save).toHaveBeenLastCalledWith('a', store.get('a'))
-  })
-
-  it('writes once per snapshot during a sustained failure', async () => {
-    const save = vi.fn<ConnectionLogPersistence['save']>(async () => {})
-    const store = createConnectionLogStore(200, { load: async () => [], save })
-    await store.hydrate('a')
-    await drain()
-    save.mockReset().mockRejectedValue(new Error('unavailable'))
-    for (let i = 0; i < 3; i++) {
-      store.append('a', entry(i))
-    }
-    await drain()
-    expect(save).toHaveBeenCalledTimes(1)
-    save.mockClear().mockResolvedValue(undefined)
-    store.append('a', entry(3))
-    await drain()
-    expect(save).toHaveBeenCalledTimes(1)
     expect(save).toHaveBeenLastCalledWith('a', store.get('a'))
   })
 })

@@ -1,51 +1,56 @@
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { WorkerDispatchState } from '../../../../orchestration/types'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
 import type { AskParams } from '../schemas'
+import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
+import {
+  askedQuestionReceipt,
+  waitForQuestionAnswer
+} from '../../../../orchestration/question-answer-delivery'
 
 export async function askRemoteRunHome(args: {
   params: z.infer<typeof AskParams>
   runtime: OrcaRuntimeService
   signal?: AbortSignal
-  orchestrationCapability?: string
   recordMutationReceipt?: (receipt: unknown) => void
   from: string
   paneKey: string
   dispatchId: string
   taskId: string
+  workerState: WorkerDispatchState
 }): Promise<unknown> {
   const db = args.runtime.getOrchestrationDb()
   const timeoutMs = clampOrchestrationAskTimeoutMs(args.params.timeoutMs)
-  if (
-    !db.verifyRemoteAttachmentAuthority({
+  assertWorkerCanReport({
+    dispatchId: args.dispatchId,
+    from: args.from,
+    workerState: args.workerState,
+    processCurrent: db.isRemoteAttachmentProcessCurrent({
       dispatchId: args.dispatchId,
-      capability: args.orchestrationCapability,
       paneKey: args.paneKey,
       processIncarnation: args.runtime.getTerminalProcessIncarnation(args.from)
     })
-  ) {
-    throw new OrchestrationError(
-      'dispatch_capability_invalid',
-      'The remote Dispatch capability or exact worker process is invalid.'
-    )
-  }
+  })
   const options =
     args.params.options
       ?.split(',')
       .map((option) => option.trim())
       .filter(Boolean) ?? []
-  let questionId = args.params.resume
-  if (questionId) {
-    const existing = db.getRemoteQuestion(questionId)
+  const resume = args.params.resume
+  if (resume) {
+    const existing = db.getRemoteQuestion(resume)
     if (!existing || existing.dispatch_id !== args.dispatchId) {
       throw new OrchestrationError(
         'question_not_found',
-        `Question ${questionId} does not belong to this remote Dispatch.`
+        `Question ${resume} does not belong to this remote Dispatch.`
       )
     }
-  } else {
-    const relay = db.enqueueFederationRelay({
+  }
+  const questionId =
+    resume ??
+    db.enqueueFederationRelay({
       dispatchId: args.dispatchId,
       direction: 'to_home',
       kind: 'question',
@@ -64,66 +69,17 @@ export async function askRemoteRunHome(args: {
         })
       }),
       remoteQuestion: true
-    })
-    questionId = relay.message_id
+    }).message_id
+  if (!resume && args.params.wait === false) {
+    return askedQuestionReceipt(questionId, args.recordMutationReceipt)
   }
-  args.recordMutationReceipt?.({
-    accepted: true,
-    answer: null,
-    messageId: questionId,
-    threadId: questionId,
-    timedOut: false,
-    cancelled: false,
-    connectionLost: false,
-    timeoutMs
+  return waitForQuestionAnswer({
+    runtime: args.runtime,
+    questionId,
+    readQuestion: () => db.getRemoteQuestion(questionId),
+    closedMessage: `Question ${questionId} closed because its remote Dispatch is inactive.`,
+    timeoutMs,
+    signal: args.signal,
+    recordMutationReceipt: args.recordMutationReceipt
   })
-  const deadline = Date.now() + timeoutMs
-  while (true) {
-    const question = db.getRemoteQuestion(questionId)
-    if (!question || question.status === 'closed') {
-      throw new OrchestrationError(
-        'dispatch_inactive',
-        `Question ${questionId} closed because its remote Dispatch is inactive.`
-      )
-    }
-    if (question.status === 'answered') {
-      return {
-        answer: question.answer_body,
-        messageId: questionId,
-        answerMessageId: question.answer_message_id,
-        threadId: questionId,
-        timedOut: false,
-        cancelled: false,
-        connectionLost: false,
-        timeoutMs
-      }
-    }
-    if (args.signal?.aborted) {
-      return {
-        answer: null,
-        messageId: questionId,
-        threadId: questionId,
-        timedOut: false,
-        cancelled: true,
-        connectionLost: true,
-        timeoutMs
-      }
-    }
-    const remainingMs = deadline - Date.now()
-    if (remainingMs <= 0) {
-      return {
-        answer: null,
-        messageId: questionId,
-        threadId: questionId,
-        timedOut: true,
-        cancelled: false,
-        connectionLost: false,
-        timeoutMs
-      }
-    }
-    await args.runtime.waitForMessage(`dispatch:${args.dispatchId}`, {
-      timeoutMs: remainingMs,
-      signal: args.signal
-    })
-  }
 }

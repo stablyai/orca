@@ -20,17 +20,14 @@ import {
 } from './agent-board-filtering'
 import './agent-board-transitions.css'
 import { translate } from '@/i18n/i18n'
+import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 
-/** Ack an agent in the pop-out window: relayed over IPC to the main renderer.
- *  ?. shields dialog-opening from dev-HMR preload skew (renderer updates hot,
- *  the preload only on app restart) — acks just no-op until restart. */
-function ackAgentViaPopoutRelay(paneKey: string): void {
-  void window.api.dashboard.ackAgent?.(paneKey)
+/** Relay acknowledgments to the main renderer; optional calls tolerate dev-HMR preload skew until restart. */
+function ackAgentViaPopoutRelay(paneKey: string, intent: AgentSubjectReadIntent): void {
+  void window.api.dashboard.ackAgent?.(paneKey, intent)
 }
 
-/** Reveal an agent from the pop-out window: raise the main window and route it
- *  to the agent's pane via IPC. Same `?.` HMR-skew guard as the ack relay —
- *  both channels ship together, so a stale preload lacks both. */
+/** Reveal via main-window IPC; optional calls tolerate the same dev-HMR preload skew as acknowledgments. */
 function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
   void window.api.dashboard.revealAgent?.(args)
 }
@@ -58,8 +55,7 @@ function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, Dashboar
   for (const card of cards) {
     grouped[card.bucket].push(card)
   }
-  // Most-recently-moved first: a card entering a column lands at the top,
-  // matching the view-transition motion the user just watched.
+  // Newly moved cards lead their column, matching the view-transition motion.
   for (const bucket of DASHBOARD_BUCKET_ORDER) {
     grouped[bucket].sort((a, b) => b.stateChangedAt - a.stateChangedAt)
   }
@@ -79,13 +75,17 @@ function KanbanColumn({
   now: number
   onOpenTerminal: (card: DashboardCard) => void
 }): React.JSX.Element {
+  const label = bucketLabel(bucket)
+
   return (
-    // Why: attention no longer tints the whole column — the cards inside carry
-    // their own state color, so a column border would double-signal it.
-    <section className="flex min-w-[264px] flex-1 flex-col rounded-xl border border-border/60 bg-muted/30">
+    // Cards carry attention color; keep the column neutral to avoid duplicate signaling.
+    <section
+      aria-label={label}
+      className="flex min-w-[264px] flex-1 flex-col rounded-xl border border-border/60 bg-muted/30"
+    >
       <header className="flex items-center gap-2 px-3 py-2">
         <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {bucketLabel(bucket)}
+          {label}
         </span>
         <span className="ml-auto rounded-full bg-background px-1.5 text-[11px] tabular-nums text-muted-foreground">
           {cards.length}
@@ -114,26 +114,19 @@ function KanbanColumn({
 
 type AgentKanbanBoardProps = {
   snapshot: DashboardSnapshot
-  /** Sizing for the outermost container. The pop-out fills the window
-   *  (h-screen w-screen); the in-window drawer fills its host (h-full w-full). */
+  /** Fill the pop-out window or the in-window drawer’s host. */
   containerClassName?: string
-  /** Marks an agent as seen. Defaults to the pop-out IPC relay; the in-window
-   *  host acks the store directly. */
-  onAckAgent?: (paneKey: string) => void
-  /** Focuses the agent's pane. Defaults to the pop-out IPC relay; the in-window
-   *  host activates the worktree/pane locally and closes the overlay. */
+  /** Default to the pop-out IPC relay; in-window hosts acknowledge directly in the store. */
+  onAckAgent?: (paneKey: string, intent: AgentSubjectReadIntent) => void
+  /** Default to the pop-out IPC relay; in-window hosts activate locally and close their overlay. */
   onRevealAgent?: (args: AgentRevealArgs) => void
-  /** When provided, renders a close control in the header (in-window mode). The
-   *  pop-out relies on its native window controls, so it omits this. */
+  /** In-window hosts provide a close control; pop-outs use native window controls. */
   onClose?: () => void
-  /** Header controls rendered before the close button. The in-window host
-   *  passes its settings menu; the pop-out renderer has no store to drive it. */
+  /** In-window settings controls; the pop-out renderer has no store to drive them. */
   headerActions?: React.ReactNode
 }
 
-/** The agent board: status columns fed by a snapshot. Shared by the pop-out
- *  window and the in-window drawer — the two differ only in sizing and
- *  how ack/reveal are routed. */
+/** Share snapshot-fed status columns across pop-out and in-window hosts with injected routing and sizing. */
 export function AgentKanbanBoard({
   snapshot,
   containerClassName = 'h-screen w-screen',
@@ -195,11 +188,7 @@ export function AgentKanbanBoard({
     return () => document.removeEventListener('keydown', handleSearchShortcut)
   }, [])
 
-  // The open terminal dialog survives bucket moves: only the paneKey is
-  // remembered, and the card data is re-resolved from each fresh snapshot.
-  // The opened card is kept as a fallback so the dialog also survives the
-  // card vanishing entirely (pane closed) — the user dismisses it explicitly.
-  // Its live routing is cleared because daemon PTY ids can be reused.
+  // Resolve open dialogs by paneKey across bucket moves; retain vanished cards until dismissal but clear routing because PTY IDs can be reused.
   const [openedCard, setOpenedCard] = useState<DashboardCard | null>(null)
   const dialogCard = useMemo(() => {
     if (!openedCard) {
@@ -219,28 +208,33 @@ export function AgentKanbanBoard({
     }
   }, [])
 
-  // Seen-state is the app-wide ack map (same signal as the sidebar's bold/mute
-  // rows): opening a dialog acks the agent, and the next snapshot comes back
-  // with unseen=false.
+  // Relay read acknowledgments through the shared app-wide map; the next snapshot clears unseen.
+  const clickAcked = useRef<{ paneKey: string; stateChangedAt: number } | null>(null)
   const handleOpenTerminal = useCallback(
     (card: DashboardCard) => {
-      onAckAgent(card.paneKey)
+      onAckAgent(card.paneKey, 'explicit')
+      clickAcked.current = { paneKey: card.paneKey, stateChangedAt: card.stateChangedAt }
       setOpenedCard(card)
     },
     [onAckAgent]
   )
-  // Watching the open dialog counts as seeing state changes as they happen —
-  // without this, an agent finishing while you watch would re-flag its card.
+  // Acknowledge state changes while watched so open-dialog cards do not become unseen again.
   useEffect(() => {
-    if (dialogCard?.unseen) {
-      onAckAgent(dialogCard.paneKey)
+    // The click already read the state it opened on; only later changes are watched.
+    const clicked = clickAcked.current
+    if (
+      dialogCard?.unseen &&
+      !(
+        clicked?.paneKey === dialogCard.paneKey &&
+        clicked.stateChangedAt === dialogCard.stateChangedAt
+      )
+    ) {
+      onAckAgent(dialogCard.paneKey, 'view')
     }
-  }, [dialogCard?.paneKey, dialogCard?.unseen, onAckAgent])
+  }, [dialogCard?.paneKey, dialogCard?.unseen, dialogCard?.stateChangedAt, onAckAgent])
 
   return (
-    // Why: the pop-out is its own React root with no app-level provider, and the
-    // card's repo tooltip needs one in both hosts. Nesting inside the main
-    // window's provider is harmless.
+    // Pop-outs have no app provider; supply the card tooltip provider in either host.
     <TooltipProvider delayDuration={300}>
       <div
         className={cn('relative flex flex-col bg-background text-foreground', containerClassName)}

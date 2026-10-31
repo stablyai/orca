@@ -1,31 +1,41 @@
+import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { resolveChecksActionAgent } from '@/lib/source-control-agent-picker'
+import type { SourceControlActionId } from '../../../../../shared/source-control-ai-actions'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
-import { pickDefaultSourceControlAgent } from '../SourceControl'
 import {
   markPRCommentThreadResolved,
   restorePRCommentThreadSnapshot
-} from '../pr-comment-thread-resolution'
+} from '@/lib/pr-comment-thread-resolution'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
-import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import { resolveGitLabMRDiscussionForChecks } from './gitlab-review-client'
-import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
+import {
+  checksPanelReviewStableKey,
+  clearPendingPRCommentAiAck
+} from '../pr-comments-ai-launch-ack'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type ChecksPanelCommentResolutionInput = Pick<
   ChecksPanelControllerState,
-  | 'activeConnectionId'
+  | 'activeWorktree'
   | 'activeWorktreeId'
+  | 'asyncResultKeyRef'
   | 'branch'
   | 'claimedCommentResolutionRef'
   | 'commentResolutionAckBusy'
   | 'commentsLoading'
   | 'detectedAgentIds'
   | 'pendingCommentResolutionRef'
-  | 'remoteDetectedAgentIds'
   | 'repo'
   | 'resolveReviewThread'
   | 'setAgentComposerState'
@@ -37,31 +47,28 @@ type ChecksPanelCommentResolutionInput = Pick<
     ChecksPanelContextState,
     'activeGitLabReview' | 'activeReview' | 'pr' | 'prCacheKey' | 'prNumber'
   > &
-  Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'> &
   Pick<ChecksPanelReviewState, 'sourceControlAiActionsVisible'>
 
 export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolutionInput) {
   const {
-    activeConnectionId,
     activeGitLabReview,
     activeReview,
+    activeWorktree,
     activeWorktreeId,
+    asyncResultKeyRef,
     branch,
     claimedCommentResolutionRef,
     commentResolutionAckBusy,
     commentsLoading,
     detectedAgentIds,
-    isCurrentAsyncResult,
     pendingCommentResolutionRef,
     pr,
     prCacheKey,
     prNumber,
-    remoteDetectedAgentIds,
     repo,
     resolveReviewThread,
     setAgentComposerState,
     setComments,
-    settings,
     sourceControlAiActionsVisible,
     commentResolutionLaunchAcceptedRef
   } = model
@@ -84,15 +91,15 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         const result = await resolveGitLabMRDiscussionForChecks({
           repoPath: repo.path,
           repoId: repo.id,
-          settings,
           iid: activeGitLabReview.number,
           discussionId: threadId,
-          resolved: resolve
+          resolved: resolve,
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
         })
         if (!result.ok) {
           rollbackThread(previousThreadComments)
           if (notifyOnFailure) {
-            toast.error(result.error)
+            toast.error(codeHostErrorText(result))
           }
           return false
         }
@@ -100,6 +107,10 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       }
       if (!repo || !prNumber) {
         return false
+      }
+      // Why: skip the local optimistic flip too; the store no-ops overlapping requests.
+      if (isReviewThreadResolutionInFlight(useAppStore.getState(), threadId)) {
+        return true
       }
       const requestKey = checksPanelAsyncResultKey(
         prCacheKey,
@@ -117,11 +128,14 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         repoId: repo.id,
         prRepo: pr?.prRepo
       })
-      if (!isCurrentAsyncResult(requestKey)) {
-        return ok
-      }
       if (!ok) {
-        rollbackThread(previousThreadComments)
+        // Why: a head push mid-request must not strand the optimistic state the cache re-read copied in.
+        if (
+          checksPanelReviewStableKey(asyncResultKeyRef.current) ===
+          checksPanelReviewStableKey(requestKey)
+        ) {
+          rollbackThread(previousThreadComments)
+        }
         if (notifyOnFailure) {
           toast.error(
             translate(
@@ -135,15 +149,15 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     },
     [
       activeGitLabReview,
+      asyncResultKeyRef,
       branch,
-      isCurrentAsyncResult,
       pr?.headSha,
       pr?.prRepo,
       prCacheKey,
       prNumber,
       repo,
       resolveReviewThread,
-      settings,
+      activeWorktree,
       setComments
     ]
   )
@@ -151,21 +165,43 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   const canTargetPRComments = Boolean(repo && prNumber && pr?.prRepo)
   const commentsDisabledReason = canTargetPRComments
     ? undefined
-    : 'Commenting requires a GitHub PR repository target.'
-  const detectedAgentsForAI =
-    typeof activeConnectionId === 'string' ? remoteDetectedAgentIds : detectedAgentIds
-  const noEnabledAgentKnown =
-    detectedAgentsForAI != null &&
-    pickDefaultSourceControlAgent(
-      settings?.defaultTuiAgent,
-      detectedAgentsForAI,
-      settings?.disabledTuiAgents
+    : translate(
+        'auto.components.right.sidebar.checks.panel.content.commentingRequiresGitHubPrTarget',
+        'Commenting requires a GitHub PR repository target.'
+      )
+  const workspace = worktreeLaunchWorkspace(activeWorktreeId ?? '')
+  const observation = useAgentMenuObservation(
+    activeWorktreeId,
+    sourceControlAiActionsVisible,
+    useAgentDetectionTargetForWorktree(activeWorktreeId)
+  )
+  const launchState = useAppStore.getState()
+  const noAgentFor = (actionId: SourceControlActionId): boolean =>
+    !observation.preferencesPending &&
+    detectedAgentIds != null &&
+    resolveChecksActionAgent(
+      launchState,
+      actionId,
+      repo?.id,
+      workspace,
+      detectedAgentIds,
+      observation.preferences
     ) == null
-  const aiActionDisabledReason = !activeWorktreeId
-    ? 'Select a workspace before launching an AI action.'
-    : noEnabledAgentKnown
-      ? 'No enabled AI agents. Configure agents in Settings.'
-      : undefined
+  const noEnabledAgentKnown = noAgentFor('resolveConflicts')
+  const actionDisabledReason = (actionId: SourceControlActionId): string | undefined =>
+    !activeWorktreeId
+      ? translate(
+          'auto.components.right.sidebar.checks.panel.content.selectWorkspaceBeforeAiAction',
+          'Select a workspace before launching an AI action.'
+        )
+      : noAgentFor(actionId)
+        ? translate(
+            'auto.components.right.sidebar.source.control.ai.recovery.launch.9bbd9077a2',
+            'No enabled AI agents. Configure agents in Settings.'
+          )
+        : undefined
+  const aiActionDisabledReason = actionDisabledReason('resolveConflicts')
+  const fixChecksDisabledReason = actionDisabledReason('fixChecks')
   useEffect(() => {
     if (!sourceControlAiActionsVisible) {
       setAgentComposerState(null)
@@ -185,8 +221,8 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     ? 'Still finishing the previous comment launch.'
     : commentsLoading
       ? 'Comments are still loading.'
-      : aiActionDisabledReason
-        ? aiActionDisabledReason
+      : actionDisabledReason('resolveComments')
+        ? actionDisabledReason('resolveComments')
         : !activeReview
           ? 'Open a PR or MR before launching an AI action.'
           : !repo
@@ -200,9 +236,10 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     handleResolve,
     canTargetPRComments,
     commentsDisabledReason,
-    detectedAgentsForAI,
+    detectedAgentsForAI: detectedAgentIds,
     noEnabledAgentKnown,
     aiActionDisabledReason,
+    fixChecksDisabledReason,
     resolveCommentsWithAIDisabledReason
   }
 }

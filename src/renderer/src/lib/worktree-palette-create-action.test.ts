@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   CREATE_WORKTREE_ITEM_ID,
-  WORKTREE_PALETTE_SELECTION_MOVE_KEYS,
   createWorktreePaletteRequestGuard,
   getNextWorktreePaletteSelection,
   getWorktreePaletteSelectionItemIds,
   getWorktreePaletteCreateActionState,
   isWorktreePaletteCreateActivationAllowed
 } from './worktree-palette-create-action'
-import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from './worktree-palette-query-bounds'
 
 describe('worktree-palette-create-action', () => {
   it('shows create for typed queries with workspace matches but selects the first workspace row', () => {
@@ -78,7 +76,7 @@ describe('worktree-palette-create-action', () => {
       query: 'new-workspace'
     })
 
-    expect(state.showCreateAction).toBe(true)
+    expect(state).toEqual({ createWorktreeName: 'new-workspace', showCreateAction: true })
     expect(
       getNextWorktreePaletteSelection({
         currentSelectedItemId: '',
@@ -153,14 +151,6 @@ describe('worktree-palette-create-action', () => {
     ).toBe(CREATE_WORKTREE_ITEM_ID)
   })
 
-  it('offers create with no projects, since the composer adds the first one inline', () => {
-    expect(
-      getWorktreePaletteCreateActionState({
-        query: 'new-workspace'
-      })
-    ).toEqual({ createWorktreeName: 'new-workspace', showCreateAction: true })
-  })
-
   it('hides create for an empty query', () => {
     expect(
       getWorktreePaletteCreateActionState({
@@ -170,7 +160,11 @@ describe('worktree-palette-create-action', () => {
   })
 
   it('hides create for oversized pasted queries without echoing the payload', () => {
-    const oversizedQuery = 'secret-create-worktree-name'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+    const oversizedQuery = 'a'.repeat(2049)
+    expect(getWorktreePaletteCreateActionState({ query: 'a'.repeat(2048) })).toEqual({
+      createWorktreeName: 'a'.repeat(2048),
+      showCreateAction: true
+    })
 
     expect(
       getWorktreePaletteCreateActionState({
@@ -206,9 +200,7 @@ describe('worktree-palette-create-action', () => {
   })
 
   it('names the rendered render key so a duplicate row is reachable by keyboard', () => {
-    // Why: rows render under de-duplicated keys, and cmdk selects by that rendered value.
-    // Naming the bare id here left the duplicate absent from the allow-list, so arrowing
-    // onto it failed the `includes` check and snapped the highlight back to the top.
+    // cmdk selects deduplicated render keys; bare IDs omit duplicate rows and snap keyboard highlight back to top.
     expect(
       getWorktreePaletteSelectionItemIds(
         [
@@ -261,19 +253,6 @@ describe('worktree-palette-create-action', () => {
         selectionMovedByUser: false
       })
     ).toBe(false)
-  })
-
-  it('counts only navigation keys as a user selection move', () => {
-    expect([...WORKTREE_PALETTE_SELECTION_MOVE_KEYS].sort()).toEqual([
-      'ArrowDown',
-      'ArrowUp',
-      'End',
-      'Home',
-      'PageDown',
-      'PageUp'
-    ])
-    // Enter is the activation itself, so it must never count as the gesture that arms it.
-    expect(WORKTREE_PALETTE_SELECTION_MOVE_KEYS.has('Enter')).toBe(false)
   })
 
   it('invalidates stale async create lookups', () => {

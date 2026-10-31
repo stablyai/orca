@@ -15,7 +15,7 @@ export type WorktreeSymlinkPathFilterState<T extends WorktreeSymlinkPathSuggesti
 export const WORKTREE_SYMLINK_PATH_QUERY_MAX_BYTES = 2 * 1024
 export const WORKTREE_SYMLINK_PATH_MAX_SUGGESTIONS = 50
 
-export function isWorktreeSymlinkPathQueryTooLarge(
+function isWorktreeSymlinkPathQueryTooLarge(
   query: string,
   maxBytes = WORKTREE_SYMLINK_PATH_QUERY_MAX_BYTES
 ): boolean {
@@ -57,7 +57,7 @@ export function getWorktreeSymlinkPathFilterState<T extends WorktreeSymlinkPathS
       }
     }
   } else {
-    // Preserve slice semantics for empty queries and unusual caller-supplied limits.
+    // Retain slice behavior for empty queries and unusual limits.
     filtered = (
       normalizedQuery
         ? suggestions.filter((entry) => entry.name.toLowerCase().includes(normalizedQuery))

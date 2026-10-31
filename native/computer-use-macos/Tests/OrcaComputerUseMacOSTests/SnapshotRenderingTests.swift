@@ -32,6 +32,16 @@ final class SnapshotRenderingTests: XCTestCase {
         XCTAssertFalse(SnapshotRenderHeuristics.shouldElide(node))
     }
 
+    func testKeepsMultiLineCustomActionNamesOnTheElementLine() {
+        // Activity Monitor's toolbar buttons expose custom actions named like this.
+        let node = SnapshotRenderNode(role: "AXButton", label: "Stop", rawActions: ["Name:move next\nTarget:0x0\nSelector:(null)"])
+
+        XCTAssertEqual(
+            SnapshotRenderHeuristics.line(index: 4, node: node),
+            "4 button Stop, Secondary Actions: name:move next  target:0x0  selector:(null)"
+        )
+    }
+
     func testRendersMarkdownLinksAndSuppressesTheirChildren() {
         let node = SnapshotRenderNode(role: "AXLink", linkText: "Skip [main]", url: "https://example.com/path")
 
@@ -72,6 +82,34 @@ final class SnapshotRenderingTests: XCTestCase {
         )
 
         XCTAssertEqual(SnapshotRenderHeuristics.meaningfulActions(node.rawActions, role: node.role), ["AXScrollUpByPage", "AXScrollDownByPage"])
+    }
+
+    func testKeepsHorizontalOnlyActionsInTheirOriginalOrder() {
+        let actions = ["AXScrollRightByPage", "AXPress", "AXScrollLeftByPage", "AXScrollRightByPage"]
+        let node = SnapshotRenderNode(role: "AXScrollArea", rawActions: actions)
+
+        XCTAssertEqual(
+            SnapshotRenderHeuristics.meaningfulActions(actions, role: node.role),
+            ["AXScrollRightByPage", "AXScrollLeftByPage", "AXScrollRightByPage"]
+        )
+        XCTAssertEqual(
+            SnapshotRenderHeuristics.line(index: 2, node: node),
+            "2 scroll area, Secondary Actions: scroll right, scroll left, scroll right"
+        )
+    }
+
+    func testKeepsMixedScrollActionsOutsideScrollAreas() {
+        let actions = ["AXScrollLeftByPage", "AXScrollDownByPage", "AXScrollRightByPage", "AXCancel"]
+        let node = SnapshotRenderNode(role: "AXMenu", rawActions: actions)
+
+        XCTAssertEqual(
+            SnapshotRenderHeuristics.meaningfulActions(actions, role: node.role),
+            ["AXScrollLeftByPage", "AXScrollDownByPage", "AXScrollRightByPage"]
+        )
+        XCTAssertEqual(
+            SnapshotRenderHeuristics.line(index: 3, node: node),
+            "3 menu, Secondary Actions: scroll left, scroll down, scroll right"
+        )
     }
 
     func testTextFieldsKeepDistinctValueAndPlaceholder() {

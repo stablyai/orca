@@ -20,6 +20,10 @@ export function isStreamingSubscriptionReadyResult(
   )
 }
 
+export function isStreamEndResult(value: unknown): value is { type: 'end' } {
+  return typeof value === 'object' && value !== null && 'type' in value && value.type === 'end'
+}
+
 export function isSnapshotResult(value: unknown): value is { type: 'snapshot' } {
   return typeof value === 'object' && value !== null && 'type' in value && value.type === 'snapshot'
 }

@@ -1,9 +1,5 @@
 // @vitest-environment happy-dom
-//
-// Why: every other TabBarCreateEntry suite mocks useRuntimeFileListForWorktree, so the classifier
-// has only ever been graded against hand-written RuntimeFileListState values. That is the same
-// seam #21423 shipped a P0 through in the file explorer. This spec runs the classifier on the
-// listing the real hook returns, mocking only the IPC boundary.
+// Exercise classifier state from the real listing hook; hand-built states cannot catch mismatches at that boundary.
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -20,7 +16,7 @@ const listRuntimeFilesMock = vi.hoisted(() => vi.fn())
 const cancelRuntimeFileListMock = vi.hoisted(() => vi.fn())
 const searchRuntimeFilePathsMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-search-client', () => ({
   listRuntimeFiles: listRuntimeFilesMock,
   cancelRuntimeFileList: cancelRuntimeFileListMock,
   searchRuntimeFilePaths: searchRuntimeFilePathsMock
@@ -80,7 +76,6 @@ function HookProbe({
   return null
 }
 
-/** Render the real list hook and return every state it rendered, in order. */
 async function renderFileList(): Promise<RuntimeFileListState[]> {
   const states: RuntimeFileListState[] = []
   const container = document.createElement('div')
@@ -157,5 +152,13 @@ describe('tab entry options over the real runtime listing', () => {
     await drainMicrotasks()
 
     expect(blockedIds(latestState(states))).not.toContain('loading')
+    expect(getTabEntryOptions('packages/app/package.json', latestState(states), 4)).toContainEqual({
+      id: 'existing-file:packages/app/package.json',
+      classification: {
+        kind: 'existing-file',
+        matchKind: 'exact-path',
+        relativePath: 'packages/app/package.json'
+      }
+    })
   })
 })

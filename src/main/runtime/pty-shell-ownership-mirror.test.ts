@@ -6,8 +6,7 @@ describe('PtyShellOwnershipMirror', () => {
     const confirm = vi.fn(async () => true)
     const mirror = new PtyShellOwnershipMirror(confirm)
 
-    // Restored bytes bypass scan(); the seed must carry the alt state or a
-    // pane reattached mid-TUI never proves ownership after the TUI dies.
+    // Restored bytes bypass scan; seed alternate-screen state so later TUI death can prove shell ownership.
     mirror.seedOwner(undefined, { alternateScreen: true })
     mirror.scan('\x1b]133;D;137\x07')
 
@@ -73,8 +72,6 @@ describe('PtyShellOwnershipMirror', () => {
     })
     mirror.seedOwner(undefined, { alternateScreen: true })
     mirror.scan('\x1b]133;D;137\x07')
-    // The settle deadline outlives the attempt deadline, so this waits out the
-    // retirement of the hung attempt.
     await mirror.settle()
     expect(mirror.owner).toBeUndefined()
 

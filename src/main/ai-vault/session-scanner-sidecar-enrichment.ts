@@ -6,24 +6,43 @@ import { devinSessionsIndexForSidecar } from './session-scanner-devin-db'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { SessionFileCandidate } from './session-scanner-types'
 
-/**
- * Merges an agent's sibling file onto the session its transcript alone
- * produced. Kept out of the fold and applied here so it is a pure function of
- * (fold result, sibling): re-running it starts from what the transcript said,
- * never from a previous merge, so a rewritten sibling replaces the fields it
- * supplied last time instead of losing to them.
- *
- * The reuse-time counterpart of session-scanner-codex-cached-title.ts, for
- * agents whose sibling the transcript key cannot see.
- */
+/** Reapply sibling metadata to the transcript fold so rewritten sidecars replace earlier enrichment. */
 
 export type SidecarEnrichment = {
   session: AiVaultSession | null
-  /** The sibling could not be read; the caller records the observation as unknown. */
+  /** Keep unreadable sidecars unknown so later scans retry. */
   refused: boolean
 }
 
-/** True when the sibling only adds metadata, so a change to it needs no re-parse. */
+// Re-enrichment changes only these fields; retain other cached metadata and no-op identity.
+export function reuseUnchangedSidecarSession(
+  previous: AiVaultSession | null,
+  next: AiVaultSession | null
+): AiVaultSession | null {
+  if (!previous || !next) {
+    return next
+  }
+  if (
+    previous.title === next.title &&
+    previous.cwd === next.cwd &&
+    previous.createdAt === next.createdAt &&
+    previous.updatedAt === next.updatedAt &&
+    previous.resumeCommand === next.resumeCommand &&
+    previous.model === next.model
+  ) {
+    return previous
+  }
+  return {
+    ...previous,
+    title: next.title,
+    cwd: next.cwd,
+    createdAt: next.createdAt,
+    updatedAt: next.updatedAt,
+    resumeCommand: next.resumeCommand,
+    model: next.model
+  }
+}
+
 export function sidecarEnrichesWithoutReparse(candidate: SessionFileCandidate): boolean {
   return candidate.agent === 'cursor' || candidate.agent === 'devin'
 }
@@ -31,7 +50,8 @@ export function sidecarEnrichesWithoutReparse(candidate: SessionFileCandidate): 
 export async function enrichSessionFromSidecar(
   candidate: SessionFileCandidate,
   foldSession: AiVaultSession | null,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  signal?: AbortSignal
 ): Promise<SidecarEnrichment> {
   if (candidate.agent === 'devin') {
     return enrichDevinSessionFromDb(candidate.file.sidecar, foldSession, platform)
@@ -39,7 +59,7 @@ export async function enrichSessionFromSidecar(
   if (candidate.agent !== 'cursor' || !foldSession) {
     return { session: foldSession, refused: false }
   }
-  const meta = await readCursorChatMeta(candidate.file.path)
+  const meta = await readCursorChatMeta(candidate.file.path, signal)
   if (!meta) {
     return {
       session: foldSession,
@@ -63,7 +83,6 @@ export function mergeCursorChatMeta(
   },
   platform: NodeJS.Platform
 ): AiVaultSession {
-  // A generated title means the fold found none, so the sibling's may stand in.
   const named = session.title !== generatedSessionTitle(session.agent, session.sessionId)
   const cwd = session.cwd ?? meta.cwd
   const merged: AiVaultSession = {
@@ -76,7 +95,6 @@ export function mergeCursorChatMeta(
   if (cwd === session.cwd) {
     return merged
   }
-  // The resume command embeds the cwd, so it has to be rebuilt with it.
   return {
     ...merged,
     resumeCommand: buildAiVaultResumeCommand({
@@ -89,12 +107,7 @@ export function mergeCursorChatMeta(
   }
 }
 
-/**
- * Merge the Devin sessions.db row onto the transcript's session. Devin's
- * sibling is one shared index for the whole transcripts dir rather than a
- * per-session file, so this also decides membership: a row the user hid in
- * Devin's UI drops the session from the listing entirely.
- */
+/** Devin’s shared index also determines membership: hidden rows suppress their sessions. */
 function enrichDevinSessionFromDb(
   sidecar: SessionSidecarObservation | undefined,
   foldSession: AiVaultSession | null,
@@ -105,8 +118,7 @@ function enrichDevinSessionFromDb(
   }
   const { index, unreadable } = devinSessionsIndexForSidecar(sidecar)
   if (!index) {
-    // An observed-but-unreadable db must not settle as "no enrichment": the
-    // refusal keeps the sidecar unknown so the next scan retries the merge.
+    // Keep unreadable sidecars unknown so the next scan retries enrichment.
     return { session: foldSession, refused: unreadable }
   }
   const row = index.get(foldSession.sessionId)

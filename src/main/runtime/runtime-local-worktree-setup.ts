@@ -1,10 +1,17 @@
-import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
+import type { CreateWorktreeResult, SetupDecision } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import { getEffectiveHooks, loadHooks, runHook } from '../hooks'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
 import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook-config'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from './runtime-store-contract'
+
+/** Share setup decision between pre-add admission and post-add execution so allowed creates cannot fail after making the worktree. */
+export function resolveRuntimeSetupDecision(
+  request: Pick<RuntimeManagedWorktreeCreateArgs, 'runHooks' | 'setupDecision'>
+): SetupDecision {
+  return request.runHooks ? 'run' : (request.setupDecision ?? 'inherit')
+}
 
 export async function prepareRuntimeLocalWorktreeSetup(args: {
   request: RuntimeManagedWorktreeCreateArgs
@@ -18,7 +25,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   setup?: CreateWorktreeResult['setup']
   defaultTabs?: CreateWorktreeResult['defaultTabs']
   warning?: string
-  effectiveDecision: 'run' | 'skip' | 'inherit'
+  effectiveDecision: SetupDecision
   hookFound: boolean
   shouldRunSetup: boolean
   didStartInProcessSetupHook: boolean
@@ -28,7 +35,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   let setup: CreateWorktreeResult['setup']
   const yamlHooks = loadHooks(worktreePath)
   const hooks = getEffectiveHooks(repo, worktreePath)
-  const effectiveDecision = request.runHooks ? 'run' : (request.setupDecision ?? 'inherit')
+  const effectiveDecision = resolveRuntimeSetupDecision(request)
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   try {
     defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, effectiveDecision)
@@ -38,9 +45,14 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
       ? { tabs: yamlHooks.defaultTabs, runCommands: false }
       : undefined
   }
-  const shouldRunSetup = Boolean(
-    hooks?.scripts.setup && shouldRunSetupForCreate(repo, effectiveDecision)
-  )
+  let shouldRunSetup = false
+  if (hooks?.scripts.setup) {
+    try {
+      shouldRunSetup = shouldRunSetupForCreate(repo, effectiveDecision)
+    } catch {
+      // A new branch may introduce an unapproved hook; worktree already exists, so skip/warn below rather than fail the create.
+    }
+  }
   let didStartInProcessSetupHook = false
   if (shouldRunSetup && hooks?.scripts.setup) {
     if (args.shouldUseSetupRunner) {

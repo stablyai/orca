@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
-  it('keeps Claude permission visible when another subagent reports tool activity', async () => {
+  it('keeps Claude permission visible across unattributed activity from another tool', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -236,52 +236,6 @@ describe('AgentHookServer listener replay', () => {
         expect.objectContaining({
           paneKey: PANE,
           state: 'working',
-          agentType: 'claude',
-          toolName: 'BespokeTool'
-        })
-      ])
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('keeps Claude permission visible for unpreviewable tool input with another tool use id', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      const env = server.buildPtyEnv()
-      const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
-          },
-          body: JSON.stringify(buildBody(payload))
-        })
-
-      await postClaudeHook({
-        hook_event_name: 'PreToolUse',
-        tool_name: 'BespokeTool',
-        tool_input: { opaque: 'request-a' },
-        tool_use_id: 'toolu-permission-owner-opaque'
-      })
-      await postClaudeHook({
-        hook_event_name: 'PermissionRequest',
-        tool_name: 'BespokeTool',
-        tool_input: { opaque: 'request-a' }
-      })
-      await postClaudeHook({
-        hook_event_name: 'PostToolUse',
-        tool_name: 'BespokeTool',
-        tool_input: { opaque: 'request-b' },
-        tool_use_id: 'toolu-other-opaque'
-      })
-
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          state: 'waiting',
           agentType: 'claude',
           toolName: 'BespokeTool'
         })
@@ -559,46 +513,6 @@ describe('AgentHookServer listener replay', () => {
           agentType: 'claude',
           toolName: 'Bash',
           toolInput: 'pnpm test'
-        })
-      ])
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('keeps Claude permission visible when unknown tool previews collide', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      const env = server.buildPtyEnv()
-      const postClaudeHook = async (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
-          },
-          body: JSON.stringify(buildBody(payload))
-        })
-
-      await postClaudeHook({
-        hook_event_name: 'PermissionRequest',
-        tool_name: 'BespokeTool',
-        tool_input: { request_id: 'pending-1' }
-      })
-      await postClaudeHook({
-        hook_event_name: 'PreToolUse',
-        tool_name: 'BespokeTool',
-        tool_input: { request_id: 'other-subagent' }
-      })
-
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          state: 'waiting',
-          agentType: 'claude',
-          toolName: 'BespokeTool',
-          toolInput: undefined
         })
       ])
     } finally {

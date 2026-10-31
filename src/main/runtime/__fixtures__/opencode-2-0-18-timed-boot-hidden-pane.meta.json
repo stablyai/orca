@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-30T08:50:47.405221Z",
+  "platform": "darwin",
+  "command": ["opencode", "--standalone"],
+  "cols": 120,
+  "rows": 40,
+  "note": "opencode v2.0.18 on macOS 26.6.2 arm64, 120x40, alternate screen. Why this run: OpenCode 2 answered like a hidden Orca pane; show-cursor repeats on every frame after the box. Recorded with a Python PTY driver rather than the repo recorder, because the driver stamps every read with its time and answers the terminal queries OpenCode sends; responder 'headless' = Orca's hidden-pane replies, silent on OSC colour queries. Isolated HOME and XDG dirs, OPENCODE_DISABLE_AUTOUPDATE=1, OPENCODE_CONFIG_CONTENT {\"autoupdate\":false}, no model configured, env -i (no ORCA_*); version and binary sha256 unchanged before and after. No input typed. Recording ran 41.5 s; no bytes after the last chunk. Run as `opencode --standalone` from a 2.0.18 binary; Orca's opencode2 row launches `opencode2 --standalone`. <name>.timing.json holds each PTY read as [ms since spawn, UTF-16 length] and recordedUntilMs.",
+  "exitCode": null
+}

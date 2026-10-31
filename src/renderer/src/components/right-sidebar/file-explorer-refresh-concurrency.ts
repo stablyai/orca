@@ -5,15 +5,7 @@ export const FILE_EXPLORER_LOCAL_REFRESH_CONCURRENCY = 16
 export const FILE_EXPLORER_RUNTIME_REFRESH_CONCURRENCY = 8
 export const FILE_EXPLORER_REMOTE_REFRESH_CONCURRENCY = 4
 
-/**
- * In-flight directory-read cap for one File Explorer refresh, by how expensive a
- * read is on the owning transport.
- *
- * Why: tiers come from the owner, not from `getFileExplorerOperationRoute`,
- * which maps every non-SSH runtime host to `expectedExecutionHostId: 'local'` —
- * including an `orca serve` runtime reached over a network socket, whose reads
- * are RPC round trips rather than disk reads.
- */
+/** Derive read cost from owner transport; runtime routes may say local even when reads require network RPC. */
 export function fileExplorerRefreshConcurrency(owner: FileExplorerOperationOwner): number {
   switch (owner.kind) {
     case 'local':
@@ -25,7 +17,7 @@ export function fileExplorerRefreshConcurrency(owner: FileExplorerOperationOwner
         ? FILE_EXPLORER_REMOTE_REFRESH_CONCURRENCY
         : FILE_EXPLORER_RUNTIME_REFRESH_CONCURRENCY
     case 'unresolved':
-      // Why: unknown ownership could be the slowest transport; stay conservative.
+      // Unknown ownership may use the slowest transport; stay conservative.
       return FILE_EXPLORER_REMOTE_REFRESH_CONCURRENCY
   }
 }

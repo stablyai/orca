@@ -6,6 +6,7 @@ import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { formatBytes } from '../status-bar/workspace-space-format'
 import { MarkdownPreview, RichMarkdownEditor } from './editor-lazy-views'
 import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
+import { exceedsMarkdownRenderOverrideSizeLimit } from './markdown-rich-size-limit'
 import type { MarkdownRenderState } from './markdown-render-mode'
 import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
@@ -55,8 +56,10 @@ export function EditorMarkdownFileSurface({
   }
   const { renderMode, richModeUnsupportedMessage } = inlineMarkdownRenderState
   if (renderMode === 'source' && mdViewMode === 'rich') {
-    // Why: only a size fallback is recoverable — unsupported syntax would round-trip badly, so it gets no override.
+    // Only size fallbacks allow override; unsupported syntax cannot safely round-trip.
     const isSizeFallback = richModeUnsupportedMessage === null
+    const canOverrideSize =
+      isSizeFallback && !exceedsMarkdownRenderOverrideSizeLimit(currentContent)
     const richFallbackMessage =
       richModeUnsupportedMessage ??
       translate(
@@ -68,7 +71,7 @@ export function EditorMarkdownFileSurface({
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center gap-3 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1">{richFallbackMessage}</span>
-          {isSizeFallback ? (
+          {canOverrideSize ? (
             <Button
               type="button"
               variant="outline"
@@ -98,7 +101,7 @@ export function EditorMarkdownFileSurface({
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1">
-          {/* Why: keyed for remount like MonacoEditor; boundary contains a TipTap render crash (issue #826) to this pane. */}
+          {/* Remount per pane and contain TipTap render failures to this editor. */}
           <RichMarkdownErrorBoundary key={viewStateScopeId} fileId={activeFile.id}>
             <RichMarkdownEditor
               fileId={activeFile.id}
@@ -122,7 +125,7 @@ export function EditorMarkdownFileSurface({
                 frontMatter ? getMarkdownSourceLineOffset(frontMatter.raw) : 0
               }
               markdownReviewContent={currentContent}
-              // Why: banner goes below the toolbar (inside the editor shell) so formatting controls stay at the top of the pane.
+              // Place frontmatter below the toolbar to keep formatting controls at the top.
               headerSlot={
                 frontMatter && showMarkdownFrontmatter ? (
                   <FrontMatterBanner raw={frontMatter.raw} />
@@ -139,14 +142,14 @@ export function EditorMarkdownFileSurface({
     return (
       <div className="flex h-full min-h-0 flex-col">
         {shouldExplainRichFallback ? (
-          <div className="border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+          <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             {richModeUnsupportedMessage}
           </div>
         ) : null}
-        {/* Why: fall back to the stable preview renderer when Tiptap can't safely own the document. */}
+        {/* Use preview when TipTap cannot safely own the document. */}
         <div className="min-h-0 flex-1">
           <MarkdownPreview
-            key={viewStateScopeId}
+            key={`${viewStateScopeId}:${editorViewStateKey}`}
             content={currentContent}
             filePath={activeFile.filePath}
             sourceFileId={activeFile.id}

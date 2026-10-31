@@ -17,8 +17,9 @@ import {
 import { ptyIncarnationById, ptyOwnership } from '../ipc/pty/provider/ownership-state'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { createPtyIpcSession } from '../ipc/pty/session'
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { OrcaRuntimeService } from './orca-runtime'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import {
   INCARNATION_ID,
   LEAF_ID,
@@ -29,7 +30,7 @@ import {
   WORKTREE_PATH,
   makeSession
 } from './__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
 const REPLACEMENT_PTY_ID = 'pty-close-continuity-replacement'
 const REPLACEMENT_INCARNATION_ID = '77777777-7777-4777-8777-777777777777'
@@ -51,9 +52,7 @@ afterEach(() => {
   }
 })
 
-/** A real store and runtime with one bound pane, and main's exit delivery to a renderer stub.
- *  `lateProviderExit`: the kill's reply overtakes the exit, so main synthesizes one and the
- *  provider's own exit arrives later through its listener. */
+/** Use real store/runtime with renderer stub; lateProviderExit lets the kill reply overtake the provider exit and force a synthetic one. */
 function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-intentional-stop-'))
   directories.push(directory)
@@ -82,11 +81,9 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
     leafId: LEAF_ID,
     incarnationId: INCARNATION_ID
   })
-  ptyOwnership.set(PTY_ID, null)
+  ptyOwnership.set(PTY_ID, 'local')
   ptyIncarnationById.set(PTY_ID, INCARNATION_ID)
-  let emitProviderExit:
-    | ((payload: { id: string; code: number; incarnationId?: string }) => void)
-    | undefined
+  let emitProviderExit: Parameters<IPtyProvider['onExit']>[0] | undefined
   const provider = {
     onData: () => () => {},
     onExit: (listener: typeof emitProviderExit) => {
@@ -124,6 +121,14 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
     deps,
     emitProviderExit: (incarnationId: string) =>
       emitProviderExit?.({ id: PTY_ID, code: 0, incarnationId }),
+    /** The exit main synthesizes for each session when it restarts the daemon. */
+    emitDaemonRestartExit: (replacedByRestart?: true) =>
+      emitProviderExit?.({
+        id: PTY_ID,
+        code: -1,
+        incarnationId: INCARNATION_ID,
+        ...(replacedByRestart ? { replacedByRestart } : {})
+      }),
     boundPtyId: () =>
       store.getWorkspaceSession().terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId?.[LEAF_ID] ?? null,
     tabIds: () => (store.getWorkspaceSession().tabsByWorktree[WORKTREE_ID] ?? []).map((t) => t.id),
@@ -140,7 +145,7 @@ describe('intentional stops keep the pane through the exit', () => {
 
     expect(harness.boundPtyId()).toBeNull()
     expect(harness.rendererExits()).toEqual([
-      { id: PTY_ID, code: 0, incarnationId: INCARNATION_ID }
+      { id: PTY_ID, code: 0, incarnationId: INCARNATION_ID, hostId: 'local' }
     ])
   })
 
@@ -152,7 +157,13 @@ describe('intentional stops keep the pane through the exit', () => {
     expect(harness.tabIds()).toEqual([TAB_ID])
     expect(harness.boundPtyId()).toBe(PTY_ID)
     expect(harness.rendererExits()).toEqual([
-      { id: PTY_ID, code: 0, incarnationId: INCARNATION_ID, preserveRendererBinding: true }
+      {
+        id: PTY_ID,
+        code: 0,
+        incarnationId: INCARNATION_ID,
+        hostId: 'local',
+        preserveRendererBinding: true
+      }
     ])
   })
 
@@ -183,7 +194,13 @@ describe('intentional stops keep the pane through the exit', () => {
       ]
     ).toBe(REPLACEMENT_INCARNATION_ID)
     expect(harness.rendererExits()).toEqual([
-      { id: PTY_ID, code: 0, incarnationId: INCARNATION_ID, replacedByRestart: true }
+      {
+        id: PTY_ID,
+        code: 0,
+        incarnationId: INCARNATION_ID,
+        hostId: 'local',
+        replacedByRestart: true
+      }
     ])
   })
 
@@ -204,9 +221,40 @@ describe('intentional stops keep the pane through the exit', () => {
         id: PTY_ID,
         code: 0,
         incarnationId: INCARNATION_ID,
+        hostId: 'local',
         preserveRendererBinding: true,
         replacedByRestart: true
       }
+    ])
+  })
+
+  it('keeps the pane when main restarts the daemon under it', () => {
+    const harness = createHarness()
+
+    harness.emitDaemonRestartExit(true)
+
+    expect(harness.tabIds()).toEqual([TAB_ID])
+    expect(harness.boundPtyId()).toBe(PTY_ID)
+    expect(harness.rendererExits()).toEqual([
+      {
+        id: PTY_ID,
+        code: -1,
+        incarnationId: INCARNATION_ID,
+        hostId: 'local',
+        replacedByRestart: true
+      }
+    ])
+  })
+
+  it('retires the pane on a daemon-wide exit that no restart claims', () => {
+    const harness = createHarness()
+
+    harness.emitDaemonRestartExit()
+
+    // Switch-on, main keeps the pane as the window does on a -1 no host confirmed (lost contact).
+    expect(harness.boundPtyId()).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? PTY_ID : null)
+    expect(harness.rendererExits()).toEqual([
+      { id: PTY_ID, code: -1, incarnationId: INCARNATION_ID, hostId: 'local' }
     ])
   })
 
@@ -219,19 +267,20 @@ describe('intentional stops keep the pane through the exit', () => {
     expect(harness.tabIds()).toEqual([TAB_ID])
     expect(harness.boundPtyId()).toBe(PTY_ID)
     expect(harness.rendererExits()).toEqual([
-      { id: PTY_ID, code: -1, incarnationId: INCARNATION_ID, preserveRendererBinding: true }
+      {
+        id: PTY_ID,
+        code: -1,
+        incarnationId: INCARNATION_ID,
+        hostId: 'local',
+        preserveRendererBinding: true
+      }
     ])
   })
 
   it('never reads the exit of a later process on the same id as the stop', async () => {
     const harness = createHarness({ lateProviderExit: true })
     await stopRendererOwnedPty(harness.deps, { id: PTY_ID, keepHistory: true })
-    harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
-      tabId: TAB_ID,
-      leafId: LEAF_ID,
-      incarnationId: LATER_INCARNATION_ID
-    })
-    ptyIncarnationById.set(PTY_ID, LATER_INCARNATION_ID)
+    // The later process's commit binds its pane before it registers, as the spawn commit does.
     await harness.store.persistPtyBinding({
       worktreeId: WORKTREE_ID,
       tabId: TAB_ID,
@@ -240,6 +289,12 @@ describe('intentional stops keep the pane through the exit', () => {
       incarnationId: LATER_INCARNATION_ID,
       origin: 'reattach'
     })
+    harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: LATER_INCARNATION_ID
+    })
+    ptyIncarnationById.set(PTY_ID, LATER_INCARNATION_ID)
 
     harness.emitProviderExit(LATER_INCARNATION_ID)
 
@@ -248,7 +303,8 @@ describe('intentional stops keep the pane through the exit', () => {
     expect(harness.rendererExits().at(-1)).toEqual({
       id: PTY_ID,
       code: 0,
-      incarnationId: LATER_INCARNATION_ID
+      incarnationId: LATER_INCARNATION_ID,
+      hostId: 'local'
     })
   })
 

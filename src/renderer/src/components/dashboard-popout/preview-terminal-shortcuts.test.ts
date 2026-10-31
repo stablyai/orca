@@ -113,6 +113,10 @@ describe('resolvePreviewShortcutAction', () => {
         contextFor({ clientPlatform: 'linux', terminalInput: null })
       )
     ).toEqual({ type: 'sendInput', data: '\x1bb' })
+    // Why: ConPTY would turn \eb into Alt+B, which Codex and PSReadLine don't read as Alt+←.
+    expect(
+      resolvePreviewShortcutAction(keydown({ key: 'ArrowLeft', altKey: true }), conpty)
+    ).toBeNull()
   })
 
   it('routes Shift+Enter by the PTY host, not the client OS', () => {
@@ -176,11 +180,15 @@ describe('resolvePreviewShortcutAction', () => {
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'd', code: 'KeyD', metaKey: true }), contextFor())
     ).toEqual({ type: 'splitActivePane', direction: 'vertical' })
+    expect(
+      resolvePreviewShortcutAction(
+        keydown({ key: 'd', code: 'KeyD', metaKey: true }),
+        contextFor({ terminalShortcutPolicy: 'terminal-first' })
+      )
+    ).toBeNull()
   })
 
-  // Why: a terminal-first user remapped terminal.closePane away, so only the
-  // tab.close alias still matches Ctrl+W — which the shell owns as a word-kill.
-  // The pane yields it; the preview must not swallow it.
+  // Terminal-first policy may remap pane close while tab.close remains Ctrl+W; preserve its shell word-kill as the pane does.
   it('follows the terminal shortcut policy for the tab.close pane-close alias', () => {
     const keybindings = {
       'terminal.closePane': ['Mod+Shift+W'],

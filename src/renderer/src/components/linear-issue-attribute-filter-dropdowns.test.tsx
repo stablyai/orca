@@ -77,7 +77,6 @@ describe('linear-issue-attribute-filter helpers', () => {
     expect(clearLinearIssueAttributeFacet(sample, 'labels').labelIds).toEqual([])
   })
 
-  // Why: Linear workflow states are per team, so every team owns its own "Todo" id (#16785).
   it('collapses same-named status ids into one pill label', () => {
     const pills = linearIssueAttributeFilterPillLabels({
       value: { stateIds: ['be-todo', 'fe-todo'], priorities: [], assignee: null, labelIds: [] },
@@ -184,8 +183,6 @@ describe('LinearIssueAttributeFilterDropdowns', () => {
     expect(metadataMocks.useTeamsMembers).toHaveBeenCalledWith(['team-1'], undefined, 'workspace-1')
   })
 
-  // Why: filters are stored per workspace, so with no single workspace resolved a
-  // click would be silently dropped — show the picker hint instead of the sections.
   it.each([['all'], [null]])(
     'offers the workspace picker hint instead of filter sections for workspaceId %s',
     (workspaceId) => {
@@ -219,8 +216,7 @@ describe('LinearIssueAttributeFilterDropdowns', () => {
     }
   )
 
-  // Why: restored filters render before the team fetch settles, when availableTeams is
-  // still the issue-scraped subset — pruning there deletes another team's facets for good.
+  // Wait for the full team fetch; pruning against issue-scraped teams would permanently discard restored facets.
   it('prunes unknown facet ids only once teams settle on the mounted component', () => {
     const team: LinearTeam = { id: 'team-1', name: 'Engineering', key: 'ENG' }
     const onChange = vi.fn()
@@ -330,8 +326,6 @@ function pickerRowsNamed(name: string): HTMLElement[] {
   )
 }
 
-// Why: two teams share Linear's default state template, so the picker used to list
-// "Todo"/"Backlog" once per team and each row filtered to a single team's issues (#16785).
 describe('LinearIssueAttributeFilterDropdowns status options across teams', () => {
   it('lists one row per status name instead of one per team state id', () => {
     metadataMocks.useTeamsStates.mockImplementation(() => ({
@@ -364,8 +358,6 @@ describe('LinearIssueAttributeFilterDropdowns status options across teams', () =
     )
   })
 
-  // Why: "All teams" in a large workspace expands one status into an id per team, and the
-  // IPC parser rejects a filter over the transport cap instead of trimming it.
   it('keeps the expanded status selection within the transport id cap', () => {
     const overCap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS + 20
     metadataMocks.useTeamsStates.mockImplementation(() => ({
@@ -393,8 +385,6 @@ function sameNamedMetadata(name: string, count: number): { id: string; name: str
   return Array.from({ length: count }, (_unused, index) => ({ id: `team-${index}-${name}`, name }))
 }
 
-// Why: the bound keeps the row checked (any surviving id maps back to it), so without a
-// notice the picker claims team coverage the filter never had (#16879).
 describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', () => {
   it('reports the team statuses left out once a picked status exceeds the id cap', () => {
     const overCap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS + 20
@@ -463,8 +453,6 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
     expect(document.body.textContent).not.toContain('partial')
   })
 
-  // Why: the notice only exists inside the detail panel, but the surfaces a user works from
-  // after applying a filter are the collapsed section menu and the pill (#16879).
   it('flags the trimmed status filter in the section menu and the pill', () => {
     const overCap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS + 20
     metadataMocks.useTeamsStates.mockImplementation(() => ({
@@ -481,11 +469,9 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
     rerender(onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter)
     openSectionNamed('Back')
 
-    // The marker sits outside the truncating summary span, so it is its own text node.
     expect(document.body.textContent).toContain('1 selected')
     expect(document.body.textContent).toContain('· partial')
-    // Why: the marker has to be reachable by keyboard and named for a screen reader,
-    // which a bare title attribute never was (#17342).
+    // Use a keyboard-reachable, named marker; a title alone cannot provide accessible coverage feedback.
     const pillMarkers = [...document.body.querySelectorAll('button')].filter(
       (button) => button.textContent === 'partial'
     )
@@ -493,8 +479,6 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
     expect(pillMarkers[0]?.getAttribute('data-slot')).toBe('tooltip-trigger')
   })
 
-  // Why: the canonical id list is sorted before the cap slices it, so a picked row whose ids
-  // all sort last used to vanish outright — unchecked, uncounted, and with no notice at all.
   it('keeps and counts a picked status whose ids all sort past the cap', () => {
     const cap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
     metadataMocks.useTeamsStates.mockImplementation(() => ({
@@ -526,8 +510,6 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
     expect(document.body.textContent).toContain(`Filtering ${cap} of ${cap + 1} team statuses`)
   })
 
-  // Why: with more single-id status rows than the cap, the row the user clicks cannot fit at
-  // all — the picker used to check nothing and still report full coverage (#17342).
   it('says the status filter is full instead of claiming coverage it cannot have', () => {
     const cap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
     const states = Array.from({ length: cap + 1 }, (_unused, index) => ({
@@ -587,8 +569,7 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
   })
 })
 
-// Why: 20 teams x 5 status names expands to exactly the cap, so nothing is dropped — the
-// warning used to fire anyway because it inferred truncation from the bounded ids (STA-5996).
+// Exactly the cap is complete here; bounded ids alone cannot prove that truncation happened.
 describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport id cap', () => {
   const cap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
   const statusNames = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon']
@@ -629,8 +610,6 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
     expect(document.body.textContent).not.toContain('partial')
   })
 
-  // Why: the prune effect only ever removes ids and never re-expands, so a recorded trim
-  // that outlived its selection would keep warning about a filter that now fits.
   it('drops the recorded truncation once the selection fits again', () => {
     const states = Array.from({ length: cap + 1 }, (_unused, index) => ({
       id: `s-${String(index).padStart(3, '0')}`,
@@ -664,10 +643,7 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
     expect(document.body.textContent).not.toContain('partial')
   })
 
-  // Why: every facet change re-caps every facet, and re-capping an already-capped status is a
-  // no-op — recomputing the record there would see requested === applied and erase the warning.
-  // The scenario has to sit where intended === applied, or the value-derived shortfall covers
-  // for the record and the guard goes untested.
+  // Keep intended equal to applied so only the truncation record catches unrelated-facet re-capping erasing a prior warning.
   it('keeps the status truncation when an unrelated facet is picked', () => {
     const states = Array.from({ length: cap + 1 }, (_unused, index) => ({
       id: `s-${String(index).padStart(3, '0')}`,
@@ -735,8 +711,6 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
     expect(document.body.textContent).toContain('Filtering the most this can carry')
   })
 
-  // Why: clearing a facet must clear its recorded trim too, or the next selection inherits
-  // a warning it never earned.
   it('drops the recorded truncation when the facet is cleared', () => {
     const states = Array.from({ length: cap + 1 }, (_unused, index) => ({
       id: `s-${String(index).padStart(3, '0')}`,

@@ -4,6 +4,7 @@ import { ResetParams } from '../schemas'
 export const ORCHESTRATION_RESET_METHODS = [
   defineMethod({
     name: 'orchestration.reset',
+    permission: 'workspace',
     params: ResetParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -14,8 +15,8 @@ export const ORCHESTRATION_RESET_METHODS = [
       }
       if (params.tasks) {
         runtime.stopOrchestrationFederationRelay()
-        db.resetTasks()
-        return { reset: 'tasks' }
+        const removed = db.resetTasks()
+        return removed ? { reset: 'tasks', removed } : { reset: 'tasks' }
       }
       if (params.messages) {
         db.resetMessages()

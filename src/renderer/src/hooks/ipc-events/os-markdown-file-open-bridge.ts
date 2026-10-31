@@ -1,64 +1,58 @@
 import { toast } from 'sonner'
-import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
-import { isFloatingWorkspacePanelVisible } from '@/lib/floating-workspace-terminal-actions'
-import { openMarkdownDocumentInFloatingWorkspace } from '@/lib/open-markdown-in-floating-workspace'
+import type { FileDocument } from '../../../../shared/filesystem-entry-types'
+import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
+import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 
-/**
- * Opens markdown files the OS shell handed to Orca ("Open With" / double-click) in the
- * floating workspace, which is the one editor surface that needs no project.
- */
-async function openOsRequestedMarkdownFiles(documents: MarkdownDocument[]): Promise<void> {
-  // Why the shape check: this payload crosses the preload boundary, so a stale or mismatched
-  // preload can hand back something that is not an array. Reading .length off that throws
-  // inside the promise chain rather than failing loudly at the boundary.
+/** Open OS shell document requests in the project-independent floating workspace. */
+async function openOsRequestedDocuments(documents: FileDocument[]): Promise<void> {
+  // Validate preload payload shape before length/access; older or mismatched preloads may return non-arrays.
   if (!Array.isArray(documents) || documents.length === 0) {
     return
   }
   const store = useAppStore.getState()
   let opened = 0
   for (const document of documents) {
-    // Why isolated: selecting several files hands us one batch, and one unopenable file
-    // must not cost the user the rest of the selection.
+    // Isolate per-file failures so a multi-file selection still opens the remaining documents.
     try {
-      openMarkdownDocumentInFloatingWorkspace(store.openFile, document)
+      openDocumentInFloatingWorkspace(store.openFile, document)
       opened += 1
     } catch (error) {
-      reportOsRequestedMarkdownFailure(error)
+      reportOsRequestedDocumentFailure(error)
     }
   }
   if (opened === 0) {
     return
   }
-  // Why enabled here: the user asked the OS for this file, and the tabs above are already in a
-  // surface a disabled floating workspace never renders. Same enable-then-reveal as the
-  // Settings "Edit keybindings in Orca" action.
+  // Enable floating workspace before revealing OS-requested files or the opened tabs remain invisible.
   if (store.settings?.floatingTerminalEnabled !== true) {
     await store.updateSettings({ floatingTerminalEnabled: true })
   }
   // Why deferred a frame: the panel only honors the toggle once the enabled flag has reached React.
-  requestAnimationFrame(() => {
-    if (!isFloatingWorkspacePanelVisible()) {
-      window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
-    }
-  })
+  requestAnimationFrame(() => revealFloatingWorkspacePanel(useAppStore.getState()))
 }
 
-function reportOsRequestedMarkdownFailure(error: unknown): void {
-  console.error('Failed to open markdown files requested by the OS:', error)
-  toast.error(
-    translate(
-      'auto.hooks.ipc.events.os.markdown.file.open.bridge.1e9a1a63c4',
-      'Failed to open the Markdown file.'
-    )
-  )
+function reportOsRequestedDocumentFailure(error: unknown): void {
+  console.error('Failed to open documents requested by the OS:', error)
+  toast.error(translate('osDocumentOpen.failed', 'Failed to open the file.'))
 }
 
 export function registerOsMarkdownFileOpenBridge(unsubs: (() => void)[]): void {
+  // Startup restoration replaces tabs; keep OS requests in main until it finishes.
+  if (!useAppStore.getState().workspaceSessionReady) {
+    const unsubscribe = useAppStore.subscribe((state) => {
+      if (state.workspaceSessionReady) {
+        unsubscribe()
+        registerOsMarkdownFileOpenBridge(unsubs)
+      }
+    })
+    unsubs.push(unsubscribe)
+    return
+  }
+  // Keep the legacy local IPC names; the payload also carries CSV/TSV documents.
   const unsubscribe = window.api.ui.onOpenMarkdownFiles?.((documents) => {
-    void openOsRequestedMarkdownFiles(documents).catch(reportOsRequestedMarkdownFailure)
+    void openOsRequestedDocuments(documents).catch(reportOsRequestedDocumentFailure)
   })
   if (unsubscribe) {
     unsubs.push(unsubscribe)
@@ -67,6 +61,6 @@ export function registerOsMarkdownFileOpenBridge(unsubs: (() => void)[]): void {
   // Why: a cold-start "Open With" resolves before this listener attaches; drain what main queued.
   const pending = window.api.ui.consumePendingMarkdownFileOpens?.()
   if (pending && typeof pending.then === 'function') {
-    void pending.then(openOsRequestedMarkdownFiles).catch(reportOsRequestedMarkdownFailure)
+    void pending.then(openOsRequestedDocuments).catch(reportOsRequestedDocumentFailure)
   }
 }

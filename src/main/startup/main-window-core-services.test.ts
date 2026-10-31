@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   attachMainWindowServicesMock,
+  holdLaunchReconnectOptOutsMock,
   initTccPromptNoticeMock,
   preserveAgentAuthBeforeRestartMock,
   registerCoreHandlersMock,
@@ -9,12 +10,14 @@ const {
   store
 } = vi.hoisted(() => {
   const store = {
-    writeLatestProfileStateJsonCompatibilityExportAsync: vi.fn(async () => {}),
+    flushPendingOrThrowAsync: vi.fn(async () => {}),
     writeLatestProfileStateJsonExportAsync: vi.fn(async () => {}),
-    getSettings: vi.fn(() => ({}))
+    getSettings: vi.fn(() => ({})),
+    getSshTargets: vi.fn(() => [{ id: 'ssh-1', reconnectOnLaunch: false }])
   }
   return {
     attachMainWindowServicesMock: vi.fn(),
+    holdLaunchReconnectOptOutsMock: vi.fn(),
     initTccPromptNoticeMock: vi.fn(),
     preserveAgentAuthBeforeRestartMock: vi.fn(() => Promise.resolve()),
     registerCoreHandlersMock: vi.fn(),
@@ -53,6 +56,9 @@ vi.mock('../ipc/register-core-handlers/register-core-handlers', () => ({
 vi.mock('../window/attach-main-window-services', () => ({
   attachMainWindowServices: attachMainWindowServicesMock
 }))
+vi.mock('../ipc/ssh/ssh-host-user-disconnect', () => ({
+  holdLaunchReconnectOptOuts: holdLaunchReconnectOptOutsMock
+}))
 vi.mock('../macos-tcc-prompt-notice', () => ({ initTccPromptNotice: initTccPromptNoticeMock }))
 vi.mock('../updater', () => ({ resolveUpdateInstallMode: vi.fn(() => 'interactive') }))
 vi.mock('./main-process-state', () => ({ mainProcessState: state }))
@@ -76,39 +82,69 @@ vi.mock('./main-window-lifecycle-flags', () => ({ isRecoveryReloadInFlight: vi.f
 
 const { attachMainWindowCoreServices } = await import('./main-window-core-services')
 
+describe('main window launch reconnect opt-outs', () => {
+  it('holds opted-out SSH hosts before core handlers start server status probes', () => {
+    vi.clearAllMocks()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mocked BrowserWindow only needs webContents for this composition-root wiring test.
+    attachMainWindowCoreServices({ webContents: { id: 17 } } as never, {
+      markExpectedRendererReload: vi.fn(),
+      recordRendererReload: vi.fn()
+    })
+
+    expect(holdLaunchReconnectOptOutsMock).toHaveBeenCalledWith([
+      { id: 'ssh-1', reconnectOnLaunch: false }
+    ])
+    expect(holdLaunchReconnectOptOutsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      registerCoreHandlersMock.mock.invocationCallOrder[0]
+    )
+  })
+})
+
 describe('main window profile-state update preparation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('publishes both recovery forms with one profile checkpoint before an update quit', async () => {
-    const window = { webContents: { id: 17 } }
+  it.each([false, true])(
+    'flushes SQL after preserving auth before an update quit (failure: %s)',
+    async (fails) => {
+      const window = { webContents: { id: 17 } }
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mocked BrowserWindow only needs webContents for this composition-root wiring test.
-    attachMainWindowCoreServices(window as never, {
-      markExpectedRendererReload: vi.fn(),
-      recordRendererReload: vi.fn()
-    })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mocked BrowserWindow only needs webContents for this composition-root wiring test.
+      attachMainWindowCoreServices(window as never, {
+        markExpectedRendererReload: vi.fn(),
+        recordRendererReload: vi.fn()
+      })
 
-    const options = attachMainWindowServicesMock.mock.calls[0]?.[5]
-    if (
-      typeof options !== 'object' ||
-      options === null ||
-      !('onBeforeUpdateQuit' in options) ||
-      typeof options.onBeforeUpdateQuit !== 'function'
-    ) {
-      throw new Error('Expected update quit cleanup to be wired')
+      const options = attachMainWindowServicesMock.mock.calls[0]?.[5]
+      if (
+        typeof options !== 'object' ||
+        options === null ||
+        !('onBeforeUpdateQuit' in options) ||
+        typeof options.onBeforeUpdateQuit !== 'function'
+      ) {
+        throw new Error('Expected update quit cleanup to be wired')
+      }
+
+      const failure = new Error('SQL commit refused')
+      if (fails) {
+        store.flushPendingOrThrowAsync.mockRejectedValueOnce(failure)
+        await expect(options.onBeforeUpdateQuit()).rejects.toBe(failure)
+      } else {
+        await options.onBeforeUpdateQuit()
+      }
+
+      expect(preserveAgentAuthBeforeRestartMock).toHaveBeenCalledWith({
+        codexRuntimeHome: state.codexRuntimeHome,
+        store
+      })
+      expect(store.writeLatestProfileStateJsonExportAsync).not.toHaveBeenCalled()
+      expect(store.flushPendingOrThrowAsync).toHaveBeenCalledOnce()
+      expect(store.flushPendingOrThrowAsync).toHaveBeenCalledWith({ fullCheckpoint: true })
+      expect(preserveAgentAuthBeforeRestartMock.mock.invocationCallOrder[0]).toBeLessThan(
+        store.flushPendingOrThrowAsync.mock.invocationCallOrder[0]
+      )
+      expect(options).toHaveProperty('onBeforeUpdateQuitFailure', 'abort')
     }
-
-    await options.onBeforeUpdateQuit()
-
-    expect(preserveAgentAuthBeforeRestartMock).toHaveBeenCalledWith({
-      codexRuntimeHome: state.codexRuntimeHome,
-      claudeRuntimeAuth: state.claudeRuntimeAuth,
-      store
-    })
-    expect(store.writeLatestProfileStateJsonExportAsync).not.toHaveBeenCalled()
-    expect(store.writeLatestProfileStateJsonCompatibilityExportAsync).toHaveBeenCalledOnce()
-    expect(options).toHaveProperty('onBeforeUpdateQuitFailure', 'abort')
-  })
+  )
 })

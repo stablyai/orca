@@ -28,6 +28,8 @@ concurrency:
 
 jobs:
   review_scope:
+    # Paused while we measure CI queue recovery.
+    if: vars.PULLFROG_PAUSED != 'true'
     runs-on: ubuntu-slim
     permissions:
       contents: read

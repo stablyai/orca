@@ -50,8 +50,7 @@ function normalizeCombinedDiffCommitMessageSlice(
   let normalized = ''
   let sliceStart = bounds.start
 
-  // Why: combined-diff commit messages can come from pasted text. Scan CRLF
-  // pairs directly instead of normalizing the whole message with a regex pass.
+  // Scan pasted CRLF pairs directly to avoid allocating a normalized copy of the whole message.
   for (let index = bounds.start; index < bounds.end; index += 1) {
     if (message.charCodeAt(index) !== 13 || message.charCodeAt(index + 1) !== 10) {
       continue

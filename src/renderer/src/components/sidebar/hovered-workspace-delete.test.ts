@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, afterEach } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -39,12 +39,14 @@ function hoveredDocument(...rows: { workspaceId: string; hostIdentity: string }[
 }
 
 function state(worktrees: Worktree[] = []): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hover helpers read only these fields.
   return {
     activeModal: 'none',
     activeWorkspaceExecutionHostId: worktrees[0]?.hostId ?? null,
     activeWorktreeId: worktrees[0]?.id ?? null,
     deleteFolderWorkspace: vi.fn(),
     deleteStateByWorktreeId: {},
+    folderWorkspaces: [],
     setActiveWorktree: vi.fn(),
     worktreesByRepo: { repo: worktrees }
   } as unknown as AppState
@@ -220,4 +222,23 @@ describe('hovered workspace delete', () => {
     )
     finishDelete(false)
   })
+})
+
+const { rejectAppStoreAccess } = vi.hoisted(() => ({
+  rejectAppStoreAccess: vi.fn(() => {
+    throw new Error('Pure helper tests must not access the app store')
+  })
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(rejectAppStoreAccess, {
+    getState: rejectAppStoreAccess,
+    getInitialState: rejectAppStoreAccess,
+    setState: rejectAppStoreAccess,
+    subscribe: rejectAppStoreAccess
+  })
+}))
+
+afterEach(() => {
+  expect(rejectAppStoreAccess).not.toHaveBeenCalled()
 })

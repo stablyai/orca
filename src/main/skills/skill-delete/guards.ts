@@ -12,11 +12,7 @@ import {
 import type { SkillScanRoot } from '../skill-discovery-sources'
 import type { SkillPlacementCandidate } from './enumeration'
 
-/**
- * Headroom against ordinary clock and read skew, not against WSL's
- * second-granularity mtime: the displayed value and the host's re-read come
- * from the same `stat` on the same host, so they already agree exactly.
- */
+/** Allow clock/read skew; WSL discovery and recheck use the same host stat precision. */
 export const SKILL_DELETE_FRESHNESS_TOLERANCE_MS = 1_000
 
 export type SkillDeleteGuardContext = {
@@ -28,10 +24,7 @@ function pathApi(semantics: SkillPathSemantics): typeof pathPosix {
   return semantics.sep === '\\' ? pathWin32 : pathPosix
 }
 
-/**
- * A request carrying no `updatedAt` fails closed. It is reachable on WSL when
- * the guest `stat` fails, and "unknown" is not "unchanged" for a delete.
- */
+/** Missing mtime is unknown, never unchanged; fail closed on delete freshness. */
 export function isSkillDeleteFresh(
   displayedUpdatedAt: number | null,
   observedMtimeMs: number | null
@@ -42,7 +35,6 @@ export function isSkillDeleteFresh(
   return Math.abs(displayedUpdatedAt - observedMtimeMs) <= SKILL_DELETE_FRESHNESS_TOLERANCE_MS
 }
 
-/** The root a path belongs to, honouring depth; null when no root owns it. */
 export function owningSkillRoot(
   path: string,
   context: SkillDeleteGuardContext
@@ -58,18 +50,7 @@ export function owningSkillRoot(
   return null
 }
 
-/**
- * Host-side eligibility, re-derived from where the skill actually lives rather
- * than read off the row: `sourceKind` is first-scanned-root-wins, so a
- * plugin-cache or `.system/` skill symlinked into a plain home root reports
- * `home` on the client. The host verdict may be stricter than the badge.
- *
- * A canonical directory *outside* every root is deliberately not blocked here.
- * The rule is "remove every placement Orca owns, and never touch anything
- * outside its roots" — so a tool-managed skill linked into a repo stays
- * deletable by its links, while its content is left alone. When no placement
- * sits inside a root either, the plan reports `unowned` on that basis instead.
- */
+/** Re-derive canonical eligibility on the host: symlinked plugin/.system skills may report home on clients. External content stays untouched, but its owned in-root links may be deleted; no owned placements means unowned. */
 export function blockedCanonicalReason(
   canonicalDirectoryPath: string,
   context: SkillDeleteGuardContext
@@ -96,11 +77,7 @@ export function blockedCanonicalReason(
 
 export type ClassifiedPlacement = SkillDeletePlacement & { root: SkillScanRoot }
 
-/**
- * Each kind compares against a different realpath. Comparing every entry's own
- * realpath against the file identity alone finds every `canonical` placement
- * and silently zero `alias-dir` ones — the exact shape this exists to remove.
- */
+/** Canonical and alias-file placements match file identity; directory aliases must match directory realpath. */
 export function classifySkillPlacement(
   candidate: SkillPlacementCandidate,
   canonicalSkillFilePath: string,
@@ -120,8 +97,6 @@ export function classifySkillPlacement(
   })
 
   if (candidate.entryKind === 'symlink') {
-    // A symlinked directory's realpath can never equal a file path, so this
-    // compares against the canonical *directory*.
     return candidate.directoryRealpath &&
       skillPathsEqual(candidate.directoryRealpath, canonicalDirectoryPath, context.semantics)
       ? placement('alias-dir')

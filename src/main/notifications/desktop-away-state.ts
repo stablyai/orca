@@ -1,4 +1,4 @@
-export const MOBILE_NOTIFICATION_AWAY_SECONDS = 180
+import { DESKTOP_AWAY_SECONDS } from '../../shared/desktop-away-threshold'
 
 type IdleMonitor = {
   getSystemIdleState(threshold: number): string
@@ -7,12 +7,12 @@ type IdleMonitor = {
 
 export function readDesktopAwayState(monitor: IdleMonitor): boolean | undefined {
   try {
-    const state = monitor.getSystemIdleState(MOBILE_NOTIFICATION_AWAY_SECONDS)
+    const state = monitor.getSystemIdleState(DESKTOP_AWAY_SECONDS)
     if (state === 'locked' || state === 'idle') {
       return true
     }
     const idle = monitor.getSystemIdleTime()
-    return Number.isFinite(idle) && idle >= 0 ? idle >= MOBILE_NOTIFICATION_AWAY_SECONDS : undefined
+    return Number.isFinite(idle) && idle >= 0 ? idle >= DESKTOP_AWAY_SECONDS : undefined
   } catch {
     // Unknown presence must not silence a phone.
     return undefined

@@ -22,22 +22,16 @@ describe('sidebar worktree activation', () => {
     vi.unstubAllGlobals()
   })
 
-  it('activates a clicked worktree without sidebar reveal', async () => {
-    await activateWorktreeFromSidebar('wt-live')
-
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live', {
-      revealInSidebar: false
+  it('preserves folder click defaults and only suppresses a requested keyboard reveal', async () => {
+    await activateWorktreeFromSidebar('folder:f', 'ssh:other')
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenLastCalledWith('f', {
+      navigationIntent: 'user-open',
+      executionHostId: 'ssh:other'
     })
-    expect(mocks.activateAndRevealFolderWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('does not defer non-VM slept worktree selection behind terminal wake work', async () => {
-    await activateWorktreeFromSidebar('wt-slept')
-
-    // Why: setActiveWorktree already defers terminal prep where needed. The
-    // sidebar click itself must switch app state immediately.
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-slept', {
+    await activateWorktreeFromSidebar('folder:f', 'ssh:other', { revealInSidebar: false })
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenLastCalledWith('f', {
+      navigationIntent: 'user-open',
+      executionHostId: 'ssh:other',
       revealInSidebar: false
     })
   })
@@ -57,18 +51,12 @@ describe('sidebar worktree activation', () => {
     const activation = activateWorktreeFromSidebar('wt-vm')
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-vm', {
+      navigationIntent: 'user-open',
       revealInSidebar: false
     })
     expect(resumeWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-vm' })
 
     resolveResume?.(null)
     await activation
-  })
-
-  it('routes folder workspace activation through the guarded folder path', async () => {
-    await activateWorktreeFromSidebar('folder:folder-workspace-1')
-
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1')
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 })

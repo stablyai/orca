@@ -3,7 +3,7 @@ import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
 } from '../../../shared/runtime-types'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   ENVIRONMENT_ID,
   deferred,
@@ -23,15 +23,7 @@ describe('web session terminal orphan recovery regressions', () => {
   const ROOTLESS_SOLE_MAP_LEAF = '22222222-2222-4222-8222-222222222222'
   const ROOTLESS_OFF_TREE_LEAF = '33333333-3333-4333-8333-333333333333'
 
-  // Retargeted (#11495). This previously asserted the mismatched leaf was REMOVED, and that was
-  // deliberate — it kept a leaf whose pending row named a ptyId the host no longer reported from
-  // lingering. But `terminal.list` ran with `requireFreshPtyLiveness: true` and answered with the
-  // handle live under `pty-replacement`, so the only thing the old assertion proved was that the
-  // host had relaunched the PTY. Stale-leaf accumulation is already covered by the two host-attested
-  // branches in the same file (`retiredTerminalSurfaces` proof, and two authoritative inventories
-  // omitting the identity), which is why this branch is the outlier. Removing on it is destructive:
-  // shouldReplaceTerminalTab rebuilds the whole mirror from one frame, so a dropped leaf takes
-  // ptyIdsByTabId and terminalLayoutsByTabId with it — the only surviving record of how to rebind.
+  // Replacement PTY with fresh host liveness proves relaunch, not exit (#11495). Retain the handle binding or mirror rebuild loses rebind metadata; stale leaves require explicit retirement or two authoritative absences.
   it('rebinds a PTY-mismatched leaf to the handle the host still reports live', async () => {
     const worktree = 'repo::mismatch'
     const leaves = [
@@ -88,8 +80,8 @@ describe('web session terminal orphan recovery regressions', () => {
       expect.objectContaining({
         parentTabId: tabId,
         leafId: 'leaf-hold',
-        status: 'ready',
-        terminal: 'term-hold'
+        status: 'pending-handle',
+        terminal: null
       })
     ])
     expect(call).toHaveBeenCalledOnce()
@@ -329,8 +321,8 @@ describe('web session terminal orphan recovery regressions', () => {
       expect.objectContaining({
         parentTabId: 'host-tab',
         leafId: 'leaf-1',
-        status: 'ready',
-        terminal: 'term-live'
+        status: 'pending-handle',
+        terminal: null
       }),
       editor
     ])
@@ -362,8 +354,8 @@ describe('web session terminal orphan recovery regressions', () => {
     expect(recovered?.tabs.slice(0, 2)).toEqual(snapshot.tabs.slice(0, 2))
     expect(recovered?.tabs[2]).toMatchObject({
       leafId: 'leaf-1',
-      status: 'ready',
-      terminal: 'term-live'
+      status: 'pending-handle',
+      terminal: null
     })
   })
 
@@ -569,7 +561,7 @@ describe('web session terminal orphan recovery regressions', () => {
     expect(recovered?.tabs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ leafId: 'leaf-claim', terminal: 'term-claim', status: 'ready' }),
-        expect.objectContaining({ leafId: 'leaf-hold', terminal: 'term-hold', status: 'ready' })
+        expect.objectContaining({ leafId: 'leaf-hold', terminal: null, status: 'pending-handle' })
       ])
     )
     expect(call).toHaveBeenNthCalledWith(
@@ -669,7 +661,8 @@ describe('web session terminal orphan recovery regressions', () => {
         expect.objectContaining({
           parentTabId: 'hold-tab',
           leafId: 'leaf-hold',
-          terminal: 'term-hold'
+          status: 'pending-handle',
+          terminal: null
         })
       ])
     )

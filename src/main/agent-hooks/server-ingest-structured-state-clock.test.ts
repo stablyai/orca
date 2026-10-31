@@ -1,9 +1,8 @@
-// The host's status row takes its state clock from the summary's `statusStartedAt`, the session's
-// own lifecycle clock, so `worktree ps`, mobile and the dashboard date a parent the way the sidebar
-// does. An older summary without the clock keeps the ingest's own continuity rule.
+// Use the session lifecycle clock across projections; older summaries retain ingest continuity.
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { AgentHookServer, _internals } from './server'
 
@@ -32,6 +31,22 @@ function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionSta
   }
 }
 
+const CHILD = { idKind: 'task_id', id: 'child-1' } as const
+
+function liveChild(observedAt: number): AgentChildWorkEvidence {
+  return {
+    type: 'live',
+    observedAt,
+    child: {
+      handle: CHILD,
+      kind: 'agent',
+      residency: 'background',
+      state: 'working',
+      stoppable: true
+    }
+  }
+}
+
 function row(server: AgentHookServer) {
   return server.getStatusSnapshot()[0]
 }
@@ -41,7 +56,7 @@ beforeEach(() => {
 })
 
 describe("the host row's state clock", () => {
-  it("dates a subagent's approval at the ask, and the parent's completion where it was", () => {
+  it("uses the summary's status clock across attention and idle", () => {
     const server = new AgentHookServer()
     server.ingestStructuredStatus(summary({ statusStartedAt: SETTLED }), SUBJECT)
     server.ingestStructuredStatus(
@@ -68,16 +83,15 @@ describe("the host row's state clock", () => {
       summary({ status: 'working', statusStartedAt: 10_000, updatedAt: 10_000 }),
       SUBJECT
     )
-    server.ingestStructuredStatus(
-      summary({
-        statusStartedAt: SETTLED,
-        updatedAt: 24_000,
-        backgroundTasks: [{ id: 'child-1', kind: 'agent', state: 'working' }]
-      }),
-      SUBJECT
-    )
+    server.ingestStructuredChildWork(SUBJECT, [liveChild(23_000)], 'codex')
+    server.ingestStructuredStatus(summary({ statusStartedAt: SETTLED, updatedAt: 24_000 }), SUBJECT)
     expect(row(server)).toMatchObject({ state: 'working', stateStartedAt: 10_000 })
 
+    server.ingestStructuredChildWork(
+      SUBJECT,
+      [{ type: 'ended', observedAt: 25_000, handle: CHILD, outcome: 'succeeded' }],
+      'codex'
+    )
     server.ingestStructuredStatus(summary({ statusStartedAt: SETTLED, updatedAt: 26_000 }), SUBJECT)
     expect(row(server)).toMatchObject({ state: 'done', stateStartedAt: SETTLED })
   })

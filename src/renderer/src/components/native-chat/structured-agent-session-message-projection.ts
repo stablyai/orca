@@ -2,28 +2,20 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
 import { projectStructuredAgentSessionMessages as projectMessages } from '../../../../shared/structured-agent-session-message-projection'
-import { projectStructuredQuestionMessages } from './structured-agent-question-projection'
+import { createStructuredQuestionProjection } from '../../../../shared/structured-agent-question-projection'
+import { projectStructuredAgentStartItem } from '../../../../shared/structured-agent-start-projection'
 
+export const desktopStructuredTranscript = createStructuredQuestionProjection(
+  projectStructuredAgentStartItem
+)
+
+/** Keep host-recorded rejections in place as not sent unless a queue card owns them. */
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
-  outbox: readonly StructuredAgentSessionOutboxEntry[],
+  optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   submissions: readonly AgentJournalSubmission[]
 ) {
-  return projectMessages(items, outbox, submissions, projectStructuredQuestionMessages)
-}
-
-export type StructuredPromptItem = AgentJournalRenderItem & {
-  body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' | 'question' }>
-}
-
-export function pendingStructuredSessionPrompts(
-  items: AgentJournalRenderItem[]
-): StructuredPromptItem[] {
-  return items.filter(
-    (item): item is StructuredPromptItem =>
-      (item.body.kind === 'approval' || item.body.kind === 'question') &&
-      item.body.resolution.state === 'pending'
-  )
+  return projectMessages(items, optimistic, submissions, desktopStructuredTranscript.messages)
 }

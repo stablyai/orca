@@ -1,10 +1,3 @@
-/**
- * A target that cannot resolve refuses every occurrence, and the refusal record
- * must stay — a user who sees nothing concludes the feature is broken. What must
- * not stay is one row per occurrence: retention keeps 100 runs per automation, so
- * a five-minute schedule would bury its real history in under a day.
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -15,14 +8,12 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence'
 import {
   closeTestStores,
-  createSqliteTestStore,
+  createStore,
   readPersistedStateJson,
+  testState,
   writePersistedStateJson
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import { AutomationService } from './service'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-
-const testState = { dir: '' }
 
 vi.mock('electron', () => ({
   app: {
@@ -34,14 +25,6 @@ vi.mock('electron', () => ({
     decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('encrypted:'.length)
   }
 }))
-
-async function createStore(): Promise<Store> {
-  vi.resetModules()
-  installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store: StoreClass, initDataPath } = await import('../persistence')
-  initDataPath()
-  return createSqliteTestStore(StoreClass, { dataFile: join(testState.dir, 'orca-data.json') })
-}
 
 const makeRepo = (): Repo => ({
   id: 'r1',
@@ -55,11 +38,7 @@ const SETUP_GONE = 'Project is not set up on the selected automation host anymor
 
 const NO_WINDOW = 'No Orca window was available to launch the automation.'
 
-/**
- * Daily at 09:00, pointed at a project host setup that does not exist. The
- * unresolvable context is written into the stored record and reloaded, as drift
- * after creation would leave it — the create path derives contexts itself.
- */
+/** Inject persisted drift because creation derives a valid run context. */
 async function seedUnresolvableAutomation(): Promise<{ store: Store; automation: Automation }> {
   const seed = await createStore()
   seed.addRepo(makeRepo())
@@ -89,7 +68,6 @@ async function seedUnresolvableAutomation(): Promise<{ store: Store; automation:
   return { store: await createStore(), automation }
 }
 
-/** Daily at 09:00 against a repo that resolves, so only the window can refuse it. */
 function seedRunnableAutomation(store: Store): Automation {
   store.addRepo(makeRepo())
   return store.createAutomation({
@@ -110,7 +88,6 @@ function attachedService(store: Store): AutomationService {
   return service
 }
 
-/** One scheduler pass. `nextRunAt` advancing is the signal that it finished. */
 async function evaluateAt(
   store: Store,
   service: AutomationService,
@@ -162,17 +139,11 @@ describe('repeated skipped_unavailable coalescing', () => {
       status: 'skipped_unavailable',
       error: SETUP_GONE,
       occurrenceCount: 3,
-      // The record keeps the first occurrence and names the latest it stands for.
       scheduledFor: new Date('2026-05-13T09:00:00').getTime(),
       lastOccurrenceAt: new Date('2026-05-15T09:00:00').getTime()
     })
   })
 
-  /**
-   * Closing the window on macOS keeps the scheduler running — nothing stops it
-   * until quit — so this refusal repeats on the schedule's own cadence and must
-   * fold like any other, or a five-minute automation buries its history in ~8h.
-   */
   it('folds the refusals a closed window produces instead of writing a row each', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const store = await createStore()
@@ -192,24 +163,6 @@ describe('repeated skipped_unavailable coalescing', () => {
       occurrenceCount: 3,
       lastOccurrenceAt: new Date('2026-05-16T09:00:00').getTime()
     })
-  })
-
-  it('starts a new record when a real run intervened, so history is not rewritten', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const { store, automation } = await seedUnresolvableAutomation()
-    const completed = store.createAutomationRun(
-      automation,
-      new Date('2026-05-12T09:00:00').getTime()
-    )
-    store.updateAutomationRun({ runId: completed.id, status: 'completed', workspaceId: null })
-    const service = attachedService(store)
-
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-14T09:01:00')
-
-    const runs = store.listAutomationRuns(automation.id)
-    expect(runs.map((run) => run.status)).toEqual(['skipped_unavailable', 'completed'])
-    expect(runs[0].occurrenceCount).toBe(2)
   })
 
   it('gives a manual attempt its own answer rather than folding it into a scheduled skip', async () => {
@@ -241,7 +194,6 @@ describe('repeated skipped_unavailable coalescing', () => {
     ).toBeNull()
   })
 
-  // Merging these would destroy the signal the record exists to carry.
   it('keeps distinct diagnoses in distinct records', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const { store, automation } = await seedUnresolvableAutomation()
@@ -290,8 +242,6 @@ describe('repeated skipped_unavailable coalescing', () => {
     expect(published).toEqual([{ reason: 'run', selector: { kind: 'self' } }])
   })
 
-  // Rollback shape: a build that never heard of these fields writes plain rows and
-  // preserves stamped ones, so an upgrade resumes counting instead of restarting.
   it('resumes counting a folded record across a reload', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const { store, automation } = await seedUnresolvableAutomation()

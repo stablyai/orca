@@ -83,7 +83,7 @@ describe('Codex prompt claim lifetime', () => {
     await collect()
     expect(old.deref()).toBeUndefined()
     expect(registry.find(replacement.itemId)).toBe(replacement.prompt)
-    expect(registry.ownsBoundClaim(claim, replacement.itemId, 'thread', 'new-turn')).toBe(true)
+    expect(registry.ownsClaim(claim)).toBe(true)
     registry.clearTurn('thread', 'new-turn')
     expect(registry.ownsClaim(claim)).toBe(false)
   })

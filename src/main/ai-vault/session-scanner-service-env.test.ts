@@ -32,12 +32,14 @@ describe('buildAiVaultServiceEnv', () => {
   it('keeps the agent-home variables the scanner discovers sessions through', () => {
     const env = buildAiVaultServiceEnv(
       {
+        CLAUDE_CONFIG_DIR: '/home/dev/claude-home',
         CODEX_HOME: '/home/dev/.codex',
         CLINE_SESSION_DATA_DIR: '/home/dev/cline-sessions',
         COPILOT_HOME: '/home/dev/.copilot',
         DEVIN_HOME: '/home/dev/.devin',
         GROK_HOME: '/home/dev/.grok',
         KIMI_CODE_HOME: '/home/dev/.kimi-code',
+        KIRO_HOME: '/home/dev/kiro-data',
         OMP_CODING_AGENT_DIR: '/home/dev/.omp/agent/sessions',
         OPENCLAW_STATE_DIR: '/home/dev/.openclaw',
         PI_CODING_AGENT_DIR: '/home/dev/.pi/agent/sessions',
@@ -49,12 +51,14 @@ describe('buildAiVaultServiceEnv', () => {
     )
 
     expect(env).toEqual({
+      CLAUDE_CONFIG_DIR: '/home/dev/claude-home',
       CODEX_HOME: '/home/dev/.codex',
       CLINE_SESSION_DATA_DIR: '/home/dev/cline-sessions',
       COPILOT_HOME: '/home/dev/.copilot',
       DEVIN_HOME: '/home/dev/.devin',
       GROK_HOME: '/home/dev/.grok',
       KIMI_CODE_HOME: '/home/dev/.kimi-code',
+      KIRO_HOME: '/home/dev/kiro-data',
       OMP_CODING_AGENT_DIR: '/home/dev/.omp/agent/sessions',
       OPENCLAW_STATE_DIR: '/home/dev/.openclaw',
       PI_CODING_AGENT_DIR: '/home/dev/.pi/agent/sessions',
@@ -73,10 +77,6 @@ describe('buildAiVaultServiceEnv', () => {
 
     expect(env.XDG_DATA_HOME).toBe('/home/dev/data')
     expect(env.OPENCODE_DB).toBe('opencode-alt.db')
-  })
-
-  it('runs the forked Electron binary as plain Node', () => {
-    expect(buildAiVaultServiceEnv({}, 'linux').ELECTRON_RUN_AS_NODE).toBe('1')
   })
 
   it('ignores a POSIX variable that only matches an allowed name by case', () => {
@@ -113,6 +113,14 @@ describe('buildAiVaultServiceEnv', () => {
 })
 
 describe('buildRelayAiVaultServiceEnv', () => {
+  it('preserves the execution host Kiro home with Windows case folding', () => {
+    expect(buildRelayAiVaultServiceEnv({ KIRO_HOME: '/srv/kiro' }, 'linux')).toEqual({
+      KIRO_HOME: '/srv/kiro'
+    })
+    expect(buildRelayAiVaultServiceEnv({ kiro_home: 'D:\\kiro' }, 'win32')).toEqual({
+      KIRO_HOME: 'D:\\kiro'
+    })
+  })
   it('drops Node flag injection variables', () => {
     const env = buildRelayAiVaultServiceEnv(
       { NODE_OPTIONS: '--max-old-space-size=8192', NODE_PATH: '/tmp/evil', HOME: '/home/ada' },
@@ -124,8 +132,6 @@ describe('buildRelayAiVaultServiceEnv', () => {
     expect(env.HOME).toBe('/home/ada')
   })
 
-  // The sidecar takes remoteHome and hostPlatform from its init message, so an
-  // agent-home override on the remote host is not part of how it finds roots.
   it('withholds the agent-home variables the desktop child needs', () => {
     const env = buildRelayAiVaultServiceEnv(
       { CODEX_HOME: '/remote/.codex', PATH: '/usr/bin' },
@@ -134,10 +140,6 @@ describe('buildRelayAiVaultServiceEnv', () => {
 
     expect(env.CODEX_HOME).toBeUndefined()
     expect(env.PATH).toBe('/usr/bin')
-  })
-
-  it('stays plain Node rather than an Electron child', () => {
-    expect(buildRelayAiVaultServiceEnv({}, 'linux').ELECTRON_RUN_AS_NODE).toBeUndefined()
   })
 })
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
-import { VisuallyHidden } from 'radix-ui'
+import * as VisuallyHidden from 'radix-ui/visually-hidden'
 
 import { LinearIssueTextEditor } from '@/components/LinearIssueTextEditor'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
@@ -17,6 +17,8 @@ import { LinearIssueSubIssues } from './linear-issue-sub-issues'
 import { useLinearIssueWorkspaceDetail } from './linear-issue-workspace-detail-state'
 import { LinearIssueWorkspaceHeader } from './linear-issue-workspace-header'
 import { LinearIssueWorkspaceSidebar } from './linear-issue-workspace-sidebar'
+import { defaultScopeSource } from '@/lib/default-creation-host'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 type LinearIssueWorkspaceProps = {
   issue: LinearIssue | null
@@ -49,9 +51,9 @@ function LinearIssueWorkspaceIssue({
   requestKey
 }: LinearIssueWorkspaceIssueProps): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
-  const providerSettings = sourceContext ?? settings
+  const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const allWorktrees = useAllWorktrees()
-  const folderWorkspaces = useAppStore((state) => state.folderWorkspaces)
+  const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
   const attachmentWorkspaces = useMemo(
     () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
     [allWorktrees, folderWorkspaces]
@@ -88,11 +90,7 @@ function LinearIssueWorkspaceIssue({
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         <div className="mx-auto grid w-full grid-cols-1 gap-10 px-7 py-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10 xl:px-12">
           <main className="min-w-0">
-            <LinearIssueTextEditor
-              issue={detail.displayed}
-              onIssueChange={detail.handleIssueTextChange}
-              sourceContext={sourceContext}
-            />
+            <LinearIssueTextEditor issue={detail.displayed} sourceContext={sourceContext} />
             <LinearIssueSubIssues
               issue={detail.displayed}
               onOpenIssue={onOpenIssue}
@@ -113,8 +111,6 @@ function LinearIssueWorkspaceIssue({
             comments={detail.comments}
             editState={detail.editState}
             attachedWorkspaceLabel={attachedWorkspaceLabel}
-            onEditStateChange={detail.handleEditStateChange}
-            onProjectChanged={detail.handleProjectChanged}
             onOpenAttachedWorkspace={handleOpenOrUseIssue}
             sourceContext={sourceContext}
           />

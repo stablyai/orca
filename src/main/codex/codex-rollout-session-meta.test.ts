@@ -44,9 +44,7 @@ describe('readCodexRolloutSessionMetaId', () => {
     await expect(readCodexRolloutSessionMetaId(malformed)).resolves.toBeNull()
   })
 
-  // Why: AI Vault hands this every scan candidate, so a `\\wsl.localhost\...`
-  // rollout must fail on the transcript gate's deadline rather than block the
-  // scan behind a stalled distro (#15453).
+  // AI Vault must use the transcript gate to bound stalled WSL reads (#15453).
   it('reads through the gated transcript filesystem at interactive priority', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-codex-session-meta-'))
     tempRoots.push(root)
@@ -56,8 +54,7 @@ describe('readCodexRolloutSessionMetaId', () => {
 
     await expect(readCodexRolloutSessionMetaId(rollout, controller.signal)).resolves.toBe('gated')
 
-    // Default `exact`: the live-resume proof is interactive and must not queue
-    // behind an AI Vault sweep of the same WSL distro.
+    // Interactive resume must not queue behind bulk scans.
     expect(mocks.readTranscriptSlice).toHaveBeenCalledWith(
       rollout,
       0,

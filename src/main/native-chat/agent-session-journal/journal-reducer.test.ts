@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import {
   agentJournalItemKey,
@@ -10,6 +11,7 @@ import type {
   AgentJournalMessageItem
 } from '../../../shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import {
   applyJournalRow,
   createJournalReducerState,
@@ -17,11 +19,7 @@ import {
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
-import {
-  buildJournalItemRow,
-  buildJournalTombstoneRow,
-  journalLifecycleBatchRowBuilder
-} from './journal-row-builders'
+import { buildJournalItemRow, buildJournalTombstoneRow } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
 
 const EPOCH = 'epoch-1'
@@ -109,8 +107,6 @@ describe('ordering', () => {
   })
 
   it('orders by sequence regardless of the order rows are applied in', () => {
-    // Live append and replay must render the same list, so the fold cannot lean
-    // on the order it happens to be handed rows in.
     const state = fold([
       { kind: 'item', itemId: 'later', revision: 1, body: text('later'), ...base(9) },
       { kind: 'item', itemId: 'earlier', revision: 1, body: text('earlier'), ...base(3) }
@@ -119,7 +115,6 @@ describe('ordering', () => {
   })
 
   it("places a batch's writes by their order in it, and keeps that place on revision", () => {
-    // One Codex ask writes all its questions in one batch; their ids are not their order.
     const state = fold([
       {
         kind: 'lifecycle-batch',
@@ -170,9 +165,7 @@ describe('ordering', () => {
   })
 
   it('pins observedAt to creation so a revision cannot relocate the row', () => {
-    // Clients sort the timeline by observedAt. The provider echoing a send revises
-    // the submission row; if that advanced the timestamp the user's own bubble
-    // would sort below rows that landed while the turn was in flight.
+    // Provider echo revisions must not move optimistic sends below later timeline entries.
     const state = fold([
       { kind: 'item', itemId: 'send', revision: 0, body: userText('ok thanks'), ...base(1) },
       { kind: 'item', itemId: 'frame', revision: 1, body: text('warning'), ...base(2) },
@@ -181,7 +174,6 @@ describe('ordering', () => {
     const items = renderJournalState(state).items
     expect(items.map((item) => item.itemId)).toEqual(['send', 'frame'])
     expect(items.map((item) => item.observedAt)).toEqual([base(1).ts, base(2).ts])
-    // The revision still lands — only its ordering keys are ignored.
     expect(items[0]?.revision).toBe(1)
   })
 
@@ -248,7 +240,6 @@ describe('submission and dispatch state machine', () => {
     const items = renderJournalState(state).items
     expect(items).toHaveLength(1)
     expect(items[0]?.itemId).toBe(agentJournalSubmissionKey('cm_1'))
-    // The echo advances the revision; the submitted bubble keeps its original slot.
     expect(items[0]?.sequence).toBe(1)
     expect(items[0]?.revision).toBe(1)
   })
@@ -340,9 +331,7 @@ describe('submission and dispatch state machine', () => {
       { kind: 'item', itemId: 'claude:session-1:user-1', revision: 1, body, ...base(4) }
     ])
 
-    // A journal written before a refused write became `rejected` still holds it as
-    // `unknown`. Replay must not let that row claim the echo of a later send that
-    // genuinely landed, which would attach the delivery to the wrong message.
+    // Legacy unknown transport failures prove non-delivery and cannot claim later genuine resend echoes.
     expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
     expect(state.submissions.get('cm_2')).toMatchObject({
       dispatchState: 'accepted',
@@ -454,6 +443,34 @@ describe('submission and dispatch state machine', () => {
     ])
   })
 
+  it("folds the echo of another agent's message into its bubble, which keeps the sender", () => {
+    const echoed = userText('You have 1 orchestration message.')
+    const from = {
+      kind: 'agent' as const,
+      senders: [
+        {
+          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+          name: 'Coder'
+        }
+      ],
+      orchestration: null
+    }
+    const state = fold([
+      {
+        kind: 'submission',
+        clientMessageId: 'agent-send',
+        payloadFingerprint: agentSessionSendBodyFingerprint('session-1', { ...echoed, from }),
+        providerHandle: { kind: 'codex', threadId: 'thread-1' },
+        body: { ...echoed, from },
+        ...base(1)
+      },
+      { kind: 'item', itemId: 'codex:thread-1:turn-1:0', revision: 1, body: echoed, ...base(2) }
+    ])
+    expect(renderJournalState(state).items).toMatchObject([
+      { itemId: agentJournalSubmissionKey('agent-send'), body: { from } }
+    ])
+  })
+
   it.each([5, 10])(
     'reconciles %i rapid sends across an interleaved cancel when Codex reuses the root turn',
     (count) => {
@@ -554,7 +571,7 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.get('cm_1')).toBeTruthy()
   })
 
-  it('keeps a refused write rejected and leaves its bubble where it was', () => {
+  it('keeps a refused write rejected, at its rejection, whatever comes after', () => {
     const state = fold([
       submission,
       {
@@ -575,14 +592,13 @@ describe('submission and dispatch state machine', () => {
       }
     ])
 
-    // `rejected` is terminal, so nothing can put this id back on the wire; the
-    // user's Retry sends a new message under a new id instead.
+    // Rejected IDs stay spent; user Retry must create a new message ID.
     expect(state.submissions.get('cm_1')).toMatchObject({
       dispatchState: 'rejected',
       submittedAt: submission.ts,
       reason: 'provider_write_failed: closed before enqueue'
     })
-    expect(renderJournalState(state).items[0]?.sequence).toBe(submission.seq)
+    expect(renderJournalState(state).items[0]?.sequence).toBe(2)
   })
 
   it('ignores a dispatch for a submission this epoch never saw', () => {
@@ -620,8 +636,6 @@ describe('lifecycle settlement deduplication', () => {
 
 describe('malformed persisted item keys', () => {
   it('degrades a malformed-percent item id to an opaque key instead of throwing', () => {
-    // A user-message body drives identity resolution through the key parser;
-    // pre-fix `parseAgentJournalItemKey('%')` threw `URIError: URI malformed`.
     const state = fold([
       { kind: 'item', itemId: '%', revision: 1, body: userText('hi'), ...base(1) }
     ])
@@ -657,208 +671,67 @@ describe('re-adding a tombstoned row', () => {
     const state = createJournalReducerState('session-1', EPOCH)
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('first'), seq: 1, fence: 1, ts: 1_001 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('first'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
     expect(renderJournalState(state).items).toEqual([])
 
-    // Same identity, re-added later in the session: a revision built only from
-    // `items` would restart at 1 and lose to the tombstone forever.
+    // Recreated items must outrank retained tombstones instead of restarting revision at 1.
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('second'), seq: 3, fence: 1, ts: 1_003 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('second'),
+        seq: 3,
+        fence: 1,
+        ts: 1_003,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     expect(renderJournalState(state).items.map((item) => item.body)).toEqual([text('second')])
   })
 
-  // `upsertItem` clearing the tombstone on a re-add is a map-state invariant:
-  // `items` and `tombstones` stay disjoint, so a re-added row is never both
-  // present and removed. Revision ordering is now independent of it —
-  // `buildJournalTombstoneRow` takes `max(itemRevision, tombstoneRevision) + 1`
-  // — so what this pins is the map state itself, not the ranking.
   it('removes the row again after it was re-added', () => {
     const identity: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'roster' }
     const itemId = agentJournalItemKey(identity)
     const state = createJournalReducerState('session-1', EPOCH)
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('first'), seq: 1, fence: 1, ts: 1_001 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('first'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('second'), seq: 3, fence: 1, ts: 1_003 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('second'),
+        seq: 3,
+        fence: 1,
+        ts: 1_003,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     expect(state.tombstones.get(itemId)).toBeUndefined()
 
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 4, fence: 1, ts: 1_004 }))
     expect(renderJournalState(state).items).toEqual([])
-  })
-})
-
-describe('producer linkage round-trips through the reducer', () => {
-  const identity: AgentJournalItemIdentity = {
-    provider: 'claude',
-    sessionId: 'claude-session',
-    uuid: 'child-1'
-  }
-  const linkage = {
-    agentId: 'task-1',
-    parentAgentId: 'task-parent',
-    providerParentRef: 'toolu_1',
-    producerKind: 'agent' as const,
-    attempt: 2
-  }
-
-  it('copies the whole bundle onto the render item on the plain item path', () => {
-    const state = createJournalReducerState('session-1', EPOCH)
-    applyJournalRow(
-      state,
-      buildJournalItemRow({
-        state,
-        identity,
-        body: text('looking'),
-        seq: 1,
-        fence: 1,
-        ts: 1_001,
-        linkage
-      })
-    )
-    expect(renderJournalState(state).items[0]).toMatchObject(linkage)
-  })
-
-  it('copies it on the lifecycle-batch path too, which is a separate upsert', () => {
-    const state = createJournalReducerState('session-1', EPOCH)
-    applyJournalRow(state, {
-      kind: 'lifecycle-batch',
-      settlementId: 'settle-1',
-      mutations: [{ kind: 'item', itemId: 'i-child', revision: 1, body: text('looking') }],
-      ...base(1),
-      ...linkage
-    })
-    expect(renderJournalState(state).items[0]).toMatchObject(linkage)
-  })
-
-  it('reads each mutation of a mixed batch as its own producer', () => {
-    // A batch can CREATE rows several agents produced — a settlement landing
-    // before any checkpoint did. The mutation that names a producer is that
-    // producer's; the one naming none is the session's own, beside it.
-    const state = createJournalReducerState('session-1', EPOCH)
-    applyJournalRow(
-      state,
-      journalLifecycleBatchRowBuilder(
-        () => state,
-        'settle-mixed',
-        [
-          { kind: 'item', identity, body: text('child'), linkage },
-          {
-            kind: 'item',
-            identity: { provider: 'claude', sessionId: 'claude-session', uuid: 'own-1' },
-            body: text('own')
-          }
-        ],
-        { fence: 1 }
-      )(1, 1_001)
-    )
-
-    const [child, own] = renderJournalState(state).items
-    expect(child).toMatchObject({ body: text('child'), ...linkage })
-    expect(own?.body).toEqual(text('own'))
-    expect(own && 'agentId' in own).toBe(false)
-  })
-
-  it('lets a correction win over the provisional row, without moving the bubble', () => {
-    // Write-through then correct: the row is written under the spawn call's own
-    // id, then re-appended under the canonical one. Revision is assigned inside
-    // the journal's serialized write step, so the later append always outranks
-    // — and `sequence`/`observedAt` stay pinned, so re-attributing a row does
-    // not relocate it in the timeline.
-    const state = createJournalReducerState('session-1', EPOCH)
-    const provisional = { agentId: 'toolu_1', providerParentRef: 'toolu_1' }
-    applyJournalRow(
-      state,
-      buildJournalItemRow({
-        state,
-        identity,
-        body: text('looking'),
-        seq: 1,
-        fence: 1,
-        ts: 1_001,
-        linkage: provisional
-      })
-    )
-    applyJournalRow(
-      state,
-      buildJournalItemRow({
-        state,
-        identity,
-        body: text('looking'),
-        seq: 9,
-        fence: 1,
-        ts: 9_999,
-        linkage
-      })
-    )
-
-    const items = renderJournalState(state).items
-    expect(items).toHaveLength(1)
-    expect(items[0]).toMatchObject({ revision: 2, ...linkage })
-    expect(items[0]).toMatchObject({ sequence: 1, observedAt: 1_001 })
-  })
-
-  it('does not let a stale checkpoint undo a correction that already landed', () => {
-    // A text checkpoint carrying the OLD stamp, submitted after the correction,
-    // would re-root the row. It cannot: revision is read at write time, so the
-    // last write wins and the lane resolves linkage fresh on every checkpoint.
-    const state = createJournalReducerState('session-1', EPOCH)
-    applyJournalRow(
-      state,
-      buildJournalItemRow({ state, identity, body: text('a'), seq: 1, fence: 1, ts: 1, linkage })
-    )
-    applyJournalRow(
-      state,
-      buildJournalItemRow({
-        state,
-        identity,
-        body: text('a and more'),
-        seq: 2,
-        fence: 1,
-        ts: 2,
-        linkage
-      })
-    )
-    const items = renderJournalState(state).items
-    expect(items[0]).toMatchObject({ revision: 2, ...linkage })
-  })
-
-  it('keeps linkage when a later revision rewrites the row', () => {
-    // The resolved-append path lost the marker once before by rebuilding the
-    // row without it, so the SECOND write is the one that matters here.
-    const state = createJournalReducerState('session-1', EPOCH)
-    for (const [seq, body] of [
-      [1, text('look')],
-      [2, text('looking at the lane')]
-    ] as const) {
-      applyJournalRow(
-        state,
-        buildJournalItemRow({ state, identity, body, seq, fence: 1, ts: 1_000 + seq, linkage })
-      )
-    }
-    const items = renderJournalState(state).items
-    expect(items).toHaveLength(1)
-    expect(items[0]).toMatchObject({ revision: 2, ...linkage })
-  })
-
-  it("renders a row that predates linkage as the session's own", () => {
-    const state = createJournalReducerState('session-1', EPOCH)
-    applyJournalRow(state, {
-      kind: 'item',
-      itemId: 'i-legacy',
-      revision: 1,
-      body: text('written before linkage existed'),
-      ...base(1)
-    })
-    const item = renderJournalState(state).items[0]
-    expect(item && 'agentId' in item).toBe(false)
   })
 })

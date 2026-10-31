@@ -2,7 +2,11 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DiscardAllDeps, DiscardAllResult, DiscardAllArea } from './discard-all-sequence'
+import type {
+  DiscardAllDeps,
+  DiscardAllResult,
+  DiscardAllArea
+} from '../../../../../../shared/source-control-discard-all-sequence'
 import type { SourceControlToastTestOptions } from './source-control-toast-test-options'
 type DiscardAllRunner = (
   area: DiscardAllArea,
@@ -17,15 +21,17 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, dismiss: vi.fn() } }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
-vi.mock('@/runtime/runtime-git-client', () => ({ bulkUnstageRuntimeGitPaths: vi.fn() }))
-vi.mock('./discard-all-sequence', () => ({
+vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
+  bulkUnstageRuntimeGitPaths: vi.fn()
+}))
+vi.mock('../../../../../../shared/source-control-discard-all-sequence', () => ({
   getDiscardAllPaths: () => [],
   runDiscardAllForArea: (area: DiscardAllArea, paths: readonly string[], deps: DiscardAllDeps) =>
     mocks.runDiscardAllForArea(area, paths, deps)
 }))
 
 import { useSourceControlDiscardConfirmation } from './use-discard-confirmation'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
 
 const EMPTY_GROUPS: SourceControlEntryGroups = { unstaged: [], staged: [], untracked: [] }
 
@@ -36,7 +42,7 @@ function lastDescription(): string | undefined {
 function renderDiscard() {
   return renderHook(() =>
     useSourceControlDiscardConfirmation({
-      activeRepoSettings: null,
+      activeRepoTarget: { kind: 'local' },
       activeWorktreeId: 'wt-1',
       worktreePath: '/repo',
       grouped: EMPTY_GROUPS,

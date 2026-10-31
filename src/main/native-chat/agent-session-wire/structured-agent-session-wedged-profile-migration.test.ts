@@ -1,16 +1,9 @@
-// The profiles already shipped into a dead end.
-//
-// Every record here is a shape taken from a real wedged store: a lease that no acquisition, no
-// handoff restore, and no manual recovery can move, so the chat behind it never opens again. The
-// contract is that loading the record under this build makes it usable WITHOUT losing the
-// conversation — the journal, the provider handle chain, and the recorded evidence all survive.
-//
-// "Usable" means ACQUIRABLE, not acquired. Startup no longer resumes a provider child for a record
-// nobody is looking at; work that needs the agent is what spawns one. So the migration's job is to
-// leave the lease in a state an attach can claim, and these tests prove that by adjudicating it
-// rather than by reading fields off it.
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+// Real wedged record shapes must become acquirable while retaining conversation and provider history.
+// Migration releases the lease; only operations needing the agent may spawn it.
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -30,12 +23,16 @@ import type {
   PersistedAgentSessionRecord,
   PersistedAgentSessionRuntimeKind
 } from '../../../shared/agent-session-legacy-handoff-lease'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { AGENT_SESSION_STORE_FILE_NAME } from '../../runtime/agent-session-record-store-file'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import {
+  openTestAgentSessionRecordStore,
+  seedTestAgentSessionRecordStore
+} from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { JournalLifecycleBatchAppender } from '../agent-session-journal/journal-lifecycle-batch-appender'
+import * as recoveryResolution from './structured-agent-session-recovery-resolution'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
@@ -46,6 +43,16 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const DEAD_OWNER: AgentSessionProcessIdentity = {
@@ -69,7 +76,6 @@ type WedgeOverrides = {
   handoffOperationId?: string | null
 }
 
-/** A record in the wedged shape, as a build may have left it on disk, with real history behind it. */
 function wedgedRecord(overrides: WedgeOverrides): PersistedAgentSessionRecord {
   const fence = 13
   return {
@@ -100,7 +106,6 @@ function wedgedRecord(overrides: WedgeOverrides): PersistedAgentSessionRecord {
       leaseDeadlineAt: NOW - 9_000,
       lastRenewedAt: NOW - 10_000,
       handoffOperationId: overrides.handoffOperationId ?? null,
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: overrides.claimStatus,
       unreconciled: false,
@@ -110,37 +115,28 @@ function wedgedRecord(overrides: WedgeOverrides): PersistedAgentSessionRecord {
 }
 
 async function seedStore(record: PersistedAgentSessionRecord): Promise<void> {
-  const directory = join(root, 'store')
-  await mkdir(directory, { recursive: true })
-  await writeFile(
-    join(directory, AGENT_SESSION_STORE_FILE_NAME),
-    JSON.stringify({
-      schemaVersion: 2,
-      hostId: 'local',
-      records: { [record.sessionId]: record },
-      operations: {},
-      retiredClaimKeys: [],
-      unusableRecords: {}
-    }),
-    'utf-8'
-  )
-  store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+  await seedTestAgentSessionRecordStore(root, { records: [record] })
+  store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
 }
 
-/** Every recorded owner in these fixtures is long gone; that is the present-time evidence. */
 function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void {
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire,
-      releaseAcquisition: vi.fn(async () => undefined),
+      releaseAcquisition: vi.fn(async () => false),
       dispatch: vi.fn(),
       cancelTurn: vi.fn(),
       answerPrompt: vi.fn(),
       setOption: vi.fn(),
       supportsCreate: () => true
-    } as unknown as StructuredAgentSessionAdapter,
-    journalRoot: root,
+    },
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-new',
     now: () => NOW,
@@ -149,15 +145,18 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
   })
 }
 
-/** The host starting the agent with no message to deliver, as an operation that needs it does. */
 function startAgent(): Promise<unknown> {
-  return host['serialize'](SESSION, () => host['mutationContext']().ensureAgent(SESSION))
+  const context = host['mutationContext']()
+  return context
+    .serialize(SESSION, async () => context.claimAgent(SESSION))
+    .then((claim) => claim.outcome)
 }
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wedged-profile-'))
   resetHostTestOperationIds()
   acquire = vi.fn(async ({ fence }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: {
       hostId: 'local',
       pid: 4242,
@@ -166,7 +165,7 @@ beforeEach(async () => {
     },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: 'resumed' as const,
       mintedAtFence: fence,
       observedAt: NOW
@@ -176,10 +175,10 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host?.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
-/** The property that matters: a hold taken now would be granted a lease. */
 function isAcquirable(lease: NonNullable<ReturnType<typeof store.getRecord>>['lease']): boolean {
   return (
     evaluateAgentSessionAcquisition({
@@ -191,7 +190,7 @@ function isAcquirable(lease: NonNullable<ReturnType<typeof store.getRecord>>['le
   )
 }
 
-/** After the owner's last renewal, so a turn it proves dead ends at its start, never before. */
+// Start after last renewal so death proof cannot end the turn before it began.
 const SEEDED_TURN_STARTED_AT = NOW - 5_000
 
 async function seedRunningTurn(provider: 'codex' | 'claude' = 'codex'): Promise<void> {
@@ -203,17 +202,17 @@ async function seedRunningTurn(provider: 'codex' | 'claude' = 'codex'): Promise<
       agent: provider,
       providerHandle:
         provider === 'codex'
-          ? { kind: 'codex', threadId: THREAD }
-          : { kind: 'claude', sessionId: 'provider-session-alpha-1', leafUuid: null }
+          ? codexProviderHandle(THREAD)
+          : claudeProviderHandle('provider-session-alpha-1', null)
     },
-    journalDir: journalDirectoryFor(root, { workspaceId: LOCATION.workspaceId, sessionId: SESSION })
+    database: openTestJournalHostDatabase(root)
   })
   await journal.appendItem(
     provider === 'codex'
       ? { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
       : { provider: 'claude', sessionId: 'provider-session-alpha-1', uuid: 'uuid-running' },
     { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: SEEDED_TURN_STARTED_AT },
-    { fence: 13 }
+    { fence: 13, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await journal.close()
 }
@@ -270,7 +269,7 @@ describe('already-wedged profiles become usable on load', () => {
       await seedRunningTurn(provider)
       openHost()
 
-      await host.restoreReadableSessions()
+      await openTestChats(host)
 
       expect(host.hasSession(SESSION)).toBe(true)
       const firstCursor = restoredJournal().cursor()
@@ -282,12 +281,9 @@ describe('already-wedged profiles become usable on load', () => {
       expect(acquire).not.toHaveBeenCalled()
 
       await host.flushAllStreamedEvents()
-      store = await AgentSessionRecordStore.open({
-        directory: join(root, 'store'),
-        hostId: 'local'
-      })
+      store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
       openHost()
-      await host.restoreReadableSessions()
+      await openTestChats(host)
 
       expect(restoredJournal().cursor()).toEqual(firstCursor)
       expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
@@ -330,7 +326,7 @@ describe('already-wedged profiles become usable on load', () => {
       const remote = seeded.lease.ownerProcess?.hostId === 'remote-host'
       openHost({
         statusSink: { publish: (summary) => published.push(summary), forget: () => {} },
-        // Loss of contact is never proof of death: a remote owner only ever probes indeterminate.
+        // Remote contact loss proves no death; probing stays indeterminate.
         ...(remote
           ? {
               probeOwner: async () => ({
@@ -341,7 +337,7 @@ describe('already-wedged profiles become usable on load', () => {
           : {})
       })
 
-      await host.restoreReadableSessions()
+      await openTestChats(host)
 
       expect(acquire).not.toHaveBeenCalled()
       expect(turnLifecycle('turn-1')).toEqual({
@@ -351,7 +347,6 @@ describe('already-wedged profiles become usable on load', () => {
         ...verdict
       })
       expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
-      // The row never carries the proof's detail, which is Orca's log text.
       const statusRows = restoredJournal()
         .snapshot()
         .items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
@@ -362,13 +357,12 @@ describe('already-wedged profiles become usable on load', () => {
               'Codex stopped while this response was in progress. You can continue in this conversation.'
             ]
       )
-      // What the sidebar reads: every status this restart published says the chat is not working.
       expect(published.filter((summary) => summary.sessionId === SESSION)).not.toEqual([])
       expect(published.map((summary) => summary.status)).not.toContain('working')
-      // A crash is not something the user did: no outcome is claimed, so no reader files it as a
-      // cancellation the user already knows about.
-      expect(published.map((summary) => summary.turnOutcome)).toEqual(
-        published.map(() => undefined)
+      // Crash evidence must never become a user-attributed cancellation.
+      expect(published[0]?.turnOutcome).toBeUndefined() // Legacy list is neutral until opened.
+      expect(published.at(-1)?.turnOutcome).toBe(
+        verdict.state === 'interrupted' ? 'interruption' : 'unconfirmed'
       )
     }
   )
@@ -380,8 +374,7 @@ describe('already-wedged profiles become usable on load', () => {
     await seedRunningTurn()
     openHost()
 
-    // The attach adjudicates the dead owner first, which moves the fence; like a client's ensure,
-    // it is retried at the fence the refusal names.
+    // Adjudication advances the fence; retry attach at the returned fence.
     const stale = await host.attach(CALLER, hostTestAttachParams(13))
     const fence = stale.ok ? 13 : (stale.refusal.currentFence ?? 13)
     expect(stale.ok || stale.refusal.code === 'agent_session_checkpoint_stale').toBe(true)
@@ -389,7 +382,6 @@ describe('already-wedged profiles become usable on load', () => {
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
-    // A pid probe proved the owner gone, so the turn was cut short when it was last proven alive.
     expect(turnLifecycle('turn-1')).toEqual({
       turnId: 'turn-1',
       state: 'interrupted',
@@ -405,7 +397,7 @@ describe('already-wedged profiles become usable on load', () => {
 
   it('settles an observed-exit latch through attach before the boot sweep', async () => {
     const record = wedgedRecord({ claimStatus: 'released', handoffStage: 'recovering' })
-    // The settlement latch an older build wrote; this build derives the settlement instead.
+    // Legacy persisted latch, now derived instead of stored.
     const olderBuildLatch = {
       settlementRetryRequired: true,
       settlementRetryId: `provider-exit:${SESSION}:12:generation-1`
@@ -427,7 +419,6 @@ describe('already-wedged profiles become usable on load', () => {
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
-    // The exit was observed, so its receipt is the turn's end.
     expect(turnLifecycle('turn-1')).toEqual({
       turnId: 'turn-1',
       state: 'interrupted',
@@ -439,7 +430,6 @@ describe('already-wedged profiles become usable on load', () => {
       claimStatus: 'live',
       handoffStage: null
     })
-    // The older build's latch is dropped at load, so a downgrade never sees it again.
     expect(store.getRecord(SESSION)?.lease).not.toHaveProperty('settlementRetryRequired')
     expect(store.getRecord(SESSION)?.lease).not.toHaveProperty('settlementRetryId')
   })
@@ -465,11 +455,10 @@ describe('already-wedged profiles become usable on load', () => {
             : { outcome: 'pid-absent' },
         stopOwnerProcess
       })
-      // The read restore's settlement fails, and nothing retries it.
       const failing = vi
-        .spyOn(AgentSessionJournal.prototype, 'appendLifecycleBatch')
+        .spyOn(JournalLifecycleBatchAppender.prototype, 'appendPlanned')
         .mockRejectedValue(new Error('journal unavailable'))
-      await host.restoreReadableSessions()
+      await openTestChats(host)
       failing.mockRestore()
       expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe('turn-1')
       expect(stopOwnerProcess).toHaveBeenCalledTimes(ownerOutlivedRestart ? 1 : 0)
@@ -483,7 +472,6 @@ describe('already-wedged profiles become usable on load', () => {
 
       expect(acquire).toHaveBeenCalledOnce()
       expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'live' })
-      // A pid probe proved the owner gone, so the turn was cut short when it was last proven alive.
       expect(turnLifecycle('turn-1')).toEqual({
         turnId: 'turn-1',
         state: 'interrupted',
@@ -504,7 +492,17 @@ describe('already-wedged profiles become usable on load', () => {
       stopOwnerProcess
     })
 
-    await host.restoreReadableSessions()
+    const resolveRecovery = recoveryResolution.resolveStructuredSessionRecovery
+    const recovery = vi
+      .spyOn(recoveryResolution, 'resolveStructuredSessionRecovery')
+      .mockImplementation((deps, sessionId) =>
+        resolveRecovery({ ...deps, delay: async () => {} }, sessionId)
+      )
+    try {
+      await openTestChats(host)
+    } finally {
+      recovery.mockRestore()
+    }
 
     expect(stopOwnerProcess.mock.calls).toEqual([
       [DEAD_OWNER.pid, 'SIGTERM'],
@@ -532,7 +530,7 @@ describe('already-wedged profiles become usable on load', () => {
       await seedStore(wedgedRecord({ handoffStage: 'manual-recovery', ...lease }))
       openHost({ probeOwner: async () => ({ outcome: 'indeterminate', reason: 'no scan here' }) })
 
-      await host.restoreReadableSessions()
+      await openTestChats(host)
 
       expect(store.getRecord(SESSION)?.lease).toMatchObject({
         claimStatus: 'released',
@@ -545,9 +543,8 @@ describe('already-wedged profiles become usable on load', () => {
     }
   )
 
-  it('marks a running turn left behind by a released lease unverifiable on a cold acquire', async () => {
-    // No settlement latch: the record was released cleanly, but the journal still says a turn is
-    // running. The child that wrote it is gone and nothing observed its exit.
+  it('interrupts a running turn left behind by a released lease on a cold acquire', async () => {
+    // No exit was observed; a replaced generation with no later liveness evidence still needs settlement.
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: null }))
     await seedRunningTurn()
     openHost()
@@ -557,8 +554,9 @@ describe('already-wedged profiles become usable on load', () => {
     expect(acquire).toHaveBeenCalledOnce()
     expect(turnLifecycle('turn-1')).toEqual({
       turnId: 'turn-1',
-      state: 'unverifiable',
+      state: 'interrupted',
       startedAt: NOW - 5_000,
+      completedAt: NOW - 5_000,
       recovered: true
     })
     expect(
@@ -572,7 +570,6 @@ describe('already-wedged profiles become usable on load', () => {
 
   it("leaves the live generation's running turn alone on a re-attach", async () => {
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: null }))
-    // The child this host spawns stays provably alive across the second attach.
     openHost({
       probeOwner: async () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] })
     })
@@ -582,10 +579,9 @@ describe('already-wedged profiles become usable on load', () => {
     await restoredJournal().appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'turn-2', ordinal: 0 },
       { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: NOW },
-      { fence }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
-    // A reconnecting client replays its attach; the same operation admits the live owner.
     expect(await host.attach(CALLER, params)).toMatchObject({ ok: true, replayed: true })
 
     expect(acquire).toHaveBeenCalledOnce()
@@ -593,8 +589,6 @@ describe('already-wedged profiles become usable on load', () => {
   })
 
   it('re-adjudicates a conflicted manual-recovery record whose owner is provably gone', async () => {
-    // A crash can leave a conflicted current-schema row in manual recovery; positive death proof
-    // must make it acquirable again without discarding the provider handle.
     await seedStore(
       wedgedRecord({
         claimStatus: 'conflicted',
@@ -604,30 +598,26 @@ describe('already-wedged profiles become usable on load', () => {
     )
     openHost()
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     const lease = store.getRecord(SESSION)!.lease
     expect(lease).toMatchObject({ handoffStage: null, unreconciled: false })
     expect(isAcquirable(lease)).toBe(true)
-    // A real re-adjudication, not a no-op: the eviction minted a new generation.
     expect(lease?.runtimeFence).toBeGreaterThan(13)
-    // The conversation survived: the codex thread was resumed, not recreated.
     expect(store.getRecord(SESSION)?.providerHandleChain[0]).toMatchObject({
       linkId: 'codex-13-link',
-      handle: { threadId: THREAD }
+      handle: { nativeId: THREAD }
     })
-    // Why NOT acquired here: startup spawning a provider child for every recovered record is the
-    // accumulation this stack removed. Unlatching is the migration's job; spawning is a hold's.
+    // Migration only unlatches; acquiring here would spawn idle agents at every startup.
     expect(acquire).not.toHaveBeenCalled()
   })
 
   it('unlatches a released record that reloaded into recovery with nothing outstanding', async () => {
-    // An evicted lease has no owner and no token, so a restart has nothing to probe. Treating that
-    // as an unproven reservation re-latched it to `recovering` on every single boot.
+    // An ownerless released lease has nothing to probe; treating it as unproven relatches every boot.
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: 'recovering' }))
     openHost()
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     const lease = store.getRecord(SESSION)!.lease
     expect(lease).toMatchObject({ handoffStage: null, unreconciled: false })
@@ -635,10 +625,7 @@ describe('already-wedged profiles become usable on load', () => {
   })
 
   it('exits a TUI reservation an older build left before its identity was committed', async () => {
-    // The reviewer's shape: a TUI child launched, the runtime died before `commitProcessIdentity`,
-    // and restart adjudication could not answer, so the lease latched at `recovering` with a null
-    // owner. Handoff restore cannot help (no owner to talk to) and manual recovery requires one,
-    // so recovery resolution is the ONLY exit — and it used to skip every TUI record.
+    // TUI crashed before commitProcessIdentity; only recovery resolution can release its ownerless reservation.
     await seedStore(
       wedgedRecord({
         claimStatus: 'reserved',
@@ -648,8 +635,7 @@ describe('already-wedged profiles become usable on load', () => {
         handoffOperationId: 'handoff-op-1'
       })
     )
-    // Restart adjudication runs while the host still cannot enumerate the token; the later
-    // recovery pass gets a real answer.
+    // Restart cannot enumerate the token yet; the later recovery pass can.
     let probes = 0
     openHost({
       probeOwner: async () => {
@@ -660,7 +646,7 @@ describe('already-wedged profiles become usable on load', () => {
       }
     })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     const lease = store.getRecord(SESSION)!.lease
     expect(lease).toMatchObject({ handoffStage: null, unreconciled: false })
@@ -686,10 +672,11 @@ describe('already-wedged profiles become usable on load', () => {
     acquire.mockImplementation(async ({ fence }) => {
       order.push('acquire')
       return {
+        acquisitionGeneration: globalThis.crypto.randomUUID(),
         process: { hostId: 'local', pid: 4242, processStartTimeMs: 1, spawnToken: 'spawn-new' },
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex' as const, threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'resumed' as const,
           mintedAtFence: fence,
           observedAt: NOW
@@ -701,7 +688,7 @@ describe('already-wedged profiles become usable on load', () => {
       stopOwnerProcess: (pid) => order.push(`stop:${pid}`)
     })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
     expect(order).toEqual([])
     expect(scan).not.toHaveBeenCalled()
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
@@ -721,9 +708,9 @@ describe('already-wedged profiles become usable on load', () => {
     const stopOwnerProcess = vi.fn()
     let probe: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
     openHost({ probeOwner: async () => probe, stopOwnerProcess })
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
-    // A terminal agent keeps its transport across a restart, so an unanswered probe is not a way in.
+    // An unanswered probe cannot authorize takeover of a TUI transport surviving restart.
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
     expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
       ok: false,
@@ -731,7 +718,6 @@ describe('already-wedged profiles become usable on load', () => {
     })
     expect(acquire).not.toHaveBeenCalled()
 
-    // The user quits that terminal: the next start proves it gone and the chat takes over.
     probe = { outcome: 'pid-absent' }
     await startAgent()
     expect(acquire).toHaveBeenCalledOnce()

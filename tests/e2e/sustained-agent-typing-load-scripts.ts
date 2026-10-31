@@ -1,21 +1,10 @@
-/**
- * Script generators for the multi-workspace sustained typing-latency bench
- * (terminal-multi-workspace-typing-latency.spec.ts):
- *
- * - a paced agent-TUI load generator that replays the deterministic pipeline
- *   bench fixture through a real PTY at a fixed byte rate, emulating a Claude
- *   Code-style agent streaming in another workspace, and
- * - a typing echo probe that records each character and its arrival time at
- *   the pty in sidecar JSONL, so a key's total latency decomposes into
- *   input-half (CDP keydown -> pty stdin) and echo-half (pty echo -> screen).
- */
+// Generate paced PTY agent load and sidecar echo arrivals for terminal-multi-workspace-typing-latency.spec.ts.
+// Split driver→PTY receipt from receipt→polled xterm-buffer detection.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-// Why absolute file URL: the generated .mjs scripts run with the disposable
-// test repo as cwd, so the fixture builder must be imported by absolute
-// specifier (file URL keeps Windows drive-letter paths importable).
+// Import fixture builders by absolute file URL because generated scripts run in disposable repos, including Windows.
 const PIPELINE_BENCH_URL = pathToFileURL(
   path.resolve(__dirname, '..', 'tools', 'benchmarks', 'terminal-pipeline-bench.mjs')
 ).href
@@ -153,14 +142,81 @@ process.stdin.on('data', (chunk) => {
 `
 }
 
+// Model Codex DEC 2026 frames with body and closing ?2026l in separate writes; the plain unwrapped echo cannot leave xterm’s latch open.
+// frameRows controls repaint size; splitDelayMs controls the source-side open-latch interval.
+function codexEchoProbeScript(
+  runId: string,
+  arrivalSidecarPath: string,
+  frameRows: number,
+  splitDelayMs: number
+): string {
+  return `
+import { appendFileSync } from 'node:fs'
+
+process.stdin.setEncoding('utf8')
+if (process.stdin.isTTY) process.stdin.setRawMode(true)
+process.stdin.resume()
+let seq = 0
+const interrupt = String.fromCharCode(3)
+const rows = ${frameRows}
+const splitDelayMs = ${splitDelayMs}
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const write = (data) =>
+  new Promise((resolve) => {
+    if (process.stdout.write(data)) resolve()
+    else process.stdout.once('drain', resolve)
+  })
+process.stdout.write('${'MWT_TYPING_READY_'}${runId}\\r\\n')
+let queue = Promise.resolve()
+process.stdin.on('data', (chunk) => {
+  const atMs = Date.now()
+  if (chunk.includes(interrupt)) process.exit(0)
+  for (const char of chunk) {
+    if (char === '\\r' || char === '\\n') continue
+    seq += 1
+    const mySeq = seq
+    appendFileSync(
+      ${JSON.stringify(arrivalSidecarPath)},
+      JSON.stringify({ seq: mySeq, atMs, char }) + '\\n'
+    )
+    queue = queue.then(async () => {
+      // Frame body: open the latch, repaint rows, but do NOT close yet.
+      let body = '\\x1b[?2026h'
+      for (let row = 1; row <= rows; row++) {
+        body += '\\x1b[' + row + ';1H\\x1b[2Kcodex frame row ' + row + ' seq ' + mySeq
+      }
+      body +=
+        '\\x1b[' + (rows + 1) + ';1H\\x1b[2Kmwt prompt ' +
+        mySeq + ': ' + char + ' ${'MWT_KEY_'}${runId}_' + mySeq
+      await write(body)
+      if (splitDelayMs > 0) await sleep(splitDelayMs)
+      await write('\\x1b[?2026l')
+    })
+  }
+})
+`
+}
+
+export function writeCodexEchoProbeScript(
+  scriptPath: string,
+  runId: string,
+  arrivalSidecarPath: string,
+  options: { frameRows: number; splitDelayMs: number }
+): void {
+  mkdirSync(path.dirname(scriptPath), { recursive: true })
+  writeFileSync(
+    scriptPath,
+    codexEchoProbeScript(runId, arrivalSidecarPath, options.frameRows, options.splitDelayMs)
+  )
+}
+
 export function writeSustainedAgentLoadScript(
   scriptPath: string,
   runId: string,
   readyFileDirectory: string
 ): void {
   mkdirSync(path.dirname(scriptPath), { recursive: true })
-  // Generated scripts concatenate with '/', which Node's fs accepts on all
-  // platforms; normalize Windows backslashes out of the baked-in directory.
+  // Normalize baked-in Windows paths because generated scripts join with forward slashes.
   writeFileSync(
     scriptPath,
     sustainedAgentLoadScript(runId, readyFileDirectory.replaceAll('\\', '/'))

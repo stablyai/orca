@@ -32,7 +32,11 @@ vi.mock('./popup-origin-bar-window', () => ({
 vi.mock('./browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({
     mode: mocks.processUserAgentMode,
-    userAgent: mocks.processUserAgent
+    userAgent: mocks.processUserAgent,
+    electronUserAgent:
+      mocks.processUserAgentMode === 'native'
+        ? mocks.processUserAgent
+        : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
   })
 }))
 
@@ -70,7 +74,6 @@ type Observed = {
   requestIdentity: ReturnType<typeof browserManager.resolveBrowserGuestRequestUserAgent>
 }
 
-/** Opens a tab on `url` the way a real load does: did-start-navigation runs before any preset. */
 function openTab(url: string): { tab: string; id: number; handle: ViewportGuestHandle } {
   const id = nextGuestId++
   const tab = `tab-${id}`
@@ -98,13 +101,35 @@ function redirectTo(url: string): void {
   willRedirect({ preventDefault: vi.fn() }, url, false, true)
 }
 
-// A redirect target that fails: the one failed-load path whose restore could otherwise write the UA.
 function failLoad(url: string): void {
   redirectTo(url)
   const didFailLoad = mocks.guestOnMock.mock.calls.findLast(
     ([event]) => event === 'did-fail-load'
   )?.[1]
   didFailLoad(null, -102, 'ERR_CONNECTION_REFUSED', url, true)
+}
+
+function failDeviceMetrics(handle: ViewportGuestHandle): void {
+  handle.debuggerSendCommand.mockImplementation((method: string) =>
+    method === 'Emulation.setDeviceMetricsOverride' ||
+    method === 'Emulation.clearDeviceMetricsOverride'
+      ? Promise.reject(new Error('Inspected target navigated or closed'))
+      : Promise.resolve(undefined)
+  )
+}
+
+function debuggerDetachHandler(handle: ViewportGuestHandle): () => void {
+  const debuggerApi = handle.guest.debugger
+  const on =
+    debuggerApi && typeof debuggerApi === 'object' && 'on' in debuggerApi ? debuggerApi.on : null
+  if (!vi.isMockFunction(on)) {
+    throw new Error('Expected a mocked debugger.on')
+  }
+  const handler: unknown = on.mock.calls.findLast(([event]) => event === 'detach')?.[1]
+  if (typeof handler !== 'function') {
+    throw new Error('Expected a debugger detach handler')
+  }
+  return () => handler()
 }
 
 async function observe(
@@ -133,8 +158,7 @@ async function presentWith(url: string, preset: Preset): Promise<Observed> {
   return observe(opened, url)
 }
 
-// Why: Chromium drops navigator.userAgentData and every sec-ch-ua header for a UA override that
-// carries no userAgentMetadata, so only Firefox (which sends no hints) may stand without it.
+// UA overrides without metadata suppress client hints; only the Google sign-in identity omits them.
 function expectClientHintsKept(observed: Observed): void {
   const override = observed.standingOverride
   if (override && override.userAgent !== googleAuthUserAgent()) {
@@ -168,13 +192,12 @@ describe('tab identity ownership', () => {
         const desktop = await presentWith(url, 'desktop')
         expect(desktop).toEqual(none)
         expectClientHintsKept(desktop)
-        const expected =
-          mode === 'clean' && url === AUTH_URL ? googleAuthUserAgent() : processUserAgent
-        expect(desktop.presented).toBe(expected)
-        expect(desktop.requestIdentity.userAgent).toBe(expected)
-        expect(desktop.requestIdentity.kind).toBe(
-          expected === processUserAgent ? 'process' : 'google-auth'
-        )
+        const auth = url === AUTH_URL
+        expect(desktop.presented).toBe(auth ? googleAuthUserAgent() : processUserAgent)
+        expect(desktop.requestIdentity).toEqual({
+          kind: auth ? 'google-auth' : 'process',
+          userAgent: desktop.presented
+        })
       }
     )
 
@@ -188,16 +211,11 @@ describe('tab identity ownership', () => {
       expect(observed.requestIdentity.userAgent).toBe(observed.presented)
     })
 
-    it('keeps the Google sign-in identity ahead of a mobile preset only in clean mode', async () => {
+    it('keeps the Google sign-in identity ahead of a mobile preset', async () => {
       const observed = await presentWith(AUTH_URL, 'mobile')
       expectClientHintsKept(observed)
-      if (mode === 'clean') {
-        expect(observed.presented).toBe(googleAuthUserAgent())
-        expect(observed.requestIdentity.kind).toBe('google-auth')
-      } else {
-        expect(observed.presented).toContain('iPhone')
-        expect(observed.requestIdentity.kind).toBe('mobile')
-      }
+      expect(observed.presented).toBe(googleAuthUserAgent())
+      expect(observed.requestIdentity.kind).toBe('google-auth')
     })
 
     it.each(['desktop', 'none'] as const)(
@@ -216,27 +234,23 @@ describe('tab identity ownership', () => {
     )
   })
 
-  it('never puts the Electron or app tokens on a clean-mode tab under any preset', async () => {
+  it('keeps the Electron and app tokens off a clean-mode tab outside Google sign-in under any preset', async () => {
     mocks.processUserAgentMode = 'clean'
     mocks.processUserAgent = GUEST_CLEAN_UA
-    for (const url of [ORDINARY_URL, AUTH_URL]) {
-      for (const preset of ['none', 'desktop', 'mobile'] as const) {
-        const observed = await presentWith(url, preset)
-        expect(observed.presented).not.toMatch(APP_TOKENS)
-        expect(observed.requestIdentity.userAgent).not.toMatch(APP_TOKENS)
-      }
+    for (const preset of ['none', 'desktop', 'mobile'] as const) {
+      const observed = await presentWith(ORDINARY_URL, preset)
+      expect(observed.presented).not.toMatch(APP_TOKENS)
+      expect(observed.requestIdentity.userAgent).not.toMatch(APP_TOKENS)
     }
   })
 
-  // Why: Chromium rejects touch emulation with maxTouchPoints 0, so every step after it used to be
-  // skipped and the mobile UA outlived its preset. Identity is no longer a step after touch.
   it('restores the process identity and reports the failure when touch emulation is rejected', async () => {
     mocks.processUserAgentMode = 'clean'
     mocks.processUserAgent = GUEST_CLEAN_UA
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const opened = openTab(ORDINARY_URL)
     await browserManager.setViewportOverride(opened.tab, PRESETS.mobile)
-    // Rejects whatever the payload, so the test outlives a fix to the payload itself.
+    // Reject by method so the regression survives changes to the touch payload.
     opened.handle.debuggerSendCommand.mockImplementation((method: string) =>
       method === 'Emulation.setTouchEmulationEnabled'
         ? Promise.reject(new Error('Touch points must be between 1 and 16'))
@@ -255,21 +269,97 @@ describe('tab identity ownership', () => {
     )
   })
 
-  it('still presents the requested mobile identity when device metrics fail', async () => {
+  it('keeps the process identity when a mobile preset cannot apply its device metrics', async () => {
     mocks.processUserAgentMode = 'clean'
     mocks.processUserAgent = GUEST_CLEAN_UA
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const opened = openTab(ORDINARY_URL)
-    opened.handle.debuggerSendCommand.mockImplementation((method: string) =>
-      method === 'Emulation.setDeviceMetricsOverride'
-        ? Promise.reject(new Error('metrics failed'))
-        : Promise.resolve(undefined)
-    )
+    failDeviceMetrics(opened.handle)
 
     await expect(browserManager.setViewportOverride(opened.tab, PRESETS.mobile)).resolves.toBe(
       false
     )
-    expect((await observe(opened, ORDINARY_URL)).presented).toContain('iPhone')
+    const failed = await observe(opened, ORDINARY_URL)
+    expect(failed.presented).toBe(GUEST_CLEAN_UA)
+    expect(failed.standingOverride).toBeNull()
+    expect(failed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
+    navigate('https://example.org/')
+    expect((await observe(opened, 'https://example.org/')).presented).toBe(GUEST_CLEAN_UA)
+
+    opened.handle.debuggerSendCommand.mockResolvedValue(undefined)
+    await expect(browserManager.setViewportOverride(opened.tab, PRESETS.mobile)).resolves.toBe(true)
+    expect((await observe(opened, 'https://example.org/')).requestIdentity.kind).toBe('mobile')
+  })
+
+  it.each(['desktop', 'none'] as const)(
+    'keeps the mobile identity while the phone viewport stands when switching to %s fails',
+    async (next) => {
+      mocks.processUserAgentMode = 'clean'
+      mocks.processUserAgent = GUEST_CLEAN_UA
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const opened = openTab(ORDINARY_URL)
+      await browserManager.setViewportOverride(opened.tab, PRESETS.mobile)
+      failDeviceMetrics(opened.handle)
+
+      await expect(browserManager.setViewportOverride(opened.tab, PRESETS[next])).resolves.toBe(
+        false
+      )
+      const failed = await observe(opened, ORDINARY_URL)
+      expect(failed.presented).toContain('iPhone')
+      expect(failed.requestIdentity.kind).toBe('mobile')
+      navigate('https://example.org/')
+      const reloaded = await observe(opened, 'https://example.org/')
+      expect(reloaded.presented).toContain('iPhone')
+      expect(reloaded.requestIdentity.kind).toBe('mobile')
+    }
+  )
+
+  it('drops the mobile identity once a debugger detach clears the device metrics', async () => {
+    mocks.processUserAgentMode = 'clean'
+    mocks.processUserAgent = GUEST_CLEAN_UA
+    const opened = openTab(ORDINARY_URL)
+    await browserManager.setViewportOverride(opened.tab, PRESETS.mobile)
+    expect(opened.handle.presentedUserAgent()).toContain('iPhone')
+
+    debuggerDetachHandler(opened.handle)()
+    opened.handle.debuggerSendCommand.mockClear()
+    navigate('https://example.org/')
+    const observed = await observe(opened, 'https://example.org/')
+    expect(opened.handle.debuggerSendCommand).not.toHaveBeenCalledWith(
+      'Emulation.setUserAgentOverride',
+      expect.anything()
+    )
+    expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
+  })
+
+  it('does not let a mid-apply debugger detach leave a mobile identity to reinstall', async () => {
+    mocks.processUserAgentMode = 'clean'
+    mocks.processUserAgent = GUEST_CLEAN_UA
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const opened = openTab(ORDINARY_URL)
+    const detach = debuggerDetachHandler(opened.handle)
+    opened.handle.debuggerSendCommand.mockImplementation((method: string) => {
+      if (method !== 'Emulation.setTouchEmulationEnabled') {
+        return Promise.resolve(undefined)
+      }
+      opened.handle.debuggerIsAttached.mockReturnValue(false)
+      detach()
+      return Promise.reject(new Error('Debugger is not attached'))
+    })
+
+    await expect(browserManager.setViewportOverride(opened.tab, PRESETS.mobile)).resolves.toBe(
+      false
+    )
+    // Another CDP client can reattach before the viewport preset returns.
+    opened.handle.debuggerIsAttached.mockReturnValue(true)
+    opened.handle.debuggerSendCommand.mockClear()
+    navigate('https://example.org/')
+    const observed = await observe(opened, 'https://example.org/')
+    expect(opened.handle.debuggerSendCommand).not.toHaveBeenCalledWith(
+      'Emulation.setUserAgentOverride',
+      expect.anything()
+    )
+    expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
   })
 
   it('heals a mid-redirect process override on the next navigation', async () => {
@@ -281,7 +371,7 @@ describe('tab identity ownership', () => {
       ([event]) => event === 'will-redirect'
     )?.[1]
     willRedirect({ preventDefault: vi.fn() }, ORDINARY_URL, false, true)
-    // The WebContents UA still says Firefox, so clearing here would expose it on an ordinary host.
+    // Clearing now would expose the stale auth WebContents UA.
     expect((await observe(opened, ORDINARY_URL)).presented).toBe(GUEST_CLEAN_UA)
 
     navigate('https://example.org/')
@@ -290,8 +380,6 @@ describe('tab identity ownership', () => {
     expect(healed.standingOverride).toBeNull()
   })
 
-  // Why a table over every entry point: Chromium cancels a redirect, and reloads a loading document,
-  // when the WebContents UA changes anywhere but a cross-document navigation start.
   it.each([
     ['a redirect', () => redirectTo(ORDINARY_URL)],
     ['a failed load', () => failLoad(ORDINARY_URL)],
@@ -312,14 +400,13 @@ describe('tab identity ownership', () => {
       expect(opened.handle.guest.setUserAgent).toHaveBeenCalledOnce()
 
       navigate('https://example.org/')
-      // Synchronous: the write must land inside did-start-navigation, before any await.
+      // Assert before yielding: the write must occur inside did-start-navigation.
       expect(opened.handle.guest.setUserAgent).toHaveBeenCalledTimes(2)
       expect(opened.handle.webContentsUserAgent()).toBe(GUEST_CLEAN_UA)
     }
   )
 
-  // Why: setUserAgent() while a document loads makes Chromium reload it, and an OAuth callback that
-  // strips its code with replaceState would be requested twice — the one-time code replayed.
+  // Changing UA during same-document navigation can reload and replay an OAuth one-time code.
   it('leaves the WebContents UA alone on a same-document navigation', async () => {
     mocks.processUserAgentMode = 'clean'
     mocks.processUserAgent = GUEST_CLEAN_UA
@@ -338,8 +425,7 @@ describe('tab identity ownership', () => {
     expect(opened.handle.webContentsUserAgent()).toBe(GUEST_CLEAN_UA)
   })
 
-  // Why: a failed navigation commits an error page that is still loading at did-fail-load, and
-  // setUserAgent() then makes Chromium reload it — the failed request replayed.
+  // Changing UA while the error page loads can replay the failed request.
   it('leaves the WebContents UA alone when a redirected navigation fails', async () => {
     mocks.processUserAgentMode = 'clean'
     mocks.processUserAgent = GUEST_CLEAN_UA
@@ -362,8 +448,7 @@ describe('tab identity ownership', () => {
     expect(observed.requestIdentity.kind).toBe('google-auth')
   })
 
-  // Why: a debugger that cannot attach (DevTools open on the guest) installs no mobile identity, so
-  // requests claiming one would disagree with the document's own navigator.userAgent.
+  // A failed attachment must not advertise mobile identity on requests alone.
   it('keeps requests on the presented identity when a mobile preset cannot attach', async () => {
     mocks.processUserAgentMode = 'clean'
     mocks.processUserAgent = GUEST_CLEAN_UA

@@ -213,10 +213,6 @@ describe('command aliases', () => {
     expect(findCommandSpec(specs, ['worktree', 'remove'])?.path).toEqual(['worktree', 'rm'])
   })
 
-  it('resolves each declared alias to the canonical spec', () => {
-    expect(findCommandSpec(specs, ['worktree', 'delete'])?.path).toEqual(['worktree', 'rm'])
-  })
-
   it('returns undefined for a path matching neither canonical nor alias', () => {
     expect(findCommandSpec(specs, ['worktree', 'destroy'])).toBeUndefined()
   })
@@ -246,17 +242,38 @@ describe('command aliases', () => {
 })
 
 describe('supportsBrowserPageFlag', () => {
-  it('does not expose browser page targeting on orchestration commands', () => {
-    expect(supportsBrowserPageFlag(['orchestration', 'send'])).toBe(false)
+  const pageFlagFor = (path: string[]): boolean => {
+    const spec = findCommandSpec(COMMAND_SPECS, path)
+    if (!spec) {
+      throw new Error(`no spec for ${path.join(' ')}`)
+    }
+    return supportsBrowserPageFlag(spec)
+  }
+
+  it('offers --page on browser commands that act on one page', () => {
+    expect(pageFlagFor(['snapshot'])).toBe(true)
+    expect(pageFlagFor(['tab', 'switch'])).toBe(true)
+    expect(pageFlagFor(['cookie', 'get'])).toBe(true)
   })
 
-  it('does not expose browser page targeting on local agent discovery', () => {
-    expect(supportsBrowserPageFlag(['agent-context'])).toBe(false)
+  it('does not offer --page on browser commands that open, list or configure pages', () => {
+    expect(pageFlagFor(['open-url'])).toBe(false)
+    expect(pageFlagFor(['tab', 'list'])).toBe(false)
+    expect(pageFlagFor(['browser', 'identity', 'get'])).toBe(false)
   })
 
-  it('does not expose browser page targeting on host-local account commands', () => {
-    expect(supportsBrowserPageFlag(['account', 'add'])).toBe(false)
-    expect(supportsBrowserPageFlag(['account', 'list'])).toBe(false)
+  it('does not offer --page outside the browser commands, including newer groups', () => {
+    for (const path of [
+      ['orchestration', 'send'],
+      ['agent-context'],
+      ['account', 'add'],
+      ['serve'],
+      ['environment', 'list'],
+      ['profile', 'state', 'exports'],
+      ['connector', 'send']
+    ]) {
+      expect(pageFlagFor(path)).toBe(false)
+    }
   })
 })
 

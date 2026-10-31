@@ -1,21 +1,31 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   View,
   Text,
   ActivityIndicator,
   colors,
   TaskProviderLogo,
-  Pressable
+  Pressable,
+  type MobileColorScheme
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import { renderMobileTasksGitHubProjectList } from './mobile-tasks-github-project-list'
 import { renderMobileTasksLinearList } from './mobile-tasks-linear-list'
 import { renderMobileTasksProviderItemList } from './mobile-tasks-provider-item-list'
+import { JiraConnectPrompt } from '../components/JiraConnectPrompt'
 
-export function renderMobileTasksListSurface(model: ConnectionPresentationModel) {
+export function renderMobileTasksListSurface(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
+) {
   const {
     githubMode,
     linearConnected,
+    jiraConnection,
+    refreshJiraConnection,
+    setError,
     provider,
     setLinearApiKeyDraft,
     setLinearConnectError,
@@ -27,23 +37,48 @@ export function renderMobileTasksListSurface(model: ConnectionPresentationModel)
   } = model
   return !tasksSupported ? (
     tasksUnsupported ? (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>Update Orca desktop</Text>
+      <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
+        <Text style={styles.emptyText}>
+          {translate('tasks.listSurface.updateDesktopTitle', 'Update Orca desktop')}
+        </Text>
         <Text style={styles.centeredHint}>
-          This mobile Tasks view needs a newer desktop runtime.
+          {translate(
+            'tasks.listSurface.updateDesktopMessage',
+            'This mobile Tasks view needs a newer desktop runtime.'
+          )}
         </Text>
       </View>
     ) : (
-      <View style={styles.centered}>
+      <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
         <ActivityIndicator size="small" color={colors.textSecondary} />
       </View>
     )
+  ) : provider === 'jira' && !jiraConnection.connected ? (
+    <JiraConnectPrompt
+      credentialError={jiraConnection.credentialError}
+      unavailableReason={jiraConnection.unavailableReason}
+      disabled={!taskUiReady}
+      onCheckAgain={() => {
+        void refreshJiraConnection().catch((err: unknown) => {
+          setError(
+            err instanceof Error
+              ? err.message
+              : translate('tasks.listSurface.jiraStatusFailed', 'Failed to read Jira status')
+          )
+        })
+      }}
+    />
   ) : provider === 'linear' && !linearConnected ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <TaskProviderLogo provider="linear" size={32} color={colors.textSecondary} />
-      <Text style={styles.emptyText}>Connect your Linear account</Text>
+      <Text style={styles.emptyText}>
+        {translate('tasks.listSurface.connectLinearTitle', 'Connect your Linear account')}
+      </Text>
       <Text style={styles.centeredHint}>
-        Browse and start work on your assigned Linear issues directly from Tasks.
+        {translate(
+          'tasks.listSurface.connectLinearMessage',
+          'Browse and start work on your assigned Linear issues directly from Tasks.'
+        )}
       </Text>
       <Pressable
         style={[styles.targetButton, styles.centerActionButton]}
@@ -58,19 +93,25 @@ export function renderMobileTasksListSurface(model: ConnectionPresentationModel)
           setShowLinearConnect(true)
         }}
       >
-        <Text style={styles.targetButtonText}>Connect Linear</Text>
+        <Text style={styles.targetButtonText}>
+          {translate('tasks.listSurface.connectLinearButton', 'Connect Linear')}
+        </Text>
       </Pressable>
     </View>
   ) : provider === 'github' && githubMode === 'project' ? (
-    renderMobileTasksGitHubProjectList(model)
+    renderMobileTasksGitHubProjectList(model, colorScheme, bottomBarHeight)
   ) : (
-    renderMobileTasksNonProjectLists(model)
+    renderMobileTasksNonProjectLists(model, colorScheme, bottomBarHeight)
   )
 }
 
-export function renderMobileTasksNonProjectLists(model: ConnectionPresentationModel) {
+export function renderMobileTasksNonProjectLists(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
+) {
   const { provider } = model
   return provider === 'linear'
-    ? renderMobileTasksLinearList(model)
-    : renderMobileTasksProviderItemList(model)
+    ? renderMobileTasksLinearList(model, colorScheme, bottomBarHeight)
+    : renderMobileTasksProviderItemList(model, colorScheme, bottomBarHeight)
 }

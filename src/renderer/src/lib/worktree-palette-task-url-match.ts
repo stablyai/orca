@@ -12,16 +12,17 @@ import {
 } from '../../../shared/github/links'
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { parseGitLabIssueOrMRLink } from '../../../shared/new-workspace/gitlab-links'
-import { parseJiraIssueUrl, type ParsedJiraIssueUrl } from '../../../shared/jira-issue-url'
+import { parseJiraIssueUrl, type ParsedJiraIssueUrl } from '../../../shared/jira/jira-issue-url'
 import { parseLinearIssueUrlIntent, type LinearIssueUrlIntent } from '../../../shared/linear/links'
 import type { Repo } from '../../../shared/repo-types'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
 import type { Worktree } from '../../../shared/worktree/types'
 import { normalizeLinearIdentifier } from './linear-issue-workspace-attachment'
 import {
   worktreeMatchesGitLabUrl,
   type GitLabIssueOrMRLink
 } from './worktree-palette-gitlab-url-match'
-import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
+import { isWorktreePaletteQueryTooLarge } from '../../../shared/palette-match/worktree-palette-query-bounds'
 import { buildWorktreePaletteTaskUrlResult } from './worktree-palette-task-url-result'
 import type { PaletteSearchResult } from './worktree-palette-search'
 import { getPaletteWorktreeExecutionHostId } from './palette-repo-resolution'
@@ -102,9 +103,7 @@ function remoteIdentityMatchesGitHubSlug(repo: Repo, slug: RepoSlug): boolean | 
   if (verdict !== false) {
     return verdict
   }
-  // Why not false: identity keeps only one remote, so an `upstream` pick means a fork's `origin`
-  // existed and is invisible here, and rejecting would drop URLs from the fork itself. GitLab makes
-  // the opposite trade (STA-4450); aligning the two is left to a twin ticket.
+  // Single-remote identity can hide a fork’s origin behind upstream; remain permissive for fork URLs. GitLab makes the opposite trade (STA-4450); alignment needs a separate change.
   return identity?.remoteName === 'upstream' ? 'unknown' : false
 }
 
@@ -113,8 +112,7 @@ function repoMatchesGitHubSlug(repo: Repo | undefined, slug: RepoSlug): boolean 
   if (!repo) {
     return 'unknown'
   }
-  // Why displayName first: it is compared host-agnostically, so mirrors and host aliases of the
-  // same owner/repo keep matching; the probed remote only fills in where no name evidence exists.
+  // Host-agnostic displayName preserves mirror/alias matching; probed remote fills only missing name evidence.
   const fromName = parseOwnerRepoDisplayName(repo.displayName)
   if (fromName) {
     return githubIdentityKey({ ...fromName, host: slug.host }) === githubIdentityKey(slug)
@@ -122,8 +120,7 @@ function repoMatchesGitHubSlug(repo: Repo | undefined, slug: RepoSlug): boolean 
   if (repo.upstream?.owner && repo.upstream.repo) {
     return githubIdentityKey(repo.upstream) === githubIdentityKey(slug)
   }
-  // Why: a basename-only displayName is the common non-fork case, and issue/PR numbers are
-  // per-repo, so a bare number must still clear the remote the repo actually points at.
+  // Basename-only names are common; repo-scoped bare numbers still need the actual remote gate.
   return remoteIdentityMatchesGitHubSlug(repo, slug)
 }
 
@@ -202,74 +199,66 @@ function worktreeMatchesGitHubUrl(
   repo: Repo | undefined,
   review: HostedReviewInfo | null | undefined
 ): boolean {
-  const linkedUrl = worktree.linkedWorkItem?.url
-    ? parseGitHubIssueOrPRLink(worktree.linkedWorkItem.url)
-    : null
-  if (linkedUrl && githubLinksEqual(linkedUrl, link)) {
-    return true
-  }
-
+  const attachments = getWorkspaceAttachments(worktree).filter((item) => item.provider === 'github')
+  const attachmentMatch = attachments.some((item) => {
+    const itemUrl = item.url ? parseGitHubIssueOrPRLink(item.url) : null
+    if (itemUrl) {
+      return githubLinksEqual(itemUrl, link)
+    }
+    return (
+      item.type === link.type &&
+      item.number === link.number &&
+      repoMatchesGitHubSlug(repo, link.slug) !== false
+    )
+  })
   const reviewUrl = review?.url ? parseGitHubIssueOrPRLink(review.url) : null
-  if (reviewUrl && githubLinksEqual(reviewUrl, link)) {
-    return true
-  }
-
-  const linkedItem = worktree.linkedWorkItem
-  const linkedItemMatches =
-    linkedItem?.provider === 'github' &&
-    linkedItem.type === link.type &&
-    linkedItem.number === link.number
-  const numberMatches =
-    linkedItemMatches ||
-    (link.type === 'pr' ? worktree.linkedPR === link.number : worktree.linkedIssue === link.number)
-  if (!numberMatches) {
-    return false
-  }
-
-  return repoMatchesGitHubSlug(repo, link.slug) !== false
+  const legacyItem = worktree.linkedWorkItem
+  const legacyNumberMatch =
+    !legacyItem?.url &&
+    legacyItem?.provider === 'github' &&
+    legacyItem.type === link.type &&
+    legacyItem.number === link.number &&
+    repoMatchesGitHubSlug(repo, link.slug) !== false
+  return (
+    attachmentMatch || legacyNumberMatch || Boolean(reviewUrl && githubLinksEqual(reviewUrl, link))
+  )
 }
 
 function worktreeMatchesLinearUrl(worktree: Worktree, intent: LinearIssueUrlIntent): boolean {
   const identifier = normalizeLinearIdentifier(intent.identifier)
-  const linkedIdentifier =
-    normalizeLinearIdentifier(worktree.linkedLinearIssue) ??
-    normalizeLinearIdentifier(worktree.linkedWorkItem?.linearIdentifier)
-  if (!identifier || linkedIdentifier !== identifier) {
-    const linkedUrl = worktree.linkedWorkItem?.url
-      ? parseLinearIssueUrlIntent(worktree.linkedWorkItem.url)
-      : null
-    if (
-      !linkedUrl ||
-      linkedUrl.identifier !== intent.identifier ||
-      linkedUrl.organizationUrlKey.toLowerCase() !== intent.organizationUrlKey.toLowerCase()
-    ) {
+  return getWorkspaceAttachments(worktree).some((item) => {
+    if (item.provider !== 'linear') {
       return false
     }
-  }
-
-  const worktreeOrg = worktree.linkedLinearIssueOrganizationUrlKey?.trim().toLowerCase()
-  if (worktreeOrg && worktreeOrg !== intent.organizationUrlKey.toLowerCase()) {
-    return false
-  }
-  return true
+    const linkedUrl = item.url ? parseLinearIssueUrlIntent(item.url) : null
+    const linkedIdentifier = normalizeLinearIdentifier(
+      item.identifier ?? item.linearIdentifier ?? linkedUrl?.identifier
+    )
+    if (!identifier || linkedIdentifier !== identifier) {
+      return false
+    }
+    const org = (item.linearOrganizationUrlKey ?? linkedUrl?.organizationUrlKey)
+      ?.trim()
+      .toLowerCase()
+    return !org || org === intent.organizationUrlKey.toLowerCase()
+  })
 }
 
 function worktreeMatchesJiraUrl(worktree: Worktree, parsed: ParsedJiraIssueUrl): boolean {
-  const linkedUrl = worktree.linkedWorkItem?.url
-    ? parseJiraIssueUrl(worktree.linkedWorkItem.url)
-    : null
-  // Why url first: issue keys are per-project, not per-tenant, so two Jira sites
-  // routinely both have a PROJ-123. The stored URL is the only tenant evidence
-  // here, so where it exists it decides — matching on the bare identifier would
-  // jump to another tenant's worktree.
-  if (linkedUrl) {
-    return (
-      linkedUrl.issueKey === parsed.issueKey &&
-      linkedUrl.origin === parsed.origin &&
-      linkedUrl.sitePath === parsed.sitePath
-    )
-  }
-  return worktree.linkedWorkItem?.jiraIdentifier?.toUpperCase() === parsed.issueKey
+  return getWorkspaceAttachments(worktree).some((item) => {
+    if (item.provider !== 'jira') {
+      return false
+    }
+    const linkedUrl = item.url ? parseJiraIssueUrl(item.url) : null
+    if (linkedUrl) {
+      return (
+        linkedUrl.issueKey === parsed.issueKey &&
+        linkedUrl.origin === parsed.origin &&
+        linkedUrl.sitePath === parsed.sitePath
+      )
+    }
+    return (item.identifier ?? item.jiraIdentifier)?.toUpperCase() === parsed.issueKey
+  })
 }
 
 export function matchWorktreePaletteTaskUrl(args: {

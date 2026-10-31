@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
+import { ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
@@ -17,7 +18,6 @@ type TaskSourceLinearSetupProps = {
   canHide: boolean
 }
 
-// Keep connection, skill install, and visibility in the same guided flow.
 export function TaskSourceLinearSetup({
   connected,
   checking,
@@ -31,13 +31,13 @@ export function TaskSourceLinearSetup({
   const skillSetup = useLinearAgentSkillSetup()
 
   const connectState = checking ? 'in-progress' : connected ? 'done' : 'pending'
-  // Skill install is independent of API connection; only gate the first-time install CTA.
+  // Skill installation is independent of API connection; gate only first-time installation.
   const skillState = skillSetup.skillChecking
     ? 'in-progress'
     : skillSetup.skillInstalled
       ? 'done'
       : 'pending'
-  // Keep the panel visible while scanning so we don't flash "connect first" over an installed skill.
+  // Keep scanning panels mounted to avoid flashing Connect first over installed skills.
   const skillInstallBlocked = !connected && !skillSetup.skillInstalled && !skillSetup.skillChecking
 
   return (
@@ -125,26 +125,12 @@ export function TaskSourceLinearSetup({
                 'Linear skill'
               )}
               description={null}
-              command={skillSetup.installCommand}
-              installedCommand={skillSetup.updateCommand}
-              terminalTitle={translate(
-                'auto.components.settings.TaskSourceLinearSetup.terminalTitle',
-                'Linear skill setup'
-              )}
-              terminalAriaLabel={translate(
-                'auto.components.settings.TaskSourceLinearSetup.terminalAriaLabel',
-                'Linear skill install terminal'
-              )}
-              terminalWorktreeId="settings-tasks-linear-skill-terminal"
-              terminalShellOverride={skillSetup.terminalShellOverride}
-              terminalRuntime={skillSetup.terminalRuntime}
+              skillNames={[ORCA_LINEAR_SKILL_NAME]}
+              installedSkillNames={[skillSetup.updateSkillName]}
               installed={skillSetup.skillInstalled}
               loading={skillSetup.skillLoading}
               error={skillSetup.error}
               installDisabled={skillSetup.installDisabled}
-              preInstallNotice={skillSetup.preInstallNotice}
-              getPrerequisiteStatus={skillSetup.getPrerequisiteStatus}
-              onBeforeOpenTerminal={skillSetup.onBeforeOpenTerminal}
               onRecheck={skillSetup.refreshSkill}
               freshnessSkillName={skillSetup.freshnessSkillName}
             />

@@ -1,6 +1,11 @@
-// A Codex session's frames, through the real adapter, into the host's child records: the order the
-// host receives them in, and whether the parent row the records imply is today's row.
+import {
+  acquireReadyCodexForTest,
+  fakeCodex,
+  identityFor,
+  THREAD_ID
+} from './codex-structured-session-adapter-fixture'
 
+import { isDeepStrictEqual } from 'node:util'
 import { describe, expect, it } from 'vitest'
 import {
   foldAgentLeadStatus,
@@ -12,9 +17,9 @@ import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liv
 import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status-child-work-reconciliation'
 import {
   agentChildWorkOwnedLiveness,
-  deriveAgentChildDisplayState,
-  projectAgentChildWorkViews
-} from '../../shared/agent-status-child-work-view'
+  deriveAgentChildDisplayState
+} from '../../shared/agent-status-child-work-display'
+import { projectAgentChildWorkViews } from '../../shared/agent-status-child-work-view'
 import { createAgentStatusStore } from '../../shared/agent-status-store'
 import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
 import type {
@@ -23,7 +28,6 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { fakeCodex, identityFor, THREAD_ID } from './codex-structured-session-adapter-fixture'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 
 const parent = makeStructuredAgentStatusSubject(
@@ -40,10 +44,9 @@ const TESTER = 'thread-tester'
 const LINTER = 'thread-linter'
 
 type Frame = { method: string; params: Record<string, unknown> }
-type Delivery = { kind: 'journal' | 'legacy' | 'evidence'; detail: string }
+type Delivery = { kind: 'journal' | 'publish' | 'evidence'; detail: string }
 type Liveness = ReturnType<typeof agentChildWorkLiveness>
-/** What the records and today's strip each said when the journal wrote or published a row. */
-type JournalMoment = { recorded: Liveness; legacy: Liveness }
+type JournalMoment = { recorded: Liveness; commandLive: boolean }
 
 const turn = (
   method: 'turn/started' | 'turn/completed',
@@ -95,11 +98,13 @@ async function producer() {
   const records = (): AgentChildWorkRecord[] => store.getChildren(parent)
   const recordedLiveness = () =>
     agentChildWorkLiveness(records().filter((record) => record.membership === 'live'))
-  // Each journal write publishes the parent's row, so the records must imply its state right then.
+  // Journal writes expose parent state, so sample child records at each write.
   const moment = () =>
     moments.push({
       recorded: recordedLiveness(),
-      legacy: agentChildWorkLiveness(adapter.backgroundTaskState('session-1')?.tasks)
+      commandLive: records().some(
+        (record) => record.kind === 'command' && record.membership === 'live'
+      )
     })
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -112,8 +117,6 @@ async function producer() {
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
-    onBackgroundTasksChanged: (_sessionId, state) =>
-      deliveries.push({ kind: 'legacy', detail: String(state?.tasks?.length ?? 0) }),
     onChildWorkEvidence: (sessionId, evidence) => {
       expect(sessionId).toBe('session-1')
       deliveries.push({ kind: 'evidence', detail: evidence.map((edge) => edge.type).join(',') })
@@ -128,9 +131,13 @@ async function producer() {
       moment()
     },
     appendTombstone: () => {},
-    publish: moment
+    // Match the host's parent-row publication point.
+    publish: () => {
+      deliveries.push({ kind: 'publish', detail: '' })
+      moment()
+    }
   }
-  await adapter.acquire({
+  await acquireReadyCodexForTest(adapter, {
     identity: identityFor('session-1'),
     fence: 7,
     spawnToken: 'spawn-9',
@@ -141,7 +148,6 @@ async function producer() {
     codex.connections[0]!.handlers.onNotification?.(frame.method, frame.params)
     return deliveries.slice(from)
   }
-  /** The journal moments one frame produced. */
   const momentsOf = (frame: Frame): JournalMoment[] => {
     const from = moments.length
     send(frame)
@@ -158,7 +164,6 @@ async function producer() {
     const view = views.find((candidate) => candidate.description === description)
     return view && deriveAgentChildDisplayState(view, agentChildWorkOwnedLiveness(views, view.id))
   }
-  /** The producer stamp on the newest journal row that carries this text. */
   const stampOf = (text: string) =>
     rows.findLast((row) => JSON.stringify(row.body).includes(text))?.linkage
   return {
@@ -178,8 +183,6 @@ const fold = (
   leadState: 'working' | 'done',
   childWorkLiveness: Liveness
 ): AgentLeadStatusResolution => foldAgentLeadStatus({ leadState, childWorkLiveness })
-/** The strip has no word for a child waiting on a human: to it, that child is working. */
-const asStrip = (liveness: Liveness): Liveness => (liveness === 'waiting' ? 'working' : liveness)
 const shellFrame = (
   method: 'item/started' | 'item/completed',
   threadId: string,
@@ -198,42 +201,59 @@ const shellFrame = (
   })
 
 describe('Codex structured child-work producer', () => {
-  it('delivers evidence only after the journal wrote the frame and the legacy row republished', async () => {
+  it('delivers evidence only after the journal wrote and published the frame', async () => {
     const { send, records } = await producer()
-    send(turn('turn/started', THREAD_ID, 'p1'))
-    send(turn('turn/started', REVIEWER, 'r1'))
-    const deliveries = send(spawned(REVIEWER, 'review', 'p1'))
+    const deliveries = [
+      ...send(turn('turn/started', THREAD_ID, 'p1')),
+      ...send(turn('turn/started', REVIEWER, 'r1')),
+      ...send(spawned(REVIEWER, 'review', 'p1'))
+    ]
     const kinds = deliveries.map((delivery) => delivery.kind)
-    // The frame's own rows, then the parent's republished row, and only then its children.
     expect(kinds.filter((kind) => kind === 'journal').length).toBeGreaterThan(0)
-    expect(kinds.slice(kinds.indexOf('legacy'))).toEqual(['legacy', 'evidence'])
+    expect(kinds.lastIndexOf('publish')).toBeGreaterThan(kinds.lastIndexOf('journal'))
+    expect(kinds.at(-1)).toBe('evidence')
+    expect(kinds.filter((kind) => kind === 'evidence')).toHaveLength(1)
     expect(records()).toEqual([
       expect.objectContaining({ description: 'review', membership: 'live' })
     ])
   })
 
-  it('records the parent state today reads, at every journal write, while adding outcome and activity', async () => {
+  it("folds the parent from the records, at every journal write, with each child's outcome and activity", async () => {
     const { adapter, momentsOf, records, recordedLiveness, byDescription, display } =
       await producer()
     const steps: {
       frame: Frame
       lead: 'working' | 'done'
-      childWaits?: true
+      live: Liveness
+      parent: AgentLeadStatusResolution
       check?: () => void
     }[] = [
-      { frame: turn('turn/started', THREAD_ID, 'p1'), lead: 'working' },
-      // Codex reports the child's turn before its announcement.
+      {
+        frame: turn('turn/started', THREAD_ID, 'p1'),
+        lead: 'working',
+        live: null,
+        parent: { stateName: 'working' }
+      },
+      // Child turn notifications can precede their spawn announcement.
       {
         frame: turn('turn/started', REVIEWER, 'r1'),
         lead: 'working',
+        live: null,
+        parent: { stateName: 'working' },
         check: () => expect(records()).toEqual([])
       },
-      { frame: spawned(REVIEWER, 'review', 'p1'), lead: 'working' },
-      // An approved command: Codex starts it on the approval path and reports its exit from
-      // unified exec.
+      {
+        frame: spawned(REVIEWER, 'review', 'p1'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
+      // Approval starts use source=agent; exits arrive from unified exec.
       {
         frame: shellFrame('item/started', REVIEWER, 'r1', 'cmd-1', 'npm test', 'agent'),
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () => {
           expect(byDescription('review')?.operation).toMatchObject({
             toolName: 'Bash',
@@ -246,10 +266,11 @@ describe('Codex structured child-work producer', () => {
           })
         }
       },
-      // The child starts a dev server it will leave running past its own turn.
       {
         frame: shellFrame('item/started', REVIEWER, 'r1', 'exec-1', 'npm run dev'),
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('npm run dev')).toMatchObject({
             membership: 'live',
@@ -259,10 +280,10 @@ describe('Codex structured child-work producer', () => {
       {
         frame: shellFrame('item/completed', REVIEWER, 'r1', 'cmd-1', 'npm test'),
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () => {
-          // A finished command leaves nothing behind.
           expect(byDescription('npm test')).toBeUndefined()
-          // The dev server is still the child's open call while its turn runs.
           expect(byDescription('review')?.operation).toMatchObject({
             toolName: 'Bash',
             input: 'npm run dev'
@@ -275,32 +296,36 @@ describe('Codex structured child-work producer', () => {
           id: 'msg-1',
           text: 'Dev server is up'
         }),
-        lead: 'working'
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
       },
-      // The parent's turn ends first; its child keeps running.
       {
         frame: turn('turn/completed', THREAD_ID, 'p1'),
         lead: 'done',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('review')).toMatchObject({ membership: 'live', state: 'working' })
       },
-      // The legacy task list carries no child state, so only the records can say a child waits,
-      // and the shared fold ranks that wait above the parent's own state.
       {
         frame: status(REVIEWER, ['waitingOnApproval']),
         lead: 'done',
-        childWaits: true,
-        check: () => {
-          expect(byDescription('review')?.state).toBe('waiting')
-          expect(agentChildWorkLiveness(adapter.backgroundTaskState('session-1')?.tasks)).toBe(
-            'working'
-          )
-        }
+        live: 'waiting',
+        parent: { stateName: 'waiting' },
+        check: () => expect(byDescription('review')?.state).toBe('waiting')
       },
-      { frame: status(REVIEWER, []), lead: 'done' },
+      {
+        frame: status(REVIEWER, []),
+        lead: 'done',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
       {
         frame: turn('turn/completed', REVIEWER, 'r1'),
         lead: 'done',
+        live: 'monitoring',
+        parent: { stateName: 'working', workingMode: 'monitoring' },
         check: () => {
           expect(byDescription('review')).toMatchObject({
             membership: 'settled',
@@ -311,15 +336,21 @@ describe('Codex structured child-work producer', () => {
             membership: 'live',
             parentChildWorkId: byDescription('review')?.childWorkId
           })
-          // Finished, but a shell it launched still runs: the CLI parent rule reads monitoring.
+          // Live descendants keep a settled child in monitoring state.
           expect(display('review')).toBe('monitoring')
         }
       },
-      { frame: turn('turn/started', THREAD_ID, 'p2'), lead: 'working' },
-      // The parent asks the finished child a follow-up: the same record, a new run.
+      {
+        frame: turn('turn/started', THREAD_ID, 'p2'),
+        lead: 'working',
+        live: 'monitoring',
+        parent: { stateName: 'working' }
+      },
       {
         frame: turn('turn/started', REVIEWER, 'r2'),
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('review')).toMatchObject({
             childWorkId: 'child-1',
@@ -328,39 +359,78 @@ describe('Codex structured child-work producer', () => {
             previousInvocations: [expect.objectContaining({ outcome: 'succeeded' })]
           })
       },
-      { frame: spawned(TESTER, 'test', 'p2'), lead: 'working' },
-      { frame: turn('turn/started', TESTER, 't1'), lead: 'working' },
-      { frame: spawned(LINTER, 'lint', 'p2'), lead: 'working' },
-      { frame: turn('turn/started', LINTER, 'l1'), lead: 'working' },
-      // Codex ends this child's turn with an error it will not retry, and no turn/completed.
+      {
+        frame: spawned(TESTER, 'test', 'p2'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
+      {
+        frame: turn('turn/started', TESTER, 't1'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
+      {
+        frame: spawned(LINTER, 'lint', 'p2'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
+      {
+        frame: turn('turn/started', LINTER, 'l1'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
       {
         frame: {
           method: 'error',
           params: { threadId: LINTER, turnId: 'l1', willRetry: false, error: { message: 'boom' } }
         },
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
+        check: () => expect(byDescription('lint')).toMatchObject({ membership: 'live' })
+      },
+      {
+        frame: turn('turn/completed', LINTER, 'l1', 'failed'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('lint')).toMatchObject({ membership: 'settled', outcome: 'failed' })
       },
       {
         frame: turn('turn/completed', REVIEWER, 'r2', 'interrupted'),
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('review')).toMatchObject({
             membership: 'settled',
             outcome: 'cancelled'
           })
       },
-      { frame: turn('turn/completed', THREAD_ID, 'p2'), lead: 'done' },
+      {
+        frame: turn('turn/completed', THREAD_ID, 'p2'),
+        lead: 'done',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
       {
         frame: turn('turn/completed', TESTER, 't1', 'failed'),
         lead: 'done',
+        live: 'monitoring',
+        parent: { stateName: 'working', workingMode: 'monitoring' },
         check: () =>
           expect(byDescription('test')).toMatchObject({ membership: 'settled', outcome: 'failed' })
       },
       {
         frame: shellFrame('item/completed', REVIEWER, 'r1', 'exec-1', 'npm run dev'),
         lead: 'done',
+        live: null,
+        parent: { stateName: 'done' },
         check: () => {
           expect(byDescription('npm run dev')).toBeUndefined()
           expect(display('review')).toBe('interrupted')
@@ -368,30 +438,37 @@ describe('Codex structured child-work producer', () => {
       }
     ]
     let journalMoments = 0
+    let before = steps[0].parent
     for (const [index, step] of steps.entries()) {
       const frameMoments = momentsOf(step.frame)
       journalMoments += frameMoments.length
-      for (const [at, { recorded, legacy }] of frameMoments.entries()) {
-        expect({ index, at, parent: fold(step.lead, asStrip(recorded)) }).toEqual({
+      // Mid-frame publication may expose either boundary state, never done with a live command.
+      for (const [at, { recorded, commandLive }] of frameMoments.entries()) {
+        const parent = fold(step.lead, recorded)
+        expect({
           index,
           at,
-          parent: fold(step.lead, legacy)
+          parent: [before, step.parent].some((p) => isDeepStrictEqual(p, parent))
+        }).toEqual({ index, at, parent: true })
+        expect({ index, at, done: commandLive && parent.stateName === 'done' }).toEqual({
+          index,
+          at,
+          done: false
         })
       }
-      const legacy = agentChildWorkLiveness(adapter.backgroundTaskState('session-1')?.tasks)
-      const recorded = recordedLiveness()
-      const expected = step.childWaits ? 'waiting' : legacy
-      expect({ index, parent: fold(step.lead, recorded) }).toEqual({
+      const live = recordedLiveness()
+      expect({ index, live, parent: fold(step.lead, live) }).toEqual({
         index,
-        parent: fold(step.lead, expected)
+        live: step.live,
+        parent: step.parent
       })
-      expect({ index, liveness: recorded }).toEqual({ index, liveness: expected })
+      before = step.parent
       step.check?.()
     }
-    expect(journalMoments).toBeGreaterThan(steps.length)
+    // Child-only changes can skip this parent's journal.
+    expect(journalMoments).toBeGreaterThan(0)
     const settled = records()
     await adapter.closeSession('session-1')
-    // Every child had already ended; closing the session changes none of what they said.
     expect(records()).toEqual(settled)
     expect(
       records().map(({ description, membership, outcome }) => ({
@@ -412,7 +489,6 @@ describe('Codex structured child-work producer', () => {
     send(turn('turn/started', THREAD_ID, 'p1'))
     send(shellFrame('item/started', THREAD_ID, 'p1', 'exec-dev', 'npm run dev'))
     const monitoring = { stateName: 'working', workingMode: 'monitoring' }
-    // The turn ends with the dev server running: straight to monitoring, never done in between.
     const turnEnd = momentsOf(turn('turn/completed', THREAD_ID, 'p1'))
     expect(turnEnd.length).toBeGreaterThan(0)
     for (const { recorded } of turnEnd) {
@@ -427,7 +503,7 @@ describe('Codex structured child-work producer', () => {
     const { adapter, codex, send, records, recordedLiveness, display, byDescription } =
       await producer()
     const approve = (threadId: string, turnId: string, itemId: string, command: string) => {
-      // The approval path starts the item before it asks, and drops the question at turn end.
+      // Codex starts approval-path items before asking; turn end abandons unanswered prompts.
       send(shellFrame('item/started', threadId, turnId, itemId, command, 'agent'))
       codex.connections[0]!.handlers.onServerRequest?.({
         id: `approval-${itemId}`,
@@ -441,7 +517,6 @@ describe('Codex structured child-work producer', () => {
     approve(REVIEWER, 'r1', 'call-child', 'npm run e2e')
     approve(THREAD_ID, 'p1', 'call-main', 'npm run dev')
     expect(records().filter((record) => record.kind === 'command')).toHaveLength(2)
-    // The user stops the child, then the main agent, each at its approval.
     send(turn('turn/completed', REVIEWER, 'r1', 'interrupted'))
     expect(byDescription('npm run e2e')).toBeUndefined()
     expect(display('review')).toBe('interrupted')
@@ -479,7 +554,7 @@ describe('Codex structured child-work producer', () => {
     const { send, byDescription, stampOf } = await producer()
     const says = (turnId: string, text: string) =>
       item('item/completed', REVIEWER, turnId, { type: 'agentMessage', id: `msg-${text}`, text })
-    // The journal stamps a child row with its run only once it is past the first.
+    // First-run rows omit attempt; normalize them to generation 1.
     const runs = (text: string) => {
       const stamp = stampOf(text)
       return {
@@ -489,13 +564,11 @@ describe('Codex structured child-work producer', () => {
       }
     }
     send(turn('turn/started', THREAD_ID, 'p1'))
-    // Codex reports the child's first turn before the spawn that announces it.
     send(turn('turn/started', REVIEWER, 'r1'))
     send(spawned(REVIEWER, 'review', 'p1'))
     send(says('r1', 'run 1'))
     expect(runs('run 1')).toEqual({ agentId: REVIEWER, attempt: 1, generation: 1 })
     send(turn('turn/completed', REVIEWER, 'r1'))
-    // Each follow-up the parent sends is the child's next run, on both sides.
     for (const run of [2, 3]) {
       send(turn('turn/started', REVIEWER, `r${run}`))
       send(says(`r${run}`, `run ${run}`))

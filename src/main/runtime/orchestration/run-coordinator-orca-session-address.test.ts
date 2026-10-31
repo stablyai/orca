@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  ORCA_SESSION_ADDRESS_PREFIX,
   formatOrcaSessionAddress,
   parseOrcaSessionAddress
 } from '../../../shared/orca-session-address'
@@ -42,7 +43,7 @@ function refillAfterReopen(db: OrchestrationDb, path: string, runId: string): Or
   return new OrchestrationDb(path)
 }
 
-/** A handle-less coordinator row; no writer records one until the caller resolver lands. */
+/** Insert a handle-less chat coordinator directly as a historical fixture. */
 function insertSessionCoordinatedRun(db: OrchestrationDb, runId: string): void {
   db.db
     .prepare(
@@ -70,13 +71,11 @@ describe('Run coordinator Orca session address', () => {
     db = new OrchestrationDb(':memory:')
     insertSessionCoordinatedRun(db, 'run_session')
 
-    // The column holds the bare id; only the remembered address carries the session: prefix.
     expect(db.getRunRaw('run_session')?.coordinator_orca_session_id).toBe(CHAT_SESSION_ID)
     expect(addressesFor(db, 'run_session')).toEqual([CHAT_ADDRESS])
     expect(parseOrcaSessionAddress(addressesFor(db, 'run_session')[0])).toBe(CHAT_SESSION_ID)
     expect(db.getRunMailboxOwnerIdsForHandle(CHAT_ADDRESS)).toEqual(['run_session'])
     expect(db.getRunMailboxOwnerIdsForHandle(CHAT_SESSION_ID)).toEqual([])
-    // The existing routing trigger matches the address by string equality, unchanged.
     const reply = db.insertMessage({
       runId: 'run_session',
       from: 'term_worker',
@@ -107,6 +106,31 @@ describe('Run coordinator Orca session address', () => {
 
     db = refillAfterReopen(db, path, 'run_unbound')
     expect(addressesFor(db, 'run_unbound')).toEqual([CHAT_ADDRESS])
+  })
+
+  it('recreates on open a coordinator trigger an older build compiled with another address prefix', () => {
+    const path = tempDbPath(tempRoots)
+    db = new OrchestrationDb(path)
+    const triggers = db.db
+      .prepare(`SELECT sql FROM sqlite_master WHERE name LIKE 'trg_runs_remember_coordinator_%'`)
+      .all()
+      .map((row) => String(row.sql))
+    expect(triggers).toHaveLength(2)
+    const olderBuild = triggers.map((sql) =>
+      sql.replaceAll(`'${ORCA_SESSION_ADDRESS_PREFIX}'`, "'session:'")
+    )
+    // Verify trigger differences so reopening actually exercises replacement.
+    olderBuild.forEach((sql, index) => expect(sql).not.toBe(triggers[index]))
+    db.db.exec(`
+      DROP TRIGGER trg_runs_remember_coordinator_insert;
+      DROP TRIGGER trg_runs_remember_coordinator_update;
+      ${olderBuild.map((sql) => `${sql};`).join('\n')}
+    `)
+    db.close()
+
+    db = new OrchestrationDb(path)
+    insertSessionCoordinatedRun(db, 'run_after_upgrade')
+    expect(addressesFor(db, 'run_after_upgrade')).toEqual([CHAT_ADDRESS])
   })
 
   it('remembers a PTY coordinator written by insert, update and refill by exactly its handle', () => {
@@ -237,12 +261,12 @@ describe('Run coordinator Orca session address', () => {
     backfillStructuredWorkerOrcaSessionIds(db.db)
     expect(db.getRunRaw(first.id)?.coordinator_orca_session_id).toBe(WORKER_SESSION_ID)
 
-    // A second Run from the same pane unbinds the first.
     const second = db.createRun({
       objective: 'second',
       coordinatorHandle: handle,
       coordinatorPaneKey: pane
     })
+    db.bindRun({ runId: second.id, coordinatorHandle: handle, coordinatorPaneKey: pane })
     expect(db.getRunRaw(first.id)).toMatchObject({
       coordinator_handle: null,
       coordinator_orca_session_id: null
@@ -255,8 +279,7 @@ describe('Run coordinator Orca session address', () => {
       coordinator_handle: 'term_taker',
       coordinator_orca_session_id: null
     })
-    // A remembered address is never forgotten, so the worker's session address reaches exactly the
-    // Runs its handle does.
+    // Remembered worker-session addresses must reach exactly the Runs their handles reach.
     expect(db.getRunMailboxOwnerIdsForHandle(WORKER_ADDRESS)).toEqual([first.id, second.id].sort())
     expect(db.getRunMailboxOwnerIdsForHandle(handle)).toEqual([first.id, second.id].sort())
   })

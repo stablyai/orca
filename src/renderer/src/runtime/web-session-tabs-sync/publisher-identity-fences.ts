@@ -11,7 +11,7 @@ import {
 const SESSION_TABS_RETIRED_EPOCH_LIMIT = 8
 const SESSION_TABS_RETIRED_RUNTIME_ID_LIMIT = 8
 
-export function hasRetiredValue(history: RetiredValueHistory | undefined, value: string): boolean {
+function hasRetiredValue(history: RetiredValueHistory | undefined, value: string): boolean {
   return history?.retired.includes(value) ?? false
 }
 
@@ -37,16 +37,23 @@ export function noteRetiredValue(
 }
 
 /**
- * Un-retires one value, leaving every other retired generation fenced.
- *
- * Only an authority that names the value current may call this; reviving on a delayed frame's own
- * say-so is exactly the resurrection `retired` exists to prevent.
+ * Whether a snapshot under `value` may apply. A retired value applies only on an authoritative
+ * census that names it, which revives just that value (or its lineage); anything else stays fenced.
  */
-export function reviveRetiredValue(history: RetiredValueHistory | undefined, value: string): void {
-  const index = history?.retired.indexOf(value) ?? -1
-  if (history && index >= 0) {
-    history.retired.splice(index, 1)
+export function admitRetiredValueUnderAuthority(
+  history: RetiredValueHistory | undefined,
+  value: string,
+  authoritative: boolean,
+  sameValue: (retired: string, value: string) => boolean = (retired, candidate) =>
+    retired === candidate
+): boolean {
+  if (!history?.retired.some((retired) => sameValue(retired, value))) {
+    return true
   }
+  if (authoritative) {
+    history.retired = history.retired.filter((retired) => !sameValue(retired, value))
+  }
+  return authoritative
 }
 
 function normalizeSessionTabsRuntimeId(runtimeId: unknown): string | undefined {
@@ -131,12 +138,7 @@ export function acceptSessionTabsRuntimeId(
   return true
 }
 
-/**
- * Retirement is a property of the publishing generation, not of the exact string it published
- * under. Matching `retired` exactly let a `:headless-merge:` rebuild of a superseded generation
- * walk past this fence while the bare form hit it, so the same predecessor was accepted or
- * rejected depending on which shape it happened to arrive in.
- */
+/** Retire entire publisher lineages: exact-string checks let headless-merge rebuilds of dead generations bypass fences their bare epochs hit. */
 export function isRetiredSessionTabsPublicationEpoch(
   key: string,
   publicationEpoch: string
@@ -170,9 +172,7 @@ export function noteSessionTabsPublicationEpoch(
   publicationEpoch: string
 ): SessionTabsPublicationEpochHistory {
   const existing = sessionTabsPublicationEpochHistoryByWorktree.get(key)
-  // A headless merge is the same publisher adding runtime-owned surfaces, so it advances the
-  // current epoch rather than superseding it. Retiring the base here would have the generation
-  // retire itself, and a lineage-aware fence then rejects its own next frame.
+  // Headless merges advance the same publisher; retiring their base makes lineage fencing reject the publisher’s own next frame.
   if (existing?.current && sameSessionTabsPublicationLineage(existing.current, publicationEpoch)) {
     existing.current = publicationEpoch
     sessionTabsPublicationEpochHistoryByWorktree.set(key, existing)

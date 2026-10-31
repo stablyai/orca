@@ -13,30 +13,50 @@ describe('classifyDaemonSpawnerPath', () => {
 
   it('classifies the installed app, the ShipIt staging area, and everything else', () => {
     expect(
-      classifyDaemonSpawnerPath('/Applications/Orca.app/Contents/MacOS/Orca', alwaysExists)
+      classifyDaemonSpawnerPath('/Applications/Orca.app/Contents/MacOS/Orca', alwaysExists, null)
     ).toBe('applications')
     expect(
-      classifyDaemonSpawnerPath('/private/Applications/Orca.app/Contents/MacOS/Orca', alwaysExists)
+      classifyDaemonSpawnerPath(
+        '/private/Applications/Orca.app/Contents/MacOS/Orca',
+        alwaysExists,
+        null
+      )
     ).toBe('applications')
     expect(
       classifyDaemonSpawnerPath(
         '/Users/a/Library/Caches/com.stablyai.orca.ShipIt/update.abc/Orca.app/Contents/MacOS/Orca',
-        alwaysExists
+        alwaysExists,
+        null
       )
     ).toBe('updater-cache')
     expect(
-      classifyDaemonSpawnerPath('/Users/a/Applications/Orca.app/Contents/MacOS/Orca', alwaysExists)
+      classifyDaemonSpawnerPath(
+        '/Users/a/Applications/Orca.app/Contents/MacOS/Orca',
+        alwaysExists,
+        null
+      )
     ).toBe('other')
-    expect(classifyDaemonSpawnerPath('/tmp/OrcaA.app/Contents/MacOS/Orca', alwaysExists)).toBe(
-      'other'
-    )
+    expect(
+      classifyDaemonSpawnerPath('/tmp/OrcaA.app/Contents/MacOS/Orca', alwaysExists, null)
+    ).toBe('other')
   })
 
   it('reports a deleted spawner as missing and an unrecorded one as unknown', () => {
     expect(
-      classifyDaemonSpawnerPath('/Applications/Orca.app/Contents/MacOS/Orca', () => false)
+      classifyDaemonSpawnerPath('/Applications/Orca.app/Contents/MacOS/Orca', () => false, null)
     ).toBe('missing')
-    expect(classifyDaemonSpawnerPath(null, alwaysExists)).toBe('unknown')
+    expect(classifyDaemonSpawnerPath(null, alwaysExists, null)).toBe('unknown')
+  })
+
+  it("classifies Orca's private stable copy from the recorded spawner path", () => {
+    const prefix = '/Users/alice/Library/Application Support/Orca/daemon-host/macos/terminal-host-'
+    const copy = `${prefix}0f3c/app.noindex/Orca Terminal Host.app/Contents/MacOS/orca-terminal-host`
+    expect(classifyDaemonSpawnerPath(copy, alwaysExists, prefix)).toBe('stable-copy')
+    expect(classifyDaemonSpawnerPath(copy, () => false, prefix)).toBe('missing')
+    expect(classifyDaemonSpawnerPath(copy, alwaysExists, null)).toBe('other')
+    expect(
+      classifyDaemonSpawnerPath('/Applications/Orca.app/Contents/MacOS/Orca', alwaysExists, prefix)
+    ).toBe('applications')
   })
 })
 
@@ -106,11 +126,20 @@ describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
     expect(
       eventSchemas.daemon_adopted.safeParse({ ...adopted, code_identity: 'severed' }).success
     ).toBe(false)
+    expect(
+      eventSchemas.daemon_pty_cwd_readable.safeParse({ ...denied, launch_method: 'stable-copy' })
+        .success
+    ).toBe(false)
+    expect(
+      eventSchemas.daemon_pty_cwd_readable.safeParse({
+        ...denied,
+        spawner_path_class: 'stable-copy'
+      }).success
+    ).toBe(true)
   })
 })
 
-// The notice is read against `daemon_pty_cwd_denied`, so it carries the same enum-only budget:
-// no daemon scope, no path, no folder name.
+// Match the denied-event enum-only privacy budget: no daemon scope, path or folder name.
 describe('daemon_folder_access_notice schema', () => {
   const shown = { action: 'shown', cwd_class: 'documents' }
 

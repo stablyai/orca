@@ -1,20 +1,21 @@
-// Guards an append clears before it becomes durable.
-//
-// Both refuse loudly rather than degrade: a silent drop here is a message
-// missing from the transcript with nothing to explain it.
+// Refuse invalid appends loudly; silent drops would leave unexplained transcript gaps.
 
 export class AgentSessionJournalError extends Error {
   constructor(
-    readonly code: 'journal_read_only' | 'journal_stale_fence' | 'journal_closed',
-    message: string
+    readonly code:
+      | 'journal_read_only'
+      | 'journal_stale_fence'
+      | 'journal_closed'
+      | 'journal_submission_exists'
+      | 'journal_row_rejected',
+    message: string,
+    options?: ErrorOptions
   ) {
-    super(message)
+    super(message, options)
     this.name = 'AgentSessionJournalError'
   }
 }
 
-/** A journal written by a newer schema is readable but never writable: this
- *  host cannot represent rows it does not understand. */
 export function assertJournalWritable(readOnly: boolean, sessionId: string): void {
   if (readOnly) {
     throw new AgentSessionJournalError(
@@ -24,13 +25,25 @@ export function assertJournalWritable(readOnly: boolean, sessionId: string): voi
   }
 }
 
-/** A write from a superseded owner is rejected outright — merging it would let
- *  two writers share one sequence space. */
+/** Reject superseded writers so owners cannot share a sequence space. */
 export function assertJournalFence(fence: number, highestFence: number): void {
   if (fence < highestFence) {
     throw new AgentSessionJournalError(
       'journal_stale_fence',
       `fence ${fence} is behind the journal's ${highestFence}`
+    )
+  }
+}
+
+/** Reusing a submission ID would reset settled state and deliver twice. */
+export function assertSubmissionIdUnused(
+  submissions: ReadonlyMap<string, unknown>,
+  clientMessageId: string
+): void {
+  if (submissions.has(clientMessageId)) {
+    throw new AgentSessionJournalError(
+      'journal_submission_exists',
+      `a submission ${clientMessageId} is already recorded`
     )
   }
 }

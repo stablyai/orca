@@ -1,13 +1,6 @@
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { isHibernationDoneRecord } from '../../../../../shared/hibernation-done-record'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
-
-// Why not activationTreatsNoteAsFinished: a live+done note is a finished turn's idle anchor for a running pane, not sleep.
-export function isHibernationDoneRecord(record: SleepingAgentSessionRecord): boolean {
-  return (
-    (record.origin === undefined || record.origin === 'worktree-sleep') && record.state === 'done'
-  )
-}
 
 // Why: never remote, where disconnect() only closes this viewer's stream, so the retry re-lands on the same live PTY and loops.
 export function hasEmptyReattachRetireEvidence(

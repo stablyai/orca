@@ -1,24 +1,35 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
+import {
+  structuredSessionSelectionAuthority,
+  structuredSessionSelectionController
+} from '@/lib/structured-agent-session-selection-controller'
+import { useStructuredSessionSelectionReads } from './use-structured-session-selection-reads'
+import { projectRuntimePermission } from '../../../../shared/structured-agent-session-permission-option'
+import { useStructuredAgentSessionStatusSummary } from './StructuredAgentSessionStatusBridge'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import { usesInstalledAgentModelCatalog } from '../../../../shared/agent-model-catalog-ownership'
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
+import type { StructuredAgentSessionOptionState } from '../../../../shared/structured-agent-session-options'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { structuredAgentSessionOptionView } from '../../../../shared/structured-agent-session-option-view'
 import {
-  getAgentSessionOptionCatalog,
-  type AgentSessionOptionCatalog
-} from '../../../../shared/agent-session-option-catalog'
+  AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session-create-capabilities'
 import {
-  applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState,
-  type StructuredAgentSessionOptionState
-} from '../../../../shared/structured-agent-session-options'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+  useStructuredAgentSessionHostCapability,
+  useStructuredAgentSessionOwnPermissionState,
+  structuredAgentSessionHostKey
+} from '@/runtime/structured-agent-session-host-capability'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import {
-  createCoalescedPollRunner,
-  type CoalescedPollRunner
-} from '../right-sidebar/coalesced-poll-runner'
+import { createStructuredAgentSessionOptionsReadOwner } from '../../../../shared/structured-agent-session-options-read-owner'
 
-/** The picker's option state for one session: seeded, reset at each fence, re-read each turn. */
+export { firstFrameOptionState } from './structured-agent-session-option-first-frame'
+import { firstFrameOptionState } from './structured-agent-session-option-first-frame'
+
+/** The picker's option state for one session: seeded, kept across its fences, re-read each turn. */
 export function useStructuredAgentSessionOptionState(args: {
   agent: AgentType
   optionCatalog: AgentSessionOptionCatalog | null
@@ -26,8 +37,14 @@ export function useStructuredAgentSessionOptionState(args: {
   fence: number | null
   sessionId: string
   target: RuntimeClientTarget
+  /** Launch context used to read the host’s saved model listing. */
+  newLaunch: boolean
+  worktree?: string
+  seedsModel: boolean
   providerVisible: boolean
   providerStarting: boolean
+  /** The option values the host's status carries: a pick made on another device moves it. */
+  hostOptionStamp: string
   readsBeforeStart: boolean
   turnId: string | null
   unloadedTurnRevisions: number | undefined
@@ -36,124 +53,180 @@ export function useStructuredAgentSessionOptionState(args: {
     agent,
     fence,
     identity,
+    newLaunch,
     optionCatalog,
+    seedsModel,
     providerStarting,
     providerVisible,
     readsBeforeStart,
     sessionId,
     target,
-    turnId
+    worktree
   } = args
-  const [conversationSupport, setConversationSupport] = useState<{
-    sessionId: string
-    commands: readonly AgentSessionConversationCommand[]
-    threadGoal: AgentSessionOptionsResult['threadGoal']
-    contextUsage: AgentSessionOptionsResult['contextUsage']
-  } | null>(null)
-  // A revision the loaded window dropped can move the host's whole-journal context facts.
-  const contextRefresh = conversationSupport?.contextUsage ? (args.unloadedTurnRevisions ?? 0) : 0
-  // Seeded from the first frame: the picker renders the static catalog while
-  // create, attach and the first live options read are still running.
-  const [optionState, setOptionState] = useState(() =>
-    createStructuredAgentSessionOptionState(agent, optionCatalog)
-  )
-  const optionStateRef = useRef(optionState)
-  const activeOptionRecordRef = useRef(optionState.record)
-  const pendingOptionRef = useRef<string | null>(null)
-  const optionMutationGeneration = useRef(0)
-  const updateOptionState = useCallback(
-    (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
-      const next = update(optionStateRef.current)
-      optionStateRef.current = next
-      setOptionState(next)
-    },
-    []
-  )
-  const optionIdentityRef = useRef(identity)
-  useEffect(() => {
-    const previous = optionStateRef.current
-    const sameSession = optionIdentityRef.current === identity
-    optionIdentityRef.current = identity
-    const seeded = createStructuredAgentSessionOptionState(
-      agent,
-      getAgentSessionOptionCatalog(agent)
+  const { summary, observation } = useStructuredAgentSessionStatusSummary(sessionId, target)
+  const [reader] = useState(() =>
+    createStructuredAgentSessionOptionsReadOwner(
+      firstFrameOptionState(agent, target, {
+        newLaunch,
+        seedsModel,
+        ...(worktree ? { worktree } : {})
+      })
     )
-    // A host catalog is the account's, not the fence's: keep it rather than blank the default.
-    const next =
-      sameSession && previous.catalogSource === 'host'
-        ? { ...seeded, catalog: previous.catalog, catalogSource: previous.catalogSource }
-        : seeded
-    optionMutationGeneration.current += 1
-    pendingOptionRef.current = null
-    optionStateRef.current = next
-    activeOptionRecordRef.current = next.record
-    setOptionState(next)
-  }, [agent, fence, identity])
-
-  const optionsReadRef = useRef<CoalescedPollRunner | null>(null)
-  // Refresh options each turn to confirm which model the provider actually selected, and once
-  // the provider starts: only then has the host read what it will run.
-  useEffect(() => {
-    if (!providerVisible || (providerStarting && !readsBeforeStart) || !optionCatalog) {
-      return
-    }
-    let stale = false
-    const runner = createCoalescedPollRunner(async () => {
-      const readGeneration = optionMutationGeneration.current
-      const result = await callStructuredAgentSession<AgentSessionOptionsResult>(
-        target,
-        'agentSession.options',
-        { sessionId }
-      )
-      if (!stale && optionMutationGeneration.current === readGeneration) {
-        setConversationSupport({
-          sessionId,
-          commands: result.conversationCommands ?? [],
-          threadGoal: result.threadGoal,
-          contextUsage: result.contextUsage
-        })
-        updateOptionState((current) =>
-          current.record === activeOptionRecordRef.current
-            ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
-            : current
-        )
-      }
-    })
-    optionsReadRef.current = runner
-    runner.run()
-    return () => {
-      stale = true
-      runner.dispose()
-    }
-  }, [
-    fence,
-    optionCatalog,
-    providerStarting,
-    providerVisible,
-    readsBeforeStart,
-    sessionId,
+  )
+  const { optionState, support } = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
+  // Projected once per accepted answer so consumers keep stable references between answers.
+  const conversationSupport = useMemo(
+    () =>
+      support && support.sessionId !== null
+        ? {
+            sessionId: support.sessionId,
+            commands: support.result.conversationCommands ?? [],
+            threadGoal: support.result.threadGoal,
+            reportedThreadGoal: support.result.reportedThreadGoal,
+            contextUsage: support.result.contextUsage,
+            acceptsImages: support.result.acceptsImages,
+            rewind: support.result.rewind ?? {
+              supported: false as const,
+              reason: 'unsupported' as const
+            },
+            fence: support.fence
+          }
+        : null,
+    [support]
+  )
+  const contextRefresh = conversationSupport?.contextUsage ? (args.unloadedTurnRevisions ?? 0) : 0
+  const {
+    optionStateRef,
+    activeOptionRecordRef,
+    updateOptionState,
+    receiveCatalog,
+    invalidate: rereadOptions
+  } = reader
+  const authority = structuredSessionSelectionAuthority(target)
+  const controller = structuredSessionSelectionController(target, sessionId, agent)
+  const takesSelection = useStructuredAgentSessionHostCapability(
     target,
-    turnId,
-    updateOptionState
-  ])
+    AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY
+  )
+  const hostKey = structuredAgentSessionHostKey(target)
+  const contextKey = JSON.stringify([identity, hostKey, newLaunch, worktree, fence, observation])
+  const contextRef = useRef(contextKey)
+  useEffect(() => {
+    contextRef.current = contextKey
+  }, [contextKey])
+  const isCurrentContext = useCallback(() => contextRef.current === contextKey, [contextKey])
+  const coherentCatalog = usesInstalledAgentModelCatalog(
+    agent,
+    useStructuredAgentSessionHostCapability(target, AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY)
+  )
+  useEffect(
+    () =>
+      reader.attach({
+        owner: [agent, sessionId, hostKey, identity, controller],
+        reset: [contextKey, authority],
+        sessionId,
+        fence,
+        seed: () =>
+          firstFrameOptionState(agent, target, {
+            newLaunch,
+            seedsModel,
+            ...(worktree ? { worktree } : {})
+          }),
+        controller,
+        eligible:
+          providerVisible &&
+          (!providerStarting || readsBeforeStart || takesSelection) &&
+          optionCatalog !== null,
+        optionCatalog,
+        newLaunch,
+        coherentCatalog,
+        authority: () => structuredSessionSelectionAuthority(target),
+        isCurrent: () => isCurrentContext() && controller.isCurrent(),
+        request: () =>
+          controller.request((options) =>
+            callStructuredAgentSession<AgentSessionOptionsResult>(
+              target,
+              'agentSession.options',
+              { sessionId },
+              options
+            )
+          )
+      }),
+    [
+      reader,
+      agent,
+      sessionId,
+      hostKey,
+      identity,
+      controller,
+      contextKey,
+      authority,
+      fence,
+      target,
+      newLaunch,
+      seedsModel,
+      worktree,
+      providerVisible,
+      providerStarting,
+      readsBeforeStart,
+      takesSelection,
+      optionCatalog,
+      coherentCatalog,
+      isCurrentContext
+    ]
+  )
 
-  // Reads share the session's host queue with sends and interrupts, so a burst of
-  // missed revisions keeps one read in flight and at most one behind it.
   const seenContextRefresh = useRef(contextRefresh)
   useEffect(() => {
     if (contextRefresh !== seenContextRefresh.current) {
       seenContextRefresh.current = contextRefresh
-      optionsReadRef.current?.run()
+      rereadOptions()
     }
-  }, [contextRefresh])
+  }, [contextRefresh, rereadOptions])
+  useStructuredSessionSelectionReads({
+    controller,
+    target,
+    authority,
+    hostOptionStamp: args.hostOptionStamp,
+    turnId: args.turnId,
+    rereadOptions
+  })
+  const permissionOwnSupport = useStructuredAgentSessionOwnPermissionState(target)
+  const permissionOwnSupported =
+    permissionOwnSupport === 'unknown' ? null : permissionOwnSupport === 'supported'
+  const optionView = useCallback(
+    (
+      state: StructuredAgentSessionOptionState,
+      seed: Readonly<Record<string, string>> | undefined,
+      explicit?: Readonly<Record<string, string>>
+    ) => ({
+      ...projectRuntimePermission(
+        structuredAgentSessionOptionView(state, seed, controller.overlay(), explicit),
+        summary,
+        fence
+      ),
+      permissionOwnSupported
+    }),
+    [controller, summary, fence, permissionOwnSupported]
+  )
+  const takesSendOptions = useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
+  )
 
   return {
+    // What the picker shows and a send carries.
+    optionView,
+    controller,
+    takesSelection,
+    takesSendOptions,
     conversationSupport,
+    rereadOptions,
+    receiveCatalog,
+    isCurrentContext,
     optionState,
     optionStateRef,
     activeOptionRecordRef,
-    pendingOptionRef,
-    optionMutationGeneration,
     updateOptionState
   }
 }

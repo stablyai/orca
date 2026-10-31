@@ -1,4 +1,5 @@
-import { bulkStageRuntimeGitPaths } from '@/runtime/runtime-git-client'
+import { bulkStageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
+import { operationGitContext } from '../listing/operation-target'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import {
   createPrIntentGitStatusMatchesToken,
@@ -18,10 +19,7 @@ export type CreatePrIntentRunSnapshot = {
   wasAbortedByStaleTarget: () => boolean
 }
 
-/**
- * The intent's view of its own worktree across async steps. Kept as closure state rather than React
- * state because every step must read what the previous step just wrote, not a re-rendered value.
- */
+/** Use closure state so each async step reads the previous write without waiting for React. */
 export function createCreatePrIntentRunSnapshot({
   initialEntries,
   initialUpstreamStatus,
@@ -56,7 +54,7 @@ export function createCreatePrIntentRunSnapshot({
     if (!refreshed) {
       return false
     }
-    // Why: a terminal checkout may land in this snapshot before React updates the target ref; stop before staging/committing/pushing on a different branch.
+    // Stop if a terminal checkout reaches this snapshot before React updates the target ref.
     if (!createPrIntentGitStatusMatchesToken(token, refreshed.status)) {
       abortedByStaleTarget = true
       return false
@@ -79,7 +77,7 @@ export function createCreatePrIntentRunSnapshot({
     }
     setIsExecutingBulk(true)
     try {
-      await bulkStageRuntimeGitPaths(operationTarget, stagePaths)
+      await bulkStageRuntimeGitPaths(operationGitContext(operationTarget), stagePaths)
     } finally {
       setIsExecutingBulk(false)
     }

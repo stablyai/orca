@@ -7,7 +7,7 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type * as RuntimeSessionMirrorTargetsModule from '@/lib/runtime-session-mirror-targets'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 
 const { getMirrorTargets } = vi.hoisted(() => ({ getMirrorTargets: vi.fn() }))
 
@@ -18,13 +18,16 @@ vi.mock('@/lib/runtime-session-mirror-targets', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
 import {
   selectRuntimeSessionMirrorTargetInputs,
   useRuntimeSessionMirrorEnvironmentKeys
 } from './use-runtime-session-mirror-environment-key'
-import { useWebSessionTabsSync } from './web-session-tabs-sync'
+import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
+import {
+  connectedRuntimeStatus,
+  publicRuntimeEnvironment
+} from './paired-runtime-environment-test-fixture'
 
 const initialState = useAppStore.getInitialState()
 
@@ -71,25 +74,13 @@ function seedMirrorState(): void {
       projectGroups: [],
       restoredRuntimeHostIdByWorkspaceSessionKey: {},
       runtimeEnvironments: [
-        { id: 'env-a', createdAt: 100, pairingRevision: 101 },
-        { id: 'env-b', createdAt: 200, pairingRevision: 201 }
-      ] as PublicKnownRuntimeEnvironment[],
+        publicRuntimeEnvironment({ id: 'env-a', createdAt: 100, pairingRevision: 101 }),
+        publicRuntimeEnvironment({ id: 'env-b', createdAt: 200, pairingRevision: 201 })
+      ],
       runtimeStatusByEnvironmentId: new Map([
-        [
-          'env-a',
-          {
-            status: { runtimeId: 'runtime-a' },
-            connectionGeneration: 1
-          }
-        ],
-        [
-          'env-b',
-          {
-            status: { runtimeId: 'runtime-b' },
-            connectionGeneration: 2
-          }
-        ]
-      ]) as AppState['runtimeStatusByEnvironmentId']
+        ['env-a', connectedRuntimeStatus('runtime-a', 1)],
+        ['env-b', connectedRuntimeStatus('runtime-b', 2)]
+      ])
     },
     true
   )
@@ -245,15 +236,7 @@ describe('useRuntimeSessionMirrorEnvironmentKeys', () => {
 
     act(() => {
       useAppStore.setState({
-        runtimeStatusByEnvironmentId: new Map([
-          [
-            'env-a',
-            {
-              status: { runtimeId: 'runtime-a' },
-              connectionGeneration: 2
-            }
-          ]
-        ]) as AppState['runtimeStatusByEnvironmentId']
+        runtimeStatusByEnvironmentId: new Map([['env-a', connectedRuntimeStatus('runtime-a', 2)]])
       })
     })
     expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00012\u0001101')
@@ -261,8 +244,8 @@ describe('useRuntimeSessionMirrorEnvironmentKeys', () => {
     act(() => {
       useAppStore.setState({
         runtimeEnvironments: [
-          { id: 'env-a', createdAt: 100, pairingRevision: 102 }
-        ] as PublicKnownRuntimeEnvironment[]
+          publicRuntimeEnvironment({ id: 'env-a', createdAt: 100, pairingRevision: 102 })
+        ]
       })
     })
     expect(hook.result.current.environmentKey).toBe('env-a\u0001runtime-a\u00012\u0001102')

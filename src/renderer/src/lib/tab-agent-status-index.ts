@@ -1,18 +1,11 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { agentTypeToIconAgent } from './agent-status'
 
-/**
- * Per-tab index of icon-capable agent panes for the tab-bar resolvers in
- * `tab-agent.ts`. Without it each of ~200 mounted tabs re-scanned (and
- * re-parsed the pane key of) the whole global status map on every render.
- *
- * Panes keep the source map's insertion order because the resolvers return the
- * FIRST match — order decides which icon a split tab shows.
- */
-export type TabAgentPane = { readonly leafId: string; readonly agent: TuiAgent }
+/** Index iconable panes once per status-map identity instead of scanning globally per mounted tab. Preserve insertion order: first-match resolution decides split-tab icons. */
+export type TabAgentPane = { readonly leafId: string; readonly agent: TerminalAgent }
 
 type TabAgentPanesByTabId = ReadonlyMap<string, readonly TabAgentPane[]>
 
@@ -28,8 +21,7 @@ function appendPane(index: Map<string, TabAgentPane[]>, tabId: string, pane: Tab
   }
 }
 
-// Why: the store replaces these maps on every write, so identity is an exact
-// invalidation signal — one scan per write instead of one per tab per render.
+// Immutable store maps make identity exact invalidation: scan once per write, not per tab/render.
 let cachedStatusSource: Record<string, AgentStatusEntry> | null = null
 let cachedLiveIndex: TabAgentPanesByTabId = EMPTY_INDEX
 let cachedCompletedIndex: TabAgentPanesByTabId = EMPTY_INDEX
@@ -59,7 +51,6 @@ function indexAgentStatus(source: Record<string, AgentStatusEntry>): void {
   cachedStatusSource = source
 }
 
-/** Panes of `tabId` whose agent is still running (any non-`done` state). */
 export function selectLiveTabAgentPanes(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   tabId: string
@@ -68,7 +59,6 @@ export function selectLiveTabAgentPanes(
   return cachedLiveIndex.get(tabId) ?? NO_PANES
 }
 
-/** Panes of `tabId` whose agent reported `done`. */
 export function selectCompletedTabAgentPanes(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   tabId: string
@@ -107,7 +97,7 @@ export function selectRetainedTabAgentPanes(
 export function firstTabAgentExcludingLeaf(
   panes: readonly TabAgentPane[],
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   for (const pane of panes) {
     if (pane.leafId !== excludedLeafId) {
       return pane.agent

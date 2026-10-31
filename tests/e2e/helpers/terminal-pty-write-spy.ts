@@ -45,37 +45,46 @@ export async function installTerminalPtyWriteSpy(app: ElectronApplication): Prom
   )
 }
 
+// Idempotent main-process reads and a clear: safe to repeat after a transient CDP failure.
 export async function clearTerminalPtyWriteLog(app: ElectronApplication): Promise<void> {
-  await app.evaluate(() => {
-    const global = globalThis as unknown as { __terminalPtyWriteLog?: PtyWriteLogEntry[] }
-    if (global.__terminalPtyWriteLog) {
-      global.__terminalPtyWriteLog.length = 0
-    }
-  })
+  await retryTransientMainEvaluate(() =>
+    app.evaluate(() => {
+      const global = globalThis as unknown as { __terminalPtyWriteLog?: PtyWriteLogEntry[] }
+      if (global.__terminalPtyWriteLog) {
+        global.__terminalPtyWriteLog.length = 0
+      }
+    })
+  )
 }
 
 export async function readTerminalPtyWrites(app: ElectronApplication): Promise<string[]> {
-  return app.evaluate(() => {
-    const global = globalThis as unknown as { __terminalPtyWriteLog?: PtyWriteLogEntry[] }
-    return (global.__terminalPtyWriteLog ?? []).map((entry) => entry.data)
-  })
+  return retryTransientMainEvaluate(() =>
+    app.evaluate(() => {
+      const global = globalThis as unknown as { __terminalPtyWriteLog?: PtyWriteLogEntry[] }
+      return (global.__terminalPtyWriteLog ?? []).map((entry) => entry.data)
+    })
+  )
 }
 
 export async function readTerminalPtyWriteEntries(
   app: ElectronApplication
 ): Promise<PtyWriteLogEntry[]> {
-  return app.evaluate(() => {
-    const global = globalThis as unknown as { __terminalPtyWriteLog?: PtyWriteLogEntry[] }
-    return [...(global.__terminalPtyWriteLog ?? [])]
-  })
+  return retryTransientMainEvaluate(() =>
+    app.evaluate(() => {
+      const global = globalThis as unknown as { __terminalPtyWriteLog?: PtyWriteLogEntry[] }
+      return [...(global.__terminalPtyWriteLog ?? [])]
+    })
+  )
 }
 
 export async function setTerminalPtyWriteDelay(
-  app: ElectronApplication,
+  app: Pick<ElectronApplication, 'evaluate'>,
   delayMs: number
 ): Promise<void> {
-  await app.evaluate((nextDelayMs) => {
-    const global = globalThis as unknown as { __terminalPtyWriteDelayMs?: number }
-    global.__terminalPtyWriteDelayMs = Math.max(0, nextDelayMs)
-  }, delayMs)
+  await retryTransientMainEvaluate(() =>
+    app.evaluate((_electron, nextDelayMs) => {
+      const global = globalThis as unknown as { __terminalPtyWriteDelayMs?: number }
+      global.__terminalPtyWriteDelayMs = Math.max(0, nextDelayMs)
+    }, delayMs)
+  )
 }

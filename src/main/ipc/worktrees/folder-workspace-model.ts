@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  getRepoMainWorktreeId
+} from '../../../shared/worktree/id'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
 export function getFolderWorkspaceRootId(repo: Repo): string {
-  return `${repo.id}::${repo.path}`
+  return getRepoMainWorktreeId(repo)
 }
 
 export function getFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {
@@ -54,6 +57,7 @@ export function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
     linkedWorkItem: meta.linkedWorkItem ?? null,
+    ...(meta.linkedItems !== undefined ? { linkedItems: meta.linkedItems } : {}),
     linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,

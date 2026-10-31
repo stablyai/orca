@@ -9,8 +9,8 @@ import type {
   SshTargetCreateInput,
   SshTarget,
   SshTargetUpdateInput,
-  SshTerminateSessionsResult,
   PortForwardEntry,
+  UnrestoredPortForward,
   EnrichedDetectedPort
 } from '../../shared/ssh-types'
 import {
@@ -44,19 +44,16 @@ export const sshApi = {
   resolveConfigHost: (args: { alias: string }): Promise<SshConfigHostResolution | null> =>
     ipcRenderer.invoke('ssh:resolveConfigHost', args),
 
-  connect: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
+  connect: async (args: {
+    targetId: string
+    automatic?: boolean
+  }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:connect', args)
     return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
   },
 
   disconnect: (args: { targetId: string }): Promise<void> =>
     ipcRenderer.invoke('ssh:disconnect', args),
-
-  terminateSessions: (args: { targetId: string }): Promise<SshTerminateSessionsResult> =>
-    ipcRenderer.invoke('ssh:terminateSessions', args),
-
-  resetRelay: (args: { targetId: string }): Promise<void> =>
-    ipcRenderer.invoke('ssh:resetRelay', args),
 
   getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:getState', args)
@@ -118,15 +115,29 @@ export const sshApi = {
   listPortForwards: (args?: { targetId?: string }): Promise<PortForwardEntry[]> =>
     ipcRenderer.invoke('ssh:listPortForwards', args),
 
+  listUnrestoredPortForwards: (args: { targetId: string }): Promise<UnrestoredPortForward[]> =>
+    ipcRenderer.invoke('ssh:listUnrestoredPortForwards', args),
+
+  removeSavedPortForward: (args: {
+    targetId: string
+    localPort: number
+    remoteHost: string
+    remotePort: number
+  }): Promise<void> => ipcRenderer.invoke('ssh:removeSavedPortForward', args),
+
   listDetectedPorts: async (args: { targetId: string }): Promise<EnrichedDetectedPort[]> =>
     admitSshDetectedPorts(await ipcRenderer.invoke('ssh:listDetectedPorts', args)),
 
   onPortForwardsChanged: (
-    callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
+    callback: (data: {
+      targetId: string
+      forwards: PortForwardEntry[]
+      unrestored?: UnrestoredPortForward[]
+    }) => void
   ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      data: { targetId: string; forwards: PortForwardEntry[] }
+      data: { targetId: string; forwards: PortForwardEntry[]; unrestored?: UnrestoredPortForward[] }
     ) => callback(data)
     ipcRenderer.on('ssh:port-forwards-changed', handler)
     return () => ipcRenderer.removeListener('ssh:port-forwards-changed', handler)

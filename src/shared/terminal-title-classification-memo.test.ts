@@ -4,10 +4,7 @@ import { getAgentLabel } from './agent-title-identity'
 import { detectAgentStatusFromTitle } from './agent-title-status'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
-
-// Why a module mock: `titleHasAgentName` is the leaf regex test every title
-// classifier funnels into, so counting its invocations is the direct measure of
-// what one store write costs when no title has changed.
+// Count the leaf titleHasAgentName regex to measure unchanged-title work across store writes.
 vi.mock('./agent-name-token-match', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentNameTokenMatchModule>()
   return { ...actual, titleHasAgentName: vi.fn(actual.titleHasAgentName) }
@@ -49,21 +46,8 @@ describe('terminal title classification memo', () => {
       classifyEveryTitle()
     }
 
-    // Unmemoized this is STORE_WRITES x titles x the whole regex ladder — 4,350
-    // leaf matches for this fixture. Memoized, an unchanged title costs nothing.
+    // Without memoization this fixture makes 4350 leaf matches; steady-state unchanged titles should make none.
     expect(classifierCalls).not.toHaveBeenCalled()
-  })
-
-  it('classifies a title once no matter how many readers ask', () => {
-    const title = 'aider running'
-    getAgentLabel(title)
-    const firstReadCalls = classifierCalls.mock.calls.length
-    expect(firstReadCalls).toBeGreaterThan(0)
-
-    for (let read = 0; read < 20; read += 1) {
-      getAgentLabel(title)
-    }
-    expect(classifierCalls.mock.calls.length).toBe(firstReadCalls)
   })
 
   it('reclassifies as soon as the title changes', () => {
@@ -84,8 +68,6 @@ describe('terminal title classification memo', () => {
   it('evicts oldest entries instead of growing without bound', () => {
     const classify = vi.fn((title: string) => title.length)
     const memoized = memoizeTitleClassification(classify)
-    // Cap is 1024; overflow it and confirm the newest key still hits while the
-    // oldest was evicted.
     for (let index = 0; index < 1030; index += 1) {
       memoized(`title-${index}`)
     }

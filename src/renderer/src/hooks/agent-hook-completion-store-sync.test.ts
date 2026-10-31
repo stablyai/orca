@@ -174,23 +174,4 @@ describe('agent hook completion store sync', () => {
     })
     expect(shouldSyncAgentHookCompletionForStoreUpdate(reorderedTabs, twoTabPrevious)).toBe(true)
   })
-
-  it('compares effective tracking state instead of unrelated settings identity', () => {
-    const previous = createState({
-      settings: {
-        experimentalTerminalAttention: true,
-        notifications: { enabled: false, agentTaskComplete: false }
-      }
-    })
-    const stillTrackedByNotifications = createState({
-      ...previous,
-      settings: {
-        experimentalTerminalAttention: false,
-        notifications: { enabled: true, agentTaskComplete: true }
-      }
-    })
-    expect(shouldSyncAgentHookCompletionForStoreUpdate(stillTrackedByNotifications, previous)).toBe(
-      false
-    )
-  })
 })

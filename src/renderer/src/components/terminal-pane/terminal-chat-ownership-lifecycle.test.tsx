@@ -14,13 +14,14 @@ const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
 const mocks = vi.hoisted(() => {
   const layouts: Record<string, TerminalLayoutSnapshot> = {}
+  const settings: { nativeChatProviders?: Record<string, boolean> } = {}
   const tab = { id: 'tab', entityId: 'tab', contentType: 'terminal', viewMode: 'chat' }
   const state = {
     terminalLayoutsByTabId: layouts,
     unifiedTabsByWorktree: { wt: [tab] },
     tabsByWorktree: {},
-    settings: { experimentalNativeChat: true },
-    pendingCodexPaneRestartIds: [],
+    settings,
+    pendingPaneAccountRestarts: [],
     runtimePaneTitlesByTabId: { tab: { 1: 'codex', 2: 'codex' } },
     agentStatusByPaneKey: {},
     paneForegroundAgentByPaneKey: {},
@@ -41,7 +42,7 @@ const mocks = vi.hoisted(() => {
 })
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
-  const { terminalLayoutEqual } = await import('@/lib/terminal-layout-equality')
+  const { terminalLayoutEqual } = await import('../../../../shared/terminal-layout-equality')
   mocks.state.setTabLayout = (id, layout) => {
     if (terminalLayoutEqual(mocks.state.terminalLayoutsByTabId[id], layout)) {
       return
@@ -58,7 +59,9 @@ vi.mock('../../store', async () => {
   const useAppStore = create(() => mocks.state)
   return { useAppStore }
 })
-vi.mock('@/runtime/web-runtime-session', () => ({ clearWebRuntimeTerminalBuffer: vi.fn() }))
+vi.mock('@/runtime/web-runtime-terminal-buffer-actions', () => ({
+  clearWebRuntimeTerminalBuffer: vi.fn()
+}))
 
 function makeFixture(paneIds = [1, 2], remotePusher?: RemotePaneLayoutPusher) {
   const container = document.createElement('div')
@@ -135,7 +138,8 @@ function useFixture(fixture: ReturnType<typeof makeFixture>, initialOwner: strin
 }
 
 beforeEach(() => {
-  mocks.state.settings.experimentalNativeChat = true
+  mocks.state.settings.nativeChatProviders = { claude: true, codex: true }
+  mocks.state.runtimePaneTitlesByTabId.tab = { 1: 'codex', 2: 'codex' }
   mocks.state.setTabViewMode('tab', 'chat')
   mocks.state.setTabLayout('tab', {
     root: {
@@ -166,25 +170,33 @@ describe('terminal chat ownership lifecycle', () => {
     expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBeUndefined()
   })
 
-  it('preserves the saved owner when this client disables native chat', () => {
+  it('keeps a saved legacy chat and its explicit toggle available with its agents set to CLI', () => {
     const push = vi.fn()
     const fixture = makeFixture(undefined, { push })
+    mocks.state.runtimePaneTitlesByTabId.tab = { 1: 'bash', 2: 'codex' }
     mocks.state.terminalLayoutsByTabId.tab.ptyIdsByLeafId = {
       [LEFT]: 'remote:host:terminal',
       [RIGHT]: 'remote:host:chat'
     }
     const hook = renderHook(() => useFixture(fixture, RIGHT))
-    mocks.state.settings.experimentalNativeChat = false
+    mocks.state.settings.nativeChatProviders = { claude: false, codex: false }
     hook.rerender()
     hook.result.current.persistLayoutSnapshot()
-    expect(hook.result.current.effectiveChatViewMode).toBe(false)
+    expect(hook.result.current.effectiveChatViewMode).toBe(true)
     expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('chat')
     expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBe(RIGHT)
+    expect(hook.result.current.canToggleChatForLeaf(RIGHT)).toBe(true)
+    expect(hook.result.current.canToggleChatForLeaf(LEFT)).toBe(false)
     expect(push).toHaveBeenLastCalledWith(
       expect.objectContaining({
         layout: expect.objectContaining({ chatLeafId: RIGHT })
       })
     )
+    act(() => hook.result.current.toggleNativeChatForLeaf(RIGHT))
+    expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('terminal')
+    expect(hook.result.current.canToggleChatForLeaf(RIGHT)).toBe(true)
+    act(() => hook.result.current.toggleNativeChatForLeaf(RIGHT))
+    expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('chat')
   })
 
   it('clears ownership when the tab-bar turns chat off, then targets the active sibling', () => {
@@ -259,7 +271,6 @@ describe('terminal chat ownership lifecycle', () => {
       .getPanes()
       .find((pane) => pane.leafId === hook.result.current.chatLeafId)
     expect(chatPane?.id).toBe(10)
-    // Closing the restored chat leaf must leave the left terminal untouched.
     restored.managerRef.current.getPanes().pop()?.container.remove()
     hook.rerender()
     expect(restored.managerRef.current.getPanes().map((pane) => pane.leafId)).toEqual([LEFT])

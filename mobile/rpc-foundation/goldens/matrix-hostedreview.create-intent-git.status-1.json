@@ -1,76 +1,9 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "source-control.create-intent",
   "family": "hostedReview.create-intent",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
-  "scenarioSha256": "1f002f900c1a3c92e8f7c72261579ee5015ec1529c003a1b32bcf3eaf98b672d",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "0347742c8f12": {
-      "name": "hostedReview.getCreationEligibility#1",
-      "ordinal": 16,
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.getCreationEligibility"
-        },
-        {
-          "name": "params",
-          "value": {
-            "ahead": 1,
-            "base": {
-              "$rpc": "null"
-            },
-            "behind": 0,
-            "branch": "feature",
-            "hasUncommittedChanges": false,
-            "hasUpstream": true,
-            "linkedGitHubPR": {
-              "$rpc": "null"
-            },
-            "linkedGitLabMR": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo42",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-7",
-          "ok": true,
-          "result": {
-            "blockedReason": "needs_push",
-            "body": "Host body",
-            "canCreate": true,
-            "defaultBaseRef": "main",
-            "nextAction": {
-              "$rpc": "null"
-            },
-            "provider": "github",
-            "reviewLookupOutcome": "not_found",
-            "title": "Host title"
-          }
-        }
-      }
-    },
     "0879e8839757": {
       "name": "progress",
       "ordinal": 3,
@@ -368,6 +301,64 @@
           "result": {
             "message": "feat: recorded",
             "success": true
+          }
+        }
+      }
+    },
+    "324be6bef431": {
+      "name": "hostedReview.getCreationEligibility#1",
+      "ordinal": 16,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.getCreationEligibility"
+        },
+        {
+          "name": "params",
+          "value": {
+            "ahead": 1,
+            "base": {
+              "$rpc": "null"
+            },
+            "behind": 0,
+            "branch": "feature",
+            "hasUncommittedChanges": false,
+            "hasUpstream": true,
+            "linkedGitHubPR": {
+              "$rpc": "null"
+            },
+            "linkedGitLabMR": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo42",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-7",
+          "ok": true,
+          "result": {
+            "blockedReason": "needs_push",
+            "body": "Host body",
+            "canCreate": false,
+            "defaultBaseRef": "main",
+            "nextAction": {
+              "$rpc": "null"
+            },
+            "provider": "github",
+            "reviewLookupOutcome": "not_found",
+            "title": "Host title"
           }
         }
       }
@@ -1576,7 +1567,7 @@
             "22cb4850c7e9",
             "0e4c5b9b4b61",
             "7b98416e2b81",
-            "0347742c8f12",
+            "324be6bef431",
             "d7fed979e629"
           ],
           "payloads": [
@@ -1606,7 +1597,7 @@
             "22cb4850c7e9",
             "0e4c5b9b4b61",
             "7b98416e2b81",
-            "0347742c8f12",
+            "324be6bef431",
             "6e227482ca80",
             "570c09f158bd",
             "6a9e29548c49",
@@ -1648,7 +1639,7 @@
             "22cb4850c7e9",
             "0e4c5b9b4b61",
             "7b98416e2b81",
-            "0347742c8f12",
+            "324be6bef431",
             "6e227482ca80",
             "570c09f158bd",
             "6a9e29548c49",

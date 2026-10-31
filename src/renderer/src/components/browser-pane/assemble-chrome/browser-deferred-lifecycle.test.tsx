@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import type { SshConnectionState } from '../../../../../shared/ssh-types'
 
 type MockState = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
@@ -12,6 +13,7 @@ type MockState = {
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   remoteBrowserPageHandlesByPageId: Record<string, never>
+  sshConnectionStates: Map<string, SshConnectionState>
   focusGroup: () => void
   updateBrowserPageState: () => void
   setBrowserPageUrl: () => void
@@ -33,13 +35,16 @@ vi.mock('@/store', async () => {
   }
 })
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => null,
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null,
   getExecutionHostIdForWorktree: () => mocks.executionHostId
 }))
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: () => {}
 }))
-vi.mock('../host-guest/webview-registry', () => ({ destroyPersistentWebview: mocks.destroy }))
+vi.mock('../host-guest/webview-registry', () => ({
+  destroyPersistentWebview: mocks.destroy,
+  webviewRegistry: new Map()
+}))
 vi.mock('./BrowserMobileDriverOverlay', () => ({ BrowserMobileDriverOverlay: () => null }))
 vi.mock('./browser-page-pane', () => ({
   BrowserPagePane: ({ browserTab, isActive }: { browserTab: BrowserPage; isActive: boolean }) => (
@@ -52,13 +57,16 @@ vi.mock('../workspace-doc/workspace-doc-page-pane', () => ({
   )
 }))
 
-import BrowserPaneOverlayLayer from './BrowserPaneOverlayLayer'
-import {
-  acquireBrowserAutomationVisibility,
-  releaseBrowserAutomationVisibility
-} from '../host-guest/browser-automation-visibility'
-import { hydrateBrowserDrivers } from '@/lib/pane-manager/browser-mobile-driver-state'
-import { hydrateBrowserRemoteViewerPages } from '@/lib/pane-manager/browser-remote-viewer-state'
+import type BrowserPaneOverlayLayerComponent from './BrowserPaneOverlayLayer'
+import type * as AutomationVisibility from '../host-guest/browser-automation-visibility'
+import type * as MobileDriverState from '@/lib/pane-manager/browser-mobile-driver-state'
+import type * as RemoteViewerState from '@/lib/pane-manager/browser-remote-viewer-state'
+
+let BrowserPaneOverlayLayer: typeof BrowserPaneOverlayLayerComponent
+let acquireBrowserAutomationVisibility: typeof AutomationVisibility.acquireBrowserAutomationVisibility
+let releaseBrowserAutomationVisibility: typeof AutomationVisibility.releaseBrowserAutomationVisibility
+let hydrateBrowserDrivers: typeof MobileDriverState.hydrateBrowserDrivers
+let hydrateBrowserRemoteViewerPages: typeof RemoteViewerState.hydrateBrowserRemoteViewerPages
 
 function createState(): MockState {
   const browsers: BrowserWorkspace[] = ['a', 'b'].map((id) => ({
@@ -104,6 +112,18 @@ function createState(): MockState {
     },
     activeGroupIdByWorktree: { 'wt-1': 'group-1' },
     remoteBrowserPageHandlesByPageId: {},
+    sshConnectionStates: new Map([
+      [
+        'target-a',
+        {
+          targetId: 'target-a',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          connectionGeneration: 1
+        }
+      ]
+    ]),
     focusGroup: () => {},
     updateBrowserPageState: () => {},
     setBrowserPageUrl: () => {},
@@ -133,7 +153,15 @@ function redraw(view: ReturnType<typeof render>, active = true): void {
 const settle = () => act(async () => {})
 
 describe('deferred browser lifecycle through the overlay and SSH gate', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Verified SSH routes outlive mounts at module scope; each test starts unverified.
+    vi.resetModules()
+    ;({ default: BrowserPaneOverlayLayer } = await import('./BrowserPaneOverlayLayer'))
+    ;({ acquireBrowserAutomationVisibility, releaseBrowserAutomationVisibility } =
+      await import('../host-guest/browser-automation-visibility'))
+    ;({ hydrateBrowserDrivers } = await import('@/lib/pane-manager/browser-mobile-driver-state'))
+    ;({ hydrateBrowserRemoteViewerPages } =
+      await import('@/lib/pane-manager/browser-remote-viewer-state'))
     mocks.state = createState()
     mocks.store = createStore(() => mocks.state!)
     mocks.executionHostId = 'local'
@@ -141,7 +169,10 @@ describe('deferred browser lifecycle through the overlay and SSH gate', () => {
     mocks.prepare.mockReset().mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { browser: { prepareSshWorkspacePartition: mocks.prepare } }
+      value: {
+        browser: { prepareSshWorkspacePartition: mocks.prepare },
+        ui: { onBrowserPagePointerDown: () => () => {} }
+      }
     })
   })
   afterEach(() => {
@@ -201,51 +232,41 @@ describe('deferred browser lifecycle through the overlay and SSH gate', () => {
     }
   )
 
-  it.each(['url', 'document'])(
-    'retains %s content across page and tab switches within a visible worktree',
-    (kind) => {
-      if (kind === 'document') {
-        mocks.state!.browserPagesByWorkspace.a[0].docLocation = {
-          kind: 'workspace-doc',
-          worktreeId: 'wt-1',
-          filePath: '/workspace/report.html'
-        }
-      }
-      const view = render(surface())
-      const page = view.container.querySelector<HTMLInputElement>('[data-page-id="a-1"]')!
-      page.value = 'unsaved state'
-      page.scrollTop = 80
-      expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(1)
-      selectPage('a-2')
-      redraw(view)
-      expect(page.isConnected).toBe(true)
-      expect(page.dataset.active).toBe('false')
-      selectTab('b')
-      redraw(view)
-      expect(page.isConnected).toBe(true)
-      selectPage('a-1')
-      selectTab('a')
-      redraw(view)
-      expect(view.container.querySelector('[data-page-id="a-1"]')).toBe(page)
-      expect(page.value).toBe('unsaved state')
-      expect(page.scrollTop).toBe(80)
-      expect(page.dataset.active).toBe('true')
-      expect(view.container.querySelector('[data-page-id="b-2"]')).toBeNull()
+  it('retains page content across page and tab switches within a visible worktree', () => {
+    const view = render(surface())
+    const page = view.container.querySelector<HTMLInputElement>('[data-page-id="a-1"]')!
+    page.value = 'unsaved state'
+    page.scrollTop = 80
+    expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(1)
+    selectPage('a-2')
+    redraw(view)
+    expect(page.isConnected).toBe(true)
+    expect(page.dataset.active).toBe('false')
+    selectTab('b')
+    redraw(view)
+    expect(page.isConnected).toBe(true)
+    selectPage('a-1')
+    selectTab('a')
+    redraw(view)
+    expect(view.container.querySelector('[data-page-id="a-1"]')).toBe(page)
+    expect(page.value).toBe('unsaved state')
+    expect(page.scrollTop).toBe(80)
+    expect(page.dataset.active).toBe('true')
+    expect(view.container.querySelector('[data-page-id="b-2"]')).toBeNull()
 
-      redraw(view, false)
-      expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(0)
-      redraw(view)
-      const restored = view.container.querySelector('[data-page-id="a-1"]')!
-      expect(restored).not.toBe(page)
-      expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(1)
+    redraw(view, false)
+    expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(0)
+    redraw(view)
+    const restored = view.container.querySelector('[data-page-id="a-1"]')!
+    expect(restored).not.toBe(page)
+    expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(1)
 
-      mocks.state!.browserPagesByWorkspace.a = mocks.state!.browserPagesByWorkspace.a.slice(1)
-      mocks.state!.browserTabsByWorktree['wt-1'] = [...mocks.state!.browserTabsByWorktree['wt-1']]
-      redraw(view)
-      expect(page.isConnected).toBe(false)
-      expect(restored.isConnected).toBe(false)
-    }
-  )
+    mocks.state!.browserPagesByWorkspace.a = mocks.state!.browserPagesByWorkspace.a.slice(1)
+    mocks.state!.browserTabsByWorktree['wt-1'] = [...mocks.state!.browserTabsByWorktree['wt-1']]
+    redraw(view)
+    expect(page.isConnected).toBe(false)
+    expect(restored.isConnected).toBe(false)
+  })
 
   it('keeps a prepared SSH gate and its opened pages alive when switching tabs', async () => {
     mocks.executionHostId = 'ssh:target-a'

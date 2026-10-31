@@ -46,8 +46,8 @@ describe('OMP completion delivery', () => {
     await vi.advanceTimersByTimeAsync(curlExitCode === null ? 11251 : 251)
     expect(harness.spawnMock).toHaveBeenCalledTimes(2)
     await harness.callHook('session_shutdown')
-    await vi.advanceTimersByTimeAsync(12000)
-    expect(harness.spawnMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(harness.spawnMock).toHaveBeenCalledTimes(4)
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -87,7 +87,7 @@ describe('OMP completion delivery', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it.each(['before_agent_start', 'agent_start', 'session_shutdown', 'session_switch'])(
+  it.each(['before_agent_start', 'agent_start'])(
     'retires a failed completion at %s',
     async (boundary) => {
       const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
@@ -121,6 +121,59 @@ describe('OMP completion delivery', () => {
       { hook_event_name: 'agent_start' }
     ])
   })
+
+  it.each(['scheduled retry', 'in-flight failure', 'in-flight success'] as const)(
+    'preserves completion delivery across a session boundary after %s',
+    async (delivery) => {
+      const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+      let id = 'A'
+      const ctx = {
+        isIdle: () => true,
+        sessionManager: { getSessionId: () => id, getSessionFile: () => `/sessions/${id}.jsonl` }
+      }
+      await harness.callHook('agent_start', {}, ctx)
+      await vi.advanceTimersByTimeAsync(0)
+      let acknowledge: ((value: { ok: boolean }) => void) | undefined
+      let fail: ((error: Error) => void) | undefined
+      if (delivery === 'scheduled retry') {
+        harness.fetchMock.mockRejectedValueOnce(new Error('offline'))
+      } else {
+        harness.fetchMock.mockImplementationOnce(
+          () =>
+            new Promise((resolve, reject) => {
+              acknowledge = resolve
+              fail = reject
+            })
+        )
+      }
+      await harness.callHook('agent_end', {}, ctx)
+      await vi.advanceTimersByTimeAsync(0)
+      id = 'B'
+      await harness.callHook('session_switch', { reason: 'new' }, ctx)
+      await harness.callHook('agent_start', {}, ctx)
+      if (delivery === 'in-flight failure') {
+        fail?.(new Error('late failure'))
+      } else {
+        acknowledge?.({ ok: true })
+      }
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      const payloads = events(harness.fetchMock)
+      const completions = payloads.filter(
+        (event) =>
+          event &&
+          typeof event === 'object' &&
+          'hook_event_name' in event &&
+          event.hook_event_name === 'agent_end'
+      )
+      expect(completions).toHaveLength(delivery === 'in-flight success' ? 1 : 2)
+      for (const completion of completions) {
+        expect(completion).toMatchObject({ session_id: 'A' })
+      }
+      expect(payloads.at(-1)).toMatchObject({ hook_event_name: 'agent_start', session_id: 'B' })
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
 
   it('retries a timed out completion without blocking agent handlers', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })

@@ -1,13 +1,16 @@
 import { translate } from '@/i18n/i18n'
 import type { AgentJournalThreadGoalStatus } from '../../../../shared/agent-session-journal-types'
 
-/** The banner's lead label, or null for a status the banner does not show. */
+/** Active goals read as pursued only during a running turn; between turns they remain set. */
 export function nativeChatThreadGoalStatusLabel(
-  status: AgentJournalThreadGoalStatus
+  status: AgentJournalThreadGoalStatus,
+  working: boolean
 ): string | null {
   switch (status) {
     case 'active':
-      return translate('components.native-chat.goal.pursuing', 'Pursuing goal')
+      return working
+        ? translate('components.native-chat.goal.pursuing', 'Pursuing goal')
+        : translate('components.native-chat.goal.set', 'Goal set')
     case 'paused':
       return translate('components.native-chat.goal.paused', 'Paused goal')
     case 'blocked':
@@ -20,7 +23,6 @@ export function nativeChatThreadGoalStatusLabel(
   }
 }
 
-/** Compact elapsed time: `25s`, `1m 7s`, `2h 3m`. */
 export function formatNativeChatThreadGoalElapsed(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds))
   const hours = Math.floor(seconds / 3600)

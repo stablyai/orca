@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +11,7 @@ import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
 import { createOrchestrationRpcHarness } from './methods/orchestration/rpc-test-harness'
+import { MessageWake } from '../runtime-message-waiters'
 
 describe('orchestration commit-notify recovery', () => {
   const harness = createOrchestrationRpcHarness()
@@ -49,7 +51,7 @@ describe('orchestration commit-notify recovery', () => {
       taskId,
       startOptions: {}
     })
-    const capability = db.prepareStartingWorkerAuthority({
+    db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
       paneKey: workerPaneKey,
@@ -59,7 +61,7 @@ describe('orchestration commit-notify recovery', () => {
       setupState: 'not_applicable'
     })
     db.markWorkerDispatchReady(started.dispatch.id)
-    return { dispatch: db.getDispatchContextById(started.dispatch.id)!, capability }
+    return { dispatch: db.getDispatchContextById(started.dispatch.id)! }
   }
 
   async function throwAfterCommitAndReplay(
@@ -101,7 +103,7 @@ describe('orchestration commit-notify recovery', () => {
     const messages = db.getInbox(100)
     expect(messages).toHaveLength(1)
     expect(replayed.result).toMatchObject({ message: { id: messages[0]?.id } })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('replays one Dispatch send after notification throws post-commit', async () => {
@@ -124,7 +126,7 @@ describe('orchestration commit-notify recovery', () => {
     const messages = db.getUnreadMessages(`dispatch:${dispatch.id}`)
     expect(messages).toHaveLength(1)
     expect(replayed.result).toMatchObject({ message: { id: messages[0]?.id } })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('replays one generic reply after notification throws post-commit', async () => {
@@ -151,7 +153,7 @@ describe('orchestration commit-notify recovery', () => {
     const replies = db.getInbox(100).filter((message) => message.thread_id === original.id)
     expect(replies).toHaveLength(1)
     expect(replayed.result).toMatchObject({ message: { id: replies[0]?.id } })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('replays one question reply nudge without duplicating the answer', async () => {
@@ -187,7 +189,7 @@ describe('orchestration commit-notify recovery', () => {
       db.getInbox(100).filter((message) => message.thread_id === question.message.id)
     ).toHaveLength(2)
     expect(replayed.result).toMatchObject({ duplicate: false })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('replays worker settlement without applying lifecycle state twice', async () => {
@@ -201,7 +203,7 @@ describe('orchestration commit-notify recovery', () => {
           : null
     )
     const task = db.createTask({ spec: 'Settle once' })
-    const { dispatch, capability } = createReadyLocalWorker(db, task.id, workerPaneKey)
+    const { dispatch } = createReadyLocalWorker(db, task.id, workerPaneKey)
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
     const workerDone = request('rpc_worker_done', 'mutation_worker_done', 'orchestration.send', {
       from: 'term_worker',
@@ -213,7 +215,6 @@ describe('orchestration commit-notify recovery', () => {
         outcome: 'succeeded'
       })
     })
-    workerDone.orchestrationCapability = capability
     const waiting = runtime.waitForMessage(`run:${activeRunId}`, {
       typeFilter: ['worker_done'],
       timeoutMs: 5_000
@@ -243,7 +244,7 @@ describe('orchestration commit-notify recovery', () => {
         mutation: { requestId: 'mutation_worker_done', replayed: true }
       }
     })
-    await expect(waiting).resolves.toBe('notified')
+    await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
   it('resumes an effect-free worker_done checkpoint after a runtime restart', async () => {
@@ -270,7 +271,7 @@ describe('orchestration commit-notify recovery', () => {
       handle.startsWith('term_') ? `runtime_test:${handle}:1` : null
     )
     const task = db.createTask({ spec: 'Resume before atomic settlement', runId: run.id })
-    const { dispatch, capability } = createReadyLocalWorker(db, task.id, workerPaneKey)
+    const { dispatch } = createReadyLocalWorker(db, task.id, workerPaneKey)
     const workerDone = request(
       'rpc_worker_done_before_crash',
       'mutation_worker_done_before_crash',
@@ -286,7 +287,6 @@ describe('orchestration commit-notify recovery', () => {
         })
       }
     )
-    workerDone.orchestrationCapability = capability
     vi.spyOn(db, 'commitWorkerDoneMessageMutation').mockImplementationOnce(() => {
       throw new OrchestrationError(
         'operation_unknown',
@@ -384,7 +384,7 @@ describe('orchestration commit-notify recovery', () => {
           : null
     )
     const task = db.createTask({ spec: 'Commit report and settlement together' })
-    const { dispatch, capability } = createReadyLocalWorker(db, task.id, workerPaneKey)
+    const { dispatch } = createReadyLocalWorker(db, task.id, workerPaneKey)
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
     const workerDone = request(
       'rpc_atomic_worker_done',
@@ -401,7 +401,6 @@ describe('orchestration commit-notify recovery', () => {
         })
       }
     )
-    workerDone.orchestrationCapability = capability
     const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
     inject(db)
 

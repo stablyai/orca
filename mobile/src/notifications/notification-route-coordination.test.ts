@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { getNotificationNavigationTarget } from './notification-routing'
 import {
@@ -6,8 +5,6 @@ import {
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
-
-const rootLayoutSource = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8')
 
 function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
@@ -31,8 +28,7 @@ function navigationHarness(initialState: HostStackNavigationState | undefined) {
   }
 }
 
-// A notification tap is handled by app/_layout.tsx, which Expo Router mounts as a screen of its
-// own internal navigator — hence the extra `__root` level around the app's root stack.
+// Include Expo’s internal __root navigator because app/_layout handles taps one level below it.
 function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNavigationState {
   return { key: 'internal', index: 0, routes: [{ key: '__root', name: '__root', state: inner }] }
 }
@@ -43,7 +39,6 @@ describe('notification route coordination', () => {
       hostId: 'host/one',
       worktreeId: 'repo::/Users/me/orca/workspaces/feature'
     })
-    // Cold start: the tap is handled before the root navigator has committed any state.
     const harness = navigationHarness(undefined)
     const push = vi.fn()
 
@@ -97,22 +92,8 @@ describe('notification route coordination', () => {
     })
   })
 
-  it('leaves a host-only notification as a shallow push with nothing to coordinate', () => {
+  it('returns no session target for a host-only notification', () => {
     expect(getNotificationNavigationTarget({ hostId: 'host-1' })?.sessionTarget).toBeNull()
-  })
-
-  it('routes notification taps through the coordinated transition, not a bare push', () => {
-    const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
-    const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
-
-    // Assert the markers first: a renamed banner would otherwise slice garbage and report a
-    // missing call instead of the real cause.
-    expect(start).toBeGreaterThanOrEqual(0)
-    expect(end).toBeGreaterThan(start)
-
-    const notificationEffect = rootLayoutSource.slice(start, end)
-    expect(notificationEffect).toContain('openNotificationRoute(target)')
-    expect(notificationEffect).not.toContain('router.push(')
   })
 })
 

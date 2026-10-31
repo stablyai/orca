@@ -9,6 +9,7 @@ import { importReleaseCheckoutModule, materializeReleaseCheckout } from './relea
 // Pin the last pre-v41 implementation: this contract specifically exercises status-only readers.
 const PRE_V41 = 'aac38d698ff75ac4c8658addab48ef5a83617619'
 
+// Allow cold checkout extraction, whose 45s deadline exceeds the default test timeout.
 test('pre-v41 code opens, acknowledges and writes a current-schema database, then current code reopens it', async () => {
   const checkout = await materializeReleaseCheckout(PRE_V41)
   const baseline = await importReleaseCheckoutModule(
@@ -67,4 +68,4 @@ test('pre-v41 code opens, acknowledges and writes a current-schema database, the
     db?.close()
     rmSync(directory, { recursive: true, force: true })
   }
-})
+}, 120_000)

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { deriveNativeChatContextUsage } from '../../shared/native-chat/native-chat-context-usage'
+import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { ompModelSelector, parseOmpModelList } from '../../shared/omp-model-list-probe'
 import { decodeOmpTranscriptLine } from './transcript-line-decoders'
 
 const line = (record: unknown): string => JSON.stringify(record)
@@ -20,7 +23,6 @@ describe('decodeOmpTranscriptLine', () => {
     expect(
       decodeOmpTranscriptLine(line({ type: 'custom', customType: 'tool_execution_start' }), 'f')
     ).toBeNull()
-    expect(decodeOmpTranscriptLine(line({ type: 'compaction', shortSummary: 's' }), 'f')).toBeNull()
     expect(decodeOmpTranscriptLine(line({ type: 'a-type-from-the-future' }), 'f')).toBeNull()
   })
 
@@ -167,9 +169,6 @@ describe('decodeOmpTranscriptLine', () => {
     ])
   })
 
-  // Why: omp's cancel and timeout paths both return `exitCode: undefined`, which
-  // JSON.stringify omits — so the record has no exitCode at all and only
-  // `cancelled` distinguishes it from a clean run.
   it('marks a cancelled run, which carries no exitCode at all', () => {
     const decoded = decodeOmpTranscriptLine(
       line({
@@ -203,8 +202,6 @@ describe('decodeOmpTranscriptLine', () => {
     expect(JSON.stringify(decoded)).not.toContain('SECRET FILE BODY')
   })
 
-  // Why: pre-v3 sessions stored extension turns as `type:'message'` with role
-  // custom/hookMessage; the display flag gates them exactly as custom_message.
   it('honors the display gate on legacy custom / hookMessage message rows', () => {
     const legacy = (role: string, display: boolean): string =>
       line({
@@ -238,9 +235,6 @@ describe('decodeOmpTranscriptLine', () => {
   })
 
   it('surfaces an aborted turn as the interrupted row, not silence', () => {
-    // Why: omp stamps `stopReason: 'aborted'` on the assistant message itself and
-    // leaves the content empty when nothing streamed, so the turn used to decode
-    // to null and vanish. Claude and Codex both emit this row for their aborts.
     const decoded = decodeOmpTranscriptLine(
       message('assistant', [{ type: 'text', text: '' }], {
         stopReason: 'aborted',
@@ -253,8 +247,6 @@ describe('decodeOmpTranscriptLine', () => {
   })
 
   it('keeps partial content when a turn aborted mid-stream', () => {
-    // omp spreads the in-flight message and stamps the abort on it, so a partial
-    // answer is real conversation and must not be replaced by the status row.
     const decoded = decodeOmpTranscriptLine(
       message('assistant', [{ type: 'text', text: 'Partial answer' }], { stopReason: 'aborted' }),
       'f'
@@ -276,5 +268,115 @@ describe('decodeOmpTranscriptLine', () => {
     )
     expect(decoded?.id).toBe('fallback-9')
     expect(decoded?.timestamp).toBeNull()
+  })
+
+  describe('what served a reply, and the prompt it read', () => {
+    // OMP 17.0.5 assistant payload with shortened IDs/content.
+    const reply = (extra: Record<string, unknown> = {}): string =>
+      message('assistant', [{ type: 'text', text: 'The `value` field is set to **42**.' }], {
+        api: 'openai-codex-responses',
+        provider: 'openai-codex',
+        model: 'gpt-5.5',
+        usage: {
+          input: 680,
+          output: 16,
+          cacheRead: 20992,
+          cacheWrite: 0,
+          totalTokens: 21688,
+          cost: {
+            input: 0.0034,
+            output: 0.00048,
+            cacheRead: 0.010496,
+            cacheWrite: 0,
+            total: 0.014376
+          }
+        },
+        stopReason: 'stop',
+        contextSnapshot: { promptTokens: 21672, nonMessageTokens: 20318 },
+        ...extra
+      })
+
+    it('keeps the provider, model and usage of a completed reply', () => {
+      expect(decodeOmpTranscriptLine(reply(), 'f')).toMatchObject({
+        role: 'assistant',
+        provider: 'openai-codex',
+        model: 'gpt-5.5',
+        usage: {
+          inputTokens: 680,
+          cacheCreationInputTokens: 0,
+          cacheReadInputTokens: 20992,
+          outputTokens: 16
+        }
+      })
+    })
+
+    it('drops the accounting of an aborted or errored reply, keeping its model', () => {
+      for (const stopReason of ['aborted', 'error']) {
+        const decoded = decodeOmpTranscriptLine(reply({ stopReason }), 'f')
+        expect(decoded?.model).toBe('gpt-5.5')
+        expect(decoded).not.toHaveProperty('usage')
+      }
+    })
+
+    it("measures the prompt OMP recorded, against its listing's window for that model", () => {
+      // OMP 17.0.5 model-list format.
+      const listing = parseOmpModelList(
+        line({
+          models: [
+            {
+              provider: 'openai-codex',
+              id: 'gpt-5.5',
+              selector: 'openai-codex/gpt-5.5',
+              name: 'GPT-5.5',
+              contextWindow: 272000
+            }
+          ]
+        })
+      )
+      const windowFor = (served: NativeChatMessage): number | null =>
+        listing.find(({ id }) => id === ompModelSelector(served.provider, served.model))
+          ?.contextWindowTokens ?? null
+      const decoded = decodeOmpTranscriptLine(reply(), 'f')!
+      expect(deriveNativeChatContextUsage([decoded], windowFor)).toEqual({
+        usedTokens: 21672,
+        windowTokens: 272000,
+        percentage: 8
+      })
+      const compaction = decodeOmpTranscriptLine(line({ type: 'compaction', id: 'c' }), 'f')!
+      expect(deriveNativeChatContextUsage([decoded, compaction], windowFor)).toBeNull()
+    })
+
+    it('puts none of it on turns that are not replies', () => {
+      const decoded = decodeOmpTranscriptLine(
+        message('user', [{ type: 'text', text: 'hi' }], { model: 'gpt-5.5', usage: { input: 5 } }),
+        'f'
+      )
+      expect(decoded).not.toHaveProperty('usage')
+      expect(decoded).not.toHaveProperty('model')
+    })
+  })
+
+  it('marks a compaction row as the boundary it draws', () => {
+    // OMP 17.0.5 appendCompaction shape with summary elided.
+    const decoded = decodeOmpTranscriptLine(
+      line({
+        type: 'compaction',
+        id: 'cmp-1',
+        parentId: 'rec-9',
+        timestamp: '2026-07-16T01:00:00.000Z',
+        summary: '…',
+        shortSummary: '…',
+        firstKeptEntryId: 'rec-7',
+        tokensBefore: 180000
+      }),
+      'f'
+    )
+    expect(decoded).toEqual({
+      id: 'cmp-1',
+      role: 'system',
+      blocks: [{ type: 'text', text: 'Context compacted', presentation: 'compaction' }],
+      timestamp: Date.parse('2026-07-16T01:00:00.000Z'),
+      source: 'transcript'
+    })
   })
 })

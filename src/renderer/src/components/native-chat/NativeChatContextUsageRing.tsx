@@ -97,8 +97,7 @@ export function NativeChatContextUsageRing({
   return (
     <div
       className="flex"
-      // Touch fires pointerleave before its click, so only a mouse drives hover.
-      // The portaled card is inside this element's React tree, so entering it cancels a pending close.
+      // Only mouse hover drives delays; touch leaves before click, and portal entry must cancel pending close.
       onPointerEnter={(event) => {
         if (event.pointerType === 'mouse') {
           setOpenAfterHover(true)
@@ -119,7 +118,7 @@ export function NativeChatContextUsageRing({
             data-native-chat-context-usage={usage.percentage}
             data-native-chat-context-usage-estimated={usage.estimated ? 'true' : undefined}
             className={cn(
-              'flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-11',
+              'flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-11',
               critical && 'text-destructive'
             )}
             // A read-only readout: clicking it must not pull focus out of the composer.
@@ -193,7 +192,7 @@ export function NativeChatContextUsageRing({
               </ul>
             ) : null}
             {usage.estimated ? (
-              <p className="mt-3 text-[11px] text-muted-foreground">
+              <p className="mt-3 text-2xs text-muted-foreground">
                 {translate(
                   'components.native-chat.contextUsage.estimated',
                   'Estimated from the last response.'

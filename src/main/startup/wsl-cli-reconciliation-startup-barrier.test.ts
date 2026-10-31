@@ -47,8 +47,7 @@ describe('createWslCliReconciliationStartupBarrier', () => {
       await vi.advanceTimersByTimeAsync(1)
       expect(barrierSettled).toBe(false)
 
-      // Why: a fast WSL discovery failure should release the barrier via its catch
-      // branch without waiting out the budget, and must clear the pending timer.
+      // Fast discovery rejection must release immediately and clear the timeout.
       rejectReconciliation(new Error('WSL discovery failed'))
       await expect(barrier).resolves.toBeUndefined()
       expect(vi.getTimerCount()).toBe(0)

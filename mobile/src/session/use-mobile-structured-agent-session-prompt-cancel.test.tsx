@@ -8,7 +8,6 @@ import type { RpcClient } from '../transport/rpc-client'
 const mocks = vi.hoisted(() => ({
   sendRequest: vi.fn(),
   promptResponses: vi.fn(() => ({
-    groupedDraft: null,
     respondPermission: vi.fn(),
     respondQuestion: vi.fn()
   }))
@@ -17,7 +16,7 @@ vi.mock('./use-mobile-structured-agent-state', () => ({
   useMobileStructuredAgentState: () => ({
     state,
     stateRef,
-    loadingOlder: false,
+    olderPages: 'idle',
     loadEarlier: vi.fn()
   })
 }))
@@ -33,9 +32,6 @@ vi.mock('./use-mobile-structured-agent-options', () => ({
 }))
 vi.mock('./use-mobile-structured-prompt-responses', () => ({
   useMobileStructuredPromptResponses: mocks.promptResponses
-}))
-vi.mock('./use-mobile-structured-send-operation-reconciliation', () => ({
-  useMobileStructuredSendOperationReconciliation: vi.fn()
 }))
 
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
@@ -121,7 +117,19 @@ function Harness({
     enabled: true,
     connected: true,
     agent: 'codex',
-    hostSupport: { promptCancel: promptCancelSupported, questionAnswers: questionAnswersSupported },
+    hostSupport: {
+      promptCancel: promptCancelSupported,
+      questionAnswers: questionAnswersSupported,
+      queuedMessages: false,
+      queuedCommands: false,
+      statusFeed: false,
+      quietRepeatedStop: false,
+      sendOptions: false,
+      conversationStop: false,
+      permissionModes: false,
+      itemDetail: false,
+      phoneAttachments: false
+    },
     onSendError: vi.fn()
   })
   return null
@@ -139,7 +147,8 @@ describe('mobile structured prompt cancellation', () => {
       fence: 3,
       items: [runningTurn(), pendingApproval()],
       submissions: [],
-      retainedItemLimit: 1024,
+      retainedOwnItemLimit: 1024,
+      retainedItemCap: 8192,
       hasOlder: false,
       status: 'ready'
     }
@@ -218,6 +227,64 @@ describe('mobile structured prompt cancellation', () => {
     )
   })
 
+  it("stops the host's running turn when its record is not loaded", async () => {
+    state = {
+      ...state,
+      hasOlder: true,
+      items: [pendingApproval()],
+      latestTurn: {
+        itemId: 'turn-status',
+        observedAt: 1,
+        turn: { turnId: 'turn-1', state: 'running', startedAt: 1 }
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.isWorking).toBe(true)
+    await act(async () => {
+      expect(await hook.cancelPrompt()).toBe(true)
+    })
+    expect(mocks.sendRequest).toHaveBeenCalledWith(
+      'agentSession.cancel',
+      expect.objectContaining({
+        turnId: 'turn-1',
+        prompt: { itemId: 'approval-1', expectedRevision: 4 }
+      }),
+      expect.any(Object)
+    )
+  })
+
+  it('reads a turn the host ended as ended, though its running row is still loaded', () => {
+    state = {
+      ...state,
+      latestTurn: {
+        itemId: 'turn-status',
+        observedAt: 1,
+        turn: { turnId: 'turn-1', state: 'completed', startedAt: 1, completedAt: 2 }
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.turnId).toBeNull()
+  })
+
+  it("reads Working from the host's answer, and from its rows only when an older host gives none", () => {
+    state = { ...state, items: [runningTurn()], working: false }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.isWorking).toBe(false)
+    act(() => renderer?.unmount())
+    const { working: _answered, ...olderHost } = state
+    state = olderHost
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.isWorking).toBe(true)
+  })
+
   it('uses the rendered prompt identity when the journal changes before tap', async () => {
     act(() => {
       renderer = create(createElement(Harness, { promptCancelSupported: true }))
@@ -227,7 +294,6 @@ describe('mobile structured prompt cancellation', () => {
       ...state,
       items: [runningTurn(), { ...pendingApproval(), itemId: 'approval-new', revision: 9 }]
     }
-    // The hook API accepts the identity captured by the card; the state is intentionally newer.
     await act(async () => {
       expect(await hook.cancelPrompt(renderedIdentity)).toBe(true)
     })
@@ -236,5 +302,29 @@ describe('mobile structured prompt cancellation', () => {
       expect.objectContaining({ prompt: renderedIdentity }),
       expect.any(Object)
     )
+  })
+
+  it("names the host's running turn for a plain Stop when its record is not loaded", async () => {
+    state = {
+      ...state,
+      hasOlder: true,
+      items: [],
+      latestTurn: {
+        itemId: 'turn-status',
+        observedAt: 1,
+        turn: { turnId: 'turn-1', state: 'running' }
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.turnId).toBe('turn-1')
+    await act(async () => {
+      hook.cancel()
+    })
+    const call = mocks.sendRequest.mock.calls.find(([method]) => method === 'agentSession.cancel')
+    expect(call).toBeDefined()
+    expect(call?.[1]).toMatchObject({ turnId: 'turn-1' })
+    expect(call?.[1]).not.toHaveProperty('prompt')
   })
 })

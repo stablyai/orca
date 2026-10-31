@@ -2,14 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { buildAgentNotificationId } from './agent-notification-id'
 
 describe('buildAgentNotificationId', () => {
-  it('builds a stable id for the same agent event metadata', () => {
+  it('builds a stable escaped id for the same agent event metadata', () => {
     const args = {
       worktreeId: 'repo::/Users/me/orca/workspaces/feature',
       paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
       stateStartedAt: 1780000000123
     }
 
-    expect(buildAgentNotificationId(args)).toBe(buildAgentNotificationId(args))
+    const id = buildAgentNotificationId(args)
+    expect(id).toBe(
+      'agent:repo%3A%3A%2FUsers%2Fme%2Forca%2Fworkspaces%2Ffeature:tab-1%3A11111111-1111-4111-8111-111111111111:1780000000123'
+    )
+    expect(buildAgentNotificationId(args)).toBe(id)
   })
 
   it('changes when the agent state start time changes', () => {

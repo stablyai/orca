@@ -13,11 +13,6 @@ import {
 } from './opencode-usage-sqlite-fixture'
 import { parseOpenCodeUsageDatabase } from './scanner'
 
-// Why: OpenCode 2 copies v1 `session` rows into `session_v2` and then writes
-// only there. A reader that knows just `session` reports zero usage for every
-// OpenCode 2 session, and a reader that unions both double-counts the migrated
-// ones (#15841). These tests pin both halves against the real v2 schema.
-
 const WORKTREE = '/workspace/repo'
 
 let tempDirs: string[] = []
@@ -81,10 +76,10 @@ describe('OpenCode 2 session_v2 usage', () => {
         cwd: WORKTREE,
         model: 'anthropic/claude-sonnet-4-5',
         estimatedCostUsd: 0.5,
-        inputTokens: 100,
+        inputTokens: 1300,
         outputTokens: 20,
         reasoningOutputTokens: 5,
-        cachedInputTokens: 900,
+        cachedInputTokens: 1200,
         totalTokens: 1325
       })
     ])
@@ -106,8 +101,8 @@ describe('OpenCode 2 session_v2 usage', () => {
     })
 
     const [event] = readEvents(path)
-    expect(event?.cachedInputTokens).toBe(5_000)
-    // Cache writes are not billed as input, so they only reach the total.
+    expect(event?.cachedInputTokens).toBe(7_000)
+    expect(event?.inputTokens).toBe(7_010)
     expect(event?.totalTokens).toBe(7_011)
   })
 
@@ -120,7 +115,6 @@ describe('OpenCode 2 session_v2 usage', () => {
     }
     const path = createFixture({
       generation: 'migrated',
-      // The frozen pre-upgrade copy, still carrying the smaller snapshot totals.
       legacySessions: [shared],
       v2Sessions: [
         { ...shared, tokensInput: 180, tokensCacheRead: 60 },
@@ -130,7 +124,7 @@ describe('OpenCode 2 session_v2 usage', () => {
 
     const events = readEvents(path)
     expect(events.map((event) => event.sessionId)).toEqual(['ses_shared', 'ses_v2_only'])
-    expect(events[0]?.inputTokens).toBe(180)
+    expect(events[0]?.inputTokens).toBe(240)
     expect(events[0]?.cachedInputTokens).toBe(60)
   })
 
@@ -151,8 +145,7 @@ describe('OpenCode 2 session_v2 usage', () => {
   it('keeps the legacy totals when the migration recomputed session_v2 lower', () => {
     const path = createFixture({
       generation: 'migrated',
-      // Upstream recomputes v2 totals from decoded messages; undecodable ones
-      // are dropped, landing the v2 row below its frozen legacy copy.
+      // Migration drops undecodable messages, so v2 totals may be lower than frozen v1 totals.
       legacySessions: [{ id: 'ses_shared', directory: WORKTREE, tokensInput: 900 }],
       v2Sessions: [{ id: 'ses_shared', directory: WORKTREE, tokensInput: 120 }]
     })
@@ -173,7 +166,6 @@ describe('OpenCode 2 session_v2 usage', () => {
     const events = readEvents(path)
     expect(events.map((event) => event.sessionId)).toEqual(['ses_shared'])
     expect(events[0]?.inputTokens).toBe(64)
-    // Equal totals: the tie goes to the newer table, so its row supplies metadata.
     expect(events[0]?.model).toContain('v2')
   })
 
@@ -211,9 +203,9 @@ describe('OpenCode 2 session_v2 usage', () => {
       expect.objectContaining({
         sessionId: 'ses_v1',
         estimatedCostUsd: 1.25,
-        inputTokens: 11,
+        inputTokens: 20,
         outputTokens: 3,
-        cachedInputTokens: 7,
+        cachedInputTokens: 9,
         totalTokens: 23
       })
     ])
@@ -240,7 +232,7 @@ describe('OpenCode 2 session_v2 usage', () => {
     db.close()
 
     expect(readEvents(path)).toEqual([
-      expect.objectContaining({ sessionId: 'ses_msg', inputTokens: 60, cachedInputTokens: 12 })
+      expect.objectContaining({ sessionId: 'ses_msg', inputTokens: 75, cachedInputTokens: 15 })
     ])
   })
 
@@ -298,11 +290,6 @@ describe('OpenCode 2 session_v2 usage', () => {
   })
 })
 
-// Why: a migrated session has two rows for one session, and neither is complete.
-// `session_v2` is the row OpenCode still writes, so it says what the session is;
-// each usage column is a lossy re-derivation, so each column takes the larger of
-// the two. Ranking whole rows by one number let that number decide cost,
-// directory and model too.
 describe('OpenCode 2 migrated session column merge', () => {
   const SHARED = 'ses_shared'
 
@@ -332,7 +319,6 @@ describe('OpenCode 2 migrated session column merge', () => {
 
     const events = readEvents(path)
     expect(events).toHaveLength(1)
-    // The legacy row still wins the token column; it must not drag metadata with it.
     expect(events[0]?.inputTokens).toBe(900)
     expect(events[0]?.cwd).toBe('/new/current-path')
   })
@@ -340,8 +326,7 @@ describe('OpenCode 2 migrated session column merge', () => {
   it('keeps the model session_v2 derived when the legacy row has none', () => {
     const path = createFixture({
       generation: 'migrated',
-      // The import fills session_v2.model from the last user message when the v1
-      // row had none: 23 of 234 shared ids on a real migrated database.
+      // Migration derives a missing v1 model from the last user message.
       legacySessions: [{ id: SHARED, directory: WORKTREE, model: null, tokensInput: 900 }],
       v2Sessions: [
         {
@@ -373,7 +358,7 @@ describe('OpenCode 2 migrated session column merge', () => {
     const events = readEvents(path)
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({
-      inputTokens: 1000,
+      inputTokens: 2200,
       cachedInputTokens: 1200,
       estimatedCostUsd: 2,
       totalTokens: 2200
@@ -426,9 +411,9 @@ describe('OpenCode 2 migrated session column merge', () => {
         cwd: WORKTREE,
         model: 'anthropic/claude-sonnet-4-5',
         estimatedCostUsd: 1.25,
-        inputTokens: 11,
+        inputTokens: 20,
         outputTokens: 3,
-        cachedInputTokens: 7,
+        cachedInputTokens: 9,
         totalTokens: 23
       })
     ])

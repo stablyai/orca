@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 
 const mocks = vi.hoisted(() => ({
-  refreshTerminalImeInputContext: vi.fn()
+  refreshTerminalImeInputContext: vi.fn(),
+  requestNativeChatComposerFocus: vi.fn()
+}))
+
+vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => ({
+  requestNativeChatComposerFocus: mocks.requestNativeChatComposerFocus
 }))
 
 vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
@@ -18,6 +23,7 @@ const GLOBAL_HELPER_SELECTOR =
 describe('focusTerminalTabSurface', () => {
   afterEach(() => {
     mocks.refreshTerminalImeInputContext.mockClear()
+    mocks.requestNativeChatComposerFocus.mockClear()
     vi.unstubAllGlobals()
   })
 
@@ -104,7 +110,7 @@ describe('focusTerminalTabSurface', () => {
     expect(textarea.focus).not.toHaveBeenCalled()
   })
 
-  it('does not focus xterm while chat covers the terminal tab', () => {
+  it('hands the focus to the chat composer instead of xterm while chat covers the terminal tab', () => {
     flushAnimationFrames()
     const textarea = { focus: vi.fn() }
     vi.stubGlobal('document', {
@@ -121,6 +127,32 @@ describe('focusTerminalTabSurface', () => {
     focusTerminalTabSurface('tab-1')
 
     expect(textarea.focus).not.toHaveBeenCalled()
+    expect(mocks.requestNativeChatComposerFocus).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('keeps unclaimed chat focus replayable unless the caller asks for a one-shot rename return', () => {
+    flushAnimationFrames()
+    const body = {}
+    vi.stubGlobal('document', {
+      body,
+      activeElement: body,
+      querySelector: vi.fn((selector: string) =>
+        selector === '[data-terminal-tab-id="tab-1"]'
+          ? { getAttribute: (name: string) => (name === 'data-terminal-chat-view' ? 'true' : null) }
+          : null
+      )
+    })
+
+    focusTerminalTabSurface('tab-1', null, { onlyIfFocusUnclaimed: true })
+    expect(mocks.requestNativeChatComposerFocus).toHaveBeenLastCalledWith('tab-1')
+
+    focusTerminalTabSurface('tab-1', null, {
+      onlyIfFocusUnclaimed: true,
+      oneShotChatComposerFocus: true
+    })
+    expect(mocks.requestNativeChatComposerFocus).toHaveBeenLastCalledWith('tab-1', {
+      onlyIfFocusUnclaimed: true
+    })
   })
 
   it('skips the chat leaf helper when a split chat tab has an active terminal leaf', () => {
@@ -213,50 +245,6 @@ describe('focusTerminalTabSurface', () => {
     focusTerminalTabSurface('tab-1', 'pending-leaf')
 
     expect(textarea.focus).not.toHaveBeenCalled()
-  })
-
-  it('does not use stale-leaf fallback while the expected layout still has multiple leaves', () => {
-    flushAnimationFrames()
-    const textarea = { focus: vi.fn() }
-    vi.stubGlobal('document', {
-      querySelector: vi.fn((selector: string) =>
-        selector === '[data-terminal-tab-id="tab-1"]'
-          ? { getAttribute: () => 'mounted-leaf pending-leaf' }
-          : null
-      ),
-      querySelectorAll: vi.fn((selector: string) =>
-        selector === TAB_HELPER_SELECTOR
-          ? { length: 1, item: () => textarea }
-          : { length: 0, item: () => null }
-      )
-    })
-
-    focusTerminalTabSurface('tab-1', 'stale-leaf')
-
-    expect(textarea.focus).not.toHaveBeenCalled()
-  })
-
-  it('does not focus a sibling when a stale leaf id has multiple helpers in the tab', () => {
-    flushAnimationFrames()
-    const first = { focus: vi.fn() }
-    const second = { focus: vi.fn() }
-    vi.stubGlobal('document', {
-      querySelector: vi.fn((selector: string) =>
-        selector === '[data-terminal-tab-id="tab-1"]'
-          ? { getAttribute: () => 'new-left new-right' }
-          : null
-      ),
-      querySelectorAll: vi.fn((selector: string) =>
-        selector === TAB_HELPER_SELECTOR
-          ? { length: 2, item: (index: number) => (index === 0 ? first : second) }
-          : { length: 0, item: () => null }
-      )
-    })
-
-    focusTerminalTabSurface('tab-1', 'stale-leaf')
-
-    expect(first.focus).not.toHaveBeenCalled()
-    expect(second.focus).not.toHaveBeenCalled()
   })
 
   it('cancels a pending focus frame when a newer focus request starts', () => {

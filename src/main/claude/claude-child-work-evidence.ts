@@ -1,32 +1,28 @@
-// Claude child work as the host records it: the outcome vocabulary, what a progress frame says,
-// the owner of each child through the journal's own linkage, and the tool a child has open.
-// The task frames themselves are read by `claude-child-work-decoder`; everything here is drained
-// after the journal handled the frame, so the host never admits evidence ahead of its rows.
-
 import type { AgentChildWorkOutcome } from '../../shared/agent-status-child-work'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
 } from '../../shared/agent-status-child-work-evidence'
 import { taskText, taskUsageTotalTokens } from './claude-background-task-frames'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type {
+  ClaudeSession,
+  ClaudeStructuredSessionEvent
+} from './structured/claude-structured-session-state'
 import { deriveToolInputPreview } from '../../shared/agent-hook-listener/tool-input-preview'
 import {
-  claudeToolResults,
+  claudeRecord,
+  claudeToolResultId,
   claudeToolUses,
   readClaudeMessageEnvelope,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
 
 export type ClaudeTaskFacts = {
-  /** The tool the provider last reported; stamped at drain. */
   toolName?: string
   lastMessage?: string
   totalTokens?: number
 }
 
-/** Provider status → how the child ended. `killed` and `stopped` are deliberate stops; a status
- *  a terminal frame does not state is an ending nobody classified, never a success. */
 export function claudeChildWorkOutcome(status: unknown): AgentChildWorkOutcome {
   switch (status) {
     case 'completed':
@@ -41,8 +37,6 @@ export function claudeChildWorkOutcome(status: unknown): AgentChildWorkOutcome {
   }
 }
 
-/** What a `task_progress` frame says: the tool the child last ran, its newest summary, usage.
- *  Its `description` restates the tool ("Running Bash") and is not the task's own. */
 export function claudeTaskProgressFacts(message: Record<string, unknown>): ClaudeTaskFacts {
   const toolName = taskText(message.last_tool_name)
   const lastMessage = taskText(message.summary)
@@ -54,8 +48,7 @@ export function claudeTaskProgressFacts(message: Record<string, unknown>): Claud
   }
 }
 
-/** Name the child that owns each live child: the agent whose own traffic made the spawn (or
- *  shell) call. A call the session's own agent made has no owner. */
+/** Ownership follows the spawn call; the session agent has no child owner. */
 export function withClaudeChildWorkOwners(
   evidence: AgentChildWorkEvidence[],
   ownerOf: ((toolUseId: string) => string | null) | undefined
@@ -72,11 +65,7 @@ export function withClaudeChildWorkOwners(
   )
 }
 
-/**
- * A child's own tool traffic, read after the journal handled the frame: the call the child has
- * open now, previewed as a hook-reported row previews its own tool. A frame that only delivers
- * the caller's own spawn result belongs to the caller, not the child it names.
- */
+/** The caller's spawn result is not the child's own tool operation. */
 export function claudeChildOperation(
   message: Record<string, unknown>,
   activityOf:
@@ -91,7 +80,11 @@ export function claudeChildOperation(
   }
   const toolTraffic =
     claudeToolUses(envelope).length > 0 ||
-    claudeToolResults(envelope).some((result) => result.toolUseId !== parentRef)
+    envelope.content.some((value) => {
+      const part = claudeRecord(value)
+      const toolUseId = claudeToolResultId(part)
+      return toolUseId !== null && toolUseId !== parentRef
+    })
   if (!toolTraffic) {
     return []
   }
@@ -109,15 +102,40 @@ export function claudeChildOperation(
   ]
 }
 
-/** Everything one frame (or a close) said about the session's child work, owners named. */
+/** Waiting requires both a written journal card and a registry request still awaiting an answer. */
+function claudeWaitingChildIds(
+  session: Pick<ClaudeSession, 'prompts' | 'translator'>
+): Set<string> {
+  const waiting = new Set<string>()
+  for (const card of session.translator?.journalPrompts.openCards() ?? []) {
+    if (session.prompts.awaitsAnswer(card.promptKey)) {
+      waiting.add(card.asker)
+    }
+  }
+  return waiting
+}
+
+/** Wait for deferred sinks to write the prompt card. */
+export function claudePromptCardWritten(
+  session: Pick<ClaudeSession, 'translator'> | null | undefined,
+  event: ClaudeStructuredSessionEvent
+): Promise<void> | undefined {
+  return event.type === 'prompt'
+    ? session?.translator?.journalPrompts.whenWritten(event.prompt.promptKey)
+    : undefined
+}
+
+/** Drain after journaling the frame; stamp evidence with the host clock. */
 export function drainClaudeChildWork(
-  session: Pick<ClaudeSession, 'childWork' | 'translator'> | null | undefined,
+  session: Pick<ClaudeSession, 'childWork' | 'translator' | 'prompts'> | null | undefined,
   message: Record<string, unknown> | null,
   observedAt: number
 ): AgentChildWorkEvidence[] {
   if (!session) {
     return []
   }
+  // Recheck cards and answer state so waits end when a card closes or its answer starts.
+  session.childWork.observeWaiting(claudeWaitingChildIds(session))
   return [
     ...withClaudeChildWorkOwners(
       session.childWork.drain(observedAt),

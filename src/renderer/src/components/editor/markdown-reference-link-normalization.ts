@@ -31,8 +31,7 @@ function normalizeReferenceLabel(label: string): string {
   return normalized.toLowerCase()
 }
 
-// Why: pasted markdown labels can be large; matching only needs collapsed
-// reference-label whitespace, not a full-string whitespace regex pass.
+// Large labels only need collapsed reference whitespace; avoid scanning them again with a full-string regex.
 function isMarkdownReferenceLabelWhitespace(code: number): boolean {
   return (
     code === 32 ||
@@ -199,8 +198,6 @@ export function normalizeMarkdownReferenceLinks(content: string): string {
     return content
   }
 
-  // Why: Tiptap's Markdown parser drops reference definitions but leaves
-  // shortcut references as plain text. Inline them before parsing so Linear
-  // issue mentions keep their links in the rich description editor.
+  // Inline shortcut references before Tiptap drops definitions, preserving links such as Linear issue mentions.
   return replaceReferenceLinks(markdown, definitions)
 }

@@ -1,8 +1,16 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
+import { createAgentModelCatalogSettingsExpiry } from '../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
+import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultOnboardingState } from '../../../shared/constants'
+import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
+import {
+  chatUiLaunchTipVariant,
+  parseChatUiLaunchTipAudience,
+  type ChatUiLaunchTipVariant
+} from '../../../shared/native-chat/chat-ui-launch-tip-audience'
 import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations
@@ -24,7 +32,9 @@ type ProfilePreferencesRuntime = Pick<
   | 'activeViewPreference'
   | 'githubCacheDirty'
   | 'githubCacheGeneration'
+  | 'githubCacheWriteListeners'
   | 'protectedSecrets'
+  | 'runDurableMutation'
   | 'settingsChangeListeners'
   | 'state'
   | 'uiChangeListeners'
@@ -74,6 +84,58 @@ export class ProfilePreferences {
     return updateSettingsOperation(getSettingsMutationOperations(this), updates, options)
   }
 
+  async updateSettingsAndFlush(
+    updates: Partial<GlobalSettings>,
+    options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
+  ): Promise<GlobalSettings> {
+    const { runtime } = this[profilePreferencesContext]
+    let changedUpdates: Partial<GlobalSettings> = {}
+    await runtime.runDurableMutation(() => {
+      const previous = runtime.state.settings
+      const next = this.updateSettings(updates)
+      const previousEntries = new Map(Object.entries(previous))
+      const updateKeys = new Set(Object.keys(updates))
+      changedUpdates = Object.fromEntries(
+        Object.entries(next).filter(
+          ([key, value]) => updateKeys.has(key) && !Object.is(previousEntries.get(key), value)
+        )
+      )
+      return {
+        value: undefined,
+        rollback: () => {
+          const currentEntries = new Map(Object.entries(runtime.state.settings))
+          const nextEntries = new Map(Object.entries(next))
+          const restoredUpdates: Record<string, unknown> = Object.fromEntries(
+            Object.entries(previous).filter(
+              ([key]) =>
+                updateKeys.has(key) && Object.is(currentEntries.get(key), nextEntries.get(key))
+            )
+          )
+          const restoredSettings = { ...runtime.state.settings, ...restoredUpdates }
+          for (const key of updateKeys) {
+            if (
+              !previousEntries.has(key) &&
+              Object.is(currentEntries.get(key), nextEntries.get(key))
+            ) {
+              Reflect.deleteProperty(restoredSettings, key)
+              restoredUpdates[key] = undefined
+            }
+          }
+          createAgentModelCatalogSettingsExpiry(agentModelCatalogStore, runtime.state.settings)(
+            restoredUpdates,
+            restoredSettings
+          )
+          runtime.state.settings = restoredSettings
+          retireAtRestCommandSettings(updateKeys)
+        }
+      }
+    })
+    if (options.notifyListeners && Object.keys(changedUpdates).length > 0) {
+      notifySettingsChanged(this, changedUpdates, options.originWebContentsId)
+    }
+    return this.getSettings()
+  }
+
   getUI(): PersistedState['ui'] {
     return getPersistedUI(
       this[profilePreferencesContext].runtime.state,
@@ -119,15 +181,33 @@ export class ProfilePreferences {
     return this.getOnboarding()
   }
 
+  getChatUiLaunchTipVariant(): ChatUiLaunchTipVariant {
+    return chatUiLaunchTipVariant(
+      parseChatUiLaunchTipAudience(
+        this[profilePreferencesContext].runtime.state.chatUiLaunchTipAudience
+      )
+    )
+  }
+
   getGitHubCache(): PersistedState['githubCache'] {
     return this[profilePreferencesContext].runtime.state.githubCache
   }
 
   setGitHubCache(cache: PersistedState['githubCache']): void {
-    // Why no scheduleSave: cache is memory-only and snapshotted to a sidecar at flush; persisting here rewrote the whole state file every poll cycle.
+    // Cache polls write a sidecar at flush; scheduling a full profile save here amplifies every poll.
     this[profilePreferencesContext].runtime.state.githubCache = cache
     this[profilePreferencesContext].runtime.githubCacheDirty = true
     this[profilePreferencesContext].runtime.githubCacheGeneration += 1
+    for (const listener of this[profilePreferencesContext].runtime.githubCacheWriteListeners) {
+      listener()
+    }
+  }
+
+  onGitHubCacheWritten(listener: () => void): () => void {
+    this[profilePreferencesContext].runtime.githubCacheWriteListeners.add(listener)
+    return () => {
+      this[profilePreferencesContext].runtime.githubCacheWriteListeners.delete(listener)
+    }
   }
 }
 
@@ -147,7 +227,12 @@ export function notifyUIChanged(owner: ProfilePreferences): void {
   }
   const ui = owner.getUI()
   for (const listener of owner[profilePreferencesContext].runtime.uiChangeListeners) {
-    listener(ui)
+    // State is already applied; a broadcast failure must not fail the update (e.g. the shutdown checkpoint).
+    try {
+      listener(ui)
+    } catch (error) {
+      console.error('[preferences] UI change listener failed:', error)
+    }
   }
 }
 
@@ -187,13 +272,4 @@ export function getFeatureInteractionOperations(
     notifyUIChanged: () => notifyUIChanged(owner),
     getUI: () => owner.getUI()
   }
-}
-
-export function installProfilePreferencesContext(
-  target: ProfilePreferences,
-  source: ProfilePreferences
-): void {
-  Object.defineProperty(target, profilePreferencesContext, {
-    value: source[profilePreferencesContext]
-  })
 }

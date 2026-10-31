@@ -1,12 +1,10 @@
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { useEffect } from 'react'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
-import {
-  HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS,
-  isWebClient,
-  type WorktreeCardProps
-} from './worktree-card-model'
+import { isWebClient, type WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
 
@@ -32,6 +30,8 @@ export function useWorktreeCardLifecycleEffects({
   issueCacheKey,
   fetchIssue,
   showLinearIssue,
+  linearSourceContext,
+  linearWorkspaceId,
   fetchLinearIssue
 }: Pick<WorktreeCardProps, 'worktree' | 'repo'> &
   Pick<
@@ -45,6 +45,8 @@ export function useWorktreeCardLifecycleEffects({
     | 'linkedGiteaPR'
     | 'branch'
     | 'issueCacheKey'
+    | 'linearSourceContext'
+    | 'linearWorkspaceId'
   > &
   Pick<
     Foundation,
@@ -55,65 +57,12 @@ export function useWorktreeCardLifecycleEffects({
     showIssue: boolean
     showLinearIssue: boolean
   }): void {
-  // Why: card surfaces are presentational, so skip hosted-review fetches when hidden to save rate-limit budget.
-  useEffect(() => {
-    // Why: paired web must not fan out per-card decoration RPCs during startup; host session/tab parity is critical.
-    if (isWebClient()) {
-      return
-    }
-    if (
-      !repo ||
-      isFolder ||
-      worktree.isBare ||
-      !hostedReviewCacheKey ||
-      !shouldRefreshHostedReview ||
-      isMacAppDataPath(repo.path)
-    ) {
-      return
-    }
-    const refreshHostedReview = (): void => {
-      // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR number from explicit metadata when we have one.
-      void fetchHostedReviewForBranch(repo.path, branch, {
-        repoId: repo.id,
-        linkedGitHubPR: worktree.linkedPR ?? null,
-        ...(cachedBranchFallbackGitHubPRNumber !== null
-          ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }
-          : {}),
-        currentHeadOid: worktree.head ?? null,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR,
-        staleWhileRevalidate: true
-      })
-    }
-    // Why: PRs created outside Orca (e.g. `gh pr create`) emit no renderer event; poll visible cards to discover them.
-    return installWindowVisibilityInterval({
-      run: refreshHostedReview,
-      jitterOnVisible: true,
-      intervalMs: HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS
-    })
-  }, [
-    repo,
-    isFolder,
-    worktree.isBare,
-    worktree.linkedPR,
-    worktree.head,
-    cachedBranchFallbackGitHubPRNumber,
-    linkedGitLabMR,
-    linkedBitbucketPR,
-    linkedAzureDevOpsPR,
-    linkedGiteaPR,
-    fetchHostedReviewForBranch,
-    branch,
-    hostedReviewCacheKey,
-    shouldRefreshHostedReview
-  ])
-
+  const hostedReviewExactKey = !branch || branch === 'HEAD' ? hostedReviewCacheKey : undefined
   useEffect(() => {
     if (
       !newCardStyle ||
       !hoverDetailsOpen ||
+      !isWindowVisible() ||
       shouldRefreshHostedReview ||
       isWebClient() ||
       !repo ||
@@ -127,11 +76,13 @@ export function useWorktreeCardLifecycleEffects({
     // Why: hidden card metadata is revealed on whole-card hover, so fetch lazily instead of always-on polling.
     void fetchHostedReviewForBranch(repo.path, branch, {
       repoId: repo.id,
+      repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+      ...(hostedReviewExactKey ? { exactReviewKey: hostedReviewExactKey } : {}),
       linkedGitHubPR: worktree.linkedPR ?? null,
       ...(cachedBranchFallbackGitHubPRNumber !== null
         ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }
         : {}),
-      currentHeadOid: worktree.head ?? null,
+      currentHeadOid: hostedReviewExactKey ? null : (worktree.head ?? null),
       linkedGitLabMR,
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
@@ -154,10 +105,11 @@ export function useWorktreeCardLifecycleEffects({
     linkedGiteaPR,
     fetchHostedReviewForBranch,
     branch,
-    hostedReviewCacheKey
+    hostedReviewCacheKey,
+    hostedReviewExactKey
   ])
 
-  // Why: same as above for issues — hidden-surface polling only burns GitHub calls for invisible data.
+  // Poll issues only while visible; hidden metadata does not justify GitHub calls.
   useEffect(() => {
     // Why: per-card decoration lookups from the browser flood the RPC path at paired-web startup; the host is authoritative.
     if (
@@ -209,32 +161,56 @@ export function useWorktreeCardLifecycleEffects({
     if (!worktree.linkedLinearIssue || !showLinearIssue) {
       return
     }
+    const controller = new AbortController()
     const linearIssueId = worktree.linkedLinearIssue
     const refreshLinearIssueIfVisible = (): void => {
       if (!isWindowVisible()) {
         return
       }
-      void fetchLinearIssue(linearIssueId, 'all')
+      void consumeLinearIssueRead(
+        fetchLinearIssue(linearIssueId, linearWorkspaceId, { sourceContext: linearSourceContext }),
+        () => !controller.signal.aborted,
+        undefined,
+        controller.signal
+      ).catch(() => {})
     }
     refreshLinearIssueIfVisible()
     window.addEventListener('focus', refreshLinearIssueIfVisible)
     document.addEventListener('visibilitychange', refreshLinearIssueIfVisible)
     return () => {
+      controller.abort()
       window.removeEventListener('focus', refreshLinearIssueIfVisible)
       document.removeEventListener('visibilitychange', refreshLinearIssueIfVisible)
     }
-  }, [worktree.linkedLinearIssue, fetchLinearIssue, showLinearIssue])
+  }, [
+    worktree.linkedLinearIssue,
+    fetchLinearIssue,
+    showLinearIssue,
+    linearSourceContext,
+    linearWorkspaceId
+  ])
 
   useEffect(() => {
     if (!newCardStyle || !hoverDetailsOpen || showLinearIssue || !worktree.linkedLinearIssue) {
       return
     }
-    void fetchLinearIssue(worktree.linkedLinearIssue, 'all')
+    const controller = new AbortController()
+    void consumeLinearIssueRead(
+      fetchLinearIssue(worktree.linkedLinearIssue, linearWorkspaceId, {
+        sourceContext: linearSourceContext
+      }),
+      () => !controller.signal.aborted,
+      undefined,
+      controller.signal
+    ).catch(() => {})
+    return () => controller.abort()
   }, [
     newCardStyle,
     hoverDetailsOpen,
     showLinearIssue,
     worktree.linkedLinearIssue,
+    linearSourceContext,
+    linearWorkspaceId,
     fetchLinearIssue
   ])
 }

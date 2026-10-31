@@ -39,6 +39,8 @@ type PtyTitleRecord = {
   lastOscTitleAt: number | null
 }
 
+type TitleCandidate = { title: string | null | undefined; updatedAt: number | null | undefined }
+
 type PtyAgentPresenceRecord = {
   launchAgent: TuiAgent | null
   launchToken: string | null
@@ -46,11 +48,74 @@ type PtyAgentPresenceRecord = {
   incarnationId: PtyIncarnationId | null
 }
 
+/** The stale-working timer's display-only clear of a PTY's native title, while it stands. */
+export type TitleDisplayClear = {
+  title: string
+  status: AgentStatus | null
+  /** Dated as a genuine title would be: observation sequence and wall clock. */
+  observedAt: number
+  observedAtEpochMs: number
+}
+
+type PtyTitleEvidence = PtyTitleRecord & {
+  lastOscTitleEpochMs: number | null
+  lastAgentStatus: AgentStatus | null
+  lastAgentStatusStartedAtEpochMs: number | null
+}
+
+/** Display-only title clearing; readiness/delivery/presence retain native evidence. max() handles restore seeds re-stamping the native title. */
+export function getPtyDisplayRecord<T extends PtyTitleEvidence>(
+  pty: T,
+  clear: TitleDisplayClear | null
+): T {
+  if (!clear) {
+    return pty
+  }
+  return {
+    ...pty,
+    lastOscTitle: clear.title,
+    lastOscTitleAt: Math.max(pty.lastOscTitleAt ?? 0, clear.observedAt),
+    lastOscTitleEpochMs: clear.observedAtEpochMs,
+    lastAgentStatus: clear.status,
+    lastAgentStatusStartedAtEpochMs:
+      clear.status === pty.lastAgentStatus
+        ? pty.lastAgentStatusStartedAtEpochMs
+        : clear.observedAtEpochMs
+  }
+}
+
+/** The leaf counterpart of {@link getPtyDisplayRecord}; `clear` is its PTY's. */
+export function getLeafDisplayRecord<T extends LeafStatusRecord>(
+  leaf: T,
+  clear: TitleDisplayClear | null
+): T {
+  if (!clear) {
+    return leaf
+  }
+  return {
+    ...leaf,
+    lastOscTitle: clear.title,
+    lastOscTitleAt: Math.max(leaf.lastOscTitleAt ?? 0, clear.observedAt),
+    lastAgentStatus: clear.status
+  }
+}
+
+/** Project lifecycle through the same display clear as titles; blocked-dialog and submission verification use this, readiness/delivery do not. */
+export function getDisplayPromptLifecycle(
+  lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined,
+  clear: TitleDisplayClear | null
+): { status: AgentStatus | null; updatedAt: number } | null | undefined {
+  if (!clear || (lifecycle && lifecycle.updatedAt > clear.observedAtEpochMs)) {
+    return lifecycle
+  }
+  return { status: clear.status, updatedAt: clear.observedAtEpochMs }
+}
+
 export function getLeafWorktreeStatus(
   leaf: LeafStatusRecord,
   tabTitle: string | null
 ): RuntimeWorktreeStatus {
-  // Why: recompute from the live title each call (no sticky state) so worktree.ps mirrors the desktop sidebar's getWorktreeStatus.
+  // Recompute without sticky state so worktree.ps mirrors desktop getWorktreeStatus.
   const titleCandidates = [
     { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
     { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
@@ -62,7 +127,7 @@ export function getLeafWorktreeStatus(
 }
 
 export function classifyLatestAgentTitle(
-  ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
+  ...titles: TitleCandidate[]
 ): 'agent' | 'management' | 'neutral' {
   return classifyAgentTitle(getLatestAgentCandidateTitle(...titles))
 }
@@ -88,8 +153,7 @@ export function getLatestLeafTitle(
   )
 }
 
-// Why: an 'agent' title only proves an agent owns the pane when something other than a
-// quarter-circle spinner carries it — those glyphs are generic progress frames (STA-4028).
+// Quarter-circle spinners prove activity, not agent ownership (STA-4028).
 export function agentTitleProvesAgentPresence(
   title: string | null,
   classification: 'agent' | 'management' | 'neutral'
@@ -132,24 +196,27 @@ export function terminalTitleBlocksExplicitAgentStatus(title: string | null): bo
   return isClaudeManagementTitle(title) || isShellProcess(title)
 }
 
-export function getLatestAgentCandidateTitle(
-  ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
-): string | null {
+export function getLatestAgentCandidateTitle(...titles: TitleCandidate[]): string | null {
   return getLatestAgentCandidateTitleInfo(...titles)?.title ?? null
 }
 
 export function getLatestAgentCandidateTitleInfo(
-  ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
+  ...titles: TitleCandidate[]
 ): { title: string; updatedAt: number } | null {
-  let latest: { title: string; updatedAt: number } | null = null
-  for (const candidate of titles) {
-    const title = candidate.title?.trim()
-    if (!title) {
+  const latest = getLatestAgentCandidate(...titles)
+  const title = latest?.title?.trim()
+  return latest && title ? { title, updatedAt: latest.updatedAt ?? 0 } : null
+}
+
+/** The newest non-blank candidate itself, so a caller can tell which source won. */
+export function getLatestAgentCandidate<T extends TitleCandidate>(...candidates: T[]): T | null {
+  let latest: T | null = null
+  for (const candidate of candidates) {
+    if (!candidate.title?.trim()) {
       continue
     }
-    const updatedAt = candidate.updatedAt ?? 0
-    if (!latest || updatedAt > latest.updatedAt) {
-      latest = { title, updatedAt }
+    if (!latest || (candidate.updatedAt ?? 0) > (latest.updatedAt ?? 0)) {
+      latest = candidate
     }
   }
   return latest
@@ -184,13 +251,6 @@ export function mapExplicitAgentStateToRuntimeTerminalStatus(
     case 'done':
       return 'idle'
   }
-}
-
-export function mergeWorktreeStatus(
-  current: RuntimeWorktreeStatus,
-  next: RuntimeWorktreeStatus
-): RuntimeWorktreeStatus {
-  return WORKTREE_STATUS_PRIORITY[next] > WORKTREE_STATUS_PRIORITY[current] ? next : current
 }
 
 export function mergeWorktreeSummaryStatus(
@@ -232,14 +292,13 @@ export function compareWorktreePs(
   left: RuntimeWorktreePsSummary,
   right: RuntimeWorktreePsSummary
 ): number {
-  // Pinned and unread worktrees sort above others so they survive truncation.
   if (left.isPinned !== right.isPinned) {
     return left.isPinned ? -1 : 1
   }
   if (left.unread !== right.unread) {
     return left.unread ? -1 : 1
   }
-  // Why: worktree.ps is truncated for mobile, so host-visible activity must sort above inactive rows.
+  // Mobile truncates worktree.ps, so host-visible activity must outrank inactive rows.
   if (left.hasHostSidebarActivity !== right.hasHostSidebarActivity) {
     return left.hasHostSidebarActivity ? -1 : 1
   }

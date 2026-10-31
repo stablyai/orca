@@ -9,6 +9,19 @@ export type ResourceMemoryMetricCopy = {
 }
 
 export function getResourceMemoryMetricCopy(metric: ProcessMemoryMetric): ResourceMemoryMetricCopy {
+  if (metric === 'footprint') {
+    return {
+      columnLabel: translate('auto.components.status.bar.resource.memory.metric.memColumn', 'Mem'),
+      summaryLabel: translate(
+        'auto.components.status.bar.resource.memory.metric.memorySummary',
+        'Σ Memory'
+      ),
+      description: translate(
+        'auto.components.status.bar.resource.memory.metric.footprintDescription',
+        'Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.'
+      )
+    }
+  }
   if (metric === 'working-set') {
     return {
       columnLabel: 'WS',
@@ -32,7 +45,10 @@ export function getResourceMemoryMetricCopy(metric: ProcessMemoryMetric): Resour
 /** No column of its own yet, so no `columnLabel`: the commit figure is a summary + tooltip. */
 export function getResourceCommitMetricCopy(): Omit<ResourceMemoryMetricCopy, 'columnLabel'> {
   return {
-    summaryLabel: 'Σ Private',
+    summaryLabel: translate(
+      'auto.components.status.bar.resource.memory.metric.privateSummary',
+      'Σ Private'
+    ),
     description: translate(
       'auto.components.status.bar.resource.memory.metric.privateBytesDescription',
       'Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.'
@@ -40,15 +56,7 @@ export function getResourceCommitMetricCopy(): Omit<ResourceMemoryMetricCopy, 'c
   }
 }
 
-/**
- * Warning tint once *Orca's own* tracked commit grows large against physical
- * RAM, on the same 60/80 bands as the host usage bars. Deliberately not a
- * host-wide paging predictor: that needs the host's commit charge and commit
- * limit, which this snapshot does not carry (#16211).
- *
- * Null both when the share is unremarkable and when the snapshot has no commit
- * figure at all — silence is the honest answer for an unmeasured host.
- */
+/** Tint Orca’s tracked commit share of physical RAM; missing host commit charge/limit prevents predicting system-wide paging. */
 export function getCommitPressureToneClass(args: {
   privateMemory: number | undefined
   hostTotalMemory: number

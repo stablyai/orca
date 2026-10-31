@@ -16,12 +16,6 @@ import {
   type AiVaultSessionSearchInit
 } from './session-scanner-service-protocol'
 
-/**
- * The child, booted the way a spawn boots it: an init frame and messages, with
- * no renderer, no Electron and no scan request. What this proves is that consent
- * alone constructs the indexer and that every search answer crosses the protocol.
- */
-
 const SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 
 let harness: SessionSearchIndexerHarness
@@ -34,7 +28,6 @@ function emit(message: AiVaultServiceParentMessage): void {
   process.emit('message', message, undefined)
 }
 
-/** One request, and the reply the child sent for it, still discriminated by operation. */
 async function call(body: AiVaultServiceRequestBody): Promise<AiVaultServiceResultValue> {
   const id = nextId++
   emit({ ...body, id })
@@ -117,11 +110,11 @@ it('reports the indexer phase and a live generation over the protocol', async ()
   const status = await vi.waitFor(async () => {
     const value = await searchStatus()
     expect(value.filesIndexed).toBeGreaterThan(0)
+    expect(value.phase).toBe('current')
+    expect(value.generation).toBeGreaterThan(0)
     return value
   })
   expect(status.enabled).toBe(true)
-  expect(status.phase).toBe('current')
-  expect(status.generation).toBeGreaterThan(0)
   expect(existsSync(harness.databasePath)).toBe(true)
 })
 
@@ -175,7 +168,6 @@ it('answers disabled once consent is withdrawn, without a respawn', async () => 
   emit({ type: 'sessionSearch', init: searchInit(false) })
   expect(await searchSessions('distinctive')).toEqual({ kind: 'unavailable', reason: 'disabled' })
   expect(await searchStatus()).toMatchObject({ enabled: false, phase: 'idle' })
-  // Re-consenting reuses the index that was left on disk rather than rebuilding it.
   emit({ type: 'sessionSearch', init: searchInit(true) })
   expect((await searchSessions('distinctive')).kind).toBe('results')
 })

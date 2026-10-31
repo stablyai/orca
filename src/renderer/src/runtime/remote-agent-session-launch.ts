@@ -1,6 +1,7 @@
 import { AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from '../../../shared/agent-session-host-authority'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
-import { RuntimeRpcCallError, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { isRuntimeCompatBlockError } from './runtime-protocol-compat'
 
 export async function runRemoteAgentSessionLaunch<TResult>(args: {
@@ -22,12 +23,10 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
     if (isRuntimeCompatBlockError(error)) {
       throw error
     }
-    // Why: a failed read-only probe has not launched anything, so preserving
-    // the legacy path cannot duplicate an agent and keeps transient upgrades neutral.
+    // Read-only probe failure launched nothing; legacy fallback is safe from duplication during transient upgrades.
     return await args.legacy({ skipCompatibilityCheck: true })
   }
-  // Why: choose before invoking either path; an ambiguous structured outcome
-  // must never trigger a legacy retry that could spawn a duplicate.
+  // Choose before launching: ambiguous structured outcomes must never retry legacy and duplicate agents.
   if (!supported) {
     return await args.legacy({ skipCompatibilityCheck: true })
   }
@@ -38,8 +37,7 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
       error instanceof RuntimeRpcCallError &&
       (error.code === 'agent_session_legacy_required' || error.code === 'method_not_found')
     ) {
-      // Why: both responses prove no structured side effect began: the new host rejected an old
-      // lower owner before dispatch, or an old host never recognized the method.
+      // Both refusals prove no dispatch: new host rejected old ownership or old host did not recognize the method.
       return await args.legacy({ skipCompatibilityCheck: true })
     }
     throw error

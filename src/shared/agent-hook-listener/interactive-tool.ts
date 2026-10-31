@@ -4,7 +4,7 @@ import { parseAgentHookJson } from './request-body'
 import { readString, toolUpdate } from './tool-input-preview'
 import { normalizeHookEventName } from './provider-event-names'
 
-/** Clear active-tool metadata so a failed tool stops looking in-flight (else the compact sidebar hides the error behind the tool name). */
+/** Clear failed-tool metadata so compact rows show the error instead of an in-flight tool. */
 export function clearActiveToolFieldsUpdate(): ToolSnapshot {
   return toolUpdate(
     { toolName: undefined, toolInput: undefined, interactivePrompt: undefined },
@@ -35,13 +35,13 @@ export function summarizeApprovalInput(toolInput: unknown): string {
   }
 }
 
-/** Normalized JSON envelope for a pending prompt: AskUserQuestion → `{ questions }` (shape kept stable for back-compat); other tool on PermissionRequest → `{ approval }`; else undefined. */
+/** Keep legacy AskUserQuestion {questions} shape; PermissionRequest approvals use {approval}, other events return undefined. */
 export function deriveInteractivePrompt(
   toolName: string | undefined,
   toolInput: unknown,
   eventName?: unknown
 ): string | undefined {
-  // Why: providers vary casing; any post-tool event means the question is no longer pending — don't recreate its answered card.
+  // Normalize provider casing; post-tool events must not recreate an answered card.
   const normalizedEventName = normalizeHookEventName(eventName)
   const isPostToolEvent =
     normalizedEventName === 'post_tool_use' || normalizedEventName === 'post_tool_use_failure'
@@ -54,7 +54,7 @@ export function deriveInteractivePrompt(
     try {
       return JSON.stringify(toolInput)
     } catch {
-      // Why: circular/unserializable input from a buggy agent — a missing live card beats throwing in the hook hot path.
+      // Unserializable input must not throw on the hook hot path.
       return undefined
     }
   }

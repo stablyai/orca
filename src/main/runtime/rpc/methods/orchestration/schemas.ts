@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
-import { OptionalString, OptionalBoolean, requiredString } from '../../schemas'
+import {
+  OptionalString,
+  OptionalBoolean,
+  requiredString
+} from '../../../../../shared/rpc-contract/rpc-param-primitives'
 import type { TaskStatus } from '../../../orchestration/db'
 import { isGroupAddress } from '../../../orchestration/groups'
 import { MESSAGE_TYPES } from '../../../orchestration/types'
@@ -103,7 +107,7 @@ export const SendParams = z
     priority: z.enum(['normal', 'high', 'urgent']).optional(),
     threadId: OptionalString,
     payload: OptionalString,
-    // Why: pane key is the remint-stable identity used to verify worker_done/heartbeat ownership; the from handle stays routing metadata.
+    // Use remint-stable pane keys to attest worker_done/heartbeat; from handles only route.
     senderPaneKey: OptionalString,
     run: OptionalString,
     waitForLifecycleSettlement: OptionalBoolean,
@@ -113,7 +117,7 @@ export const SendParams = z
     if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
       return
     }
-    // Why: dispatch lifecycle messages are authority/liveness signals for one coordinator; fanout would create lifecycle mail in unrelated terminals.
+    // Lifecycle authority targets one coordinator; fanout would leak signals to unrelated terminals.
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: getLifecycleGroupRecipientError(params.type),

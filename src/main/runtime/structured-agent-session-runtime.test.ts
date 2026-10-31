@@ -1,10 +1,8 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import { agentSessionJournalCloseRetries } from '../native-chat/agent-session-journal/journal-close-retry'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
 import type {
   AgentSessionClaimStatus,
   AgentSessionExecutionLocation,
@@ -14,6 +12,10 @@ import type {
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
+  JournalHostDatabase,
+  journalDatabasePath
+} from '../native-chat/agent-session-journal/journal-host-database'
+import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
 } from './structured-agent-session-owner-probe'
@@ -22,6 +24,16 @@ import {
   hasPersistedStructuredAgentSessionStore,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { nativeChatScratchFolderFor } from '../native-chat/native-chat-scratch-folder'
+import { foundAgentSessionRecord } from './agent-session-record-founding'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { onStructuredAgentSessionsHeldChanged } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 const HOST_ID = 'local'
 
@@ -57,35 +69,47 @@ const OWNER: AgentSessionProcessIdentity = {
 const deadProbe = () => vi.fn(async () => ({ outcome: 'pid-absent' }) as const)
 
 describe('structured agent-session store presence', () => {
-  it('stops after finding the durable primary store', () => {
-    const fileExists = vi.fn(() => true)
-
-    expect(hasPersistedStructuredAgentSessionStore('/profile', fileExists)).toBe(true)
-    expect(fileExists).toHaveBeenCalledOnce()
-    expect(fileExists).toHaveBeenCalledWith(
-      join('/profile', 'agent-sessions', 'agent-sessions.json')
-    )
+  let profile: string
+  afterEach(async () => {
+    if (profile) {
+      await rm(profile, { recursive: true, force: true })
+      profile = ''
+    }
   })
 
-  it('checks the durable backup when the primary store is absent', () => {
-    const fileExists = vi.fn((path: string) => path.endsWith('.bak'))
+  async function openProfileDatabase(): Promise<JournalHostDatabase> {
+    profile = await mkdtemp(join(tmpdir(), 'orca-session-presence-'))
+    return JournalHostDatabase.open(profile)
+  }
 
-    expect(hasPersistedStructuredAgentSessionStore('/profile', fileExists)).toBe(true)
-    expect(fileExists).toHaveBeenNthCalledWith(
-      1,
-      join('/profile', 'agent-sessions', 'agent-sessions.json')
-    )
-    expect(fileExists).toHaveBeenNthCalledWith(
-      2,
-      join('/profile', 'agent-sessions', 'agent-sessions.json.bak')
-    )
+  it('reports a profile whose database holds no chat absent', async () => {
+    await (await openProfileDatabase()).close()
+
+    expect(hasPersistedStructuredAgentSessionStore(profile)).toBe(false)
   })
 
-  it('reports a fresh profile absent after two bounded presence checks', () => {
+  it('reports a chat record in the database', async () => {
+    const database = await openProfileDatabase()
+    database.db
+      .prepare('INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?)')
+      .run('session-1', '{}')
+    await database.close()
+
+    expect(hasPersistedStructuredAgentSessionStore(profile)).toBe(true)
+  })
+
+  it('reports a database it cannot read present', async () => {
+    profile = await mkdtemp(join(tmpdir(), 'orca-session-presence-'))
+    await writeFile(journalDatabasePath(profile), 'not a database')
+
+    expect(hasPersistedStructuredAgentSessionStore(profile)).toBe(true)
+  })
+
+  it('reports a fresh profile absent after one presence check', () => {
     const fileExists = vi.fn(() => false)
 
     expect(hasPersistedStructuredAgentSessionStore('/profile', fileExists)).toBe(false)
-    expect(fileExists).toHaveBeenCalledTimes(2)
+    expect(fileExists).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -173,8 +197,7 @@ describe('structured agent-session owner probe', () => {
   it('frees a lease that names neither an owner nor a spawn token', async () => {
     const probe = deadProbe()
     const scan = vi.fn(async () => [] as number[])
-    // Nothing was ever minted that a child could be carrying, so no scan is even needed;
-    // answering `indeterminate` here is what latches every released record into recovery.
+    // Without an owner or minted token no scan is needed; indeterminate would trap released records in recovery.
     const result = await createStructuredAgentSessionOwnerProbe(HOST_ID, probe, scan)(record(null))
 
     expect(probe).not.toHaveBeenCalled()
@@ -199,20 +222,126 @@ describe('structured agent-session runtime install', () => {
   afterEach(async () => {
     await stopStructuredAgentSessionRuntime()
     if (stateDirectory) {
+      await closeTestJournalHostDatabases()
       await rm(stateDirectory, { recursive: true, force: true })
       stateDirectory = null
     }
     vi.restoreAllMocks()
   })
 
+  function oldChat(provider: 'claude' | 'codex'): AgentSessionRecord {
+    return foundAgentSessionRecord(
+      {
+        sessionId: `old-${provider}`,
+        provider,
+        location: {
+          executionHostId: HOST_ID,
+          workspaceId: 'folder-1',
+          workspaceKind: 'folder',
+          wslDistro: null
+        },
+        accountHome: {
+          variable: provider === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+          path: '/account'
+        }
+      },
+      { claimKeyId: 'key-1', now: 1 }
+    )
+  }
+
+  async function installOver(
+    fullAccessAgents: readonly string[],
+    logger = recordingStructuredAgentSessionLogger().logger
+  ) {
+    return await ensureStructuredAgentSessionHost({
+      logger,
+      stateDirectory: stateDirectory!,
+      hostId: HOST_ID,
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => stateDirectory!,
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
+      resolveAgentFullAccess: (agent) => fullAccessAgents.includes(agent),
+      resolveEnvironment: async () => ({})
+    })
+  }
+
+  it.each([false, true])(
+    'backfills before the host is readable and keeps startup nonfatal on a failed write (%s)',
+    async (failWrite) => {
+      stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-backfill-'))
+      await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
+      if (failWrite) {
+        openTestJournalHostDatabase(stateDirectory).db.exec(
+          "CREATE TRIGGER fail_permission_backfill BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+        )
+      }
+      const logged = recordingStructuredAgentSessionLogger()
+      const host = await installOver(['codex'], logged.logger)
+      expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBe(
+        failWrite ? undefined : 'full-access'
+      )
+      expect((await host.readOptions('old-codex')).current.permissionMode).toBe(
+        failWrite ? 'ask' : 'full-access'
+      )
+      if (failWrite) {
+        expect(logged.scopes()).toContain('permission-mode-backfill')
+      } else {
+        expect(logged.scopes()).not.toContain('permission-mode-backfill')
+      }
+    }
+  )
+
+  it.each([
+    [['claude'], 'full-access', 'ask'],
+    [['codex'], 'ask', 'full-access']
+  ] as const)(
+    "fills each old chat from its own agent's arguments when %j skip prompts",
+    async (fullAccessAgents, claude, codex) => {
+      stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-backfill-'))
+      await seedTestAgentSessionRecordStore(stateDirectory, {
+        records: [oldChat('claude'), oldChat('codex')]
+      })
+      const host = await installOver(fullAccessAgents)
+      expect(host.deps.store.getRecord('old-claude')?.permissionMode).toBe(claude)
+      expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBe(codex)
+    }
+  )
+
+  it('moves pre-rename chat visuals under the current root before the host is readable', async () => {
+    stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-visuals-'))
+    await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
+    const current = nativeChatScratchFolderFor(stateDirectory, 'old-codex')
+    const legacy = join(stateDirectory, 'native-chat-visuals', basename(current))
+    await mkdir(legacy, { recursive: true })
+    await writeFile(join(legacy, 'chart.html'), '<p>chart</p>')
+
+    let readableAtPublication = false
+    const stopListening = onStructuredAgentSessionsHeldChanged((held) => {
+      if (held) {
+        readableAtPublication = readFileSync(join(current, 'chart.html'), 'utf8') === '<p>chart</p>'
+      }
+    })
+    try {
+      await installOver([])
+    } finally {
+      stopListening()
+    }
+
+    expect(readableAtPublication).toBe(true)
+    expect(await readFile(join(current, 'chart.html'), 'utf8')).toBe('<p>chart</p>')
+  })
+
   it('holds stop until the model catalog has written its coalesced save', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
     await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory,
       hostId: HOST_ID,
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory!,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveEnvironment: async () => ({})
     })
     let finishWrite = (): void => {}
@@ -234,7 +363,7 @@ describe('structured agent-session runtime install', () => {
     expect(stopped).toBe(true)
   })
 
-  it('does not infer Windows process identity support from an injected reader', async () => {
+  it('supports native Windows creation without the process-table addon', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
     const originalPlatform = process.platform
     const location: AgentSessionExecutionLocation = {
@@ -247,85 +376,23 @@ describe('structured agent-session runtime install', () => {
     __setWindowsProcessTreeLoaderForTests(() => null)
     try {
       const host = await ensureStructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         stateDirectory,
         hostId: HOST_ID,
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => stateDirectory!,
         resolveEnvironment: async () => ({}),
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+        resolveLaunchArgs: () => [],
+        resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
         readProcessStartTime: async () => 1_700_000_000_000
       })
 
-      expect(host.supportsCreate(location, 'codex')).toBe(false)
+      // No addon means no creation times; chat no longer depends on them.
+      expect(host.supportsCreate(location, 'codex')).toBe(true)
+      expect(host.supportsCreate(location, 'claude')).toBe(true)
     } finally {
       __setWindowsProcessTreeLoaderForTests()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
-  })
-})
-
-// A stop whose teardown fails must not forget the runtime it was tearing down.
-// `installing` is cleared either way so nothing new attaches, but the host keeps
-// every journal whose close rejected, and this module slot is the only handle
-// onto that host once it is gone.
-describe('a teardown that fails is retried by the next stop', () => {
-  const JOURNAL_IDENTITY: AgentSessionJournalIdentity = {
-    sessionId: 'session-teardown-retry',
-    workspaceId: 'ws-1',
-    hostId: HOST_ID,
-    agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: 'thread-1' }
-  }
-  const journals = createTrackedJournalOpener()
-  let directory: string | null = null
-
-  afterEach(async () => {
-    await agentSessionJournalCloseRetries.retryAll()
-    await journals.closeAll()
-    await stopStructuredAgentSessionRuntime().catch(() => undefined)
-    if (directory) {
-      await rm(directory, { recursive: true, force: true })
-      directory = null
-    }
-  })
-
-  it('reports the failure, then releases the handle on the following stop', async () => {
-    directory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
-    await ensureStructuredAgentSessionHost({
-      stateDirectory: directory,
-      hostId: HOST_ID,
-      claimKeyId: 'key-1',
-      resolveWorkspacePath: async () => directory!,
-      resolveEnvironment: async () => ({}),
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
-    })
-
-    const journalDir = join(directory, 'stubborn-journal')
-    const real = await journals.open({ identity: JOURNAL_IDENTITY, journalDir })
-    let closeFailures = 2
-    const flaky = new Proxy(real, {
-      get(target, property, receiver) {
-        if (property !== 'close') {
-          // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
-          return Reflect.get(target, property, receiver)
-        }
-        return async () => {
-          if (closeFailures > 0) {
-            closeFailures -= 1
-            throw new Error('close rejected')
-          }
-          await target.close()
-        }
-      }
-    })
-    await agentSessionJournalCloseRetries.closeOrRetain(flaky)
-
-    // The host's teardown runs the registry retry, so this stop surfaces it.
-    await expect(stopStructuredAgentSessionRuntime()).rejects.toThrow()
-    expect(agentSessionJournalCloseRetries.pendingDirectories).toEqual([journalDir])
-
-    // The retained runtime is what makes this a retry rather than a no-op.
-    await stopStructuredAgentSessionRuntime()
-    expect(agentSessionJournalCloseRetries.pendingDirectories).toEqual([])
   })
 })

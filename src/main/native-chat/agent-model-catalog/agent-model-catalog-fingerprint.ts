@@ -4,58 +4,64 @@ import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
 } from './agent-model-catalog-store'
+import {
+  isLegacyAgentSessionAccountHome,
+  type AgentSessionAccountHome
+} from '../../../shared/agent-session-account-home'
 
-/**
- * Everything that changes which models a listing can answer with: the agent,
- * the account home the CLI reads credentials/config from, and the execution
- * host that runs the binary. Login-state or CLI-version drift under the same
- * key is corrected by the next refresh, never by the fingerprint.
- */
+/** Key by agent, account, host and optional project scope; later probes repair login/version drift. */
 export type AgentModelCatalogIdentity = {
-  agent: 'claude' | 'codex'
-  accountHomeVariable: string
-  accountHomePath: string
-  /** Null on the native host; WSL distros each carry their own CLI. */
+  agent: string
+  /** Native host uses null; each WSL distro has its own CLI. */
   wslDistro: string | null
-}
+  /** Include only for catalogs whose membership varies by folder. */
+  folder?: string
+} & (
+  | { accountHomeVariable: string; accountHomePath: string; accountHome?: never }
+  | { accountHome: AgentSessionAccountHome; accountHomeVariable?: never; accountHomePath?: never }
+)
 
 export function agentModelCatalogFingerprint(identity: AgentModelCatalogIdentity): string {
+  const account = identity.accountHome
+  const parts = account
+    ? isLegacyAgentSessionAccountHome(account)
+      ? [account.variable, account.path]
+      : [account.kind, account.locator]
+    : [identity.accountHomeVariable, identity.accountHomePath]
   return createHash('sha256')
     .update(
       JSON.stringify([
         identity.agent,
-        identity.accountHomeVariable,
-        identity.accountHomePath,
-        identity.wslDistro ?? ''
+        ...parts,
+        identity.wslDistro ?? '',
+        ...(identity.folder ? [identity.folder] : [])
       ])
     )
     .digest('hex')
 }
 
-/** The durable record pins the account home at launch, so this names the
- *  catalog THAT session lists from — not whichever account is selected now. */
+/** Use the account pinned at launch, regardless of later account selection. */
 export function agentModelCatalogIdentityForRecord(
   record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
 ): AgentModelCatalogIdentity {
   return {
     agent: record.provider,
-    accountHomeVariable: record.accountHome.variable,
-    accountHomePath: record.accountHome.path,
+    accountHome: record.accountHome,
     wslDistro: record.location.wslDistro
   }
 }
 
 export function agentModelCatalogFingerprintForRecord(
-  record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
+  record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>,
+  folder?: string
 ): string {
-  return agentModelCatalogFingerprint(agentModelCatalogIdentityForRecord(record))
+  return agentModelCatalogFingerprint({ ...agentModelCatalogIdentityForRecord(record), folder })
 }
 
-/** A live session's store handle, pinned to the account home it spawned under.
- *  Native only: both structured adapters refuse non-native locations at launch. */
+/** Per-spawn store access; supported structured adapters require native execution. */
 export function agentModelCatalogSessionAccess(
   store: AgentModelCatalogStore | undefined,
-  agent: 'claude' | 'codex',
+  agent: { agent: string; accountHomeVariable: string },
   accountHomePath: string | null
 ): AgentModelCatalogSessionAccess | undefined {
   if (!store || !accountHomePath) {
@@ -64,11 +70,21 @@ export function agentModelCatalogSessionAccess(
   return {
     store,
     fingerprint: agentModelCatalogFingerprint({
-      agent,
-      accountHomeVariable: agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+      agent: agent.agent,
+      accountHomeVariable: agent.accountHomeVariable,
       accountHomePath,
       wslDistro: null
     }),
     accountHomePath
   }
+}
+
+export function agentModelCatalogScopeFingerprint(
+  account: string,
+  cwd: string,
+  invocation: unknown = null
+): string {
+  return createHash('sha256')
+    .update(JSON.stringify([account, cwd, invocation]))
+    .digest('hex')
 }

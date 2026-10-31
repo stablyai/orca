@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.create-terminal",
   "family": "session.create-terminal",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "fa7d9fd6428e89282f08e04fefba4289000eb3aed1462489a2f11efed374382c",
-  "scenarioSha256": "f1952a0e2c9108dadf2f5b85ac1f43ec9db09db0ce81a575bb4dd3a8d18d9c83",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "21e2b9cf755e": {
       "name": "fetch-session-tabs",
@@ -65,21 +56,6 @@
         }
       }
     },
-    "4c528a84c114": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "",
-      "creating": true,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
     "4d318de3b635": {
       "name": "unsubscribe-terminal",
       "ordinal": 3,
@@ -87,19 +63,16 @@
         "handle": "terminal-0"
       }
     },
-    "85aa4672ab09": {
-      "activeHandle": {
-        "$rpc": "null"
-      },
-      "activeSessionTabId": "tab-1",
+    "6275ace50da2": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
       "createError": "",
-      "creating": false,
-      "initializedHandles": [],
-      "pendingActiveSessionTabId": "tab-1",
-      "pendingActiveTerminalHandle": {
+      "creating": true,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
         "$rpc": "null"
       },
-      "sessionTabs": ["tab-1"],
+      "sessionTabs": [],
       "terminals": []
     },
     "9270aeb7d9c6": {
@@ -144,6 +117,21 @@
         "startedAt": 0
       }
     },
+    "b9c6351c01b1": {
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "activeSessionTabId": "tab-1",
+      "createError": "",
+      "creating": false,
+      "initializedHandles": [],
+      "pendingSelection": {
+        "kind": "tab",
+        "tabId": "tab-1"
+      },
+      "sessionTabs": ["tab-1"],
+      "terminals": []
+    },
     "cce8a731064a": {
       "name": "session.tabs.createTerminal#1",
       "ordinal": 2,
@@ -170,7 +158,7 @@
             "mount": "eb79a9b3682a",
             "create": "9270aeb7d9c6"
           },
-          "state": "4c528a84c114",
+          "state": "6275ace50da2",
           "effects": []
         }
       },
@@ -183,7 +171,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "85aa4672ab09",
+          "state": "b9c6351c01b1",
           "effects": ["4d318de3b635", "a816d27ffe28"]
         }
       },
@@ -196,7 +184,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "85aa4672ab09",
+          "state": "b9c6351c01b1",
           "effects": ["4d318de3b635", "a816d27ffe28", "21e2b9cf755e"]
         }
       }

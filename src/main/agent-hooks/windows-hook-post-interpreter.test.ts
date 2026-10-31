@@ -1,8 +1,6 @@
-// Why (#15117): an agent holding a private copy of the shared post command missed the move to
-// curl for three months, invisible to per-agent tests. Assert the invariant across every agent
-// at once: a managed Windows .cmd hook posts through curl.exe and spawns no interpreter.
-// Generated under a mocked win32 platform, not executed, so the POSIX CI legs guard it too.
+// Check generated .cmd scripts on every host; Antigravity uses a separate bounded Node stdin reader.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +11,12 @@ let previousUserDataPath: string | undefined
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
+}))
+
+vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+  ...(await importOriginal<typeof CodexHookHashLookup>()),
+  resolveCodexHookAnswerForLaunch: async () =>
+    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -29,7 +33,6 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { CodexHookService } from '../codex/hook-service'
 import { CommandCodeHookService } from '../command-code/hook-service'
@@ -40,11 +43,8 @@ import { GeminiHookService } from '../gemini/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
-// Why: only agents whose managed Windows script is a .cmd batch file. Copilot's hook is a
-// `.ps1` — PowerShell is its interpreter, not a child process it spawns per event — and Kimi's
-// is a Git Bash `.sh`, so neither is subject to this invariant.
+// Only batch scripts belong here; PowerShell-native hooks use their interpreter directly.
 const BATCH_SCRIPT_INSTALLERS = [
-  { agent: 'antigravity', install: () => new AntigravityHookService().install() },
   { agent: 'claude', install: () => new ClaudeHookService().install() },
   { agent: 'openclaude', install: () => openClaudeHookService.install() },
   { agent: 'codex', install: () => new CodexHookService().install() },
@@ -56,9 +56,7 @@ const BATCH_SCRIPT_INSTALLERS = [
   { agent: 'grok', install: () => new GrokHookService().install() }
 ] as const
 
-// Why: the Codex installer awaits an app-server trust-grant session, so the
-// override has to stay pinned across the await instead of being restored by a
-// synchronous `finally` while the install is still running.
+// Keep the platform override pinned across asynchronous installers.
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -77,8 +75,7 @@ describe('Windows managed hook post interpreter', () => {
   beforeEach(() => {
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     isolatedUserDataDir = mkdtempSync(join(tmpdir(), 'orca-hook-interpreter-user-data-'))
-    // Why: Orca-managed Codex hooks resolve through ORCA_USER_DATA_PATH before the mocked
-    // home; an inherited live path would let this test rewrite the developer's own hooks.
+    // Isolate managed-script resolution so tests cannot rewrite live Codex hooks.
     process.env.ORCA_USER_DATA_PATH = isolatedUserDataDir
     home = mkdtempSync(join(tmpdir(), 'orca-hook-interpreter-'))
     homedirMock.mockReturnValue(home)
@@ -107,25 +104,19 @@ describe('Windows managed hook post interpreter', () => {
         .map((name) => ({ name, body: readFileSync(join(hooksDir, name), 'utf8') }))
     })
 
-    // Why: a silent zero would make this suite pass while asserting nothing.
     expect(scripts.length).toBeGreaterThanOrEqual(BATCH_SCRIPT_INSTALLERS.length)
 
-    // Why: assert this across every .cmd before narrowing. Filtering to posting scripts first
-    // hides the failure that matters — a script that swapped its curl POST for an interpreter
-    // no longer matches the filter, so the suite fails on an opaque count instead.
+    // Inspect every script before filtering so a lost POST cannot hide an interpreter regression.
     for (const script of scripts) {
-      // Why: PowerShell costs ~300ms of interpreter startup per event and recodes the UTF-8
-      // payload through the console code page. curl.exe (Win10 1803+) does neither.
+      // curl avoids PowerShell startup and UTF-8 recoding.
       expect(script.body, `${script.name} must not spawn an interpreter`).not.toMatch(
         /powershell(\.exe)?/i
       )
     }
 
-    // Why: `%~dp0` marks an event wrapper that only sets env and delegates to the core script.
     const isWrapper = (body: string): boolean => body.includes('%~dp0')
     const posts = (body: string): boolean => body.includes('127.0.0.1:%ORCA_AGENT_HOOK_PORT%')
 
-    // Why: name the script that stopped posting rather than failing on a bare count.
     expect(
       scripts.filter((s) => !isWrapper(s.body) && !posts(s.body)).map((s) => s.name),
       'every non-wrapper script must post to the hook port'
@@ -135,14 +126,13 @@ describe('Windows managed hook post interpreter', () => {
     expect(posting.length).toBeGreaterThanOrEqual(BATCH_SCRIPT_INSTALLERS.length)
 
     for (const script of posting) {
-      // Why: fully qualified so a repo-local curl.exe cannot intercept hook payloads.
+      // A repo-local curl.exe must not intercept hook payloads.
       expect(script.body, `${script.name} must post through curl.exe`).toContain(
         '"%SystemRoot%\\System32\\curl.exe"'
       )
     }
 
-    // Why: hook events pipe via stdin to keep multi-KB tool output off the command line (EDR
-    // oversized-command-line rules). The statusline script stages a temp file instead.
+    // stdin avoids EDR command-length limits; statusline payloads use temporary files.
     for (const script of posting.filter((s) => s.body.includes('/hook/'))) {
       expect(script.body, `${script.name} must pipe the payload via stdin`).toContain(
         '--data-urlencode "payload@-"'

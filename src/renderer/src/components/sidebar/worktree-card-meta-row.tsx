@@ -6,7 +6,7 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import CacheTimer from './CacheTimer'
 import { WorktreeHostContextBadge } from './WorktreeHostContextBadge'
-import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
+import { conflictOperationLabel } from './WorktreeCardHelpers'
 import { TruncatedSidebarLabel } from './truncated-sidebar-label'
 import { getDirectoryName } from './worktree-card-model'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
@@ -22,7 +22,6 @@ export function WorktreeCardMetaRow({
   const {
     worktree,
     repo,
-    hostContextLabel,
     identityDisplay,
     isFolder,
     newCardStyle,
@@ -35,6 +34,7 @@ export function WorktreeCardMetaRow({
   const {
     showRepoBadgeInMetaRow,
     showHostContextBadge,
+    contextLabel,
     showIdentityInNewCard,
     hasHoverDetails,
     showBranch,
@@ -48,15 +48,16 @@ export function WorktreeCardMetaRow({
     <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
         {showRepoBadgeInMetaRow && repo && (
-          <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
+          // Why: keep a 6rem name floor (+1.625rem chrome) so the branch shrinks first; grow only into width the branch leaves free.
+          <div className="flex min-w-0 max-w-max shrink-0 grow basis-[7.625rem] items-center gap-1.5 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
             <RepoBadgeMark color={repo.badgeColor} />
-            <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
+            <span className="min-w-0 truncate text-[10px] font-semibold text-foreground leading-none lowercase">
               {repo.displayName}
             </span>
           </div>
         )}
 
-        {showHostContextBadge && <WorktreeHostContextBadge label={hostContextLabel!} />}
+        {showHostContextBadge && <WorktreeHostContextBadge label={contextLabel ?? ''} />}
 
         {showIdentityInNewCard ? (
           <TruncatedSidebarLabel
@@ -93,7 +94,7 @@ export function WorktreeCardMetaRow({
             className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-amber-600 border-amber-500/30 bg-amber-500/5 dark:text-amber-400 dark:border-amber-400/30 dark:bg-amber-400/5 leading-none"
           >
             <GitMerge className="size-2.5" />
-            {CONFLICT_OPERATION_LABELS[conflictOperation]}
+            {conflictOperationLabel(conflictOperation)}
           </Badge>
         )}
 

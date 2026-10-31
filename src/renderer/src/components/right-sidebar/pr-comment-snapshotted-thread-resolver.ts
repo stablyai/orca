@@ -27,6 +27,7 @@ export type SnapshottedThreadResolverDeps = {
     iid: number
     discussionId: string
     resolved: boolean
+    repoOwnerExecutionHostId: string
   }) => Promise<SnapshottedThreadResolveOutcome>
   /** False once the panel moved to another review: host calls continue, UI writes stop. */
   isPanelStillOnLaunchReview: () => boolean
@@ -34,10 +35,7 @@ export type SnapshottedThreadResolverDeps = {
   onResolveFailed: (args: { threadId: string; error?: string }) => void
 }
 
-/**
- * Resolve one host thread against the review snapshotted at launch: the panel can be showing a
- * different PR/MR by the time the agent prompt lands, so live state must not pick the target.
- */
+/** Use the snapshotted launch review for host resolves even if the panel switches before prompt delivery. */
 export function buildSnapshottedThreadResolver(
   deps: SnapshottedThreadResolverDeps
 ): (threadId: string) => Promise<boolean> {
@@ -47,8 +45,7 @@ export function buildSnapshottedThreadResolver(
       deps.onResolveFailed({ threadId, error: outcome.error })
       return false
     }
-    // Why: the optimistic row must never land in another review's list; the caller's guarded
-    // refresh reconciles whichever panel is actually showing.
+    // Gate optimistic rows to the launch review; guarded refresh reconciles whichever panel is showing.
     if (deps.isPanelStillOnLaunchReview()) {
       deps.onResolvedOptimistically(threadId)
     }
@@ -70,7 +67,8 @@ async function resolveOnHost(
         repoId: deps.gitlabTarget.repoId,
         iid: deps.gitlabTarget.iid,
         discussionId: threadId,
-        resolved: true
+        resolved: true,
+        repoOwnerExecutionHostId: deps.gitlabTarget.ownerHostId
       })
     }
     if (deps.provider !== 'github' || !deps.githubResolveTarget) {
@@ -83,7 +81,7 @@ async function resolveOnHost(
     })
     return { ok }
   } catch (err) {
-    // Why: one rejected host call would otherwise abort the whole bulk ack pool.
+    // A rejected host call must not abort the bulk acknowledgement pool.
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 }

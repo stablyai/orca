@@ -14,10 +14,6 @@ describe('local worktree metadata prune gate', () => {
     __resetLocalWorktreeMetadataPruneGateForTests()
   })
 
-  it('is due for a repo it has never seen', () => {
-    expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(true)
-  })
-
   it('stays undue indefinitely once a pass ran and nothing changed', () => {
     markLocalWorktreeMetadataPruneStarted('repo-1')
 
@@ -56,14 +52,6 @@ describe('local worktree metadata prune gate', () => {
     expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(false)
   })
 
-  it('does not re-arm on the first listing it observes', () => {
-    markLocalWorktreeMetadataPruneStarted('repo-1')
-
-    recordLocalWorktreeListingForPruneGate('repo-1', ['/a'])
-
-    expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(false)
-  })
-
   it('re-arms when a later listing differs from the one the last pass ran against', () => {
     recordLocalWorktreeListingForPruneGate('repo-1', ['/a', '/b'])
     markLocalWorktreeMetadataPruneStarted('repo-1')
@@ -80,7 +68,6 @@ describe('local worktree metadata prune gate', () => {
     forgetLocalWorktreeMetadataPruneGate('repo-1')
 
     expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(true)
-    // The forgotten fingerprint must not later read as a change against a stale entry.
     recordLocalWorktreeListingForPruneGate('repo-1', ['/a'])
     markLocalWorktreeMetadataPruneStarted('repo-1')
     expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(false)

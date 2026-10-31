@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { stripNoiseMessages } from './native-chat-noise'
-import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
+import {
+  foldToolMessages,
+  splitNativeChatBlocks
+} from '../../../../shared/native-chat/tools/native-chat-tool-fold'
 
 function msg(
   overrides: Partial<NativeChatMessage> & Pick<NativeChatMessage, 'id'>
@@ -65,6 +68,42 @@ describe('foldToolMessages', () => {
     ])
     expect(folded).toHaveLength(1)
     expect(folded[0]?.blocks).toHaveLength(3)
+  })
+
+  // Invisible provider events must not split visible runs; rendered plan updates do.
+  it('keeps one run across a wordless provider event, but not across a plan update', () => {
+    const frameRow = (id: string, kind: string): NativeChatMessage =>
+      msg({
+        id,
+        role: 'system',
+        blocks: [
+          {
+            type: 'text',
+            text: `codex · ${kind}`,
+            providerFrame: {
+              provider: 'codex',
+              kind,
+              payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+            }
+          }
+        ]
+      })
+    const run = (between: NativeChatMessage): string[] =>
+      foldToolMessages([
+        msg({
+          id: 'a1',
+          blocks: [
+            { type: 'text', text: 'go' },
+            { type: 'tool-call', name: 'Bash', input: {} }
+          ]
+        }),
+        msg({ id: 'r1', role: 'tool', blocks: [{ type: 'tool-result', output: 'ok' }] }),
+        between,
+        msg({ id: 'a2', blocks: [{ type: 'tool-call', name: 'Bash', input: {} }] }),
+        msg({ id: 'r2', role: 'tool', blocks: [{ type: 'tool-result', output: 'ok' }] })
+      ]).map((message) => message.id)
+    expect(run(frameRow('frame', 'notification:future/event'))).toEqual(['a1', 'frame'])
+    expect(run(frameRow('plan', 'notification:turn/plan/updated'))).toEqual(['a1', 'plan', 'a2'])
   })
 
   it('drops a tool result no loaded call can own instead of leaving it standalone', () => {
@@ -270,59 +309,5 @@ describe('spawn-group roster rows', () => {
     expect(tools).toEqual([])
     // The plain-text twin stays in prose: a client without the block type reads it.
     expect(prose.map((block) => block.type)).toEqual(['text', 'subagent-group'])
-  })
-})
-
-describe('foldToolMessages — each agent folds into its own run', () => {
-  const child = (
-    overrides: Partial<NativeChatMessage> & Pick<NativeChatMessage, 'id'>
-  ): NativeChatMessage => msg({ agentId: 'task-1', ...overrides })
-  const text = (value: string) => ({ type: 'text' as const, text: value })
-  const call = (name: string) => ({ type: 'tool-call' as const, name, input: {} })
-
-  it("does not fold a subagent's tool calls into its parent's message", () => {
-    const folded = foldToolMessages([
-      msg({ id: 'parent', blocks: [text('delegating')] }),
-      child({ id: 'child-grep', blocks: [call('Grep')] })
-    ])
-    expect(folded.map((message) => message.id)).toEqual(['parent', 'child-grep'])
-    expect(folded[0]?.blocks).toEqual([text('delegating')])
-  })
-
-  it("keeps interleaved agents in order, each call in its own agent's run", () => {
-    const folded = foldToolMessages([
-      msg({ id: 'parent', blocks: [text('delegating')] }),
-      child({ id: 'child', blocks: [text('looking')] }),
-      child({ id: 'child-grep', blocks: [call('Grep')] }),
-      msg({ id: 'parent-read', blocks: [call('Read')] })
-    ])
-    // The parent's later call stays where it happened, below the child's work,
-    // rather than jumping back up into the parent's earlier row.
-    expect(folded.map((message) => message.id)).toEqual(['parent', 'child', 'parent-read'])
-    expect(folded[0]?.blocks).toEqual([text('delegating')])
-    expect(folded[1]?.blocks).toEqual([text('looking'), call('Grep')])
-    expect(folded[1]?.agentId).toBe('task-1')
-    expect(folded[2]?.agentId).toBeUndefined()
-  })
-
-  it("ends every agent's run at a turn boundary", () => {
-    const folded = foldToolMessages([
-      child({ id: 'child', blocks: [text('looking')] }),
-      msg({ id: 'ask', role: 'user', blocks: [text('next')] }),
-      child({ id: 'child-grep', blocks: [call('Grep')] })
-    ])
-    // The child's later call stays in the turn it happened in.
-    expect(folded.map((message) => message.id)).toEqual(['child', 'ask', 'child-grep'])
-  })
-
-  it('folds a transcript that names no producer exactly as a single run', () => {
-    const folded = foldToolMessages([
-      msg({ id: 'a', blocks: [text('one')] }),
-      msg({ id: 'a-call', blocks: [call('Bash')] }),
-      msg({ id: 'notice', role: 'system', blocks: [text('Something happened')] }),
-      msg({ id: 'b-call', blocks: [call('Read')] })
-    ])
-    expect(folded.map((message) => message.id)).toEqual(['a', 'notice', 'b-call'])
-    expect(folded[0]?.blocks).toEqual([text('one'), call('Bash')])
   })
 })

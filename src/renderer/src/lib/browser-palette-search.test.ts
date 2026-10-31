@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { PALETTE_QUERY_MAX_TOKENS } from './palette-match/palette-query'
 import {
   BROWSER_PALETTE_QUERY_MAX_BYTES,
   buildSearchableBrowserPageDocument,
   searchBrowserPages,
   formatBrowserPaletteUrl,
   isBlankBrowserUrl,
-  isBrowserPaletteQueryTooLarge,
   type SearchableBrowserPage
 } from './browser-palette-search'
 
@@ -83,8 +81,7 @@ describe('browser-palette-search', () => {
   })
 
   it('stamps the row execution host so activation never resolves by id alone', () => {
-    // Why: worktree ids repeat across hosts, so a host-blind activation opened the other
-    // host's workspace behind a row labelled with this one's name and branch.
+    // IDs repeat across hosts; retain the row’s owner so activation cannot open its same-ID twin.
     const [result] = searchBrowserPages(
       [
         makeEntry({
@@ -444,10 +441,10 @@ describe('browser-palette-search', () => {
   })
 
   it('rejects a query with more unique tokens than the matcher accepts', () => {
-    const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
+    const query = 't0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16'
     const entries = [
       makeEntry({
-        page: makePage({ id: 'page-1', title: 'Docs' }),
+        page: makePage({ id: 'page-1', title: query }),
         workspace: makeWorkspace({ id: 'ws-1' }),
         worktree: makeWorktree({ id: 'wt-1' }),
         repoName: 'repo/one',
@@ -457,6 +454,9 @@ describe('browser-palette-search', () => {
       })
     ]
 
+    expect(
+      searchBrowserPages(entries, 't0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15')
+    ).toHaveLength(1)
     expect(searchBrowserPages(entries, query)).toEqual([])
   })
 
@@ -480,17 +480,27 @@ describe('browser-palette-search', () => {
       })
     } as SearchableBrowserPage
 
-    expect(isBrowserPaletteQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchBrowserPages([entry], oversizedQuery)).toEqual([])
   })
 
   it('rejects oversized whitespace before trimming', () => {
-    expect(searchBrowserPages([], ' '.repeat(BROWSER_PALETTE_QUERY_MAX_BYTES + 1))).toEqual([])
+    const entry = makeEntry({
+      page: makePage(),
+      workspace: makeWorkspace(),
+      worktree: makeWorktree(),
+      repoName: 'repo',
+      worktreeSortIndex: 0,
+      isCurrentPage: false,
+      isCurrentWorktree: false
+    })
+    expect(searchBrowserPages([entry], ' '.repeat(2048)).map((result) => result.pageId)).toEqual([
+      'page-1'
+    ])
+    expect(searchBrowserPages([entry], ' '.repeat(2049))).toEqual([])
   })
 
   it('falls back to the branch label when a cleared display name left it undefined', () => {
-    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
-    // so the store-level display-name corruption reaches here too.
+    // Cmd+J shares worktree objects with searchWorktrees, including corrupt raw display names.
     const cleared = makeWorktree({
       displayName: undefined as unknown as string,
       branch: 'refs/heads/feature/browser-search'

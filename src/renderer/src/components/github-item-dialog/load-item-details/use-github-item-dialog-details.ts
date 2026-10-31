@@ -4,6 +4,7 @@ import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-sou
 import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
 import {
   normalizeItemDialogTab,
+  parseOwnerRepoFromItemUrl,
   type ItemDialogTab
 } from '@/components/github/github-work-item-identity'
 import type { PRComment } from '../../../../../shared/github/comment-types'
@@ -52,7 +53,7 @@ export function useGitHubItemDialogDetails({
 }) {
   const [tab, setTab] = useState<ItemDialogTab>(() => normalizeItemDialogTab(workItem, initialTab))
 
-  // Why: the cache key must include issue source preference so toggling origin/upstream for the same issue number doesn't read the wrong repo's details.
+  // Include source preference so origin/upstream switches cannot reuse details from the wrong repository.
   const issueSourcePreference = useAppStore((s) => {
     if (!repoPath && !effectiveRepoId) {
       return undefined
@@ -61,6 +62,13 @@ export function useGitHubItemDialogDetails({
       ?.issueSourcePreference
   })
   const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
+  const issueRepository = useMemo(
+    () =>
+      workItem?.type === 'issue'
+        ? (projectOrigin ?? parseOwnerRepoFromItemUrl(workItem.url))
+        : null,
+    [projectOrigin, workItem]
+  )
   const detailsCacheKey = useMemo(() => {
     if (!workItem || !effectiveRepoId || !canUseDetailsRepoContext) {
       return null
@@ -69,10 +77,12 @@ export function useGitHubItemDialogDetails({
       repoPath: repoPath ?? '',
       repoId: effectiveRepoId,
       issueSourcePreference,
+      sourceContext,
       sourceCacheScope:
         sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null,
       type: workItem.type,
-      number: workItem.number
+      number: workItem.number,
+      ownerRepo: issueRepository
     })
   }, [
     canUseDetailsRepoContext,
@@ -80,7 +90,8 @@ export function useGitHubItemDialogDetails({
     effectiveRepoId,
     sourceContext,
     workItem,
-    issueSourcePreference
+    issueSourcePreference,
+    issueRepository
   ])
 
   // Why: reset during render so an item switch never paints the previous item's tab.
@@ -96,12 +107,11 @@ export function useGitHubItemDialogDetails({
     }
   }
 
-  // Why: hold comments added before the detail fetch resolves so they merge into the result instead of being overwritten.
-  const optimisticCommentsRef = useRef<PRComment[]>([])
-  // Why: distinguish "reopen same item" from "switch item" — reopen must keep optimistic comments since gh's 60s cache omits the just-posted one.
+  // Retain pre-fetch comments so the arriving detail payload cannot overwrite them.
+  const optimisticCommentsRef = useRef(new Map<string, PRComment[]>())
+  // Preserve optimistic comments on reopen because gh’s cache may still omit them.
   const prevItemIdRef = useRef<string | null>(null)
 
-  // Why: subscribe to the module-level cache so reopening a cached item paints synchronously on first render.
   const cachedEntry = useSyncExternalStore(
     subscribeWorkItemDetailsCache,
     useCallback(
@@ -110,15 +120,15 @@ export function useGitHubItemDialogDetails({
     )
   )
 
-  // Why: bumped on cold open (no cached details yet) so the details memo re-runs and surfaces the optimistic comment before the fetch lands.
+  // Wake the details memo on cold-open comment writes before a cache entry exists.
   const [optimisticTick, setOptimisticTick] = useState(0)
 
-  // Why: key off cachedEntry identity (stable), not the optimistic ref array (fresh each render), to avoid needless recompute.
+  // Depend on stable cache-entry identity rather than a freshly built optimistic array.
   const details = useMemo<GitHubWorkItemDetails | null>(() => {
     const cachedDetails = cachedEntry?.details ?? null
-    const opt = optimisticCommentsRef.current
+    const opt = optimisticCommentsRef.current.get(detailsCacheKey ?? '') ?? []
     if (!cachedDetails) {
-      // Why: on cold open, details may still be loading — surface optimistic comments via a minimal shell so a pre-fetch comment isn't invisible.
+      // Show pre-fetch optimistic comments in a minimal shell while full details load.
       if (opt.length > 0 && workItem) {
         return { item: workItem, body: '', comments: [...opt] }
       }
@@ -138,13 +148,13 @@ export function useGitHubItemDialogDetails({
     }
     // Why: optimisticTick forces this ref-reading memo to re-run on cold-open writes; lint can't see the dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cachedEntry, workItem, optimisticTick])
+  }, [cachedEntry, workItem, detailsCacheKey, optimisticTick])
 
   const loading = !!cachedEntry?.pending && !cachedEntry?.details
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
   const detailsLoaded = Boolean(cachedEntry?.details)
 
-  // Why: if a cross-window mutation invalidates the open drawer's entry (cachedEntry undefined, fetch deps unchanged), bump a tick to force the refetch.
+  // Invalidation can remove an open entry without changing fetch dependencies; a tick forces refetch.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
     if (workItem && detailsCacheKey && !cachedEntry) {
@@ -156,9 +166,9 @@ export function useGitHubItemDialogDetails({
     if (!workItem || !effectiveRepoId || !detailsCacheKey || !canUseDetailsRepoContext) {
       return
     }
-    // Why: clear optimistic comments only on item switch — on reopen, gh's 60s cache omits the just-posted comment, so keep the ref to re-merge.
+    // Clear on item switches only; gh’s cache can still omit comments when reopening the same item.
     if (workItem.id !== prevItemIdRef.current) {
-      optimisticCommentsRef.current = []
+      optimisticCommentsRef.current.clear()
     }
     prevItemIdRef.current = workItem.id
 
@@ -170,7 +180,7 @@ export function useGitHubItemDialogDetails({
       return
     }
 
-    // Why: dedupe concurrent opens for the same key — share one in-flight promise instead of racing two `gh` subprocesses.
+    // Share concurrent fetches for this key instead of racing gh subprocesses.
     const inflight: Promise<GitHubWorkItemDetails | null> =
       cached?.pending ??
       lookupGitHubWorkItemDetailsForSource({
@@ -178,10 +188,11 @@ export function useGitHubItemDialogDetails({
         repoId: effectiveRepoId,
         sourceContext,
         number: workItem.number,
-        type: workItem.type
+        type: workItem.type,
+        ownerRepo: issueRepository
       })
 
-    // Why: snapshot the invalidation generation; if it advances before resolve, a mid-flight mutation invalidated the entry — don't write back.
+    // Snapshot invalidation generation so pre-mutation results cannot restore stale cache data.
     const launchedAtGeneration = workItemDetailsCacheGeneration
 
     if (!cached?.pending) {
@@ -201,6 +212,7 @@ export function useGitHubItemDialogDetails({
     sourceContext,
     workItem,
     detailsCacheKey,
+    issueRepository,
     refetchTick
   ])
 
@@ -218,7 +230,7 @@ export function useGitHubItemDialogDetails({
     if (!workItem || details?.item.reviewRequests === undefined) {
       return
     }
-    // Why: PR details can carry fresher reviewer metadata than the list row; push it back so the Tasks review chip isn't stale.
+    // Refresh list-side reviewer metadata from the fresher detail response.
     onReviewRequestsChange?.(
       { id: workItem.id, repoId: workItem.repoId },
       details.item.reviewRequests
@@ -230,9 +242,11 @@ export function useGitHubItemDialogDetails({
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
       useAppStore.getState().recordFeatureInteraction('github-tasks')
-      // Why: skip refreshDetails() — gh's 60s cache would overwrite the optimistic comment; next open picks up the server version.
-      optimisticCommentsRef.current.push(comment)
-      // Why: write through the module cache so concurrent drawers re-render; mark fetchedAt stale (0) so next open refetches server fields.
+      // Do not refetch immediately: gh’s cache could overwrite the new optimistic comment.
+      const optimisticKey = detailsCacheKey ?? ''
+      const optimisticComments = optimisticCommentsRef.current.get(optimisticKey) ?? []
+      optimisticCommentsRef.current.set(optimisticKey, [...optimisticComments, comment])
+      // Notify concurrent drawers through the cache; mark stale so reopening fetches server fields.
       if (detailsCacheKey) {
         const prev = workItemDetailsCache.get(detailsCacheKey)
         if (prev?.details) {
@@ -250,7 +264,7 @@ export function useGitHubItemDialogDetails({
           }
         }
       }
-      // Why: no cache write fires while details are still loading; bump local state so the memo re-runs and shows the optimistic comment.
+      // Without a cache entry to notify subscribers, wake the memo through local state.
       setOptimisticTick((n) => n + 1)
     },
     [detailsCacheKey]
@@ -260,7 +274,7 @@ export function useGitHubItemDialogDetails({
     if (!workItem) {
       return
     }
-    // Why: local repos invalidate all source-pref variants; runtime-only entries need their exact source-scoped key (no local path).
+    // Invalidate all source variants for local repos; runtime-only entries require their exact scoped key.
     if (repoPath) {
       invalidateWorkItemDetailsCacheByMatch({
         repoPath,

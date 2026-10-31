@@ -1,78 +1,30 @@
-// Starting or resuming the single Codex thread a structured session owns.
-//
-// The reply is verified before the caller registers the session, because a
-// resume that lands on a different thread is a fork wearing a resume's name —
-// recording it would make the durable handle chain lie about what this session
-// actually proved.
-
-import {
-  isCodexAppServerRequestError,
-  type CodexAppServerConnection
-} from './codex-app-server-connection'
-import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
-import { readCodexThreadId, readCodexThreadPath } from './codex-structured-thread-facts'
+import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
+import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
+import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
+import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
+import type { CodexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
+import { readCodexThreadId } from './codex-structured-thread-facts'
+import { readCodexSandboxPolicy, type CodexSandboxPolicy } from './codex-structured-sandbox-policy'
 
 export type CodexOpenedThread = {
   threadId: string
-  /** The unsaved thread this new one was started in place of. */
+  reportedPermissionMode?: string | null
   supersededThreadId?: string
   thread?: Record<string, unknown>
-  /** Rollout file Codex named, when it named one. */
-  historyPath: string | null
   historyMode?: 'legacy' | 'paginated'
   model?: string
-  effort?: string
+  effort?: string | null
   /** Present, including null, only when this app-server reports the effective tier. */
   serviceTier?: string | null
+  sandbox?: CodexSandboxPolicy
 }
 
 function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-const resumeMetadataUnsupported = new WeakSet<object>()
-
-function isExcludeTurnsUnsupported(error: unknown): boolean {
-  return (
-    isCodexAppServerRequestError(error) &&
-    error.code === -32602 &&
-    /(?:unknown|unexpected|unsupported|unrecognized).{0,80}excludeTurns|excludeTurns.{0,80}(?:unknown|unexpected|unsupported|unrecognized)/i.test(
-      error.message
-    )
-  )
-}
-
-async function resumeCodexThread(
-  connection: Pick<CodexAppServerConnection, 'request'>,
-  params: Record<string, unknown>,
-  timeoutMs: number | undefined
-): Promise<unknown> {
-  if (resumeMetadataUnsupported.has(connection)) {
-    return connection.request('thread/resume', params, { timeoutMs })
-  }
-  try {
-    return await connection.request(
-      'thread/resume',
-      { ...params, excludeTurns: true },
-      { timeoutMs }
-    )
-  } catch (error) {
-    if (!isExcludeTurnsUnsupported(error)) {
-      throw error
-    }
-    resumeMetadataUnsupported.add(connection)
-    return connection.request('thread/resume', params, { timeoutMs })
-  }
-}
-
-/**
- * Codex's own answer that it holds no rollout for this exact thread: the thread was started but
- * never given input, so there is no conversation to lose. Codex matches the same exact text
- * internally; any other resume failure, including a broader "not found", is not this proof.
- * Orca's own wrapper prefix is deliberately not part of the match.
- * Codex also uses this text for an archived thread read active-only; resume reads archived threads
- * and answers "is archived" instead, so here the text means no rollout exists at all.
- */
+/** Only this thread-specific resume error proves no rollout; archived resumes report "is archived". */
 function isCodexNoRolloutError(error: unknown, threadId: string): boolean {
   return (
     isCodexAppServerRequestError(error) &&
@@ -82,42 +34,80 @@ function isCodexNoRolloutError(error: unknown, threadId: string): boolean {
   )
 }
 
+/** Set keys merge after Codex's inheritance filter, preserving Orca identity under inherit = core. */
+function shellEnvironmentSetConfig(
+  env: Record<string, string> | undefined
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env ?? {}).map(([key, value]) => [`shell_environment_policy.set.${key}`, value])
+  )
+}
+
 export async function openCodexThread(
   connection: Pick<CodexAppServerConnection, 'request'>,
   launch: {
     cwd: string
     resumeThreadId: string | null
-    resumePath?: string | null
     supersedeIfUnsaved?: boolean
     permissionPolicy?: CodexStructuredPermissionPolicy
-    /** Why: Codex renders a thread's base instructions for its opening model; a first turn on
-     *  another model reads as a mid-conversation switch and injects a second full prompt. */
+    /** Avoid a duplicate base prompt caused by switching models on the first turn. */
     model?: string
+    threadConfig?: Record<string, unknown>
+    commandEnv?: Record<string, string>
   },
-  timeoutMs: number | undefined
+  /** null: no deadline; the start that opens the thread bounds it (`signal`). */
+  timeoutMs: number | null | undefined,
+  signal?: AbortSignal
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId
-  const threadSettings = { cwd: launch.cwd, ...launch.permissionPolicy }
-  const startThread = (): Promise<unknown> =>
-    connection.request(
+  const config = { ...launch.threadConfig, ...shellEnvironmentSetConfig(launch.commandEnv) }
+  const threadSettings = {
+    cwd: launch.cwd,
+    ...launch.permissionPolicy,
+    ...(Object.keys(config).length > 0 ? { config } : {})
+  }
+  const startThread = (): Promise<unknown> => {
+    throwIfSignalAborted(signal)
+    return connection.request(
       'thread/start',
       { ...threadSettings, ...(launch.model ? { model: launch.model } : {}) },
       { timeoutMs }
     )
+  }
   let supersededThreadId: string | undefined
   let opened: unknown
   if (!resumeThreadId) {
     opened = await startThread()
   } else {
-    // No model: naming one makes Codex skip the thread's saved model, provider and effort.
+    // Omitting model preserves the resumed thread's model, provider and effort.
     const resumeParams = {
       threadId: resumeThreadId,
-      ...threadSettings,
-      ...(launch.resumePath ? { path: launch.resumePath } : {})
+      ...threadSettings
     }
     try {
-      opened = await resumeCodexThread(connection, resumeParams, timeoutMs)
+      throwIfSignalAborted(signal)
+      opened = await connection.request(
+        'thread/resume',
+        { ...resumeParams, excludeTurns: true },
+        { timeoutMs }
+      )
     } catch (error) {
+      throwIfSignalAborted(signal)
+      if (
+        isCodexAppServerRequestError(error) &&
+        error.method === 'thread/resume' &&
+        error.code === -32600 &&
+        /\bthread\s+(\S+)\s+already has an active writer\b/i.exec(error.message)?.[1] ===
+          resumeThreadId
+      ) {
+        throw withProviderDiagnostic(
+          Object.assign(
+            new AgentSessionAcquisitionRefusal(error.message, 'conversationOpenElsewhere'),
+            { cause: error }
+          ),
+          providerDiagnostic(error.providerDiagnostic?.text ?? error.message, 'log')
+        )
+      }
       if (!launch.supersedeIfUnsaved || !isCodexNoRolloutError(error, resumeThreadId)) {
         throw error
       }
@@ -141,16 +131,55 @@ export async function openCodexThread(
   const effort = nonEmptyString(result.reasoningEffort)
   const serviceTierKnown = Object.hasOwn(result, 'serviceTier')
   const serviceTier = nonEmptyString(result.serviceTier)
+  const sandbox = readCodexSandboxPolicy(result.sandbox)
   return {
     threadId,
+    reportedPermissionMode: reportedCodexPermissionMode(result),
     ...(supersededThreadId === undefined ? {} : { supersededThreadId }),
     thread,
-    historyPath: readCodexThreadPath(opened),
     ...(thread.historyMode === 'legacy' || thread.historyMode === 'paginated'
       ? { historyMode: thread.historyMode }
       : {}),
     ...(model ? { model } : {}),
-    ...(effort ? { effort } : {}),
+    ...(effort || result.reasoningEffort === null ? { effort } : {}),
+    ...(sandbox ? { sandbox } : {}),
     ...(serviceTierKnown ? { serviceTier } : {})
   }
+}
+
+/** Unrecognized policies remain the agent's settings rather than a guessed Orca mode. */
+export function reportedCodexPermissionMode(reply: Record<string, unknown>): string | null {
+  const approval = reply.approvalPolicy ?? reply.approval_policy
+  const reviewer = reply.approvalsReviewer ?? reply.approvals_reviewer
+  const sandbox = reply.sandbox
+  const sandboxType =
+    typeof sandbox === 'object' && sandbox !== null && 'type' in sandbox ? sandbox.type : sandbox
+  const readOnly = sandboxType === 'readOnly' || sandboxType === 'read-only'
+  const workspace = sandboxType === 'workspaceWrite' || sandboxType === 'workspace-write'
+  const full = sandboxType === 'dangerFullAccess' || sandboxType === 'danger-full-access'
+  if (approval === 'on-request' && reviewer === 'user' && readOnly) {
+    return 'ask'
+  }
+  if (approval === 'on-request' && reviewer === 'auto_review' && workspace) {
+    return 'auto'
+  }
+  if (approval === 'never' && reviewer === 'user' && full) {
+    return 'full-access'
+  }
+  if (sandboxType === 'readOnly' || sandboxType === 'read-only') {
+    return 'read-only'
+  }
+  if (
+    (sandboxType === 'dangerFullAccess' || sandboxType === 'danger-full-access') &&
+    approval === 'never'
+  ) {
+    return 'full-access'
+  }
+  if (
+    (sandboxType === 'workspaceWrite' || sandboxType === 'workspace-write') &&
+    approval === 'on-request'
+  ) {
+    return reviewer === 'auto_review' ? 'auto' : reviewer === 'user' ? 'ask' : null
+  }
+  return null
 }

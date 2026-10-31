@@ -1,24 +1,8 @@
 import { resolve } from 'node:path'
 import { getSystemCodexHomePath } from './codex-home-paths'
-import { readShellStartupEnvVar } from '../pty/shell-startup-env'
+import { readBashStartupEnvVar, readShellStartupEnvVar } from '../pty/shell-startup-env'
+import { readPowerShellProfileEnvValues } from '../pty/powershell-profile-env'
 
-export type CodexShellStartupHomeOverride = {
-  home: string
-  shell?: string
-  /** Why recorded: fish reads config under it, so re-reads must use the same root. */
-  configHome?: string
-  codexHome: string
-}
-
-export type CodexEnvironmentHomeOverride = {
-  codexHome: string
-}
-
-export type CustomCodexHomeOverrideForLaunch =
-  | { source: 'environment'; context: CodexEnvironmentHomeOverride }
-  | { source: 'shell-startup'; context: CodexShellStartupHomeOverride }
-
-/** True when the user points Codex outside its standard native home. */
 export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env): boolean {
   const codexHome = env.CODEX_HOME?.trim()
   const orcaCodexHome = env.ORCA_CODEX_HOME?.trim()
@@ -26,8 +10,7 @@ export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env)
   const normalizedOrcaCodexHome = orcaCodexHome
     ? normalizePathForComparison(orcaCodexHome)
     : undefined
-  // Why: phase 1 owns only ~/.codex and can clean that path on downgrade. A
-  // custom home needs cross-home ownership tracking before Orca may mutate it.
+  // Custom native homes need ownership tracking before Orca can safely mutate and clean them.
   return Boolean(
     normalizedCodexHome &&
     normalizedCodexHome !== normalizedOrcaCodexHome &&
@@ -36,88 +19,52 @@ export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env)
 }
 
 export function hasCustomCodexHomeOverrideForLaunch(launchEnv?: NodeJS.ProcessEnv): boolean {
-  return getCustomCodexHomeOverrideForLaunch(launchEnv) !== null
-}
-
-export function getCustomCodexHomeOverrideForLaunch(
-  launchEnv?: NodeJS.ProcessEnv
-): CustomCodexHomeOverrideForLaunch | null {
-  const effectiveEnv = launchEnv
-    ? {
-        CODEX_HOME: getLaunchEnvValue(launchEnv, 'CODEX_HOME'),
-        ORCA_CODEX_HOME: getLaunchEnvValue(launchEnv, 'ORCA_CODEX_HOME')
-      }
-    : process.env
-  if (hasCustomCodexHomeOverride(effectiveEnv)) {
-    return {
-      source: 'environment',
-      context: { codexHome: effectiveEnv.CODEX_HOME!.trim() }
-    }
+  if (
+    hasCustomCodexHomeOverride({
+      CODEX_HOME: getLaunchEnvValue(launchEnv, 'CODEX_HOME'),
+      ORCA_CODEX_HOME: getLaunchEnvValue(launchEnv, 'ORCA_CODEX_HOME')
+    })
+  ) {
+    return true
   }
-  const home = launchEnv ? getLaunchEnvValue(launchEnv, 'HOME') : process.env.HOME
-  const shell = launchEnv ? getLaunchEnvValue(launchEnv, 'SHELL') : process.env.SHELL
-  const configHome = launchEnv
-    ? getLaunchEnvValue(launchEnv, 'XDG_CONFIG_HOME')
-    : process.env.XDG_CONFIG_HOME
-  const shellCodexHome = readShellStartupEnvVar('CODEX_HOME', home, shell, configHome)
-  if (!home || !shellCodexHome || !hasCustomCodexHomeOverride({ CODEX_HOME: shellCodexHome })) {
-    return null
-  }
-  return {
-    source: 'shell-startup',
-    context: {
-      home,
-      ...(shell ? { shell } : {}),
-      ...(configHome ? { configHome } : {}),
-      codexHome: shellCodexHome
-    }
-  }
-}
-
-export function environmentCodexHomeOverrideContextsEqual(
-  left: CodexEnvironmentHomeOverride,
-  right: CodexEnvironmentHomeOverride
-): boolean {
-  return normalizePathForComparison(left.codexHome) === normalizePathForComparison(right.codexHome)
-}
-
-export function shellStartupCodexHomeOverrideMatches(
-  context: CodexShellStartupHomeOverride,
-  currentContext: CodexShellStartupHomeOverride = context
-): boolean {
-  if (!shellStartupCodexHomeOverrideContextsEqual(context, currentContext)) {
+  // PowerShell profiles use USERPROFILE, which Windows supplies even without HOME.
+  const home = getLaunchEnvValue(launchEnv, process.platform === 'win32' ? 'USERPROFILE' : 'HOME')
+  if (!home) {
     return false
   }
-  const currentCodexHome = readShellStartupEnvVar(
-    'CODEX_HOME',
-    currentContext.home,
-    currentContext.shell,
-    currentContext.configHome
-  )
-  return Boolean(
-    currentCodexHome &&
-    hasCustomCodexHomeOverride({ CODEX_HOME: currentCodexHome }) &&
-    normalizePathForComparison(currentCodexHome) === normalizePathForComparison(context.codexHome)
+  // Windows panes may use either PowerShell edition or Git Bash.
+  const shellCodexHomes =
+    process.platform === 'win32'
+      ? [
+          ...readPowerShellProfileEnvValues('CODEX_HOME', home),
+          readBashStartupEnvVar('CODEX_HOME', home)
+        ]
+      : [
+          readShellStartupEnvVar(
+            'CODEX_HOME',
+            home,
+            getLaunchEnvValue(launchEnv, 'SHELL'),
+            getLaunchEnvValue(launchEnv, 'XDG_CONFIG_HOME')
+          )
+        ]
+  return shellCodexHomes.some(
+    (codexHome) => codexHome !== undefined && hasCustomCodexHomeOverride({ CODEX_HOME: codexHome })
   )
 }
 
-export function shellStartupCodexHomeOverrideContextsEqual(
-  left: CodexShellStartupHomeOverride,
-  right: CodexShellStartupHomeOverride
-): boolean {
-  return (
-    normalizePathForComparison(left.home) === normalizePathForComparison(right.home) &&
-    left.shell === right.shell &&
-    left.configHome === right.configHome &&
-    normalizePathForComparison(left.codexHome) === normalizePathForComparison(right.codexHome)
-  )
-}
+type LaunchEnvKey =
+  | 'CODEX_HOME'
+  | 'ORCA_CODEX_HOME'
+  | 'HOME'
+  | 'USERPROFILE'
+  | 'SHELL'
+  | 'XDG_CONFIG_HOME'
 
 function getLaunchEnvValue(
-  launchEnv: NodeJS.ProcessEnv,
-  key: 'CODEX_HOME' | 'ORCA_CODEX_HOME' | 'HOME' | 'SHELL' | 'XDG_CONFIG_HOME'
+  launchEnv: NodeJS.ProcessEnv | undefined,
+  key: LaunchEnvKey
 ): string | undefined {
-  return Object.hasOwn(launchEnv, key) ? launchEnv[key] : process.env[key]
+  return launchEnv && Object.hasOwn(launchEnv, key) ? launchEnv[key] : process.env[key]
 }
 
 function normalizePathForComparison(value: string): string {

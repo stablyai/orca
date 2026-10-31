@@ -1,12 +1,4 @@
-// Regression guard for the inspection admission budget. The cadence tiers
-// (active 750ms / idle 2000 / hidden 3000 / no-evidence 15000) were a per-pane
-// promise the queue could not keep: the budget of 8 starts per second was spent
-// one pane at a time, so N due panes meant roughly N/8 seconds between
-// inspections for each of them and agent-completion latency degraded as the
-// user added panes. Local inspections all resolve out of one TTL-and-in-flight-
-// deduped process-table capture, so a whole round of them is one host
-// observation and rides one start, launched in a single tick. The budget itself
-// is unchanged — it just buys the whole round instead of one pane.
+// A shared local capture must consume one admission start for all due panes; unshared remote reads still cost one each.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   enqueueAgentProcessInspection,
@@ -25,28 +17,6 @@ afterEach(() => {
 })
 
 describe('agent process inspection rounds', () => {
-  it('inspects every pane of a 300-pane round inside the same admission budget', async () => {
-    const inspected = new Set<string>()
-
-    for (let index = 0; index < PANES; index += 1) {
-      const ptyId = `pty-${index}`
-      enqueueAgentProcessInspection({
-        priority: 'cadence',
-        canRun: () => true,
-        sharesHostObservation: true,
-        run: async () => {
-          await Promise.resolve()
-          inspected.add(ptyId)
-        }
-      })
-    }
-    // Well inside one 1s rate-limiter window: pre-fix only the 8 starts that window
-    // allows are spent, so only 8 of the 300 panes are ever inspected.
-    await vi.advanceTimersByTimeAsync(200)
-
-    expect(inspected.size).toBe(PANES)
-  })
-
   it('launches the whole round in one tick on one start', async () => {
     const launchesPerTick = new Map<number, number>()
     let unshared = 0
@@ -63,8 +33,7 @@ describe('agent process inspection rounds', () => {
         }
       })
     }
-    // Seven unshared panes still fit, which is what proves the round cost exactly one of
-    // the eight starts rather than one per pane until the concurrency slots filled.
+    // Seven unshared starts must remain, proving the shared round consumed exactly one of eight.
     for (let index = 0; index < 7; index += 1) {
       enqueueAgentProcessInspection({
         priority: 'cadence',
@@ -77,8 +46,7 @@ describe('agent process inspection rounds', () => {
     }
     await vi.advanceTimersByTimeAsync(200)
 
-    // One synchronous burst carries every pane, so they hit one process-table capture
-    // rather than serializing across the limiter.
+    // Launch the full shared burst in one tick so it hits one process-table capture.
     expect([...launchesPerTick.values()]).toEqual([PANES])
     expect(unshared).toBe(7)
   })
@@ -99,6 +67,7 @@ describe('agent process inspection rounds', () => {
     }
     await vi.advanceTimersByTimeAsync(200)
 
+    expect(started.length).toBeGreaterThan(0)
     expect(started.length).toBeLessThanOrEqual(8)
   })
 

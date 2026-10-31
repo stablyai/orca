@@ -147,8 +147,7 @@ describe('waitForReplacementRuntime', () => {
       )
     ).rejects.toThrow('remote_update_reconnect_timeout')
 
-    // First probe runs on the second tick: it starts at 3s, the status RPC spends 2s more,
-    // so 4s of the 9s budget is left — not the 6s the tick began with.
+    // Second tick starts at 3s; status spends 2s, leaving 4s of 9s rather than the tick’s original 6s.
     expect(getUpdaterStatus).toHaveBeenNthCalledWith(1, 'server-1', 4_000)
   })
 

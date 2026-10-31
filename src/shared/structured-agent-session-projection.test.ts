@@ -2,19 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 import { agentSessionFailureWords } from './agent-session-failure-words'
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
+import { AgentJournalRenderItemSchema } from './agent-session-journal-schemas'
 import { parsePaneKey } from './stable-pane-id'
 import {
   activeStructuredAgentSessionTurnId,
   hasUnansweredStructuredAgentSessionDispatch,
   projectStructuredItemToNativeChat,
   projectStructuredItemsToNativeChat,
-  latestStructuredAgentSessionAssistantMessage,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusState,
   projectStructuredAgentSessionStatusSummary,
   structuredAgentSessionPaneKey
 } from './structured-agent-session-projection'
 import { statusStructuredAgentSessionToolCall } from './structured-agent-session-live-turn'
+import { latestStructuredAgentSessionAssistantMessage } from './structured-agent-session-latest-request'
 
 function item(
   itemId: string,
@@ -76,8 +77,8 @@ describe('structured agent session status projection', () => {
       blocks: [{ type: 'tool-call' }, { type: 'tool-result', output: '@@\n+second' }]
     })
     expect(second?.blocks).toEqual([
-      { type: 'tool-call', name: 'Diff', input: { path: 'a.ts' } },
-      { type: 'tool-result', output: '@@\n+second' }
+      { type: 'tool-call', name: 'Diff', input: { path: 'a.ts' }, callId: 'diff' },
+      { type: 'tool-result', output: '@@\n+second', callId: 'diff' }
     ])
     const pending = item('approval', 2, {
       kind: 'approval',
@@ -122,6 +123,41 @@ describe('structured agent session status projection', () => {
       type: 'text',
       text: 'Stopped.'
     })
+  })
+
+  it('names the call a tool row output answers, so a run pairs it by id', () => {
+    const projected = projectStructuredItemToNativeChat(
+      item('wait', 1, {
+        kind: 'tool-call',
+        name: 'wait_agent',
+        callId: 'call-wait',
+        input: null,
+        state: 'completed',
+        output: { head: 'CHILD_REPLY', digest: 'd', byteLength: 11, truncated: false }
+      })
+    )
+    expect(projected?.blocks).toEqual([
+      expect.objectContaining({ type: 'tool-call', callId: 'call-wait' }),
+      { type: 'tool-result', output: 'CHILD_REPLY', isError: false, callId: 'call-wait' }
+    ])
+  })
+
+  it('carries a cut-short call through the schema, and its partial output is not an error', () => {
+    const body = {
+      kind: 'tool-call' as const,
+      name: 'shell',
+      callId: 'call-sleep',
+      input: { command: 'sleep 20' },
+      state: 'failed' as const,
+      endedAs: 'interrupted' as const,
+      output: { head: 'partial', digest: 'd', byteLength: 7, truncated: false }
+    }
+    const parsed = AgentJournalRenderItemSchema.parse(item('sleep', 1, body))
+    expect(parsed.body).toMatchObject({ state: 'failed', endedAs: 'interrupted' })
+    expect(projectStructuredItemToNativeChat(item('sleep', 1, body))?.blocks).toEqual([
+      expect.objectContaining({ type: 'tool-call', state: 'failed', endedAs: 'interrupted' }),
+      { type: 'tool-result', output: 'partial', isError: false, callId: 'call-sleep' }
+    ])
   })
 
   it('projects running, attention, and completed lifecycle states', () => {
@@ -481,16 +517,16 @@ describe('structured agent session status projection', () => {
 
   it('preserves structured tool lifecycle state for the live renderer', () => {
     const projected = projectStructuredItemToNativeChat(
-      item('running-tool', 1, {
+      item('ls', 1, {
         kind: 'tool-call',
         name: 'shell',
-        input: { command: 'cat package.json' },
+        input: { command: 'ls' },
         state: 'running'
       })
     )
 
     expect(projected?.blocks).toEqual([
-      { type: 'tool-call', name: 'shell', input: { command: 'cat package.json' }, state: 'running' }
+      { type: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'running', callId: 'ls' }
     ])
   })
 
@@ -519,6 +555,7 @@ describe('structured agent session status projection', () => {
 describe('notice projection for desktop and mobile consumers', () => {
   it.each([
     { presentation: 'compaction' },
+    { presentation: 'compaction-skipped', tone: 'warning' },
     { presentation: 'plan-document' },
     { tone: 'warning' },
     { tone: 'error' },
@@ -631,8 +668,7 @@ describe("producer linkage — a subagent's output never speaks for the parent",
     expect(summary.status).toBe('working')
     expect(summary.lastAssistantMessage).toBe('delegating')
     expect(summary.toolName).toBe('Task')
-    // The row does not go blank while a child runs: the spawn call is still the
-    // parent's own live work.
+    // Keep the parent’s spawn-call preview while its child runs.
     expect(summary.toolInput).toBeTruthy()
   })
 
@@ -656,8 +692,7 @@ describe("producer linkage — a subagent's output never speaks for the parent",
   })
 
   it("still renders the child's output in the transcript", () => {
-    // The other direction: scoping the STATUS readers must not delete subagent
-    // output from the chat.
+    // Status scoping must still preserve all child output in the transcript.
     const prose = projectStructuredItemsToNativeChat(items).flatMap((message) =>
       message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
     )
@@ -666,8 +701,7 @@ describe("producer linkage — a subagent's output never speaks for the parent",
   })
 
   it("keeps the child's output as the child's: the transcript message names its producer", () => {
-    // Rendering the child's rows is not enough; unless the message still says who
-    // wrote it, the transcript can only present it as the parent speaking.
+    // Keep producer identity or child output would appear to be the parent speaking.
     const messages = projectStructuredItemsToNativeChat(items)
     const byId = new Map(messages.map((message) => [message.id, message]))
     expect(byId.get('child-prose')).toMatchObject({ agentId: 'task-1', producerKind: 'agent' })
@@ -690,11 +724,7 @@ describe("producer linkage — a subagent's output never speaks for the parent",
   })
 
   it('attributes rows without reading their neighbours', () => {
-    // A window holding only the child's own rows: no spawn call, no turn record.
-    // Nothing here is re-derived from a start row, so attribution does not
-    // depend on how much of the timeline a reader happens to hold. (This store
-    // has no compaction and paginates complete-or-reset, so such a window is not
-    // reachable today — the point is that the rule does not rely on that.)
+    // Attribution must survive a window without spawn/turn rows; derive it from each row’s own linkage.
     const windowed = [childProse, childCall]
     expect(latestStructuredAgentSessionAssistantMessage(windowed)).toBe('')
     expect(statusStructuredAgentSessionToolCall(windowed)).toBeNull()
@@ -726,12 +756,10 @@ describe("producer linkage — a subagent's output never speaks for the parent",
     }
     const nested = [...items, grandchild]
     expect(latestStructuredAgentSessionAssistantMessage(nested)).toBe('delegating')
-    // Naming a parent does not make the row that parent's: the summary the
-    // sidebar reads still shows the session's own line.
+    // A named parent does not make child prose part of the root summary.
     expect(projectStructuredAgentSessionStatusSummary(nested).lastAssistantMessage).toBe(
       'delegating'
     )
-    // And the transcript still renders it, so naming a parent is not a filter.
     expect(
       projectStructuredItemsToNativeChat(nested).some((block) =>
         JSON.stringify(block).includes('deeper')
@@ -752,9 +780,7 @@ describe("producer linkage — a subagent's output never speaks for the parent",
   })
 
   it("reads a row written before linkage existed as the parent's own", () => {
-    // A journal open across the upgrade has unmarked child rows below marked
-    // ones. Absence means root, which reproduces exactly what those journals
-    // always showed — it is never "unknown".
+    // Legacy unmarked child rows retain historical root attribution across upgrades; absence is never unknown.
     const legacyChildProse = item('legacy-child', 5, {
       kind: 'message',
       role: 'assistant',
@@ -801,7 +827,7 @@ describe('the turn verdict on the status summary', () => {
     })
   })
 
-  it('reports no verdict for a settled turn the provider never judged', () => {
+  it('reports no verdict for a completed turn the provider never judged', () => {
     const completed = item('turn-completed', 2, {
       kind: 'turn',
       turnId: 'turn-1',
@@ -810,5 +836,42 @@ describe('the turn verdict on the status summary', () => {
     expect(projectStructuredAgentSessionStatusSummary([user, completed])).not.toHaveProperty(
       'turnOutcome'
     )
+  })
+
+  // With no verdict from the provider, the lifecycle the host settled is what the row reports.
+  it.each([
+    ['interrupted', 'interruption'],
+    ['unverifiable', 'unconfirmed']
+  ] as const)(
+    'reads an %s turn the provider never judged as its host-observed end',
+    (state, outcome) => {
+      const ended = item('turn-ended', 2, { kind: 'turn', turnId: 'turn-1', state })
+      expect(projectStructuredAgentSessionStatusSummary([user, ended])).toMatchObject({
+        status: 'idle',
+        turnOutcome: outcome
+      })
+    }
+  )
+
+  it("keeps the provider's own verdict over what the host observed of the end", () => {
+    for (const outcome of ['cancellation', 'failure', 'success'] as const) {
+      const judged = item('turn-judged', 2, {
+        kind: 'turn',
+        turnId: 'turn-1',
+        state: 'interrupted',
+        outcome
+      })
+      expect(projectStructuredAgentSessionStatusSummary([user, judged])).toMatchObject({
+        turnOutcome: outcome
+      })
+    }
+  })
+
+  it('keeps the observed end off the request the completion feed announces', () => {
+    const ended = item('turn-ended', 2, { kind: 'turn', turnId: 'turn-1', state: 'interrupted' })
+    expect(projectStructuredAgentSessionStatusState([user, ended]).latestRequest).toMatchObject({
+      turnState: 'interrupted',
+      outcome: null
+    })
   })
 })

@@ -1,6 +1,3 @@
-// Real Claude CLI frame orders, replayed through the adapter into a real host: each child ends on
-// its own terminal frame, at that frame's time, and on nothing the parent does.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
 import {
@@ -25,7 +22,7 @@ describe('Claude child work from captured frame orders', () => {
     const run = await producer(hostWithParent())
     const [beforeEnding, fromEnding] = until(MOVED_TO_BACKGROUND, 51_275)
     run.replay(beforeEnding)
-    // The parent's `result` (+12,610 ms) and every roster since have passed.
+    // The parent turn ended at +12,610 ms; the child has no terminal frame yet.
     expect(run.byDescription('Sleep 45 seconds then print 1')).toMatchObject({
       membership: 'live',
       residency: 'foreground'
@@ -52,7 +49,6 @@ describe('Claude child work from captured frame orders', () => {
 
   it("does not end a moved agent on its spawn call's early result", async () => {
     const run = await producer(hostWithParent())
-    // The same capture with the spawn call's result delivered before the move is announced.
     const launched = MOVED_TO_BACKGROUND.findIndex(
       ({ frame }) => frame.type === 'user' && frame.parent_tool_use_id === null
     )
@@ -77,7 +73,6 @@ describe('Claude child work from captured frame orders', () => {
     const run = await producer(hostWithParent())
     const [launch] = until(RESUMED_BY_MESSAGE, 5_077)
     run.replay(launch)
-    // A roster that no longer lists the agent, and no terminal frame from it.
     run.replay([
       { at: 6_000, frame: { type: 'system', subtype: 'background_tasks_changed', tasks: [] } }
     ])
@@ -87,7 +82,8 @@ describe('Claude child work from captured frame orders', () => {
     })
   })
 
-  it('settles what still runs when the session ends, and keeps every record', async () => {
+  // Confirmed process exit supplies no child outcome without an accepted Stop.
+  it('leaves how they ended unknown when Orca ends the session, and keeps every record', async () => {
     const run = await producer(hostWithParent())
     const [running] = until(MOVED_TO_BACKGROUND, 51_275)
     run.replay(running)
@@ -101,6 +97,34 @@ describe('Claude child work from captured frame orders', () => {
     ).toEqual([
       { description: 'Run 45s sleep command', membership: 'settled', outcome: 'unknown' },
       { description: 'Sleep 45 seconds then print 1', membership: 'settled', outcome: 'unknown' }
+    ])
+  })
+
+  it('leaves how they ended unknown when the close sees a descendant survive', async () => {
+    const run = await producer(hostWithParent())
+    const [running] = until(MOVED_TO_BACKGROUND, 51_275)
+    run.replay(running)
+    const connection = run.claude.connections[0]!
+    connection.exitVerdict = { root: 'exited', tree: 'live' }
+    connection.close = async () => false
+    await expect(run.adapter.closeSession('session-1')).rejects.toMatchObject({
+      name: 'AgentSessionAcquisitionRootExitObservedError'
+    })
+    expect(run.records().map(({ membership, outcome }) => ({ membership, outcome }))).toEqual([
+      { membership: 'settled', outcome: 'unknown' },
+      { membership: 'settled', outcome: 'unknown' }
+    ])
+  })
+
+  it('leaves how they ended unknown when the session dies on its own', async () => {
+    const run = await producer(hostWithParent())
+    const [running] = until(MOVED_TO_BACKGROUND, 51_275)
+    run.replay(running)
+    run.claude.connections[0]!.handlers.onExit?.(new Error('claude exited'))
+    await run.adapter.drainObservedExits()
+    expect(run.records().map(({ membership, outcome }) => ({ membership, outcome }))).toEqual([
+      { membership: 'settled', outcome: 'unknown' },
+      { membership: 'settled', outcome: 'unknown' }
     ])
   })
 

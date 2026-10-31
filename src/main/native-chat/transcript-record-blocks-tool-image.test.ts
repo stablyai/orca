@@ -22,7 +22,7 @@ const TOOL_RESULT_WITH_SCREENSHOT = [
 describe('tool_result image promotion', () => {
   it('emits an image-ref alongside the tool-result text', () => {
     expect(claudeContentBlocks(TOOL_RESULT_WITH_SCREENSHOT)).toEqual([
-      { type: 'tool-result', output: 'screenshot taken' },
+      { type: 'tool-result', callId: 'toolu_1', output: 'screenshot taken' },
       { type: 'image-ref', url: 'data:image/png;base64,iVBORw0KGgo=' }
     ])
   })
@@ -35,13 +35,13 @@ describe('tool_result image promotion', () => {
         content: [{ type: 'image', source: { type: 'url', url: 'https://x.test/shot.png' } }]
       }
     ])
-    expect(blocks).toEqual([{ type: 'tool-result', output: '' }])
+    expect(blocks).toEqual([{ type: 'tool-result', callId: 'toolu_2', output: '' }])
   })
 
   it('leaves text-only tool results unchanged', () => {
     expect(
       claudeContentBlocks([{ type: 'tool_result', tool_use_id: 'x', content: 'done' }])
-    ).toEqual([{ type: 'tool-result', output: 'done' }])
+    ).toEqual([{ type: 'tool-result', callId: 'x', output: 'done' }])
   })
 
   it('drops base64 parts whose mime is not a raster image', () => {
@@ -57,7 +57,7 @@ describe('tool_result image promotion', () => {
         ]
       }
     ])
-    expect(blocks).toEqual([{ type: 'tool-result', output: '' }])
+    expect(blocks).toEqual([{ type: 'tool-result', callId: 'x', output: '' }])
   })
 
   it('still drops user-prompt base64 images without url/path (companion rows carry them)', () => {

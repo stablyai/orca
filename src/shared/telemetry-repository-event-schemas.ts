@@ -10,6 +10,7 @@ import {
   bucketNestedRepoTelemetryCount
 } from './nested-repo-telemetry'
 import { nthRepoAddedSchema } from './telemetry-app-event-schemas'
+import { workspaceCreateFailedProperties } from './telemetry-workspace-create-schemas'
 import {
   addRepoDefaultCheckoutHandoffReasonSchema,
   addRepoDefaultCheckoutHandoffResultSchema,
@@ -57,12 +58,13 @@ export const addRepoDefaultCheckoutHandoffSchema = z
   })
   .strict()
 
-// Why: enum-only like `agent_error` — `.strict()` blocks raw error strings from ever crossing the wire.
+// Strict enum-only failures keep raw errors off the wire.
 export const workspaceCreateFailedSchema = z
   .object({
     source: workspaceSourceSchema,
     error_class: workspaceCreateErrorClassSchema,
-    nth_repo_added: nthRepoAddedSchema
+    nth_repo_added: nthRepoAddedSchema,
+    ...workspaceCreateFailedProperties
   })
   .strict()
 
@@ -70,7 +72,7 @@ export const setupScriptPromptModeSchema = z.enum(['import_available', 'configur
 export const setupScriptCountBucketSchema = z.enum(['0', '1', '2-3', '4+'])
 export const setupScriptPromptContextSchema = {
   mode: setupScriptPromptModeSchema,
-  // Why: superRefine (not transform) keeps the top-level ZodObject shape that cohort injection probes.
+  // Keep the ZodObject shape available to cohort injection; refine instead of transforming.
   provider: setupScriptImportProviderSchema.optional(),
   file_count_bucket: setupScriptCountBucketSchema,
   unsupported_field_count_bucket: setupScriptCountBucketSchema,
@@ -102,7 +104,6 @@ export function validateSetupScriptPromptProvider(
     })
   }
 }
-// Why: retention-cohort telemetry, not repo debugging — closed enums and count buckets only.
 export const setupScriptPromptShownSchema = z
   .object(setupScriptPromptContextSchema)
   .strict()
@@ -211,7 +212,7 @@ export function validateNestedRepoCountBuckets(
 }
 
 export const nestedRepoTelemetryBaseSchema = {
-  // Why: high-cardinality but random and non-persistent — correlates scan→action→result without path-derived IDs.
+  // Random, non-persistent correlation across scan/action/result; never derive this ID from a path.
   attempt_id: nestedRepoAttemptIdSchema,
   surface: nestedRepoTelemetrySurfaceSchema,
   runtime_kind: nestedRepoTelemetryRuntimeKindSchema,

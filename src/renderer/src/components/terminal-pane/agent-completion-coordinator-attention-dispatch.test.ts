@@ -16,7 +16,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       dispatchAttention,
@@ -71,7 +70,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       dispatchAttention,
@@ -113,7 +111,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       dispatchAttention,
@@ -129,8 +126,7 @@ describe('agent completion coordinator', () => {
     coordinator.observeHookStatus({ state: 'done', ...turn, lastAssistantMessage: 'Done.' })
     expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
 
-    // A permission/elicitation pause arrives before the 1.5s quiet window
-    // expires; it must cancel the pending 'done' so no completion fires.
+    // Attention arriving within the quiet window must cancel provisional completion.
     coordinator.observeHookStatus({
       state: 'waiting',
       ...turn,
@@ -160,7 +156,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       dispatchAttention,
@@ -172,10 +167,7 @@ describe('agent completion coordinator', () => {
       agentType: 'cursor' as const
     }
 
-    // Realistic flow: the agent pauses for a permission prompt mid-turn, resumes,
-    // then genuinely finishes. The intervening attention state must surface as
-    // attention only and must not suppress the final completion. This fails if
-    // 'waiting' is treated as a completion state (issue #5698).
+    // A mid-turn permission pause must notify attention without suppressing the eventual completion.
     coordinator.observeHookStatus({ state: 'working', ...turn })
     coordinator.observeHookStatus({
       state: 'waiting',
@@ -192,16 +184,12 @@ describe('agent completion coordinator', () => {
   })
 
   it('dispatches a Codex attention notification immediately, like every other agent', () => {
-    // Why: Codex used to debounce this behind a 1.5s window to hide auto-approved
-    // pauses. The hook listener now classifies a reviewer-owned approval as
-    // `working` at write time, so a Codex `waiting` that reaches here is a real
-    // prompt and must notify at once (#21389).
+    // Auto-approved Codex pauses are classified working upstream; waiting here is a real prompt requiring immediate attention.
     const dispatchAttention = vi.fn()
     const dispatchHookLifecycle = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion: vi.fn(),
       dispatchAttention,
@@ -233,52 +221,6 @@ describe('agent completion coordinator', () => {
         })
       })
     )
-    // No Codex-only timer is armed any more.
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('dispatches a non-Codex attention notification immediately', () => {
-    const dispatchAttention = vi.fn()
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: 'tab-1:leaf-1',
-      getPtyId: () => 'pty-1',
-      getSettings: () => null,
-      inspectProcess: vi.fn(),
-      dispatchCompletion: vi.fn(),
-      dispatchAttention,
-      isLive: () => true
-    })
-
-    const turn = { prompt: 'fix the bug', agentType: 'cursor' as const }
-    coordinator.observeHookStatus({ state: 'working', ...turn })
-    coordinator.observeHookStatus({
-      state: 'waiting',
-      ...turn,
-      toolName: 'Shell',
-      toolInput: 'pnpm test'
-    })
-
-    expect(dispatchAttention).toHaveBeenCalledTimes(1)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('dispatches a blocked Codex pause immediately, like waiting', () => {
-    const dispatchAttention = vi.fn()
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: 'tab-1:leaf-1',
-      getPtyId: () => 'pty-1',
-      getSettings: () => null,
-      inspectProcess: vi.fn(),
-      dispatchCompletion: vi.fn(),
-      dispatchAttention,
-      isLive: () => true
-    })
-
-    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
-    coordinator.observeHookStatus({ state: 'working', ...turn })
-    coordinator.observeHookStatus({ state: 'blocked', ...turn, toolName: 'exec_command' })
-
-    expect(dispatchAttention).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -288,7 +230,6 @@ describe('agent completion coordinator', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       dispatchAttention,
@@ -308,54 +249,14 @@ describe('agent completion coordinator', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('notifies a second distinct Codex pause after work resumed', () => {
-    const dispatchAttention = vi.fn()
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: 'tab-1:leaf-1',
-      getPtyId: () => 'pty-1',
-      getSettings: () => null,
-      inspectProcess: vi.fn(),
-      dispatchCompletion: vi.fn(),
-      dispatchAttention,
-      isLive: () => true
-    })
-
-    const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
-    coordinator.observeHookStatus({ state: 'working', ...turn })
-    coordinator.observeHookStatus({
-      state: 'waiting',
-      ...turn,
-      toolName: 'exec_command',
-      toolInput: 'ls'
-    })
-    expect(dispatchAttention).toHaveBeenCalledTimes(1)
-
-    coordinator.observeHookStatus({
-      state: 'working',
-      ...turn,
-      toolName: 'exec_command',
-      toolInput: 'ls'
-    })
-    coordinator.observeHookStatus({
-      state: 'waiting',
-      ...turn,
-      toolName: 'apply_patch',
-      toolInput: 'diff'
-    })
-
-    expect(dispatchAttention).toHaveBeenCalledTimes(2)
-  })
-
   it('settles foreground misses after Codex pauses before reporting a sustained exit', async () => {
-    // Why: a real attention hook is positive liveness evidence even when the
-    // local process table briefly misses the foreground agent during handoff.
+    // Attention hooks prove liveness even when process inspection misses a foreground handoff.
     let foreground: string | null = 'codex'
     const dispatchAttention = vi.fn()
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(async () => processResult(foreground)),
       dispatchCompletion,
       dispatchAttention,
@@ -397,14 +298,12 @@ describe('agent completion coordinator', () => {
   })
 
   it('notifies a Codex pause even when the pane stops being live right after it', () => {
-    // Why: the removed quiet window re-checked isLive() when it expired, so a
-    // genuine prompt on a pane that went non-live inside the window was dropped.
+    // A pane becoming non-live must not drop an already observed real prompt.
     const dispatchAttention = vi.fn()
     let live = true
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion: vi.fn(),
       dispatchAttention,

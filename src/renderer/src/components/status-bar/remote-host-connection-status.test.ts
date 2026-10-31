@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
-import { runtimeHostConnectionDetail } from './remote-host-connection-status'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
+import {
+  runtimeHostConnectionDetail,
+  runtimeHostStatusForOverall
+} from './remote-host-connection-status'
+
+describe('blocked runtime hosts', () => {
+  it('excludes refused hosts from the connected count', () => {
+    expect(runtimeHostStatusForOverall('disconnected', 'access-revoked')).toBe('blocked')
+    expect(runtimeHostStatusForOverall('connected', 'incompatible')).toBe('blocked')
+    expect(runtimeHostStatusForOverall('disconnected', undefined)).toBe('disconnected')
+  })
+})
 
 describe('runtimeHostConnectionDetail', () => {
   it('suppresses stale failures while a handshake is in flight', () => {

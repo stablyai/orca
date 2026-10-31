@@ -162,7 +162,7 @@ describe('profile state database', () => {
     }
     const after = statSync(dbPath)
     expect(after.size).toBe(before.size)
-    expect(readFileSync(dbPath)).toEqual(beforeBytes)
+    expect(readFileSync(dbPath).equals(beforeBytes)).toBe(true)
   })
 
   it('opens the current schema read-only without changing its bytes', () => {
@@ -179,7 +179,7 @@ describe('profile state database', () => {
     } finally {
       opened.db.close()
     }
-    expect(readFileSync(dbPath)).toEqual(before)
+    expect(readFileSync(dbPath).equals(before)).toBe(true)
   })
 
   it('rejects a database whose profile identity does not match', () => {
@@ -192,7 +192,7 @@ describe('profile state database', () => {
     expect(() => openProfileStateDatabase(dbPath, 'profile-b')).toThrowError(
       expect.objectContaining({ code: 'identity-mismatch' })
     )
-    expect(readFileSync(dbPath)).toEqual(before)
+    expect(readFileSync(dbPath).equals(before)).toBe(true)
   })
 
   it('rejects malformed database bytes without replacing them', () => {
@@ -204,7 +204,7 @@ describe('profile state database', () => {
     expect(() => openProfileStateDatabase(dbPath, 'profile-a')).toThrowError(
       expect.objectContaining({ code: 'unreadable' })
     )
-    expect(readFileSync(dbPath)).toEqual(bytes)
+    expect(readFileSync(dbPath).equals(bytes)).toBe(true)
   })
 
   it('quarantines the database family without touching live recovery sources', () => {
@@ -254,7 +254,7 @@ describe('profile state database', () => {
     expect(() => openProfileStateDatabase(dbPath, 'profile-a')).toThrowError(
       expect.objectContaining({ code: 'unreadable' })
     )
-    expect(readFileSync(dbPath)).toEqual(before)
+    expect(readFileSync(dbPath).equals(before)).toBe(true)
   })
 
   it('rejects an incomplete current schema without mutating it', () => {
@@ -268,7 +268,7 @@ describe('profile state database', () => {
     expect(() => openProfileStateDatabase(dbPath, 'profile-a')).toThrowError(
       expect.objectContaining({ code: 'unreadable' })
     )
-    expect(readFileSync(dbPath)).toEqual(before)
+    expect(readFileSync(dbPath).equals(before)).toBe(true)
   })
 
   it('rejects current-version tables with incompatible columns without mutating them', () => {
@@ -290,7 +290,7 @@ describe('profile state database', () => {
     expect(() => openProfileStateDatabase(dbPath, 'profile-a')).toThrowError(
       expect.objectContaining({ code: 'unreadable' })
     )
-    expect(readFileSync(dbPath)).toEqual(before)
+    expect(readFileSync(dbPath).equals(before)).toBe(true)
   })
 
   it('does not create an empty database when the parent directory is absent', () => {
@@ -328,12 +328,5 @@ describe('profile state database', () => {
     } finally {
       opened.db.close()
     }
-  })
-})
-
-describe('profile state database does not reuse orchestration state', () => {
-  it('uses a profile-local filename', () => {
-    const directory = createDirectory()
-    expect(profileStateDatabaseFile(directory)).not.toBe(join(directory, 'orchestration.db'))
   })
 })

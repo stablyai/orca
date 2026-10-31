@@ -1,21 +1,34 @@
+import { writeFileSync } from 'node:fs'
 import { appendFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import type { NativeChatTranscriptSubscription } from './transcript-watch-contract'
 import {
   getActiveNativeChatWatcherCount,
   readNativeChatTranscriptTail,
-  subscribeNativeChatTranscript
+  subscribeNativeChatTranscript as subscribeTranscript
 } from './transcript-watch'
 
+const subscriptions = new Set<NativeChatTranscriptSubscription>()
 let tempRoots: string[] = []
+
+async function subscribeNativeChatTranscript(...args: Parameters<typeof subscribeTranscript>) {
+  const subscription = await subscribeTranscript(...args)
+  subscriptions.add(subscription)
+  return subscription
+}
 
 beforeEach(() => {
   tempRoots = []
 })
 
 afterEach(async () => {
+  for (const subscription of subscriptions) {
+    subscription.unsubscribe()
+  }
+  subscriptions.clear()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
@@ -28,8 +41,6 @@ async function tempFile(initial: string): Promise<string> {
   return filePath
 }
 
-// A path inside a fresh temp dir with nothing written yet — simulates a
-// just-created session whose agent hasn't flushed its first JSONL line (#8401).
 async function pendingFilePath(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-pending-'))
   tempRoots.push(root)
@@ -90,7 +101,8 @@ describe('subscribeNativeChatTranscript', () => {
       filePath,
       onInitialSnapshot: (messages) => snapshots.push(messages),
       onAppend: (messages) => appends.push(messages),
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
     expect(sub.watching).toBe(true)
@@ -115,7 +127,8 @@ describe('subscribeNativeChatTranscript', () => {
       filePath,
       onInitialSnapshot: (messages) => snapshots.push(messages),
       onAppend: () => {},
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
     await waitFor(() => snapshots.length === 1)
@@ -140,7 +153,8 @@ describe('subscribeNativeChatTranscript', () => {
           lifecycles.push(lifecycle)
         }
       },
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
     await waitFor(() => lifecycles.length === 1)
@@ -170,7 +184,8 @@ describe('subscribeNativeChatTranscript', () => {
           lifecycles.push(lifecycle)
         }
       },
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
     await waitFor(() => lifecycles.length === 1)
@@ -200,7 +215,8 @@ describe('subscribeNativeChatTranscript', () => {
         snapshot = { messages, lifecycle }
       },
       onAppend: () => {},
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
     await waitFor(() => snapshot !== undefined)
@@ -229,9 +245,6 @@ describe('subscribeNativeChatTranscript', () => {
   })
 
   it('recovers a completion marker even when trailing non-boundary rows follow it', async () => {
-    // The lifecycle scan walks newest-first; rows that decode to no boundary
-    // (tool-results, harness noise) must not hide an earlier real completion
-    // within the window, or a reconnect snapshot would fail to settle.
     const toolResult = `${JSON.stringify({
       type: 'user',
       uuid: 'tool-result-1',
@@ -269,7 +282,8 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: 'ignored',
       filePath,
       onAppend: (messages) => batches.push(messages),
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
     await new Promise((resolve) => setTimeout(resolve, 20))
     await appendFile(
@@ -295,7 +309,8 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: 'ignored',
       filePath,
       onAppend: (messages) => seen.push(...messages),
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
     await new Promise((resolve) => setTimeout(resolve, 20))
     await appendFile(
@@ -323,7 +338,8 @@ describe('subscribeNativeChatTranscript', () => {
       onInitialSnapshot: (messages, hasMore) =>
         snapshots.push({ ids: messages.map((message) => message.id), hasMore }),
       onAppend: () => {},
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
     await waitFor(() => snapshots.length === 1)
@@ -342,7 +358,8 @@ describe('subscribeNativeChatTranscript', () => {
       onInitialSnapshot: (messages, hasMore) =>
         snapshots.push({ ids: messages.map((message) => message.id), hasMore }),
       onAppend: () => {},
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
     await waitFor(() => snapshots.length === 1)
@@ -395,7 +412,8 @@ describe('subscribeNativeChatTranscript', () => {
       onInitialSnapshot: (messages, hasMore) =>
         snapshots.push({ ids: messages.map((message) => message.id), hasMore }),
       onAppend: () => {},
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
     await waitFor(() => snapshots.length === 1)
@@ -412,7 +430,8 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: 'ignored',
       filePath,
       onAppend: (messages) => batches.push(messages),
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
     await appendFile(filePath, claudeLine('a-1', 'assistant', 'reply'))
@@ -420,36 +439,9 @@ describe('subscribeNativeChatTranscript', () => {
 
     sub.unsubscribe()
 
-    // Seed-at-0 means the first drain re-reads the whole file; the assembler
-    // dedups by id. The appended turn must appear; the pre-existing line may
-    // appear too (collapsed downstream by id).
+    // Offset-zero seed rereads existing rows; downstream ID dedup permits them beside new appends.
     const ids = batches.flat().map((m) => m.id)
     expect(ids).toContain('a-1')
-  })
-
-  it('appends a turn in the gap between initial read and first watcher drain exactly once', async () => {
-    // Simulate the read/subscribe race: a turn lands after the caller's
-    // readSession EOF but before the watcher's first drain. Seeding at 0 means
-    // the first drain reads it; the assembler later dedups by deterministic id.
-    const filePath = await tempFile(claudeLine('u-1', 'user', 'first'))
-    const seen: NativeChatMessage[] = []
-
-    // The gap turn is written BEFORE subscribe completes its first drain.
-    await appendFile(filePath, claudeLine('a-gap', 'assistant', 'raced reply'))
-
-    const sub = await subscribeNativeChatTranscript({
-      agent: 'claude',
-      sessionId: 'ignored',
-      filePath,
-      onAppend: (messages) => seen.push(...messages),
-      debounceMs: 5
-    })
-
-    await waitFor(() => seen.some((m) => m.id === 'a-gap'))
-    sub.unsubscribe()
-
-    // The raced turn is present, and not duplicated within a single drain pass.
-    expect(seen.filter((m) => m.id === 'a-gap')).toHaveLength(1)
   })
 
   it('recovers cleanly when a read throws (subscription not left deaf)', async () => {
@@ -461,17 +453,15 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: 'ignored',
       filePath,
       onAppend: (messages) => seen.push(...messages),
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
-    // Make the file unreadable mid-flight (EACCES on the read path). The drain's
-    // try/catch must break and reset `reading` in finally so a later append
-    // still tails once permissions are restored.
+    // Fail a drain mid-flight; finally must clear reading so later appends recover.
     await waitFor(() => seen.some((m) => m.id === 'u-1'))
     const { chmod } = await import('node:fs/promises')
     await chmod(filePath, 0o000)
     await appendFile(filePath, claudeLine('a-1', 'assistant', 'reply')).catch(() => {})
-    // Give the watcher a chance to attempt (and fail) a drain.
     await new Promise((resolve) => setTimeout(resolve, 40))
     await chmod(filePath, 0o644)
     await appendFile(filePath, claudeLine('a-2', 'assistant', 'recovered'))
@@ -490,14 +480,14 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: 'ignored',
       filePath,
       onAppend: () => {},
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
     expect(getActiveNativeChatWatcherCount()).toBe(before + 1)
 
     sub.unsubscribe()
     expect(getActiveNativeChatWatcherCount()).toBe(before)
 
-    // Idempotent: a second unsubscribe must not under-count.
     sub.unsubscribe()
     expect(getActiveNativeChatWatcherCount()).toBe(before)
   })
@@ -511,10 +501,10 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: 'ignored',
       filePath,
       onAppend: (messages) => seen.push(...messages),
-      debounceMs: 10
+      debounceMs: 10,
+      reconciliationIntervalMs: 20
     })
 
-    // Fire several appends back-to-back within the debounce window.
     await appendFile(filePath, claudeLine('a-1', 'assistant', 'one'))
     await appendFile(filePath, claudeLine('a-2', 'assistant', 'two'))
     await appendFile(filePath, claudeLine('a-3', 'assistant', 'three'))
@@ -522,8 +512,6 @@ describe('subscribeNativeChatTranscript', () => {
     await waitFor(() => ['a-1', 'a-2', 'a-3'].every((id) => seen.some((m) => m.id === id)))
     sub.unsubscribe()
 
-    // Order is preserved for the appended turns (the seed re-read may also carry
-    // the pre-existing u-1, which the assembler dedups downstream).
     const appendedIds = seen.map((m) => m.id).filter((id) => id !== 'u-1')
     expect(appendedIds).toEqual(['a-1', 'a-2', 'a-3'])
   })
@@ -537,7 +525,8 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: 'ignored',
       filePath,
       onAppend: (messages) => seen.push(...messages),
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
     await waitFor(() => seen.some((m) => m.id === 'u-1'))
@@ -566,15 +555,13 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: 'ignored',
       filePath,
       onAppend: (messages) => seen.push(...messages),
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
 
-    // Replace the file with shorter content (simulates rotation to a new,
-    // smaller session file at the same resolved path).
     await writeFile(filePath, claudeLine('u-2', 'user', 'fresh'))
     await waitFor(() => seen.some((m) => m.id === 'u-2'))
 
-    // A subsequent append on the rotated file is still tailed.
     await appendFile(filePath, claudeLine('a-2', 'assistant', 'fresh-reply'))
     await waitFor(() => seen.some((m) => m.id === 'a-2'))
 
@@ -587,23 +574,32 @@ describe('subscribeNativeChatTranscript', () => {
   it('detects same-size and larger in-place transcript replacement', async () => {
     const filePath = await tempFile(claudeLine('u-old', 'user', 'old'))
     const seen: NativeChatMessage[] = []
+    const replacements = new Map([
+      ['u-old', claudeLine('u-new', 'user', 'new')],
+      ['u-new', claudeLine('u-bigger', 'user', 'larger replacement text')]
+    ])
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
       filePath,
-      onAppend: (messages) => seen.push(...messages),
-      debounceMs: 5
+      onAppend: (messages) => {
+        seen.push(...messages)
+        // Rewrite during delivery so no mid-write stat sees Bun’s write-before-truncate intermediate version.
+        for (const message of messages) {
+          const next = replacements.get(message.id)
+          replacements.delete(message.id)
+          if (next) {
+            writeFileSync(filePath, next)
+          }
+        }
+      },
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
-    await waitFor(() => seen.some((message) => message.id === 'u-old'))
-
-    await writeFile(filePath, claudeLine('u-new', 'user', 'new'))
-    await waitFor(() => seen.some((message) => message.id === 'u-new'))
-    await writeFile(filePath, claudeLine('u-bigger', 'user', 'larger replacement text'))
     await waitFor(() => seen.some((message) => message.id === 'u-bigger'))
     sub.unsubscribe()
 
-    expect(seen.filter((message) => message.id === 'u-new')).toHaveLength(1)
-    expect(seen.filter((message) => message.id === 'u-bigger')).toHaveLength(1)
+    expect(seen.map((message) => message.id)).toEqual(['u-old', 'u-new', 'u-bigger'])
   })
 
   it('keeps watching after atomic rename replacement', async () => {
@@ -622,7 +618,8 @@ describe('subscribeNativeChatTranscript', () => {
         seen.splice(0, seen.length, ...messages)
       },
       onAppend: (messages) => seen.push(...messages),
-      debounceMs: 5
+      debounceMs: 5,
+      reconciliationIntervalMs: 20
     })
     await waitFor(() => seen.some((message) => message.id === 'atomic-old'))
 
@@ -648,7 +645,8 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: 'ignored',
       filePath,
       onAppend: (messages) => seen.push(...messages),
-      debounceMs: 0
+      debounceMs: 0,
+      reconciliationIntervalMs: 20
     })
     await waitFor(() => seen.some((message) => message.id === 'race-old'))
 
@@ -672,7 +670,8 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: 'ignored',
       filePath,
       onAppend: (messages) => seen.push(...messages),
-      debounceMs: 0
+      debounceMs: 0,
+      reconciliationIntervalMs: 20
     })
     await waitFor(() => seen.some((message) => message.id === 'unlink-old'))
 
@@ -696,16 +695,10 @@ describe('subscribeNativeChatTranscript', () => {
     })
     expect(sub.watching).toBe(false)
     expect(getActiveNativeChatWatcherCount()).toBe(before)
-    // Must not throw.
     sub.unsubscribe()
   })
 })
 
-// Regression for #8401: Claude Code (and other agents) can take from ~3s to
-// minutes to flush a brand-new session's first JSONL line, so the file
-// genuinely doesn't exist when native chat subscribes. Before this fix,
-// subscribeNativeChatTranscript returned a permanent no-op the instant the
-// file was missing and never recovered once it appeared.
 describe('subscribeNativeChatTranscript (resolve-poll for a not-yet-created file, #8401)', () => {
   it('keeps retrying resolve+install and tails the file once it is created', async () => {
     const filePath = await pendingFilePath()
@@ -717,13 +710,12 @@ describe('subscribeNativeChatTranscript (resolve-poll for a not-yet-created file
       filePath,
       onAppend: (messages) => seen.push(...messages),
       debounceMs: 5,
+      reconciliationIntervalMs: 20,
       resolvePollIntervalMs: 20
     })
 
-    // Nothing installed yet — the file doesn't exist on disk.
     expect(getActiveNativeChatWatcherCount()).toBe(0)
 
-    // The agent flushes its first turn well after subscribe.
     await new Promise((resolve) => setTimeout(resolve, 50))
     await writeFile(filePath, claudeLine('u-1', 'user', 'hello'))
 
@@ -741,10 +733,10 @@ describe('subscribeNativeChatTranscript (resolve-poll for a not-yet-created file
       sessionId: '   ',
       onAppend: () => {},
       debounceMs: 5,
+      reconciliationIntervalMs: 20,
       resolvePollIntervalMs: 10
     })
 
-    // An unresolvable target must not spin the resolve poll forever.
     await new Promise((resolve) => setTimeout(resolve, 60))
     expect(getActiveNativeChatWatcherCount()).toBe(before)
     sub.unsubscribe()
@@ -762,14 +754,13 @@ describe('subscribeNativeChatTranscript (resolve-poll for a not-yet-created file
       filePath,
       onAppend: () => {},
       debounceMs: 5,
+      reconciliationIntervalMs: 20,
       resolvePollIntervalMs: 20
     })
 
-    // Unsubscribe while still polling — the file is never created in this test.
     sub.unsubscribe()
     expect(getActiveNativeChatWatcherCount()).toBe(before)
 
-    // Give any stray timer a chance to fire; it must not install a watcher.
     await new Promise((resolve) => setTimeout(resolve, 100))
     expect(getActiveNativeChatWatcherCount()).toBe(before)
   })

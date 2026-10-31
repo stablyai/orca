@@ -2,6 +2,10 @@
 <html class="native-shell">
   <head>
     <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="img-src 'self' data: blob: http: https: file: orca-media: orca-preview: orca-jira-image: orca-plugin-image:"
+    />
     <title>Orca</title>
     <!-- CSP is relaxed during development; electron-vite injects a stricter policy for production builds -->
   </head>

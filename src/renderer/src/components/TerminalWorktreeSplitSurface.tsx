@@ -10,11 +10,8 @@ import {
   shouldMountRetainedBrowserOverlay
 } from './browser-pane/host-guest/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
-import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
-import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
-import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
-import StructuredAgentSessionPaneOverlayLayer from './native-chat/StructuredAgentSessionPaneOverlayLayer'
-import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
+import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
+import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'
 
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
@@ -23,6 +20,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   focusedGroupId,
   isVisible,
   shouldMeasureHiddenWorktree,
+  prewarmStage,
   shouldColdParkTerminalPanes,
   isForceParked,
   activityTerminalPortals,
@@ -35,6 +33,8 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   focusedGroupId?: string
   isVisible: boolean
   shouldMeasureHiddenWorktree: boolean
+  /** Hover intent: mount, then lay out, then render the revealable terminals while hidden. */
+  prewarmStage: TerminalPrewarmStage | null
   shouldColdParkTerminalPanes: boolean
   isForceParked: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
@@ -44,7 +44,8 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
-    shouldMeasureHiddenWorktree,
+    // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
+    shouldMeasureHiddenWorktree: shouldMeasureHiddenWorktree && prewarmStage !== 'mount',
     needsBrowserGuestPaint
   })
 
@@ -59,6 +60,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       }
       inert={!isVisible}
       aria-hidden={!isVisible}
+      data-workspace-surface-id={worktreeId}
     >
       <TabGroupSplitLayout
         layout={layout}
@@ -66,34 +68,24 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         focusedGroupId={focusedGroupId}
         isWorktreeActive={isVisible}
       />
-      <TerminalPaneOverlayLayer
+      <WorkspacePaneOverlayLayers
         worktreeId={worktreeId}
         worktreePath={worktreePath}
-        isWorktreeActive={isVisible}
-        coldParkTerminalPanes={shouldColdParkTerminalPanes}
-        isForceParked={isForceParked}
+        isVisible={isVisible}
         shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+        hiddenTerminalPrewarm={prewarmStage === 'mount' ? null : prewarmStage}
+        shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
+        isForceParked={isForceParked}
         activityTerminalPortals={activityTerminalPortals}
         backgroundMountTabIds={backgroundMountTabIds}
         activationDeferredMountTabIds={activationDeferredMountTabIds}
-      />
-      <RetainedBrowserPaneOverlayLayer
-        worktreeId={worktreeId}
-        isWorktreeActive={isVisible}
-        mountEligible={shouldMountRetainedBrowserOverlay({
+        mountRetainedBrowserOverlay={shouldMountRetainedBrowserOverlay({
           isWorktreeVisible: isVisible,
           hasDeferredBackgroundMounts: backgroundMountTabIds !== null,
           needsBrowserGuestPaint
         })}
+        mountEmulatorOverlay={isVisible || backgroundMountTabIds === null}
       />
-      {isVisible || backgroundMountTabIds === null ? (
-        <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
-      ) : null}
-      <StructuredAgentSessionPaneOverlayLayer
-        worktreeId={worktreeId}
-        isWorktreeActive={isVisible}
-      />
-      <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
     </div>
   )
 })

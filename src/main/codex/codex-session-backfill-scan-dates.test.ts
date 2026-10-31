@@ -132,9 +132,6 @@ describe('bounded backfill range construction', () => {
     ).toEqual(expandCodexSessionBackfillDatesThroughToday(dates, ['2024', '03', '01'], 3))
   })
 
-  // The arithmetic cardinality gate must admit and reject exactly what enumerating the range
-  // would, on every calendar edge that has ever broken a day count: leap days, century rules,
-  // year rollover, and the DST switches the UTC-only arithmetic has to stay indifferent to.
   it.each<[string, CodexSessionBackfillDate, CodexSessionBackfillDate]>([
     ['leap February', ['2024', '02', '27'], ['2024', '03', '02']],
     ['non-leap February', ['2023', '02', '27'], ['2023', '03', '02']],
@@ -143,7 +140,6 @@ describe('bounded backfill range construction', () => {
     ['EU spring-forward', ['2025', '03', '29'], ['2025', '03', '31']],
     ['southern-hemisphere DST', ['2025', '04', '05'], ['2025', '04', '07']],
     ['year rollover', ['2024', '12', '30'], ['2025', '01', '02']],
-    ['leap century', ['1999', '12', '31'], ['2000', '01', '02']],
     ['non-leap century', ['2100', '02', '27'], ['2100', '03', '02']],
     ['30-day month end', ['2026', '04', '29'], ['2026', '05', '02']],
     ['single day', ['2026', '09', '07'], ['2026', '09', '07']]

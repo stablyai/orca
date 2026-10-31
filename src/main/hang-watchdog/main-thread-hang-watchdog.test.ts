@@ -54,6 +54,19 @@ function fakeWorker() {
 
 describe('installMainThreadHangWatchdog', () => {
   beforeEach(() => {
+    for (const name of [
+      'CI',
+      'GITHUB_ACTIONS',
+      'GITLAB_CI',
+      'CIRCLECI',
+      'TRAVIS',
+      'BUILDKITE',
+      'JENKINS_URL',
+      'TEAMCITY_VERSION',
+      'ORCA_DIAGNOSTICS_DISABLED'
+    ]) {
+      vi.stubEnv(name, '')
+    }
     vi.useFakeTimers()
     workerState.calls = []
     workerState.instance = null
@@ -67,19 +80,48 @@ describe('installMainThreadHangWatchdog', () => {
   })
 
   afterEach(() => {
+    for (const [event, listener] of appMock.on.mock.calls) {
+      if (event === 'will-quit') {
+        listener()
+      }
+    }
+    vi.unstubAllEnvs()
     vi.useRealTimers()
     delete process.env.ORCA_HANG_WATCHDOG_FORCE
     delete process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS
     delete process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS
   })
 
-  it('is a no-op off macOS', () => {
+  it.each(['win32', 'linux'] as const)('creates no worker or timers on %s', (platform) => {
+    for (const isPackaged of [false, true]) {
+      for (const forced of [false, true]) {
+        appMock.isPackaged = isPackaged
+        if (forced) {
+          process.env.ORCA_HANG_WATCHDOG_FORCE = '1'
+        } else {
+          delete process.env.ORCA_HANG_WATCHDOG_FORCE
+        }
+        expect(
+          withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
+        ).toBeNull()
+        expect(workerState.calls).toHaveLength(0)
+        expect(vi.getTimerCount()).toBe(0)
+        expect(appMock.on).not.toHaveBeenCalled()
+      }
+    }
+  })
+
+  it.each(['darwin'] as const)('respects development and diagnostics gates on %s', (platform) => {
+    appMock.isPackaged = false
     expect(
-      withPlatform('win32', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
+      withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).toBeNull()
+    process.env.ORCA_HANG_WATCHDOG_FORCE = '1'
+    vi.stubEnv('ORCA_DIAGNOSTICS_DISABLED', '1')
     expect(
-      withPlatform('linux', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
+      withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).toBeNull()
+    vi.unstubAllEnvs()
     expect(workerState.calls).toHaveLength(0)
   })
 

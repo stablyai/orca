@@ -24,19 +24,17 @@ import {
 } from './codex-structured-journal-contracts'
 import { MAX_CODEX_GOAL_THREADS } from './codex-structured-journal-limits'
 import { appendCodexLifecycleTransition } from './codex-structured-journal-sink'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 type GoalAccounting = { key: string; timeUsedSeconds: number; tokenBudget: number | null }
 
 type GoalThreadState = {
   signature: string
   occurrence: string
-  /** Accounting last journaled for this goal; null when the row carries none. */
   accounting: GoalAccounting | null
 }
 
-// Codex re-sends accounting every few seconds of a running turn, and each revision
-// is a persisted row; readers extrapolate between revisions while a turn runs.
+// Throttle persisted accounting revisions; readers extrapolate while the turn runs.
 const GOAL_ACCOUNTING_REVISION_SECONDS = 30
 
 function goalAccounting(body: AgentJournalItemBody | undefined): GoalAccounting | null {
@@ -51,7 +49,6 @@ function goalAccounting(body: AgentJournalItemBody | undefined): GoalAccounting 
   }
 }
 
-/** Whether a live accounting tick is worth a revision of the goal's row. */
 function accountingOutgrew(previous: GoalAccounting | null, next: GoalAccounting): boolean {
   return (
     previous === null ||
@@ -70,7 +67,7 @@ export class CodexJournalGoals {
 
   constructor(
     private readonly sink: StructuredAgentSessionEventSink,
-    private readonly linkageFor: CodexRowLinkage
+    private readonly attributionFor: CodexRowAttribution
   ) {}
 
   handle(event: {
@@ -110,8 +107,7 @@ export class CodexJournalGoals {
       this.remember(thread, previous)
       return CODEX_JOURNAL_ADMITTED
     }
-    // Counter-only changes revise the goal's existing row: same identity, so the
-    // journal bumps its revision and keeps its sequence.
+    // Accounting revisions keep the existing identity and sequence.
     const occurrence =
       previous && sameGoal
         ? previous.occurrence
@@ -131,8 +127,8 @@ export class CodexJournalGoals {
           accounting,
           event.method === 'thread/goal/cleared'
         ),
-      // A goal belongs to its thread, not to one run of it, so no turn is named.
-      this.linkageFor(event.threadId, null)
+      // Goals belong to the thread across turns.
+      this.attributionFor(event.threadId, null)
     )
     if (!admission.accepted) {
       return admission
@@ -186,7 +182,6 @@ export class CodexJournalGoals {
     this.seedDurableState(journal)
     const previous = this.durableStateByThread.get(thread) ?? null
     if (previous?.signature === signature) {
-      // Same goal with fresh accounting, e.g. a resume snapshot: revise its row in place.
       if (accounting === null || previous.accounting?.key === accounting.key) {
         return null
       }

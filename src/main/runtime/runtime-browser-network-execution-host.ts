@@ -1,4 +1,4 @@
-import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { SshConnectionState } from '../../shared/ssh-types'

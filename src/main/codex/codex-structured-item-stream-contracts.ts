@@ -2,28 +2,29 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session-journa
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { codexJournalItem, CodexThreadItem } from './codex-structured-item-translation'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 export type CodexItemStreamDeps = {
   sink: StructuredAgentSessionEventSink
-  /** The turn a delta-only item belongs to, read the way its first delta names it. */
+  /** Resolve turn provenance from the first delta. */
   turnIdFor: (threadId: string, params: unknown) => string | null
   identityFor: (
     threadId: string,
     turnId: string | null,
     item: CodexThreadItem
   ) => AgentJournalItemIdentity
-  linkageFor: CodexRowLinkage
+  attributionFor: CodexRowAttribution
   coalesceMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
-  maxMetadataBytes?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
 }
 
 export type CodexItemStreamState = {
   identity: AgentJournalItemIdentity
   item: CodexThreadItem
+  /** Host start time for rows first written by a stream. */
+  startedAt?: number
 }
 
 export type CodexPendingItemPatch = {
@@ -42,20 +43,21 @@ export type CodexStructuredItemStreamHandleResult = {
 
 export type CodexStructuredItemStreams = {
   readonly persistentCount: number
-  canTrack: (threadId: string, item: CodexThreadItem, identity: AgentJournalItemIdentity) => boolean
   track: (
     threadId: string,
     turnId: string | null,
     item: CodexThreadItem,
-    identity: AgentJournalItemIdentity
-  ) => boolean
+    identity: AgentJournalItemIdentity,
+    startedAt?: number
+  ) => void
   handle: (
     threadId: string,
     method: string,
     params: unknown
   ) => CodexStructuredItemStreamHandleResult
   forget: (threadId: string, itemId: string) => void
-  flush: () => boolean
+  /** Force-saves streamed text before a row; a thread limits that to its own streams, the only text its row follows. */
+  flush: (threadId?: string) => boolean
   dispose: () => void
   snapshot: (
     threadId: string,

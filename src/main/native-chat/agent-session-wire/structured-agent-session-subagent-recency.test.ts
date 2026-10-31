@@ -1,27 +1,26 @@
-// A subagent's work must not re-date the session that spawned it.
-//
-// The status row takes its completion stamp and acknowledgement clock from the summary's
-// `statusStartedAt`. Subagents write into the same journal and keep going after the session's
-// own agent has settled, so every hop below is the real one — provider translator, deferred
-// sink, durable journal, status feed.
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentSessionBackgroundTask,
-  AgentSessionStatusEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  subagentJournalBody,
+  subagentJournalItemIdentity
+} from '../agent-session-journal/journal-subagent-item'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'recency-session'
 const CODEX_THREAD = 'thread-parent'
@@ -41,10 +40,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** A journal, a feed over it, and a sink that publishes into the feed. One clock serves the
- *  journal and every provider event, and it advances on every read: on the wall clock a burst
- *  of appends can share a millisecond, and a `Math.max` over one number moves nothing, so a
- *  contaminated clock would pass. */
+/** Advance on every read: a same-millisecond burst could hide contamination of the session clock. */
 async function openSession() {
   let clock = 10_000
   const tick = (): number => (clock += 1_000)
@@ -54,15 +50,14 @@ async function openSession() {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'claude',
-      providerHandle: { kind: 'codex', threadId: CODEX_THREAD }
+      providerHandle: codexProviderHandle(CODEX_THREAD)
     },
     now: tick,
-    journalDir: join(root, SESSION)
+    stateDirectory: join(root, SESSION)
   })
-  // The roster the provider adapter reports, and the host's status row the feed writes into.
-  const roster: { tasks: AgentSessionBackgroundTask[] } = { tasks: [] }
   const server = new AgentHookServer()
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
       [
         SESSION,
@@ -72,27 +67,29 @@ async function openSession() {
         })
       ]
     ]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => 1,
-    readBackgroundTasks: () => ({ state: 'monitoring', tasks: roster.tasks }),
     statusSink: () => ({
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
-      forget: (subject) => server.dropStructuredStatus(subject)
+      forget: (subject) => server.dropStructuredStatus(subject),
+      publishChildWork: (subject, evidence, provider) =>
+        server.ingestStructuredChildWork(subject, evidence, provider),
+      readChildWork: (subject) => server.getStructuredChildWorkViews(subject)
     })
   })
   const events: AgentSessionStatusEvent[] = []
   feed.subscribe({ id: 'list-1', emit: (event) => events.push(event) })
-  const deferred = createDeferredStructuredAgentSessionEventSink()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   deferred.bind({ journal, fence: 1, publish: () => feed.publish(SESSION, journal) })
   const drain = async (): Promise<void> => {
     expect(await deferred.drained()).toEqual({ ok: true })
   }
-  /** The prompt as the host journals it; provider user frames never become user rows. */
+  // Provider user frames never become personal rows.
   const prompt = (clientMessageId: string, text: string) =>
     journal.appendItem(
       { provider: 'orca', clientMessageId },
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   const latestStatus = () => {
     const event = events.findLast((candidate) => candidate.type === 'status')
@@ -101,14 +98,13 @@ async function openSession() {
     }
     return event.session
   }
-  /** The journal's projection now, whether or not the feed republished it. */
   const projected = () => {
     const snapshot = journal.snapshot()
     return projectStructuredAgentSessionStatusSummary(snapshot.items, snapshot.submissions, 1)
   }
   return {
     journal,
-    roster,
+    feed,
     server,
     projected,
     tick,
@@ -150,7 +146,6 @@ function claudeTask(subtype: string, fields: Record<string, unknown>) {
   return claudeFrame({ type: 'system', subtype, ...fields })
 }
 
-/** The real Codex translator over the session's sink, its clock shared with the journal's. */
 function codexTranslator(session: Awaited<ReturnType<typeof openSession>>) {
   const translator = createCodexJournalTranslator({
     sink: session.sink,
@@ -182,6 +177,19 @@ describe("a subagent's work and the recency of the session that spawned it", () 
     const translator = createClaudeJournalTranslator({ sink: session.sink })
     const handle = (event: ReturnType<typeof claudeFrame>): void =>
       translator.handle({ ...event, observedAt: session.tick() })
+    const hostRow = (label: string, state: 'working' | 'completed') =>
+      session.journal.appendItem(
+        subagentJournalItemIdentity('task-1'),
+        subagentJournalBody({
+          type: 'subagent',
+          id: 'task-1',
+          label,
+          state,
+          groupId: 'thread',
+          run: 'toolu_1'
+        }),
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
     await session.prompt('prompt-1', 'fan out')
     handle(claudeUserTurn('user-1', 'fan out'))
     handle(
@@ -226,11 +234,10 @@ describe("a subagent's work and the recency of the session that spawned it", () 
     const published = session.events.length
     const sequence = session.journal.cursor().sequence
 
-    // The session's own agent has settled. Its backgrounded child renames itself and then
-    // finishes, and each edge revises the session's roster row.
     handle(
       claudeTask('task_updated', { task_id: 'task-1', patch: { description: 'Build watched' } })
     )
+    await hostRow('Build watched', 'working')
     handle(
       claudeTask('task_notification', {
         task_id: 'task-1',
@@ -239,16 +246,15 @@ describe("a subagent's work and the recency of the session that spawned it", () 
         summary: 'green'
       })
     )
+    await hostRow('Build watched', 'completed')
     await session.drain()
 
-    // Controls, so the holds below are not vacuous: the child's edges DID reach the journal,
-    // and they moved its evidence clock.
+    // Confirm child events landed and advanced journal evidence before checking the session clock.
     expect(session.journal.cursor().sequence).toBeGreaterThan(sequence)
     expect(session.journal.lastActivityAt()).toBeGreaterThan(evidenceClock)
     expect(session.events).toHaveLength(published)
     expect(session.projected().statusStartedAt).toBe(settled.statusStartedAt)
 
-    // The session's own next turn still moves it.
     await session.prompt('prompt-2', 'thanks')
     handle(claudeUserTurn('user-3', 'thanks'))
     handle(claudeResult('result-2'))
@@ -258,8 +264,7 @@ describe("a subagent's work and the recency of the session that spawned it", () 
     session.close()
   })
 
-  // A row live child work holds open is dated by when the host saw it, and mobile decays a working
-  // row whose evidence is older than the staleness window. The child's own rows are what keep it.
+  // Mobile decays stale working rows; live child evidence must keep their host row fresh.
   it("keeps the host's evidence fresh while a live subagent holds an idle Claude session open", async () => {
     const session = await openSession()
     const translator = createClaudeJournalTranslator({ sink: session.sink })
@@ -278,7 +283,21 @@ describe("a subagent's work and the recency of the session that spawned it", () 
         }
       })
     )
-    session.roster.tasks = [{ id: 'task-1', kind: 'agent', state: 'working' }]
+    // Host ordering lands the spawn frame before its child record.
+    await session.drain()
+    session.feed.publishChildWork(SESSION, [
+      {
+        type: 'live',
+        observedAt: session.tick(),
+        child: {
+          handle: { idKind: 'task_id', id: 'task-1', runId: 'toolu_1' },
+          kind: 'agent',
+          residency: 'background',
+          state: 'working',
+          stoppable: true
+        }
+      }
+    ])
     handle(claudeResult('result-1'))
     await session.drain()
     const settled = session.latestStatus()
@@ -331,7 +350,6 @@ describe("a subagent's work and the recency of the session that spawned it", () 
     const published = session.events.length
     const sequence = session.journal.cursor().sequence
 
-    // The parent's turn is over; its child runs on, writing prose and spending tokens.
     item(CODEX_CHILD, 'item/completed', 'child-turn', {
       type: 'agentMessage',
       id: 'child-message',
@@ -346,7 +364,6 @@ describe("a subagent's work and the recency of the session that spawned it", () 
 
     expect(session.journal.cursor().sequence).toBeGreaterThan(sequence)
     expect(session.journal.lastActivityAt()).toBeGreaterThan(evidenceClock)
-    // Whatever else a child row republishes, none of it re-dates the session.
     for (const event of session.events.slice(published)) {
       expect(event).toMatchObject({ session: { statusStartedAt: settled.statusStartedAt } })
     }

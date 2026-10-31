@@ -5,14 +5,13 @@ import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-instal
 import { isAppImageExtractedLauncherPath } from './appimage-extracted-root'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from './cli-install-constants'
 import { buildWindowsForwarder, extractManagedUnixLauncherTarget } from './cli-dev-launcher'
+import { isPermissionError } from '../win32-utils'
 import { isMissingError } from './cli-install-errors'
 import { CliInstallLocation } from './cli-install-location'
 import { isPathInsideOrEqual, samePathEntry } from './cli-install-path-format'
 import { extractLegacyAppImageCliWrapperTarget } from './legacy-appimage-cli-wrapper'
 
-// Why: electron-builder's /opt directory name varies with productName sanitization, which is why
-// resources/linux/packaging/after-install.sh enumerates all three of these. A symlink into one is a
-// previous packaged Orca and is ours to reclaim; anything else stays a conflict.
+// Match after-install.sh's electron-builder name variants when reclaiming packaged launchers.
 const PACKAGED_LINUX_LAUNCHER_DIRECTORIES = ['/opt/Orca', '/opt/orca-ide', '/opt/orca']
 
 export class CliCommandInspection extends CliInstallLocation {
@@ -24,10 +23,16 @@ export class CliCommandInspection extends CliInstallLocation {
       const stats = await lstat(commandPath)
       if (!stats.isSymbolicLink()) {
         if (stats.isFile()) {
-          const currentContent = await readFile(commandPath, 'utf8')
-          const managedTarget =
-            extractManagedUnixLauncherTarget(currentContent) ??
-            extractLegacyAppImageCliWrapperTarget(currentContent)
+          const currentContent = await readFile(commandPath, 'utf8').catch((error: unknown) => {
+            if (isPermissionError(error)) {
+              return null
+            }
+            throw error
+          })
+          const managedTarget = currentContent
+            ? (extractManagedUnixLauncherTarget(currentContent) ??
+              extractLegacyAppImageCliWrapperTarget(currentContent))
+            : null
           if (managedTarget) {
             return this.buildStatus({
               commandPath,
@@ -52,7 +57,24 @@ export class CliCommandInspection extends CliInstallLocation {
         })
       }
 
-      const currentTarget = await readlink(commandPath)
+      let currentTarget: string
+      try {
+        currentTarget = await readlink(commandPath)
+      } catch (error) {
+        if (!isPermissionError(error)) {
+          throw error
+        }
+        // macOS cannot read old root-owned 0700 links; privileged repair must precede ownership checks.
+        return this.buildStatus({
+          commandPath,
+          launcherPath,
+          installMethod: 'symlink',
+          supported: true,
+          state: 'stale',
+          currentTarget: null,
+          detail: `${commandPath} cannot be read. Register again to repair it.`
+        })
+      }
       const resolvedCurrentTarget = resolve(dirname(commandPath), currentTarget)
       const resolvedLauncher = resolve(launcherPath)
       const isInstalled = resolvedCurrentTarget === resolvedLauncher && existsSync(resolvedLauncher)
@@ -124,7 +146,6 @@ export class CliCommandInspection extends CliInstallLocation {
     return false
   }
 
-  /** A launcher inside a packaged Linux install tree, left behind by a deb/rpm Orca. */
   protected isPackagedLinuxLauncherTarget(resolvedTarget: string, expectedName: string): boolean {
     return PACKAGED_LINUX_LAUNCHER_DIRECTORIES.some(
       (directory) => resolvedTarget === `${directory}/resources/bin/${expectedName}`

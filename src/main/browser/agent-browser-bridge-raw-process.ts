@@ -1,14 +1,16 @@
 import { execFile, type ChildProcess } from 'node:child_process'
 import { BrowserError } from './cdp-bridge'
 import { classifyErrorCode } from './agent-browser-bridge-process'
-import { AgentBrowserBridgeExecution } from './agent-browser-bridge-execution'
+import { parseAgentBrowserJsonOutput } from './agent-browser-batch-command'
+import { AgentBrowserBridgeElementCalls } from './agent-browser-bridge-element-calls'
 import {
+  AGENT_BROWSER_EXIT_DRAIN_MS,
   CONSECUTIVE_TIMEOUT_LIMIT,
   EXEC_TIMEOUT_MS,
   type AgentBrowserExecOptions
 } from './agent-browser-bridge-types'
 
-export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExecution {
+export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeElementCalls {
   protected abstract destroySession(
     sessionName: string,
     options?: { closeTimeoutMs?: number }
@@ -22,21 +24,21 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
     return new Promise<string>((resolve, reject) => {
       const session = this.sessions.get(sessionName)
       let child: ChildProcess | null = null
+      let exitDrainTimer: ReturnType<typeof setTimeout> | undefined
       child = execFile(
         this.agentBrowserBin,
         args,
-        // Why: screenshots return large base64 that exceeds Node's default 1MB maxBuffer (ENOBUFS).
         {
           timeout: execOptions?.timeoutMs ?? EXEC_TIMEOUT_MS,
           maxBuffer: 50 * 1024 * 1024,
-          // Why windowsHide: see the stale-session close above -- every
-          // agent-browser invocation would otherwise flash a console (#14543).
+          // Hide Windows helper consoles so they cannot take keyboard focus.
           windowsHide: true,
           env: execOptions?.envOverrides
             ? { ...this.agentBrowserEnv, ...execOptions.envOverrides }
             : this.agentBrowserEnv
         },
         (error, stdout, stderr) => {
+          clearTimeout(exitDrainTimer)
           if (session && session.activeProcess === child) {
             session.activeProcess = null
           }
@@ -58,7 +60,7 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
             if (liveSession) {
               liveSession.consecutiveTimeouts++
               if (liveSession.consecutiveTimeouts >= CONSECUTIVE_TIMEOUT_LIMIT) {
-                // Why: 3 consecutive timeouts means the daemon is likely stuck — destroy and recreate
+                // Repeated timeouts can indicate a stuck daemon; retire it before reuse.
                 this.destroySession(sessionName)
               }
             }
@@ -71,10 +73,15 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
           }
 
           if (error) {
-            // Why: agent-browser exits non-zero on failure but still writes structured JSON to stdout — parse it for the real error.
+            // Failed helpers can still return a structured error on stdout.
             if (stdout) {
               try {
-                const parsed = JSON.parse(stdout)
+                const parsed = parseAgentBrowserJsonOutput(stdout, execOptions)
+                // A batch exits 1 when any step failed; its reply carries each step's outcome.
+                if (parsed.success) {
+                  resolve(stdout)
+                  return
+                }
                 if (parsed.error) {
                   const code = classifyErrorCode(parsed.error)
                   reject(
@@ -82,9 +89,7 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
                   )
                   return
                 }
-              } catch {
-                // stdout not valid JSON — fall through to stderr/error.message
-              }
+              } catch {}
             }
             const message = stderr || error.message
             const code = classifyErrorCode(message)
@@ -95,13 +100,20 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
           resolve(stdout)
         }
       )
+      // Windows daemons inherit stdio; drain after helper exit, then close pipes to settle execFile (vercel-labs/agent-browser#1407).
+      child.once('exit', () => {
+        exitDrainTimer = setTimeout(() => {
+          child.stdout?.destroy()
+          child.stderr?.destroy()
+        }, AGENT_BROWSER_EXIT_DRAIN_MS)
+      })
       if (session) {
         session.activeProcess = child
       }
-      if (execOptions?.stdinText !== undefined && child?.stdin) {
-        // Why: eval --stdin keeps paste-sized scripts out of argv on every platform.
+      if (child?.stdin) {
         child.stdin.on('error', () => {})
-        child.stdin.end(execOptions.stdinText)
+        // A command that reads stdin, like bare `batch`, would otherwise wait out the exec timeout.
+        child.stdin.end(execOptions?.stdinText)
       }
     })
   }

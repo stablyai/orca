@@ -1,24 +1,32 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "worktree.home-catalog",
   "family": "worktree.home-catalog",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
-  "scenarioSha256": "4749bb3b871275ba08f026f9b6bcfd383605f443e7bba70a7f89175b91db6fa5",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "0809e2178d5a": {
+    "0d02c4637af4": {
       "name": "info",
       "ordinal": 3,
       "value": {
         "host-1": {
-          "activeCount": 1,
+          "activeCount": 2,
+          "attention": [
+            {
+              "branch": {
+                "$rpc": "undefined"
+              },
+              "displayName": "One",
+              "dotStatus": "working",
+              "lastOutputAt": {
+                "$rpc": "undefined"
+              },
+              "repo": "Repo",
+              "workingMode": {
+                "$rpc": "undefined"
+              },
+              "worktreeId": "w-1"
+            }
+          ],
           "countsProvenAt": 1767225600000,
           "hostId": "host-1",
           "lastActiveWorktree": {
@@ -29,20 +37,6 @@
           },
           "totalWorktrees": 2
         }
-      }
-    },
-    "39b7354b00f4": {
-      "host-1": {
-        "activeCount": 1,
-        "countsProvenAt": 1767225600000,
-        "hostId": "host-1",
-        "lastActiveWorktree": {
-          "displayName": "One",
-          "repo": "Repo",
-          "status": "working",
-          "worktreeId": "w-1"
-        },
-        "totalWorktrees": 2
       }
     },
     "3b32328e5154": {
@@ -119,6 +113,37 @@
         "startedAt": 0
       }
     },
+    "87aae336d391": {
+      "host-1": {
+        "activeCount": 2,
+        "attention": [
+          {
+            "branch": {
+              "$rpc": "undefined"
+            },
+            "displayName": "One",
+            "dotStatus": "working",
+            "lastOutputAt": {
+              "$rpc": "undefined"
+            },
+            "repo": "Repo",
+            "workingMode": {
+              "$rpc": "undefined"
+            },
+            "worktreeId": "w-1"
+          }
+        ],
+        "countsProvenAt": 1767225600000,
+        "hostId": "host-1",
+        "lastActiveWorktree": {
+          "displayName": "One",
+          "repo": "Repo",
+          "status": "working",
+          "worktreeId": "w-1"
+        },
+        "totalWorktrees": 2
+      }
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
@@ -160,8 +185,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "39b7354b00f4",
-          "effects": ["0809e2178d5a"]
+          "state": "87aae336d391",
+          "effects": ["0d02c4637af4"]
         }
       }
     ]

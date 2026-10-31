@@ -15,6 +15,7 @@ import {
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import { resolvePaletteRepoForWorktree } from '@/lib/palette-repo-resolution'
 import { BrowserFavicon } from '@/components/browser-favicon'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
 export function WorktreeJumpPaletteSimulatorRow({
   entry,
@@ -36,7 +37,7 @@ export function WorktreeJumpPaletteSimulatorRow({
     : undefined
   const simulatorRepoName = simulatorRepo?.displayName ?? result.repoName
   const simulatorHostBadge = getPaletteHostBadge(
-    simulatorRepo,
+    result.executionHostId ?? (simulatorRepo && getRepoExecutionHostId(simulatorRepo)),
     controller.hostOptions,
     controller.hostFilterActive
   )
@@ -131,7 +132,7 @@ export function WorktreeJumpPaletteBrowserRow({
     : undefined
   const browserRepoName = browserRepo?.displayName ?? result.repoName
   const browserHostBadge = getPaletteHostBadge(
-    browserRepo,
+    result.executionHostId ?? (browserRepo && getRepoExecutionHostId(browserRepo)),
     controller.hostOptions,
     controller.hostFilterActive
   )

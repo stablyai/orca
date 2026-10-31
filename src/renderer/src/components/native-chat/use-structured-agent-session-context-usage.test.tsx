@@ -8,6 +8,7 @@ let items: AgentJournalRenderItem[] = []
 let unloadedTurnRevisions: number | undefined
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   readStructuredAgentSessionConversationOutline: vi.fn(async () => null)
 }))
@@ -33,14 +34,15 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: vi.fn(),
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
-    blockedClientMessageId: null,
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: vi.fn()
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: vi.fn(),
-    retry: vi.fn()
+    stopSends: vi.fn()
   })
 }))
 
@@ -186,17 +188,22 @@ describe('useStructuredAgentSession context usage', () => {
         : Promise.resolve(null)
     )
     const { result, rerender } = render()
+    // Reads start one microtask after they are scheduled, so let each start before its revisions.
+    await waitFor(() => expect(replies).toHaveLength(1))
     await act(async () => replies[0](150_000))
     await waitFor(() => expect(result.current.contextUsage).toMatchObject({ usedTokens: 150_000 }))
 
-    for (let revision = 1; revision <= 5; revision += 1) {
+    unloadedTurnRevisions = 1
+    rerender()
+    await waitFor(() => expect(optionReads()).toBe(2))
+    for (let revision = 2; revision <= 5; revision += 1) {
       unloadedTurnRevisions = revision
       rerender()
     }
     expect(optionReads()).toBe(2)
     await act(async () => replies[1](160_000))
-    // The one in flight lands, and one more read covers every revision behind it.
-    expect(result.current.contextUsage).toMatchObject({ usedTokens: 160_000 })
+    // The obsolete read cannot replace the answer; one current successor covers the revisions.
+    expect(result.current.contextUsage).toMatchObject({ usedTokens: 150_000 })
     await waitFor(() => expect(optionReads()).toBe(3))
     await act(async () => replies[2](175_000))
     expect(result.current.contextUsage).toMatchObject({ usedTokens: 175_000 })

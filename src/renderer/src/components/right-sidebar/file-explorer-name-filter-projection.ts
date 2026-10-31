@@ -1,4 +1,4 @@
-import { joinPath, normalizeRelativePath } from '@/lib/path'
+import { getRelativePathInsideRoot, joinPath, normalizeRelativePath } from '@/lib/path'
 import { compareFileNames } from '../../../../shared/file-name-sort'
 import {
   FILE_NAME_FILTER_QUERY_MAX_BYTES,
@@ -12,7 +12,7 @@ import {
   type FileExplorerRowProjection
 } from './file-explorer-row-projection'
 import { isDotfileRelativePath } from './file-explorer-entries'
-import { splitPathSegments } from './path-tree'
+import { splitPathSegments } from '../../../../shared/cross-platform-path'
 import { isPathIgnored } from './status-display'
 
 export type FileExplorerNameFilterProjectionSource = {
@@ -65,7 +65,8 @@ export function getFileExplorerNameFilterTokens(query: string | undefined): stri
 
 export function getFileExplorerNameFilterIgnoredQueryRelativePaths(
   source: FileExplorerNameFilterProjectionSource,
-  showDotfiles: boolean
+  showDotfiles: boolean,
+  worktreePath?: string | null
 ): string[] {
   if (isFileExplorerNameFilterQueryTooLarge(source.query)) {
     return []
@@ -75,11 +76,11 @@ export function getFileExplorerNameFilterIgnoredQueryRelativePaths(
   }
   const tokens = getFileExplorerNameFilterTokens(source.query)
   return source.relativePaths
-    .map((relativePath) => normalizeRelativePath(relativePath))
+    .map((relativePath) => normalizeRelativePath(relativePath, worktreePath))
     .filter(
       (relativePath) =>
         Boolean(relativePath) &&
-        (showDotfiles || !isDotfileRelativePath(relativePath)) &&
+        (showDotfiles || !isDotfileRelativePath(relativePath, worktreePath)) &&
         pathMatchesFileNameFilterTokens(relativePath, tokens)
     )
 }
@@ -107,13 +108,15 @@ function createSyntheticNode(
   }
 }
 
+/** Builds a filtered subtree for the display root while retaining worktree-relative paths on synthetic nodes. */
 export function createNameFilteredFileExplorerProjection({
   collapsedPaths,
   ignoredSet,
   nameFilter,
   showDotfiles,
   showGitIgnoredFiles,
-  worktreePath
+  worktreePath,
+  displayRootPath = worktreePath
 }: {
   collapsedPaths?: ReadonlySet<string>
   ignoredSet: Set<string>
@@ -121,6 +124,7 @@ export function createNameFilteredFileExplorerProjection({
   showDotfiles: boolean
   showGitIgnoredFiles: boolean
   worktreePath: string
+  displayRootPath?: string
 }): FileExplorerRowProjection {
   const visibleFlatRows: TreeNode[] = []
   const rowsByPath = new Map<string, TreeNode>()
@@ -129,33 +133,31 @@ export function createNameFilteredFileExplorerProjection({
   }
   const nameFilterTokens = getFileExplorerNameFilterTokens(nameFilter.query)
   if (nameFilterTokens.length === 0 || nameFilter.relativePaths === null) {
-    // Why: empty queries use the normal explorer projection, and loading filters must not
-    // fall back to a partial cached path list.
+    // Empty queries use normal projection; loading filters must not reveal partial cached paths.
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
   }
 
   const rootChildren = new Map<string, SyntheticTreeEntry>()
   for (const rawRelativePath of nameFilter.relativePaths) {
-    const relativePath = normalizeRelativePath(rawRelativePath)
-    if (!relativePath) {
+    const relativePath = normalizeRelativePath(rawRelativePath, worktreePath)
+    if (!relativePath || !pathMatchesFileNameFilterTokens(relativePath, nameFilterTokens)) {
       continue
     }
-    if (!showDotfiles && isDotfileRelativePath(relativePath)) {
+    if (getRelativePathInsideRoot(joinPath(worktreePath, relativePath), displayRootPath) === null) {
+      continue
+    }
+    if (!showDotfiles && isDotfileRelativePath(relativePath, worktreePath)) {
       continue
     }
     if (!showGitIgnoredFiles && isPathIgnored(ignoredSet, relativePath)) {
       continue
     }
-    if (!pathMatchesFileNameFilterTokens(relativePath, nameFilterTokens)) {
-      continue
-    }
-
-    const segments = splitPathSegments(relativePath)
+    const segments = splitPathSegments(relativePath, worktreePath)
     let currentChildren = rootChildren
     let currentRelativePath = ''
     for (let index = 0; index < segments.length; index += 1) {
       const name = segments[index]
-      currentRelativePath = currentRelativePath ? joinPath(currentRelativePath, name) : name
+      currentRelativePath = currentRelativePath ? `${currentRelativePath}/${name}` : name
       const isDirectory = index < segments.length - 1
       let entry = currentChildren.get(name)
       if (!entry) {
@@ -178,7 +180,16 @@ export function createNameFilteredFileExplorerProjection({
     }
   }
 
-  appendNameFilteredEntries(rootChildren.values(), visibleFlatRows, rowsByPath, collapsedPaths)
+  let displayChildren = rootChildren
+  const scope = getRelativePathInsideRoot(displayRootPath, worktreePath)
+  for (const segment of scope ? splitPathSegments(scope, worktreePath) : []) {
+    const entry = displayChildren.get(segment)
+    if (!entry) {
+      return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
+    }
+    displayChildren = entry.children
+  }
+  appendNameFilteredEntries(displayChildren.values(), visibleFlatRows, rowsByPath, collapsedPaths)
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 

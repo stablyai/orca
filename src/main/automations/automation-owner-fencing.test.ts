@@ -1,10 +1,10 @@
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
-/**
- * The desktop authority's end of the scoped-list and owner-fenced contracts:
- * a parameterless read still answers with everything it stores, a scoped read is
- * qualified per row, and no mutation or dispatch may cross an incarnation
- * boundary — including one that a client silently declines to name.
- */
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState
+} from '../persistence/persistence-test-harness'
+import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -16,7 +16,7 @@ import { getDefaultPersistedState } from '../../shared/constants'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../shared/automation-owner-conflict'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -103,6 +103,10 @@ async function createStore() {
     }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
@@ -111,6 +115,8 @@ async function createStore() {
 }
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'automation-fencing-'))
 })
 
@@ -198,8 +204,6 @@ describe('owner-fenced mutations', () => {
     expect(store.listAutomations().find((entry) => entry.id === 'ssh-1-a')?.enabled).toBe(true)
   })
 
-  // Optional on the wire is not unenforced: a caller that names no host may not
-  // mutate a record fenced to an SSH registration.
   it('refuses an ownerless mutation of a generation-bearing SSH record', async () => {
     const store = await createStore()
     const required = expect.objectContaining({
@@ -261,31 +265,7 @@ describe('owner-fenced mutations', () => {
   })
 })
 
-/**
- * A client with no target registry of its own reads the owner, then acts on it.
- * The projection is what makes the fence satisfiable off-host rather than a wall.
- */
 describe('projected owner precondition', () => {
-  it('reuses the complete projection until automation state changes', async () => {
-    const store = await createStore()
-    const first = store.listAutomationsForScope()
-    expect(store.listAutomationsForScope()).toBe(first)
-
-    store.updateAutomation('local-1', { enabled: false })
-    expect(store.listAutomationsForScope()).not.toBe(first)
-  })
-
-  it('projects the fenceable owner for each kind of record', async () => {
-    const store = await createStore()
-    expect(store.automationOwnerPrecondition('ssh-1-a')).toEqual(OWNED_SSH)
-    expect(store.automationOwnerPrecondition('local-1')).toEqual({ selector: { kind: 'self' } })
-    // The orphan issue is diagnosis, not identity, so it stays out of the precondition.
-    expect(store.automationOwnerPrecondition('orphan-1')).toEqual({
-      selector: { kind: 'orphan' }
-    })
-    expect(store.automationOwnerPrecondition('missing')).toBeNull()
-  })
-
   it('satisfies the fence it was projected from, on the record that used to refuse', async () => {
     const store = await createStore()
     const owner = store.automationOwnerPrecondition('ssh-1-a')!
@@ -297,7 +277,6 @@ describe('projected owner precondition', () => {
     ).toBe(false)
   })
 
-  // Execute is refused whatever the caller names: an orphan has no host to run on.
   it('does not let an orphan precondition unlock a dispatch', async () => {
     const store = await createStore()
     const owner = store.automationOwnerPrecondition('orphan-1')!

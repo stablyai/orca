@@ -1,16 +1,16 @@
 // @vitest-environment happy-dom
 import { act, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostSectionRow } from '../../host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 
 const state = {
   keybindings: undefined,
+  revealWorktreeInSidebar: vi.fn(),
   activeView: 'terminal',
   activeTabType: 'terminal',
   activeWorktreeId: 'a',
@@ -32,7 +32,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: (...args: unknown[]) => activate(...args)
 }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
   focusRuntimeTerminalSurface: (...args: unknown[]) => focusRuntime(...args)
 }))
 const { useWorktreeListKeyboardNavigation } = await import('./use-keyboard')
@@ -46,7 +46,6 @@ const rows: HostSectionRow[] = ['a', 'b', 'c'].map((id) => ({
   repo,
   depth: 0,
   groupDepth: 0,
-  lineageTrail: [],
   isLastLineageChild: false,
   lineageChildCount: 0
 }))
@@ -61,11 +60,7 @@ let modal = 'none'
 function Probe() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [activeId, setActiveId] = useState(state.activeWorktreeId)
-  const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 30
-  })
+
   activate.mockImplementation((id: string) => {
     state.activeWorktreeId = id
     state.activeTabId = `tab-${id}`
@@ -74,11 +69,9 @@ function Probe() {
   })
   const { handleContainerKeyDown } = useWorktreeListKeyboardNavigation({
     rows,
-    renderRows: rows,
     activeWorktreeId: activeId,
     activeWorkspaceExecutionHostId: 'ssh:fixture',
     pinnedDisplayPolicy: 'single-location',
-    virtualizer,
     scrollRef,
     activeModal: modal,
     markDirectScrollInput: () => {}
@@ -97,15 +90,24 @@ function Probe() {
 }
 
 function press(key: string, init: KeyboardEventInit = {}, target: HTMLElement = list) {
-  act(() => {
-    target.dispatchEvent(
-      new KeyboardEvent('keydown', { key, code: key, bubbles: true, cancelable: true, ...init })
-    )
+  const event = new KeyboardEvent('keydown', {
+    key,
+    code: key,
+    bubbles: true,
+    cancelable: true,
+    ...init
   })
+  // Why: happy-dom reports AltGraph for any Alt; Chromium only for a real AltGr key.
+  Object.defineProperty(event, 'getModifierState', { value: () => false })
+  act(() => {
+    target.dispatchEvent(event)
+  })
+  return event
 }
 
 beforeEach(() => {
   Object.assign(state, {
+    keybindings: undefined,
     activeView: 'terminal',
     activeTabType: 'terminal',
     activeWorktreeId: 'a',
@@ -146,7 +148,11 @@ describe('workspace list focus ownership', () => {
     expect(document.activeElement).toBe(list)
     press('ArrowUp')
     expect(activate.mock.calls.map(([id]) => id)).toEqual(['b', 'c', 'b'])
-    expect(activate).toHaveBeenLastCalledWith('b', { executionHostId: 'ssh:fixture' })
+    expect(activate).toHaveBeenLastCalledWith('b', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false,
+      executionHostId: 'ssh:fixture'
+    })
     expect(terminal.focus).not.toHaveBeenCalled()
   })
 
@@ -198,6 +204,33 @@ describe('workspace list focus ownership', () => {
       expect(document.activeElement).toBe(textarea)
     }
   )
+
+  it('leaves the default chord to text fields and runs a user-bound one', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mac')
+    const composer = document.createElement('div')
+    composer.contentEditable = 'true'
+    const editor = document.createElement('div')
+    editor.className = 'monaco-editor'
+    const field = editor.appendChild(document.createElement('textarea'))
+    const reachedField = vi.fn()
+    field.addEventListener('keydown', reachedField)
+    document.body.append(composer, editor)
+    const fieldKeepsChord = (target: HTMLElement) =>
+      !press('ArrowDown', { metaKey: true, shiftKey: true }, target).defaultPrevented
+    expect([composer, field].map(fieldKeepsChord)).toEqual([true, true])
+
+    const navigateDown = ['Mod+Shift+ArrowDown', 'Ctrl+Alt+ArrowDown', 'Alt+ArrowDown', 'Alt+L']
+    Object.assign(state, { keybindings: { 'worktree.navigateDown': navigateDown } })
+    act(() => root.render(<Probe />))
+    expect([composer, field].map(fieldKeepsChord)).toEqual([true, true])
+    // Option+L composes a character on Mac, so the field keeps it even when bound.
+    press('¬', { code: 'KeyL', altKey: true }, composer)
+    expect(activate).not.toHaveBeenCalled()
+    press('ArrowDown', { altKey: true }, composer)
+    press('ArrowDown', { ctrlKey: true, altKey: true }, field)
+    expect(activate.mock.calls.map(([id]) => id)).toEqual(['b', 'c'])
+    expect(reachedField).toHaveBeenCalledTimes(2)
+  })
 
   it('does not navigate while an application modal is active', () => {
     modal = 'settings'

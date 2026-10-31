@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, existsSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -17,18 +17,14 @@ vi.mock('os', async () => {
 })
 
 import { AntigravityHookService } from './hook-service'
-import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 
-const ANTIGRAVITY_SCRIPT_FILE_NAME =
-  process.platform === 'win32' ? 'antigravity-hook.cmd' : 'antigravity-hook.sh'
 const ANTIGRAVITY_PRE_INVOCATION_COMMAND =
   process.platform === 'win32' ? 'antigravity-pre-invocation.cmd' : 'antigravity-hook.sh'
 const ANTIGRAVITY_POST_TOOL_USE_COMMAND =
   process.platform === 'win32' ? 'antigravity-post-tool-use.cmd' : 'antigravity-hook.sh'
 const ANTIGRAVITY_PRE_TOOL_USE_COMMAND =
   process.platform === 'win32' ? 'antigravity-pre-tool-use.cmd' : 'antigravity-hook.sh'
-// Why: the gate decision Orca is allowed to emit — "allow" would auto-approve every observed tool call.
 const PRE_TOOL_USE_DECISION = '{"decision":"ask"}'
 const POLICY_OVERRIDING_DECISIONS = ['allow', 'deny', 'force_ask', 'deny_unless_prior_grant']
 
@@ -57,71 +53,6 @@ describe('AntigravityHookService', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  it('installs Antigravity global hooks.json bundle and managed script', () => {
-    const status = new AntigravityHookService().install()
-
-    expect(status.state).toBe('installed')
-    expect(status.configPath).toBe(join(homeDir, '.gemini', 'config', 'hooks.json'))
-    expect(status.managedHooksPresent).toBe(true)
-
-    const config = JSON.parse(
-      readFileSync(join(homeDir, '.gemini', 'config', 'hooks.json'), 'utf8')
-    ) as {
-      'orca-status': Record<
-        string,
-        { matcher?: string; command?: string; hooks?: { command: string }[] }[]
-      >
-    }
-    expect(Object.keys(config['orca-status']).sort()).toEqual(
-      ['PostInvocation', 'PostToolUse', 'PreInvocation', 'PreToolUse', 'Stop'].sort()
-    )
-    expect(config['orca-status'].PreToolUse[0].matcher).toBe('*')
-    expect(config['orca-status'].PreToolUse[0].hooks?.[0]?.command).toContain(
-      ANTIGRAVITY_PRE_TOOL_USE_COMMAND
-    )
-    expect(config['orca-status'].PostToolUse[0].matcher).toBe('*')
-    expect(config['orca-status'].PreInvocation[0].command).toContain(
-      ANTIGRAVITY_PRE_INVOCATION_COMMAND
-    )
-    if (process.platform === 'win32') {
-      expect(config['orca-status'].PreInvocation[0].command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
-    } else {
-      expect(config['orca-status'].PreInvocation[0].command).toContain(
-        "ORCA_ANTIGRAVITY_EVENT='PreInvocation'"
-      )
-      expect(config['orca-status'].Stop[0].command).toContain("ORCA_ANTIGRAVITY_EVENT='Stop'")
-    }
-
-    const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_SCRIPT_FILE_NAME),
-      'utf8'
-    )
-    expect(script).toContain('/hook/antigravity')
-    if (process.platform === 'win32') {
-      expect(script).not.toContain('powershell.exe')
-      expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-      expect(script).toContain('hook_event_name=%ORCA_ANTIGRAVITY_EVENT%')
-      expect(script).toContain('--data-urlencode "payload@-"')
-      // Why (#9358/#9941): delayed expansion eats `!` out of percent-expanded curl args.
-      expect(script).toContain('setlocal DisableDelayedExpansion')
-    } else {
-      expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
-      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
-      expect(script).toContain("payload='{}'")
-      expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
-      // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-      // on the curl command line (EDR oversized-command-line false positive).
-      expect(script).toContain('printf \'%s\' "$payload" | curl')
-      expect(script).toContain('--data-urlencode "payload@-"')
-      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
-    }
-    expect(script).toContain('{"decision":""}')
-    expect(script).toContain(PRE_TOOL_USE_DECISION)
-    for (const decision of POLICY_OVERRIDING_DECISIONS) {
-      expect(script).not.toContain(`{"decision":"${decision}"}`)
-    }
-  })
-
   it.skipIf(process.platform === 'win32')(
     'answers the PreToolUse gate with ask so the hook never decides tool permissions',
     () => {
@@ -145,7 +76,6 @@ describe('AntigravityHookService', () => {
       )
 
       expect(result.status).toBe(0)
-      // Why: Antigravity reads silence/`{}` on PreToolUse as a deny (#2426), so the exact payload is the contract.
       expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
     }
   )
@@ -166,7 +96,7 @@ describe('AntigravityHookService', () => {
         encoding: 'utf8'
       })
 
-      // Why: hooks.json lives in ~/.gemini and outlives ~/.orca, so a swept script must not deny every tool call.
+      // Config under .gemini can outlive managed scripts under .orca.
       expect(result.status).toBe(0)
       expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
     }
@@ -263,7 +193,6 @@ describe('AntigravityHookService', () => {
         const wrapper = readFileSync(join(homeDir, '.orca', 'agent-hooks', wrapperFileName), 'utf8')
         expect(wrapper).toContain(`set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`)
         expect(wrapper).toContain('call "%ORCA_ANTIGRAVITY_CORE%"')
-        // Why: the wrapper is the stdin owner when the core script is gone, so it must answer the gate itself.
         if (eventName === 'PreToolUse') {
           expect(wrapper).toContain(`echo ${PRE_TOOL_USE_DECISION}`)
         }
@@ -276,12 +205,55 @@ describe('AntigravityHookService', () => {
         join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook.cmd'),
         'utf8'
       )
-      expect(script).toContain('/hook/antigravity')
+      expect(script).toContain('antigravity-hook-post.cjs')
       expect(script).not.toContain('powershell.exe')
-      expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-      expect(script).toContain('hook_event_name=%ORCA_ANTIGRAVITY_EVENT%')
+      expect(script).toContain('ELECTRON_RUN_AS_NODE=1')
+      expect(
+        readFileSync(join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook-post.cjs'), 'utf8')
+      ).toContain('/hook/antigravity')
       expect(script).toContain('setlocal DisableDelayedExpansion')
     })
+  })
+
+  it('preserves the installed core and config when publishing the Windows reader fails', () => {
+    withPlatform('win32', () => {
+      const service = new AntigravityHookService()
+      expect(service.install().state).toBe('installed')
+      const hookDir = join(homeDir, '.orca', 'agent-hooks')
+      const readerPath = join(hookDir, 'antigravity-hook-post.cjs')
+      const corePath = join(hookDir, 'antigravity-hook.cmd')
+      const configPath = join(homeDir, '.gemini', 'config', 'hooks.json')
+      writeFileSync(corePath, 'previous installed core')
+      const previousConfig = readFileSync(configPath, 'utf8')
+      rmSync(readerPath)
+      mkdirSync(readerPath)
+
+      expect(() => service.install()).toThrow()
+      expect(readFileSync(corePath, 'utf8')).toBe('previous installed core')
+      expect(readFileSync(configPath, 'utf8')).toBe(previousConfig)
+    })
+  })
+
+  it('restores the owned Windows reader and resolves the current runtime on refresh', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      const service = new AntigravityHookService()
+      let runtimePath = 'C:\\Orca1\\Orca.exe'
+      service.setWindowsRuntimePathProvider(() => runtimePath)
+      const readerPath = join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook-post.cjs')
+      await service.refreshManagedScripts()
+      expect(existsSync(readerPath)).toBe(false)
+      expect(service.install().state).toBe('installed')
+      rmSync(readerPath)
+      runtimePath = 'C:\\Orca2\\Orca.exe'
+      await service.refreshManagedScripts()
+      expect(readFileSync(readerPath, 'utf8')).toContain("require('node:string_decoder')")
+      expect(
+        readFileSync(join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook.cmd'), 'utf8')
+      ).toContain('ORCA_AGENT_HOOK_NODE=C:\\Orca2\\Orca.exe')
+    } finally {
+      vi.restoreAllMocks()
+    }
   })
 
   it('preserves user-authored hook bundles and entries in Orca bundle', () => {
@@ -350,13 +322,12 @@ describe('AntigravityHookService', () => {
       'orca-status': Record<string, { command?: string; hooks?: { command: string }[] }[]>
     }
     expect(config['orca-status'].OldEvent).toBeUndefined()
-    // Why: the pre-a480e6b7 PreToolUse entry pointed at a script with no gate branch; it must be replaced, not kept.
     const preToolCommands = config['orca-status'].PreToolUse.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
     expect(preToolCommands).toHaveLength(1)
     expect(preToolCommands[0]).toContain(
-      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_PRE_TOOL_USE_COMMAND)
+      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_PRE_TOOL_USE_COMMAND).replaceAll('\\', '/')
     )
     expect(preToolCommands[0]).not.toContain('/tmp/old/agent-hooks/antigravity-hook.sh')
     const commands = config['orca-status'].PostToolUse.flatMap((definition) =>
@@ -364,7 +335,43 @@ describe('AntigravityHookService', () => {
     )
     expect(commands).toHaveLength(1)
     expect(commands[0]).toContain(
-      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_POST_TOOL_USE_COMMAND)
+      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_POST_TOOL_USE_COMMAND).replaceAll('\\', '/')
     )
+  })
+
+  it('replaces legacy backslash Windows entries and keeps user hooks', () => {
+    withPlatform('win32', () => {
+      const configPath = join(homeDir, '.gemini', 'config', 'hooks.json')
+      // Git Bash strips backslashes from legacy bare paths.
+      const legacyStop = 'C:\\Users\\ada\\.orca\\agent-hooks\\antigravity-stop.cmd'
+      const legacyPreToolUse = 'C:\\Users\\ada\\.orca\\agent-hooks\\antigravity-pre-tool-use.cmd'
+      const userHook = { type: 'command', command: 'C:\\tools\\user-hook.cmd' }
+      mkdirSync(dirname(configPath), { recursive: true })
+      writeFileSync(
+        configPath,
+        `${JSON.stringify({
+          'orca-status': {
+            Stop: [{ type: 'command', command: legacyStop }, userHook],
+            PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: legacyPreToolUse }] }]
+          }
+        })}\n`
+      )
+
+      const service = new AntigravityHookService()
+      expect(service.getStatus().state).toBe('partial')
+      expect(service.install().state).toBe('installed')
+
+      const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
+        'orca-status': Record<string, { command?: string; hooks?: { command: string }[] }[]>
+      }
+      const [keptUserHook, stop] = config['orca-status'].Stop
+      expect(config['orca-status'].Stop).toHaveLength(2)
+      expect(keptUserHook).toEqual(userHook)
+      expect(stop.command).not.toBe(legacyStop)
+      expect(createManagedCommandMatcher('antigravity-stop.cmd')(stop.command)).toBe(true)
+      const preToolUse = config['orca-status'].PreToolUse.flatMap((d) => d.hooks ?? [])
+      expect(preToolUse).toHaveLength(1)
+      expect(preToolUse[0].command).not.toBe(legacyPreToolUse)
+    })
   })
 })

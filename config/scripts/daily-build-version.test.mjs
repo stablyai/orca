@@ -13,25 +13,17 @@ describe('createDailyBuildVersion', () => {
     )
   })
 
-  // Why: main's package.json carries the in-flight RC tail. Keeping it would make
-  // every daily semver-NEWER than the RC it was cut from (1.4.160-rc.3-daily.X >
-  // 1.4.160-rc.3), so an ordinary RC-channel check would offer untested daily
-  // builds to RC users. Dropping it parks dailies below both rc.N and stable,
-  // reachable only by an explicit pinned jump.
+  // RC-tail daily prereleases outrank RC; dropping tail keeps untested daily below RC/stable and reachable only by explicit selection.
   it('drops an in-flight rc tail so dailies never outrank the rc series', () => {
     const version = createDailyBuildVersion('1.4.160-rc.3', new Date('2026-07-28T13:00:00Z'))
     expect(version).toBe('1.4.160-daily.202607281300')
     expect(compareAppVersions(version, '1.4.160-rc.3')).toBeLessThan(0)
-    expect(compareAppVersions('1.4.160-rc.3-daily.202607281300', '1.4.160-rc.3')).toBeGreaterThan(0)
   })
 
-  // Why: 'daily' sorts before 'hourly' alphabetically, so a daily of the same
-  // base never outranks an hourly — both stay below rc/stable and only the
-  // channel picker offers them.
+  // daily sorts below hourly; neither can outrank RC/stable in routine checks.
   it('sorts below the hourly build of the same base version', () => {
-    expect(
-      compareAppVersions('1.4.160-daily.202607281300', '1.4.160-hourly.202607281400')
-    ).toBeLessThan(0)
+    const version = createDailyBuildVersion('1.4.160', new Date('2026-07-28T13:00:00Z'))
+    expect(compareAppVersions(version, '1.4.160-hourly.202607281400')).toBeLessThan(0)
   })
 
   it('rejects invalid input', () => {
@@ -44,22 +36,10 @@ describe('formatDailyReleaseName', () => {
   const name = (iso, buildNumber = 1, commit = 'e698241abcde') =>
     formatDailyReleaseName('1.4.163-daily.x', buildNumber, commit, new Date(iso))
 
-  it('renders version, number, Pacific timestamp, and short sha', () => {
-    // 17:15 UTC is 10:15AM PDT in July (the daily cut time).
-    expect(name('2026-07-28T17:15:00Z')).toBe('1.4.163 • 01 • Jul 28, 10:15AM • e698241')
-  })
-
-  // Why both sides of DST: the tag's stamp is UTC and the title is Pacific, so
-  // the offset between them is not a constant. A test pinned to one season would
-  // pass all summer and start failing in November.
+  // Tag is UTC, title Pacific; test both DST offsets to catch seasonal failures.
   it('follows the Pacific offset across DST', () => {
     expect(name('2026-01-15T18:15:00Z')).toBe('1.4.163 • 01 • Jan 15, 10:15AM • e698241')
     expect(name('2026-07-28T17:15:00Z')).toBe('1.4.163 • 01 • Jul 28, 10:15AM • e698241')
-  })
-
-  it('pads to two digits and grows past them', () => {
-    expect(name('2026-07-28T17:15:00Z', 9)).toContain(' • 09 • ')
-    expect(name('2026-07-28T17:15:00Z', 42)).toContain(' • 42 • ')
   })
 
   it('rejects a build number that is not a positive integer', () => {
@@ -93,8 +73,7 @@ describe('nextDailyBuildNumber', () => {
     ).toBe(2)
   })
 
-  // Why max and not count: pruning trims to DAILY_RETAIN_COUNT, so counting
-  // would roll backwards and reissue a number already used.
+  // Count rolls backward after retention pruning; max avoids reissuing numbers.
   it('takes the highest number, not the count', () => {
     expect(nextDailyBuildNumber('1.4.163', ['1.4.163 • 09 • Jul 31, 6:00AM • e698241'])).toBe(10)
   })

@@ -1,22 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
+import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
 import {
-  agentMainAgentVerdict,
-  agentVerdictDisplayMark
-} from '../../../src/shared/agent-main-agent-verdict'
-import { AGENT_JOURNAL_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
   agentDisplayLabel,
+  agentStateLabel,
   agentDotState,
-  agentIdentityLabel,
   agentRowTimeAt,
-  agentRowVerdict,
-  agentRowVerdictMark,
   formatTimeAgo
 } from './agent-row-display'
 
-type Outcome = (typeof AGENT_JOURNAL_TURN_OUTCOMES)[number]
+type Outcome = (typeof AGENT_TURN_OUTCOMES)[number]
 const mainAgentDone = (outcome: Outcome, stateStartedAt = 0) => ({
   mainAgent: { state: 'done' as const, outcome, stateStartedAt }
 })
@@ -28,6 +22,8 @@ function row(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktreeA
     state: 'working',
     agentType: 'claude',
     prompt: '',
+    taskTitle: null,
+    displayName: null,
     lastAssistantMessage: null,
     toolName: null,
     toolInput: null,
@@ -47,74 +43,51 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'blocked', updatedAt: 0 }), 0)).toBe('blocked')
     expect(agentDotState(row({ state: 'waiting', updatedAt: 0 }), 0)).toBe('waiting')
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), 0)).toBe('done')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unparsed rows can carry a future host state.
     expect(agentDotState(row({ state: 'unknown-state' as never }), 0)).toBe('idle')
   })
 
-  it('reports the verdict of a done row: failed, interrupted, or an old host legacy flag', () => {
-    expect(agentDotState(row({ state: 'done', interrupted: true }), 0)).toBe('interrupted')
-    expect(agentDotState(row({ state: 'done', ...mainAgentDone('failure') }), 0)).toBe('failed')
-    expect(
-      agentDotState(row({ state: 'done', ...mainAgentDone('cancellation'), interrupted: true }), 0)
-    ).toBe('interrupted')
-    expect(agentDotState(row({ state: 'done', ...mainAgentDone('success') }), 0)).toBe('done')
-  })
-
-  it('shows a main agent that failed while its subagents still run as failed', () => {
+  it('lets the shared verdict mark win over the row state, label included', () => {
     expect(agentDotState(row({ state: 'working', ...mainAgentDone('failure') }), 0)).toBe('failed')
-    expect(agentDotState(row({ state: 'waiting', ...mainAgentDone('failure') }), 0)).toBe('failed')
-    // Only a failure outranks live work; a success or a stop with live subagents reads working.
-    expect(agentDotState(row({ state: 'working', ...mainAgentDone('success') }), 0)).toBe('working')
-    expect(
-      agentDotState(
-        row({ state: 'working', ...mainAgentDone('cancellation'), interrupted: true }),
-        0
-      )
-    ).toBe('working')
-  })
-
-  // The shared accessor cannot be imported by app code here, so this mirror must not drift from it.
-  it('agrees with the desktop verdict accessor on every row', () => {
-    const states = ['working', 'blocked', 'waiting', 'done'] as const
-    const mainAgents = [
-      undefined,
-      ...states.flatMap((state) =>
-        [undefined, ...AGENT_JOURNAL_TURN_OUTCOMES].map((outcome) => ({
-          state,
-          ...(outcome ? { outcome } : {}),
-          stateStartedAt: 0
-        }))
-      )
-    ]
-    for (const state of states) {
-      for (const mainAgent of mainAgents) {
-        for (const interrupted of [false, true]) {
-          const agentRow = { state, interrupted, ...(mainAgent ? { mainAgent } : {}) }
-          expect(agentRowVerdict(agentRow), JSON.stringify(agentRow)).toBe(
-            agentMainAgentVerdict(agentRow)
-          )
-          expect(agentRowVerdictMark(agentRow), JSON.stringify(agentRow)).toBe(
-            agentVerdictDisplayMark(agentRow)
-          )
-        }
-      }
+    expect(agentDisplayLabel(row({ state: 'done', ...mainAgentDone('unconfirmed') }), 0)).toBe(
+      'Couldn’t confirm'
+    )
+    for (const [outcome, label] of [
+      ['cancellation', 'Interrupted'],
+      ['interruption', 'Failed'],
+      ['failure', 'Failed']
+    ] as const) {
+      expect(
+        agentStateLabel(agentDotState(row({ state: 'done', ...mainAgentDone(outcome) }), 0))
+      ).toBe(label)
     }
   })
 
   it('decays a stale active state to idle, matching desktop', () => {
-    const stale = AGENT_STATUS_STALE_AFTER_MS + 1
-    // Active states past the staleness window read as idle…
+    const stale = 1_800_001
+    expect(agentDotState(row({ state: 'working', updatedAt: 0, hasLivePty: true }), stale)).toBe(
+      'unverifiable'
+    )
     expect(agentDotState(row({ state: 'working', updatedAt: 0 }), stale)).toBe('idle')
     expect(agentDotState(row({ state: 'blocked', updatedAt: 0 }), stale)).toBe('idle')
     expect(agentDotState(row({ state: 'waiting', updatedAt: 0 }), stale)).toBe('idle')
-    // …exactly at the threshold it is still fresh (decay is strictly past it).
-    expect(
-      agentDotState(row({ state: 'working', updatedAt: 0 }), AGENT_STATUS_STALE_AFTER_MS)
-    ).toBe('working')
-    // 'done' never decays, and neither does its verdict.
+    expect(agentDotState(row({ state: 'working', updatedAt: 0 }), 1_800_000)).toBe('working')
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), stale)).toBe('done')
-    expect(agentDotState(row({ state: 'done', updatedAt: 0, interrupted: true }), stale)).toBe(
-      'interrupted'
-    )
+    expect(
+      agentDotState(row({ state: 'done', updatedAt: 0, ...mainAgentDone('interruption') }), stale)
+    ).toBe('failed')
+  })
+
+  // Title renewal updates the row timestamp without renewing status evidence.
+  it('ages a status by its evidence, not by a later title renewal, as desktop does', () => {
+    const now = 100 * 60 * 1000
+    const renewed = {
+      state: 'blocked' as const,
+      updatedAt: now,
+      evidenceObservedAt: now - 31 * 60 * 1000
+    }
+    expect(isAgentStatusFresh(renewed, now)).toBe(false)
+    expect(agentDotState(renewed, now)).toBe('idle')
   })
 })
 
@@ -157,22 +130,36 @@ describe('agentDisplayLabel', () => {
     ).toBe('Monitoring background tasks')
   })
 
-  it('falls back to the decayed state label when stale', () => {
-    expect(
-      agentDisplayLabel(
-        row({ state: 'working', prompt: '', updatedAt: 0 }),
-        AGENT_STATUS_STALE_AFTER_MS + 1
-      )
-    ).toBe('Idle')
+  it("says Stopping while the host says a person's Stop is ending the turn", () => {
+    const stopping = row({
+      lastAssistantMessage: 'hello there',
+      mainAgent: { state: 'working', stopping: true, stateStartedAt: 0 }
+    })
+    expect(agentDisplayLabel(stopping, 0)).toBe('Stopping…')
+    expect(agentDotState(stopping, 0)).toBe('working')
+    expect(agentDisplayLabel({ ...stopping, conversationName: 'Orca PR rebase' }, 0)).toBe(
+      'Stopping… · Orca PR rebase'
+    )
   })
-})
 
-describe('agentIdentityLabel', () => {
-  it('maps known agent types and falls back to initials', () => {
-    expect(agentIdentityLabel('claude')).toBe('CL')
-    expect(agentIdentityLabel('codex')).toBe('CX')
-    expect(agentIdentityLabel('mystery')).toBe('MY')
-    expect(agentIdentityLabel(null)).toBe('')
+  it('leads with the host-sent conversation name, like the desktop row', () => {
+    const named = row({ state: 'done', conversationName: 'Orca PR rebase', prompt: 'rebase it' })
+    expect(agentDisplayLabel(named, 0)).toBe('Orca PR rebase')
+    expect(agentDisplayLabel({ ...named, lastAssistantMessage: 'PR is closed' }, 0)).toBe(
+      'Orca PR rebase · PR is closed'
+    )
+  })
+
+  it('falls back to the decayed state label when stale', () => {
+    expect(agentDisplayLabel(row({ state: 'working', prompt: '', updatedAt: 0 }), 1_800_001)).toBe(
+      'Idle'
+    )
+  })
+
+  it('keeps the task text on a silent row and names the silence when there is none', () => {
+    const silent = row({ state: 'working', updatedAt: 0, hasLivePty: true })
+    expect(agentDisplayLabel({ ...silent, prompt: 'build' }, 40 * 60_000)).toBe('build')
+    expect(agentDisplayLabel(silent, 40 * 60_000)).toBe('No recent update')
   })
 })
 

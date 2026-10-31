@@ -1,3 +1,4 @@
+import type { AgentSessionOwnerObservation } from './agent-session-conversation-view'
 /**
  * Single-writer lease adjudication.
  *
@@ -20,7 +21,12 @@ import type {
   AgentSessionRefusalDetailsByCode
 } from './agent-session-wire-refusals'
 
-export type AgentSessionIdentityMatchField = 'process-start-time' | 'spawn-token'
+/** What a PID probe can compare against the recorded owner. */
+export type AgentSessionProcessIdentityField = 'process-start-time' | 'spawn-token'
+
+/** `held-child`: this runtime still holds the child at the record's fence and has not seen it exit.
+ *  Only lease renewal in that runtime asserts it; restart and recovery probes never can. */
+export type AgentSessionIdentityMatchField = AgentSessionProcessIdentityField | 'held-child'
 
 export type AgentSessionOwnerProbe =
   /** Orca watched this exact process exit. */
@@ -28,7 +34,7 @@ export type AgentSessionOwnerProbe =
   /** The recorded pid is not present on the host. */
   | { outcome: 'pid-absent' }
   /** The pid is present but is a different process. */
-  | { outcome: 'identity-mismatch'; field: AgentSessionIdentityMatchField | 'command-line' }
+  | { outcome: 'identity-mismatch'; field: AgentSessionProcessIdentityField | 'command-line' }
   /** The pid is present and at least one identity element was verified. */
   | { outcome: 'identity-matched'; matchedOn: readonly AgentSessionIdentityMatchField[] }
   /** No process carries the reserved spawn token and the provider saw no activity after it. */
@@ -70,10 +76,7 @@ export function isProvenDeadProbe(probe: AgentSessionOwnerProbe): boolean {
   )
 }
 
-/**
- * A matched pid is only proof of life when something PID-reuse-safe matched with it. A bare pid
- * match on a host that can produce neither a start time nor a token echo is indeterminate.
- */
+/** A PID match needs reuse-safe start-time/token evidence; otherwise liveness is indeterminate. */
 export function isProvenAliveProbe(probe: AgentSessionOwnerProbe): boolean {
   return probe.outcome === 'identity-matched' && probe.matchedOn.length > 0
 }
@@ -104,7 +107,13 @@ function deathEvidenceFor(
 /** `exited` only for a lease released on death evidence; one recovery released without proof, like
  *  anything held or mid-handoff, may still be running. */
 export function agentSessionLeaseOwnerVerdict(lease: AgentSessionLease): AgentSessionOwnerVerdict {
-  if (agentSessionLeaseAdmitsWriter(lease)) {
+  return agentSessionOwnerObservationVerdict(lease)
+}
+
+export function agentSessionOwnerObservationVerdict(
+  lease: AgentSessionOwnerObservation
+): AgentSessionOwnerVerdict {
+  if (agentSessionOwnerObservationIsLive(lease)) {
     return 'live'
   }
   return lease.claimStatus === 'released' &&
@@ -116,6 +125,32 @@ export function agentSessionLeaseOwnerVerdict(lease: AgentSessionLease): AgentSe
     : 'unverifiable'
 }
 
+/** Founding is not an observed death; every reservation/recovery leaves a different tuple. */
+export function agentSessionLeaseNeverAcquired(lease: AgentSessionLease): boolean {
+  return (
+    lease.runtimeKind === 'native' &&
+    lease.runtimeFence === 1 &&
+    lease.minimumNextFence === undefined &&
+    !lease.unreconciled &&
+    lease.claimStatus === 'released' &&
+    lease.ownerProcess === null &&
+    lease.reservedSpawnToken === null &&
+    lease.handoffStage === null &&
+    lease.handoffOperationId === null &&
+    lease.provenHandleLinkId === null &&
+    lease.deathEvidence === null
+  )
+}
+
+export function agentSessionLeasePossiblyWriting(
+  lease: AgentSessionLease | AgentSessionOwnerObservation
+): boolean {
+  return (
+    !('runtimeKind' in lease && agentSessionLeaseNeverAcquired(lease)) &&
+    agentSessionOwnerObservationVerdict(lease) !== 'exited'
+  )
+}
+
 /** Nothing holds this lease: released, no handoff in flight, and reconciled since the last restart. */
 export function agentSessionLeaseIsReleased(lease: AgentSessionLease): boolean {
   return !lease.unreconciled && lease.claimStatus === 'released' && lease.handoffStage === null
@@ -123,6 +158,10 @@ export function agentSessionLeaseIsReleased(lease: AgentSessionLease): boolean {
 
 /** True when the recorded owner may write right now. Used by every mutating path in later parts. */
 export function agentSessionLeaseAdmitsWriter(lease: AgentSessionLease): boolean {
+  return agentSessionOwnerObservationIsLive(lease)
+}
+
+export function agentSessionOwnerObservationIsLive(lease: AgentSessionOwnerObservation): boolean {
   return (
     !lease.unreconciled &&
     lease.handoffStage === null &&
@@ -135,10 +174,7 @@ export function isAgentSessionFenceCurrent(lease: AgentSessionLease, fence: numb
   return Number.isSafeInteger(fence) && fence === lease.runtimeFence
 }
 
-/**
- * Compare-and-swap acquisition. `probe` describes what the host could prove about the recorded
- * owner; it is only consulted when a recorded owner or an unused reservation stands in the way.
- */
+/** CAS acquisition probes only when a recorded owner or unused reservation blocks the caller. */
 export function evaluateAgentSessionAcquisition(args: {
   lease: AgentSessionLease
   expectedFence: number
@@ -196,8 +232,7 @@ export function evaluateAgentSessionAcquisition(args: {
   }
   if (lease.ownerProcess !== null) {
     if (!isProvenDeadProbe(probe)) {
-      // Why: a lapsed deadline means Orca stopped hearing from the owner, not that the child
-      // stopped editing files and spending tokens.
+      // Expiry means no renewal was heard, not that the child stopped editing files or spending tokens.
       return isProvenAliveProbe(probe)
         ? { decision: 'refused', code: 'agent_session_conflict', details: { reason: 'ownerAlive' } }
         : {
@@ -209,8 +244,7 @@ export function evaluateAgentSessionAcquisition(args: {
     return { decision: 'granted', nextFence: nextAgentSessionFence(lease) }
   }
   if (lease.claimStatus === 'reserved' && probe.outcome !== 'reservation-unused') {
-    // Why: a reservation with no proven process is not a free lease — the crash may have lost
-    // the race with the spawn rather than beaten it.
+    // An unproven reservation is not free: the crash may have followed the spawn.
     return {
       decision: 'refused',
       code: 'agent_session_ownership_unknown',
@@ -220,10 +254,7 @@ export function evaluateAgentSessionAcquisition(args: {
   return { decision: 'granted', nextFence: nextAgentSessionFence(lease) }
 }
 
-/**
- * Host-restart reconciliation for one persisted lease. Every lease is unreconciled at load and
- * grants no writer until this returns.
- */
+/** Every loaded lease starts unreconciled and grants no writer until restart reconciliation finishes. */
 export function adjudicateAgentSessionRestart(args: {
   lease: AgentSessionLease
   probe: AgentSessionOwnerProbe
@@ -232,16 +263,10 @@ export function adjudicateAgentSessionRestart(args: {
   const { lease, probe, observedAt } = args
   if (lease.ownerProcess === null) {
     if (lease.reservedSpawnToken === null && lease.claimStatus === 'released') {
-      // Why: the spawn token is minted before the child and is the only thing a child could be
-      // carrying. With no owner and no token nothing can hold this lease, so it is already free —
-      // treating it as an unproven reservation is what re-latches every released record on restart.
+      // Without owner or pre-spawn token nothing can hold the lease; do not re-latch released records as unproven reservations.
       return { disposition: 'free', reason: 'lease has no owner and no reservation' }
     }
-    // Why: a child spawned before its identity was recorded lost its stdio with the runtime that
-    // crashed, so nothing can drive it. A token scan that proves no child is the only evidence there
-    // can be; without it the lease is released anyway. A live child still carrying the token is
-    // never signalled: the token is inherited by every descendant, so it cannot prove which one is
-    // the provider child.
+    // A child without recorded identity lost stdio in the crash; only a token scan can prove absence, but release even without proof. Never signal by token alone: descendants inherit it and cannot be distinguished from the provider.
     return {
       disposition: 'evicted',
       nextFence: nextAgentSessionFence(lease),
@@ -257,8 +282,7 @@ export function adjudicateAgentSessionRestart(args: {
     }
   }
   if (isProvenAliveProbe(probe)) {
-    // Why: the surviving child's stdio died with the previous runtime, so readoption would renew
-    // a lease no host can drive. Recovery stops the child and respawns at fence + 1.
+    // The crash lost native stdio: recovery stops the undrivable child and respawns at fence + 1 instead of readopting it.
     return {
       disposition: 'recovering',
       stage: 'recovering',

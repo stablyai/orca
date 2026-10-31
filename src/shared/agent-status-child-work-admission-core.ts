@@ -1,4 +1,8 @@
 import {
+  agentChildWorkEndingConflicts,
+  mergedAgentChildWorkEnding
+} from './agent-status-child-work-ending'
+import {
   serializeAgentChildWorkAliasKey,
   type AgentChildWorkAliasInput,
   type AgentChildWorkAliasRecord
@@ -122,8 +126,7 @@ type AgentChildWorkFactKey = Exclude<
   'kind' | 'state' | 'membership' | 'observedAt' | 'stoppable' | 'provenance'
 >
 
-/** Every fact is listed, so a request field added without a parse and a merge rule fails to
- *  compile. `undefined` means the observation did not say it. */
+/** Require parse/merge rules for every new request fact at compile time; undefined means unreported. */
 type AgentChildWorkFacts = {
   [K in AgentChildWorkFactKey]-?: AgentChildWorkObservationFields[K] | undefined
 }
@@ -154,9 +157,7 @@ function parseObservedOperation(
     : undefined
 }
 
-/** Provider facts are untrusted: each becomes a value the record codec accepts, or "not said".
- *  A malformed fact is dropped here so it can neither reject the observation nor erase what
- *  the record already knows. */
+/** Drop malformed provider facts before codec validation so they neither reject an observation nor erase known values. */
 function parseObservationFacts(
   request: AgentChildWorkObservationFields,
   host: Pick<AgentChildWorkHostFields, 'childWorkId' | 'firstObservedAt'>
@@ -167,6 +168,10 @@ function parseObservationFacts(
       : parseAgentChildWorkProviderTiming(request.providerTiming)
   return {
     outcome: request.outcome,
+    outcomeBasis:
+      request.membership === 'settled' && request.outcomeBasis === 'stop-acknowledged'
+        ? request.outcomeBasis
+        : undefined,
     name: normalizeChildWorkText(request.name, AGENT_CHILD_WORK_LABEL_MAX_LENGTH),
     description: normalizeChildWorkText(
       request.description,
@@ -188,19 +193,14 @@ function parseObservationFacts(
   }
 }
 
-/** A sparse observation never erases what the record knows (a roster omission knows only "it is
- *  gone"). `run` is the stored record only when this observation continues its invocation. */
+/** Sparse observations preserve known facts; run supplies the stored record only for the same invocation. */
 function mergeObservationFacts(
   said: AgentChildWorkFacts,
   prior: AgentChildWorkRecord | undefined,
   run: AgentChildWorkRecord | undefined
 ): AgentChildWorkFacts {
   return {
-    // Refine-only: an `unknown` ending claims nothing, so a definite one stands.
-    outcome:
-      said.outcome === undefined || said.outcome === 'unknown'
-        ? (run?.outcome ?? said.outcome)
-        : said.outcome,
+    ...mergedAgentChildWorkEnding(said, run),
     name: said.name ?? prior?.name,
     description: said.description ?? prior?.description,
     agentType: said.agentType ?? prior?.agentType,
@@ -221,8 +221,7 @@ function mergeObservationFacts(
   }
 }
 
-/** Builds the record admission writes: parse the observation, merge it over `prior` (the stored
- *  record on update and resume), and let the codec check the invariants. */
+/** Parse and merge observations over prior (including resume), then check record invariants through the codec. */
 export function buildAgentChildWork(
   request: AgentChildWorkObservationFields & {
     parent: AgentStatusSubject
@@ -270,21 +269,6 @@ export function commitAgentChildWork(
     : rejectAgentChildWorkAdmission('store-rejected')
 }
 
-/** Settled history only gains precision: an `unknown` ending may become a definite one (a roster
- *  omission can land a tick before the frame naming the outcome), and a definite ending never
- *  changes to another. An omitted outcome counts as `unknown`. */
-function conflictsWithSettled(
-  child: AgentChildWorkRecord,
-  request: AgentChildWorkAnnounceRequest | AgentChildWorkAdoptRequest
-): boolean {
-  const requested = request.outcome ?? 'unknown'
-  return (
-    request.membership !== 'settled' ||
-    request.state !== child.state ||
-    (requested !== 'unknown' && child.outcome !== 'unknown' && requested !== child.outcome)
-  )
-}
-
 export function updateExistingAgentChildWork(
   store: AgentStatusStore,
   request: AgentChildWorkAnnounceRequest | AgentChildWorkAdoptRequest,
@@ -292,7 +276,7 @@ export function updateExistingAgentChildWork(
   aliases: AgentChildWorkAliasInput[],
   removeAliases: string[] = []
 ): AgentChildWorkAdmissionResult {
-  if (child.membership === 'settled' && conflictsWithSettled(child, request)) {
+  if (child.membership === 'settled' && agentChildWorkEndingConflicts(child, request)) {
     return rejectAgentChildWorkAdmission('stale-invocation')
   }
   const updated = buildAgentChildWork(

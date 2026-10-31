@@ -1,14 +1,8 @@
-/**
- * Teardown coverage for `nativeChatLaunchDraftByTabId`.
- *
- * A stranded entry is worse than a plain leak: sync-runtime-graph keeps
- * publishing it to mobile as that tab's `launchDraft`. It must evict wherever
- * its sibling `nativeChatLaunchPromptByTabId` does — tab close, orphan sweep,
- * the bulk worktree purge, and the single removeWorktree teardown.
- */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+/** Evict nativeChatLaunchDraftByTabId wherever launch prompt retires (close, orphan sweep, bulk/single purge); stranded drafts otherwise keep publishing to mobile. */
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { buildOrphanTerminalCleanupPatch } from './terminal-orphan-helpers'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -24,9 +18,20 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
+// Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     remove: vi.fn().mockResolvedValue(undefined),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     updateMeta: vi.fn().mockResolvedValue({})
@@ -38,7 +43,23 @@ const mockApi = {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: mockApi }
 
-import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
+import {
+  createTestStore,
+  seedStore,
+  makeWorktree,
+  makeTab,
+  makeTabGroup,
+  makeUnifiedTab
+} from './store-test-helpers'
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  addNativeChatPendingAttachment,
+  settleNativeChatPendingAttachment
+} from '@/components/native-chat/native-chat-pending-attachment-cache'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'
@@ -69,9 +90,14 @@ function seedDrafts(store: ReturnType<typeof createTestStore>): void {
 }
 
 describe('nativeChatLaunchDraftByTabId teardown', () => {
+  let main: TabsDrawnFromMain | undefined
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.worktrees.remove.mockResolvedValue(undefined)
+  })
+  afterEach(() => {
+    main?.close()
+    main = undefined
   })
 
   it('closeTab drops the closed tab’s draft only', () => {
@@ -109,9 +135,7 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
   })
 
   it('persists the adopted flag, idempotently, and clears the whole entry', () => {
-    // Every consumer test injects these reducers as bare vi.fn()s. `adopted` is
-    // what stops a manually cleared composer from resurrecting the prefill, so
-    // assert the real reducers here.
+    // Consumers stub these reducers; test real adopted handling so manual composer clears cannot revive prefill.
     const store = createTestStore()
     store.getState().seedNativeChatLaunchDraft(draft(TAB1, 'https://github.com/o/r/issues/1'))
     expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]?.adopted).toBeUndefined()
@@ -150,5 +174,108 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
 
     expect(patch.nativeChatLaunchDraftByTabId[TAB1]).toBeUndefined()
     expect(patch.nativeChatLaunchDraftByTabId[TAB2]).toBeDefined()
+  })
+
+  it('removing a worktree drops the unsent composer drafts of its tabs only', async () => {
+    const store = createTestStore()
+    seedDrafts(store)
+    updateNativeChatComposerDraft(`${TAB1}:leaf-a`, { text: 'unsent' }, 'immediate')
+    updateNativeChatComposerDraft(`${TAB2}:leaf-a`, { text: 'kept' }, 'immediate')
+
+    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
+
+    expect(result).toEqual({ ok: true })
+    expect(readNativeChatComposerDraft(`${TAB1}:leaf-a`).text).toBe('')
+    expect(readNativeChatComposerDraft(`${TAB2}:leaf-a`).text).toBe('kept')
+  })
+
+  it('a user tab close drops the unsent composer drafts of that tab’s panes only', () => {
+    const store = createTestStore()
+    seedDrafts(store)
+    updateNativeChatComposerDraft(`${TAB1}:leaf-a`, { text: 'unsent' }, 'immediate')
+    updateNativeChatComposerDraft(`${TAB2}:leaf-a`, { text: 'kept' }, 'immediate')
+
+    store.getState().closeTab(TAB2, { reason: 'pty-exit' })
+    store.getState().closeTab(TAB1)
+
+    expect(readNativeChatComposerDraft(`${TAB1}:leaf-a`).text).toBe('')
+    expect(readNativeChatComposerDraft(`${TAB2}:leaf-a`).text).toBe('kept')
+  })
+
+  it('a user tab close drops the uploads still on their way in that tab’s panes only', () => {
+    const store = createTestStore()
+    seedDrafts(store)
+    for (const scopeKey of [`${TAB1}:leaf-b`, `${TAB2}:leaf-b`]) {
+      addNativeChatPendingAttachment(scopeKey, { id: scopeKey, path: '', pending: true })
+    }
+
+    store.getState().closeTab(TAB2, { reason: 'pty-exit' })
+    store.getState().closeTab(TAB1)
+
+    const settled = [`${TAB1}:leaf-b`, `${TAB2}:leaf-b`].map((scopeKey) =>
+      settleNativeChatPendingAttachment(scopeKey, scopeKey, '/store/a.png')
+    )
+    expect(settled).toEqual([false, true])
+    expect(readNativeChatComposerDraft(`${TAB1}:leaf-b`).images).toEqual([])
+  })
+
+  function seedStructuredChat(store: ReturnType<typeof createTestStore>) {
+    const chat = makeUnifiedTab({
+      id: 'chat-tab',
+      entityId: 'session-1',
+      contentType: 'agent-session',
+      worktreeId: WT1,
+      groupId: 'group-1'
+    })
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: WT1, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: WT2, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      unifiedTabsByWorktree: { [WT1]: [chat] },
+      groupsByWorktree: {
+        [WT1]: [
+          makeTabGroup({
+            id: 'group-1',
+            worktreeId: WT1,
+            activeTabId: chat.id,
+            tabOrder: [chat.id]
+          })
+        ]
+      }
+    })
+    return chat
+  }
+
+  it('closing a structured chat tab keeps its conversation’s unsent draft', async () => {
+    const store = createTestStore()
+    const chat = seedStructuredChat(store)
+    main = await drawTabsFromMain(store)
+    const conversation = structuredAgentSessionDraftScopeKey('session-1')
+    updateNativeChatComposerDraft(conversation, { text: 'unsent' }, 'immediate')
+
+    store.getState().closeUnifiedTab(chat.id)
+    await main.settle()
+
+    // Main's frame drops a workspace with no tabs left; the window keeps an empty list.
+    expect(store.getState().unifiedTabsByWorktree[WT1] ?? []).toEqual([])
+    expect(readNativeChatComposerDraft(conversation).text).toBe('unsent')
+  })
+
+  it('removing a worktree drops its structured chats’ conversation drafts only', async () => {
+    const store = createTestStore()
+    seedStructuredChat(store)
+    const removed = structuredAgentSessionDraftScopeKey('session-1')
+    const other = structuredAgentSessionDraftScopeKey('session-2')
+    updateNativeChatComposerDraft(removed, { text: 'unsent' }, 'immediate')
+    updateNativeChatComposerDraft(other, { text: 'kept' }, 'immediate')
+
+    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
+
+    expect(result).toEqual({ ok: true })
+    expect(readNativeChatComposerDraft(removed).text).toBe('')
+    expect(readNativeChatComposerDraft(other).text).toBe('kept')
   })
 })

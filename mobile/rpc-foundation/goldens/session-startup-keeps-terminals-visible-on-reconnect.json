@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.startup",
   "family": "session.startup",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "6b08c394e37fd572cf63a4c11934247d379008f11117aa5af33b2926fbd32d1e",
-  "scenarioSha256": "f540e4a06380a6a5d82d670230c76b7afc2c60302bc27dda13156b620095c5cc",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "2bba58da0410": {
       "name": "fetch-terminals",

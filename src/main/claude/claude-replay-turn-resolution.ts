@@ -1,10 +1,8 @@
-// Which dispatch a provider frame settles, and whether it opens a turn.
-//
-// A replay or result is joined to its waiter by the client uuid Claude echoes.
-// A send Claude FOLDS into the running request cycle is replayed mid-cycle with
-// the client uuid adopted: once that cycle has done work, that replay is a
-// delivery receipt and opens no boundary.
-
+import {
+  observeClaudeCommandLifecycle,
+  releaseClaudeDispatchesUnansweredAtIdle
+} from './claude-command-lifecycle'
+import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { forgetRetiredWaiter } from './claude-structured-dispatch-waiters'
 import {
   claudeHasReplayContent,
@@ -14,20 +12,31 @@ import type {
   ClaudeDispatchWaiter,
   ClaudeLateDispatchOutcome,
   ClaudeSession
-} from './claude-structured-session-state'
-import { readClaudeFrameString } from './claude-structured-init-proof'
+} from './structured/claude-structured-session-state'
+import { readClaudeFrameString } from './structured/claude-structured-init-proof'
 import { claudeDispatchContentKey } from './claude-structured-dispatch-content'
 
-/** Settles a provider-proven late outcome; replay rows independently reconcile acceptance. */
+/** Settle provider-proven delivery independently of replay-row acceptance reconciliation. */
 export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void
 
-export type ClaudeReplayTurnOrigin = { requestedAt: number | null }
+export type ClaudeReplayTurnOrigin = {
+  requestedAt: number | null
+  clientMessageId: string | null
+}
 
 export function resolveClaudeReplayTurn(
   session: ClaudeSession,
   message: Record<string, unknown>,
   onSettledLate?: ClaudeLateDispatchSettlement
 ): ClaudeReplayTurnOrigin | null {
+  if (message.type === 'command_lifecycle') {
+    observeClaudeCommandLifecycle(session, message, onSettledLate)
+    return null
+  }
+  if (claudeSessionStateEndsTurn(message)) {
+    releaseClaudeDispatchesUnansweredAtIdle(session, onSettledLate)
+    return null
+  }
   const envelope = readClaudeMessageEnvelope(message)
   const isUserReplay =
     envelope?.role === 'user' &&
@@ -45,13 +54,9 @@ export function resolveClaudeReplayTurn(
     return null
   }
 
-  // Newer SDK frames carry the client uuid that caused a turn. A correlation
-  // value is authoritative: never fall back to queue order or content, since
-  // identical prompts may be in flight across a timeout boundary.
+  // Explicit correlation outranks content and queue order across identical prompts and timeout boundaries.
   const userMessageUuid = readClaudeFrameString(message, 'user_message_uuid')
-  // A folded turn's result names every send it ran under `user_message_uuids`.
-  // Each member settles its own waiter under its own uuid — the result frame's
-  // uuid is never adopted as a shared alias for multiple submissions.
+  // Each folded send settles under its own UUID, never a shared result-frame alias.
   const resultUserMessageUuids = isCompletedCommand ? claudeResultUserMessageUuids(message) : []
   for (const member of resultUserMessageUuids) {
     if (member === userMessageUuid) {
@@ -75,7 +80,9 @@ export function resolveClaudeReplayTurn(
     if (exact) {
       const foldReceipt = isUserReplay && claudeReplayIsFoldReceipt(session, exact, uuid)
       settleWaiter(session, exact, uuid, onSettledLate)
-      return isUserReplay && !foldReceipt ? { requestedAt: exact.requestedAt } : null
+      return isUserReplay && !foldReceipt
+        ? { requestedAt: exact.requestedAt, clientMessageId: exact.clientMessageId }
+        : null
     }
     const retired = session.retiredDispatchWaiters.find(
       (candidate) => candidate.sentUuid === userMessageUuid
@@ -88,8 +95,7 @@ export function resolveClaudeReplayTurn(
     return null
   }
   if (resultUserMessageUuids.length > 0) {
-    // The plural list is this result's complete correlation; queue order must
-    // not join anyone it did not name.
+    // An explicit list is complete; queue order must not claim unnamed sends.
     return null
   }
 
@@ -97,7 +103,9 @@ export function resolveClaudeReplayTurn(
   if (exact) {
     const foldReceipt = isUserReplay && claudeReplayIsFoldReceipt(session, exact, uuid)
     settleWaiter(session, exact, uuid, onSettledLate)
-    return isUserReplay && !foldReceipt ? { requestedAt: exact.requestedAt } : null
+    return isUserReplay && !foldReceipt
+      ? { requestedAt: exact.requestedAt, clientMessageId: exact.clientMessageId }
+      : null
   }
   const retired = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (retired) {
@@ -107,10 +115,7 @@ export function resolveClaudeReplayTurn(
   }
 
   if (isUserReplay) {
-    // Compatibility CLIs may mint a new replay uuid instead of echoing the
-    // client uuid. Content is an acceptable join only when it is the sole
-    // candidate on one side of the timeout boundary; with active and retired
-    // candidates present, identical prompts are intentionally left unknown.
+    // Older CLIs may mint replay UUIDs; join by content only with one match and no candidates across the timeout boundary.
     const replayContentKey = claudeDispatchContentKey(envelope.content)
     if (!session.replayContentFallbackBlocked && session.retiredDispatchWaiters.length === 0) {
       const compatible = session.dispatchWaiters.filter(
@@ -119,7 +124,7 @@ export function resolveClaudeReplayTurn(
       if (compatible.length === 1) {
         const [candidate] = compatible
         settleWaiter(session, candidate!, uuid, onSettledLate)
-        return { requestedAt: candidate!.requestedAt }
+        return { requestedAt: candidate!.requestedAt, clientMessageId: candidate!.clientMessageId }
       }
     } else if (!session.replayContentFallbackBlocked && session.dispatchWaiters.length === 0) {
       const lateCompatible = session.retiredDispatchWaiters.filter(
@@ -138,32 +143,25 @@ export function resolveClaudeReplayTurn(
   if (isCompletedCommand && !current?.acceptsResult) {
     return null
   }
-  // A legacy result has no dispatch correlation. Any retired waiter makes queue order ambiguous,
-  // even when the retired dispatch was an ordinary turn rather than a slash command.
+  // Any retired waiter makes queue-order correlation ambiguous for uncorrelated legacy results.
   if (isCompletedCommand && session.retiredDispatchWaiters.length > 0) {
     return null
   }
-  // Once an eviction occurred, a fresh result uuid cannot be joined to a waiter by queue order.
+  // Eviction makes later queue-order joins unsafe.
   if (isCompletedCommand && session.replayContentFallbackBlocked) {
     return null
   }
   const waiter = uuid ? session.dispatchWaiters.shift() : undefined
   if (waiter && uuid) {
     settleWaiter(session, waiter, uuid, onSettledLate)
-    return isUserReplay ? { requestedAt: waiter.requestedAt } : null
+    return isUserReplay
+      ? { requestedAt: waiter.requestedAt, clientMessageId: waiter.clientMessageId }
+      : null
   }
   return null
 }
 
-/** The provider's own cycle state decides a fold: the CLI folds a send into the
- *  request cycle that is running when the send arrives, and it replays a folded
- *  send mid-cycle with the client uuid ADOPTED (measured: fold-fresh/-resumed,
- *  two-steers, early-steer). So an adopted replay after the running cycle has
- *  done work is a delivery receipt, not a turn boundary; a cycle's first send is
- *  its opener. Adoption is the capability check, read off the frame itself: a
- *  CLI that mints fresh replay uuids never qualifies. A new cycle announces
- *  itself with a root init (per-turn, measured), so a lost result cannot leave a
- *  stale turn swallowing the next turn's replay. */
+/** Adopted UUIDs after root cycle work prove folded delivery; a new root init resets this evidence. */
 function claudeReplayIsFoldReceipt(
   session: ClaudeSession,
   waiter: ClaudeDispatchWaiter,
@@ -191,7 +189,7 @@ function settleWaiter(
   }
   waiter.settledUuid = uuid
   waiter.resolve(uuid)
-  // Dispatch returned on admission, so the replay is what settles delivery.
+  // Admission already returned; this replay settles delivery.
   if (waiter.clientMessageId) {
     onSettledLate?.({
       clientMessageId: waiter.clientMessageId,
@@ -210,8 +208,7 @@ function recoverLateIdentity(
   if (!isUserReplay && !waiter.acceptsResult) {
     return
   }
-  // The provider acted on this dispatch, so the send it came from is delivered.
-  // A retired replay settles delivery only; it cannot reopen a turn.
+  // Retired replays settle delivery without reopening turns.
   if (waiter.clientMessageId) {
     onSettledLate?.({
       clientMessageId: waiter.clientMessageId,

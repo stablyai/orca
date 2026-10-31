@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "workspace.file-inventory",
   "family": "legacy-inventory",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "262eaad263a45aa13ec5b27c12b59946b12c202474229fff7a5727dba6d702ca",
-  "scenarioSha256": "d6c57a5153d915f0a0c0fd9e305cac70b41b7eb8be226fc865227ebf1821e5d1",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "13ef648b37c5": {
       "name": "files.list#1",

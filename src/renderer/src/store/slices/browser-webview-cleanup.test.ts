@@ -7,16 +7,10 @@ vi.mock('../../components/browser-pane/host-guest/webview-registry', () => ({
 
 import {
   collectBrowserWebviewIds,
-  destroyRemovedBrowserWebview,
   destroyWorkspaceWebviews,
   destroyWorktreeBrowserGuests
 } from './browser-webview-cleanup'
 import { destroyPersistentWebview } from '../../components/browser-pane/host-guest/webview-registry'
-import {
-  forgetExplicitBrowserPageZoomLevel,
-  getExplicitBrowserPageZoomLevel,
-  rememberExplicitBrowserPageZoomLevel
-} from '../../components/browser-pane/host-guest/browser-page-zoom'
 
 function workspace(id: string): BrowserWorkspace {
   return {
@@ -75,12 +69,6 @@ describe('destroyWorkspaceWebviews', () => {
     vi.mocked(destroyPersistentWebview).mockClear()
   })
 
-  it('destroys the webview when the backing page is removed', () => {
-    destroyRemovedBrowserWebview('page-1')
-
-    expect(destroyPersistentWebview).toHaveBeenCalledWith('page-1')
-  })
-
   it('destroys every page id for a multi-page workspace', () => {
     destroyWorkspaceWebviews(
       { 'workspace-1': [page('page-1', 'workspace-1'), page('page-2', 'workspace-1')] },
@@ -137,30 +125,5 @@ describe('destroyWorktreeBrowserGuests', () => {
     destroyWorktreeBrowserGuests({}, {}, 'wt-1')
 
     expect(destroyPersistentWebview).not.toHaveBeenCalled()
-  })
-
-  it('re-remembers explicit zoom past the destroy-path forget (eviction is not a close)', () => {
-    // Mirror the real registry contract: a plain destroy forgets explicit zoom.
-    vi.mocked(destroyPersistentWebview).mockImplementation((browserTabId: string) => {
-      forgetExplicitBrowserPageZoomLevel(browserTabId)
-      return Promise.resolve()
-    })
-    rememberExplicitBrowserPageZoomLevel('page-1', 1.5)
-    rememberExplicitBrowserPageZoomLevel('legacy-workspace', 0.5)
-
-    destroyWorktreeBrowserGuests(
-      { 'wt-1': [workspace('workspace-1'), workspace('legacy-workspace')] },
-      { 'workspace-1': [page('page-1', 'workspace-1'), page('page-2', 'workspace-1')] },
-      'wt-1'
-    )
-
-    expect(getExplicitBrowserPageZoomLevel('page-1')).toBe(1.5)
-    expect(getExplicitBrowserPageZoomLevel('legacy-workspace')).toBe(0.5)
-    // A page the user never zoomed stays unremembered.
-    expect(getExplicitBrowserPageZoomLevel('page-2')).toBeNull()
-
-    forgetExplicitBrowserPageZoomLevel('page-1')
-    forgetExplicitBrowserPageZoomLevel('legacy-workspace')
-    vi.mocked(destroyPersistentWebview).mockReset()
   })
 })

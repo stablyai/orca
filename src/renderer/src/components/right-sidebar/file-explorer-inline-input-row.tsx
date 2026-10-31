@@ -1,5 +1,9 @@
 import React, { useCallback, useRef } from 'react'
 import { File, Folder } from 'lucide-react'
+import {
+  isImeCompositionKeyDown,
+  useImeEnterGestureOwnership
+} from '@/lib/ime-composition-keyboard-event'
 import type { TreeNode } from './file-explorer-types'
 
 export type InlineInput = {
@@ -25,10 +29,8 @@ export function InlineInputRow({
   const inputRef = useRef<HTMLInputElement>(null)
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submitted = useRef(false)
-  // Grace period flag: when a menu (context or dropdown) closes, its focus
-  // management can momentarily steal focus from this input before the user
-  // has a chance to type. During the grace window we re-focus on blur instead
-  // of auto-submitting, which would dismiss the empty input.
+  const imeEnter = useImeEnterGestureOwnership()
+  // Refocus during menu-close grace so temporary focus restoration cannot dismiss the empty input.
   const focusSettled = useRef(false)
   const focusFrame = useRef<number | null>(null)
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -76,6 +78,8 @@ export function InlineInputRow({
     (el: HTMLInputElement | null): void => {
       inputRef.current = el
       clearInlineInputTimers()
+      // Keyed remounts skip blur; composition ownership must not outlive the element.
+      imeEnter.reset()
       if (!el) {
         return
       }
@@ -98,15 +102,14 @@ export function InlineInputRow({
             el.select()
           }
         }
-        // Allow enough time for the menu close focus management to finish
-        // before treating blur events as intentional user actions.
+        // Treat blur as intentional only after menu-close focus management settles.
         settleTimer.current = setTimeout(() => {
           settleTimer.current = null
           focusSettled.current = true
         }, 200)
       })
     },
-    [clearInlineInputTimers, inlineInput.existingName, inlineInput.type]
+    [clearInlineInputTimers, imeEnter, inlineInput.existingName, inlineInput.type]
   )
 
   const clearBlurTimeout = useCallback(() => {
@@ -145,6 +148,10 @@ export function InlineInputRow({
         className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
         defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
         onKeyDown={(e) => {
+          // IME confirm Enter may redispatch unmarked; preserve gesture ownership and ignore IME Escape.
+          if (imeEnter.ownsKeyDown(e) || imeEnter.isComposing() || isImeCompositionKeyDown(e)) {
+            return
+          }
           if (e.key === 'Enter') {
             e.preventDefault()
             submit(e.currentTarget.value)
@@ -154,14 +161,13 @@ export function InlineInputRow({
             onCancel()
           }
         }}
+        onKeyUp={imeEnter.onKeyUp}
+        onCompositionStart={() => imeEnter.setComposing(true)}
+        onCompositionEnd={(e) => imeEnter.setComposing(false, e.data)}
         onFocus={clearBlurTimeout}
         onBlur={(e) => {
-          // During the grace period after mount, menu close focus management
-          // may shift focus away before the user can type. Re-focus instead of
-          // dismissing the still-empty input. Past that window a blur is the
-          // user leaving, so commit like Finder does rather than clinging to
-          // the edit state — every row is itself a context-menu trigger, so
-          // relatedTarget can't tell an ordinary row click from Radix cleanup.
+          imeEnter.reset()
+          // Refocus only during menu-close grace; afterward commit on blur, since relatedTarget cannot distinguish Radix cleanup from row clicks.
           if (!focusSettled.current) {
             scheduleInputRefocus()
             return

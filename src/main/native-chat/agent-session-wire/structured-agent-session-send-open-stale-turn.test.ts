@@ -1,14 +1,11 @@
-// A send can be what opens a conversation this process has not read yet: a chat nobody has on
-// screen after the app died, sent to from a phone or the CLI. Whatever that journal shows running
-// belongs to a generation that is gone, so it is settled when the journal opens, not only when a
-// new child starts: a start that then fails would leave the turn running for every reader.
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 
 import { cp, rm } from 'node:fs/promises'
-import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   adapter,
@@ -24,8 +21,13 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
-/** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
 function eventually(assertion: () => unknown): Promise<unknown> {
   return vi.waitFor(assertion, { timeout: 10_000 })
 }
@@ -33,12 +35,12 @@ function eventually(assertion: () => unknown): Promise<unknown> {
 const relaunchedRoots: string[] = []
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await Promise.all(
     relaunchedRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
   )
 })
 
-/** A host that dies mid-turn, relaunched over a copy of its files taken at the crash. */
 async function relaunchAfterCrashMidTurn(
   probe: AgentSessionOwnerProbe,
   { reconcile = true }: { reconcile?: boolean } = {}
@@ -51,29 +53,28 @@ async function relaunchAfterCrashMidTurn(
   }
   events.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'crashed-turn', ordinal: 1 },
-    { kind: 'turn', turnId: 'crashed-turn', state: 'running' }
+    { kind: 'turn', turnId: 'crashed-turn', state: 'running' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await dying.host.flushStreamedEvents(SESSION)
-  // An empty renewal queues behind every record write, so they are on disk.
+  // Empty renewal drains preceding record writes before copying crash state.
   await dying.store.renewLeases([])
   const relaunched = `${dying.root}-relaunched`
   relaunchedRoots.push(relaunched)
-  // A dead process holds no lock.
   await cp(dying.root, relaunched, {
     recursive: true,
     filter: (source) => !source.includes('.lock')
   })
-  const store = await AgentSessionRecordStore.open({
-    directory: join(relaunched, 'store'),
-    hostId: 'local'
-  })
+  const store = await openTestAgentSessionRecordStore(relaunched)
   const acquire = vi.fn(async () => {
     throw new Error('claude: command not found')
   })
   const host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: { ...adapter(), acquire },
-    journalRoot: relaunched,
+    journalDatabase: openTestJournalHostDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     probeOwner: async () => probe,
@@ -92,9 +93,7 @@ async function turnStates(host: StructuredAgentSessionHost) {
     .map((turn) => turn.state)
 }
 
-// A host that cannot prove the old owner gone leaves its lease in recovery, still claimed, until
-// the next acquire resolves it: the open is not that acquire, and the turn is no less gone. Only
-// the proof decides whether it reads interrupted.
+// Read-open settles old work without claiming ownership; death proof alone permits interrupted.
 const PROBES = [
   ['the old owner is proven gone', { outcome: 'pid-absent' }, 'interrupted'],
   [
@@ -141,8 +140,7 @@ it.each(PROBES)(
   }
 )
 
-// On desktop the chat on screen at relaunch reads before startup reconciles the leases: nothing
-// has proved its owner gone yet, and the reconcile's proof then revises what the open settled.
+// First read may precede startup reconciliation; later proof must revise its unverifiable settlement.
 it('settles it when a read reaches the chat before the startup reconcile, then revises it', async () => {
   const { host } = await relaunchAfterCrashMidTurn({ outcome: 'pid-absent' }, { reconcile: false })
   expect(hostTestState().store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
@@ -150,7 +148,7 @@ it('settles it when a read reaches the chat before the startup reconcile, then r
   await host.history({ sessionId: SESSION, direction: 'tail' })
   expect(await turnStates(host)).toEqual(['unverifiable'])
   await host.reconcileRestartLeases()
-  await host.restoreReadableSessions([SESSION])
+  await openTestChats(host, [SESSION])
 
   expect(await turnStates(host)).toEqual(['interrupted'])
   await host.flushAllStreamedEvents()

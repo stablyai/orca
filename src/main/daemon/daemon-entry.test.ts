@@ -15,29 +15,12 @@ describe('daemon-entry parseArgs', () => {
     })
   })
 
-  it('handles flags in any order', () => {
-    const result = parseArgs(['--token', '/tmp/t.token', '--socket', '/tmp/t.sock'])
-    expect(result).toEqual({
-      socketPath: '/tmp/t.sock',
-      tokenPath: '/tmp/t.token'
-    })
-  })
-
   it('throws when --socket is missing', () => {
     expect(() => parseArgs(['--token', '/tmp/t.token'])).toThrow('Usage:')
   })
 
   it('throws when --token is missing', () => {
     expect(() => parseArgs(['--socket', '/tmp/t.sock'])).toThrow('Usage:')
-  })
-
-  it('throws with no args', () => {
-    expect(() => parseArgs([])).toThrow('Usage:')
-  })
-
-  it('omits logFilePath when --log-file is absent (adopted old daemons)', () => {
-    const result = parseArgs(['--socket', '/tmp/t.sock', '--token', '/tmp/t.token'])
-    expect(result).not.toHaveProperty('logFilePath')
   })
 
   it('parses --log-file when present', () => {

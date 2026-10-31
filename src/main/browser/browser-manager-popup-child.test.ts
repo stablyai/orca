@@ -48,6 +48,24 @@ const {
   shellOpenExternalMock
 } = browserMocks
 
+let didCreateWindow: (window: { webContents: unknown }) => void = () => {}
+const fakeGuest = (id: number) => ({
+  id,
+  isDestroyed: vi.fn(() => false),
+  isCurrentlyAudible: vi.fn(() => false),
+  getType: vi.fn(() => 'webview'),
+  setWindowOpenHandler: vi.fn(),
+  downloadURL: vi.fn(),
+  on: vi.fn((event: string, listener: (window: { webContents: unknown }) => void) => {
+    if (event === 'did-create-window') {
+      didCreateWindow = listener
+    }
+  }),
+  off: vi.fn(),
+  once: vi.fn((_event: string, listener: () => void) => listener()),
+  close: vi.fn()
+})
+
 describe('browserManager popup child policies', () => {
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
@@ -68,16 +86,19 @@ describe('browserManager popup child policies', () => {
     const childGuest = {
       id: 4040,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: childSetBackgroundThrottlingMock,
       setWindowOpenHandler: childSetWindowOpenHandlerMock,
       on: childOnMock,
       off: childOffMock,
-      openDevTools: childOpenDevToolsMock
+      openDevTools: childOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://identity.example.com/login')
     }
     const guest = {
       id: 404,
       isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -109,7 +130,7 @@ describe('browserManager popup child policies', () => {
 
     didCreateWindowHandler?.({ webContents: childGuest })
 
-    expect(childSetBackgroundThrottlingMock).toHaveBeenCalledWith(false)
+    expect(childSetBackgroundThrottlingMock).not.toHaveBeenCalled()
     expect(childSetWindowOpenHandlerMock).toHaveBeenCalledTimes(1)
     expect(childOnMock.mock.calls.filter(([event]) => event === 'did-create-window')).toHaveLength(
       1
@@ -249,5 +270,96 @@ describe('browserManager popup child policies', () => {
     expect(childOffMock).toHaveBeenCalledWith('did-create-window', expect.any(Function))
     expect(childOffMock).toHaveBeenCalledWith('will-navigate', expect.any(Function))
     expect(childOffMock).toHaveBeenCalledWith('will-redirect', expect.any(Function))
+  })
+
+  it('exposes a live popup child as a page owned by its opener tab', async () => {
+    const opener = fakeGuest(404)
+    const popup = fakeGuest(4040)
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === opener.id ? opener : id === popup.id ? popup : null
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the policy reads only the fake's listed members.
+    browserManager.attachGuestPolicies(opener as unknown as Electron.WebContents)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      worktreeId: 'wt-1',
+      sessionProfileId: 'work',
+      webContentsId: opener.id,
+      rendererWebContentsId
+    })
+    didCreateWindow({ webContents: popup })
+
+    expect(browserManager.getPopupPages()).toEqual([
+      { browserPageId: 'popup-4040', webContentsId: 4040, openerBrowserPageId: 'browser-1' }
+    ])
+    expect(browserManager.getWorktreeIdForTab('popup-4040')).toBe('wt-1')
+    expect(browserManager.getSessionProfileIdForTab('popup-4040')).toBe('work')
+    await expect(browserManager.closePopupPage('browser-1')).resolves.toBe(false)
+    await expect(browserManager.closePopupPage('popup-4040')).resolves.toBe(true)
+    expect(popup.close).toHaveBeenCalledTimes(1)
+
+    browserManager.unregisterGuest('browser-1')
+    expect(browserManager.getPopupPages()).toEqual([])
+  })
+
+  it("saves a popup page's agent download to its path and refuses a second claim on the tab", async () => {
+    const opener = fakeGuest(406)
+    const popup = fakeGuest(4060)
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === opener.id ? opener : id === popup.id ? popup : null
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the policy reads only the fake's listed members.
+    browserManager.attachGuestPolicies(opener as unknown as Electron.WebContents)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: opener.id,
+      rendererWebContentsId
+    })
+    didCreateWindow({ webContents: popup })
+
+    const claim = browserManager.claimNextDownload(popup.id, '/work/out/receipt.pdf')
+    expect(() => browserManager.claimNextDownload(opener.id, '/work/out/other.pdf')).toThrow(
+      'Another download is already waiting'
+    )
+    const item = createDownloadItem()
+    browserManager.handleGuestWillDownload({ guestWebContentsId: popup.id, item })
+
+    expect(item.setSavePath).toHaveBeenCalledWith('/work/out/receipt.pdf')
+    await expect(claim.started).resolves.toBe(true)
+  })
+
+  it("opens a sibling popup's new-tab link as a tab while its tab waits for a download", () => {
+    const rendererSend = vi.fn()
+    const opener = fakeGuest(407)
+    const popup = fakeGuest(4070)
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSend }
+      }
+      return id === opener.id ? opener : id === popup.id ? popup : null
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the policy reads only the fake's listed members.
+    browserManager.attachGuestPolicies(opener as unknown as Electron.WebContents)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: opener.id,
+      rendererWebContentsId
+    })
+    didCreateWindow({ webContents: popup })
+    const openFromPopup = popup.setWindowOpenHandler.mock.calls[0][0]
+
+    browserManager.claimNextDownload(opener.id, '/work/out/report.csv')
+    openFromPopup({
+      url: 'https://app.example.com/help',
+      frameName: '',
+      features: '',
+      disposition: 'foreground-tab'
+    })
+
+    expect(popup.downloadURL).not.toHaveBeenCalled()
+    expect(rendererSend).toHaveBeenCalledWith('browser:open-link-in-orca-tab', {
+      browserPageId: 'browser-1',
+      url: 'https://app.example.com/help'
+    })
   })
 })

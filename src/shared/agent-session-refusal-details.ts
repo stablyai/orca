@@ -1,14 +1,23 @@
-// What a refusal says beyond its code: one reason list and one set of facts per code.
-//
-// A code alone cannot say what to do: `agent_session_operation_invalid` covers a cleared
-// conversation (open the current one) and a busy command (wait). Each reason here is one situation
-// with its own honest words and next step; a reason two codes share is listed under each. There is
-// no catch-all: a site that cannot name its situation sends the code with no reason, the same as an
-// older host, and the reader falls back to what it does for the code.
+// Codes span situations with different next steps (cleared chat versus busy command). Name only a listed reason; otherwise omit it for the code fallback, as older hosts do.
 
+import type { AgentSessionAccountKind } from './agent-session-availability'
 import type { AgentJournalResolution } from './agent-session-journal-types'
+import {
+  readAgentCliInstallationProblem,
+  type AgentCliInstallationProblem
+} from './agent-cli-installation-problem'
+import {
+  readCodexInstallationProblem,
+  type CodexInstallationProblem
+} from './codex-cli-installation'
+import {
+  readAgentSessionArgumentProblem,
+  type AgentSessionArgumentProblem
+} from './agent-session-argument-problem'
 import { isAgentJournalResolution } from './agent-session-journal-schemas'
 import { AGENT_SESSION_REWIND_REASONS, type AgentSessionRewindReason } from './agent-session-rewind'
+import type { TuiAgent } from './tui-agent'
+import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 import type {
   AgentSessionOwnerVerdict,
   AgentSessionWireRefusalCode
@@ -22,21 +31,33 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'messageIdReused',
     'operationRefusedEarlier',
     'journalWriteFailed',
+    /** A Stop that could not be saved. */
+    'stopFailed',
+    /** A card's Cancel whose dismissal could not be saved. */
+    'cancelNotSaved',
+    /** The message names a chat attachment the host no longer stores. */
+    'attachmentExpired',
     // The conversation's state
     'conversationCleared',
-    /** A /clear that never committed; its replacement conversation may not exist. */
+    /** Older hosts only: a /clear that never committed; its replacement may not exist. */
     'clearUnconfirmed',
+    /** Older hosts only: a command blocked behind that /clear. */
     'conversationCommandUnconfirmed',
     'conversationCommandInFlight',
     'handoffInFlight',
     'turnActive',
+    'continuationSuperseded',
     'promptPending',
     'backgroundTasksRunning',
     'messagesUnsettled',
+    /** The chat's queued messages hold too much text to show on every client. */
+    'queueTooLarge',
     'rewindRefused',
     'rewindUnconfirmed',
     // A prompt card or an option
     'promptGone',
+    /** The agent that raised the prompt has ended, so nothing can take its answer. */
+    'promptOwnerEnded',
     'optionRejected',
     // The provider
     'providerStarting',
@@ -44,12 +65,33 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'providerRejected',
     'providerStartFailed',
     'notSignedIn',
+    /** The agent's CLI is not installed on the host that would run it. */
+    'cliMissing',
     'historyTooLarge',
     /** The launch's own Anthropic sign-in variables would override the managed Claude account. */
     'managedAccountEnvOverride',
     'accountSwitchInProgress',
     /** A Claude account is added in WSL and no Windows one is selected, which a chat can't run under. */
     'managedAccountUnsupported',
+    /** A floating chat resumes only in the folder it ran in, and that folder is gone. */
+    'launchFolderMissing',
+    /** The chat's transcript is in a Claude account other than the selected one. */
+    'historyInOtherAccount',
+    /** The selected Claude account's folder is gone. */
+    'claudeAccountFolderMissing',
+    /** The selected Claude account's folder could not be set up. */
+    'claudeAccountSetupFailed',
+    /** Settings → Agents → Command names no program this host can run. */
+    'agentCommandNotRunnable',
+    /** The runtime Orca installs for the agent is not installed on this host. */
+    'runtimeNotInstalled',
+    /** The agent refuses Full access while it runs as root. */
+    'fullAccessAsRoot',
+    /** Orca's launch preparation on the host failed before any agent process was spawned. */
+    'launchPreparationFailed',
+    /** A terminal may still be writing the chat's conversation, so its agent did not start. */
+    'conversationOpenInTerminal',
+    'conversationOpenElsewhere',
     /** The agent started, then Orca could not open the chat's conversation for it. */
     'attachFailed'
   ],
@@ -65,7 +107,9 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'spawnIdentityMismatch',
     'notResumable',
     'noProviderChild',
-    'conversationHeldElsewhere'
+    'conversationHeldElsewhere',
+    /** A stop's close cannot prove child exit; it takes no input and no replacement starts beside it. Sent with ownerVerdict: unverifiable. */
+    'previousExitUnverifiable'
   ],
   agent_session_conflict: [
     'chatStarting',
@@ -95,7 +139,9 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     /** SQLite reports the chat's journal damaged or not a database; no retry reads past it. */
     'journalCorrupt',
     /** Any other failed open, which can clear. */
-    'journalUnavailable'
+    'journalUnavailable',
+    /** A newer Orca wrote the journal, or this chat's rows; only an update writes past it. */
+    'journalWrittenByNewerOrca'
   ],
   structured_agent_session_unsupported: [
     'clientCapabilityMissing',
@@ -126,9 +172,21 @@ type PromptFacts = {
 
 type NoFacts = Record<never, never>
 
+export type AgentSessionConversationOwner = { sessionId: string; workspaceId: string }
+
+type ConversationOwnerFacts = { owner?: AgentSessionConversationOwner }
+
 /** The facts a code carries beside its reason. */
 type AgentSessionRefusalFactsByCode = {
-  agent_session_operation_invalid: RewindFacts
+  agent_session_operation_invalid: RewindFacts & {
+    account?: AgentSessionAccountKind
+    argumentProblem?: AgentSessionArgumentProblem
+    /** The chat's agent a `stopFailed` Stop could not stop. */
+    agent?: TuiAgent
+    agentInstallation?: AgentCliInstallationProblem
+    /** Codex's binary problem as builds before `agentInstallation` send and read it. */
+    codexInstallation?: CodexInstallationProblem
+  }
   agent_session_operation_unknown: RewindFacts
   agent_session_checkpoint_stale: {
     /** So the client can retry without another round trip. */
@@ -136,8 +194,8 @@ type AgentSessionRefusalFactsByCode = {
   }
   agent_session_item_revision_stale: PromptFacts
   agent_session_already_resolved: PromptFacts
-  agent_session_ownership_unknown: NoFacts
-  agent_session_conflict: NoFacts
+  agent_session_ownership_unknown: ConversationOwnerFacts
+  agent_session_conflict: ConversationOwnerFacts
   execution_owner_reconciling: NoFacts
   agent_session_identity_required: NoFacts
   agent_session_operation_conflict: NoFacts
@@ -148,8 +206,7 @@ type AgentSessionRefusalFactsByCode = {
   agent_session_owner_restart_failed: NoFacts
 }
 
-/** A durably failed create says whether anything still runs for it, whichever code it failed
- *  with: `exited` proves nothing does, so a new operation cannot collide with this one. */
+/** exited proves no process still runs for a failed create, regardless of refusal code, so a fresh operation cannot collide. */
 type AgentSessionRefusalCommonFacts = { ownerVerdict?: AgentSessionOwnerVerdict }
 
 export type AgentSessionRefusalFacts<C extends AgentSessionWireRefusalCode> =
@@ -162,8 +219,7 @@ export type AgentSessionRefusalDetailsByCode = {
   } & AgentSessionRefusalFacts<C>
 }
 
-/** Details as the wire and a durable record carry them. The reason is absent where the host could
- *  not name the situation; the whole object is absent from older hosts. */
+/** Persist/wire listed details; omit reason when unclassified. Older hosts omit the whole object. */
 export type AgentSessionRefusalDetails<C extends AgentSessionWireRefusalCode> = {
   reason?: AgentSessionRefusalReason<C>
 } & AgentSessionRefusalFacts<C>
@@ -220,6 +276,11 @@ function readFact(
   }
 }
 
+/** An agent this build can name; a newer host's agent reads as none. */
+function isNamedAgent(value: unknown): value is TuiAgent {
+  return typeof value === 'string' && Object.hasOwn(TUI_AGENT_DISPLAY_NAMES, value)
+}
+
 export function isAgentSessionRefusalReason<C extends AgentSessionWireRefusalCode>(
   code: C,
   value: unknown
@@ -228,11 +289,7 @@ export function isAgentSessionRefusalReason<C extends AgentSessionWireRefusalCod
   return typeof value === 'string' && reasons.includes(value)
 }
 
-/**
- * Details as a reader meets them: from the wire, a ledger row or a stored failure, possibly
- * written by another build. Keeps only a reason and facts this code lists, so a reason a newer
- * host added reads as none; undefined when nothing is left.
- */
+/** Read only reasons/facts listed for the code from wire/ledger/stored failures; newer reasons become absent, and an empty result becomes undefined. */
 export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusalCode>(
   code: C,
   value: unknown
@@ -245,9 +302,45 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
     (kept, key) => ({ ...kept, ...readFact(key, value[key]) }),
     {}
   )
+  const argumentProblem =
+    code === 'agent_session_operation_invalid'
+      ? readAgentSessionArgumentProblem(value.argumentProblem)
+      : undefined
+  const agentInstallation =
+    code === 'agent_session_operation_invalid'
+      ? readAgentCliInstallationProblem(value.agentInstallation)
+      : undefined
+  const codexInstallation =
+    code === 'agent_session_operation_invalid'
+      ? readCodexInstallationProblem(value.codexInstallation)
+      : undefined
+  const owner =
+    (code === 'agent_session_conflict' || code === 'agent_session_ownership_unknown') &&
+    value.reason === 'conversationHeldElsewhere' &&
+    isRecord(value.owner) &&
+    typeof value.owner.sessionId === 'string' &&
+    value.owner.sessionId.trim().length > 0 &&
+    typeof value.owner.workspaceId === 'string' &&
+    value.owner.workspaceId.trim().length > 0
+      ? { sessionId: value.owner.sessionId, workspaceId: value.owner.workspaceId }
+      : undefined
   const read = {
     ...(isAgentSessionRefusalReason(code, value.reason) ? { reason: value.reason } : {}),
-    ...facts
+    ...facts,
+    ...(owner ? { owner } : {}),
+    ...(code === 'agent_session_operation_invalid' &&
+    value.reason === 'notSignedIn' &&
+    (value.account === 'managed' || value.account === 'system')
+      ? { account: value.account }
+      : {}),
+    ...(argumentProblem ? { argumentProblem } : {}),
+    ...(code === 'agent_session_operation_invalid' &&
+    value.reason === 'stopFailed' &&
+    isNamedAgent(value.agent)
+      ? { agent: value.agent }
+      : {}),
+    ...(agentInstallation ? { agentInstallation } : {}),
+    ...(codexInstallation ? { codexInstallation } : {})
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reason was checked against `code`'s list and only the facts `code` lists (plus the verdict every code may carry) were kept.
   return Object.keys(read).length > 0 ? (read as AgentSessionRefusalDetails<C>) : undefined

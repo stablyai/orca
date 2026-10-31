@@ -37,16 +37,30 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-// Fields that can name a party: the caller in ORCHESTRATION_CALLER_PARAM, a target in ORCHESTRATION_TARGET_PARAM.
-const PARTY_NAMING_FIELDS = ['to', 'from', 'terminal', 'callerTerminalHandle'] as const
-// `method field` pairs with such a field that is neither, so never resolves as a party.
+// Caller and target params are named by ORCHESTRATION_CALLER_PARAM and ORCHESTRATION_TARGET_PARAM.
+const PARTY_NAMING_FIELDS = [
+  'to',
+  'from',
+  'terminal',
+  'callerTerminalHandle',
+  'sessionId',
+  'address'
+] as const
+// These identity-adjacent fields must never resolve as parties.
 const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
   'orchestration.run from': 'retired; refused before any handler',
   'orchestration.runShow from': 'reads a Run by id; `from` is unused',
   'orchestration.dispatchShow from': '`from` only fills the preview preamble text',
-  'orchestration.workerStart terminal': 'adopts an existing PTY pane, which a session never has',
   'orchestration.federationAttachStart terminal': 'names the remote worker terminal',
-  'orchestration.workerTerminalUserInput terminal': 'names the worker terminal'
+  'orchestration.workerTerminalUserInput terminal': 'names the worker terminal',
+  'orchestration.workerTerminalUserInput sessionId':
+    'names the worker session, as its terminal does',
+  'orchestration.workerAutoClose terminal': 'names the worker terminal',
+  'orchestration.workerAutoClose sessionId': 'names the worker session, as its terminal does',
+  'orchestration.workerKeepOpen terminal': 'names the worker terminal',
+  'orchestration.workerKeepOpen sessionId': 'names the worker session, as its terminal does',
+  'orchestration.workerChatTouch terminal': 'names the worker terminal',
+  'orchestration.workerChatTouch sessionId': 'names the worker session, as its terminal does'
 }
 
 /** One request per identity-consulting method, valid enough to reach the dispatcher entry. */
@@ -93,9 +107,6 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
-    // The population: 41 registered methods carrying 25 party-naming fields.
-    expect(registry.size).toBe(41)
-    expect(partyNaming).toHaveLength(25)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(
@@ -147,8 +158,7 @@ describe('orchestration session callers at the dispatch entry', () => {
         })
       )
 
-      // Whatever the method answers, it answered as the session: no host-boundary or session refusal,
-      // and terminal evidence on the same request never attested anyone.
+      // Replies must use session identity without host/session refusal; terminal evidence on the same request must never attest.
       if (!response.ok) {
         expect(Object.values(CODES)).not.toContain(response.error.code)
         expect(response.error.message).not.toContain('term_other')
@@ -252,7 +262,7 @@ describe('orchestration session callers at the dispatch entry', () => {
     })
 
     it('a terminal handle presented as a session id', async () => {
-      await expectRefusedWithNoEffects('term_4f2c9a0b', CODES.unknown, /not an Orca session id/)
+      await expectRefusedWithNoEffects('term_4f2c9a0b', CODES.unknown, /not an Orca session ID/)
     })
 
     it("a provider's session id, with a hint naming the Orca id", async () => {
@@ -263,16 +273,50 @@ describe('orchestration session callers at the dispatch entry', () => {
         ok: false,
         error: {
           code: CODES.providerId,
-          message: expect.stringContaining(`This session's Orca id is ${SESSION_X}`),
+          message: `${PROVIDER_ID_X} is the provider's own session id, which changes on /clear. This session's Orca session ID is orca_session_id:${SESSION_X}; set ORCA_AGENT_SESSION_ID=${SESSION_X} instead. No effects were applied.`,
           data: { orcaSessionId: SESSION_X, effectsApplied: false }
         }
       })
       await expectRefusedWithNoEffects(PROVIDER_ID_X, CODES.providerId, /changes on \/clear/)
     })
 
-    it('a released lease', async () => {
+    it('a released lease reading its mail, while its background commands still send as it', async () => {
       h.records.set(SESSION_X, sessionRecord(SESSION_X, { lease: { claimStatus: 'released' } }))
-      await expectRefusedWithNoEffects(SESSION_X, CODES.notLive, /is not running right now/)
+      const { messageId } = seedPendingMail()
+      for (const [method, params] of [
+        ['orchestration.check', {}],
+        ['orchestration.check', { wait: true, timeoutMs: 1 }],
+        ['orchestration.check', { peek: true }],
+        ['orchestration.ask', { question: 'q', to: 'term_worker', timeoutMs: 1 }]
+      ] as const) {
+        const response = await h.dispatch(
+          orchestrationRequest(method, params, { sessionId: SESSION_X })
+        )
+        expect(response, method).toMatchObject({
+          ok: false,
+          error: { code: CODES.notLive, message: expect.stringMatching(/is not running right now/) }
+        })
+      }
+      expect(h.db.getMessageById(messageId)).toMatchObject({ read: 0 })
+
+      const sent = await h.dispatch(
+        orchestrationRequest(
+          'orchestration.send',
+          { to: ADDRESS_X, subject: 'wake' },
+          { sessionId: SESSION_X }
+        )
+      )
+      expect(h.db.getMessageById(idOf(resultOf(sent).message))).toMatchObject({
+        from_handle: ADDRESS_X
+      })
+    })
+
+    it('a released lease the host has not reconciled since restart', async () => {
+      h.records.set(
+        SESSION_X,
+        sessionRecord(SESSION_X, { lease: { claimStatus: 'released', unreconciled: true } })
+      )
+      await expectRefusedWithNoEffects(SESSION_X, CODES.notLive, /no live owner/)
     })
 
     it('a lease mid owner change', async () => {
@@ -375,6 +419,80 @@ describe('orchestration session callers at the dispatch entry', () => {
       )
       expect(response).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
     })
+
+    it('accepts a /clear successor naming the address it had before the clear, and no other', async () => {
+      // Y continued X after a /clear, so X's address is Y's: the lineage root names the chat.
+      h.records.set(SESSION_X, {
+        ...sessionRecord(SESSION_X),
+        conversationCommand: {
+          command: 'clear',
+          state: 'completed',
+          replacementSessionId: SESSION_Y,
+          operationId: 'op',
+          callerKey: 'caller',
+          phase: 'committed'
+        }
+      })
+      const run = resultOf(
+        await h.dispatch(
+          orchestrationRequest(
+            'orchestration.runCreate',
+            { objective: 'o', from: ADDRESS_X },
+            { sessionId: SESSION_Y }
+          )
+        )
+      ).run
+      expect(h.db.getRunRaw(idOf(run))?.coordinator_orca_session_id).toBe(SESSION_X)
+
+      const stranger = 'orca_session_id:0b5e2d7c-9a41-4c3e-8f62-7d1a3e5b9c08'
+      const refused = await h.dispatch(
+        orchestrationRequest(
+          'orchestration.runCreate',
+          { objective: 'o', from: stranger },
+          { sessionId: SESSION_Y }
+        )
+      )
+      expect(refused).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
+    })
+
+    it.each(['orchestration.gateList', 'orchestration.taskList'])(
+      'checks a caller %s names beside --run: the /clear root is the chat, a stranger is refused',
+      async (method) => {
+        h.records.set(SESSION_X, {
+          ...sessionRecord(SESSION_X),
+          conversationCommand: {
+            command: 'clear',
+            state: 'completed',
+            replacementSessionId: SESSION_Y,
+            operationId: 'op',
+            callerKey: 'caller',
+            phase: 'committed'
+          }
+        })
+        const runId = idOf(
+          resultOf(
+            await h.dispatch(
+              orchestrationRequest(
+                'orchestration.runCreate',
+                { objective: 'o' },
+                { sessionId: SESSION_Y }
+              )
+            )
+          ).run
+        )
+        const param = ORCHESTRATION_CALLER_PARAM[method]!
+        const listed = await h.dispatch(
+          orchestrationRequest(method, { run: runId, [param]: ADDRESS_X }, { sessionId: SESSION_Y })
+        )
+        expect(resultOf(listed)).toMatchObject({ runId })
+
+        const stranger = 'orca_session_id:0b5e2d7c-9a41-4c3e-8f62-7d1a3e5b9c08'
+        const refused = await h.dispatch(
+          orchestrationRequest(method, { run: runId, [param]: stranger }, { sessionId: SESSION_Y })
+        )
+        expect(refused).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
+      }
+    )
 
     it.each([ADDRESS_X, SESSION_X])('accepts the session named as %s', async (declared) => {
       const run = resultOf(

@@ -10,7 +10,7 @@ runs:
       uses: actions/cache@v5
       with:
         path: ~/.cache/orca-git-compat/git-2.25.5
-        key: git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5
+        key: git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5-submodule
 
     # Finish the CPU-heavy build before any timed compatibility lanes start.
     - name: Build the baseline Git binary
@@ -18,7 +18,9 @@ runs:
       run: |
         archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
         source="$HOME/.cache/orca-git-compat/git-2.25.5"
-        if [ -x "$source/git" ]; then
+        if [ -x "$source/git" ] && [ -x "$source/git-submodule" ] \
+          && [ -f "$source/git-sh-setup" ] && [ -f "$source/git-sh-i18n" ] \
+          && [ -f "$source/git-parse-remote" ] && [ -x "$source/git-sh-i18n--envsubst" ]; then
           exit 0
         fi
         curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
@@ -27,6 +29,7 @@ runs:
         mkdir -p "$source"
         tar -xzf "$archive" -C "$source" --strip-components=1
         make -C "$source" -j"$(nproc)" \
-          NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+          NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease \
+          git git-submodule git-sh-setup git-sh-i18n git-parse-remote git-sh-i18n--envsubst
         # Object files are no longer needed after linking the cached binary.
         find "$source" -name '*.o' -delete

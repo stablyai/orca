@@ -24,16 +24,18 @@ import {
 /** What Orca's own text looks like: a code or marker, a uuid, a path, an exception. */
 const ORCA_INTERNAL = /\b[a-z]+_[a-z_]+\b|[0-9a-f]{8}-[0-9a-f]{4}-|[/\\][\w.-]+[/\\]|Error:|ENOENT/
 
-const SURFACES: readonly AgentSessionFailureSurface[] = ['row', 'rejection']
+const SURFACES: readonly AgentSessionFailureSurface[] = ['row', 'rejection', 'answer']
 const LEGACY_MARKER_KINDS: ReadonlySet<SubmissionRejectionKind> = new Set([
   'cancelled',
   'writeFailed',
   'queueFull'
 ])
 
-/** Every fact shape a kind can carry: bare, with a person or a log detail, with a refusal, and
- *  for an attachment each reason with and without its limit. */
+/** Cover every fact shape, with person/log/refusal details and every attachment reason with/without a limit. */
 function factsFor(kind: AgentSessionFailureKind): AgentSessionFailureFact[] {
+  if (kind === 'modelUnavailable') {
+    return [{ kind }, { kind, detail: { text: 'retired-model', audience: 'log' } }]
+  }
   const facts: AgentSessionFailureFact[] = [
     { kind },
     { kind, detail: { text: 'Context window exceeded.', audience: 'person' } },
@@ -48,6 +50,8 @@ function factsFor(kind: AgentSessionFailureKind): AgentSessionFailureFact[] {
     facts.push({ kind, retry: { error: 'rate_limit', status: 429 } })
     facts.push({ kind, retry: { error: 'overloaded', status: 529 } })
     facts.push({ kind, retry: { status: 500 } })
+    facts.push({ kind, retry: { error: 'server_error', status: 502, attempt: 3, maxRetries: 10 } })
+    facts.push({ kind, retry: { attempt: 1 } })
   }
   if (kind === 'attachmentInvalid') {
     for (const reason of AGENT_SESSION_ATTACHMENT_PROBLEM_REASONS) {
@@ -67,15 +71,25 @@ describe('the words written beside a failure fact', () => {
           [undefined, undefined],
           ['Codex', 'clear']
         ] as const) {
-          const sentence = agentSessionFailureSentence(fact, surface, { agentName, command })
-          expect([fact, sentence]).toEqual([fact, expect.stringMatching(/[^.]\.$/)])
+          const context = { agentName, command, provider: 'claude' } as const
+          const sentence = agentSessionFailureSentence(fact, surface, context)
+          expect(sentence).toMatch(/[^.]\.$/)
           expect(sentence).not.toMatch(/\.\./)
           expect(sentence).not.toMatch(ORCA_INTERNAL)
-          const context = { agentName, command, provider: 'claude' } as const
           if (surface === 'row') {
-            expect(agentSessionFailureWords(fact, { ...context, surface }).text).toBe(sentence)
-          } else if (isSubmissionRejectionFact(fact) && !LEGACY_MARKER_KINDS.has(fact.kind)) {
-            expect(agentSessionFailureWords(fact, { ...context, surface }).reason).toBe(sentence)
+            expect(agentSessionFailureWords(fact, { ...context, surface })).toEqual({
+              text: sentence,
+              failure: fact
+            })
+          } else if (
+            surface === 'rejection' &&
+            isSubmissionRejectionFact(fact) &&
+            !LEGACY_MARKER_KINDS.has(fact.kind)
+          ) {
+            expect(agentSessionFailureWords(fact, { ...context, surface })).toEqual({
+              reason: sentence,
+              rejection: fact
+            })
           }
         }
       }
@@ -107,16 +121,27 @@ describe('the words written beside a failure fact', () => {
     }
   })
 
-  it('names /clear as the next step for the start a /clear needed', () => {
-    const clear = (kind: AgentSessionFailureKind) =>
-      agentSessionFailureSentence({ kind }, 'row', { agentName: 'Codex', command: 'clear' })
-    expect(clear('notSignedIn')).toBe(
-      'Codex is not signed in for the selected account. Sign in, then run /clear again.'
+  it('names /compact as the next step for the start a /compact needed', () => {
+    const compact = (kind: AgentSessionFailureKind) =>
+      agentSessionFailureSentence({ kind }, 'rejection', {
+        agentName: 'Claude',
+        command: 'compact'
+      })
+    expect(compact('notSignedIn')).toBe(
+      "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings. Run /compact again."
     )
-    expect(clear('startFailed')).toBe("Codex couldn't start. Run /clear again.")
-    expect(clear('restartFailed')).toBe("Codex couldn't restart. Run /clear again.")
-    expect(clear('providerStartFailed')).toBe(
-      'Codex stopped before it finished starting. Run /clear again.'
+    expect(
+      agentSessionFailureSentence({ kind: 'notSignedIn', account: 'managed' }, 'rejection', {
+        agentName: 'Codex',
+        command: 'compact'
+      })
+    ).toBe(
+      "This Codex account isn't signed in. Sign in again in Codex Accounts settings. Run /compact again."
+    )
+    expect(compact('startFailed')).toBe("Claude couldn't start. Run /compact again.")
+    expect(compact('restartFailed')).toBe("Claude couldn't restart. Run /compact again.")
+    expect(compact('providerStartFailed')).toBe(
+      'Claude stopped before it finished starting. Run /compact again.'
     )
   })
 
@@ -148,6 +173,55 @@ describe('the words written beside a failure fact', () => {
     ).toBe("Codex couldn't start. Start a new chat to continue.")
   })
 
+  it("names a too-old agent's installed and minimum versions, and still reads Codex's legacy fact", () => {
+    const words = (details: Record<string, unknown>) =>
+      agentSessionFailureSentence(
+        readAgentSessionFailureFact({
+          kind: 'startFailed',
+          refusal: {
+            code: 'agent_session_operation_invalid',
+            details: { reason: 'attachFailed', ...details }
+          }
+        })!,
+        'row',
+        {}
+      )
+    expect(
+      words({
+        agentInstallation: {
+          agent: 'opencode',
+          installedVersion: '1.0.0',
+          minimumVersion: '1.18.31'
+        }
+      })
+    ).toBe('OpenCode 1.0.0 is too old for chats. Update to 1.18.31 or newer.')
+    expect(
+      words({ codexInstallation: { installedVersion: '0.135.0', minimumVersion: '0.136.0' } })
+    ).toBe('Codex 0.135.0 is too old for chats. Update to 0.136.0 or newer.')
+  })
+
+  it('says a start refused beside a process Orca could not stop in its own words', () => {
+    const refused = (context: { command?: 'compact'; retryControl?: boolean } = {}) =>
+      agentSessionFailureSentence(
+        {
+          kind: 'restartFailed',
+          refusal: {
+            code: 'agent_session_ownership_unknown',
+            details: { reason: 'previousExitUnverifiable' }
+          }
+        },
+        'rejection',
+        { agentName: 'Claude', ...context }
+      )
+    expect(refused()).toBe(
+      "Couldn't stop Claude from before. Send your message again to try once more."
+    )
+    expect(refused({ command: 'compact' })).toBe(
+      "Couldn't stop Claude from before. Run /compact again."
+    )
+    expect(refused({ retryControl: true })).toBe("Couldn't stop Claude from before.")
+  })
+
   it('names the exit a row reports differently from the message it left unsent', () => {
     expect(
       agentSessionFailureWords({ kind: 'providerExited' }, { surface: 'row', agentName: 'Claude' })
@@ -169,6 +243,23 @@ describe('the words written beside a failure fact', () => {
     ).toBe('The agent stopped before this message was sent.')
   })
 
+  it('says a refused Stop reached the agent, which declined it', () => {
+    const refused = (detail?: { text: string; audience: 'person' | 'log' }, agentName?: string) =>
+      agentSessionFailureWords(
+        { kind: 'stopRefused', ...(detail ? { detail } : {}) },
+        { surface: 'row', agentName }
+      ).text
+    expect(refused(undefined, 'Codex')).toBe('Codex had no turn running to stop.')
+    expect(refused()).toBe('The agent had no turn running to stop.')
+    expect(refused({ text: 'no active turn to interrupt.', audience: 'person' }, 'Codex')).toBe(
+      "Codex didn't stop: no active turn to interrupt."
+    )
+    // Words Codex wrote for the log are never quoted to a person.
+    expect(refused({ text: 'rpc -32600', audience: 'log' }, 'Codex')).toBe(
+      'Codex had no turn running to stop.'
+    )
+  })
+
   it('says what frees a chat a terminal agent still holds, without naming its process', () => {
     expect(
       agentSessionFailureSentence(
@@ -182,6 +273,68 @@ describe('the words written beside a failure fact', () => {
     ).toBe(
       "Codex couldn't restart. This chat is still open in a terminal agent. Quit that agent to continue the chat here."
     )
+  })
+
+  it("quotes a provider's own retry progress, and keeps a log detail out of it", () => {
+    const retrying = (fact: Omit<AgentSessionFailureFact, 'kind'>) =>
+      agentSessionFailureSentence({ kind: 'providerRetrying', ...fact }, 'row', {
+        agentName: 'Codex'
+      })
+    expect(retrying({ detail: { text: 'Reconnecting... 2/5', audience: 'person' } })).toBe(
+      'Codex is retrying: Reconnecting... 2/5.'
+    )
+    expect(
+      retrying({
+        detail: { text: '{"type":"system","subtype":"api_retry"}', audience: 'log' },
+        retry: { error: 'rate_limit', status: 429 }
+      })
+    ).toBe('Codex is rate-limited and retrying.\nLast error: HTTP 429 rate limit.')
+    expect(retrying({})).toBe('Codex hit a temporary problem and is retrying.')
+  })
+
+  it("puts the provider's account of what failed on the retry row's second line", () => {
+    const retrying = (fact: Omit<AgentSessionFailureFact, 'kind'>) =>
+      agentSessionFailureSentence({ kind: 'providerRetrying', ...fact }, 'row', {
+        agentName: 'Codex'
+      })
+    expect(
+      retrying({
+        detail: { text: 'Reconnecting... 2/5', audience: 'person' },
+        retry: { cause: 'stream disconnected before completion' }
+      })
+    ).toBe('Codex is retrying: Reconnecting... 2/5.\nstream disconnected before completion')
+    expect(retrying({ retry: { status: 429, cause: 'Too many requests' } })).toBe(
+      'Codex is rate-limited and retrying.\nToo many requests'
+    )
+  })
+
+  it("says which retry it is, and the provider's codes when it wrote no account", () => {
+    const retrying = (retry: AgentSessionFailureFact['retry']) =>
+      agentSessionFailureSentence({ kind: 'providerRetrying', retry }, 'row', {
+        agentName: 'Claude'
+      })
+    expect(retrying({ error: 'server_error', status: 502, attempt: 3, maxRetries: 10 })).toBe(
+      'Claude hit a temporary problem and is retrying. Retry 3 of 10.\nLast error: HTTP 502 server error.'
+    )
+    expect(retrying({ status: 502, attempt: 3 })).toBe(
+      'Claude hit a temporary problem and is retrying. Retry 3.\nLast error: HTTP 502.'
+    )
+    // The provider's own account outranks its codes.
+    expect(retrying({ status: 429, cause: 'Too many requests', attempt: 2, maxRetries: 5 })).toBe(
+      'Claude is rate-limited and retrying. Retry 2 of 5.\nToo many requests'
+    )
+    // A provider that words its own progress is quoted alone, never counted twice.
+    expect(
+      agentSessionFailureSentence(
+        {
+          kind: 'providerRetrying',
+          detail: { text: 'Reconnecting... 2/5', audience: 'person' },
+          retry: { status: 502, attempt: 2, maxRetries: 5 }
+        },
+        'row',
+        { agentName: 'Codex' }
+      )
+    ).toBe('Codex is retrying: Reconnecting... 2/5.')
   })
 
   it('says which limit an attachment broke, in megabytes', () => {

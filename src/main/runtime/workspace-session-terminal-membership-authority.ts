@@ -5,7 +5,6 @@ import type {
 } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { layoutContainsLeafId } from '../persistence/restoring-sessions/terminal-layout-normalization'
 import { pruneTabGroupLayoutAfterRetirement } from './mobile-session-terminal-retirement'
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null, ids: Set<string>): void {
@@ -46,7 +45,7 @@ function rebaseLayout(
   }
   return {
     ...candidate,
-    // Why: renderer layout metadata may move, but only host-persisted live bindings may name PTYs.
+    // Renderer metadata may move; PTY bindings remain host-authoritative.
     ptyIdsByLeafId: {
       ...candidate.ptyIdsByLeafId,
       ...current.ptyIdsByLeafId
@@ -102,8 +101,7 @@ function rebaseTabGroups(
         ...group,
         tabOrder,
         activeTabId,
-        // Why assigned even when it filters to empty: omitting the key lets `...group`
-        // re-introduce the unfiltered array, persisting ids for tabs the host dropped.
+        // Keep empty explicitly or the group spread restores stale tab ids.
         ...(group.recentTabIds ? { recentTabIds: recentTabIds ?? [] } : {})
       }
     ]
@@ -146,59 +144,6 @@ function rebaseIncarnationBindings(
     })
   )
   return Object.keys(retained).length > 0 ? retained : undefined
-}
-
-export function advanceTerminalTopologyRevision(
-  session: WorkspaceSessionState,
-  worktreeId: string
-): WorkspaceSessionState {
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return {
-    ...session,
-    terminalTopologyRevisionByRepoId: {
-      ...session.terminalTopologyRevisionByRepoId,
-      [repoId]: (session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0) + 1
-    }
-  }
-}
-
-/**
- * The tab whose live layout holds this leaf. Only the leaf half of a pane key is remint-stable —
- * `detachTerminalPaneToTab` moves a live pane into a new tab, so a stored tabId names the tab the
- * pane left. Callers fencing on location must resolve it here rather than trust a frozen tabId.
- *
- * Stateless on purpose: writers graft leaves by assigning into a layout that is already inside the
- * layouts record, so any cache here would need a revalidation key that is itself O(tabs) per read —
- * the same cost as this walk, with a staleness invariant to keep. `Object.keys` over a guarded
- * `for...in` is deliberate too: the key array is cheaper than a `hasOwn` call per tab (measured).
- */
-export function findTerminalTabIdForLeaf(
-  session: WorkspaceSessionState | undefined,
-  leafId: string
-): string | undefined {
-  const layouts = session?.terminalLayoutsByTabId
-  if (!layouts) {
-    return undefined
-  }
-  for (const tabId of Object.keys(layouts)) {
-    if (layoutContainsLeafId(layouts[tabId]?.root ?? null, leafId)) {
-      return tabId
-    }
-  }
-  return undefined
-}
-
-export function hasHostAuthoritativeTerminalMembership(
-  session: WorkspaceSessionState | undefined,
-  worktreeId: string
-): boolean {
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return (
-    (session?.terminalTopologyRevisionByRepoId?.[repoId] ?? 0) > 0 ||
-    Object.values(session?.terminalSurfaceTombstonesByPaneKey ?? {}).some(
-      (tombstone) => tombstone.worktreeId === worktreeId
-    )
-  )
 }
 
 export function rebaseWorkspaceSessionTerminalMembership(

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -35,8 +36,11 @@ function frames(): {
     },
     publish: vi.fn()
   } as unknown as StructuredAgentSessionEventSink
-  const goals = new CodexJournalGoals(sink, () => ({}))
-  const generic = new CodexJournalGenericFrames({ sink, linkageFor: () => ({}) }, () => null)
+  const goals = new CodexJournalGoals(sink, () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }))
+  const generic = new CodexJournalGenericFrames(
+    { sink, attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }) },
+    () => null
+  )
   return {
     rows,
     frames: {
@@ -95,8 +99,7 @@ describe('codex goal frames as journal rows', () => {
   it('does not repeat the row while only the counters climb', () => {
     const { rows, frames: generic } = frames()
 
-    // Codex re-sends the goal through the turn as accounting ticks; a live session
-    // emitted these two seconds apart with nothing else changed.
+    // Captured live accounting ticks, two seconds apart.
     generic.appendUnhandled('notification:thread/goal/updated', goalFrame({}), THREAD)
     generic.appendUnhandled(
       'notification:thread/goal/updated',
@@ -178,7 +181,6 @@ describe('codex goal frames as journal rows', () => {
     generic.appendUnhandled('notification:warning', { message: 'disk almost full' }, THREAD)
     generic.appendUnhandled('notification:warning', { message: 'disk almost full' }, THREAD)
 
-    // No goal dedupe applies, so both warnings still land.
     expect(rows).toHaveLength(2)
   })
 })

@@ -40,8 +40,7 @@ export const AGENT_SESSION_WIRE_REFUSAL_CODES = [
 ] as const
 export type AgentSessionWireRefusalCode = (typeof AGENT_SESSION_WIRE_REFUSAL_CODES)[number]
 
-/** For a host path that raises its refusal as the thrown code. Narrowing through this keeps an
- *  unrelated fault from being reported to the client as a tidy, wrong refusal. */
+/** Narrow thrown refusal codes so unrelated faults cannot become tidy but incorrect client refusals. */
 export function isAgentSessionWireRefusalCode(
   value: unknown
 ): value is AgentSessionWireRefusalCode {
@@ -62,6 +61,8 @@ export type AgentSessionRefusalOf<C extends AgentSessionWireRefusalCode> = {
     message: string
     /** Absent from older hosts. */
     details?: AgentSessionRefusalDetails<K>
+    /** This create attempt refused before commit; earlier attempts may still have committed. */
+    createAttemptRefusedBeforeCommit?: true
   } & AgentSessionLegacyRefusalFields
 }[C]
 
@@ -88,8 +89,7 @@ function buildRefusal(
   return refusal as AgentSessionWireRefusal
 }
 
-/** A refusal built at its emitter. The reason must be one `code` lists; the legacy top-level fields
- *  released clients read are copied from `details` here and nowhere else. */
+/** Require a reason listed for code; copy legacy top-level fields only here from details. */
 export function refuse<C extends AgentSessionWireRefusalCode>(
   code: C,
   details: NoInfer<AgentSessionRefusalDetailsByCode[C]>,
@@ -98,11 +98,7 @@ export function refuse<C extends AgentSessionWireRefusalCode>(
   return buildRefusal(code, details, message)
 }
 
-/**
- * A refusal whose situation this site cannot name: the code, and whatever facts it does know, with
- * no reason, exactly as an older host sends it. The explicit path, so no emitter reaches for a
- * catch-all reason instead.
- */
+/** Explicitly emit code/facts without a reason when the situation is unclassified; never invent a catch-all reason. */
 export function refuseUnclassified<C extends AgentSessionWireRefusalCode>(
   code: C,
   message: string,
@@ -134,8 +130,7 @@ export function agentSessionRefusalReference(
   return buildReference(refusal.code, refusal.details)
 }
 
-/** A reference read back from a record another build may have written; details are checked
- *  against the code, and anything else they held (an older build's `cause`) is dropped. */
+/** Check stored details against code and discard unknown fields, including legacy cause. */
 export function readAgentSessionRefusalReference(
   value: unknown
 ): AgentSessionRefusalReference | undefined {
@@ -162,13 +157,7 @@ function buildReference(
   return reference as AgentSessionRefusalReference
 }
 
-/**
- * A refusal raised rather than returned. Its message is the bare code, exactly as the
- * `Error(code)` it replaces: the RPC passthrough, the restart-resume ledger and released clients
- * all read a thrown refusal's message as its code. The details ride on `refusal` and reach the
- * client only in the RPC error's data. Deliberately no `code` property, so no `'code' in error`
- * passthrough meant for another subsystem can claim it.
- */
+/** Keep thrown message as bare code for RPC passthrough, restart ledger and released clients. Carry details only through refusal/RPC error data; omit a code property to avoid unrelated subsystem passthrough. */
 export class AgentSessionRefusalError extends Error {
   readonly refusal: AgentSessionWireRefusal
 

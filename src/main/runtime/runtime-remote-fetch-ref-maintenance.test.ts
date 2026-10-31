@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why: Orca's fetches are what create the loose-ref backlog (they suppress
-// git's auto-maintenance), so the fetch controller is where the idle sweep has
-// to be armed. These tests pin that wiring and the per-repo busy signal it
-// hands the sweep.
+// Fetches suppress auto-maintenance and create loose refs; pin controller scheduling and its per-repo busy signal.
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 const armMock = vi.hoisted(() => vi.fn())
@@ -54,7 +51,9 @@ describe('fetch-armed ref maintenance', () => {
 
     await controller.getOrStartRemoteFetch('/repo/worktrees/a', 'origin')
 
-    expect(armedTargets().map((target) => target.key)).toEqual(['local::/repo/.git'])
+    await vi.waitFor(() =>
+      expect(armedTargets().map((target) => target.key)).toEqual(['local::/repo/.git'])
+    )
   })
 
   it('gives every worktree of one repo the same maintenance key', async () => {
@@ -68,8 +67,12 @@ describe('fetch-armed ref maintenance', () => {
       base: 'origin/main'
     })
 
-    const keys = new Set(armedTargets().map((target) => target.key))
-    expect(keys).toEqual(new Set(['local::/repo/.git']))
+    await vi.waitFor(() =>
+      expect(armedTargets().map((target) => target.key)).toEqual([
+        'local::/repo/.git',
+        'local::/repo/.git'
+      ])
+    )
   })
 
   it('scopes the key to the WSL distro that executes the repo', async () => {
@@ -79,12 +82,11 @@ describe('fetch-armed ref maintenance', () => {
       wslDistro: 'Ubuntu'
     })
 
-    expect(armedTargets()[0]?.key).toBe('wsl:Ubuntu::/repo/.git')
+    await vi.waitFor(() => expect(armedTargets()[0]?.key).toBe('wsl:Ubuntu::/repo/.git'))
   })
 
   it('does not collapse every repo onto one key on Git older than 2.31', async () => {
-    // Old Git echoes the unrecognized `--path-format` flag, exits 0, and prints a
-    // relative `.git`; taking that raw would name every repository identically.
+    // Older Git may echo unsupported --path-format and exit 0; do not mistake its relative .git answer for every repo's key.
     gitExecFileAsyncMock.mockImplementation(async (argv: string[]) =>
       argv[0] === 'rev-parse'
         ? { stdout: '--path-format=absolute\n.git\n', stderr: '' }
@@ -95,15 +97,18 @@ describe('fetch-armed ref maintenance', () => {
     await controller.getOrStartRemoteFetch('/repo/one', 'origin')
     await controller.getOrStartRemoteFetch('/repo/two', 'origin')
 
-    expect(armedTargets().map((entry) => entry.key)).toEqual([
-      'local::/repo/one/.git',
-      'local::/repo/two/.git'
-    ])
+    await vi.waitFor(() =>
+      expect(armedTargets().map((entry) => entry.key)).toEqual([
+        'local::/repo/one/.git',
+        'local::/repo/two/.git'
+      ])
+    )
   })
 
   it('reports the repo as busy while another fetch on it is in flight', async () => {
     const controller = new RuntimeRemoteFetchController()
     await controller.getOrStartRemoteFetch('/repo', 'first')
+    await vi.waitFor(() => expect(busyProbeFor('local::/repo/.git')).toBeDefined())
     const isBusy = busyProbeFor('local::/repo/.git')
     expect(isBusy?.()).toBe(false)
 
@@ -140,6 +145,6 @@ describe('fetch-armed ref maintenance', () => {
       ok: false,
       errorKind: 'git_error'
     })
-    expect(armedTargets()).toHaveLength(1)
+    await vi.waitFor(() => expect(armedTargets()).toHaveLength(1))
   })
 })

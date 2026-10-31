@@ -1,28 +1,24 @@
-import type { BrowserWindow, IpcMainEvent } from 'electron'
+import type { BrowserWindow, IpcMainEvent, WebContents } from 'electron'
 
-/**
- * The desktop facilities `OrcaRuntimeService` uses, which a Node host does not have.
- *
- * Three sites, all optional by nature: a native notification toast, a lookup of the
- * authoritative renderer window, and one ipcMain channel used only by the
- * renderer-backed tab-create fallback. With no renderer that fallback is unreachable —
- * `createTerminal` already takes the background spawn branch when there is no
- * authoritative window (#10333) — so a Node host needs none of them.
- *
- * Defaults are inert rather than throwing, for the same reason as the PTY bindings: a
- * host with no desktop legitimately has nothing here, and that is not a downgrade.
- * Where absence IS user-visible — a notification that would have been shown — the
- * runtime already routes to paired clients, which is the better destination anyway.
- */
+/** Optional Electron facilities for runtime hosts: notifications, renderer lookup and renderer-backed tab creation IPC.
+ * Node hosts legitimately lack these; terminal creation uses background spawn without a window (#10333), and notifications route to paired clients. */
 
 export type RuntimeDesktopSurface = {
-  /** Show a native notification. Returns false when the host cannot, so callers can say so. */
+  /** Headless hosts retain the formatter's English defaults. */
+  translateNotification?(key: string, fallback: string): string
+  /** This machine's own idle state; undefined is unknown. Absent on hosts with no desktop. */
   isAwayForMobileNotifications?(): boolean | undefined
+  /** Show a native notification. Returns false when the host cannot, so callers can say so. */
   showNotification(input: { title: string; body: string }): boolean
   /** The renderer window with this id, or null when there is no desktop. */
   findWindowById(id: number): BrowserWindow | null
+  isResourceViewVisible?(sender: WebContents): boolean
   onIpc(channel: string, listener: (event: IpcMainEvent, ...args: never[]) => void): void
   removeIpcListener(channel: string, listener: (...args: never[]) => void): void
+  /** Re-encodes as a PNG fitting `maxEdge`; null if undecodable. Absent on Node hosts. */
+  encodeRepoIconPng?(bytes: Uint8Array, maxEdge: number): Uint8Array | null
+  /** A GET answering redirects with the 3xx, without proxy login; absent where fetch already does. */
+  fetchRepoIcon?(url: string, init: RequestInit): Promise<Response>
 }
 
 const inertDesktopSurface: RuntimeDesktopSurface = {

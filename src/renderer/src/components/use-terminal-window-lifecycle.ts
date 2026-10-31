@@ -5,7 +5,7 @@ import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import {
   collectBrowserWebviewIds,
-  destroyRemovedBrowserWebview
+  destroyWebviewsRemovedFromStore
 } from '../store/slices/browser-webview-cleanup'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 
@@ -55,11 +55,9 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
       proceedToNativeWindowClose(isQuitting)
     })
     return () => setWindowCloseRequestHandler(null)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
-  }, [proceedToNativeWindowClose, queueEditorCloseRequests])
+  }, [proceedToNativeWindowClose, queueEditorCloseRequests, windowCloseAfterDirtyRef])
 
-  // Why lazy: a `useRef(expr)` argument re-runs on every render and is thrown away, and this
-  // walks every browser page and tab across all worktrees on a component that renders constantly.
+  // Initialize lazily: eager useRef arguments walk every browser page/tab again on every render.
   const prevBrowserWebviewIdsRef = useRef<Set<string>>(undefined!)
   prevBrowserWebviewIdsRef.current ??= collectBrowserWebviewIds(
     useAppStore.getState().browserTabsByWorktree,
@@ -77,16 +75,11 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
       }
       prevBrowserTabs = state.browserTabsByWorktree
       prevBrowserPages = state.browserPagesByWorkspace
-      const currentIds = collectBrowserWebviewIds(
+      prevBrowserWebviewIdsRef.current = destroyWebviewsRemovedFromStore(
+        prevBrowserWebviewIdsRef.current,
         state.browserTabsByWorktree,
         state.browserPagesByWorkspace
       )
-      for (const prevId of prevBrowserWebviewIdsRef.current) {
-        if (!currentIds.has(prevId)) {
-          destroyRemovedBrowserWebview(prevId)
-        }
-      }
-      prevBrowserWebviewIdsRef.current = currentIds
     })
   }, [])
 

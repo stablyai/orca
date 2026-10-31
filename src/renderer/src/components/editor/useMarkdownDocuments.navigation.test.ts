@@ -4,10 +4,14 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
+import { useAppStore } from '@/store'
+import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 
 const runtime = vi.hoisted(() => ({
   stat: vi.fn(),
-  list: vi.fn()
+  list: vi.fn(),
+  toastError: vi.fn(),
+  translate: vi.fn()
 }))
 let runtimeConnectionId: string | null = null
 const target = {
@@ -17,25 +21,30 @@ const target = {
   name: 'target'
 }
 const state = {
-  settings: {},
-  worktreesByRepo: { repo: [{ id: 'wt', path: '/repo' }] },
   openFile: vi.fn(),
   openMarkdownPreview: vi.fn()
 }
-
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign((selector: (store: typeof state) => unknown) => selector(state), {
-    getState: () => state
-  })
-}))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => runtimeConnectionId }))
-vi.mock('@/runtime/runtime-file-client', () => ({ statRuntimePath: runtime.stat }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: (_settings: unknown, owner: string | null | undefined) => ({ owner })
-}))
+vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => runtimeConnectionId }))
+vi.mock('@/runtime/runtime-file-metadata-client', () => ({ statRuntimePath: runtime.stat }))
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
+    _state: unknown,
+    _worktreeId: string | null | undefined,
+    owner: string | null | undefined
+  ) => (owner ? { kind: 'environment' as const, environmentId: owner } : { kind: 'local' as const })
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
 vi.mock('./markdown-document-list-request', () => ({
   requestSharedMarkdownDocumentList: runtime.list
 }))
+vi.mock('sonner', () => ({ toast: { error: runtime.toastError } }))
+vi.mock('@/i18n/i18n', () => ({ translate: runtime.translate }))
 
 let root: Root
 let container: HTMLDivElement
@@ -61,17 +70,82 @@ function sourceFile(mode: OpenFile['mode'], runtimeEnvironmentId: string | null 
 }
 
 async function render(file: OpenFile, viewMode: MarkdownViewMode): Promise<void> {
+  const environmentId = file.runtimeEnvironmentId ?? null
+  const executionHostId = environmentId
+    ? (`runtime:${environmentId}` as const)
+    : runtimeConnectionId
+      ? (`ssh:${runtimeConnectionId}` as const)
+      : ('local' as const)
+  const connections = new Map(
+    runtimeConnectionId
+      ? [
+          [
+            runtimeConnectionId,
+            {
+              targetId: runtimeConnectionId,
+              status: 'connected' as const,
+              error: null,
+              reconnectAttempt: 0,
+              connectionGeneration: 7
+            }
+          ]
+        ]
+      : []
+  )
+  useAppStore.setState({
+    ...state,
+    openFiles: [file],
+    repos: [
+      {
+        ...TEST_REPO,
+        id: 'repo',
+        path: '/repo',
+        executionHostId,
+        connectionId: runtimeConnectionId
+      }
+    ],
+    worktreesByRepo: {
+      repo: [
+        makeWorktree({
+          id: 'wt',
+          repoId: 'repo',
+          path: '/repo',
+          hostId: runtimeConnectionId ? `ssh:${runtimeConnectionId}` : executionHostId,
+          runtimeOwnerEnvironmentId: environmentId ?? undefined
+        })
+      ]
+    },
+    sshConnectionStates: connections,
+    sshStateByEnvironment: new Map(
+      environmentId && runtimeConnectionId
+        ? [
+            [
+              environmentId,
+              {
+                targetsHydrated: true,
+                targetLabels: new Map([[runtimeConnectionId, 'Box']]),
+                targetGenerations: new Map([[runtimeConnectionId, 7]]),
+                removedTargetLabels: new Map(),
+                connectionStates: connections
+              }
+            ]
+          ]
+        : []
+    )
+  })
   await act(async () => {
     root.render(createElement(Harness, { file, viewMode }))
   })
 }
 
 beforeEach(() => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.clearAllMocks()
   runtimeConnectionId = null
   runtime.stat.mockResolvedValue({ isDirectory: false })
   runtime.list.mockResolvedValue([target])
+  runtime.translate.mockReturnValue('Localized listing failure')
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -84,6 +158,102 @@ afterEach(() => {
 })
 
 describe('Markdown document navigation', () => {
+  it.each(['source-replaced', 'authority-replaced'])(
+    'does not open a delayed stat result after %s',
+    async (reason) => {
+      runtimeConnectionId = 'box'
+      const source = sourceFile('edit')
+      await render(source, 'source')
+      let finish!: (value: { isDirectory: boolean }) => void
+      runtime.stat.mockReturnValueOnce(
+        new Promise<{ isDirectory: boolean }>((resolve) => {
+          finish = resolve
+        })
+      )
+      const pending = controller.openMarkdownDocument(target)
+      expect(runtime.stat).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connectionId: 'box',
+          expectedExecutionHostId: 'ssh:box',
+          expectedSshConnectionGeneration: 7
+        }),
+        target.filePath
+      )
+      if (reason === 'source-replaced') {
+        useAppStore.setState({
+          openFiles: [
+            { ...source, filePath: '/repo/replacement.md', relativePath: 'replacement.md' }
+          ]
+        })
+      } else {
+        useAppStore.setState((current) => ({
+          repos: current.repos.map((repo) => ({
+            ...repo,
+            executionHostId: 'ssh:other' as const,
+            connectionId: 'other'
+          })),
+          worktreesByRepo: {
+            repo: [makeWorktree({ id: 'wt', repoId: 'repo', path: '/repo', hostId: 'ssh:other' })]
+          }
+        }))
+      }
+      await act(async () => {
+        finish({ isDirectory: false })
+        await pending
+      })
+      expect(state.openFile).not.toHaveBeenCalled()
+      expect(state.openMarkdownPreview).not.toHaveBeenCalled()
+    }
+  )
+  it('localizes a non-Error failure at settlement without restarting the request', async () => {
+    let rejectListing: (reason: unknown) => void = () => {}
+    runtime.list.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectListing = reject
+      })
+    )
+    await render(sourceFile('edit'), 'source')
+    runtime.translate.mockReturnValue('Current language listing failure')
+    await render(sourceFile('edit'), 'source')
+    await act(async () => rejectListing(null))
+
+    expect(runtime.list).toHaveBeenCalledOnce()
+    expect(runtime.translate).toHaveBeenCalledWith(
+      'auto.components.editor.useMarkdownDocuments.listFailed',
+      'Failed to list Markdown documents.'
+    )
+    expect(runtime.toastError).toHaveBeenCalledWith('Current language listing failure')
+    expect(controller.markdownDocuments).toEqual([])
+  })
+
+  it('preserves actual listing error detail', async () => {
+    runtime.list.mockRejectedValueOnce(new Error('SSH listing timed out'))
+    await render(sourceFile('edit', 'runtime-owner'), 'source')
+
+    expect(runtime.toastError).toHaveBeenCalledWith('SSH listing timed out')
+    expect(runtime.translate).not.toHaveBeenCalled()
+  })
+
+  it.each(['superseded', 'unmounted'])('ignores a %s listing failure', async (reason) => {
+    let rejectListing: (error: unknown) => void = () => {}
+    runtime.list.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectListing = reject
+      })
+    )
+    await render(sourceFile('edit'), 'source')
+    await (reason === 'superseded'
+      ? render(sourceFile('edit', 'next-owner'), 'source')
+      : act(async () => root.render(null)))
+    await act(async () => rejectListing(null))
+
+    expect(runtime.toastError).not.toHaveBeenCalled()
+    expect(runtime.translate).not.toHaveBeenCalled()
+    if (reason === 'superseded') {
+      expect(controller.markdownDocuments).toEqual([target])
+    }
+  })
+
   it.each([
     ['markdown-preview', 'source'],
     ['edit', 'preview'],
@@ -100,7 +270,8 @@ describe('Markdown document navigation', () => {
         relativePath: target.relativePath,
         worktreeId: 'wt',
         language: 'markdown',
-        runtimeEnvironmentId: null
+        runtimeEnvironmentId: null,
+        operationProvenance: expect.any(Object)
       },
       { anchor: undefined }
     )
@@ -169,12 +340,12 @@ describe('Markdown document navigation', () => {
     })
 
     expect(runtime.stat).toHaveBeenCalledWith(
-      {
-        settings: { owner: 'runtime-owner' },
+      expect.objectContaining({
+        target: { kind: 'environment', environmentId: 'runtime-owner' },
         worktreeId: 'wt',
         worktreePath: '/repo',
-        connectionId: 'ssh-owner'
-      },
+        expectedSshTargetId: 'ssh-owner'
+      }),
       target.filePath
     )
     expect(state.openMarkdownPreview).toHaveBeenCalledWith(

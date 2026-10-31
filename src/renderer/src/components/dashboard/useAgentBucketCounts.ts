@@ -6,6 +6,11 @@ import {
   buildDashboardBucketCounts,
   createDashboardBucketCountsCache
 } from './build-dashboard-bucket-counts'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export type AgentBucketCounts = Record<DashboardBucket, number>
 
@@ -23,21 +28,22 @@ export type AgentBucketCountState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
+  | 'paneForegroundAgentByPaneKey'
   | 'folderWorkspaces'
   | 'acknowledgedAgentsByPaneKey'
   | 'agentStatusEpoch'
-> & {
-  // Why null: counts never render a card's conversation name, so the
-  // generated-title gate is moot and the sidebar stays off settings.
-  settings: null
-}
+  | 'settings'
+  | 'detectedWorktreesByRepo'
+  | 'projectGroups'
+  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
+  | 'runtimeEnvironments'
+  | 'runtimeEnvironmentCatalogHydrated'
+  | 'removedRuntimeEnvironmentIds'
+>
 
-// Why module scope rather than useShallow: zustand runs this selector on every
-// store write, and shallow() on a plain object takes the compareEntries path —
-// two Object.entries arrays, 28 tuples and two Maps allocated per write just to
-// conclude nothing moved. Fourteen `===` against the previous slices allocates
-// nothing on the unchanged path, and the result is a pure function of the state
-// so one gate can serve every mounted consumer.
+// Compare slice identities directly: useShallow allocates entries/Maps per store write. This pure state projection shares one allocation-free unchanged path across consumers.
 let previousState: AgentBucketCountState | null = null
 
 /** Test-only: drop the cross-render identity gate so a case starts cold. */
@@ -50,7 +56,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
   if (
     previous !== null &&
     previous.repos === s.repos &&
-    previous.worktreesByRepo === s.worktreesByRepo &&
+    selectWorktreesByRepo(previous) === selectWorktreesByRepo(s) &&
     previous.tabsByWorktree === s.tabsByWorktree &&
     previous.unifiedTabsByWorktree === s.unifiedTabsByWorktree &&
     previous.agentStatusByPaneKey === s.agentStatusByPaneKey &&
@@ -60,15 +66,26 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     previous.terminalLayoutsByTabId === s.terminalLayoutsByTabId &&
     previous.ptyIdsByTabId === s.ptyIdsByTabId &&
     previous.runtimePaneTitlesByTabId === s.runtimePaneTitlesByTabId &&
-    previous.folderWorkspaces === s.folderWorkspaces &&
+    previous.paneForegroundAgentByPaneKey === s.paneForegroundAgentByPaneKey &&
+    selectFolderWorkspaces(previous) === selectFolderWorkspaces(s) &&
     previous.acknowledgedAgentsByPaneKey === s.acknowledgedAgentsByPaneKey &&
-    previous.agentStatusEpoch === s.agentStatusEpoch
+    previous.agentStatusEpoch === s.agentStatusEpoch &&
+    previous.settings === s.settings &&
+    selectDetectedWorktreesByRepo(previous) === selectDetectedWorktreesByRepo(s) &&
+    previous.projectGroups === s.projectGroups &&
+    previous.restoredRuntimeHostIdByWorkspaceSessionKey ===
+      s.restoredRuntimeHostIdByWorkspaceSessionKey &&
+    previous.activeWorktreeId === s.activeWorktreeId &&
+    previous.activeWorkspaceExecutionHostId === s.activeWorkspaceExecutionHostId &&
+    previous.runtimeEnvironments === s.runtimeEnvironments &&
+    previous.runtimeEnvironmentCatalogHydrated === s.runtimeEnvironmentCatalogHydrated &&
+    previous.removedRuntimeEnvironmentIds === s.removedRuntimeEnvironmentIds
   ) {
     return previous
   }
   previousState = {
     repos: s.repos,
-    worktreesByRepo: s.worktreesByRepo,
+    worktreesByRepo: selectWorktreesByRepo(s),
     tabsByWorktree: s.tabsByWorktree,
     unifiedTabsByWorktree: s.unifiedTabsByWorktree,
     agentStatusByPaneKey: s.agentStatusByPaneKey,
@@ -78,30 +95,32 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,
     ptyIdsByTabId: s.ptyIdsByTabId,
     runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
-    folderWorkspaces: s.folderWorkspaces,
+    paneForegroundAgentByPaneKey: s.paneForegroundAgentByPaneKey,
+    folderWorkspaces: selectFolderWorkspaces(s),
     acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
     agentStatusEpoch: s.agentStatusEpoch,
-    settings: null
+    settings: s.settings,
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
+    projectGroups: s.projectGroups,
+    restoredRuntimeHostIdByWorkspaceSessionKey: s.restoredRuntimeHostIdByWorkspaceSessionKey,
+    activeWorktreeId: s.activeWorktreeId,
+    activeWorkspaceExecutionHostId: s.activeWorkspaceExecutionHostId,
+    runtimeEnvironments: s.runtimeEnvironments,
+    runtimeEnvironmentCatalogHydrated: s.runtimeEnvironmentCatalogHydrated,
+    removedRuntimeEnvironmentIds: s.removedRuntimeEnvironmentIds
   }
   return previousState
 }
 
-/**
- * Per-state agent counts for the sidebar dashboard entry, using the same row
- * and bucket derivation as the pop-out board without allocating its cards.
- * Recomputes only when an input slice changes.
- */
+/** Derive sidebar buckets with shared board rules without allocating cards; subscribe only to relevant input slices. */
 export function useAgentBucketCounts(): AgentBucketCounts {
   const state = useAppStore(selectAgentBucketCountState)
-  // Why a per-hook cache: unrelated status/title writes change one worktree's inputs;
-  // the cache keeps every other worktree's rows without rerunning its row pipeline.
+  // Cache per worktree so status/title churn in one workspace does not rebuild every row pipeline.
   const cacheRef = useRef<ReturnType<typeof createDashboardBucketCountsCache>>(undefined!)
   cacheRef.current ??= createDashboardBucketCountsCache()
   return useMemo(() => {
-    // Why Date.now() is read here and not a dep: idle-decay tracks agentStatusEpoch
-    // ticks (carried in `state`), matching useDashboardData. That epoch doubles as the
-    // cache generation, so a stale-boundary tick recounts every decayed bucket.
+    // Freshness follows agentStatusEpoch in state; read the clock when that generation invalidates the memo, not as a dependency.
+    // oxlint-disable-next-line react/purity -- wall time is sampled per epoch tick, as explained above.
     return buildDashboardBucketCounts(state, Date.now(), cacheRef.current, state.agentStatusEpoch)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
 }

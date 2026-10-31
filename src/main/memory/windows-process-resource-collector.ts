@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import os from 'node:os'
 import { performance } from 'node:perf_hooks'
 import {
@@ -27,8 +27,7 @@ let previousCpuSample: WindowsProcessSample | null = null
 let retryCimAtMs = 0
 
 export async function enumerateWindowsProcessResources(): Promise<WindowsProcessResourceRow[]> {
-  // Why: one CIM sweep supplies both resource values and process identity,
-  // avoiding a second host-wide PowerShell process on every open-popover poll.
+  // Reuse one CIM sweep for resources and identity instead of spawning PowerShell twice per poll.
   if (processBackend === 'typeperf') {
     if (performance.now() < retryCimAtMs) {
       return enumerateWindowsWithTypeperf()
@@ -40,8 +39,7 @@ export async function enumerateWindowsProcessResources(): Promise<WindowsProcess
   if (sample) {
     return applyWindowsCpuSample(sample)
   }
-  // Why: avoid repeating a blocked CIM timeout every two-second poll while
-  // still recovering CPU attribution after a transient PowerShell failure.
+  // Back off blocked CIM queries while allowing recovery from transient failures.
   processBackend = 'typeperf'
   retryCimAtMs = performance.now() + CIM_RETRY_AFTER_MS
   previousCpuSample = null
@@ -56,14 +54,12 @@ function applyWindowsCpuSample(sample: WindowsProcessSample): WindowsProcessReso
   }
   const elapsedMs = sample.sampledAtMs - previous.sampledAtMs
   if (elapsedMs < CPU_MIN_SAMPLE_MS) {
-    // Why: forced snapshots can land too close together for a stable rate.
-    // Keep the older baseline so the next normal poll spans a useful interval.
+    // Preserve the baseline when samples are too close for stable CPU rates.
     return sample.rows
   }
   previousCpuSample = sample
   if (elapsedMs > CPU_STALE_AFTER_MS) {
-    // Why: closing Resource Manager or sleeping the machine leaves a stale
-    // baseline whose long-term average is not the current CPU usage.
+    // Long gaps after sleep/closed dashboards produce stale averages; discard them.
     return sample.rows
   }
 
@@ -71,8 +67,7 @@ function applyWindowsCpuSample(sample: WindowsProcessSample): WindowsProcessReso
   for (const row of sample.rows) {
     const currentTimes = sample.cpuByPid.get(row.pid)
     const previousTimes = previous.cpuByPid.get(row.pid)
-    // Why: process start time prevents a recycled PID from inheriting the old
-    // process's cumulative CPU time; counter resets likewise warm up again.
+    // PID reuse and reset counters must not inherit another process's CPU baseline.
     if (
       !currentTimes ||
       !previousTimes ||
@@ -88,8 +83,7 @@ function applyWindowsCpuSample(sample: WindowsProcessSample): WindowsProcessReso
 }
 
 async function enumerateWindowsWithCim(): Promise<WindowsProcessSample | null> {
-  // PageFileUsage rides along on the sweep that already runs: it is the commit
-  // charge the working set stops showing once Windows starts trimming pages.
+  // PageFileUsage includes committed memory hidden by working-set trimming.
   const args = [
     '-NoLogo',
     '-NoProfile',
@@ -111,8 +105,7 @@ async function enumerateWindowsWithCim(): Promise<WindowsProcessSample | null> {
 
 async function enumerateWindowsWithTypeperf(): Promise<WindowsProcessResourceRow[]> {
   try {
-    // Why: an immediate sample keeps the memory-only fallback inside the
-    // Resource Manager's two-second poll interval without inventing CPU rates.
+    // Immediate fallback fits the two-second poll budget without inventing CPU rates.
     const stdout = await execFileText('typeperf.exe', [
       ...TYPEPERF_COUNTERS,
       '-sc',

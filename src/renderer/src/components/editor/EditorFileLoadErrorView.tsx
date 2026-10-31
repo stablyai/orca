@@ -1,11 +1,11 @@
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { displayIpcErrorMessage } from '@/lib/ipc-error'
+import { isFileTooLargeCodeMessage } from '../../../../shared/file-write-disk-precondition'
 import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
 
-// Why: `loadError` is stored as English so logs and non-view consumers stay readable; the
-// user-facing copy is keyed by the machine sentinel, never by the text, so localization
-// cannot break the terminal-state comparison upstream (#21041).
+// Localize by machine code; stored English remains readable for logs without coupling upstream state checks to UI language.
 function localizeFileLoadError(message: string, code: string | undefined): string {
   if (code === WORKTREE_HOST_UNRESOLVED_CODE) {
     return translate(
@@ -13,13 +13,18 @@ function localizeFileLoadError(message: string, code: string | undefined): strin
       "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
     )
   }
-  return message
+  // Keep IPC wrappers in stored errors for classifiers; strip them only for display.
+  const displayed = displayIpcErrorMessage(message) ?? message
+  if (isFileTooLargeCodeMessage(displayed)) {
+    return translate(
+      'editor.fileLoad.remoteTooLarge',
+      'This file is too large to open from its host.'
+    )
+  }
+  return displayed
 }
 
-// Why no Close action here: this view renders for real tabs and for synthesized inline
-// conflict rows alike, and only the tab strip's own close path carries the pin, shared-
-// reference, and unsaved-changes semantics. The copy points the user at that path instead
-// of adding a second one that would have to reimplement it (#21041).
+// Leave close to the tab strip: this view also serves synthetic conflict rows and cannot enforce pin, shared-reference or unsaved-change rules.
 export function EditorFileLoadErrorView({
   message,
   code,

@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "pairing.pre-profile",
   "family": "pairing.pre-profile",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "57c8ad93d162ea69e4a0ecd5de7d8fae6806f8f7a51945c2c13661d81bae6497",
-  "scenarioSha256": "5696ea2a62bb3f24902305f8bac0c4ae8f1e505f359db76fd69aabe353adae86",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "2b5606ff50ed": {
       "name": "candidate-closed",

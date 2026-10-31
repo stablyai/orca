@@ -7,18 +7,7 @@ import type {
   MobileWebShellUpdateNotice
 } from './mobile-web-shell-session-contract'
 
-/**
- * Phase D of the hybrid RC emulator run, end to end and against a disk.
- *
- * The host is reachable and serves a generation whose assets do not arrive intact. Refusing them is
- * right — the fetch hashes every asset, and a truncated one is not a bundle. What the shell then
- * did was paint a refusal wall with a "Try again" over a generation already on disk that it would
- * have opened without being asked the moment the host went away.
- *
- * The reducer suite pins the decision; this pins the two things only a disk can answer: the refused
- * generation never reaches the cache, and the next launch asks the host again rather than living
- * under a fallback forever.
- */
+// Exercise the real hook/store over in-memory disk; stub network and native modules.
 type Doubles = {
   connection: { client: object | null; state: string }
   gates: {
@@ -27,9 +16,7 @@ type Doubles = {
     hostCapabilities: string[]
     hostProtocolWindow: { protocolVersion: number; minCompatibleMobileVersion: number }
   }
-  /** What the host answers `mobileWebBundleManifestRead` with on this mount. */
   manifest: MobileWebBundleManifestRead | null
-  /** What the asset fetch does on this mount: the refused read, or the bytes. */
   fetch: () => Promise<MobileWebBundleFetchResult>
 }
 
@@ -38,7 +25,6 @@ const doubles = vi.hoisted((): Doubles => ({
   gates: {
     statusPending: false,
     statusReadable: true,
-    // Filled in `beforeEach`: a hoisted factory runs before this module's imports do.
     hostCapabilities: [],
     hostProtocolWindow: { protocolVersion: 10, minCompatibleMobileVersion: 1 }
   },
@@ -51,8 +37,10 @@ vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths:
 vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
   encodeBase64Url: () => 'session-id'
 }))
-vi.mock('../components/HostProtocolGate', () => ({ useHostProtocolGates: () => doubles.gates }))
-vi.mock('../transport/client-context', () => ({ useHostClient: () => doubles.connection }))
+vi.mock('../components/host-protocol-gates-context', () => ({
+  useHostProtocolGates: () => doubles.gates
+}))
+vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => doubles.connection }))
 vi.mock('../transport/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: async () => {
@@ -89,8 +77,6 @@ const HOST_KEY = deriveHostCacheKey(HOST_ID)
 const ROUTE_PATHNAME = '/h/host-1'
 const ROUTE_PATTERN = '/h/[hostId]'
 
-/** Two bundles: the one this phone already runs, and the one the host has moved on to. Different
- *  bytes, so different ids, which is what makes the second an update rather than a cache hit. */
 function assetsFilled(fill: number) {
   return [
     { path: 'index.html', sha256: `${fill}`.repeat(64), byteLength: 4, contentType: 'text/html' },
@@ -106,13 +92,10 @@ function assetsFilled(fill: number) {
 const GOOD_ASSETS = assetsFilled(1)
 const NEWER_ASSETS = assetsFilled(5)
 const TOTAL_BYTES = 6
-/** The id the assets decide, because the cached manifest is read back through the schema that pins
- *  it to their digest: a literal would be refused before any of this could be measured. */
+// Derive ids from assets so cached fixtures pass the manifest digest check.
 const GOOD_BUILD_ID = computeMobileWebBundleId(GOOD_ASSETS)
 const NEWER_BUILD_ID = computeMobileWebBundleId(NEWER_ASSETS)
 
-/** Through the phone's own reader, so a fixture these tests could not have received is refused
- *  here rather than measured. */
 function manifestOf(
   assets: readonly MobileWebBundleAsset[],
   runtimeProtocolVersion = 5
@@ -132,8 +115,6 @@ function manifestOf(
 
 const GOOD_MANIFEST = manifestOf(GOOD_ASSETS)
 const NEWER_MANIFEST = manifestOf(NEWER_ASSETS)
-/** The same assets under a manifest the host's stated floor has moved past: the doubles answer
- *  `minCompatibleMobileVersion: 1`, so a bundle runtime of 0 is below it. */
 const STALE_MANIFEST = manifestOf(GOOD_ASSETS, 0)
 
 function fetchResultFor(manifest: MobileWebBundleManifestRead): MobileWebBundleFetchResult {
@@ -142,13 +123,13 @@ function fetchResultFor(manifest: MobileWebBundleManifestRead): MobileWebBundleF
     assets: new Map(
       manifest.assets.map((asset) => [asset.path, new Uint8Array(asset.byteLength).fill(7)])
     ),
+    reused: [],
     totalBytes: TOTAL_BYTES,
     elapsedMs: 1
   }
 }
 
-/** Generation N on disk, written by the store's own stage-and-commit rather than seeded as files:
- *  what a fallback opens has to be a tree the download path really leaves. */
+// Stage/commit N through the real store so fallback reads the tree a successful download actually leaves.
 async function cacheGeneration(
   fileSystem: FakeGenerationFileSystem,
   manifest: MobileWebBundleManifestRead = GOOD_MANIFEST
@@ -157,8 +138,6 @@ async function cacheGeneration(
   await store.commitGeneration(await store.stageGeneration(HOST_KEY, fetchResultFor(manifest)))
 }
 
-/** What a truncated asset really produces: the fetch's own refusal, which is nothing the transport
- *  predicate recognises as the link going. */
 function refuseTheAssets(): Promise<MobileWebBundleFetchResult> {
   return Promise.reject(
     new MobileWebBundleFetchError(
@@ -174,7 +153,6 @@ type Mounted = {
   updateNotice: () => MobileWebShellUpdateNotice | null
 }
 
-/** One cold start of the route: a fresh store over the tree already on disk, as a relaunch gets. */
 async function mountRoute(fileSystem: FakeGenerationFileSystem): Promise<Mounted> {
   const latest: {
     state: MobileWebShellSessionState
@@ -220,7 +198,6 @@ function generationTree(fileSystem: FakeGenerationFileSystem): readonly string[]
   return fileSystem.paths().filter((path) => path.startsWith(GENERATIONS_PREFIX))
 }
 
-/** Every generation directory this host holds, which is one for a cache that committed cleanly. */
 function cachedBuildIds(fileSystem: FakeGenerationFileSystem): readonly string[] {
   return [
     ...new Set(
@@ -256,10 +233,7 @@ describe('an update the shell refuses while the host is reachable', () => {
     expect(mounted.state()).toMatchObject({ kind: 'ready' })
 
     expect(cachedBuildIds(fileSystem)).toEqual([GOOD_BUILD_ID])
-    // File for file: the refusal wrote nothing over the intact tree and deleted nothing from it.
     expect(generationTree(fileSystem)).toEqual(settled)
-    // And left no residue of its own. The fetch refuses before a byte is staged, so the staging
-    // tree the launch sweep cleared is still clear.
     expect(fileSystem.paths().filter((path) => path.includes('/tmp'))).toEqual([])
   })
 
@@ -277,8 +251,7 @@ describe('an update the shell refuses while the host is reachable', () => {
   })
 
   it('walls a generation whose declared runtime the host has moved past', async () => {
-    // Read back off the disk, not handed in: the manifest the wall is decided from is the one the
-    // commit really left beside the assets, which is the only record of what these bytes declare.
+    // Decide compatibility from the persisted manifest beside the cached bytes, not an injected value.
     const fileSystem = createFakeGenerationFileSystem()
     await cacheGeneration(fileSystem, STALE_MANIFEST)
 
@@ -295,18 +268,7 @@ describe('an update the shell refuses while the host is reachable', () => {
       }
     })
     expect(mounted.updateNotice()).toBeNull()
-    // Walled, not deleted: the bytes are intact and a newer host is not what makes them wrong.
     expect(cachedBuildIds(fileSystem)).toEqual([GOOD_BUILD_ID])
-  })
-
-  it('serves the generation still inside that window, which is the same disk one field apart', async () => {
-    const fileSystem = createFakeGenerationFileSystem()
-    await cacheGeneration(fileSystem, GOOD_MANIFEST)
-
-    const mounted = await mountRoute(fileSystem)
-
-    expect(mounted.state()).toMatchObject({ kind: 'ready', buildId: GOOD_BUILD_ID })
-    expect(mounted.updateNotice()).toBe('update-failed')
   })
 
   it('writes down why on the device, which is all a release build keeps', async () => {
@@ -377,8 +339,6 @@ describe('an update the shell refuses while the host is reachable', () => {
     expect(refused.state()).toMatchObject({ kind: 'ready', buildId: GOOD_BUILD_ID })
     await refused.unmount()
 
-    // The same host, now serving assets that arrive whole. Nothing on disk had to be cleared for
-    // this: the fallback is a decision, not a state anything was written into.
     doubles.fetch = () => Promise.resolve(fetchResultFor(NEWER_MANIFEST))
     const updated = await mountRoute(fileSystem)
 

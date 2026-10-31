@@ -1,4 +1,6 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { upgradeStoredStructuredAgentSessionOwnerExitEvidence } from '../native-chat/agent-session-wire/structured-agent-session-lease-release'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,11 +10,14 @@ import {
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
 import type { AgentSessionFailedAcquisitionSettlement } from './agent-session-acquisition-failure-settlement'
-import { AgentSessionRecordStore } from './agent-session-record-store'
-import { agentSessionStorePath } from './agent-session-record-store-file'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import {
+  openTestAgentSessionRecordStore,
+  seedTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-alpha-1'
-/** The fixture lease's last renewal. */
 const LAST_RENEWED_AT = 30_000
 
 let directory: string
@@ -27,21 +32,11 @@ async function seed(deathEvidence: AgentSessionDeathEvidence | null): Promise<vo
           claimStatus: 'released',
           deathEvidence
         })
-  await writeFile(
-    agentSessionStorePath(directory),
-    JSON.stringify({
-      schemaVersion: 2,
-      hostId: 'local',
-      records: { [SESSION]: agentSessionRecordFixture(lease) },
-      operations: {},
-      retiredClaimKeys: [],
-      unusableRecords: {}
-    })
-  )
+  await seedTestAgentSessionRecordStore(directory, { records: [agentSessionRecordFixture(lease)] })
 }
 
 function open(): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({ directory, hostId: 'local' })
+  return openTestAgentSessionRecordStore(directory)
 }
 
 beforeEach(async () => {
@@ -49,6 +44,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -106,7 +102,7 @@ describe('who is told a proof of death landed', () => {
       })
     ).rejects.toThrow()
     await store.reconcileOnRestart({ probe: async () => ({ outcome: 'pid-absent' }), now: 90_000 })
-    // The proof already on the record is not news to a later write.
+    // Already-persisted proof must not notify again on unrelated writes.
     await store.setSessionTabVisibility(SESSION, true)
 
     expect(told).toEqual([expect.objectContaining({ kind: 'pid-absent', ownerFence: 7 })])
@@ -118,7 +114,6 @@ describe('a failed acquisition', () => {
   const NOW = 1_800_000_000_000
   const OPERATION_ID = `${NOW}-${'1'.padStart(32, '0')}`
 
-  /** Reserve and observe the spawn at NOW, as an attach does before it can fail. */
   async function spawnedOwner(store: AgentSessionRecordStore): Promise<number> {
     const reserved = await store.reserveOwner({
       sessionId: SESSION,
@@ -170,7 +165,7 @@ describe('a failed acquisition', () => {
           fence,
           link: {
             linkId: 'link-1',
-            handle: { provider: 'claude', sessionId: 'provider-session-1', leafUuid: null },
+            handle: claudeProviderHandle('provider-session-1', null),
             origin: 'created',
             mintedAtFence: fence,
             observedAt: NOW
@@ -210,7 +205,7 @@ describe('a failed acquisition', () => {
                 fence,
                 link: {
                   linkId: 'link-1',
-                  handle: { provider: 'claude', sessionId: 'provider-session-1', leafUuid: null },
+                  handle: claudeProviderHandle('provider-session-1', null),
                   origin: 'created',
                   mintedAtFence: fence,
                   observedAt: NOW
@@ -226,3 +221,86 @@ describe('a failed acquisition', () => {
     }
   )
 })
+
+it.each([10, 100])(
+  'bounds same-fence evidence work with %s records and duplicate events',
+  async (population) => {
+    const releasedWriter = { fence: 7, generation: 'released-writer-generation' }
+    const evidence = {
+      kind: 'kill-delivered' as const,
+      detail: 'writer terminated',
+      observedAt: 90000,
+      ownerFence: releasedWriter.fence
+    }
+    const records = Array.from({ length: population }, (_, index) =>
+      agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId: index === 0 ? SESSION : `session-other-${index}`,
+          runtimeFence: releasedWriter.fence,
+          ownerProcess: null,
+          reservedSpawnToken: null,
+          claimStatus: 'released',
+          deathEvidence: evidence
+        })
+      )
+    )
+    await seedTestAgentSessionRecordStore(directory, { records })
+    const store = await open()
+    const unrelated = records.slice(1).map((record) => store.getRecord(record.sessionId))
+    const transition = vi.spyOn(store, 'transitionHandoff')
+    const notified = vi.fn()
+    const unsubscribe = store.onDeathEvidence(notified)
+    const event = {
+      type: 'ended' as const,
+      sessionId: SESSION,
+      fence: releasedWriter.fence,
+      acquisitionGeneration: releasedWriter.generation,
+      cause: 'requested-close' as const,
+      reason: 'late exit',
+      observedAt: 91000
+    }
+    try {
+      await upgradeStoredStructuredAgentSessionOwnerExitEvidence(
+        store,
+        { ...event, deathEvidenceKind: 'kill-delivered' },
+        92000
+      )
+      expect(transition).not.toHaveBeenCalled()
+      await upgradeStoredStructuredAgentSessionOwnerExitEvidence(store, event, 92000)
+      expect(transition).toHaveBeenCalledOnce()
+      expect(notified).toHaveBeenCalledExactlyOnceWith(SESSION)
+      records
+        .slice(1)
+        .forEach((record, index) =>
+          expect(store.getRecord(record.sessionId)).toBe(unrelated[index])
+        )
+      expect((await open()).getRecord(SESSION)?.lease.deathEvidence?.kind).toBe('exit-observed')
+      transition.mockClear()
+      notified.mockClear()
+      for (let index = 0; index < population; index++) {
+        await upgradeStoredStructuredAgentSessionOwnerExitEvidence(store, event, 92000)
+      }
+      expect(transition).not.toHaveBeenCalled()
+      expect(notified).not.toHaveBeenCalled()
+      await store.transitionHandoff(SESSION, (current) => ({
+        ...current,
+        lease: {
+          ...current.lease,
+          ...agentSessionLeaseFixture({ runtimeFence: 8, provenHandleLinkId: null })
+        }
+      }))
+      const successor = store.getRecord(SESSION)
+      transition.mockClear()
+      notified.mockClear()
+      for (let index = 0; index < population; index++) {
+        await upgradeStoredStructuredAgentSessionOwnerExitEvidence(store, event, 93000)
+      }
+      expect(transition).not.toHaveBeenCalled()
+      expect(notified).not.toHaveBeenCalled()
+      expect(store.getRecord(SESSION)).toBe(successor)
+    } finally {
+      unsubscribe()
+      transition.mockRestore()
+    }
+  }
+)

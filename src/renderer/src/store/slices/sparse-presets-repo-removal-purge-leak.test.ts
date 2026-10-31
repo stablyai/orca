@@ -1,12 +1,5 @@
-/**
- * Memory-leak regression: removing a repo must purge its sparse-preset maps.
- *
- * The four per-repo maps (`sparsePresetsByRepo`, `sparsePresetsLoadingByRepo`,
- * `sparsePresetsLoadStatusByRepo`, `sparsePresetsErrorByRepo`) are populated
- * lazily by `fetchSparsePresets` but were never pruned when a repo was removed,
- * so orphaned entries accumulated for the renderer's whole session. repoIds are
- * random UUIDs (never reused), so re-adding a repo cannot reclaim the old keys.
- */
+/** Repo UUIDs never recur; removal must evict all four lazily populated sparse-preset maps or session memory grows forever. */
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
@@ -21,7 +14,7 @@ beforeEach(() => {
   reposRemove.mockReset().mockResolvedValue(undefined)
   vi.stubGlobal('window', {
     api: {
-      repos: { remove: reposRemove },
+      repos: { removeForHost: reposRemove },
       pty: { kill: vi.fn() },
       runtimeEnvironments: { call: vi.fn() }
     }
@@ -54,15 +47,13 @@ describe('removeProject purges the removed repo sparse-preset maps (leak regress
     const store = createTestStore()
     seed(store)
 
-    await store.getState().removeProject(repo1.id)
+    await store.getState().removeProject(repo1.id, { hostId: getRepoExecutionHostId(repo1) })
 
     const s = store.getState()
-    // Removed repo: every sparse-preset map key is gone.
     expect(repo1.id in s.sparsePresetsByRepo).toBe(false)
     expect(repo1.id in s.sparsePresetsLoadingByRepo).toBe(false)
     expect(repo1.id in s.sparsePresetsLoadStatusByRepo).toBe(false)
     expect(repo1.id in s.sparsePresetsErrorByRepo).toBe(false)
-    // Surviving repo: retained (guard over-eviction).
     expect(s.sparsePresetsByRepo[repo2.id]).toEqual([preset('p2', repo2.id)])
     expect(s.sparsePresetsLoadingByRepo[repo2.id]).toBe(false)
     expect(s.sparsePresetsLoadStatusByRepo[repo2.id]).toBe('loaded')

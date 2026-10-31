@@ -1,4 +1,3 @@
-import { foldAgentLeadStatus } from './agent-lead-status-fold'
 import {
   AGENT_CHILD_WORK_ALIAS_KINDS,
   type AgentChildWorkAliasInput,
@@ -15,20 +14,13 @@ import {
   type AgentChildWorkOutcome,
   type AgentChildWorkState
 } from './agent-status-child-work'
-import {
-  agentChildWorkLiveness,
-  type AgentChildWorkLiveness
-} from './agent-status-child-work-liveness'
 import { agentStatusSubjectsEqual } from './agent-status-subject'
-import type { AgentStatusState } from './agent-status-types'
+import { groupedBy } from './grouped-by'
 
-/** What a surface reads about one child: a read-only projection of the host's record.
- *  Host bookkeeping (residency, invocation history, provenance, aliases) never travels. A view
- *  from another build is decoded permissively or behind a capability, never by the record codec. */
+/** Publish read-only child views without host bookkeeping. Decode foreign versions permissively or gate by capability, never with the strict record codec. */
 export type AgentChildWorkView = {
   id: AgentChildWorkId
-  /** The id today's wire names this child by (`tasks[].id`, `subagents[].id`). Absent when the
-   *  host holds no provider handle for the current invocation; legacy shapes then omit the row. */
+  /** Provider ID for tasks/subagents; absent without a current-invocation handle, so legacy projections omit the row. */
   providerId?: string
   kind: AgentChildWorkKind
   name?: string
@@ -55,8 +47,7 @@ export type AgentChildWorkViewAlias = Pick<
   'childWorkId' | 'aliasKind' | 'alias' | 'fence'
 >
 
-// Stable handles before per-call ones: a spawn's tool id changes on every resume. Keyed by kind so
-// a new alias kind cannot compile without a rank (an unranked kind would lose its row's providerId).
+// Rank stable handles before per-call IDs changed by resume; require a rank for every alias kind to preserve providerId.
 const PROVIDER_ID_ALIAS_RANK: Record<AgentChildWorkAliasKind, number> = {
   task_id: 0,
   thread_id: 1,
@@ -81,21 +72,6 @@ function providerIdFor(
     }
   }
   return undefined
-}
-
-// Not `Map.groupBy`: the relay runs this core on Node 18, which lacks it.
-function groupedBy<T, K>(items: readonly T[], keyOf: (item: T) => K): Map<K, T[]> {
-  const groups = new Map<K, T[]>()
-  for (const item of items) {
-    const key = keyOf(item)
-    const group = groups.get(key)
-    if (group) {
-      group.push(item)
-    } else {
-      groups.set(key, [item])
-    }
-  }
-  return groups
 }
 
 function isOnOwnershipCycle(
@@ -128,14 +104,18 @@ function resolvedOwner(
     : undefined
 }
 
-/** The one record-to-view projection; every surface and every legacy shape starts here. */
+/** Every surface starts here; foreground Codex tools stay in status records and tool rows. */
 export function projectAgentChildWorkViews(
   records: readonly AgentChildWorkInput[],
   aliases: readonly AgentChildWorkViewAlias[]
 ): AgentChildWorkView[] {
-  const byId = new Map(records.map((record) => [record.childWorkId, record]))
+  const visible = records.filter(
+    (record) =>
+      record.provider !== 'codex' || record.kind !== 'command' || record.residency !== 'foreground'
+  )
+  const byId = new Map(visible.map((record) => [record.childWorkId, record]))
   const aliasesByChild = groupedBy(aliases, (alias) => alias.childWorkId)
-  return records.map((record) => {
+  return visible.map((record) => {
     const providerId = providerIdFor(record, aliasesByChild.get(record.childWorkId) ?? [])
     const owner = resolvedOwner(record, byId)
     return {
@@ -160,81 +140,4 @@ export function projectAgentChildWorkViews(
       invocation: { ...record.invocation }
     }
   })
-}
-
-type AgentChildWorkOwnershipView = Pick<
-  AgentChildWorkView,
-  'id' | 'kind' | 'state' | 'membership' | 'parentChildWorkId'
->
-
-/** Liveness of all live work beneath a child, at any depth — the same input a parent row folds. */
-export function agentChildWorkOwnedLiveness(
-  views: readonly AgentChildWorkOwnershipView[],
-  ownerId: AgentChildWorkId
-): AgentChildWorkLiveness {
-  const owned = groupedBy(views, (view) => view.parentChildWorkId)
-  const seen = new Set<AgentChildWorkId>([ownerId])
-  const frontier = [ownerId]
-  const liveDescendants: AgentChildWorkOwnershipView[] = []
-  for (let owner = frontier.pop(); owner !== undefined; owner = frontier.pop()) {
-    for (const view of owned.get(owner) ?? []) {
-      if (!seen.has(view.id)) {
-        seen.add(view.id)
-        frontier.push(view.id)
-        if (view.membership === 'live') {
-          liveDescendants.push(view)
-        }
-      }
-    }
-  }
-  return agentChildWorkLiveness(liveDescendants)
-}
-
-/** The dot a child row renders; every value is an `AgentStateDot` state. */
-export type AgentChildDisplayState =
-  | 'working'
-  | 'monitoring'
-  | 'waiting'
-  | 'blocked'
-  | 'done'
-  | 'failed'
-  | 'interrupted'
-  | 'idle'
-  | 'unverifiable'
-
-const SETTLED_DISPLAY_STATE: Record<AgentChildWorkOutcome, AgentChildDisplayState> = {
-  succeeded: 'done',
-  failed: 'failed',
-  cancelled: 'interrupted',
-  // Neutral: an ending the lane cannot classify asserts nothing.
-  unknown: 'idle'
-}
-
-/**
- * A child's display state, through the same fold that decides a parent row's: work that is idle
- * or finished enters it as `done`, so a live shell the child owns reads `monitoring` exactly as it
- * would under a CLI agent. `unverifiable` is a freshness verdict and bypasses the fold.
- */
-export function deriveAgentChildDisplayState(
-  view: Pick<AgentChildWorkView, 'state' | 'membership' | 'outcome'>,
-  ownedLiveness: AgentChildWorkLiveness
-): AgentChildDisplayState {
-  if (view.state === 'unverifiable') {
-    return 'unverifiable'
-  }
-  // Stored only by a shell or a monitor, and neither owns work.
-  if (view.state === 'monitoring') {
-    return 'monitoring'
-  }
-  const leadState: AgentStatusState =
-    view.membership === 'settled' || view.state === 'done' || view.state === 'idle'
-      ? 'done'
-      : view.state
-  // A child's cancel never hides the work it left running.
-  const foldInput = { leadState, childWorkLiveness: ownedLiveness, interrupted: false }
-  const folded = foldAgentLeadStatus(foldInput)
-  if (folded.stateName !== 'done') {
-    return folded.workingMode ?? folded.stateName
-  }
-  return view.membership === 'live' ? 'idle' : SETTLED_DISPLAY_STATE[view.outcome ?? 'unknown']
 }

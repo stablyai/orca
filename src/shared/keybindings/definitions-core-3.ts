@@ -35,6 +35,19 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+C'])
   },
   {
+    id: 'browser.annotateElement',
+    title: 'Annotate Page Element',
+    group: 'Browser',
+    scope: 'browser',
+    searchKeywords: ['shortcut', 'browser', 'annotate', 'comment', 'element'],
+    // Why: Ctrl+Shift+C is terminal copy on Linux/Windows, including web terminals in the page.
+    defaultBindings: {
+      darwin: ['Mod+Shift+C'],
+      linux: ['Alt+Shift+N'],
+      win32: ['Alt+Shift+N']
+    }
+  },
+  {
     id: 'editor.find',
     title: 'Find in editor',
     group: 'Editors',
@@ -121,7 +134,7 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     title: 'Send Review Notes to Agent',
     group: 'Global',
     scope: 'global',
-    // Why: fires from the global capture handler even while the editor is focused, so Settings must warn on collisions with editor chords (e.g. Add Review Note) too, not just global ones.
+    // Global capture also fires in editors; include editor collisions such as Add Review Note in Settings warnings.
     conflictGroup: 'editor',
     searchKeywords: [
       'shortcut',

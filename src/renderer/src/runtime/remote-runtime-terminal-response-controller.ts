@@ -1,3 +1,4 @@
+import { parseTerminalAttachmentLaunchResult } from '../../../shared/terminal-attachment-launch-result'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../shared/terminal-multiplex-flow-control'
 import { parseTerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
@@ -6,12 +7,43 @@ import { RemoteRuntimeTerminalFlowController } from './remote-runtime-terminal-f
 import {
   clearResyncTimer,
   clearSnapshot,
-  discardOutputAcknowledgements,
+  disposeRemoteTerminalStreamState,
   isTerminalDriverState,
   rejectPendingSnapshotRequest
 } from './remote-runtime-terminal-snapshot-state'
 import type { TerminalMultiplexEvent } from './remote-runtime-terminal-multiplexer-types'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+
+type SubscribedCapabilities = {
+  ackOutputSourceRanges: boolean
+  outputPause: boolean
+  outputPauseDropNotice: boolean
+  inputAck: boolean
+}
+
+// Why parse: the frame comes off the wire, so a malformed or legacy capabilities value must read as "unsupported".
+function parseSubscribedCapabilities(value: unknown): SubscribedCapabilities {
+  if (typeof value !== 'object' || value === null) {
+    return {
+      ackOutputSourceRanges: false,
+      outputPause: false,
+      outputPauseDropNotice: false,
+      inputAck: false
+    }
+  }
+  const record: {
+    ackOutputSourceRanges?: unknown
+    outputPause?: unknown
+    outputPauseDropNotice?: unknown
+    inputAck?: unknown
+  } = value
+  return {
+    ackOutputSourceRanges: record.ackOutputSourceRanges === 1,
+    outputPause: record.outputPause === 1,
+    outputPauseDropNotice: record.outputPause === 1 && record.outputPauseDropNotice === 1,
+    inputAck: record.inputAck === 1
+  }
+}
 
 export abstract class RemoteRuntimeTerminalResponseController extends RemoteRuntimeTerminalFlowController {
   protected handleResponse(response: RuntimeRpcResponse<unknown>): void {
@@ -45,28 +77,37 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
       return
     }
     if (event.type === 'subscribed') {
-      const capabilities =
-        typeof event.capabilities === 'object' && event.capabilities !== null
-          ? (event.capabilities as { ackOutputSourceRanges?: unknown; outputPause?: unknown })
-          : null
+      const capabilities = parseSubscribedCapabilities(event.capabilities)
       if (
-        capabilities?.ackOutputSourceRanges === 1 &&
+        capabilities.ackOutputSourceRanges &&
         typeof event.streamGeneration === 'string' &&
         event.streamGeneration.length > 0
       ) {
         stream.acknowledgeOutputSourceRanges = true
         stream.streamGeneration = event.streamGeneration
       }
-      stream.supportsOutputPause = capabilities?.outputPause === 1
+      stream.supportsOutputPause = capabilities.outputPause
+      stream.supportsPausedOutputDropNotice = capabilities.outputPauseDropNotice
+      // Why require the ledger id: without it a runtime restart could not be told apart, and replay would run input twice.
+      stream.inputLedgerId =
+        capabilities.inputAck &&
+        typeof event.inputLedgerId === 'string' &&
+        event.inputLedgerId.length > 0
+          ? event.inputLedgerId
+          : null
+      stream.supportsInputAck = stream.inputLedgerId !== null
       if (stream.supportsOutputPause) {
         stream.callbacks.onOutputPauseCapability?.()
       }
+      if (!stream.initialSnapshotReceived) {
+        stream.callbacks.onSubscribeAcknowledged?.(
+          event.terminal === stream.terminal
+            ? parseTerminalAttachmentLaunchResult(event.launchResult)
+            : undefined
+        )
+      }
     } else if (event.type === 'end') {
-      discardOutputAcknowledgements(stream)
-      stream.watchdog.dispose()
-      clearSnapshot(stream)
-      clearResyncTimer(stream)
-      rejectPendingSnapshotRequest(stream, 'Remote terminal stream ended.')
+      disposeRemoteTerminalStreamState(stream, 'Remote terminal stream ended.')
       this.streams.delete(event.streamId)
       if (stream.capacityRejected) {
         if (stream.callbacks.onTransportClose) {
@@ -87,9 +128,7 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
       }
       clearSnapshot(stream)
       rejectPendingSnapshotRequest(stream, message)
-      // Why: the paired binary Error frame can be dropped under backpressure;
-      // this reliable event must also dispatch or release the resync gate, and
-      // must never disarm the watchdog while leaving the gate shut.
+      // Binary Error can drop under backpressure; reliable errors must dispatch/release resync, never disarm watchdog with gate still shut.
       if (stream.resyncPendingSend) {
         this.sendDeferredResyncSnapshot(stream)
       } else {
@@ -103,7 +142,9 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
           event.mode !== 'remote-desktop-fit' &&
           event.mode !== 'desktop-fit') ||
         typeof event.cols !== 'number' ||
-        typeof event.rows !== 'number'
+        typeof event.rows !== 'number' ||
+        // Restarted hosts can publish 0x0 before learning grid; rejecting that hold prevents a one-cell pane whose keys never reach shell.
+        (event.mode !== 'desktop-fit' && (event.cols <= 0 || event.rows <= 0))
       ) {
         return
       }

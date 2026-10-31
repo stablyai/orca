@@ -7,8 +7,6 @@ import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import {
   getHostedReviewLocalGitOptions,
   hasHostedReviewLocalGitOptions,
@@ -18,7 +16,7 @@ import { getProjectSlug } from './client'
 import {
   acquire,
   glabExecFileAsync,
-  glabHostnameArgs,
+  glabHostEnvOptions,
   glabRepoExecOptions,
   release
 } from './gl-utils'
@@ -52,21 +50,24 @@ function classifyCreateMRError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'auth_required',
       error:
-        'Create MR failed: GitLab is not authenticated. Next step: run glab auth login in this environment.'
+        'Create MR failed: GitLab is not authenticated. Next step: run glab auth login in this environment.',
+      reason: 'auth_required'
     }
   }
   if (lower.includes('already exists') || lower.includes('merge request already exists')) {
     return {
       ok: false,
       code: 'already_exists',
-      error: 'A merge request already exists for this branch.'
+      error: 'A merge request already exists for this branch.',
+      reason: 'existing_review'
     }
   }
   if (lower.includes('timed out') || lower.includes('timeout')) {
     return {
       ok: false,
       code: 'unknown_completion',
-      error: 'MR creation may have completed. Refreshing branch review state...'
+      error: 'MR creation may have completed. Refreshing branch review state...',
+      reason: 'creation_unconfirmed'
     }
   }
   if (lower.includes('validation failed') || lower.includes('http 422')) {
@@ -74,13 +75,15 @@ function classifyCreateMRError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'validation',
       error:
-        'Create MR failed: GitLab rejected the merge request. Check the base branch and branch state, then try again.'
+        'Create MR failed: GitLab rejected the merge request. Check the base branch and branch state, then try again.',
+      reason: 'rejected'
     }
   }
   return {
     ok: false,
     code: 'unknown',
-    error: 'Create MR failed: GitLab could not create the merge request. Try again in a moment.'
+    error: 'Create MR failed: GitLab could not create the merge request. Try again in a moment.',
+    reason: 'create_failed'
   }
 }
 
@@ -100,21 +103,11 @@ async function readMergeRequestTemplate(
     '.gitlab/merge_request_template.md',
     '.gitlab/MERGE_REQUEST_TEMPLATE.md'
   ]
-  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-  if (connectionId && !remoteProvider) {
+  if (connectionId) {
     return ''
   }
   for (const relativeCandidate of relativeCandidates) {
     try {
-      if (remoteProvider) {
-        const result = await remoteProvider.readFile(
-          joinWorktreeRelativePath(repoPath, relativeCandidate)
-        )
-        if (result.isBinary) {
-          continue
-        }
-        return result.content
-      }
       return await readFile(join(repoPath, relativeCandidate), 'utf8')
     } catch {
       // Try the next conventional GitLab merge-request template path.
@@ -133,7 +126,8 @@ export async function createGitLabMergeRequest(
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating reviews for this provider is not supported yet.'
+      error: 'Creating reviews for this provider is not supported yet.',
+      reason: 'provider_not_supported'
     }
   }
 
@@ -149,7 +143,8 @@ export async function createGitLabMergeRequest(
     return {
       ok: false,
       code: 'unsupported_provider',
-      error: 'Creating merge requests requires a GitLab remote.'
+      error: 'Creating merge requests requires a GitLab remote.',
+      reason: 'unsupported_provider'
     }
   }
 
@@ -167,7 +162,8 @@ export async function createGitLabMergeRequest(
     return {
       ok: false,
       code: 'validation',
-      error: 'Create MR failed: choose a different base branch before creating a merge request.'
+      error: 'Create MR failed: choose a different base branch before creating a merge request.',
+      reason: 'same_base_branch'
     }
   }
 
@@ -188,8 +184,7 @@ export async function createGitLabMergeRequest(
       title,
       '--description',
       body,
-      '--yes',
-      ...glabHostnameArgs(projectRef, connectionId)
+      '--yes'
     ]
     if (head) {
       createArgs.push('--source-branch', head)
@@ -201,6 +196,7 @@ export async function createGitLabMergeRequest(
       const { stdout } = await glabExecFileAsync(createArgs, {
         ...glabRepoExecOptions(repoPath, connectionId),
         ...(connectionId ? {} : getHostedReviewLocalGitOptions(options)),
+        ...glabHostEnvOptions(projectRef, connectionId),
         timeout: 60_000,
         idempotent: false
       })
@@ -224,7 +220,8 @@ export async function createGitLabMergeRequest(
       return {
         ok: false,
         code: 'unknown_completion',
-        error: 'MR creation may have completed. Refreshing branch review state...'
+        error: 'MR creation may have completed. Refreshing branch review state...',
+        reason: 'creation_unconfirmed'
       }
     } catch (error) {
       const classified = classifyCreateMRError(error)
@@ -246,6 +243,7 @@ export async function createGitLabMergeRequest(
             ok: false,
             code: 'already_exists',
             error: 'A merge request already exists for this branch.',
+            reason: 'existing_review',
             existingReview: existing
           }
         }

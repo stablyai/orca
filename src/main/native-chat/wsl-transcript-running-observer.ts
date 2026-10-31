@@ -30,7 +30,7 @@ function notify(subscription: RunningDistrosSubscription, runningDistros: string
       try {
         await subscription.callback(next)
       } catch {
-        // A subscriber owns its retry/error policy; one failure must not stop observation.
+        // Subscriber failures must not stop shared observation.
       }
       next = subscription.pending
     }
@@ -49,7 +49,7 @@ async function observe(): Promise<void> {
       notify(subscription, runningDistros)
     }
   } catch {
-    // A transient list failure is an unknown state; retry without touching UNC paths.
+    // Listing failure leaves state unknown; retry without accessing UNC shares.
   } finally {
     armObservation()
   }

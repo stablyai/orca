@@ -1,5 +1,4 @@
-import { hasFlag } from './agent-cli-flag-detection'
-import { removeAgentArgOption } from './agent-session-option-agent-args'
+import { agentChoiceCliApply } from './agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog, CatalogOption } from './agent-session-option-catalog-types'
 
 const CODEBUDDY_EFFORT: CatalogOption = {
@@ -19,9 +18,17 @@ const CODEBUDDY_EFFORT: CatalogOption = {
     defaultValue: 'medium'
   },
   apply: {
-    launchArgs: (value) => ['--effort', String(value)],
-    agentArgsOverride: (tokens) => hasFlag(tokens, ['--effort']),
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--effort'])
+    ...agentChoiceCliApply(
+      'codebuddy',
+      [
+        {
+          kind: 'value',
+          names: ['--effort'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--effort'
+    )
   }
 }
 
@@ -36,9 +43,17 @@ export const CODEBUDDY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     { id: 'deep-model', label: 'Deep' }
   ].map((model) => ({ ...model, options: [CODEBUDDY_EFFORT] })),
   modelApply: {
-    launchArgs: (value) => ['--model', String(value)],
-    agentArgsOverride: (tokens) => hasFlag(tokens, ['--model']),
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model'])
+    ...agentChoiceCliApply(
+      'codebuddy',
+      [
+        {
+          kind: 'value',
+          names: ['--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--model'
+    )
   },
   unknownModelOptions: [CODEBUDDY_EFFORT]
 }

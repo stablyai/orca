@@ -59,10 +59,7 @@ export function getProcessStartedAtMs(pid: number): number | null {
   }
 
   if (process.platform === 'win32') {
-    // Why: the only OS source is a CIM query costing a powershell spawn —
-    // too slow for this sync path. Windows pid files instead carry the
-    // daemon's self-reported start time from its ready message, and
-    // isDaemonProcess verifies it against CIM CreationDate asynchronously.
+    // Verify Windows self-reported readiness time against OS creation time asynchronously.
     return null
   }
 
@@ -77,8 +74,7 @@ export function startTimeMatches(pid: number, expectedStartedAtMs: number | null
   )
 }
 
-// Why: fail open on null — a pid file or OS query without a start time must
-// not veto an otherwise-matching daemon (adoption safety beats recycle safety).
+// Missing start times must not veto an otherwise matching daemon and risk live sessions.
 export function startTimesWithinTolerance(
   actualStartedAtMs: number | null,
   expectedStartedAtMs: number | null,

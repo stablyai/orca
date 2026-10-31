@@ -1,7 +1,34 @@
-import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
+import {
+  clearedInto,
+  readAgentSessionRecordStore,
+  type AgentSessionRecordReader
+} from './structured-session-lineage'
 
-/** The Orca session id orchestration addresses a session by; every session-to-party step calls this. */
-export function canonicalOrcaSessionId(orcaSessionId: OrcaSessionId): OrcaSessionId {
-  // Later lineage canonicalization (a `/clear`ed session to its lineage root) plugs in here.
-  return orcaSessionId
+/** Address by the /clear root to preserve Runs and mail; without records, retain the supplied id. */
+export function canonicalOrcaSessionId(
+  orcaSessionId: OrcaSessionId,
+  store: Pick<AgentSessionRecordReader, 'listRecords'> | null = readAgentSessionRecordStore()
+): OrcaSessionId {
+  if (!store) {
+    return orcaSessionId
+  }
+  const clearedFrom = new Map<string, string>()
+  for (const record of store.listRecords()) {
+    const next = clearedInto(record)
+    if (next) {
+      clearedFrom.set(next, record.sessionId)
+    }
+  }
+  // The visited set bounds corrupt chains; valid clear lineage is acyclic.
+  let root: string = orcaSessionId
+  const earlier = new Set([root])
+  let prior = clearedFrom.get(root)
+  while (prior && !earlier.has(prior)) {
+    earlier.add(prior)
+    root = prior
+    prior = clearedFrom.get(root)
+  }
+  // Record ids are minted as Orca session ids; one that is not cannot name the conversation.
+  return isOrcaSessionId(root) ? root : orcaSessionId
 }

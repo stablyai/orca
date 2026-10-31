@@ -1,12 +1,9 @@
-import { hasFlag } from './agent-cli-flag-detection'
 import type {
   AgentSessionOptionCatalog,
   CatalogModel,
   CatalogOption
 } from './agent-session-option-catalog-types'
-import { removeAgentArgOption } from './agent-session-option-agent-args'
-
-const hasModelFlag = (tokens: readonly string[]): boolean => hasFlag(tokens, ['-m', '--model'])
+import { agentChoiceCliApply } from './agent-choice-cli-apply'
 
 export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   models: [
@@ -16,8 +13,17 @@ export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', options: [] }
   ],
   modelApply: {
-    launchArgs: (value) => ['-m', String(value)],
-    agentArgsOverride: hasModelFlag,
+    ...agentChoiceCliApply(
+      'gemini',
+      [
+        {
+          kind: 'value',
+          names: ['-m', '--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '-m'
+    ),
     midSession: { kind: 'agent-picker', command: '/model' }
   }
 }
@@ -85,9 +91,17 @@ export const CURSOR_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     }
   ],
   modelApply: {
-    launchArgs: (value) => ['--model', String(value)],
-    agentArgsOverride: hasModelFlag,
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['-m', '--model']),
+    ...agentChoiceCliApply(
+      'cursor',
+      [
+        {
+          kind: 'value',
+          names: ['-m', '--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--model'
+    ),
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
   composeModelValue: (modelId, values) => {

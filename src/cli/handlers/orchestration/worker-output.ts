@@ -1,6 +1,6 @@
 import type { RuntimeTerminalRead } from '../../../shared/runtime-types'
 import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
-import { formatWorkerTranscriptMessages } from '../../../shared/worker-transcript-text'
+import { formatWorkerTranscriptMessage } from '../../../shared/worker-transcript-text'
 
 export type LegacyWorkerReadResult = {
   dispatchId: string
@@ -9,6 +9,7 @@ export type LegacyWorkerReadResult = {
 
 export type WorkerStartReceipt = {
   mode?: { detail: string }
+  run?: { id: string; objective: string; created: boolean }
   taskId: string
   dispatchId: string
   state: string
@@ -22,10 +23,18 @@ export type WorkerStartReceipt = {
 
 export function formatWorkerStart(value: WorkerStartReceipt): string {
   const lines = [`Worker ${value.dispatchId} [${value.state}] for ${value.taskId}`]
-  // Settings-driven rather than requested, so the human line always names the mode that ran: a
-  // fallback from the user's structured default is never silent.
+  if (value.run) {
+    lines.push(
+      `${value.run.created ? 'Created and bound Run' : 'In Run'} ${value.run.id}: ${value.run.objective}`
+    )
+  }
+  // Show the mode that actually ran so a fallback from the user's default is visible.
   if (value.mode) {
     lines.push(value.mode.detail)
+  }
+  const workspace = createdWorkspaceName(value.effects)
+  if (workspace) {
+    lines.push(`Created workspace: ${workspace}`)
   }
   if (value.lastError) {
     lines.push(`${value.failedStage ?? 'start'}: ${value.lastError}`)
@@ -47,6 +56,23 @@ export function formatWorkerStart(value: WorkerStartReceipt): string {
   return lines.join('\n')
 }
 
+/** Only a created worktree's effect carries a name; older hosts omit it. */
+function createdWorkspaceName(effects: unknown[] | undefined): string | undefined {
+  for (const effect of effects ?? []) {
+    if (
+      typeof effect === 'object' &&
+      effect !== null &&
+      'kind' in effect &&
+      effect.kind === 'worktree' &&
+      'name' in effect &&
+      typeof effect.name === 'string'
+    ) {
+      return effect.name
+    }
+  }
+  return undefined
+}
+
 export function formatWorkerRead(
   value: OrchestrationWorkerReadResult | LegacyWorkerReadResult
 ): string {
@@ -57,7 +83,7 @@ export function formatWorkerRead(
   const output =
     value.source === 'terminal'
       ? value.terminal.tail.join('\n')
-      : formatWorkerTranscriptMessages(value.transcript.messages).join('\n\n')
+      : value.transcript.messages.map(formatWorkerTranscriptMessage).join('\n\n')
   if (output) {
     return `${details}\n\n${output}`
   }
@@ -74,12 +100,11 @@ function formatWorkerReadDetails(value: OrchestrationWorkerReadResult): string {
       ? `Source: transcript (provider=${value.provider})`
       : 'Source: terminal'
   const lines = [source]
-  // A released archive read otherwise prints identically to a live one.
   if (value.status?.worker) {
     lines.push(`Worker: ${value.status.worker}`)
   }
   lines.push(`Archived: ${value.archived === true}`)
-  // Two different verdicts: status.liveness is the PTY's, the fleet projection is the agent's.
+  // PTY liveness and agent liveness are separate verdicts.
   if (value.status?.liveness) {
     lines.push(`Terminal liveness: ${value.status.liveness}`)
   }

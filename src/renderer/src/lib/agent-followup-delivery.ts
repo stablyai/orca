@@ -1,67 +1,69 @@
-import {
-  inspectRuntimeTerminalProcess,
-  sendRuntimePtyInputVerified
-} from '@/runtime/runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-paste-draft'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-
-type RuntimeOwnerSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 
 export async function sendFollowupPromptWhenAgentReady(args: {
   ptyId: string
+  agent: TuiAgent
   expectedProcess: string
   prompt: string
-  settings: RuntimeOwnerSettings
 }): Promise<boolean> {
-  const { ptyId, expectedProcess, prompt, settings } = args
-  if (!(await waitForAgentForeground(ptyId, expectedProcess, settings))) {
+  const { ptyId, agent, expectedProcess, prompt } = args
+  if (!(await waitForAgentForeground(ptyId, expectedProcess))) {
     return false
   }
+  // Why: an agent in front may not read input yet; Kimi drops text typed before its composer is up (#10336).
   try {
-    return await sendRuntimePtyInputVerified(settings, ptyId, `${prompt}\r`, 'launch')
+    return await pasteDraftToAgentPtyWhenReady({
+      ptyId,
+      content: prompt,
+      agent,
+      submit: true,
+      forcePaste: true,
+      // An agent that exited during the readiness wait must not have its prompt pasted into the shell.
+      beforePaste: () => agentHoldsPty(ptyId, expectedProcess, true)
+    })
   } catch {
     return false
   }
 }
 
-// Why: delayed follow-ups must not type into an arbitrary shell. Require a
-// positive readiness signal before writing user/task text to the PTY.
-async function waitForAgentForeground(
-  ptyId: string,
-  expectedProcess: string,
-  settings: RuntimeOwnerSettings
-): Promise<boolean> {
+// Require positive readiness before sending delayed user/task text, or it could land in an arbitrary shell.
+async function waitForAgentForeground(ptyId: string, expectedProcess: string): Promise<boolean> {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     if (attempt > 0) {
       await new Promise((resolve) => globalThis.setTimeout(resolve, 150))
     }
-    try {
-      const process = await inspectRuntimeTerminalProcess(settings, ptyId)
-      const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      if (isExpectedAgentProcess(foreground, expectedProcess)) {
-        return true
-      }
-      // Why: interpreter-wrapped agents (aider, mistral-vibe are pip console
-      // scripts) surface a python/node foreground comm, so the exact-name check
-      // never matches — locally when the ps-table resolver can't pin the child,
-      // and over SSH when the relay falls back to the bare interpreter name. If
-      // the foreground is a known agent wrapper (not a shell) with a live
-      // non-shell child, the agent has taken over the PTY and can accept input.
-      if (
-        attempt >= 4 &&
-        isAgentForegroundWrapperProcess(foreground) &&
-        !isShellProcess(foreground) &&
-        process.hasChildProcesses
-      ) {
-        return true
-      }
-    } catch {
-      // Ignore transient PTY inspection failures and keep polling.
+    if (await agentHoldsPty(ptyId, expectedProcess, attempt >= 4)) {
+      return true
     }
   }
   return false
+}
+
+async function agentHoldsPty(
+  ptyId: string,
+  expectedProcess: string,
+  acceptWrapper: boolean
+): Promise<boolean> {
+  try {
+    const process = await inspectRuntimeTerminalProcess(ptyId)
+    const foreground = process.foregroundProcess?.toLowerCase() ?? ''
+    // Wrapped agents may expose only python/node comm locally or over SSH; require a known wrapper plus a live non-shell child.
+    return (
+      isExpectedAgentProcess(foreground, expectedProcess) ||
+      (acceptWrapper &&
+        isAgentForegroundWrapperProcess(foreground) &&
+        !isShellProcess(foreground) &&
+        process.hasChildProcesses === true)
+    )
+  } catch {
+    // Transient PTY inspection failures prove nothing.
+    return false
+  }
 }

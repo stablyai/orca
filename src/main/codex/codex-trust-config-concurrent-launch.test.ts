@@ -9,22 +9,34 @@ import type {
 import type { CodexManagedTrustGrantPlan } from './codex-hook-trust-grant'
 import type { CodexTrustEntry } from './config-toml-trust'
 
+// Keep the guest identity probe unstamped without requiring wsl.exe.
+vi.mock('@orca/process-host', () => ({
+  runProcess: vi.fn(async () => ({
+    code: 1,
+    signal: null,
+    timedOut: false,
+    stdout: '',
+    stderr: ''
+  }))
+}))
+
 const testState = {
   fakeHomeDir: '',
   userDataDir: '',
   previousUserDataPath: undefined as string | undefined
 }
 
-vi.mock('node:os', async () => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
-  const actual = await vi.importActual<typeof import('node:os')>('node:os')
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return { ...actual, homedir: () => testState.fakeHomeDir }
 })
 
 const { CodexAppServerUnsupportedError } = await import('./codex-app-server-client')
-const { codexAppServerCapabilityCache } = await import('./codex-app-server-capability-cache')
+const { codexAppServerCapabilityCache } =
+  await import('./app-server/codex-app-server-capability-cache')
 const { _internals, grantManagedCodexHookTrust } = await import('./codex-hook-trust-grant')
 const { markCodexProjectTrusted } = await import('../agent-trust-presets')
+const { getLocalCodexTrustConfigFiles } = await import('./codex-home-paths')
 const { setCodexTrustGrantTelemetry } = await import('./codex-trust-grant-telemetry')
 const {
   computeTrustKey,
@@ -85,16 +97,18 @@ function buildPlan(
     tomlPath: join(runtimeHomeDir, 'config.toml'),
     managedCommand: MANAGED_COMMAND,
     managedEntries: entries,
-    host: { kind: 'native' },
-    telemetryLane: 'real-home',
+    host: {
+      kind: 'wsl',
+      distro: 'Ubuntu',
+      linuxRuntimeHome: overrides.runtimeHomePath ?? runtimeHomeDir
+    },
     ...overrides
   }
 }
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
-/** Stands in for codex app-server: really writes the trust entries into
- *  config.toml across an await, like the RPC does. */
+/** Write across an await to model concurrent app-server mutations. */
 function writingSessionRunner(args: {
   tomlPath: string
   entries: CodexTrustEntry[]
@@ -133,15 +147,11 @@ function writingSessionRunner(args: {
 }
 
 describe('two Codex pane launches against one config.toml', () => {
-  it('does not let a failing launch roll back a concurrent launch that already succeeded', async () => {
-    // Why warm: on a cold host the shared capability probe incidentally
-    // serializes the two launches. Once the host is known-supported that
-    // dedupe is bypassed and the per-file lane is the only thing left.
-    codexAppServerCapabilityCache.rememberSupported('native')
+  it("leaves a concurrent grant's records in place when a sibling grant fails", async () => {
+    // Warm the capability cache so both grant sessions can overlap.
+    codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
     const tomlPath = join(runtimeHomeDir, 'config.toml')
     const entries = [managedEntry('session_start')]
-    let sessionsInFlight = 0
-    let maxSessionsInFlight = 0
     let call = 0
     let releaseFirst!: () => void
     const firstGate = new Promise<void>((resolve) => {
@@ -149,21 +159,15 @@ describe('two Codex pane launches against one config.toml', () => {
     })
 
     _internals.setGrantSessionRunner(async (request) => {
-      sessionsInFlight += 1
-      maxSessionsInFlight = Math.max(maxSessionsInFlight, sessionsInFlight)
       call += 1
       const isFirst = call === 1
-      try {
-        return await writingSessionRunner({
-          tomlPath,
-          entries,
-          hashPrefix: isFirst ? 'sha256:doomed-' : 'sha256:survivor-',
-          gate: isFirst ? firstGate : undefined,
-          outcome: isFirst ? 'verify-failed' : 'granted'
-        })(request)
-      } finally {
-        sessionsInFlight -= 1
-      }
+      return writingSessionRunner({
+        tomlPath,
+        entries,
+        hashPrefix: isFirst ? 'sha256:doomed-' : 'sha256:survivor-',
+        gate: isFirst ? firstGate : undefined,
+        outcome: isFirst ? 'verify-failed' : 'granted'
+      })(request)
     })
 
     const doomed = grantManagedCodexHookTrust(buildPlan(entries))
@@ -174,16 +178,13 @@ describe('two Codex pane launches against one config.toml', () => {
 
     expect(await doomed).toMatchObject({ lane: 'fallback', reason: 'verify-failed' })
     expect(await survivor).toMatchObject({ lane: 'rpc' })
-    // The doomed run's rollback must not resurrect the pre-grant file over
-    // the entries the survivor legitimately wrote.
     const trust = readHookTrustEntries(tomlPath)
     const key = normalizeHookTrustKeyForLookup(computeTrustKey(entries[0]))
     expect(trust.get(key)?.trustedHash).toBe('sha256:survivor-session_start')
-    expect(maxSessionsInFlight).toBe(1)
   })
 
-  it('keeps a concurrent markCodexProjectTrusted write out of a grant rollback window', async () => {
-    codexAppServerCapabilityCache.rememberSupported('native')
+  it('writes project trust while a grant session is still running, and keeps it', async () => {
+    codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
     const tomlPath = join(runtimeHomeDir, 'config.toml')
     const entries = [managedEntry('session_start')]
     const workspace = mkdtempSync(join(tmpdir(), 'orca-concurrent-ws-'))
@@ -204,18 +205,13 @@ describe('two Codex pane launches against one config.toml', () => {
 
     try {
       const grant = grantManagedCodexHookTrust(buildPlan(entries))
-      // Let the grant capture config.toml and start its session.
       await tick()
       await tick()
-      const marked = markCodexProjectTrusted(workspace)
-      await tick()
-      // The lane must hold the preset write back until rollback has run.
-      expect(readFileSync(tomlPath, 'utf-8')).not.toContain('trust_level')
+      await markCodexProjectTrusted(workspace, getLocalCodexTrustConfigFiles(testState.fakeHomeDir))
+      expect(readFileSync(tomlPath, 'utf-8')).toContain('trust_level = "trusted"')
 
       releaseSession()
       expect(await grant).toMatchObject({ lane: 'fallback', reason: 'verify-failed' })
-      await marked
-
       expect(readFileSync(tomlPath, 'utf-8')).toContain('trust_level = "trusted"')
     } finally {
       rmSync(workspace, { recursive: true, force: true })
@@ -266,7 +262,6 @@ describe('concurrent capability probes against a cold host', () => {
       ...managedEntry('session_start'),
       sourcePath: join(secondHome, 'hooks.json')
     }
-    // Self-computed trust the fallback lane already wrote for this pane.
     upsertHookTrustEntries(waiterToml, [
       { ...waiterEntry, trustedHash: computeTrustedHash(waiterEntry) }
     ])
@@ -294,9 +289,6 @@ describe('concurrent capability probes against a cold host', () => {
 })
 
 describe('host-scoped transient cooldown', () => {
-  // Why: the cooldown lives outside the per-file lane, so a failure on one
-  // pane's config.toml has to suppress every other pane on that host and
-  // nothing on a different one.
   it('suppresses a second config.toml on the same host but not another host', async () => {
     const secondHome = join(testState.userDataDir, 'second-runtime-home')
     mkdirSync(secondHome, { recursive: true })
@@ -322,22 +314,18 @@ describe('host-scoped transient cooldown', () => {
     ).toMatchObject({ lane: 'fallback', reason: 'retry-cached' })
     expect(calls).toBe(1)
 
-    // A WSL distro runs its own codex binary; the native cooldown must not reach it.
     expect(
       await grantManagedCodexHookTrust(
         buildPlan(entries, {
-          host: { kind: 'wsl', distro: 'Ubuntu', linuxRuntimeHome: '/home/u/.codex' }
+          host: { kind: 'wsl', distro: 'Debian', linuxRuntimeHome: '/home/u/.codex' }
         })
       )
     ).toMatchObject({ lane: 'fallback', reason: 'error' })
     expect(calls).toBe(2)
   })
 
-  // Why: the cooldown check runs before the lane, so a launch already admitted
-  // can succeed after a sibling failed. That proof of health must clear the
-  // sibling's cooldown instead of suppressing the host for five more minutes.
   it('lets a concurrent success clear a cooldown a sibling failure just set', async () => {
-    codexAppServerCapabilityCache.rememberSupported('native')
+    codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
     const secondHome = join(testState.userDataDir, 'second-runtime-home')
     mkdirSync(secondHome, { recursive: true })
     writeFileSync(join(secondHome, 'hooks.json'), '{"hooks":{}}\n', 'utf-8')
@@ -370,8 +358,7 @@ describe('host-scoped transient cooldown', () => {
     expect(await failing).toMatchObject({ lane: 'fallback', reason: 'error' })
     expect(await succeeding).toMatchObject({ lane: 'rpc' })
 
-    // A later launch on the same host must reach the RPC, not the cooldown.
-    // The ledger is shared across runtime homes, so clear it to force a session.
+    // Clear the shared ledger to force another RPC instead of reusing the successful grant.
     rmSync(join(testState.userDataDir, 'codex-runtime-home', 'trust-grant-ledger.json'), {
       force: true
     })
@@ -393,11 +380,12 @@ describe('reentrancy under concurrency', () => {
     )
     const workspace = mkdtempSync(join(tmpdir(), 'orca-nested-ws-'))
     try {
-      // Installer lock order: runtime then system, with a grant and a preset
-      // write nested inside both.
       const outcome = await runExclusivelyForCodexTrustConfig(tomlPath, () =>
         runExclusivelyForCodexTrustConfig(systemToml, async () => {
-          await markCodexProjectTrusted(workspace)
+          await markCodexProjectTrusted(
+            workspace,
+            getLocalCodexTrustConfigFiles(testState.fakeHomeDir)
+          )
           return grantManagedCodexHookTrust(buildPlan(entries))
         })
       )

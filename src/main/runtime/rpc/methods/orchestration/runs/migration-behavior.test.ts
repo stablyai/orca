@@ -1,3 +1,4 @@
+import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import {
@@ -193,7 +194,8 @@ describe('orchestration migration behavior', () => {
         },
         runtime,
         db,
-        runId: run.id,
+        bindRunId: () => run.id,
+        taskDeps: undefined,
         task,
         orchestrationMutation: {
           callerFingerprint: 'caller',
@@ -240,7 +242,8 @@ describe('orchestration migration behavior', () => {
         },
         runtime,
         db,
-        runId: run.id,
+        bindRunId: () => run.id,
+        taskDeps: undefined,
         task,
         orchestrationMutation: {
           callerFingerprint: 'caller',
@@ -315,7 +318,8 @@ describe('orchestration migration behavior', () => {
       },
       runtime,
       db,
-      runId: run.id,
+      bindRunId: () => run.id,
+      taskDeps: undefined,
       task,
       orchestrationMutation: {
         callerFingerprint: 'caller',

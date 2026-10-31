@@ -6,13 +6,14 @@ import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-revi
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 import { getWorktreeCardPrDisplay } from '@/components/sidebar/worktree-card-pr-display'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
-import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
+import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
+import { getGitHubRepoCacheKey } from '../../../../shared/github/github-cache-key'
 import {
   getHostedReviewCacheKey,
   linkedReviewHintKey
 } from '@/store/slices/hosted-review-cache-identity'
 import { prChecksCacheSuffix } from '@/store/github/cache-identity'
+import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
 import {
   PARENT_PR_CHECKS_GROUP_LABELS,
   PARENT_PR_CHECKS_GROUP_ORDER,
@@ -158,6 +159,7 @@ function getReviewSnapshot(
 ): { review: HostedReviewInfo | null | undefined; hasCacheEntry: boolean } {
   if (
     outcome?.kind === 'found' &&
+    !isStaleMergedGitHubReviewForHead({ data: outcome.review }, args.worktree.head) &&
     (outcome.review.provider !== 'github' ||
       !isGitHubPRSuppressed(args.worktree, outcome.review.number))
   ) {

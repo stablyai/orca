@@ -1,9 +1,10 @@
 import {
   closeTestStores,
-  createSqliteTestStore,
+  createStore,
+  testState,
   readPersistedStateJson,
   writePersistedStateJson
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -11,9 +12,6 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { AutomationService } from './service'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-
-const testState = { dir: '' }
 
 vi.mock('electron', () => ({
   app: {
@@ -26,16 +24,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-async function createStore() {
-  vi.resetModules()
-  // Why: userData resolves through AppEnvironment; point it at this file's temp dir.
-  installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('../persistence')
-  initDataPath()
-  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
-}
-
-/** Simulate registry drift after a record was stored; the create path derives contexts itself. */
+/** Inject persisted drift that normal creation would resolve. */
 function mutateDataFile(mutate: (state: { automations: Record<string, unknown>[] }) => void): void {
   const file = join(testState.dir, 'orca-data.json')
   const state = JSON.parse(readPersistedStateJson(file))
@@ -224,26 +213,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Remote check',
-      prompt: 'Check the remote repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Remote check',
+        prompt: 'Check the remote repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-14T00:00:00Z').getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
+      { resolvedRepo: repo }
+    )
     const send = vi.fn()
     const service = new AutomationService(store, { tickMs: 60_000 })
     service.setWebContents({
@@ -263,26 +256,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Remote check',
-      prompt: 'Check the remote repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Remote check',
+        prompt: 'Check the remote repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-14T00:00:00Z').getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
+      { resolvedRepo: repo }
+    )
     const send = vi.fn()
     const service = new AutomationService(store, {
       tickMs: 60_000,
@@ -310,26 +307,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Remote check',
-      prompt: 'Check the remote repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Remote check',
+        prompt: 'Check the remote repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-14T00:00:00Z').getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
+      { resolvedRepo: repo }
+    )
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
@@ -382,26 +383,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(beforeRunAt)
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Morning check',
-      prompt: 'Check the repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Morning check',
+        prompt: 'Check the repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone,
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date(2026, 4, 12, 0, 0).getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone,
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date(2026, 4, 12, 0, 0).getTime()
-    })
+      { resolvedRepo: repo }
+    )
 
     const headlessDispatcher = vi.fn().mockResolvedValue({
       workspaceId: 'wt1',
@@ -586,8 +591,7 @@ describe('AutomationService', () => {
       terminalSessionId: 'tab-1',
       error: null
     })
-    // While usage collection is awaited the run is already final, so a
-    // scheduler tick creating newer runs can prune it away mid-flight.
+    // New runs can prune this finalized run while usage collection waits.
     const getAutomationRunUsage = vi.fn().mockImplementation(async () => {
       for (let i = 1; i <= 120; i++) {
         const later = store.createAutomationRun(automation, base + i * 60_000)
@@ -614,7 +618,6 @@ describe('AutomationService', () => {
     })
 
     expect(updated.id).toBe(run.id)
-    // The run really was evicted; the usage write was skipped instead of throwing.
     expect(store.listAutomationRuns(automation.id).some((entry) => entry.id === run.id)).toBe(false)
   })
 
@@ -655,7 +658,7 @@ describe('AutomationService', () => {
     expect(updated.usage?.unavailableReason).toBe('provider_unsupported')
   })
 
-  // #16303: listAutomations sorts by name, so 'A ...' is evaluated before 'B ...'.
+  // Name sorting evaluates the poison record before the healthy one.
   it('keeps evaluating later due automations after an unreadable schedule throws', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()
@@ -682,7 +685,6 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })
-    // Persisted by an older build, or hand-edited: WEEKLY with no BYDAY cannot resolve a day.
     mutateDataFile((state) => {
       const entry = state.automations.find((automation) => automation.id === poison.id)!
       entry.rrule = 'FREQ=WEEKLY;BYHOUR=9;BYMINUTE=0'
@@ -713,8 +715,6 @@ describe('AutomationService', () => {
     expect(logged).toHaveBeenCalled()
   })
 
-  // Same isolation, reached through the cron parser rather than the RRULE one, because that
-  // is the path all four cron repairs run on.
   it('keeps evaluating later due automations after an unreadable cron schedule throws', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()
@@ -741,7 +741,6 @@ describe('AutomationService', () => {
       rrule: '0 9 * * *',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })
-    // Day of month 32 never validates at input; only a hand-edited or older-build row has it.
     mutateDataFile((state) => {
       const entry = state.automations.find((automation) => automation.id === poison.id)!
       entry.rrule = '0 9 32 * *'
@@ -770,8 +769,6 @@ describe('AutomationService', () => {
     expect(logged).toHaveBeenCalled()
   })
 
-  // A send that throws is a dispatch failure, not an unreadable schedule: the run must land on
-  // dispatch_failed rather than being left 'dispatching' beside a bogus skipped_unavailable row.
   it('marks the run dispatch_failed when the renderer send throws', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()

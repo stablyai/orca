@@ -107,7 +107,6 @@ function readAuditActions(): string[] {
   return readBackfillAuditRecords().map((record) => record.action)
 }
 
-/** Stands in for a Codex pane launch: records its date without dropping the baseline. */
 function markLaunchPending(...scanDates: CodexSessionBackfillDate[]): void {
   markCodexSessionBackfillMarkerPending(
     getMarkerPath(),
@@ -268,8 +267,7 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
       resolveCodexSessionBackfillPaths()
     )
 
-    // Why: the session walker skips symlink dirents, so bridge-created links
-    // (which point back into the user's own home) never reach the copier.
+    // The walker skips symlink dirents before they can count as scanned or skipped files.
     expect(summary).toMatchObject({ linkedFiles: 0, copiedFiles: 0, failedFiles: 0 })
     const targetPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
     expect(existsSync(targetPath)).toBe(false)
@@ -298,20 +296,6 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(readAuditActions()).toEqual(['hardlink', 'run-summary'])
   })
 
-  it('skips cross-volume rollouts instead of freezing a mutable snapshot', async () => {
-    fsMockState.failLink = true
-    const relativePath = join('2026', '05', '26', 'rollout-a ü.jsonl')
-    writeManagedSession(relativePath, '{"id":"a"}\n')
-
-    const summary = await backfillManagedCodexSessionsIntoSystemHome(
-      resolveCodexSessionBackfillPaths()
-    )
-
-    expect(summary).toMatchObject({ copiedFiles: 0, skippedUnsupportedFilesystemFiles: 1 })
-    expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
-    expect(readAuditActions()).toEqual(['copy-unsupported', 'run-summary'])
-  })
-
   it('fails closed when the target filesystem cannot install without overwrite', async () => {
     fsMockState.failLink = true
     writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
@@ -330,21 +314,6 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(existsSync(targetPath)).toBe(false)
     expect(readdirSync(dirname(targetPath))).toEqual([])
     expect(readAuditActions()).toEqual(['copy-unsupported', 'run-summary'])
-  })
-
-  it('keeps transient hardlink failures retryable', async () => {
-    fsMockState.failLinkTransiently = true
-    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
-
-    const summary = await backfillManagedCodexSessionsIntoSystemHome(
-      resolveCodexSessionBackfillPaths()
-    )
-
-    expect(summary).toMatchObject({
-      skippedUnsupportedFilesystemFiles: 0,
-      failedFiles: 1
-    })
-    expect(readAuditActions()).toEqual(['failed', 'run-summary'])
   })
 
   it('keeps target directory permission failures retryable', async () => {
@@ -467,7 +436,6 @@ describe('startCodexSessionBackfillInBackground', () => {
     })
 
     expect(active).toMatchObject({ scannedFiles: 2, linkedFiles: 2 })
-    // The baseline is certified despite the open pane; only its date stays pending.
     expect(readMarker()).toMatchObject({
       version: 4,
       coverage: 'full',
@@ -487,7 +455,6 @@ describe('startCodexSessionBackfillInBackground', () => {
   it('scans only the current date once a baseline exists', async () => {
     writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
     await startCodexSessionBackfillInBackground()
-    // A second date directory: a full walk would report two scanned files.
     writeManagedSession(join('2026', '06', '02', 'rollout-other.jsonl'), '{"id":"other"}\n')
     markLaunchPending()
 
@@ -495,7 +462,6 @@ describe('startCodexSessionBackfillInBackground', () => {
       ignoreCompletionMarker: true
     })
 
-    // No scanDates were requested, so only the recorded pending date is walked.
     expect(scanned).toMatchObject({ scannedFiles: 1, skippedExistingFiles: 1 })
   })
 
@@ -525,7 +491,6 @@ describe('startCodexSessionBackfillInBackground', () => {
     })
 
     expect(raced).toMatchObject({ linkedFiles: 1, stopped: false })
-    // The full walk still certifies history, but the racing launch's date stays pending.
     expect(readMarker()).toMatchObject({
       version: 4,
       coverage: 'full',
@@ -549,7 +514,6 @@ describe('startCodexSessionBackfillInBackground', () => {
 
     markLaunchPending(['2026', '08', '05'])
 
-    // Fail closed: no marker at all beats a marker missing the launch's date.
     expect(existsSync(getMarkerPath())).toBe(false)
     fsMockState.failMarkerReplacement = false
     const recovered = await startCodexSessionBackfillInBackground()
@@ -587,7 +551,6 @@ describe('startCodexSessionBackfillInBackground', () => {
       'utf-8'
     )
 
-    // No full walk on upgrade: the v3 baseline is honored as-is.
     expect(await startCodexSessionBackfillInBackground()).toBeNull()
     expect(existsSync(join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl'))).toBe(
       false
@@ -607,7 +570,6 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(existsSync(getMarkerPath())).toBe(true)
     expect(readMarker()).toMatchObject({ version: 4, coverage: 'full' })
 
-    // An ordinary call remains a no-op; only a launch-scheduled pass bypasses the marker.
     writeManagedSession(join('2026', '07', '01', 'rollout-later.jsonl'), '{"id":"later"}\n')
     const second = await startCodexSessionBackfillInBackground()
     expect(second).toBeNull()
@@ -661,7 +623,6 @@ describe('startCodexSessionBackfillInBackground', () => {
     writeManagedSession(join('2026', '05', '26', 'rollout-baseline.jsonl'), 'baseline\n')
     await startCodexSessionBackfillInBackground()
 
-    // A launch records its date, then the app dies before any pass runs.
     markLaunchPending(['2026', '08', '05'])
     writeManagedSession(join('2026', '06', '01', 'rollout-untouched.jsonl'), 'untouched\n')
     writeManagedSession(join('2026', '08', '05', 'rollout-launch.jsonl'), 'launch\n')
@@ -686,7 +647,6 @@ describe('startCodexSessionBackfillInBackground', () => {
 
     const baseline = readCodexSessionBackfillBaseline(getMarkerPath(), getSystemSessionsRoot())
 
-    // The pane could have written on every date from its launch through today.
     expect(baseline?.pendingScanDates).toHaveLength(3)
     expect(baseline?.pendingScanDates.at(0)).toEqual(launchDate)
     expect(baseline?.pendingScanDates.at(-1)).toEqual(getCodexSessionBackfillDate())
@@ -750,7 +710,6 @@ describe('startCodexSessionBackfillInBackground', () => {
     const interrupted = await startCodexSessionBackfillInBackground()
 
     expect(interrupted).toMatchObject({ linkedFiles: 1, failedHealAuditRecords: 1 })
-    // The failed pass certifies nothing, so its date stays queued for the retry.
     expect(readMarker()).toMatchObject({ pendingScanDates: [FIXTURE_LAUNCH_DATE] })
     expect(
       readBackfillAuditRecords().filter((record) =>

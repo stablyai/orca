@@ -1,6 +1,6 @@
 import bridgePath from '../../../resources/notebook/kernel-bridge.py?asset&asarUnpack'
-import { spawnProcess } from '../../shared/child-process/run-process'
-import { forceTerminateProcessTree } from '../../shared/child-process/process-tree-termination'
+import { spawnProcess } from '@orca/process-host'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
 import { createNdjsonParser } from '../../shared/main-process-ndjson-framer'
 import {
   KERNEL_OUTPUT_TYPES,
@@ -39,9 +39,7 @@ function parseFrame(value: unknown): BridgeFrame | null {
   return outputType && isRecord(content) ? { type: outputType, content } : null
 }
 
-/** Splits bridge stdout into frames, skipping any line that is not one. */
 export function createFrameReader(onFrame: (frame: BridgeFrame) => void): (text: string) => void {
-  // Each frame ships as its line completes; a consumer throw escapes the stdout listener and is fatal anyway.
   const parser = createNdjsonParser(
     (value) => {
       const frame = parseFrame(value)
@@ -49,19 +47,18 @@ export function createFrameReader(onFrame: (frame: BridgeFrame) => void): (text:
         onFrame(frame)
       }
     },
-    // The bridge keeps fd 1 to itself, so an unreadable line means the frame channel is damaged.
+    // The bridge owns stdout exclusively, so unreadable lines signal channel corruption.
     (error) => console.warn('[notebook-kernel] Dropped an unreadable bridge record:', error),
-    // Notebook display frames can contain large images; preserve the existing unrestricted size.
+    // Notebook image frames retain the existing unrestricted size limit.
     { maxLineBytes: Number.POSITIVE_INFINITY }
   )
   return (text) => parser.feed(text)
 }
 
 export type NotebookKernel = {
-  /** Only one execution may be in flight; send the next after its `done` frame. */
   execute: (code: string) => void
   interrupt: () => void
-  /** Closing stdin is the bridge's shutdown signal; the force-kill covers a wedged bridge. */
+  /** stdin close requests shutdown; force-kill handles a wedged bridge. */
   shutdown: () => void
 }
 
@@ -94,8 +91,7 @@ export function startNotebookKernel({
   child.stderr.on('data', (text: string) => {
     stderrTail = (stderrTail + text).slice(-STDERR_TAIL_CHARS)
   })
-  // Why: an unhandled stream error crashes main (see spawnProcess); a write racing the bridge's
-  // exit raises EPIPE, and the exit itself is reported on close.
+  // Ignore EPIPE races during exit; close reports death, while unhandled stream errors would crash main.
   for (const stream of [child.stdin, child.stdout, child.stderr]) {
     stream.on('error', () => {})
   }
@@ -104,7 +100,7 @@ export function startNotebookKernel({
     createFrameReader((frame) => {
       if (frame.type === 'ready') {
         started = true
-        // Why: a death notice should show what the kernel said since it started, not startup warnings.
+        // Report post-start diagnostics on death, excluding startup warnings.
         stderrTail = ''
         settle({ status: 'ready' })
       } else if (frame.type === 'missing') {

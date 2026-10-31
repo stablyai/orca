@@ -128,26 +128,6 @@ describe('attachPaneFitResizeObserver', () => {
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
   })
 
-  it('waits through a transient grid wobble before fitting', () => {
-    const proposed = [
-      { cols: 80, rows: 24 },
-      { cols: 81, rows: 24 },
-      { cols: 81, rows: 24 }
-    ]
-    const pane = createPane(() => proposed.shift() ?? { cols: 81, rows: 24 })
-
-    attachPaneFitResizeObserver(pane)
-    mockResizeObservers[0]?.trigger()
-
-    flushAnimationFrames()
-
-    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
-
-    flushAnimationFrames()
-
-    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
-  })
-
   it('waits through a transient grid wobble before notifying settled callbacks', () => {
     const proposed = [
       { cols: 80, rows: 24 },

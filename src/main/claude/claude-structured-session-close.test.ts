@@ -3,20 +3,31 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import type {
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+} from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   adapterFor,
   fakeClaude,
   identityFor
 } from './claude-structured-session-test-support'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { closeClaudeSession } from './claude-structured-session-close'
-import { ClaudeAcquisitionRegistry } from './claude-structured-session-state'
+import { claudeRootExitObserved, closeClaudeSession } from './claude-structured-session-close'
+import { ClaudeAcquisitionRegistry } from './structured/claude-structured-session-state'
 
 describe('Claude published session close lifecycle', () => {
+  it('never reads a failed spawn as an observed root exit, whatever checks it first', async () => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+    await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    const connection = claude.connections[0]!
+    connection.exitVerdict = { root: 'exited', tree: 'exited', processless: true }
+    expect(claudeRootExitObserved(connection)).toBe(false)
+    connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    expect(claudeRootExitObserved(connection)).toBe(true)
+  })
+
   it('reports a proven root exit when published-session close cannot prove descendants', async () => {
     const claude = fakeClaude()
     const adapter = adapterFor(claude)
@@ -37,7 +48,6 @@ describe('Claude published session close lifecycle', () => {
     const first = claude.connections[0]!
     first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
     first.close = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
-    // The owner releases the lease on this verdict, so the next surface resumes the chat.
     await expect(adapter.closeSession('session-1')).rejects.toBeInstanceOf(
       AgentSessionAcquisitionRootExitObservedError
     )
@@ -88,7 +98,7 @@ describe('Claude published session close lifecycle', () => {
       .fn<NonNullable<ClaudeStructuredSessionAdapterDeps['persistHandle']>>()
       .mockRejectedValueOnce(persistenceError)
       .mockResolvedValueOnce(undefined)
-    const backgroundStates: (AgentSessionBackgroundTaskState | null)[] = []
+    const childWork: AgentChildWorkEvidence['type'][] = []
     const adapter = adapterFor(
       claude,
       {},
@@ -96,7 +106,7 @@ describe('Claude published session close lifecycle', () => {
       [],
       undefined,
       persistHandle,
-      (_sessionId, state) => backgroundStates.push(state)
+      (_sessionId, evidence) => childWork.push(...evidence.map((edge) => edge.type))
     )
     const journalSink: StructuredAgentSessionEventSink = {
       appendItem: () => {},
@@ -118,15 +128,7 @@ describe('Claude published session close lifecycle', () => {
       task_type: 'local_agent',
       is_backgrounded: true
     })
-    expect(backgroundStates).toEqual([
-      {
-        state: 'monitoring',
-        tasks: [
-          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
-        ],
-        supportsTaskStop: true
-      }
-    ])
+    expect(childWork).toEqual(['live'])
     const session = (
       adapter as unknown as {
         sessions: Map<string, { translator: { dispose: () => void } | null }>
@@ -134,26 +136,16 @@ describe('Claude published session close lifecycle', () => {
     ).sessions.get('session-1')
     const disposeTranslator = vi.spyOn(session!.translator!, 'dispose')
 
-    await expect(adapter.closeSession('session-1')).rejects.toBe(persistenceError)
-    // The child is provably dead; a failed cursor write may not suppress the end.
+    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
+    await vi.waitFor(() => expect(persistHandle).toHaveBeenCalledOnce())
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(events.filter((event) => event.type === 'handle')).toHaveLength(0)
     expect(disposeTranslator).toHaveBeenCalledOnce()
-    expect(backgroundStates).toEqual([
-      {
-        state: 'monitoring',
-        tasks: [
-          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
-        ],
-        supportsTaskStop: true
-      },
-      null
-    ])
+    // Session close cannot prove how unfinished child work ended.
+    expect(childWork).toEqual(['live', 'session-ended'])
 
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
-    expect(persistHandle).toHaveBeenCalledTimes(2)
-    // The retry persists the same cursor without a second lifecycle end.
-    expect(events.filter((event) => event.type === 'handle')).toHaveLength(1)
+    expect(persistHandle).toHaveBeenCalledOnce()
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(disposeTranslator).toHaveBeenCalledOnce()
   })

@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { structuredAgentSessionShownStatus } from './structured-agent-session-shown-work'
-import { submission } from './structured-agent-session-restart-resume-test-harness'
+import { childRecord, submission } from './structured-agent-session-restart-resume-test-harness'
 
 describe('whether a session shows as working', () => {
-  // The status feed scopes unanswered sends to the lease fence; a stale one would otherwise offer a
-  // resume for a chat the sidebar showed idle.
+  // Stale-fence sends must not create restart offers for otherwise idle chats.
   it('does not count a send left pending under an older lease fence', () => {
     const journal = { items: [], submissions: [submission('msg-1', 'pending')] }
     expect(structuredAgentSessionShownStatus(journal, undefined, 2).state).toBe('done')
@@ -16,7 +15,14 @@ describe('whether a session shows as working', () => {
     expect(
       structuredAgentSessionShownStatus(
         journal,
-        [{ id: 'watch', kind: 'monitor', description: 'Watch CI', state: 'working' }],
+        [
+          childRecord({
+            id: 'watch',
+            kind: 'monitor',
+            description: 'Watch CI',
+            state: 'monitoring'
+          })
+        ],
         1
       ).state
     ).not.toBe('done')

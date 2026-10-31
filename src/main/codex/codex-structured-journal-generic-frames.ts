@@ -1,4 +1,8 @@
-import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
+import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-types'
+import {
+  unhandledProviderFrameJournalItem,
+  type UnhandledProviderFrameJournalItem
+} from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type {
   CodexJournalTranslationAdmission,
@@ -9,14 +13,23 @@ import {
   MAX_CODEX_GENERIC_BOOKKEEPING_BYTES,
   MAX_CODEX_GENERIC_BOOKKEEPING_ENTRIES,
   MAX_CODEX_GENERIC_ROWS_PER_TURN,
-  MAX_CODEX_GENERIC_TURN_BUCKETS
+  MAX_CODEX_GENERIC_TURN_BUCKETS,
+  MAX_CODEX_WORDLESS_ROWS_PER_TURN
 } from './codex-structured-journal-limits'
-import { readCodexTurnId } from './codex-structured-thread-facts'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import { readCodexTurnId, readCodexErrorWillRetry } from './codex-structured-thread-facts'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import {
+  CODEX_PLAN_UPDATED_FRAME_KIND,
+  isWordlessProviderFrame
+} from '../../shared/native-chat/native-chat-provider-frame-summary'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
+import { codexAuthenticationFailure } from './codex-authentication-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import { CodexUsageLimits } from './codex-usage-limits'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
-/** `producer` is absent only on the overflow bucket, which pools every thread's
- *  evicted turns and so has no single author: it reads as the session's own. */
+type TurnRows = { drawn: number; wordless: number }
+/** Overflow summaries pool threads, so they have no single producer. */
 type SuppressedSummary = {
   count: number
   publishedCount: number
@@ -47,7 +60,7 @@ function publish(sink: StructuredAgentSessionEventSink): CodexJournalTranslation
 }
 
 export class CodexJournalGenericFrames {
-  private readonly genericRowsByTurn = new Map<string, number>()
+  private readonly genericRowsByTurn = new Map<string, TurnRows>()
   private readonly suppressedRowsByTurn = new Map<string, SuppressedSummary>()
   private readonly bucketOrder = new Map<string, number>()
   private readonly schedule: NonNullable<CodexJournalTranslatorDeps['schedule']>
@@ -56,10 +69,14 @@ export class CodexJournalGenericFrames {
   private bookkeepingBytes = 0
   private fallbackSequence = 0
   private cancelSuppressionFlush: (() => void) | null = null
+  private readonly usageLimits = new CodexUsageLimits()
 
   constructor(
-    private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'schedule' | 'coalesceMs'> & {
-      linkageFor: CodexRowLinkage
+    private readonly deps: Pick<
+      CodexJournalTranslatorDeps,
+      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId' | 'account'
+    > & {
+      attributionFor: CodexRowAttribution
     },
     private readonly activeTurn: (threadId: string) => string | null
   ) {
@@ -72,20 +89,56 @@ export class CodexJournalGenericFrames {
     payload: unknown,
     threadId: string
   ): CodexJournalTranslationAdmission {
-    const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
-    // A frame the classifier declines is deliberately not journaled, which is success.
-    // Failing admission here force-closes the provider through the retry queue.
-    if (!translated) {
+    if (this.usageLimits.observe(kind, payload)) {
       return CODEX_JOURNAL_ADMITTED
     }
+    const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
+    // Declined frames count as success; rejection would force-close the provider.
+    const ended = kind === 'notification:error' && !readCodexErrorWillRetry(payload)
+    const usageLimit = ended ? this.usageLimits.failure(payload) : null
+    const failure =
+      usageLimit ?? (ended ? codexAuthenticationFailure(payload, this.deps.account?.()) : null)
+    return translated
+      ? this.appendFrameRow(threadId, payload, {
+          ...translated,
+          body: failure
+            ? {
+                ...translated.body,
+                ...(usageLimit ? { tone: 'warning' } : {}),
+                ...agentSessionFailureWords(failure, {
+                  provider: 'codex',
+                  agentName: 'Codex',
+                  surface: 'row'
+                })
+              }
+            : translated.body
+        })
+      : CODEX_JOURNAL_ADMITTED
+  }
+
+  appendFrameRow(
+    threadId: string,
+    payload: unknown,
+    translated: {
+      body: AgentJournalStatusItem
+      classification: UnhandledProviderFrameJournalItem['classification']
+      turnScope?: UnhandledProviderFrameJournalItem['turnScope']
+    }
+  ): CodexJournalTranslationAdmission {
     const frameTurnId = readCodexTurnId(payload) ?? this.activeTurn(threadId)
     const turnId = frameTurnId ?? 'outside-turn'
     const bucket = this.bucketFor(threadId, turnId)
-    const rowCount = this.genericRowsByTurn.get(bucket) ?? 0
-    // The cap bounds noise, never evidence: an error frame is always journaled, and
-    // capped frames stay countable through one summary row per turn.
+    const rows = this.genericRowsByTurn.get(bucket) ?? { drawn: 0, wordless: 0 }
+    // Errors bypass the noise cap; suppressed visible frames are counted in a summary.
     const isError = translated.classification === 'error-surface'
-    if (!isError && rowCount >= MAX_CODEX_GENERIC_ROWS_PER_TURN) {
+    // The task list reads every plan update; capping one would freeze it mid-turn.
+    const isPlan = translated.body.providerFrame?.kind === CODEX_PLAN_UPDATED_FRAME_KIND
+    // Do not create visible summaries for rows no client draws.
+    const wordless = !isPlan && isWordlessProviderFrame(translated.body)
+    if (!isError && wordless && rows.wordless >= MAX_CODEX_WORDLESS_ROWS_PER_TURN) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    if (!isError && !isPlan && !wordless && rows.drawn >= MAX_CODEX_GENERIC_ROWS_PER_TURN) {
       this.addSuppressed(bucket, 1, { threadId, turnId })
       this.recordBucket(bucket)
       this.scheduleSuppressedRows()
@@ -100,17 +153,28 @@ export class CodexJournalGenericFrames {
     this.fallbackSequence += 1
     const identity = {
       provider: 'orca' as const,
-      clientMessageId: `provider-frame:codex:${this.fallbackSequence}`
+      clientMessageId:
+        translated.body.failure?.kind === 'usageLimitReached' && frameTurnId
+          ? `terminal-failure:codex:${JSON.stringify([threadId, frameTurnId])}`
+          : `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
     }
-    const linkage = this.deps.linkageFor(threadId, frameTurnId)
+    const attribution = this.deps.attributionFor(threadId, frameTurnId)
+    attribution.turnScope = translated.turnScope ?? attribution.turnScope
     const admission = this.deps.sink.tryAppendItem
-      ? this.deps.sink.tryAppendItem(identity, translated.body, linkage)
-      : (this.deps.sink.appendItem(identity, translated.body, linkage), CODEX_JOURNAL_ADMITTED)
+      ? this.deps.sink.tryAppendItem(identity, translated.body, attribution)
+      : (this.deps.sink.appendItem(identity, translated.body, attribution), CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
       this.fallbackSequence -= 1
       return admission
     }
-    this.genericRowsByTurn.set(bucket, rowCount + 1)
+    this.genericRowsByTurn.set(
+      bucket,
+      isPlan
+        ? rows
+        : wordless
+          ? { ...rows, wordless: rows.wordless + 1 }
+          : { ...rows, drawn: rows.drawn + 1 }
+    )
     this.recordBucket(bucket)
     return publish(this.deps.sink)
   }
@@ -140,10 +204,9 @@ export class CodexJournalGenericFrames {
         clientMessageId: `provider-frame-suppressed:codex:${bucket}`
       }
       const options = {
-        coalescingKey: `provider-frame-suppressed:codex:${bucket}`,
         ...(summary.producer
-          ? this.deps.linkageFor(summary.producer.threadId, summary.producer.turnId)
-          : {})
+          ? this.deps.attributionFor(summary.producer.threadId, summary.producer.turnId)
+          : { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
       }
       const admission = this.deps.sink.tryAppendItem
         ? this.deps.sink.tryAppendItem(identity, { kind: 'status', text }, options)

@@ -21,7 +21,6 @@ import {
 const LOCAL_PTY = 'pty-local'
 const SSH_PTY = 'ssh:openclaw@@pty-7'
 const RUNTIME_PTY = 'remote:env-1@@handle-1'
-/** A runtime pty minted without an owner id. Still someone else's machine. */
 const OWNERLESS_RUNTIME_PTY = 'remote:handle-2'
 
 const BUSY = {
@@ -37,7 +36,6 @@ const UNVERIFIABLE = {
   reason: 'transport_loss'
 }
 
-/** One worktree, one tab, owning `ptyIds`. */
 function setState(ptyIds: string[]): void {
   getStateMock.mockReturnValue({
     settings: { activeRuntimeEnvironmentId: null },
@@ -47,9 +45,8 @@ function setState(ptyIds: string[]): void {
   })
 }
 
-/** Answers each pty id from `byPtyId`; anything unlisted never settles. */
 function answerWith(byPtyId: Record<string, unknown>): void {
-  inspectRuntimeTerminalProcessMock.mockImplementation((_settings: unknown, ptyId: string) =>
+  inspectRuntimeTerminalProcessMock.mockImplementation((ptyId: string) =>
     ptyId in byPtyId ? Promise.resolve(byPtyId[ptyId]) : new Promise(() => {})
   )
 }
@@ -81,26 +78,55 @@ describe('assessWindowCloseRunningWork', () => {
     })
   })
 
-  it('warns on quit about a live process on a paired runtime host', async () => {
+  // #29916: a paired runtime owns its terminals and keeps them after this client quits.
+  it('does not warn on quit, or probe, for a live process on a paired runtime host', async () => {
+    setState([RUNTIME_PTY, OWNERLESS_RUNTIME_PTY])
+    answerWith({ [RUNTIME_PTY]: BUSY, [OWNERLESS_RUNTIME_PTY]: BUSY })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
+      kind: 'none'
+    })
+    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('does not warn on quit when a paired runtime host is unreachable', async () => {
+    setState([RUNTIME_PTY])
+    answerWith({ [RUNTIME_PTY]: UNVERIFIABLE })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
+      kind: 'none'
+    })
+  })
+
+  it('still warns when closing the window over a live process on a paired runtime host', async () => {
     setState([RUNTIME_PTY])
     answerWith({ [RUNTIME_PTY]: BUSY })
 
-    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
       kind: 'running'
     })
   })
 
-  it('counts an owner-less remote pty as remote work', async () => {
+  it('still warns when closing the window over an owner-less runtime pty', async () => {
     setState([OWNERLESS_RUNTIME_PTY])
-    answerWith({ [OWNERLESS_RUNTIME_PTY]: BUSY })
+    answerWith({ [OWNERLESS_RUNTIME_PTY]: UNVERIFIABLE })
+
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
+      kind: 'unverifiable'
+    })
+  })
+
+  it('warns on quit about an SSH relay pty alongside a busy paired runtime pty', async () => {
+    setState([SSH_PTY, RUNTIME_PTY])
+    answerWith({ [SSH_PTY]: BUSY, [RUNTIME_PTY]: BUSY })
 
     await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
       kind: 'running'
     })
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(1)
   })
 
-  // The crux of docs/reference/ssh-execution-boundary.md: an unreachable host is `unverifiable`,
-  // and quitting on `unverifiable` as though it were `exited` is what orphans live remote work.
+  // Unreachable remote work is unverifiable, never proof of exit; quitting silently could orphan it.
   it('warns rather than quitting silently when a remote host answers unverifiable', async () => {
     setState([SSH_PTY])
     answerWith({ [SSH_PTY]: UNVERIFIABLE })
@@ -155,7 +181,7 @@ describe('assessWindowCloseRunningWork', () => {
     setState([SSH_PTY, RUNTIME_PTY])
     answerWith({ [SSH_PTY]: UNVERIFIABLE, [RUNTIME_PTY]: BUSY })
 
-    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
+    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
       kind: 'running'
     })
   })
@@ -169,8 +195,7 @@ describe('assessWindowCloseRunningWork', () => {
     })
   })
 
-  // A local probe has no transport to lose, so its failure means the pty is gone — unlike a
-  // remote host going quiet, it is not a reason to hold up the close.
+  // Local probe failure has no lost-transport ambiguity and must not block closing.
   it('does not warn when only a local probe is unverifiable', async () => {
     setState([LOCAL_PTY])
     answerWith({ [LOCAL_PTY]: UNVERIFIABLE })
@@ -180,8 +205,7 @@ describe('assessWindowCloseRunningWork', () => {
     })
   })
 
-  // #524 decided quitting is an unambiguous instruction to end this machine's processes. It is
-  // not an instruction to end execution on someone else's, which is why remote still warns above.
+  // Quit consents to end this machine’s processes (#524); it does not consent to end remote work.
   it('leaves local-only quit unprompted, and never probes for it', async () => {
     setState([LOCAL_PTY])
     answerWith({ [LOCAL_PTY]: BUSY })

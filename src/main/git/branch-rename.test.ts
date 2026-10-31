@@ -16,7 +16,7 @@ describe('probeBranchUpstream', () => {
   it('reports has-upstream when @{u} resolves to a tracking ref', async () => {
     const exec: GitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         return { stdout: 'origin/feature\n', stderr: '' }
@@ -29,7 +29,7 @@ describe('probeBranchUpstream', () => {
   it('reports no-upstream when there is no upstream', async () => {
     const exec: GitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw noUpstreamError
@@ -45,7 +45,7 @@ describe('probeBranchUpstream', () => {
   it('reports has-upstream when a same-name origin tracking ref exists without configured upstream', async () => {
     const exec: GitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw noUpstreamError
@@ -67,8 +67,6 @@ describe('probeBranchUpstream', () => {
   })
 
   it('scrubs credential-bearing URLs from the probe-failed message', async () => {
-    // The message surfaces on the worktree card, so an embedded remote URL
-    // must not leak a token or password into the UI.
     const exec: GitExec = vi
       .fn()
       .mockRejectedValue(
@@ -81,10 +79,10 @@ describe('probeBranchUpstream', () => {
   })
 
   it('reports probe-failed, not has-upstream, for localized git diagnostics (issue #7808)', async () => {
-    // A gettext-enabled git under de_DE translates even the `fatal:` prefix.
+    // gettext can translate even Git's fatal: prefix.
     const exec: GitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       throw new Error(
         'Command failed: git rev-parse --abbrev-ref HEAD@{u}\n' +
@@ -100,7 +98,7 @@ describe('resolveUniqueBranchName', () => {
   const compute = (leaf: string): string => `you/${leaf}`
 
   it('returns the first candidate when no branch collides', async () => {
-    const exec: GitExec = vi.fn().mockRejectedValue(new Error('not found')) // show-ref misses
+    const exec: GitExec = vi.fn().mockRejectedValue(new Error('not found'))
     const result = await resolveUniqueBranchName(exec, 'fix-auth', compute, 'you/Nautilus')
     expect(result).toBe('you/fix-auth')
   })
@@ -109,7 +107,7 @@ describe('resolveUniqueBranchName', () => {
     const exec: GitExec = vi.fn(async (args: string[]) => {
       const ref = args.at(-1)
       if (ref === 'refs/heads/you/fix-auth') {
-        return { stdout: '', stderr: '' } // exists
+        return { stdout: '', stderr: '' }
       }
       throw new Error('not found')
     })
@@ -118,8 +116,6 @@ describe('resolveUniqueBranchName', () => {
   })
 
   it('does not treat the branch being renamed away from as a collision', async () => {
-    // exec would report every ref as existing; only the currentBranch shortcut
-    // lets a candidate through.
     const exec: GitExec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     const result = await resolveUniqueBranchName(exec, 'octopus', compute, 'you/octopus')
     expect(result).toBe('you/octopus')

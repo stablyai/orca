@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -109,8 +110,7 @@ export default function PdfFind({
     [onClose, findNext, findPrevious]
   )
 
-  // Why: close hides the bar immediately; reset counters before the next commit
-  // so reopening with the same query never paints stale match totals.
+  // Reset before the next commit so reopening the same query cannot flash stale counts.
   if ((!isOpen || !requestQuery) && (activeMatch !== 0 || totalMatches !== 0)) {
     setActiveMatch(0)
     setTotalMatches(0)
@@ -126,7 +126,7 @@ export default function PdfFind({
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}
     >
-      <input
+      <ImeInput
         ref={handleInputRef}
         type="text"
         value={query}

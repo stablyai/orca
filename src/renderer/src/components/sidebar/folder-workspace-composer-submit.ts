@@ -1,38 +1,47 @@
+import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import {
+  resolveAgentStartupPlanInputs,
+  type AgentStartupSettings
+} from '../../../../shared/agent-startup-plan-inputs'
 import { ensureAgentStartupInTerminal, type LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/worktree-activation'
-import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
+import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getLinkedItemDisplayName,
   toFolderWorkspaceLinkedTask
 } from './folder-workspace-composer-helpers'
-import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import {
+  planAgentSessionLaunch,
+  adoptAgentSessionLaunchVerdict
+} from '@/lib/agent-session-launch-plan'
+import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store'
+import { resolveExecutionHostAgentStartupShell } from '@/lib/execution-host-facts'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
-  getFolderWorkspaceAgentLaunchPlatform,
+  getFolderWorkspaceAgentLaunchFact,
   resolveFolderWorkspaceLaunchDraft
 } from './folder-workspace-agent-startup'
 
 export {
   buildFolderWorkspaceLinkedStartupPlan,
-  getFolderWorkspaceAgentLaunchPlatform,
+  getFolderWorkspaceAgentLaunchFact,
   resolveFolderWorkspaceLaunchDraft
 } from './folder-workspace-agent-startup'
+import { translate } from '@/i18n/i18n'
 
 type FolderWorkspaceCreateInput = {
   projectGroupId: string
@@ -52,11 +61,12 @@ type SubmitFolderWorkspaceCreateParams = {
   linkedTaskSourceContext?: TaskSourceContext | null
   note: string
   quickAgent: TuiAgent | null
+  launchChoice?: AgentLaunchChoice
   autoRenameBranchFromWork: boolean | undefined
+  settings?: AgentStartupSettings
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
-  sessionOptions?: Record<string, SessionOptionValue>
   terminalWindowsShell?: string | null
   isRemote?: boolean
   launchSource?: LaunchSource
@@ -73,11 +83,12 @@ export async function submitFolderWorkspaceCreate({
   linkedTaskSourceContext,
   note,
   quickAgent,
+  launchChoice,
   autoRenameBranchFromWork,
+  settings,
   agentCmdOverrides,
   agentArgs,
   agentEnv,
-  sessionOptions,
   terminalWindowsShell,
   launchSource = 'sidebar',
   runtimeEnvironmentId = null,
@@ -85,68 +96,100 @@ export async function submitFolderWorkspaceCreate({
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
   const linkedName = linkedWorkItem ? getLinkedItemDisplayName(linkedWorkItem) : null
-  const nameIsAutoManaged = !name.trim() || name === lastAutoName || isWorkItemLookupText(name)
+  const nameIsAutoManaged = shouldApplyWorkspaceSourceAutoName({
+    currentName: name,
+    lastAutoName,
+    lookupTextIsQuery: !linkedWorkItem
+  })
   const workspaceName =
     nameIsAutoManaged && linkedName
       ? linkedName
-      : name.trim() || linkedName || `${projectGroup.name} workspace`
-  const launchPlatform = getFolderWorkspaceAgentLaunchPlatform(projectGroup)
-  // Why: an SSH folder group runs the plain `orca` relay shim, so the Linux-only
-  // `orca-ide` rename must not be applied for remote launches.
+      : name.trim() ||
+        linkedName ||
+        translate(
+          'auto.components.sidebar.folderWorkspaceComposer.defaultWorkspaceName',
+          '{{name}} workspace',
+          { name: projectGroup.name }
+        )
+  const launchHost = getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)
+  if (quickAgent && launchHost.kind === 'withheld') {
+    throw new Error(launchHost.reason)
+  }
+  const launchPlatform = launchHost.kind === 'known' ? launchHost.platform : null
+  // SSH folders use the plain orca relay shim; keep the Linux-only local executable rename out of remote launches.
   const launchIsRemote = Boolean(projectGroup.connectionId)
-  const launchShell = resolveLocalWindowsAgentStartupShell({
-    platform: launchPlatform,
-    isRemote: launchIsRemote,
-    terminalWindowsShell
-  })
+  const launchShell = resolveExecutionHostAgentStartupShell(launchHost, terminalWindowsShell)
+  const preferences =
+    quickAgent && settings
+      ? await ensureAgentLaunchPreferences(useAppStore.getState(), {
+          kind: 'folder',
+          runtimeEnvironmentId,
+          executionHostId: getNewWorkspaceProjectGroupHostId(projectGroup)
+        })
+      : undefined
+  const effectiveSettings = settings
+    ? {
+        ...settings,
+        agentLaunchChoices: preferences?.agentLaunchChoices ?? settings.agentLaunchChoices
+      }
+    : settings
   const startupPlan =
-    quickAgent && linkedWorkItem
+    quickAgent && launchPlatform && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
           agent: quickAgent,
+          settings: effectiveSettings,
           linkedWorkItem,
           note,
           agentCmdOverrides,
           agentArgs,
           agentEnv,
-          sessionOptions,
           platform: launchPlatform,
           shell: launchShell,
           isRemote: launchIsRemote
         })
-      : quickAgent
+      : quickAgent && launchPlatform
         ? buildAgentStartupPlan({
-            agent: quickAgent,
+            ...resolveAgentStartupPlanInputs({
+              agent: quickAgent,
+              settings: effectiveSettings ?? { agentCmdOverrides },
+              agentArgs: settings ? agentArgs : (agentArgs ?? null),
+              platform: launchPlatform,
+              shell: launchShell,
+              isRemote: launchIsRemote
+            }),
+            ...(agentEnv ? { agentEnv } : {}),
             prompt: note,
-            cmdOverrides: agentCmdOverrides ?? {},
-            agentArgs,
-            agentEnv,
-            sessionOptions,
-            platform: launchPlatform,
-            shell: launchShell,
-            isRemote: launchIsRemote,
             allowEmptyPromptLaunch: true
           })
         : null
-  // Why: the argv-prefill plan carries the draft inside `launchCommand`, so
-  // `startupPlan.draftPrompt` alone can't tell whether this launch has one.
+  // Argv prefill embeds the draft in launchCommand, so draftPrompt alone cannot detect it.
   const launchDraftPrompt =
     quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
-  const plan = quickAgent
-    ? planAgentSessionLaunch(useAppStore.getState(), {
+  const launchRequest = quickAgent
+    ? {
+        requestId: newAgentLaunchRequestId(),
         agent: quickAgent,
         workspace: {
-          kind: 'folder',
+          kind: 'folder' as const,
           runtimeEnvironmentId,
           executionHostId: getNewWorkspaceProjectGroupHostId(projectGroup)
         },
         prompt: launchDraftPrompt ?? note,
-        promptDelivery: launchDraftPrompt ? 'draft' : 'auto-submit',
-        initialSessionOptions: startupPlan?.sessionOptions
-      })
+        promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)
+      }
+    : null
+  // Creation retains its chosen route, but admission after materialization may fall back.
+  const plan = launchRequest
+    ? launchChoice
+      ? adoptAgentSessionLaunchVerdict({
+          ...launchRequest,
+          route: launchChoice.route,
+          executionHostId: launchChoice.executionHostId
+        })
+      : planAgentSessionLaunch(useAppStore.getState(), launchRequest)
     : null
   const structuredLaunch = plan?.route === 'structured-native-chat'
-  // Why: the pending badge should only appear when the submitted prompt can
-  // actually produce the first agent message that names the workspace.
+  // Show pending rename only when the submitted prompt can produce a naming message.
   const pendingFirstAgentMessageRename =
     autoRenameBranchFromWork === true &&
     !name.trim() &&
@@ -157,8 +200,7 @@ export async function submitFolderWorkspaceCreate({
   const workspace = await createFolderWorkspace({
     projectGroupId: projectGroup.id,
     name: workspaceName,
-    // Why: SSH folder groups must keep their target provenance even when the
-    // focused runtime is local or another host.
+    // Retain the SSH target even when another host owns the focused runtime.
     connectionId: projectGroup.connectionId ?? null,
     linkedTask: toFolderWorkspaceLinkedTask(linkedWorkItem),
     ...(linkedTaskSourceContext ? { linkedTaskSourceContext } : {}),
@@ -168,16 +210,8 @@ export async function submitFolderWorkspaceCreate({
   if (!workspace) {
     return false
   }
-  if (!structuredLaunch) {
-    await preflightAgentTrust({
-      agent: quickAgent,
-      workspacePath: workspace.folderPath,
-      connectionId: workspace.connectionId ?? projectGroup.connectionId
-    })
-  }
   if (startupPlan && !startupPlan.launchToken) {
-    // Why: delayed delivery must target the exact pane spawned from this queued
-    // startup, so both halves share one renderer-session token.
+    // Share one token so delayed startup delivery reaches exactly the pane it spawned.
     startupPlan.launchToken = createBrowserUuid()
   }
 
@@ -189,11 +223,7 @@ export async function submitFolderWorkspaceCreate({
           launchConfig: startupPlan.launchConfig,
           ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
           launchAgent: quickAgent,
-          ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
           ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
-          // Why: view-mode only. The argv-prefill plan sets no draftPrompt, so
-          // without this the tab opens in chat with nothing mirrored into it.
-          ...(launchDraftPrompt ? { launchDraftText: launchDraftPrompt } : {}),
           ...(startupPlan.startupCommandDelivery
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
             : {}),
@@ -238,8 +268,7 @@ export async function submitFolderWorkspaceCreate({
       activation !== false &&
       activation.primaryTabId
     ) {
-      // Why: draft launch context reaches only the TUI input; seed the
-      // chat-composer copy so it isn't invisible in the chat view.
+      // TUI prefill needs a separate chat-composer copy to remain visible after switching views.
       seedNativeChatLaunchDraftForAgentTab({
         tabId: activation.primaryTabId,
         agent: quickAgent,
@@ -259,8 +288,7 @@ export async function submitFolderWorkspaceCreate({
       })
     }
   } catch (error) {
-    // Why: creation already succeeded. Do not leave the completed create modal
-    // open if the follow-up reveal/startup path hits a transient issue.
+    // Creation succeeded; a transient activation failure must not keep its completed modal open.
     console.error('Failed to activate folder workspace after create:', error)
   }
   return true

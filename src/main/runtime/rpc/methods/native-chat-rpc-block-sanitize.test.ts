@@ -1,4 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import {
+  AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH,
+  parseAgentStatusPayload
+} from '../../../../shared/agent-status-types'
+import { nativeChatAskDismissKey } from '../../../../shared/native-chat-ask-dismiss-key'
+import {
+  parseAskFromStatus,
+  parseAskFromToolInput
+} from '../../../../shared/native-chat/input/native-chat-ask'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 
@@ -31,5 +40,52 @@ describe('mobile subagent roster bounds', () => {
   it('leaves a short id alone', () => {
     const block = sanitizeNativeChatRpcBlock(rosterBlock(['task-1']), 'mobile')
     expect(block.type === 'subagent-group' && block.agents[0]?.id).toBe('task-1')
+  })
+
+  it('bounds a subagent’s own row like a roster’s entry, and leaves other clients its fields', () => {
+    const own: NativeChatBlock = {
+      type: 'subagent',
+      id: `${'p'.repeat(512)}a`,
+      label: 'l'.repeat(600),
+      state: 'working',
+      groupId: 'turn-1',
+      run: 'call-1',
+      outcomeBasis: 'stop-acknowledged'
+    }
+    const block = sanitizeNativeChatRpcBlock(own, 'mobile')
+    expect(block).toMatchObject({ type: 'subagent', groupId: 'turn-1', run: 'call-1' })
+    expect(block.type === 'subagent' && block.id.length).toBe(512)
+    expect(block.type === 'subagent' && block.label.length).toBeLessThan(600)
+    expect(sanitizeNativeChatRpcBlock(own, 'runtime')).toBe(own)
+  })
+})
+
+describe('mobile question tool-call bounds', () => {
+  it('keeps a long question answerable and one dismiss identity across status and transcript', () => {
+    const input = {
+      questions: [
+        {
+          question: 'q'.repeat(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH + 4000),
+          options: [{ label: 'Ship it' }, { label: 'Wait' }]
+        }
+      ]
+    }
+    const status = parseAgentStatusPayload(
+      JSON.stringify({ state: 'waiting', interactivePrompt: JSON.stringify(input) })
+    )
+    const live = parseAskFromStatus(status!.interactivePrompt, 'AskUserQuestion')
+    const block = sanitizeNativeChatRpcBlock(
+      { type: 'tool-call', name: 'AskUserQuestion', input },
+      'mobile'
+    )
+    const mobile = parseAskFromToolInput(
+      'AskUserQuestion',
+      block.type === 'tool-call' ? block.input : undefined
+    )
+    const desktop = parseAskFromToolInput('AskUserQuestion', input)
+
+    expect(mobile!.questions[0].options.map((option) => option.label)).toEqual(['Ship it', 'Wait'])
+    expect(nativeChatAskDismissKey(mobile) === nativeChatAskDismissKey(live)).toBe(true)
+    expect(nativeChatAskDismissKey(desktop) === nativeChatAskDismissKey(live)).toBe(true)
   })
 })

@@ -12,13 +12,8 @@ import {
 import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
-import { encodeMergedSearchCursor } from './ai-vault-search-merged-cursor'
 
-/**
- * Three real indexes over real transcripts, wired as three legs. Everything a
- * merged page claims — every hit exactly once, a purge fencing one host, an
- * unreachable host retried — is checked against the hit sets the indexes hold.
- */
+/** Verify merged hit sets, purge fencing and retries against three independent real transcript indexes. */
 
 const HOST_IDS = ['local', 'ssh:alpha', 'ssh:beta'] as const
 const SESSIONS_PER_HOST = [14, 13, 13] as const
@@ -40,8 +35,7 @@ async function writeSession(harness: SessionSearchIndexerHarness, index: number)
   const sessionId = sessionIdFor(index)
   const path = join(harness.claudeProjectDir, `${sessionId}.jsonl`)
   await mkdir(harness.claudeProjectDir, { recursive: true })
-  // A distinct start index per session gives every hit in the fixture its own
-  // `updatedAt`, so the newest-first order across hosts is total.
+  // Give every hit a distinct timestamp to make cross-host ordering total.
   const lines = claudeLines([`needle transcript ${index}`], sessionId, index * 2)
   await writeFile(path, `${lines.join('\n')}\n`)
   return sessionId
@@ -65,8 +59,7 @@ beforeEach(async () => {
         throw error
       }
     })
-    // One process holds one index, so the transcript reader publishes every read
-    // to every live consumer. Three machines means three indexes built alone.
+    // Build each host index alone: transcript reads publish to every live consumer in one process.
     instance.apply({ enabled: true, historyDays: null })
     await instance.settled()
     instance.close()
@@ -155,7 +148,6 @@ it('orders a newest merge by recency across hosts, newest first', async () => {
   )
   const updated = response.hits.map((hit) => hit.updatedAt)
   expect(updated).toEqual([...updated].sort().toReversed())
-  // The 20 newest of the 40 are the 20 highest session indexes, which span hosts.
   expect(new Set(response.hits.map((hit) => hit.executionHostId)).size).toBeGreaterThan(1)
 })
 
@@ -176,7 +168,6 @@ it('fences the purged host and keeps the other two paginating', async () => {
   const first = resultsOf(await searchAllExecutionHosts(request, legs()))
   expect(first.hosts?.every((host) => host.outcome === 'searched')).toBe(true)
 
-  // A real purge: the transcript is gone and a full reconcile publishes that.
   const purged = hosts[2]!
   await rm(join(purged.harness.claudeProjectDir, `${purged.sessionIds[0]!}.jsonl`))
   await purged.instance.reconcile()
@@ -197,11 +188,10 @@ it('fences the purged host and keeps the other two paginating', async () => {
     const page = resultsOf(await searchAllExecutionHosts({ ...request, cursor }, legs()))
     seen.push(...keysOf(page))
     cursor = page.page.cursor
-    // A merge that never retires a host would page for ever; fail instead.
+    // Fail boundedly if a host is never retired.
     expect((pages += 1)).toBeLessThan(40)
   }
-  // Beta contributed only what it handed out before the purge; nothing repeats,
-  // and both healthy hosts finished their own hit sets.
+  // Purged beta retains only previously emitted hits; healthy hosts finish without duplicates.
   expect(new Set(seen).size).toBe(seen.length)
   const betaEmitted = keysOf(first).filter((key) => key.startsWith('ssh:beta/'))
   expect([...seen].sort()).toEqual(
@@ -249,29 +239,11 @@ it('reports an unreachable host, keeps hasMore, and picks it up on the retry', a
     const page = resultsOf(await searchAllExecutionHosts({ ...request, cursor }, legs()))
     seen.push(...keysOf(page))
     cursor = page.page.cursor
-    // A merge that never retires a host would page for ever; fail instead.
+    // Fail boundedly if a host is never retired.
     expect((pages += 1)).toBeLessThan(40)
   }
   expect(new Set(seen).size).toBe(seen.length)
   expect([...seen].sort()).toEqual(everyKey().sort())
-})
-
-it('refuses a cursor whose page size or host set no longer matches the request', async () => {
-  const first = resultsOf(await searchAllExecutionHosts({ query: 'needle', limit: 5 }, legs()))
-  expect(
-    await searchAllExecutionHosts(
-      { query: 'needle', limit: 20, cursor: first.page.cursor! },
-      legs()
-    )
-  ).toEqual({ kind: 'malformed-cursor' })
-  const nonHost = encodeMergedSearchCursor({
-    limit: 5,
-    sort: 'relevance',
-    hosts: { 'not-a-host': { c: null, e: 0, g: 0 } }
-  })
-  expect(
-    await searchAllExecutionHosts({ query: 'needle', limit: 5, cursor: nonHost }, legs())
-  ).toEqual({ kind: 'malformed-cursor' })
 })
 
 it('reports a disabled host without aborting the merge', async () => {

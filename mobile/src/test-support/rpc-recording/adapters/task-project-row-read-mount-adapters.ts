@@ -5,7 +5,6 @@ import type { operationModuleLoader } from '../operation-module-loader'
 
 const REPO_ID = 'repo-1'
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -17,7 +16,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -100,12 +98,6 @@ const PROJECT_TABLE = {
   rows: [ISSUE_ROW, PR_ROW]
 }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share. Copied per module rather than shared, because an adapter may not import another file
- * in this directory: a golden pins the one module it was recorded through, so plumbing reaching
- * across the seam would drive recordings its header does not cover.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -153,10 +145,7 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * One board row's reads: its details, and the label, assignee and issue-type pickers behind its
- * metadata sheet. The envelope note on the board-load module applies here too.
- */
+// As with board loads, accepted row replies still carry an inner {ok, error} envelope.
 export function taskProjectRowReadMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

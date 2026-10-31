@@ -9,15 +9,17 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-client'
+import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-mutation-client'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
 } from './file-explorer-operation-owner'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
   worktreePath: string | null
+  displayRootPath?: string | null
   expanded: Set<string>
   rowProjection: FileExplorerRowProjection
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -33,9 +35,11 @@ type UseFileExplorerInlineInputResult = {
   handleInlineSubmit: (value: string) => void
 }
 
+/** Positions creation input under the displayed root while retaining true workspace paths for edits and undo. */
 export function useFileExplorerInlineInput({
   activeWorktreeId,
   worktreePath,
+  displayRootPath = worktreePath,
   expanded,
   rowProjection,
   scrollRef,
@@ -68,12 +72,12 @@ export function useFileExplorerInlineInput({
     if (!inlineInput || inlineInput.type === 'rename') {
       return -1
     }
-    return rowProjection.getInsertIndexAfterSubtree(inlineInput.parentPath, worktreePath)
-  }, [inlineInput, rowProjection, worktreePath])
+    return rowProjection.getInsertIndexAfterSubtree(inlineInput.parentPath, displayRootPath)
+  }, [inlineInput, rowProjection, displayRootPath])
 
   const startNew = useCallback(
     (type: 'file' | 'folder', parentPath: string, depth: number) => {
-      if (activeWorktreeId && parentPath !== worktreePath && !expanded.has(parentPath)) {
+      if (activeWorktreeId && parentPath !== displayRootPath && !expanded.has(parentPath)) {
         toggleDir(activeWorktreeId, parentPath)
       }
       setInlineInput({
@@ -83,7 +87,7 @@ export function useFileExplorerInlineInput({
         operationOwner: getFileExplorerOperationOwner(activeWorktreeId)
       })
     },
-    [activeWorktreeId, worktreePath, expanded, toggleDir]
+    [activeWorktreeId, displayRootPath, expanded, toggleDir]
   )
 
   const startRename = useCallback(
@@ -111,7 +115,6 @@ export function useFileExplorerInlineInput({
         return
       }
       const name = value.trim()
-      // No-op if the user submitted the same name (e.g. blur without editing)
       if (inlineInput.type === 'rename' && name === inlineInput.existingName) {
         setInlineInput(null)
         return
@@ -135,7 +138,7 @@ export function useFileExplorerInlineInput({
             )
             const operationRoute = operationGuard.route
             const fileContext = {
-              settings: operationRoute.settings,
+              target: operationRoute.target,
               worktreeId: activeWorktreeId,
               worktreePath,
               connectionId: operationRoute.connectionId,
@@ -157,7 +160,7 @@ export function useFileExplorerInlineInput({
                   await deleteRuntimePath(
                     {
                       ...fileContext,
-                      settings: currentRoute.settings,
+                      target: currentRoute.target,
                       connectionId: currentRoute.connectionId
                     },
                     fullPath,
@@ -170,7 +173,7 @@ export function useFileExplorerInlineInput({
                   await createRuntimePath(
                     {
                       ...fileContext,
-                      settings: currentRoute.settings,
+                      target: currentRoute.target,
                       connectionId: currentRoute.connectionId
                     },
                     fullPath,
@@ -186,7 +189,7 @@ export function useFileExplorerInlineInput({
                   await deleteRuntimePath(
                     {
                       ...fileContext,
-                      settings: currentRoute.settings,
+                      target: currentRoute.target,
                       connectionId: currentRoute.connectionId
                     },
                     fullPath
@@ -198,7 +201,7 @@ export function useFileExplorerInlineInput({
                   await createRuntimePath(
                     {
                       ...fileContext,
-                      settings: currentRoute.settings,
+                      target: currentRoute.target,
                       connectionId: currentRoute.connectionId
                     },
                     fullPath,
@@ -210,8 +213,7 @@ export function useFileExplorerInlineInput({
             }
             await refreshDir(inlineInput.parentPath)
             if (inlineInput.type === 'file') {
-              const runtimeEnvironmentId =
-                fileContext.settings.activeRuntimeEnvironmentId?.trim() || null
+              const runtimeEnvironmentId = runtimeTargetEnvironmentId(fileContext.target)
               openFile(
                 {
                   filePath: fullPath,
@@ -225,7 +227,6 @@ export function useFileExplorerInlineInput({
               )
             }
           } catch (err) {
-            // Refresh the directory even on failure so the tree stays consistent
             await refreshDir(inlineInput.parentPath)
             toast.error(extractIpcErrorMessage(err, `Failed to create '${name}'.`))
           }

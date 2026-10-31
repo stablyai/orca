@@ -24,6 +24,23 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
   ) {
     return false
   }
+  if (value.kind === 'native-page' || value.kind === 'native-signal') {
+    return (
+      'dbPath' in value &&
+      typeof value.dbPath === 'string' &&
+      'sessionId' in value &&
+      typeof value.sessionId === 'string' &&
+      (!('limit' in value) ||
+        (typeof value.limit === 'number' &&
+          Number.isSafeInteger(value.limit) &&
+          value.limit > 0 &&
+          value.limit <= 2400)) &&
+      (!('beforeMessageRowId' in value) ||
+        (typeof value.beforeMessageRowId === 'number' &&
+          Number.isSafeInteger(value.beforeMessageRowId) &&
+          value.beforeMessageRowId >= 0))
+    )
+  }
   if (value.kind === 'list') {
     return (
       'dbPaths' in value &&

@@ -1,8 +1,9 @@
 import { abortSignalReason } from './abort-signal-reason'
-import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from './remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from './remote-runtime/remote-runtime-memory-limits'
 
 const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8
 const DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY = 2
+const REMOTE_RUNTIME_BULK_READ_CONCURRENCY = 2
 export const RUNTIME_RPC_MAX_QUEUED_CALLS_PER_SELECTOR = 256
 export const RUNTIME_RPC_MAX_QUEUED_CALLS_TOTAL = 2_048
 export const RUNTIME_RPC_QUEUE_OVERLOAD_CODE = 'runtime_rpc_queue_overloaded'
@@ -28,6 +29,7 @@ type QueuedRuntimeCall<T> = {
 }
 
 type RuntimeCallQueue = {
+  concurrency: number
   active: number
   backgroundActive: number
   foreground: (QueuedRuntimeCall<unknown> | undefined)[]
@@ -49,6 +51,17 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
     method === 'git.upstreamStatus' ||
     method === 'worktree.prefetchCreateBase'
   )
+}
+
+// Slow worktree removal/model listing waits get a separate lane so foreground refresh/send slots remain free;
+// background slots belong to status.
+function isLongWaitRuntimeMethod(method: string): boolean {
+  return method === 'worktree.rm' || method === 'agentSession.modelCatalog'
+}
+
+// Byte-range reads (media, paged files, downloads) are bulk: a playing video must not hold terminal or workspace slots.
+function isBulkReadRuntimeMethod(method: string): boolean {
+  return method === 'files.readChunk' || method === 'files.readDocPreviewChunk'
 }
 
 export class RuntimeRpcCallQueuePool {
@@ -74,10 +87,17 @@ export class RuntimeRpcCallQueuePool {
     if (signal?.aborted) {
       return Promise.reject(abortSignalReason(signal))
     }
+    // Same concurrency bound, counted apart from the selector's other calls; global caps still apply.
+    const bulkRead = isBulkReadRuntimeMethod(method)
+    const queueKey = isLongWaitRuntimeMethod(method)
+      ? `${selector}\u0000long-wait`
+      : bulkRead
+        ? `${selector}\u0000bulk-read`
+        : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }
-    const existingQueue = this.queues.get(selector)
+    const existingQueue = this.queues.get(queueKey)
     if (existingQueue && this.queuedCount(existingQueue) >= this.maxQueuedPerSelector) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('selector'))
     }
@@ -89,7 +109,10 @@ export class RuntimeRpcCallQueuePool {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('memory'))
     }
 
-    const queue = this.getQueue(selector)
+    const queue = this.getQueue(
+      queueKey,
+      bulkRead ? Math.min(this.concurrency, REMOTE_RUNTIME_BULK_READ_CONCURRENCY) : this.concurrency
+    )
     return new Promise<T>((resolve, reject) => {
       const call: QueuedRuntimeCall<T> = {
         background: isBackgroundRuntimeMethod(method),
@@ -105,17 +128,18 @@ export class RuntimeRpcCallQueuePool {
       this.queuedCallCount += 1
       this.retainedCallBytes += retainedBytes
       if (signal) {
-        call.onAbort = () => this.cancelQueuedCall(selector, queue, call)
+        call.onAbort = () => this.cancelQueuedCall(queueKey, queue, call)
         signal.addEventListener('abort', call.onAbort, { once: true })
       }
-      this.pump(selector, queue)
+      this.pump(queueKey, queue)
     })
   }
 
-  private getQueue(selector: string): RuntimeCallQueue {
+  private getQueue(selector: string, concurrency: number): RuntimeCallQueue {
     let queue = this.queues.get(selector)
     if (!queue) {
       queue = {
+        concurrency,
         active: 0,
         backgroundActive: 0,
         foreground: [],
@@ -129,7 +153,7 @@ export class RuntimeRpcCallQueuePool {
   }
 
   private pump(selector: string, queue: RuntimeCallQueue): void {
-    while (queue.active < this.concurrency) {
+    while (queue.active < queue.concurrency) {
       let call = this.takeForeground(queue)
       if (!call && queue.backgroundActive < this.backgroundConcurrency) {
         call = this.takeBackground(queue)
@@ -147,14 +171,12 @@ export class RuntimeRpcCallQueuePool {
       if (call.background) {
         queue.backgroundActive += 1
       }
-      // Why: runtime streams and worktree actions share transport capacity with
-      // per-card status refreshes, so decorative calls must not stampede it.
+      // Decorative status refreshes must not stampede capacity shared with streams and workspace actions.
       let runPromise: Promise<unknown>
       try {
         runPromise = call.run()
       } catch (error) {
-        // Why: callers rely on queued work starting immediately, but sync
-        // validation errors must still flow through the cleanup path.
+        // Start queued work immediately but route synchronous validation failures through cleanup.
         runPromise = Promise.reject(error)
       }
       void runPromise.then(call.resolve, call.reject).finally(() => {

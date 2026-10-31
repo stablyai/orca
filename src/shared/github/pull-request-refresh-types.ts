@@ -1,12 +1,7 @@
 import type { RepoKind } from '../repo-types'
 import type { CheckStatus, PRInfo, PRMergeableState, PRState } from './pull-request-types'
 
-/**
- * Discriminates a classified GitHub PR-refresh failure. The renderer maps these
- * to stable, non-destructive empty-state copy; a `hard` subset (auth, permission,
- * repo_unavailable, gh_unavailable) means the existing-review lookup is currently
- * impossible and must hide the Create composer.
- */
+/** Classified failures drive stable empty-state copy. Auth/permission/repo_unavailable/gh_unavailable make existing-review lookup impossible and must hide Create. */
 export type PRRefreshErrorType =
   | 'rate_limited'
   | 'auth'
@@ -22,16 +17,13 @@ export type PRRefreshUpstreamErrorType = PRRefreshErrorType
 
 export type PRRefreshOutcome =
   | { kind: 'found'; pr: PRInfo; fetchedAt: number }
-  | { kind: 'no-pr'; fetchedAt: number }
+  | { kind: 'no-pr'; fetchedAt: number; rejectedPRUrls?: string[] }
   | {
       kind: 'upstream-error'
       errorType: PRRefreshErrorType
       message: string
       fetchedAt: number
-      // Unified retry schedule (see docs/reference/pr-panel-refresh-guidance.md).
-      // `nextAutoRetryAt`: earliest time main expects to auto-retry this key.
-      // `retryDisabledUntil`: earliest time a manual Retry / refreshPRNow is
-      // accepted (rate-limit gates only, never ordinary network/auth backoff).
+      // Shared schedule: nextAutoRetryAt is main’s earliest automatic retry; retryDisabledUntil gates manual retry only for rate limits.
       nextAutoRetryAt?: number
       retryDisabledUntil?: number
     }
@@ -54,9 +46,7 @@ export type GitHubPRRefreshAlias = {
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
   fallbackPRSource?: 'explicit' | 'pr-cache' | 'hosted-review' | null
-  // Why: request-time worktree HEAD. Merged branch-matched PRs are only visible
-  // for heads that belong to the PR, and refresh consumers need this snapshot to
-  // clear a durable linked PR once main confirms the head diverged.
+  // Carry request-time HEAD so merged PR containment can confirm divergence before consumers clear durable links.
   currentHeadOid?: string | null
 }
 
@@ -68,6 +58,8 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   connectionId?: string | null
   executionHostId?: string | null
   connectionState?: 'connected' | 'disconnected' | 'unknown'
+  isSelected?: boolean
+  cachedHeadOid?: string | null
   cachedFetchedAt?: number | null
   cachedHasPR?: boolean | null
   cachedPRState?: PRState | null
@@ -85,6 +77,8 @@ export type GitHubPRRefreshSkippedReason =
   | 'bare'
   | 'archived'
   | 'disconnected'
+  /** The workspace's WSL host is off; a poll never starts its distro. */
+  | 'host-off'
   | 'remote'
   | 'rate-limit'
   | 'capacity'

@@ -1,9 +1,4 @@
-// Renderer-parity headless terminal + snapshot/replay mirrors for the garble
-// differential fuzz suites (headless-emulator-fidelity.fuzz.test.ts and
-// hidden-reveal-reconciliation.fuzz.test.ts). Lives in src/shared because the
-// main-side and renderer-side fuzz suites both consume it and neither
-// tsconfig (tsconfig.node.json / tsconfig.tc.web.json) includes the other
-// side's sources.
+// Share renderer-parity fixtures across main/renderer fuzz suites; their tsconfigs exclude each other’s sources.
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -23,11 +18,7 @@ export type ParityTerminal = {
   serializeAddon: SerializeAddon
 }
 
-/** Builds an @xterm/headless terminal configured exactly like the renderer
- *  pane where buffer state is concerned: scrollback + kitty vtExtensions from
- *  buildDefaultTerminalOptions (pane-terminal-options.ts), Unicode11Addon
- *  (pane-dom-creation.ts) and the Orca ZWJ provider (pane-lifecycle.ts).
- *  Font/cursor/render options are omitted — they never alter buffer cells. */
+/** Match renderer buffer state: scrollback/Kitty options, Unicode11 and Orca ZWJ. Font/cursor/render options do not affect cells. */
 export function createRendererParityTerminal(dims: { cols: number; rows: number }): ParityTerminal {
   const terminal = new Terminal({
     cols: dims.cols,
@@ -47,10 +38,17 @@ export function writeToTerminal(terminal: Terminal, data: string): Promise<void>
   return new Promise((resolve) => terminal.write(data, resolve))
 }
 
-export async function writeChunksToTerminal(terminal: Terminal, chunks: string[]): Promise<void> {
-  for (const chunk of chunks) {
-    await writeToTerminal(terminal, chunk)
-  }
+export function writeChunksToTerminal(terminal: Terminal, chunks: string[]): Promise<void> {
+  return new Promise((resolve) => {
+    if (chunks.length === 0) {
+      resolve()
+      return
+    }
+    // The final FIFO callback also fences async parser handlers in earlier chunks.
+    for (let index = 0; index < chunks.length; index++) {
+      terminal.write(chunks[index]!, index === chunks.length - 1 ? resolve : undefined)
+    }
+  })
 }
 
 /** Bottom-anchored visible screen rows (baseY, not viewportY — scroll intent
@@ -75,24 +73,13 @@ export function visibleRowWraps(terminal: Terminal): boolean[] {
 const COLOR_MODE_P16 = 16777216
 const COLOR_MODE_P256 = 33554432
 
-/** Known-legitimate serializer normalization: SerializeAddon re-emits palette
- *  indices 0-15 written via 38;5;N / 48;5;N as classic SGR 30-37/90-97, so a
- *  restored cell reports CM_P16 where the live cell reported CM_P256. Both
- *  modes resolve through the same 16 theme slots — no visual difference. */
+/** SerializeAddon normalizes palette indices 0–15 from CM_P256 to CM_P16; both resolve to the same theme slots. */
 function canonicalColorMode(mode: number, color: number): number {
   return mode === COLOR_MODE_P256 && color >= 0 && color < 16 ? COLOR_MODE_P16 : mode
 }
 
-/** Per-cell descriptor rows so SGR runs that shift cells are caught even
- *  when the text matches. Encodes only VISUALLY EFFECTIVE state:
- *  - glyph cells: char, width, fg, bg, all attribute flags;
- *  - blank cells: width, bg, and fg only when inverse swaps it into the cell
- *    background. Literal spaces retain underline/strikethrough/overline,
- *    while Orca's WebGL glyph renderer skips decorations on null cells.
- *    SerializeAddon may materialize a skipped null run as plain spaces, so
- *    invisible fg/bold/italic state cannot fail the garble gate.
- *  Trailing default blanks are trimmed: the serializer does not re-emit
- *  pristine cells past the last written column. */
+/** Compare visually effective cell state even when text matches: glyph attributes, blank backgrounds and inverse foregrounds.
+ * Keep space decorations; WebGL skips null-cell decorations, and serialization may turn null runs into spaces. Trim pristine trailing blanks the serializer omits. */
 type TerminalBufferLine = ReturnType<Terminal['buffer']['active']['getLine']>
 
 function effectiveRowStyles(line: TerminalBufferLine): string {
@@ -174,12 +161,7 @@ export function normalBufferStylesTrimmed(terminal: Terminal): string[] {
   return rows
 }
 
-// Re-exported, never re-spelled: these had drifted from production twice
-// (they still carried the pre-#14241 preambles), which left the fuzz and
-// colour-parity harnesses asserting against bytes the restorer no longer
-// emits — precisely the failure this module's own header warns about (#12101).
-// The harnesses replay into a fresh terminal, which starts on the normal
-// buffer, so that is the pane state they ground from.
+// Reuse production preambles: duplicated pre-#14241 bytes invalidated fuzz/parity checks (#12101). Fresh harness terminals start on normal.
 export const SNAPSHOT_REPLAY_PREAMBLE_NORMAL = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue(
   { targetAlternateScreen: false, paneOnAlternateScreen: false }
 )}`
@@ -197,18 +179,11 @@ export type ParityMainSnapshot = {
   seq: number
   alternateScreen: boolean
   pendingDeliveryStartSeq?: number
-  /** Mirror of TerminalSnapshot.pendingEscapeTailAnsi: the trailing
-   *  incomplete escape of the hidden byte stream. The restorer writes it
-   *  LAST, after its post-replay resets (Bug E fix). */
+  /** Write the hidden stream’s incomplete escape last, after post-replay resets (Bug E). */
   pendingEscapeTailAnsi?: string
 }
 
-/** Mirror of the production main-buffer snapshot the renderer restore path
- *  consumes: HeadlessEmulator.getSnapshot (snapshotAnsi normalization +
- *  rehydrateSequences + absolute-cursor/DECSC epilogue) composed exactly like
- *  OrcaRuntime.serializeHeadlessTerminalBuffer (normal buffer separated from
- *  an active alt frame). The renderer fuzz cannot import
- *  HeadlessEmulator itself — tsconfig.tc.web.json excludes src/main/daemon. */
+/** Mirror HeadlessEmulator snapshot composition and OrcaRuntime normal/alt separation; renderer fuzz cannot import main/daemon sources. */
 export function buildParityMainBufferSnapshot(
   parity: ParityTerminal,
   seq: number,
@@ -223,8 +198,7 @@ export function buildParityMainBufferSnapshot(
   const { terminal } = parity
   const alternateScreen = terminal.buffer.active.type === 'alternate'
   const scrollback = opts.scrollbackRows ?? DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
-  // Same composition as HeadlessEmulator.getSnapshot: absolute-cursor CUP for
-  // the wrap-pending relative-restore defect plus the DECSC register epilogue.
+  // Match production absolute-cursor and DECSC epilogues.
   let snapshotAnsi = serializeWithAbsoluteCursor(
     parity.serializeAddon,
     terminal,
@@ -233,8 +207,7 @@ export function buildParityMainBufferSnapshot(
   )
   let scrollbackAnsi: string | undefined
   if (alternateScreen) {
-    // Why: HeadlessEmulator splits the normal buffer from the active alt frame;
-    // rehydrateSequences owns the transition between them.
+    // Production separates normal history from the active alt frame; rehydrateSequences owns the switch.
     const marker = '\x1b[?1049h'
     const start = snapshotAnsi.lastIndexOf(marker)
     if (start !== -1) {
@@ -249,14 +222,11 @@ export function buildParityMainBufferSnapshot(
   if (terminal.modes.bracketedPasteMode) {
     seqs.push('\x1b[?2004h')
   }
-  // Why normal-buffer-only: HeadlessEmulator.getModes reports
-  // applicationCursor false while the alternate buffer is active, so the
-  // production rehydrate omits ?1h for alt-screen snapshots.
+  // Match getModes: applicationCursor is false on alt, so alt snapshots omit ?1h.
   if (!alternateScreen && terminal.modes.applicationCursorKeysMode) {
     seqs.push('\x1b[?1h')
   }
-  // Mouse-mode rehydrate omitted: TerminalMouseModeMirror is main-only and
-  // mouse reporting is input encoding — it cannot alter rendered output.
+  // Mouse reporting affects input encoding, not rendered output; omit it from visual parity.
   const snapshot: ParityMainSnapshot = {
     data: seqs.join('') + snapshotAnsi,
     cols: terminal.cols,

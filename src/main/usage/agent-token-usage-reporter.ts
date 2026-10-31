@@ -26,7 +26,7 @@ export class AgentTokenUsageReporter {
   constructor(
     private readonly file: string,
     private readonly provider: AgentTokenUsage['provider'],
-    private readonly getSessionId: (providerSessionId: string) => Promise<string>
+    private readonly getSessionIds: (providerSessionIds: readonly string[]) => Promise<string[]>
   ) {
     this.writer = new UsageCacheSnapshotWriter('[agent-token-usage]', () => file)
   }
@@ -46,18 +46,19 @@ export class AgentTokenUsageReporter {
     if (!isTelemetryEnabled()) {
       return
     }
+    const rows = sessions.flatMap(({ providerSessionId, ...counts }) => {
+      const parsed = agentTokenCountsSchema.safeParse(counts)
+      return parsed.success ? [{ providerSessionId, counts: parsed.data }] : []
+    })
+    const ids = await this.getSessionIds(rows.map((row) => row.providerSessionId))
+    if (!isTelemetryEnabled()) {
+      return
+    }
     const previous = this.snapshots ?? (await this.load())
     const next = new Map(previous)
     let changed = false
-    for (const { providerSessionId, ...counts } of sessions) {
-      if (!isTelemetryEnabled()) {
-        return
-      }
-      const parsed = agentTokenCountsSchema.safeParse(counts)
-      if (!parsed.success) {
-        continue
-      }
-      const id = await this.getSessionId(providerSessionId)
+    for (const [index, { counts }] of rows.entries()) {
+      const id = ids[index]
       const existing = next.get(id)
       if (
         existing &&
@@ -71,7 +72,7 @@ export class AgentTokenUsageReporter {
       next.set(
         id,
         agentTokenUsageSchema.parse({
-          ...parsed.data,
+          ...counts,
           provider: this.provider,
           analytics_session_id: id,
           revision: (existing?.revision ?? 0) + 1

@@ -1,22 +1,27 @@
-// Which agent a tool call or a frame belongs to, answered from the journal's own linkage, so a
-// child's record and its open operation name the agent its rows name.
-
+import type { AgentJournalProducerLinkage } from '../../shared/agent-session-journal-types'
+import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeToolUse } from './claude-structured-item-translation'
-import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
+import type {
+  ClaudeAgentLinkageSource,
+  ClaudeSubagentLinkageSource
+} from './claude-subagent-linkage'
 import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
 
 export type ClaudeChildToolQueries = {
-  /** The agent (its canonical task id) whose own traffic made a tool call; null when the session's
-   *  own agent made it, or it was never seen. The same answer a row that call produced carries. */
+  /** Canonical journal owner; null for the session agent or unseen calls. */
   childToolOwner: (toolUseId: string) => string | null
-  /** The child a frame's `parent_tool_use_id` names, and its newest call still awaiting a result. */
+  /** The child named by `parent_tool_use_id` and its newest unanswered call. */
   childActivity: (parentToolUseId: string) => { agentId: string; openTool: ClaudeToolUse | null }
+  /** Use the asking agent's journal linkage; empty for the session agent. */
+  promptProducer: (
+    prompt: Pick<ClaudePendingPrompt, 'agentId' | 'toolUseId'>
+  ) => AgentJournalProducerLinkage
 }
 
 export function claudeChildToolQueries(deps: {
   tools: ReadonlyMap<string, ClaudeToolUse>
   toolOrigins: Pick<ClaudeToolOriginRegistry, 'childOwnerRef'>
-  linkage: Pick<ClaudeSubagentLinkageSource, 'settledLinkageFor'>
+  linkage: Pick<ClaudeSubagentLinkageSource, 'settledLinkageFor'> & ClaudeAgentLinkageSource
 }): ClaudeChildToolQueries {
   const childToolOwner = (toolUseId: string): string | null => {
     const ownerRef = deps.toolOrigins.childOwnerRef(toolUseId)
@@ -35,6 +40,13 @@ export function claudeChildToolQueries(deps: {
       }
       const { agentId } = deps.linkage.settledLinkageFor(parentToolUseId).linkage
       return { agentId: agentId ?? parentToolUseId, openTool }
+    },
+    promptProducer: (prompt) => {
+      if (prompt.agentId !== undefined) {
+        return deps.linkage.linkageForAgent(prompt.agentId)
+      }
+      const ownerRef = deps.toolOrigins.childOwnerRef(prompt.toolUseId)
+      return ownerRef === null ? {} : deps.linkage.settledLinkageFor(ownerRef).linkage
     }
   }
 }

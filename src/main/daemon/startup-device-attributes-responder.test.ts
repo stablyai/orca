@@ -82,7 +82,7 @@ describe('startup device attributes responder', () => {
       reply: (d) => replies.push(d)
     })
 
-    // Why: a non-zero parameter is a secondary/tertiary DA request, not DA1.
+    // Nonzero or extra parameters are unsupported here; they do not identify secondary DA requests.
     expect(registered[0]?.([1])).toBe(false)
     expect(registered[0]?.([0, 1])).toBe(false)
     expect(replies).toEqual([])
@@ -104,8 +104,6 @@ describe('startup device attributes responder', () => {
   })
 
   it('reports the same primary attributes the renderer would, so consuming the query is transparent', () => {
-    // Why pinned: the renderer's xterm answers `?1;2c` for xterm-* TERMs. Diverging here
-    // would silently change the capabilities a TUI sees on barrier-gated panes only.
     expect(STARTUP_DA1_RESPONSE).toBe('\x1b[?1;2c')
   })
 })

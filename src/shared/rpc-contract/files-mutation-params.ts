@@ -18,21 +18,30 @@ export const FileMutationOpen = FileOpen.extend({
   expectedSshConnectionGeneration: z.number().int().nonnegative().optional()
 })
 
-// Why: write content must be a real string. Coercing a missing/non-string value
-// to '' silently truncated the target file to empty instead of erroring. An
-// explicit '' is still accepted (writing an empty file is legitimate).
+// Reject missing/non-string content instead of coercing to empty and truncating the file; explicit empty remains valid.
 export const FileWrite = FileMutationOpen.extend({
   content: z
     .unknown()
     .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
 })
 
+// Why a separate method: a host too old to honor the precondition answers method_not_found
+// instead of silently dropping the field and writing over newer disk content.
+export const FileWriteDiskPreconditionParam = z.object({
+  expectedSignature: z.string().min(1).max(64),
+  allowMissing: z.boolean().optional(),
+  requireLosslessUtf8: z.boolean().optional()
+})
+
+export const FileWriteIfUnchanged = FileWrite.extend({
+  diskPrecondition: FileWriteDiskPreconditionParam
+})
+
 export const FileWriteBase64 = FileMutationOpen.extend({
   contentBase64: z
     .unknown()
     .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
-    // Why: Buffer.from(..., 'base64') accepts malformed input by dropping
-    // invalid bytes, which can silently create empty or corrupt uploaded files.
+    // Buffer.from tolerates malformed base64 and may silently create empty or corrupt files.
     .refine(isValidRuntimeFileBase64, 'File content must be base64')
 })
 
@@ -80,6 +89,16 @@ export const FileCommitUpload = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing final path'))
+})
+
+export const FileReplaceWithUpload = FileCommitUpload.extend({
+  bytesPrecondition: z.object({
+    expectedSha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    allowMissing: z.boolean().optional()
+  })
 })
 
 export const FileDelete = FileMutationOpen.extend({

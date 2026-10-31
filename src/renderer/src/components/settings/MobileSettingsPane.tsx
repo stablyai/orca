@@ -9,11 +9,11 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { MobileRelayBetaNotice } from './MobileRelayBetaNotice'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export { getMobileSettingsPaneSearchEntries }
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'
-const ORCA_ANDROID_APK_URL =
-  'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.48/app-release.apk'
+const ORCA_ANDROID_APK_URL = 'https://www.onorca.dev/download/android'
 
 export function MobileSettingsPane(): React.JSX.Element {
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
@@ -38,7 +38,7 @@ export function MobileSettingsPane(): React.JSX.Element {
             )}{' '}
             <button
               type="button"
-              onClick={() => void window.api.shell.openUrl(ORCA_IOS_APP_STORE_URL)}
+              onClick={(event) => openAppHttpLink(ORCA_IOS_APP_STORE_URL, { event })}
               className="cursor-pointer underline underline-offset-2 hover:text-foreground"
             >
               {translate('auto.components.settings.MobileSettingsPane.b5a2ed83ff', 'App Store')}
@@ -46,9 +46,8 @@ export function MobileSettingsPane(): React.JSX.Element {
             {' · '}
             <button
               type="button"
-              // Why: Android is moving to Google Play soon, but until then
-              // link directly to the pinned APK asset for the current mobile release.
-              onClick={() => void window.api.shell.openUrl(ORCA_ANDROID_APK_URL)}
+              // Link the pinned release APK until Android distribution moves to Google Play.
+              onClick={(event) => openAppHttpLink(ORCA_ANDROID_APK_URL, { event })}
               className="cursor-pointer underline underline-offset-2 hover:text-foreground"
             >
               {translate(

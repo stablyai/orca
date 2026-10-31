@@ -7,6 +7,7 @@ type PositionedTab = {
 
 export type WebSessionExistingTabIndex = {
   getEditorUnifiedTab: (fileId: string, hostTabId: string) => Tab | null
+  getEditorUnifiedTabByHostId: (hostTabId: string) => Tab | null
 }
 
 type BuildWebSessionExistingTabIndexArgs = {
@@ -26,8 +27,7 @@ export function buildWebSessionExistingTabIndex({
     editorTabById: Map<string, PositionedTab>
     editorTabByFileId: Map<string, PositionedTab>
   } | null = null
-  // Why: terminal-only snapshots are the common case, so a snapshot carrying no
-  // mirrored editor tab never pays to walk the worktree's unified tab list.
+  // Terminal-only snapshots avoid walking unified tabs unless mirrored editors are present.
   const getIndexes = (): NonNullable<typeof indexes> => {
     if (!indexes) {
       const editorTabById = new Map<string, PositionedTab>()
@@ -45,12 +45,13 @@ export function buildWebSessionExistingTabIndex({
   }
 
   return {
+    getEditorUnifiedTabByHostId: (hostTabId) =>
+      getIndexes().editorTabById.get(hostTabId)?.tab ?? null,
     getEditorUnifiedTab: (fileId, hostTabId) => {
       const { editorTabById, editorTabByFileId } = getIndexes()
       const byHostId = editorTabById.get(hostTabId)
       const byFileId = editorTabByFileId.get(fileId)
-      // Why: the former Array.find accepted either key, so duplicate legacy
-      // entries must still resolve to whichever candidate appeared first.
+      // Match former Array.find behavior: duplicate legacy entries resolve to the first candidate under either key.
       if (byHostId && byFileId) {
         return byHostId.position <= byFileId.position ? byHostId.tab : byFileId.tab
       }

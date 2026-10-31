@@ -1,42 +1,34 @@
 import { specPaths, type CommandSpec } from './command-spec'
 import { levenshtein } from '../shared/edit-distance'
 
-export { levenshtein } from '../shared/edit-distance'
-
-// Why: rank the live registry so typo recovery cannot drift from accepted paths.
-
 const SUGGESTION_THRESHOLD = 3
 const MAX_SUGGESTIONS = 3
 
-// Why: a close typo of a destructive verb (`remov`→`remove`) still signals that
-// intent, but `move` (distance 2 from `remove`) does not — keep this at 1 so
-// genuine recovery works while unrelated verbs stay locked out. #6303
+// Distance 1 recovers remov→remove without suggesting deletion for move.
 const DESTRUCTIVE_INTENT_THRESHOLD = 1
 
 function finalToken(path: string[]): string {
   return path.at(-1) ?? ''
 }
 
-// Why: destructiveness is declared on the spec (single source of truth); the
-// intent verbs are the final tokens of every destructive path/alias so the guard
-// tracks the registry instead of a hand-maintained list.
-function destructiveVerbs(specs: CommandSpec[]): Set<string> {
-  const verbs = new Set<string>()
+// Aliases join destructive verb families without admitting unrelated verbs.
+function destructiveVerbFamilies(specs: CommandSpec[]): Map<string, Set<string>> {
+  const families = new Map<string, Set<string>>()
   for (const spec of specs) {
-    if (spec.destructive) {
-      for (const path of specPaths(spec)) {
-        verbs.add(finalToken(path))
-      }
+    if (!spec.destructive) {
+      continue
+    }
+    const verbs = specPaths(spec).map(finalToken)
+    const family = new Set(verbs.flatMap((verb) => [...(families.get(verb) ?? [verb])]))
+    for (const verb of family) {
+      families.set(verb, family)
     }
   }
-  return verbs
+  return families
 }
 
-// Why: deletion is irreversible and suggestions flow into agents' recovery
-// channel (--json nextSteps), so only unlock destructive candidates when the
-// input token is itself a near-miss of a destructive verb. #6303
-function intendsDestruction(inputToken: string, verbs: Set<string>): boolean {
-  for (const verb of verbs) {
+function intendsDestruction(inputToken: string, verbs: Set<string> | undefined): boolean {
+  for (const verb of verbs ?? []) {
     if (
       Math.abs(inputToken.length - verb.length) <= DESTRUCTIVE_INTENT_THRESHOLD &&
       levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD
@@ -52,7 +44,6 @@ export type CommandErrorData = {
   nextSteps: string[]
 }
 
-// Why: one bounded near-match ranking keeps command and flag recovery consistent.
 function rankByDistance(scored: { label: string; distance: number }[]): string[] {
   return scored
     .filter((entry) => entry.distance > 0 && entry.distance <= SUGGESTION_THRESHOLD)
@@ -61,19 +52,20 @@ function rankByDistance(scored: { label: string; distance: number }[]): string[]
     .map((entry) => entry.label)
 }
 
-// Why: same-depth matching avoids suggesting parent groups or unrelated commands.
+// Match depth to avoid suggesting parent groups or unrelated commands.
 export function suggestCommands(specs: CommandSpec[], commandPath: string[]): string[] {
   const input = commandPath.join(' ')
-  // Why: only surface destructive commands when the user actually reached for one;
-  // otherwise a benign typo could recover into an irreversible action. #6303
-  const allowDestructive = intendsDestruction(finalToken(commandPath), destructiveVerbs(specs))
+  const families = destructiveVerbFamilies(specs)
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
   for (const spec of specs) {
     if (spec.hidden) {
       continue
     }
-    if (spec.destructive && !allowDestructive) {
+    if (
+      spec.destructive &&
+      !intendsDestruction(finalToken(commandPath), families.get(finalToken(spec.path)))
+    ) {
       continue
     }
     const candidates = specPaths(spec).map((path) =>
@@ -110,10 +102,7 @@ export type FlagErrorData = {
   nextSteps: string[]
 }
 
-// Why: edit distance cannot recover a rename. `orchestration check` is the one verb
-// that identifies its caller with `--terminal` while every sibling uses `--from`, so
-// the near-miss ranking answered `--json`/`--run` and left the caller stuck (#16904).
-// A synonym only fires where the typed flag is rejected and its partner is accepted.
+// Recover renamed flags only when the typed flag is rejected and its synonym is accepted.
 const FLAG_SYNONYMS: Readonly<Record<string, string>> = { from: 'terminal' }
 
 function suggestFlags(flag: string, validFlags: string[]): string[] {
@@ -130,7 +119,6 @@ function suggestFlags(flag: string, validFlags: string[]): string[] {
     : ranked
 }
 
-// Why: include the accepted set so agents can recover without another help call.
 export function unknownFlagData(flag: string, validFlags: string[]): FlagErrorData {
   const sortedValid = [...validFlags].sort((a, b) => a.localeCompare(b))
   const suggestions = suggestFlags(flag, sortedValid)

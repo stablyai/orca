@@ -5,11 +5,10 @@ import {
 } from '../../../shared/claude-subagent-roster'
 import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { isClaudePermissionSettledByReplay } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
-/** The shell fact a Claude row stores beside its `mainAgent`; restart seeds a settled main agent only
- *  when it reads `false`. The listener restates it on every event it produces; any other write keeps
- *  the previous fact only while `mainAgent` is unchanged, since the fact was observed with that one. */
+/** Retain the shell-work fact only with the main-agent observation that established it. */
 export function pairedClaudeNonAgentWork(
   previous: EnrichedAgentHookEventPayload | undefined,
   next: AgentHookEventPayload
@@ -22,10 +21,7 @@ export function pairedClaudeNonAgentWork(
     : undefined
 }
 
-/** A child's permission prompt stays visible over the main agent's own progress, but the row must
- *  still carry that progress: restart seeds the main agent from it, and a stale `done` would let the
- *  children's drain settle a row whose main agent is working. Returns `previous` when nothing changed,
- *  and keeps `previous.payload` when only the unpublished shell fact did. */
+/** Keep main-agent progress behind a child's permission prompt so restart cannot settle live work. */
 export function withHeldChildWaitMainAgent(
   previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
@@ -36,7 +32,13 @@ export function withHeldChildWaitMainAgent(
   }
   const runningNonAgentTask = pairedClaudeNonAgentWork(previous, next)
   const mainAgentChanged = !mainAgentStatusEqual(previous.payload.mainAgent, mainAgent)
-  if (!mainAgentChanged && runningNonAgentTask === previous.claudeRunningNonAgentTask) {
+  const pendingWakeup = next.payload.claudeTaskWakeupPending
+  const wakeupChanged = pendingWakeup !== previous.payload.claudeTaskWakeupPending
+  if (
+    !mainAgentChanged &&
+    !wakeupChanged &&
+    runningNonAgentTask === previous.claudeRunningNonAgentTask
+  ) {
     return previous
   }
   const { claudeRunningNonAgentTask: _unpaired, ...unpaired } = previous
@@ -45,7 +47,10 @@ export function withHeldChildWaitMainAgent(
     ...(runningNonAgentTask !== undefined
       ? { claudeRunningNonAgentTask: runningNonAgentTask }
       : {}),
-    payload: mainAgentChanged ? { ...previous.payload, mainAgent } : previous.payload
+    payload:
+      mainAgentChanged || wakeupChanged
+        ? { ...previous.payload, mainAgent, claudeTaskWakeupPending: pendingWakeup }
+        : previous.payload
   }
 }
 
@@ -71,10 +76,13 @@ export function shouldKeepClaudePermissionVisible(
   if (isClaudePermissionOwningChildEnding(previous, next)) {
     return false
   }
+  if (isClaudePermissionSettledByReplay(previous, next)) {
+    return false
+  }
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
   }
-  // Why: only real permission requests stay sticky; newer Claude reports AskUserQuestion as a PermissionRequest, so tool name (not event) decides.
+  // AskUserQuestion can arrive as PermissionRequest; only actual permissions stay sticky.
   if (isAskUserQuestionTool(previous.payload.toolName)) {
     return false
   }
@@ -134,11 +142,18 @@ function isClaudePermissionResumingApprovedTool(
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
 
+  // Failure clears tool name/input; require the exact request and owner.
+  if (next.hookEventName === 'PostToolUseFailure') {
+    return (
+      hasMatchingToolUseId && previousAgentId === nextAgentId && previousAgentType === nextAgentType
+    )
+  }
+
   return (
     (next.hookEventName === 'PreToolUse' || next.hookEventName === 'PostToolUse') &&
     nextToolUseId !== undefined &&
     !hasConflictingToolUseId &&
-    // Why: subagents share agent_type, so a concrete agent id (or the preserved PostToolUse tool_use_id) is the safest resume signal.
+    // Subagents share agent_type; concrete agent or tool-use IDs distinguish them.
     (hasMatchingConcreteAgentId || hasSameExplicitAgentType || hasMatchingToolUseId) &&
     sameToolName &&
     (sameKnownToolInput || sameUnknownInputFromConcreteAgent || sameUnknownInputFromToolUseId)
@@ -193,7 +208,7 @@ export function attachClaudePermissionToolUseId(
   }
   return {
     ...next,
-    // Why: Claude emits PermissionRequest without tool_use_id, then PostToolUse carries the original PreToolUse id.
+    // PermissionRequest omits tool_use_id; PostToolUse reuses the PreToolUse ID.
     toolUseId: inheritedToolUseId
   }
 }

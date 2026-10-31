@@ -1,5 +1,10 @@
+import type { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { vi, type Mock } from 'vitest'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { OpenFile } from './editor'
+import { translate } from '@/i18n/i18n'
 
 /** Shape shared by the Claude/Codex/OpenCode usage-scanner namespaces. */
 type UsageScannerMocks = {
@@ -13,8 +18,14 @@ type UsageScannerMocks = {
 }
 
 export type StoreSessionMockApi = {
-  worktrees: { list: Mock; create: Mock; remove: Mock; updateMeta: Mock }
-  repos: { list: Mock; add: Mock; remove: Mock; update: Mock; pickFolder: Mock }
+  worktrees: { create: Mock; remove: Mock; updateMeta: Mock }
+  repos: {
+    list: Mock
+    add: Mock
+    removeForHost: Mock
+    update: Mock
+    pickFolder: Mock
+  }
   pty: { kill: Mock }
   gh: { prForBranch: Mock; issue: Mock }
   settings: { get: Mock; set: Mock }
@@ -29,7 +40,6 @@ export type StoreSessionMockApi = {
 export function createStoreSessionMockApi(): StoreSessionMockApi {
   const mockApi: StoreSessionMockApi = {
     worktrees: {
-      list: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({}),
       remove: vi.fn().mockResolvedValue(undefined),
       updateMeta: vi.fn().mockResolvedValue({})
@@ -37,7 +47,7 @@ export function createStoreSessionMockApi(): StoreSessionMockApi {
     repos: {
       list: vi.fn().mockResolvedValue([]),
       add: vi.fn().mockResolvedValue({}),
-      remove: vi.fn().mockResolvedValue(undefined),
+      removeForHost: vi.fn().mockResolvedValue(undefined),
       update: vi.fn().mockResolvedValue({}),
       pickFolder: vi.fn().mockResolvedValue(null)
     },
@@ -126,5 +136,72 @@ export function makeBrowserTab(
     loadError: null,
     createdAt: Date.now(),
     ...overrides
+  }
+}
+
+export function makeTab(
+  overrides: Partial<TerminalTab> & { id: string; worktreeId: string }
+): TerminalTab {
+  return {
+    ptyId: null,
+    title: translate('auto.store.slices.store.test.helpers.b9a8117c33', 'Terminal 1'),
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: Date.now(),
+    ...overrides
+  }
+}
+
+export function makeLayout(): TerminalLayoutSnapshot {
+  return { root: null, activeLeafId: null, expandedLeafId: null }
+}
+
+export function makeOpenFile(
+  overrides: Partial<OpenFile> & { id: string; worktreeId: string }
+): OpenFile {
+  return {
+    filePath: overrides.id,
+    relativePath: 'file.ts',
+    language: 'typescript',
+    isDirty: false,
+    mode: 'edit',
+    ...overrides
+  }
+}
+
+export function makeUnifiedTab(
+  overrides: Partial<Tab> & { id: string; worktreeId: string; groupId: string }
+): Tab {
+  return {
+    entityId: overrides.id,
+    contentType: 'terminal',
+    label: translate('auto.store.slices.store.test.helpers.b9a8117c33', 'Terminal 1'),
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: Date.now(),
+    ...overrides
+  }
+}
+
+export function makeTabGroup(
+  overrides: Partial<TabGroup> & { id: string; worktreeId: string }
+): TabGroup {
+  return {
+    activeTabId: null,
+    tabOrder: [],
+    ...overrides
+  }
+}
+
+export function admissionFromBusy(busy: () => boolean): typeof admitStructuredAgentSession {
+  return (_workspace, _tab, _intent, effect) => {
+    effect(busy(), {
+      current: () => true,
+      busy,
+      signal: new AbortController().signal
+    })
+    return Promise.resolve()
   }
 }

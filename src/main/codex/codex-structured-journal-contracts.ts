@@ -1,14 +1,37 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
-import type { CodexDispatchRequestOrigin } from './codex-structured-dispatch-echo'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type {
+  CodexDispatchEchoes,
+  CodexDispatchRequestOrigin
+} from './codex-structured-dispatch-echo'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import type { CodexSubagentExecutions } from './codex-subagent-executions'
+import type { CodexThreadItem } from './codex-structured-item-translation'
+import type { CodexHelperName } from './codex-collab-agent-item-translation'
+import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+
+export type CodexActiveJournalItem = {
+  threadId: string
+  turnId: string | null
+  identity: AgentJournalItemIdentity
+  item: CodexThreadItem
+  /** Preserve helper names in settled collab-call revisions. */
+  helperName?: CodexHelperName
+  /** Host start time retained for delayed first writes. */
+  startedAt?: number
+}
 
 export type CodexJournalTranslatorDeps = {
+  account?: () => AgentSessionAccountKind | undefined
   sink: StructuredAgentSessionEventSink
+  /** Prevent later connections from revising this connection's frame rows. */
+  acquisitionId?: string
   /** Keys restored lifecycle rows to the live identity; without it history restore skips them. */
   sessionId?: string
+  /** Catch-up imports use turn-qualified identities without changing live/resume keys. */
+  historyImport?: true
   now?: () => number
   bindPromptItemId?: (
     journalItemId: string,
@@ -17,15 +40,13 @@ export type CodexJournalTranslatorDeps = {
     turnId?: string | null
   ) => void
   clearPromptTurn?: (threadId: string, turnId: string) => void
-  /** Settles a send's identity off the echoed user message, using the very
-   *  identity the journal row carries so a replay computes the same key. */
+  /** Use the journal row identity so replay computes the same settlement key. */
   onUserMessageEcho?: (clientMessageId: string, identity: AgentJournalItemIdentity) => void
   primaryThreadId?: () => string | null
-  /** Codex reported the primary thread is not running while no turn is open here.
-   *  A send whose dispatch was never answered is owed nothing after this. */
-  onPrimaryThreadStoppedRunning?: () => void
-  /** Submission origin for one exact client message still awaiting its echo. */
+  /** Submission origin for a dispatch still armed. */
   dispatchRequestOrigin?: (clientMessageId: string) => CodexDispatchRequestOrigin | null
+  /** Armed send whose turn/start reply named this turn. */
+  dispatchTurnOpener?: CodexDispatchEchoes['turnOpener']
   subagentExecutions?: CodexSubagentExecutions
   coalesceMs?: number
   maxRetainedBytes?: number
@@ -34,6 +55,12 @@ export type CodexJournalTranslatorDeps = {
 
 export type CodexJournalTranslator = {
   handle: (event: CodexStructuredSessionEvent) => CodexJournalTranslationAdmission
+  /** The next primary turn carries this command and determines its end. */
+  beginCommand: (command: StructuredAgentSessionCommandRun) => void
+  /** The command was never taken. */
+  forgetCommand: (turnId: string) => void
+  /** The provider turn a Stop naming `turnId` interrupts; undefined while a command has none. */
+  commandProviderTurnId: (turnId: string) => string | undefined
   cancelPrompt: (journalItemId: string) => CodexJournalTranslationAdmission
   restoreThread: (
     threadId: string,

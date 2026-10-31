@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react'
+import { groupWorkspaceSpaceDecisionInputs } from './workspace-space-decision-inputs'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import {
   getWorkspaceDecisionDetails,
@@ -8,6 +9,7 @@ import { getWorkspaceSpaceDeleteState } from './workspace-space-state-resolution
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
+import { getWorktreeOnHostFromState } from '@/store/selectors'
 
 type WorkspaceSpaceManagerBindings = ReturnType<typeof useWorkspaceSpaceManagerBindings>
 
@@ -36,7 +38,8 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
     runtimePaneTitlesByTabId,
     settings,
     tabsByWorktree,
-    worktreeMap
+    worktreeMap,
+    worktreesByRepo
   } = bindings
 
   const sourceRows = useMemo(() => analysis?.worktrees ?? [], [analysis?.worktrees])
@@ -47,9 +50,25 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
     }
     return counts
   }, [sourceRows])
+  const groupedInputs = useMemo(
+    () =>
+      groupWorkspaceSpaceDecisionInputs(sourceRows, tabsByWorktree, {
+        agentStatusByPaneKey,
+        migrationUnsupportedByPtyId,
+        retainedAgentsByPaneKey,
+        openFiles
+      }),
+    [
+      sourceRows,
+      tabsByWorktree,
+      agentStatusByPaneKey,
+      migrationUnsupportedByPtyId,
+      retainedAgentsByPaneKey,
+      openFiles
+    ]
+  )
   const decisionDetailsByWorktreeId = useMemo(() => {
-    // Why: the epoch bumps when fresh hook entries cross the stale boundary so
-    // delete readiness recomputes with the same wall-clock sample as the store.
+    // Use the epoch’s clock so delete readiness and the store agree when hook evidence becomes stale.
     const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
     const details = new Map<string, WorkspaceDecisionDetails>()
     for (const worktree of sourceRows) {
@@ -58,6 +77,11 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
         getWorkspaceDecisionDetails(worktree, {
           repoMap,
           worktreeMap,
+          worktreeRecord: getWorktreeOnHostFromState(
+            { worktreesByRepo },
+            worktree.worktreeId,
+            worktree.executionHostId
+          ),
           repos,
           tabsByWorktree,
           ptyIdsByTabId,
@@ -77,12 +101,14 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
           settings,
           activeWorktreeId,
           activeWorkspaceExecutionHostId,
+          ...groupedInputs.get(worktree.worktreeId),
           now: agentStatusNow
         })
       )
     }
     return details
   }, [
+    groupedInputs,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
     agentStatusEpoch,
@@ -105,7 +131,8 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
     settings,
     sourceRows,
     tabsByWorktree,
-    worktreeMap
+    worktreeMap,
+    worktreesByRepo
   ])
   const getDeleteStateForWorktree = useCallback(
     (worktree: WorkspaceSpaceWorktree) =>

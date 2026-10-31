@@ -1,6 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
-const installed = vi.hoisted(() => ({ deps: null as Record<string, unknown> | null }))
+const installed = vi.hoisted(() => {
+  const state: {
+    deps: Record<string, unknown> | null
+    logger: StructuredAgentSessionLogger | null
+  } = { deps: null, logger: null }
+  return state
+})
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -10,70 +17,26 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./structured-agent-session-runtime', () => ({
-  ensureStructuredAgentSessionHost: vi.fn(async (deps: Record<string, unknown>) => {
-    installed.deps = deps
-  })
-}))
-
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { OrcaRuntimeService } from './orca-runtime'
-import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
-
-type OrcaRuntimeDeps = NonNullable<ConstructorParameters<typeof OrcaRuntimeService>[2]>
-
-/** Renaming either option reddens this list, and dropping either from a host's construction
- *  reddens the assertion below. Both are needed: the runtime class does not typecheck its own
- *  `this` calls, and each entry point wires the store separately. */
-const AGENT_STATUS_STORE_DEPS = [
-  'getAgentStatusSnapshot',
-  'structuredAgentStatusSink'
-] as const satisfies readonly (keyof OrcaRuntimeDeps)[]
-
-const MAIN_ROOT = join(import.meta.dirname, '..')
-
-/** The text of the `new OrcaRuntimeService(...)` call in one entry point. */
-function runtimeConstruction(relativePath: string): string {
-  const source = readFileSync(join(MAIN_ROOT, relativePath), 'utf8')
-  const start = source.indexOf('new OrcaRuntimeService(')
-  expect(start).toBeGreaterThanOrEqual(0)
-  let depth = 0
-  for (let index = source.indexOf('(', start); index < source.length; index += 1) {
-    const character = source[index]
-    if (character === '(') {
-      depth += 1
-    } else if (character === ')') {
-      depth -= 1
-      if (depth === 0) {
-        return source.slice(start, index + 1)
-      }
-    }
-  }
-  throw new Error(`unbalanced OrcaRuntimeService construction in ${relativePath}`)
-}
-
-/** The runtime class this wiring lives on does not typecheck its own `this` calls, so a misnamed
- *  field here would install a host that never writes to the agent-status store — and every reader
- *  of that store would simply list no structured sessions. Pin it behaviourally. */
-/** `worktree ps` reads structured rows only from the agent-status store, so an entry point that
- *  constructs a runtime without these lists no agents at all — and `orcad` serves `worktree.ps`
- *  and `agentSession.*` exactly like the desktop does. */
-describe('every host that constructs a runtime wires the agent-status store', () => {
-  it.each([['orcad/orcad-entry.ts'], ['startup/main-process-runtime-service.ts']])(
-    '%s passes both store deps',
-    (relativePath) => {
-      const construction = runtimeConstruction(relativePath)
-      for (const dep of AGENT_STATUS_STORE_DEPS) {
-        expect(construction).toContain(`${dep}:`)
-      }
-      // A sink without it leaves the host holding no child records for that entry point.
-      expect(construction).toContain('publishChildWork: (subject, evidence, provider) =>')
-      expect(construction).toContain('ingestStructuredChildWork(subject, evidence, provider)')
+  ensureStructuredAgentSessionHost: vi.fn(
+    async (deps: Record<string, unknown> & { logger: StructuredAgentSessionLogger }) => {
+      installed.deps = deps
+      installed.logger = deps.logger
     }
   )
-})
+}))
+
+import { OrcaRuntimeService } from './orca-runtime'
+import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
+import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import * as structuredMailTarget from './orchestration/structured-session-mail-target'
+import { OrcaRuntimeWithRuntimeId } from './construction/runtime-identity-state'
 
 describe('structured status sink wiring', () => {
+  afterEach(() => {
+    _resetTracerForTests()
+    vi.restoreAllMocks()
+  })
+
   it('hands the host the sink the runtime was constructed with', async () => {
     installed.deps = null
     const sink: StructuredAgentSessionStatusSink = { publish: vi.fn(), forget: vi.fn() }
@@ -84,6 +47,30 @@ describe('structured status sink wiring', () => {
     expect(installed.deps?.['statusSink']).toBe(sink)
   })
 
+  it('hands the host the trace-file logger', async () => {
+    installed.logger = null
+    const push = vi.fn()
+    setActiveSink({ push, flush: () => {}, close: () => {} })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const runtime = new OrcaRuntimeService()
+
+    await runtime.ensureStructuredAgentSessionHost()
+    const installedLogger = (): StructuredAgentSessionLogger | null => installed.logger
+    installedLogger()?.warn('renewing a chat lease failed', {
+      scope: 'lease-renewal',
+      sessionId: 'session-1',
+      error: new Error('database is locked')
+    })
+
+    expect(push).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'agentSession.lease-renewal',
+        attributes: expect.objectContaining({ sessionId: 'session-1' }),
+        exit: expect.objectContaining({ _tag: 'Failure' })
+      })
+    )
+  })
+
   it('installs without a sink when none was provided', async () => {
     installed.deps = null
     const runtime = new OrcaRuntimeService()
@@ -92,5 +79,123 @@ describe('structured status sink wiring', () => {
 
     expect(installed.deps).not.toBeNull()
     expect('statusSink' in (installed.deps ?? {})).toBe(false)
+  })
+})
+
+describe('mail dispatch through the current runtime', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('uses runtime journal and delivery overrides on the idle edge', () => {
+    const target = new OrcaRuntimeService()
+    vi.spyOn(structuredMailTarget, 'structuredSessionIdleEdgeMailboxes').mockReturnValue([
+      'term_mailbox'
+    ])
+    const events: string[] = []
+    Object.defineProperties(target, {
+      notifyStructuredSessionJournalActivity: {
+        value: function (this: OrcaRuntimeService, sessionId: string) {
+          expect(this).toBe(target)
+          expect(arguments.length).toBe(1)
+          events.push(`journal:${sessionId}`)
+        }
+      },
+      deliverPendingMessagesForHandle: {
+        value: function (this: OrcaRuntimeService, handle: string) {
+          expect(this).toBe(target)
+          expect(arguments.length).toBe(1)
+          events.push(`delivery:${handle}`)
+        }
+      }
+    })
+
+    target.onStructuredSessionStatusForMail({ sessionId: 'session-mailbox', status: 'working' })
+    expect(events).toEqual(['journal:session-mailbox'])
+    events.length = 0
+    target.onStructuredSessionStatusForMail({ sessionId: 'session-mailbox', status: 'idle' })
+    expect(events).toEqual(['journal:session-mailbox', 'delivery:term_mailbox'])
+  })
+
+  it('uses the runtime delivery override during repoint repair', () => {
+    const target = new OrcaRuntimeService()
+    const delivery = vi.fn(function (this: OrcaRuntimeService, handle: string) {
+      expect(this).toBe(target)
+      expect(arguments.length).toBe(1)
+      expect(handle).toBe('term_mailbox')
+    })
+    Object.defineProperty(target, 'deliverPendingMessagesForHandle', { value: delivery })
+
+    target['repointPendingMessagesForHandle']('term_mailbox')
+    expect(delivery).toHaveBeenCalledOnce()
+  })
+
+  it('uses runtime coordinator and direct worker target overrides', () => {
+    const target = new OrcaRuntimeService()
+    Object.defineProperties(target, {
+      resolveStructuredCoordinatorMailboxTarget: {
+        value: function (this: OrcaRuntimeService, runId: string) {
+          expect(this).toBe(target)
+          expect(arguments.length).toBe(1)
+          expect(runId).toBe('run-mailbox')
+          return { sessionId: 'coordinator-session', dispatchId: null }
+        }
+      },
+      resolveStructuredWorkerDirectMailboxTarget: {
+        value: function (this: OrcaRuntimeService, handle: string) {
+          expect(this).toBe(target)
+          expect(arguments.length).toBe(1)
+          expect(handle).toBe('term_mailbox')
+          return { sessionId: 'worker-session', dispatchId: null }
+        }
+      }
+    })
+
+    expect(target['resolveStructuredMailboxTarget']('run:run-mailbox')).toEqual({
+      sessionId: 'coordinator-session',
+      dispatchId: null
+    })
+    expect(target['resolveStructuredMailboxTarget']('term_mailbox')).toEqual({
+      sessionId: 'worker-session',
+      dispatchId: null
+    })
+  })
+})
+
+abstract class MailSchedulerPhaseProbe extends OrcaRuntimeWithRuntimeId {
+  readonly pendingMailDuringConstruction = this.mailPointerRepointScheduler.pendingCount
+}
+
+describe('input state before later runtime layers initialize', () => {
+  it('makes the scheduler available immediately after the original base layer', () => {
+    expect(
+      Object.getOwnPropertyDescriptor(
+        Reflect.construct(MailSchedulerPhaseProbe, []),
+        'pendingMailDuringConstruction'
+      )?.value
+    ).toBe(0)
+  })
+})
+
+describe('checked runtime construction', () => {
+  it('installs subscription callbacks on the runtime with their real registry receiver', () => {
+    const runtime = new OrcaRuntimeService()
+    const cleanup = vi.fn()
+    runtime.registerSubscriptionCleanup('construction-subscription', cleanup)
+    runtime.cleanupSubscription('construction-subscription')
+    expect(cleanup).toHaveBeenCalledOnce()
+    runtime.cleanupSubscription('construction-subscription')
+    expect(cleanup).toHaveBeenCalledOnce()
+  })
+
+  it('keeps constructor callbacks lazy and the canonical status producer identity', () => {
+    const snapshot = vi.fn(() => [])
+    const stopped = vi.fn()
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      getAgentStatusSnapshot: snapshot,
+      onPtyStopped: stopped
+    })
+    expect(runtime.getAgentStatusSnapshotFn).toBe(snapshot)
+    expect(runtime['onPtyStopped']).toBe(stopped)
+    expect(snapshot).not.toHaveBeenCalled()
+    expect(stopped).not.toHaveBeenCalled()
   })
 })

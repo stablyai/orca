@@ -1,6 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
+import { getDefaultSourceControlAiSettings } from '../../../src/shared/source-control-ai'
 
 export type PRCommentsSidebarSeed = {
   worktreeId: string
@@ -46,7 +47,11 @@ export const FIXTURE_COMMENTS: PRComment[] = [
 
 /** Seed an open PR on e2e-secondary with mixed comment triage states for sidebar tests. */
 export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommentsSidebarSeed> {
-  return page.evaluate(async (fixtureComments: PRComment[]) => {
+  const seed = {
+    fixtureComments: FIXTURE_COMMENTS,
+    sourceControlAiDefaults: getDefaultSourceControlAiSettings()
+  }
+  return page.evaluate(async ({ fixtureComments, sourceControlAiDefaults }) => {
     const store = window.__store
     if (!store) {
       throw new Error('window.__store is not available')
@@ -117,12 +122,13 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
         ? {
             ...current.settings,
             sourceControlAi: {
+              ...sourceControlAiDefaults,
               ...current.settings.sourceControlAi,
               enabled: true
             }
           }
         : current.settings,
-      fetchPRForBranch: async (repoPath: string, targetBranch: string) => {
+      fetchPRForBranch: async (_repoPath: string, targetBranch: string) => {
         if (targetBranch !== branch) {
           return null
         }
@@ -137,12 +143,13 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
       fetchPRChecks: async () => [],
       fetchPRComments: async () => comments,
       setPRCommentReaction: async () => true,
-      fetchUpstreamStatus: async () => undefined,
+      fetchUpstreamStatus: async (worktreeId) =>
+        store.getState().remoteStatusesByWorktree[worktreeId] ?? null,
       setUpstreamStatus: () => undefined
     }))
 
     window.localStorage.setItem('orca:pr-comment-presentation', 'cards')
 
     return { worktreeId: worktree.id, branch, prNumber }
-  }, FIXTURE_COMMENTS)
+  }, seed)
 }

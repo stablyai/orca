@@ -4,14 +4,10 @@ import type { RelayDatabase, SqlRow } from './database.js'
 
 export const IDLE_REHOME_PAGE_SIZE = 100
 
-// How many decision rows one poll is allowed to look at. The poll runs about
-// fifty times a minute across the directors, so its cost has to be set by this
-// number and not by the size of the fleet or the width of the cohort.
+// Bound each of ~50 polls/min by decision rows, independent of fleet/cohort size.
 export const IDLE_REHOME_DECISION_WINDOW = 500
 
-// Where the last window ended. A keyset beats OFFSET: `OFFSET n` still has to
-// produce and throw away n rows, and n grew by a page on every poll that
-// dispatched, so the scan got more expensive the longer the rollout ran.
+// Keyset cursor avoids OFFSET’s growing discarded-row scan cost over long rollouts.
 export type IdleRehomeHostCursor = { userId: string; relayHostId: string } | null
 
 export type IdleRegionalRehomeCandidate = IdleRegionalRehomeRequest & { sourceCellUrl: string }
@@ -23,10 +19,7 @@ export type IdleRegionalRehomeSelection = {
   skippedOffRegionSourceCells: number
 }
 
-// TEMPORARY STOPGAP: delete with its call sites once the rehome commit stops holding
-// relay_cells row locks across cross-region round trips. The source cell runs the commit,
-// and one outside the database's region holds fleet-wide locks for seconds, so it may not
-// be a source. It stays a target: only the source side of the commit pays the round trips.
+// Source-region stopgap keeps commits beside the database while remote cells remain targets; reassess now rehome uses a final NOWAIT cell-row write instead of prolonged fleet locks.
 export function rehomeSourceRegionAllowed(
   sourceRegion: string,
   directorRegion: string | undefined
@@ -92,10 +85,7 @@ export async function selectIdleRegionalRehomes(
   const after = input.cursor ? [input.cursor.userId, input.cursor.relayHostId] : []
   const afterFilter = input.cursor ? 'AND (user_id, relay_host_id) > (?, ?)' : ''
 
-  // The window is taken first and on its own so the poll knows where it stopped
-  // reading, not just where it stopped emitting. Every gate below this point can
-  // reject a host, and a cursor that only advanced past emitted rows would park
-  // on a rejected host forever.
+  // Advance by the read window, not emitted candidates, or rejected hosts can pin the cursor forever.
   const window = await input.database.query(
     `SELECT user_id, relay_host_id FROM relay_region_decisions
      WHERE ${decisionFilter} ${afterFilter}
@@ -108,10 +98,7 @@ export async function selectIdleRegionalRehomes(
 
   const sourceList = [...cells.sources.values()]
   const rows = await input.database.query(
-    // The verification names the window's keys rather than repeating its LIMIT:
-    // the two reads take separate snapshots, and a decision that turned eligible
-    // between them would otherwise shift the second LIMIT and push the last host
-    // out of it while the cursor still advanced past it.
+    // Verify exact window keys: separate snapshots with repeated LIMIT can admit a newly eligible row while skipping the old last key forever.
     `SELECT d.user_id, d.relay_host_id, d.preferred_region, a.cell_id AS source_cell_id,
        a.assignment_epoch, host.generation
      FROM (SELECT user_id, relay_host_id, preferred_region, incumbent_region, assignment_epoch
@@ -188,9 +175,7 @@ export async function selectIdleRegionalRehomes(
   }
 }
 
-// Every cell predicate the candidate join used to re-evaluate per (host, cell)
-// pair. There are tens of cells and tens of thousands of hosts, so this is
-// resolved once per poll against the four small inventory tables.
+// Resolve small inventory predicates once per poll instead of per tens-of-thousands of host/cell pairs.
 async function readCellInventory(
   input: SelectionInput
 ): Promise<{
@@ -290,9 +275,7 @@ function placeholders(count: number): string {
   return Array.from({ length: count }, () => '?').join(',')
 }
 
-// A derived table the planner can hash, in the one syntax both Postgres and the
-// SQLite test engine accept (`VALUES ... AS t(col)` and LATERAL are not common to
-// both). Only the first branch is cast; both engines take the union's types from it.
+// Derived UNION table is hashable on PostgreSQL and SQLite (unlike aliased VALUES/LATERAL); first branch sets both engines’ types.
 function inlineRows(columns: ReadonlyArray<readonly [string, string]>, rows: number): string {
   const first = columns.map(([name, type]) => `CAST(? AS ${type}) AS ${name}`)
   const rest = Array.from({ length: rows - 1 }, () => `UNION ALL SELECT ${placeholders(columns.length)}`)
@@ -300,7 +283,7 @@ function inlineRows(columns: ReadonlyArray<readonly [string, string]>, rows: num
 }
 
 function hostKey(row: SqlRow): string {
-  return `${String(row.user_id)} ${String(row.relay_host_id)}`
+  return `${String(row.user_id)}\u0000${String(row.relay_host_id)}`
 }
 
 function idleRehomeCandidate(

@@ -14,16 +14,14 @@ const {
   listRepoWorktreesMock,
   getStatusMock,
   gitExecFileAsyncMock,
-  getLocalProjectWorktreeGitOptionsMock,
-  getSshGitProviderMock
+  getLocalProjectWorktreeGitOptionsMock
 } = vi.hoisted(() => ({
   lstatMock: vi.fn(),
   readFileMock: vi.fn(),
   listRepoWorktreesMock: vi.fn(),
   getStatusMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
-  getLocalProjectWorktreeGitOptionsMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+  getLocalProjectWorktreeGitOptionsMock: vi.fn()
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -45,10 +43,6 @@ vi.mock('../git/status', () => ({
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
 }))
 
 vi.mock('../project-runtime-git-options', () => ({
@@ -150,7 +144,6 @@ describe('workspace cleanup broad scan opt-in', () => {
     } satisfies GitStatusResult)
     gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '0\n', stderr: '' })
     getLocalProjectWorktreeGitOptionsMock.mockReset().mockReturnValue({})
-    getSshGitProviderMock.mockReset().mockReturnValue(undefined)
   })
 
   afterEach(() => {
@@ -189,53 +182,6 @@ describe('workspace cleanup broad scan opt-in', () => {
       result.candidates.find((candidate) => candidate.worktreeId === 'repo-1::/repo-old')
         ?.executionHostId
     ).toBe('runtime:env-1')
-  })
-
-  it('does not borrow same-id local metadata for a connected SSH cleanup row', async () => {
-    const sharedPath = '/shared/workspace'
-    const worktreeId = `${REPO.id}::${sharedPath}`
-    const localRepo = { ...REPO, path: '/local/repo' }
-    const sshRepo = { ...REPO, path: '/remote/repo', connectionId: 'ssh-1' }
-    const sharedWorktree: GitWorktreeInfo = {
-      path: sharedPath,
-      head: 'shared123',
-      branch: 'refs/heads/shared',
-      isBare: false,
-      isMainWorktree: false
-    }
-    const localMeta = makeWorktreeMeta({
-      displayName: 'Local metadata only',
-      hostId: 'local',
-      isPinned: true,
-      lastActivityAt: NOW - 40 * DAY_MS
-    })
-    listRepoWorktreesMock.mockResolvedValue([sharedWorktree])
-    getSshGitProviderMock.mockReturnValue({
-      listWorktrees: vi.fn().mockResolvedValue([sharedWorktree])
-    })
-
-    const result = await scanWorkspaceCleanup(
-      makeStore([localRepo, sshRepo], { [worktreeId]: localMeta }),
-      { includeAllWorkspaces: true, skipGitWorktreeIds: [worktreeId] }
-    )
-
-    expect(result.candidates).toHaveLength(2)
-    expect(result.candidates).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          worktreeId,
-          executionHostId: 'local',
-          displayName: 'Local metadata only',
-          blockers: ['pinned']
-        }),
-        expect.objectContaining({
-          worktreeId,
-          executionHostId: 'ssh:ssh-1',
-          displayName: 'shared',
-          blockers: []
-        })
-      ])
-    )
   })
 
   it('reads git for a pinned target during focused preflight scans', async () => {
@@ -354,54 +300,11 @@ describe('workspace cleanup broad scan opt-in', () => {
     ])
   })
 
-  it('does not publish a same-id local folder instance on an SSH host', async () => {
-    const localFolderRepo = { ...FOLDER_REPO }
-    const sshFolderRepo = { ...FOLDER_REPO, connectionId: 'ssh-1' }
-    const instanceId = `${FOLDER_REPO.id}::${FOLDER_REPO.path}::workspace:11111111-2222-4333-8444-555555555555`
-    getSshGitProviderMock.mockReturnValue({})
-
-    const result = await scanWorkspaceCleanup(
-      makeStore([localFolderRepo, sshFolderRepo], {
-        [instanceId]: makeWorktreeMeta({
-          displayName: 'Local folder session',
-          hostId: 'local'
-        })
-      }),
-      { includeAllWorkspaces: true }
-    )
-
-    expect(result.candidates).toHaveLength(3)
-    expect(result.candidates.filter((candidate) => candidate.worktreeId === instanceId)).toEqual([
-      expect.objectContaining({
-        executionHostId: 'local',
-        displayName: 'Local folder session'
-      })
-    ])
-  })
-
-  it('does not mark connected SSH folder workspaces as disconnected', async () => {
-    const sshFolderRepo: Repo = { ...FOLDER_REPO, connectionId: 'ssh-1' }
-    getSshGitProviderMock.mockReturnValue({})
-
-    const result = await scanWorkspaceCleanup(makeStore([sshFolderRepo]), {
-      includeAllWorkspaces: true
-    })
-
-    expect(result.candidates).toHaveLength(1)
-    expect(result.candidates[0]).toMatchObject({
-      worktreeId: 'repo-folder::/folder-workspace',
-      connectionId: 'ssh-1',
-      blockers: ['main-worktree', 'folder-repo']
-    })
-  })
-
   it('defers git evidence for rows that no cleanup decision can use', async () => {
     const result = await scanWorkspaceCleanup(makeStore(), {
       includeAllWorkspaces: true
     })
 
-    // Why: only the inactive row can ever be queued, so it is the only row worth
-    // a git read; the rest stream immediately with empty evidence.
     expect(getStatusMock).toHaveBeenCalledTimes(1)
     expect(getStatusMock).toHaveBeenCalledWith('/repo-old', expect.anything())
     expect(
@@ -556,6 +459,24 @@ describe('workspace cleanup broad scan opt-in', () => {
       blockers: ['ssh-disconnected'],
       reasons: []
     })
+  })
+
+  it('reads host-written terminal use as activity for a disconnected SSH workspace', async () => {
+    const sshRepo: Repo = { ...REPO, id: 'repo-ssh', connectionId: 'ssh-1' }
+    const allMeta: Record<string, WorktreeMeta> = {
+      'repo-ssh::/remote/shells': makeWorktreeMeta({
+        lastActivityAt: NOW - 45 * DAY_MS,
+        lastTerminalUseAt: NOW - 2 * DAY_MS
+      })
+    }
+
+    const legacy = await scanWorkspaceCleanup(makeStore([sshRepo], allMeta))
+    const optIn = await scanWorkspaceCleanup(makeStore([sshRepo], allMeta), {
+      includeAllWorkspaces: true
+    })
+
+    expect(legacy.candidates).toEqual([])
+    expect(optIn.candidates[0]).toMatchObject({ reasons: [], lastActivityAt: NOW - 2 * DAY_MS })
   })
 
   it('keeps a canonical-only SSH cleanup row blocked while local metadata collides', async () => {

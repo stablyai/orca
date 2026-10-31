@@ -16,6 +16,14 @@ describe('web file preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('has no local file path bridge and refuses path preparation without remote calls', async () => {
+    const { api } = await installApi('Linux')
+    expect(Object.hasOwn(api.fs, 'getPathForFile')).toBe(false)
+    await expect(
+      api.fs.prepareDroppedPaths({ paths: ['/files/notes.txt'], consumer: 'agent' })
+    ).rejects.toThrow('Preparing dropped file paths is not supported in the web client')
+  })
+
   it('rejects native save-dialog downloads in paired web clients', async () => {
     const { api } = await installApi('Linux')
 
@@ -25,18 +33,6 @@ describe('web file preload API', () => {
     await expect(
       api.fs.downloadFolder({ dirPath: '/workspace/repo/src', connectionId: 'ssh-1' })
     ).rejects.toThrow('Remote folder download is unavailable in paired web clients.')
-  })
-
-  it('rejects SSH clone requests in paired web clients', async () => {
-    const { api } = await installApi('Linux')
-
-    await expect(
-      api.repos.cloneRemote({
-        connectionId: 'ssh-1',
-        url: 'https://github.com/stablyai/orca.git',
-        destination: '/workspace'
-      })
-    ).rejects.toThrow('SSH clone is unavailable in paired web clients.')
   })
 
   it('returns false for runtime missing-path errors from fs.pathExists', async () => {

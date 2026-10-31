@@ -1,14 +1,19 @@
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, existsSync, linkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { rename } from 'node:fs/promises'
+import { existsSync, linkSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { setTimeout } from 'node:timers/promises'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { nodeFileContentsEqualSync } from '../../shared/node-file-content-equality'
+import {
+  copyFileWithWindowsRetry,
+  renameFileWithWindowsRetry,
+  renameFileWithWindowsRetryAsync
+} from '../../shared/windows-retry-file-operations'
+
+export { copyFileWithWindowsRetry, renameFileWithWindowsRetry, renameFileWithWindowsRetryAsync }
 
 export function writeFileAtomically(
   targetPath: string,
-  contents: string,
+  contents: string | Uint8Array,
   options?: { mode?: number }
 ): void {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
@@ -17,12 +22,7 @@ export function writeFileAtomically(
     renameFileWithWindowsRetry(tmpPath, targetPath)
   } catch (error) {
     rmSync(tmpPath, { force: true })
-    // Why: on Windows, Chromium's renderer initialization calls
-    // SetNamedSecurityInfo on the userData folder with a Protected DACL
-    // that propagates empty inherited ACEs to child directories, causing
-    // EPERM on all writes. Grant an explicit ACL on the parent directory
-    // and retry once so the write succeeds even if Chromium reset the DACL
-    // after our startup fix ran.
+    // Chromium can reset inherited userData ACLs after startup; repair the parent and retry once.
     if (isPermissionError(error) && process.platform === 'win32') {
       try {
         grantDirAcl(dirname(targetPath))
@@ -35,7 +35,7 @@ export function writeFileAtomically(
           rmSync(retryTmpPath, { force: true })
         }
       } catch {
-        // icacls failure is not actionable; re-throw the original EPERM
+        // Preserve the original write error when ACL repair fails.
       }
     }
     throw error
@@ -192,70 +192,4 @@ export function publishFileWithoutOverwrite(sourcePath: string, targetPath: stri
     }
     throw error
   }
-}
-
-// Why: on Windows, file replacement and backup-copy operations can fail with
-// EPERM/EACCES/EBUSY if another process (antivirus, Claude CLI, Codex CLI)
-// holds the target file open. A short retry avoids transient failures without
-// masking real permission errors. Total backoff (~750ms) covers typical AV
-// scan windows seen in issue #1507.
-export function renameFileWithWindowsRetry(source: string, target: string): void {
-  runFileOperationWithWindowsRetry(() => renameSync(source, target))
-}
-
-export async function renameFileWithWindowsRetryAsync(
-  source: string,
-  target: string,
-  isCurrent: () => boolean = () => true
-): Promise<boolean> {
-  for (let attempt = 1; ; attempt++) {
-    if (!isCurrent()) {
-      return false
-    }
-    try {
-      await rename(source, target)
-      return true
-    } catch (error) {
-      if (!shouldRetryFileOperation(error, attempt)) {
-        throw error
-      }
-      await setTimeout(attempt * 50)
-    }
-  }
-}
-
-export function copyFileWithWindowsRetry(source: string, target: string): void {
-  runFileOperationWithWindowsRetry(() => copyFileSync(source, target))
-}
-
-function runFileOperationWithWindowsRetry(operation: () => void): void {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      operation()
-      return
-    } catch (error) {
-      if (shouldRetryFileOperation(error, attempt)) {
-        sleepSync(attempt * 50)
-        continue
-      }
-      throw error
-    }
-  }
-}
-
-function shouldRetryFileOperation(error: unknown, attempt: number): boolean {
-  return (
-    process.platform === 'win32' &&
-    attempt < 6 &&
-    error instanceof Error &&
-    'code' in error &&
-    (error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY')
-  )
-}
-
-// Why: writeFileAtomically is a sync API called from sync paths, so the retry
-// backoff must park the thread instead of burning CPU in a Date.now() loop.
-const sleepBuffer = new Int32Array(new SharedArrayBuffer(4))
-function sleepSync(ms: number): void {
-  Atomics.wait(sleepBuffer, 0, 0, ms)
 }

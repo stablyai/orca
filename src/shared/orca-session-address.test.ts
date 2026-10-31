@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ORCA_SESSION_ADDRESS_PREFIX,
   formatOrcaSessionAddress,
   isOrcaSessionId,
   parseOrcaSessionAddress
@@ -8,11 +7,10 @@ import {
 import { testOrcaSessionId } from './orca-session-address-test-fixture'
 
 const SESSION_ID = testOrcaSessionId('0b7e4c2a-5f1d-4e8a-9c3b-2d6f8a1e4b70')
-const ADDRESS = `session:${SESSION_ID}`
+const ADDRESS = `orca_session_id:${SESSION_ID}`
 
 describe('Orca session address', () => {
-  it('addresses an Orca session id as session:<id> and parses the bare id back', () => {
-    expect(ORCA_SESSION_ADDRESS_PREFIX).toBe('session:')
+  it('addresses an Orca session id as orca_session_id:<id> and parses the bare id back', () => {
     expect(formatOrcaSessionAddress(SESSION_ID)).toBe(ADDRESS)
     expect(parseOrcaSessionAddress(ADDRESS)).toBe(SESSION_ID)
     const parsed = parseOrcaSessionAddress(ADDRESS)
@@ -32,12 +30,17 @@ describe('Orca session address', () => {
     ['the Run mailbox namespace', 'run:run_123'],
     ['the Dispatch mailbox namespace', 'dispatch:ctx_123'],
     ['an empty prefix', `:${SESSION_ID}`],
-    ['an empty id', 'session:'],
-    ['an id with a separator', `session:${SESSION_ID}:extra`],
-    ['an id the session predicate rejects', 'session:short'],
+    ['an empty id', 'orca_session_id:'],
+    ['an id with a separator', `orca_session_id:${SESSION_ID}:extra`],
+    ['an id the session predicate rejects', 'orca_session_id:short'],
     ['a terminal handle', 'term_4f2c9a']
   ])('refuses %s', (_label, value) => {
     expect(parseOrcaSessionAddress(value)).toBeNull()
+  })
+
+  it('no longer reads the retired session:<id> spelling as a session, as an address or a bare id', () => {
+    expect(parseOrcaSessionAddress(`session:${SESSION_ID}`)).toBeNull()
+    expect(isOrcaSessionId(`session:${SESSION_ID}`)).toBe(false)
   })
 
   it.each([
@@ -47,7 +50,7 @@ describe('Orca session address', () => {
   ])('never treats %s as an Orca session id', (_label, handle) => {
     // Handles share the session-id charset, so the session-record predicate alone would accept them.
     expect(isOrcaSessionId(handle)).toBe(false)
-    expect(parseOrcaSessionAddress(`session:${handle}`)).toBeNull()
+    expect(parseOrcaSessionAddress(`orca_session_id:${handle}`)).toBeNull()
   })
 
   it('validates an Orca session id with the session-record predicate', () => {

@@ -1,11 +1,13 @@
 import { buildPushDelivery } from './push-delivery-message.js'
 import type { PushDispatcher } from './push-dispatcher.js'
 import type { DurablePushStore } from './durable-push-store.js'
+import { WORKER_DRAINS } from './push-worker-concurrency.js'
 
 export class DurablePushWorker {
   private timer?: NodeJS.Timeout
-  private running: Promise<void> | null = null
+  private readonly drains = new Set<Promise<void>>()
   private stopped = false
+  private wakePending = false
   constructor(
     private readonly store: DurablePushStore,
     private readonly dispatcher: PushDispatcher,
@@ -16,36 +18,50 @@ export class DurablePushWorker {
     if (this.timer) return
     this.stopped = false
     this.timer = setInterval(() => {
-      void this.runDue().catch(() => {
-        console.warn(JSON.stringify({ event: 'orca_push_worker_failed' }))
-      })
+      void this.runDue().catch(warnWorkerFailed)
     }, 1000)
     this.timer.unref()
   }
 
-  async runDue(): Promise<void> {
-    if (this.running) {
-      await this.running
+  // One drain per wake keeps claims O(sends + drains); the poll restores full concurrency.
+  wake(): void {
+    if (!this.timer || this.stopped) return
+    if (this.drains.size >= WORKER_DRAINS) {
+      this.wakePending = true
       return
     }
+    this.startDrain().catch(warnWorkerFailed)
+  }
+
+  async runDue(): Promise<void> {
     if (this.stopped) return
-    const pending = Promise.allSettled(Array.from({ length: 4 }, () => this.drain())).then(
-      (results) => {
-        const failure = results.find((result) => result.status === 'rejected')
-        if (failure?.status === 'rejected') throw failure.reason
-      }
+    const started = Array.from({ length: WORKER_DRAINS - this.drains.size }, () =>
+      this.startDrain()
     )
-    this.running = pending
-    try {
-      await pending
-    } finally {
-      this.running = null
-    }
+    const active = Promise.allSettled(this.drains)
+    const failure = (await Promise.allSettled(started)).find(
+      (result) => result.status === 'rejected'
+    )
+    await active
+    if (failure?.status === 'rejected') throw failure.reason
+  }
+
+  private startDrain(): Promise<void> {
+    const drain: Promise<void> = this.drain().finally(() => {
+      this.drains.delete(drain)
+      // A committed enqueue can arrive after every drain has found an empty queue.
+      if (this.wakePending) {
+        this.wakePending = false
+        this.wake()
+      }
+    })
+    this.drains.add(drain)
+    return drain
   }
 
   private async drain(): Promise<void> {
     for (let count = 0; count < 25 && !this.stopped; count++) {
-      const queued = await this.store.claim()
+      const queued = await this.store.claim(() => !this.stopped)
       if (!queued) return
       const delivery = buildPushDelivery({
         expiresAt: queued.expiresAt,
@@ -82,8 +98,13 @@ export class DurablePushWorker {
 
   async stop(): Promise<void> {
     this.stopped = true
+    this.wakePending = false
     if (this.timer) clearInterval(this.timer)
     this.timer = undefined
-    await this.running
+    await Promise.allSettled(this.drains)
   }
+}
+
+function warnWorkerFailed(): void {
+  console.warn(JSON.stringify({ event: 'orca_push_worker_failed' }))
 }

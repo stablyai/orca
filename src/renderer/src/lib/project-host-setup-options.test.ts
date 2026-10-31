@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { getExecutionHostLabel, type ExecutionHostId } from '../../../shared/execution-host'
-import type {
-  ExecutionHostHealth,
-  ExecutionHostRegistryEntry
+import {
+  buildExecutionHostRegistry,
+  type ExecutionHostHealth,
+  type ExecutionHostRegistryEntry
 } from '../../../shared/execution-host-registry'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
@@ -140,8 +141,7 @@ describe('buildProjectHostSetupOptions', () => {
   })
 
   it('omits runtime-owned SSH (per-workspace-env) setups even when their host is filtered out', () => {
-    // The execution-host registry filters runtime-owned targets, so the setup's host is absent
-    // here — guard on the hostId so the hidden target never becomes a selectable run-target.
+    // Runtime-owned SSH targets are absent from the host registry; their raw hostId must still prevent selectable run targets.
     const runtimeSshHostId = 'ssh:runtime-ssh-orca-e37aa3a9' as ExecutionHostId
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
@@ -220,8 +220,7 @@ describe('buildProjectHostSetupOptions', () => {
   })
 
   it('collapses duplicate ready setups on one host to the setup creation actually uses', () => {
-    // Why: a linked worktree added as its own project projected a second ready `local` setup for the
-    // same project, which rendered as repeated identical "Local Mac" rows separated only by path.
+    // Linked worktrees added as projects can duplicate ready Local Mac rows distinguished only by path.
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
       eligibleRepos: [repo('main-checkout'), repo('worktree-a'), repo('worktree-b')],
@@ -276,8 +275,7 @@ describe('buildProjectHostSetupOptions', () => {
     ])
   })
 
-  // A `repo:<id>` project has no cross-host identity, so linking it on another host
-  // always fails in main — the row keeps its status line instead of a dead button.
+  // Host-local repo:<id> projects cannot link across hosts; keep status instead of a guaranteed-failing action.
   it('cannot set a location for a host-local project', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'repo:local-repo',
@@ -585,5 +583,93 @@ describe('buildProjectHostSetupOptions', () => {
       detail: 'Checking host capabilities',
       isAvailable: false
     })
+  })
+
+  it('offers an SSH host with a managed server once, routed to the server', () => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo')],
+      hosts: buildExecutionHostRegistry({
+        repos: [],
+        settings: null,
+        hostSource: 'configured-only',
+        sshTargetLabels: new Map([['omarchy-target', 'Omarchy']]),
+        runtimeEnvironments: [
+          {
+            id: 'omarchy-server',
+            name: 'Omarchy',
+            orcadDeployment: { sshTargetId: 'omarchy-target' }
+          }
+        ]
+      }),
+      projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
+    })
+
+    expect(options.filter((option) => option.label === 'Omarchy')).toEqual([
+      expect.objectContaining({ kind: 'needs-setup', hostId: 'runtime:omarchy-server' })
+    ])
+  })
+
+  function managedOpenclawHosts(): ExecutionHostRegistryEntry[] {
+    return buildExecutionHostRegistry({
+      repos: [],
+      settings: null,
+      hostSource: 'configured-only',
+      sshTargetLabels: new Map([['openclaw-target', 'openclaw']]),
+      runtimeEnvironments: [
+        {
+          id: 'openclaw-server',
+          name: 'openclaw',
+          orcadDeployment: { sshTargetId: 'openclaw-target' }
+        }
+      ]
+    })
+  }
+
+  it('shows one row when an SSH host and its managed server report the same checkout', () => {
+    const checkout = { path: '/home/neil/projects/orca' }
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo'), repo('ssh-repo'), repo('server-repo')],
+      hosts: [host('local'), ...managedOpenclawHosts()],
+      projectHostSetups: [
+        setup('local', 'project-1', 'local', 'local-repo'),
+        // The SSH repo predates the managed server, so it comes first in store order.
+        setup('ssh', 'project-1', 'ssh:openclaw-target', 'ssh-repo', checkout),
+        setup('server', 'project-1', 'runtime:openclaw-server', 'server-repo', checkout)
+      ]
+    })
+
+    expect(options.filter((option) => option.label === 'openclaw')).toEqual([
+      expect.objectContaining({
+        kind: 'ready',
+        id: 'server',
+        hostId: 'runtime:openclaw-server',
+        aliasSetups: [{ id: 'ssh', hostId: 'ssh:openclaw-target' }]
+      })
+    ])
+  })
+
+  it('keeps distinct checkouts on an SSH host and its managed server as separate rows', () => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('ssh-repo'), repo('server-repo')],
+      hosts: managedOpenclawHosts(),
+      projectHostSetups: [
+        setup('ssh', 'project-1', 'ssh:openclaw-target', 'ssh-repo', { path: '/home/neil/a' }),
+        setup('server', 'project-1', 'runtime:openclaw-server', 'server-repo', {
+          path: '/home/neil/b'
+        })
+      ]
+    })
+
+    expect(
+      options
+        .filter((option) => option.kind === 'ready')
+        .map((option) => [option.id, option.hostId])
+    ).toEqual([
+      ['ssh', 'ssh:openclaw-target'],
+      ['server', 'runtime:openclaw-server']
+    ])
   })
 })

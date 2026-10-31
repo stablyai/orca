@@ -1,5 +1,4 @@
-// A Codex rewind whose outcome only the provider can prove, found on a chat at rest: nothing on
-// screen will start the agent that settles it, so the next send does, and its message is kept.
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,7 +6,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -23,6 +23,14 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const caller = { callerKey: 'desktop' }
 const KEPT = { provider: 'codex' as const, threadId: THREAD, turnId: 'kept', ordinal: 0 }
@@ -38,46 +46,54 @@ const rewindSupport = vi.fn<NonNullable<StructuredAgentSessionAdapter['rewindSup
 const dispatch = vi.fn<StructuredAgentSessionAdapter['dispatch']>()
 
 function adapter(): StructuredAgentSessionAdapter {
-  return {
-    supportsCreate: (_location, agent) => agent === 'codex',
-    supportsLocation: () => true,
-    acquire: async (input) => {
-      acquires += 1
-      sink = input.events!
-      return {
-        process: {
-          hostId: 'local',
-          pid: 4000 + acquires,
-          processStartTimeMs: HOST_TEST_NOW,
-          spawnToken: input.spawnToken
-        },
-        acquisitionGeneration: `generation-${acquires}`,
-        link: {
-          linkId: `link-${acquires}`,
-          mintedAtFence: input.fence,
-          observedAt: HOST_TEST_NOW,
-          origin: acquires === 1 ? 'created' : 'resumed',
-          handle: { provider: 'codex', threadId: THREAD }
+  return startsWhenPublished(
+    {
+      supportsCreate: (_location, agent) => agent === 'codex',
+      supportsLocation: () => true,
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
+      acquire: async (input) => {
+        acquires += 1
+        sink = input.events!
+        return {
+          process: {
+            hostId: 'local',
+            pid: 4000 + acquires,
+            processStartTimeMs: HOST_TEST_NOW,
+            spawnToken: input.spawnToken
+          },
+          acquisitionGeneration: `generation-${acquires}`,
+          link: {
+            linkId: `link-${acquires}`,
+            mintedAtFence: input.fence,
+            observedAt: HOST_TEST_NOW,
+            origin: acquires === 1 ? 'created' : 'resumed',
+            handle: codexProviderHandle(THREAD)
+          }
         }
-      }
+      },
+      dispatch,
+      cancelTurn: async () => ({ cancelled: false }),
+      answerPrompt: async () => {},
+      setOption: async () => {},
+      rewindSupport,
+      rewind,
+      recoverRewind,
+      releaseAcquisition: async () => true,
+      closeSession: async () => true
     },
-    dispatch,
-    cancelTurn: async () => ({ cancelled: false }),
-    answerPrompt: async () => {},
-    setOption: async () => {},
-    rewindSupport,
-    rewind,
-    recoverRewind,
-    releaseAcquisition: async () => true,
-    closeSession: async () => true
-  }
+    () => host
+  )
 }
 
 function openHost(): StructuredAgentSessionHost {
   return new StructuredAgentSessionHost({
+    agents: claudeAndCodexDeclared(),
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalRoot: directory,
+    journalDatabase: openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
     probeOwner: async () => ({ outcome: 'exit-observed' }),
@@ -89,10 +105,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   acquires = 0
   rewind.mockReset()
-  recoverRewind.mockReset().mockResolvedValue({
-    ok: true,
-    items: [{ identity: KEPT, body: hostTestMessage('verified history') }]
-  })
+  recoverRewind.mockReset().mockResolvedValue({ ok: true })
   rewindSupport.mockReset().mockReturnValue({ supported: true })
   dispatch.mockReset().mockImplementation(async (input): Promise<AgentSessionDispatchOutcome> => ({
     state: 'accepted',
@@ -104,15 +117,13 @@ beforeEach(async () => {
     }
   }))
   directory = await mkdtemp(join(tmpdir(), 'orca-rewind-rest-'))
-  store = await AgentSessionRecordStore.open({
-    directory: join(directory, 'store'),
-    hostId: 'local'
-  })
+  store = await openTestAgentSessionRecordStore(directory)
   host = openHost()
 })
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -154,15 +165,15 @@ function sendParams(text: string) {
   }
 }
 
-/** A chat whose rewind the provider applied, whose Orca side never finished, reopened at rest. */
 async function interruptedRewindAtRest(): Promise<void> {
   expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const drop = { ...KEPT, turnId: 'drop' }
-  sink.appendItem(KEPT, hostTestMessage('verified history'))
-  sink.appendItem(drop, hostTestMessage('to be rewound'))
+  sink.appendItem(KEPT, hostTestMessage('verified history'), {
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
+  })
+  sink.appendItem(drop, hostTestMessage('to be rewound'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
   await host.flushStreamedEvents(SESSION)
-  rewind.mockImplementation(async (input) => {
-    await input.onReverted?.()
+  rewind.mockImplementation(async () => {
     throw new Error('history unavailable')
   })
   const epoch = (await host.journalSnapshot(SESSION)).cursor.epoch
@@ -171,10 +182,7 @@ async function interruptedRewindAtRest(): Promise<void> {
   )
   expect(store.getRecord(SESSION)?.rewind).toMatchObject({ phase: 'prepared' })
   await host.flushAllStreamedEvents()
-  store = await AgentSessionRecordStore.open({
-    directory: join(directory, 'store'),
-    hostId: 'local'
-  })
+  store = await openTestAgentSessionRecordStore(directory)
   host = openHost()
 }
 
@@ -196,23 +204,42 @@ describe('an interrupted Codex rewind on a chat at rest (R16)', () => {
         ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
         : []
     )
-    // The recovered history, then the new message — nothing the rewind dropped, nothing lost.
     expect(texts).toEqual(['verified history', 'after the rewind'])
     expect(snapshot.submissions.at(-1)?.dispatchState).toBe('accepted')
+  })
+
+  it('is settled by the start a /clear makes, and the clear commits', async () => {
+    await interruptedRewindAtRest()
+    const before = acquires
+
+    const cleared = await host.conversationCommand(caller, {
+      command: 'clear',
+      envelope: {
+        sessionId: SESSION,
+        clientOperationId: hostTestOperationId(),
+        expectedRuntimeFence: fence(),
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.conversationCommand',
+          sessionId: SESSION,
+          fields: { command: 'clear' }
+        })
+      }
+    })
+    expect(cleared).toMatchObject({ ok: true, value: { phase: 'committed', state: 'completed' } })
+    expect(acquires - before).toBe(1)
+    expect(recoverRewind).toHaveBeenCalledOnce()
+    expect(store.getRecord(SESSION)?.rewind?.phase).toBe('completed')
   })
 })
 
 describe('a rewind asked of a chat at rest (P2-23)', () => {
   it('starts the agent first and answers with what the provider says', async () => {
     expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
-    sink.appendItem(KEPT, hostTestMessage('kept'))
+    sink.appendItem(KEPT, hostTestMessage('kept'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await host.flushStreamedEvents(SESSION)
     const epoch = (await host.journalSnapshot(SESSION)).cursor.epoch
     await host.flushAllStreamedEvents()
-    store = await AgentSessionRecordStore.open({
-      directory: join(directory, 'store'),
-      hostId: 'local'
-    })
+    store = await openTestAgentSessionRecordStore(directory)
     host = openHost()
     const before = acquires
     rewindSupport.mockReturnValue({ supported: false, reason: 'history-not-paginated' })

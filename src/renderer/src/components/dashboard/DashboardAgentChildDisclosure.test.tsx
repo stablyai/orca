@@ -13,7 +13,10 @@ vi.mock('../sidebar/CacheTimer', () => ({
   usePromptCacheCountdownForPane: () => null
 }))
 
-afterEach(cleanup)
+afterEach(async () => {
+  cleanup()
+  await vi.dynamicImportSettled()
+})
 
 const agent: AgentRow = {
   paneKey: 'tab:leaf',

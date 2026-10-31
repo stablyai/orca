@@ -3,10 +3,15 @@ import type { Repo } from '../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { getRepoExecutionHostId } from '../shared/execution-host'
-import { isWorkspaceKey, parseWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import { isWorkspaceKey, parseWorkspaceKey } from '../shared/workspace-scope'
 import { splitWorktreeId } from '../shared/worktree/id'
 import { worktreeRetentionPathComparisonKey } from './worktree-retention-path-comparison'
 import type { Store } from './persistence'
+import { isWslMoveRepoBlocked } from './persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
+
+type WorktreeLineagePruningStore = Pick<Store, 'getRepos' | 'getWorktreeMeta' | 'setWorktreeMeta'> &
+  Partial<Pick<Store, 'getAllWorktreeLineage' | 'getAllWorkspaceLineage' | 'removeWorktreeLineage'>>
 
 function worktreeIdBelongsToRepo(worktreeId: string, repoPrefix: string): boolean {
   return worktreeId.startsWith(repoPrefix)
@@ -37,7 +42,7 @@ function hasStoredRepoLineage(
 }
 
 export function pruneLineageForMissingRepoWorktrees(
-  store: Store,
+  store: WorktreeLineagePruningStore,
   repo: Repo,
   gitWorktrees: GitWorktreeInfo[],
   options: {
@@ -46,7 +51,9 @@ export function pruneLineageForMissingRepoWorktrees(
   } = {}
 ): void {
   const { platform = process.platform, preservedMetadataCandidateIds } = options
+  // Mid-move a scan can miss paths that still exist; lineage waits for the move to settle.
   if (
+    isWslMoveRepoBlocked(repo) ||
     typeof store.getAllWorktreeLineage !== 'function' ||
     typeof store.removeWorktreeLineage !== 'function'
   ) {
@@ -55,7 +62,7 @@ export function pruneLineageForMissingRepoWorktrees(
   const worktreeLineage = store.getAllWorktreeLineage()
   const workspaceLineage = store.getAllWorkspaceLineage?.() ?? {}
   const repoPrefix = `${repo.id}::`
-  // Why: one empty observation cannot prove every registered lineage edge disappeared at once.
+  // One empty scan cannot prove every stored lineage edge disappeared.
   if (
     gitWorktrees.length === 0 &&
     hasStoredRepoLineage(repoPrefix, worktreeLineage, workspaceLineage)
@@ -96,7 +103,9 @@ export function pruneLineageForMissingRepoWorktrees(
       !isLive(childScope.worktreeId) &&
       isWorkspaceKey(childWorkspaceKey)
     ) {
-      store.removeWorkspaceLineage?.(childWorkspaceKey)
+      store.removeWorktreeLineage(
+        hostWorktreeTarget({ id: childScope.worktreeId, hostId: expectedHostId })
+      )
     }
   }
   for (const [childId, lineage] of Object.entries(worktreeLineage)) {
@@ -105,9 +114,8 @@ export function pruneLineageForMissingRepoWorktrees(
       canMutateWorktree(childId) &&
       !isLive(childId)
     ) {
-      // Why: a proven-missing path must not transfer its lineage to a future checkout at that path.
-      store.removeWorktreeLineage(childId)
-      store.removeWorkspaceLineage?.(worktreeWorkspaceKey(childId))
+      // Path reuse must not inherit a proven-missing checkout's lineage.
+      store.removeWorktreeLineage(hostWorktreeTarget({ id: childId, hostId: expectedHostId }))
     }
     if (
       worktreeIdBelongsToRepo(lineage.parentWorktreeId, repoPrefix) &&
@@ -116,8 +124,11 @@ export function pruneLineageForMissingRepoWorktrees(
     ) {
       const parentMeta = store.getWorktreeMeta(lineage.parentWorktreeId)
       if (parentMeta?.instanceId === lineage.parentWorktreeInstanceId) {
-        // Why: rotate a proven-missing parent's identity once so path reuse cannot validate old lineage.
-        store.setWorktreeMeta(lineage.parentWorktreeId, { instanceId: randomUUID() })
+        // Rotate once so path reuse cannot validate the missing parent's old identity.
+        store.setWorktreeMeta(
+          hostWorktreeTarget({ id: lineage.parentWorktreeId, hostId: expectedHostId }),
+          { instanceId: randomUUID() }
+        )
       }
     }
   }

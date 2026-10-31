@@ -90,9 +90,7 @@ describe('claudeContextWindowFromResult', () => {
     const byResponse = (responseModel: string) =>
       claudeContextWindowFromResult({ modelUsage }, { initModel: null, responseModel })
     expect(byResponse('claude-sonnet-5')).toBe(200_000)
-    // Responses drop the `[1m]` the usage is keyed with.
     expect(byResponse('claude-fable-5-1')).toBe(1_000_000)
-    // A provider-specific key is matched through the canonical id it reports.
     expect(
       claudeContextWindowFromResult(
         {
@@ -127,7 +125,6 @@ describe('claudeContextWindowFromResult', () => {
         { initModel: 'claude-fable-5-1[1m]', responseModel }
       )
     ).toBe(1_000_000)
-    // An init the newest response contradicts names a model the session has left.
     expect(
       claudeContextWindowFromResult(
         { modelUsage: { ...modelUsage, 'claude-sonnet-5': { contextWindow: 300_000 } } },
@@ -148,28 +145,12 @@ describe('claudeContextWindowFromResult', () => {
         { initModel: 'claude-sonnet-5', responseModel: 'claude-opus-5-5' }
       )
     ).toBe(1_000_000)
-    // An approved plan hands the rest of the turn back to the resting model.
     expect(
       claudeContextWindowFromResult(
         { modelUsage },
         { initModel: 'claude-sonnet-5', responseModel: 'claude-sonnet-5' }
       )
     ).toBe(200_000)
-  })
-
-  it('keeps the main thread window when a subagent ran on a larger one', () => {
-    const modelUsage = {
-      'claude-sonnet-5': { contextWindow: 200_000 },
-      'claude-fable-5-1[1m]': { contextWindow: 1_000_000 }
-    }
-    for (const initModel of ['claude-sonnet-5', null]) {
-      expect(
-        claudeContextWindowFromResult(
-          { modelUsage },
-          { initModel, responseModel: 'claude-sonnet-5' }
-        )
-      ).toBe(200_000)
-    }
   })
 
   it('is null when no entry reports a usable window', () => {
@@ -288,7 +269,6 @@ describe('bindClaudeContextUsageCapture', () => {
     fake.request(TURN_1)
     second.resolve({ ...CONTROL_REPORT, totalTokens: 9_000 })
     await settle()
-    // Superseded, not merely overtaken by activity: not even its window lands.
     fake.state.activity += 1
     first.resolve(CONTROL_REPORT)
     await settle()

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -8,6 +8,18 @@ import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -230,8 +242,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       expect(hostListCalls).toBeGreaterThan(1)
       expect(hostListCalls).toBeLessThan(25)
-      // The reconnect opens with a materialize (session.tabs.activate) and then
-      // polls the inventory, so the first list runs one backoff into the budget.
+      // Reconnect materializes first, then its inventory poll begins one backoff into the budget.
       const listTimeouts = runtimeCall.mock.calls
         .map(([args]) => args)
         .filter((args) => args.method === 'session.tabs.list')
@@ -249,13 +260,14 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
 
       const listCallsAfterBound = hostListCalls
-      await expect(
-        transport.sendInputAccepted?.('retry while reconnecting', 'driving')
-      ).resolves.toBe(false)
+      // Why: held for terminal-stale; the replacement handle below must never receive it (#10065).
+      const heldWhileReconnecting = transport.sendInputAccepted?.(
+        'retry while reconnecting',
+        'driving'
+      )
       await vi.advanceTimersByTimeAsync(16_000)
 
-      // The accepted-snapshot listener already owns recovery. User input must
-      // not turn a bounded reconnect into recurring host-inventory polling.
+      // Accepted snapshots already own recovery; input must not restart bounded inventory polling.
       expect(hostListCalls).toBe(listCallsAfterBound)
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
 
@@ -291,6 +303,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         'remote:env-1@@terminal-after-timeout',
         'remote:env-1@@terminal-stale'
       )
+      await expect(heldWhileReconnecting).resolves.toBe(false)
       expect(onPtyExit).not.toHaveBeenCalled()
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-after-timeout')
       expect(transport.isConnected()).toBe(false)

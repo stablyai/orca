@@ -164,4 +164,17 @@ describe('a refusal a failed request carried in its error', () => {
       code: 'structured_agent_session_unsupported'
     })
   })
+
+  it("degrades a reason another build added to the code's own words", () => {
+    const newer = {
+      code: 'agent_session_journal_unreadable',
+      details: { reason: 'journalFromTheFuture' }
+    }
+    expect(
+      agentSessionThrownFailure({ ...payload, data: { refusal: newer } }, 'runtime_error')
+    ).toEqual({
+      kind: 'refused',
+      code: 'agent_session_journal_unreadable'
+    })
+  })
 })

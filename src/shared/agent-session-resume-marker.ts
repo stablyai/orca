@@ -1,14 +1,5 @@
-// What a teardown recorded about a session that was genuinely working when the app went away.
-//
-// A marker is written ONLY by the teardown path, from the live runtime — never derived from a
-// persisted `running` row, which survives a crash and would resurrect work nobody is doing. The
-// marker is both the offer and its description: what the session was doing is captured on it at
-// the stop, because that fact exists only in memory at that moment — the provider rewrites the
-// journal in its own words on reattach.
-//
-// A marker has no expiry. It ends when the chat's agent is started again other than by its own
-// continuation, or by a successful resume, a dismissal, or closing the chat — each of which
-// deletes it.
+// Teardown captures live work/activity once; persisted running rows could resurrect nonexistent work and reattach rewrites history.
+// No expiry: remove on a non-continuation start, successful resume, dismissal or chat close.
 
 import { z } from 'zod'
 import { AGENT_STATUS_STATES } from './agent-status-types'
@@ -32,15 +23,7 @@ export const AGENT_SESSION_RESUME_FAILURE_OUTCOMES = ['refused', 'unconfirmed'] 
 export type AgentSessionResumeFailureOutcome =
   (typeof AGENT_SESSION_RESUME_FAILURE_OUTCOMES)[number]
 
-/**
- * WHAT the session was working on, in whichever identity that work actually had.
- *
- * A turn id is not always available. Codex declares its turn within ~150ms, but Claude cannot write
- * a running turn until the SDK echoes the user message back — seconds on real journals. A send is
- * journaled before provider dispatch, so the projection already calls that window `working`. Forcing
- * a turn-id shape onto it would drop exactly those genuinely-working Claude sessions, so a
- * submission carries its own identity instead of being made to look like a turn.
- */
+/** Use the actual work identity: Claude may take seconds to echo a turn while its journaled submission is already working. Requiring a turn ID would omit genuinely active sends. */
 export type AgentSessionResumeWork =
   | { kind: 'turn'; id: string }
   | { kind: 'submission'; id: string }
@@ -56,33 +39,14 @@ export type AgentSessionResumeMarker = {
   /** Execution host's clock at teardown. */
   recordedAt: number
   trigger: AgentSessionResumeTrigger
-  /**
-   * IDENTITY ROOT of the provider handle this session had proved at teardown — deliberately not the
-   * full handle key.
-   *
-   * The key embeds Claude's leaf uuid, which is a branch cursor, and the adapter's own close path
-   * appends a `resumed` link with an advanced leaf seconds after the marker is written. Comparing
-   * keys therefore refuses every Claude session forever. The root is the part a resume must
-   * preserve — a resume that changes it forked — which is exactly what this guard is for.
-   */
+  /** Compare provider identity roots: Claude close advances the leaf after teardown, so full-key checks would refuse every resume. A changed root is a fork. */
   providerHandleRoot: string
   /** Stable teardown identity for continuation deduplication, not launch ancestry. */
   teardownId: string
-  /**
-   * Where the chat's journal stood when the offer was taken. A message accepted after it, or a
-   * journal on another epoch, means the chat moved on. Absent on markers from builds that did not
-   * record it.
-   */
+  /** Offer-time journal position; later accepted messages or another epoch mean the chat moved on. Older markers omit it. */
   journalCursor?: AgentJournalCursor
-  /**
-   * What the session was doing, captured at the same stop-time snapshot that decided the offer.
-   * The dialog row, the status bar and the wire candidate read ONLY this; nothing re-reads the
-   * journal after the restart for the description.
-   *
-   * Absent on markers from builds that recorded no snapshot. Optional so an older build strips it
-   * and still reads the marker; `work` keeps its two kinds for the same reason, because a kind
-   * that build cannot parse makes it reject the whole capsule.
-   */
+  contextClearOperationId?: string
+  /** Use only the stop-time activity capture for dialog/status/wire descriptions, never restarted history. Optional activity preserves older capsule parsing; work retains its two known kinds for the same reason. */
   activity?: AgentSessionRestartActivity
 }
 
@@ -108,18 +72,7 @@ const agentSessionRestartActivitySchema = z.object({
     .max(AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS)
 })
 
-/**
- * The single parse boundary for a marker.
- *
- * Markers re-enter from the capsule as JSON this process may not have written — an older build, a
- * hand-edited profile, a partially recovered file. Everything downstream dereferences the shape
- * without guards and decides whether to hand an agent a provider child, so the untyped value is
- * turned into a typed one exactly once, here, and never read field-by-field off `unknown`.
- *
- * Unknown keys pass: a marker written by a slightly newer build must not read as malformed.
- * The activity is display only, so one this build cannot read is dropped rather than costing
- * the whole offer.
- */
+/** Parse foreign/recovered capsule JSON once before unguarded consumers can launch children. Preserve unknown keys for newer builds; drop unreadable display activity without losing the offer. */
 const agentSessionResumeMarkerSchema = z.object({
   sessionId: markerField,
   work: agentSessionResumeWorkSchema,
@@ -128,6 +81,7 @@ const agentSessionResumeMarkerSchema = z.object({
   trigger: z.enum(AGENT_SESSION_RESUME_TRIGGERS),
   providerHandleRoot: markerField,
   teardownId: markerField,
+  contextClearOperationId: markerField.optional().catch(undefined),
   journalCursor: z
     .object({ epoch: markerField, sequence: z.number().int().nonnegative() })
     .optional()
@@ -135,8 +89,7 @@ const agentSessionResumeMarkerSchema = z.object({
   activity: agentSessionRestartActivitySchema.optional().catch(undefined)
 })
 
-/** The marker this value describes, or null when it is not one. Null is always a drop, never a
- *  throw: a malformed advisory marker must never make a user's sessions unreadable. */
+/** Malformed advisory markers drop as null, never throw and make sessions unreadable. */
 export function parseAgentSessionResumeMarker(value: unknown): AgentSessionResumeMarker | null {
   const parsed = agentSessionResumeMarkerSchema.safeParse(value)
   if (!parsed.success) {

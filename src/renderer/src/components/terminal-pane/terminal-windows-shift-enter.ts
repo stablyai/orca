@@ -1,5 +1,5 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '../../lib/pane-agent-evidence'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
@@ -23,14 +23,15 @@ export function resolveWindowsShiftEnterEncoding(
   if (signals.foreground?.shellForeground) {
     return 'alt-enter'
   }
-  // Why: a pending confirmation retains the last allowlisted byte capability;
-  // CSI-u is inert in a shell, while Esc+CR can submit in Pi.
+  // Retain allowlisted encoding during confirmation: CSI-u is inert in shells, while Esc+CR can submit in Pi.
   const agent =
     signals.foreground?.routingTrusted === true ||
     signals.foreground?.routingConfirmationPending === true
       ? signals.foreground.agent
       : null
-  return agent ? (TUI_AGENT_CONFIG[agent].windowsShiftEnterEncoding ?? 'alt-enter') : 'alt-enter'
+  return isTuiAgent(agent)
+    ? (TUI_AGENT_CONFIG[agent].windowsShiftEnterEncoding ?? 'alt-enter')
+    : 'alt-enter'
 }
 
 /** Resolves only pane-keyed evidence so a split sibling cannot inherit tab ownership. */
@@ -55,7 +56,15 @@ export function resolveWindowsShiftEnterEncodingForPane(
   }
   // Why: strict pane-local titles recover Pi/Droid through process-scan gaps without overriding process or shell proof.
   const titleAgent = resolveCommittedTitleAgentType(terminalTitle)
-  return titleAgent
+  // Why: pending confirmation retains the foreground identity; a stale title cannot switch agents.
+  if (
+    foreground?.routingConfirmationPending === true &&
+    foreground.agent != null &&
+    foreground.agent !== titleAgent
+  ) {
+    return encoding
+  }
+  return isTuiAgent(titleAgent)
     ? (TUI_AGENT_CONFIG[titleAgent].windowsShiftEnterEncoding ?? 'alt-enter')
     : 'alt-enter'
 }

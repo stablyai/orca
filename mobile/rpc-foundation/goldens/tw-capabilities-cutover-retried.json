@@ -1,20 +1,26 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.worktree-capabilities",
   "family": "worktree.runtime-capabilities",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
-  "scenarioSha256": "fb9c0e4b7c34f9bd1bd355b606c6ba75a7583cff3788000b7ed013612f5574fe",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "32354557bece": {
       "capabilities": "unprobed"
+    },
+    "446c5090cdcc": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": false
+      }
     },
     "452610f318ae": {
       "name": "status.get#2",
@@ -79,26 +85,15 @@
         }
       }
     },
-    "8a8da145ef52": {
-      "capabilities": {
-        "agentLaunch": false,
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": false
-      }
-    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
     },
-    "c7a06214cf1f": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
+    "a161e33447b4": {
+      "capabilities": {
         "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
         "hostPlatform": {
           "$rpc": "null"
         },
@@ -181,10 +176,10 @@
           "sender": ["523bdccb77ba", "cc2699f90bbe"],
           "payloads": ["d08f74d65ee6", "f1834177e593"],
           "settlements": {
-            "probe": "c7a06214cf1f",
+            "probe": "446c5090cdcc",
             "migrate": "eb79a9b3682a"
           },
-          "state": "8a8da145ef52",
+          "state": "a161e33447b4",
           "effects": []
         }
       }

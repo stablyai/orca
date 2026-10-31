@@ -1,5 +1,6 @@
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault-resume-target'
 import {
-  canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
 } from '@/lib/ai-vault-resume-target'
@@ -11,6 +12,7 @@ import {
   isKnownAiVaultResumeWorkspaceTarget,
   type AiVaultSessionResumeTargetState
 } from './ai-vault-session-resume'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function resolveAiVaultTargetWorkspacePath(
   state: AiVaultSessionResumeTargetState,
@@ -19,12 +21,12 @@ export function resolveAiVaultTargetWorkspacePath(
   const scope = parseWorkspaceKey(workspaceId)
   if (scope?.type === 'folder') {
     return (
-      state.folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId)
+      selectFolderWorkspaces(state).find((workspace) => workspace.id === scope.folderWorkspaceId)
         ?.folderPath ?? null
     )
   }
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
-  return findWorktreeById(state.worktreesByRepo, worktreeId)?.path ?? null
+  return findWorktreeById(selectWorktreesByRepo(state), worktreeId)?.path ?? null
 }
 
 export type AiVaultSessionLaunchTarget =
@@ -60,7 +62,8 @@ export function resolveAiVaultSessionLaunchTarget(args: {
       sessionFilePath: args.sessionFilePath,
       sessionExecutionHostId: args.sessionExecutionHostId,
       targetStatus,
-      targetExecutionHostId
+      targetExecutionHostId,
+      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(args.targetState, targetWorktreeId)
     })
   ) {
     return { status: 'unsupported', targetStatus }
@@ -72,8 +75,7 @@ export function resolveAiVaultSessionLaunchTarget(args: {
 export function aiVaultResumeUnsupportedMessage(
   targetStatus: ReturnType<typeof getAiVaultResumeWorkspaceTargetStatus>
 ): string {
-  // Why: local and SSH targets can both be valid generally; this branch means
-  // the session's recorded host does not match the selected workspace.
+  // Otherwise-valid host types here mean the session host differs from the selected workspace.
   if (targetStatus === 'ssh' || targetStatus === 'local' || targetStatus === 'runtime') {
     return translate(
       'auto.components.right.sidebar.AiVaultPanel.sessionHostMismatchUnsupported',

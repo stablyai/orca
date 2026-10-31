@@ -1,20 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { execFileSync } from 'node:child_process'
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import {
   getPosixPtyForegroundGroup,
   resetPosixPtyForegroundGroupOwnRowCache,
   signalPosixPtyForegroundGroup
 } from './posix-pty-foreground-group'
 
-vi.mock('node:child_process', () => ({ execFileSync: vi.fn(() => '') }))
+const { runProcessMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>()
+}))
+const pidArg = (spec: ProcessSpec): string => {
+  const args = spec.args ?? []
+  return args[args.indexOf('-p') + 1]
+}
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
-// The concatenated output of two `ps -p <pid> -o pid=,tpgid=,tty=` calls.
+const psResult = (stdout: string): ProcessResult => ({
+  code: 0,
+  signal: null,
+  stdout,
+  stderr: '',
+  timedOut: false
+})
+
 const macosTable = ['84644 84985 ttys318', '  4242     4242 ttys002'].join('\n')
 
 describe('getPosixPtyForegroundGroup', () => {
   it('returns the tty foreground group, not the root pid group', () => {
-    // Why: on macOS the root is login(1) and the shell setpgid's into its own group,
-    // so the root pid is never a member of the group a real resize signals.
+    // macOS login(1) is the root; the shell moves into the group that actually receives resize signals.
     expect(getPosixPtyForegroundGroup(macosTable, 84644, '/dev/ttys318', 4242)).toBe(84985)
   })
 
@@ -23,13 +36,12 @@ describe('getPosixPtyForegroundGroup', () => {
   })
 
   it('refuses when the pid now answers for a different tty', () => {
-    // Why: `ps -p` answers for whoever owns the pid now — a recycled pid must not
-    // aim a group signal at a real terminal.
+    // A recycled root PID must not signal another terminal's group.
     expect(getPosixPtyForegroundGroup(macosTable, 84644, '/dev/ttys999', 4242)).toBeNull()
   })
 
   it('refuses when this process shares the PTY', () => {
-    // Why: a dev daemon can inherit its launch TTY; group-signalling would hit Orca.
+    // A dev daemon can inherit its launch TTY; group signals must not reach Orca.
     const shared = ['84644 84985 ttys318', '4242 84985 ttys318'].join('\n')
     expect(getPosixPtyForegroundGroup(shared, 84644, '/dev/ttys318', 4242)).toBeNull()
   })
@@ -46,13 +58,13 @@ describe('getPosixPtyForegroundGroup', () => {
 })
 
 describe('signalPosixPtyForegroundGroup', () => {
-  const table = (): string => macosTable
+  const table = async (): Promise<string> => macosTable
 
-  it('signals the negated foreground group', () => {
+  it('signals the negated foreground group', async () => {
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
     const fallback = vi.fn()
     try {
-      signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
+      await signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
         platform: 'darwin',
         currentPid: 4242,
         readProcessTable: table
@@ -64,10 +76,10 @@ describe('signalPosixPtyForegroundGroup', () => {
     }
   })
 
-  it('falls back to the root pid on Windows', () => {
-    // Why: a negative pid is invalid there, and SIGTERM/SIGINT mean terminate.
+  it('falls back to the root pid on Windows', async () => {
+    // Windows rejects negative PIDs and treats SIGTERM/SIGINT as termination.
     const fallback = vi.fn()
-    signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
+    await signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
       platform: 'win32',
       currentPid: 4242,
       readProcessTable: table
@@ -75,9 +87,9 @@ describe('signalPosixPtyForegroundGroup', () => {
     expect(fallback).toHaveBeenCalledOnce()
   })
 
-  it('falls back when the slave device name is unknown', () => {
+  it('falls back when the slave device name is unknown', async () => {
     const fallback = vi.fn()
-    signalPosixPtyForegroundGroup(84644, undefined, 'SIGWINCH', fallback, {
+    await signalPosixPtyForegroundGroup(84644, undefined, 'SIGWINCH', fallback, {
       platform: 'darwin',
       currentPid: 4242,
       readProcessTable: table
@@ -85,20 +97,20 @@ describe('signalPosixPtyForegroundGroup', () => {
     expect(fallback).toHaveBeenCalledOnce()
   })
 
-  it('falls back when the process table cannot be read', () => {
+  it('falls back when the process table cannot be read', async () => {
     const fallback = vi.fn()
-    signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
+    await signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
       platform: 'darwin',
       currentPid: 4242,
-      readProcessTable: () => {
+      readProcessTable: async () => {
         throw new Error('ps timed out')
       }
     })
     expect(fallback).toHaveBeenCalledOnce()
   })
 
-  it('treats a vanished foreground group as done rather than falling back', () => {
-    // Why: the fallback target is just as stale, and re-signalling a recycled pid is worse.
+  it('treats a vanished foreground group as done rather than falling back', async () => {
+    // ESRCH means the captured target vanished; root fallback would be stale too.
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
       const error = new Error('no such process') as NodeJS.ErrnoException
       error.code = 'ESRCH'
@@ -106,7 +118,7 @@ describe('signalPosixPtyForegroundGroup', () => {
     })
     const fallback = vi.fn()
     try {
-      signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
+      await signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
         platform: 'darwin',
         currentPid: 4242,
         readProcessTable: table
@@ -117,7 +129,7 @@ describe('signalPosixPtyForegroundGroup', () => {
     }
   })
 
-  it('falls back when foreground group signalling fails', () => {
+  it('falls back when foreground group signalling fails', async () => {
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
       const error = new Error('operation not permitted') as NodeJS.ErrnoException
       error.code = 'EPERM'
@@ -125,7 +137,7 @@ describe('signalPosixPtyForegroundGroup', () => {
     })
     const fallback = vi.fn()
     try {
-      signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
+      await signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
         platform: 'darwin',
         currentPid: 4242,
         readProcessTable: table
@@ -142,33 +154,25 @@ describe('process table lookup', () => {
     resetPosixPtyForegroundGroupOwnRowCache()
   })
 
-  it('asks ps for one pid at a time', () => {
-    // Why pinned: macOS ps only takes its by-pid fast path for a SINGLE pid. Any list
-    // form walks the whole process table (~3.6s on a busy machine vs ~3ms), which
-    // exceeds this module's timeout and silently reinstates root-pid delivery — the
-    // exact bug it exists to fix. Regressing this looks like a working feature.
-    const execFileSyncMock = vi.mocked(execFileSync)
-    execFileSyncMock.mockClear()
-    execFileSyncMock.mockReturnValue('84644 84985 ttys318' as never)
-    // Why stubbed: the resolver succeeds against the mocked table, so a live
-    // process.kill would aim a real group signal at whatever owns pgid 84985 here.
+  it('asks ps for one pid at a time', async () => {
+    // macOS PID lists scan the whole table (~3.6s vs ~3ms), silently timing out into root-only delivery.
+    runProcessMock.mockReset()
+    runProcessMock.mockResolvedValue(psResult('84644 84985 ttys318'))
+    // Mock group signalling so fixture PGIDs cannot target real host processes.
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
 
     try {
-      signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', vi.fn(), {
+      await signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', vi.fn(), {
         platform: 'darwin',
         currentPid: 4242
       })
 
-      expect(execFileSyncMock).toHaveBeenCalled()
+      expect(runProcessMock).toHaveBeenCalled()
       let timeoutBudget = 0
-      for (const call of execFileSyncMock.mock.calls) {
-        const args = call[1] as string[]
-        const options = call[2] as { timeout: number }
-        const pidArg = args[args.indexOf('-p') + 1]
-        expect(pidArg).toMatch(/^\d+$/)
-        expect(args.filter((arg) => arg === '-p')).toHaveLength(1)
-        timeoutBudget += options.timeout
+      for (const [spec] of runProcessMock.mock.calls) {
+        expect(pidArg(spec)).toMatch(/^\d+$/)
+        expect(spec.args?.filter((arg) => arg === '-p')).toHaveLength(1)
+        timeoutBudget += spec.timeoutMs ?? Infinity
       }
       expect(timeoutBudget).toBeLessThanOrEqual(250)
     } finally {
@@ -176,12 +180,8 @@ describe('process table lookup', () => {
     }
   })
 
-  it('forks ps once per pane after the first SIGWINCH of the process', () => {
-    // Why: `runPs(currentPid)` reads Orca's own controlling tty, which cannot change
-    // for the process lifetime and feeds only the "do we share this PTY" guard. The
-    // renderer fires SIGWINCH twice per revealed pane, so re-forking it made a 4-pane
-    // tab switch eight synchronous ~3ms `ps` calls on the main event loop.
-    const execFileSyncMock = vi.mocked(execFileSync)
+  it('forks ps once per pane after the first SIGWINCH of the process', async () => {
+    // Reuse Orca's own TTY row: repeated ps forks doubled the per-pane resize cost.
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
     const panes = [
       { rootPid: 900, tty: 'ttys301' },
@@ -191,36 +191,38 @@ describe('process table lookup', () => {
     ]
 
     try {
-      execFileSyncMock.mockClear()
-      execFileSyncMock.mockImplementation(((_file: string, args: string[]) => {
-        const pid = Number(args[args.indexOf('-p') + 1])
+      runProcessMock.mockReset()
+      runProcessMock.mockImplementation(async (spec) => {
+        const pid = Number(pidArg(spec))
         if (pid === 4242) {
-          return '4242 4242 ttys002'
+          return psResult('4242 4242 ttys002')
         }
         const pane = panes.find((entry) => entry.rootPid === pid)
-        return pane ? `${pane.rootPid} ${pane.rootPid + 50} ${pane.tty}` : ''
-      }) as never)
+        return psResult(pane ? `${pane.rootPid} ${pane.rootPid + 50} ${pane.tty}` : '')
+      })
 
       for (const pane of panes) {
-        // Two signals per revealed pane: hidden-restore snapshot + reattach repaint.
+        // Hidden restore and reattach each signal once per pane.
         for (let signalIndex = 0; signalIndex < 2; signalIndex += 1) {
-          signalPosixPtyForegroundGroup(pane.rootPid, `/dev/${pane.tty}`, 'SIGWINCH', vi.fn(), {
-            platform: 'darwin',
-            currentPid: 4242
-          })
+          await signalPosixPtyForegroundGroup(
+            pane.rootPid,
+            `/dev/${pane.tty}`,
+            'SIGWINCH',
+            vi.fn(),
+            {
+              platform: 'darwin',
+              currentPid: 4242
+            }
+          )
         }
       }
 
-      const pidArgs = execFileSyncMock.mock.calls.map((call) =>
-        Number((call[1] as string[])[(call[1] as string[]).indexOf('-p') + 1])
-      )
-      // 8 root-pid reads (one per signal) + exactly ONE read of Orca's own row.
+      const pidArgs = runProcessMock.mock.calls.map(([spec]) => Number(pidArg(spec)))
       expect(pidArgs.filter((pid) => pid === 4242)).toHaveLength(1)
       expect(pidArgs).toHaveLength(9)
       expect(kill).toHaveBeenCalledTimes(8)
     } finally {
-      execFileSyncMock.mockReset()
-      execFileSyncMock.mockReturnValue('' as never)
+      runProcessMock.mockReset()
       kill.mockRestore()
     }
   })

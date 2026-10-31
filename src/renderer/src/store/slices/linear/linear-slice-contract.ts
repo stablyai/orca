@@ -1,3 +1,5 @@
+import type { LinearIssueRead } from './linear-issue-publication'
+import type { LinearReadScope } from './linear-slice-scope'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
@@ -29,11 +31,23 @@ export type LinearIssueReadArgs =
   | { kind: 'search'; query: string; limit?: number }
   | LinearIssueListReadArgs
 
-export type LinearFetchOptions = { force?: boolean; sourceContext?: TaskSourceContext | null }
-export type LinearPatchOptions = { sourceContext?: TaskSourceContext | null }
+export type LinearFetchOptions = {
+  scope?: LinearReadScope
+  seed?: LinearIssue
+  force?: boolean
+  sourceContext?: TaskSourceContext | null
+  workspaceId?: LinearWorkspaceSelection | null
+  // Issue reads only: reject on an undecryptable credential instead of resolving null.
+  rejectCredentialError?: boolean
+}
+export type LinearPatchOptions = {
+  sourceContext?: TaskSourceContext | null
+  scope?: LinearReadScope
+}
 
 export type LinearSlice = {
   linearStatus: LinearConnectionStatus
+  linearStatusObserved: boolean
   linearStatusChecked: boolean
   linearStatusContextKey: string | null
   linearIssueCache: Record<string, CacheEntry<LinearIssue>>
@@ -65,31 +79,32 @@ export type LinearSlice = {
     id: string,
     workspaceId?: string | null,
     options?: LinearFetchOptions
-  ) => Promise<LinearIssue | null>
+  ) => LinearIssueRead<LinearIssue | null>
   refreshLinearIssue: (
     id: string,
     workspaceId?: string | null,
     options?: LinearFetchOptions
-  ) => Promise<LinearIssue | null>
+  ) => LinearIssueRead<LinearIssue | null>
   getCachedLinearIssues: (
     args: LinearIssueReadArgs,
-    options?: Pick<LinearFetchOptions, 'sourceContext'>
+    options?: Pick<LinearFetchOptions, 'sourceContext' | 'workspaceId'>
   ) => LinearIssue[] | LinearCollectionResult<LinearIssue> | null
   prefetchLinearIssues: (args: LinearIssueReadArgs, options?: LinearFetchOptions) => void
   searchLinearIssues: (
     query: string,
     limit?: number,
     options?: LinearFetchOptions
-  ) => Promise<LinearIssue[]>
+  ) => LinearIssueRead<LinearIssue[]>
   listLinearIssues: (
     args: LinearIssueListReadArgs,
     options?: LinearFetchOptions
-  ) => Promise<LinearCollectionResult<LinearIssue>>
-  linearListInvalidationToken: { scope: string; version: number }
-  invalidateLinearIssueLists: (options?: Pick<LinearFetchOptions, 'sourceContext'>) => void
+  ) => LinearIssueRead<LinearCollectionResult<LinearIssue>>
+  invalidateLinearIssueLists: (
+    options?: Pick<LinearFetchOptions, 'sourceContext' | 'scope'>
+  ) => void
   getCachedLinearTeams: (
     workspaceId?: LinearWorkspaceSelection | null,
-    options?: Pick<LinearFetchOptions, 'sourceContext'>
+    options?: Pick<LinearFetchOptions, 'sourceContext' | 'scope'>
   ) => LinearTeam[] | null
   listLinearTeams: (
     workspaceId?: LinearWorkspaceSelection | null,
@@ -99,7 +114,7 @@ export type LinearSlice = {
     query?: string,
     limit?: number,
     workspaceId?: LinearWorkspaceSelection | null,
-    options?: Pick<LinearFetchOptions, 'sourceContext'>
+    options?: Pick<LinearFetchOptions, 'sourceContext' | 'scope'>
   ) => LinearCollectionResult<LinearProjectSummary> | null
   listLinearProjects: (
     query?: string,
@@ -117,12 +132,12 @@ export type LinearSlice = {
     workspaceId: string,
     limit?: number,
     options?: LinearFetchOptions
-  ) => Promise<LinearCollectionResult<LinearIssue>>
+  ) => LinearIssueRead<LinearCollectionResult<LinearIssue>>
   getCachedLinearCustomViews: (
     model: LinearCustomViewModel,
     limit?: number,
     workspaceId?: LinearWorkspaceSelection | null,
-    options?: Pick<LinearFetchOptions, 'sourceContext'>
+    options?: Pick<LinearFetchOptions, 'sourceContext' | 'scope'>
   ) => LinearCollectionResult<LinearCustomViewSummary> | null
   listLinearCustomViews: (
     model: LinearCustomViewModel,
@@ -141,7 +156,7 @@ export type LinearSlice = {
     workspaceId: string,
     limit?: number,
     options?: LinearFetchOptions
-  ) => Promise<LinearCollectionResult<LinearIssue>>
+  ) => LinearIssueRead<LinearCollectionResult<LinearIssue>>
   listLinearCustomViewProjects: (
     viewId: string,
     workspaceId: string,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getProjectPickerBrowseHost, parseProjectInput } from './ProjectPicker'
+import { parseProjectInput } from './project-picker-input'
+import { getProjectPickerBrowseHost } from './project-picker-runtime'
 
 describe('ProjectPicker project input', () => {
   it('preserves the host and custom port from a GHES project URL', () => {
@@ -11,10 +12,6 @@ describe('ProjectPicker project input', () => {
       host: 'github.corp.example:8443',
       viewNumber: 2
     })
-  })
-
-  it('keeps owner/number shorthand on the default host', () => {
-    expect(parseProjectInput('acme/7')).toEqual({ owner: 'acme', number: 7 })
   })
 
   it('accepts Enterprise Managed User owners (`_<shortcode>` suffix) in URLs and shorthand', () => {

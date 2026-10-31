@@ -4,25 +4,24 @@ import {
   type AutomationRun,
   type AutomationRunOutputSnapshot
 } from '../../shared/automations-types'
+import type { AutomationRunFailureCodeFields } from '../../shared/automation-run-failure-copy'
 import { RetainedRunReconciler } from './retained-run-reconciliation'
 
 export type AutomationRunCompletionObservation = {
   status: 'completed' | 'dispatch_failed'
   outputSnapshot?: AutomationRunOutputSnapshot | null
   error?: string | null
-}
+} & AutomationRunFailureCodeFields
 
-/** The owning authority's view of a dispatched run's own terminal session. */
 export type AutomationRunTerminalObserver = {
-  /** Control handle for the run's terminal, or null once the authority lost it. */
+  /** Null also covers terminals that have not reattached yet. */
   resolveRunTerminal: (run: AutomationRun) => string | null
   observeCompletion: (
     handle: string,
-    options: { signal: AbortSignal }
+    options: { signal: AbortSignal; run?: AutomationRun }
   ) => Promise<AutomationRunCompletionObservation>
 }
 
-/** Truthful reason for a run this authority can no longer observe; never claims completion. */
 export function describeStrandedAutomationRun(run: AutomationRun): string {
   if (run.status === 'pending') {
     return 'Orca stopped before this manual run could launch.'
@@ -33,9 +32,7 @@ export function describeStrandedAutomationRun(run: AutomationRun): string {
   return 'Orca lost the terminal for this run before it reported completion.'
 }
 
-/** Why a fixed sentence: the throws here carry internal transport tokens
- *  (`terminal_handle_stale`, `terminal_not_found`, `request_aborted`), and a run
- *  history row is user copy. The token stays in the log, where it is useful. */
+// Log transport tokens while keeping run history readable.
 function describeObservationError(error: unknown): string {
   console.error('[automations] run completion observation failed:', error)
   return 'Orca stopped watching this run before it reported completion.'
@@ -74,8 +71,7 @@ export class AutomationRunCompletionWatcher {
     })
   }
 
-  /** Observes a just-dispatched run. A run whose terminal is not resolvable yet
-   *  is left alone; startup reconciliation is what resolves stranded runs. */
+  /** Leave unresolved terminals for startup reconciliation. */
   watch(run: AutomationRun): void {
     if (this.disposed || this.watching.has(run.id)) {
       return
@@ -118,7 +114,10 @@ export class AutomationRunCompletionWatcher {
   ): Promise<void> {
     let observation: AutomationRunCompletionObservation
     try {
-      observation = await this.observer.observeCompletion(handle, { signal: controller.signal })
+      observation = await this.observer.observeCompletion(handle, {
+        signal: controller.signal,
+        run
+      })
     } catch (error) {
       if (controller.signal.aborted) {
         return
@@ -137,9 +136,7 @@ export class AutomationRunCompletionWatcher {
     this.watching.delete(runId)
   }
 
-  /** Startup pass over retained runs: re-attach where the session survived, and
-   *  stage the rest — a run is only closed out once the terminal surface has
-   *  reported ready and still cannot find it. */
+  /** Reattach surviving sessions; defer unresolved runs until the ready-surface grace expires. */
   reconcileRetainedRuns(runs: readonly AutomationRun[]): void {
     this.reconciler.reconcile(
       runs.filter(
@@ -151,8 +148,7 @@ export class AutomationRunCompletionWatcher {
     )
   }
 
-  /** The authority's terminal surface can now answer pane lookups: desktop
-   *  renderer attached, or headless serve finished adopting its PTYs. */
+  /** Call after renderer attachment or headless PTY adoption. */
   markTerminalSurfaceReady(): void {
     this.reconciler.markSurfaceReady()
   }
@@ -170,8 +166,7 @@ export class AutomationRunCompletionWatcher {
     run: AutomationRun,
     observation: AutomationRunCompletionObservation
   ): Promise<void> {
-    // Why: the renderer's dispatch observer races this watcher for the same run;
-    // re-reading immediately before the write keeps the terminal status single.
+    // Preserve a final result already reported by the renderer.
     const current = this.readRun(run.automationId, run.id)
     if (!current || isFinalAutomationRunStatus(current.status)) {
       return
@@ -180,11 +175,15 @@ export class AutomationRunCompletionWatcher {
       runId: run.id,
       status: observation.status,
       workspaceId: current.workspaceId,
+      sessionKind: current.sessionKind,
+      chatSessionId: current.chatSessionId,
       terminalSessionId: current.terminalSessionId,
       terminalPaneKey: current.terminalPaneKey,
       terminalPtyId: current.terminalPtyId,
       outputSnapshot: observation.outputSnapshot ?? null,
-      error: observation.error ?? null
+      error: observation.error ?? null,
+      errorCode: observation.errorCode ?? null,
+      errorParams: observation.errorParams ?? null
     })
   }
 }

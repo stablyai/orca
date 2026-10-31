@@ -1,5 +1,4 @@
-// What the structured chat says when reading its history failed: the notice table's words for the
-// refusal the read met, never the host's message or code.
+// Render history refusals through the notice table, never raw host messages or codes.
 
 import {
   agentSessionReadHistoryRefusalParts,
@@ -13,7 +12,7 @@ export type StructuredAgentSessionReadFailureNotice = {
   text: string
   /** The host named the situation, so the words say more than that the history did not load. */
   named: boolean
-  /** Nothing the read retries gets past it, so the pane no longer says it keeps trying. */
+  /** Nothing the read retries gets past it. */
   final: boolean
 }
 

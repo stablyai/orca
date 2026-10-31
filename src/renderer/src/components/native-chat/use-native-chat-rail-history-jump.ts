@@ -1,19 +1,10 @@
-// Jumping to a rail tick whose message is not loaded yet: page older history in
-// until the message has a slot, then hand it to the ordinary rail jump.
-//
-// One awaited loop per jump, owning its own lifecycle. Each step reads the rail
-// from a commit made after the last page landed, so "has a slot yet?" is always
-// asked of what the list will actually render. It stops on anything but a page
-// that moved the window, when the window passes the message without it drawing a
-// row, after a bounded number of pages, or when aborted — by a later pick, any
-// other navigation, reader input, a session switch or unmount.
+// Page until the target renders, checking committed slots after each page; stop on no progress, omission, page bound or aborted navigation.
 
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import type { NativeChatRailItem } from './native-chat-message-rail-items'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 
-/** Far past any real session (pages are up to 200 journal items); only a
- *  runaway loop reaches it. */
+/** Bound runaway paging beyond any expected session size. */
 export const NATIVE_CHAT_RAIL_JUMP_MAX_PAGES = 1000
 
 function railItemById(
@@ -26,12 +17,15 @@ function railItemById(
 export function useNativeChatRailHistoryJump({
   items,
   sessionKey,
+  isVisible,
   loadEarlier,
   jumpToLoaded
 }: {
   items: readonly NativeChatRailItem[]
   /** A change abandons the jump: its target belongs to the previous session. */
   sessionKey: string
+  /** Hiding the pane abandons the jump too: a hidden lane stops reading, so a page never lands. */
+  isVisible: boolean
   loadEarlier: () => Promise<NativeChatOlderPageResult>
   jumpToLoaded: (item: NativeChatRailItem) => void
 }): {
@@ -45,7 +39,7 @@ export function useNativeChatRailHistoryJump({
   const committedRef = useRef({ items, loadEarlier, jumpToLoaded })
   const commitWaitersRef = useRef(new Set<() => void>())
 
-  // Every commit: the loop reads what the list last rendered, never a render in progress.
+  // Read committed rails; in-progress renders may be discarded.
   useLayoutEffect(() => {
     committedRef.current = { items, loadEarlier, jumpToLoaded }
     const waiters = [...commitWaitersRef.current]
@@ -55,8 +49,7 @@ export function useNativeChatRailHistoryJump({
     }
   })
 
-  // Forces a commit rather than waiting for one: the page may already have rendered
-  // before its promise settled, and nothing else is owed a render after it.
+  // Force a commit because the page may have rendered before resolving, with no further render scheduled.
   const nextCommit = useCallback((signal: AbortSignal): Promise<void> => {
     return new Promise<void>((resolve) => {
       const done = (): void => {
@@ -73,7 +66,6 @@ export function useNativeChatRailHistoryJump({
   const run = useCallback(
     async (id: string, signal: AbortSignal): Promise<void> => {
       for (let pages = 0; ; pages += 1) {
-        // Each pass reads a newer commit's rail, so there is no list to index up front.
         const target = railItemById(committedRef.current.items, id)
         if (!target) {
           return
@@ -127,7 +119,7 @@ export function useNativeChatRailHistoryJump({
     [run]
   )
 
-  useEffect(() => abort, [abort, sessionKey])
+  useEffect(() => abort, [abort, sessionKey, isVisible])
 
   return { pendingId, start, abort }
 }

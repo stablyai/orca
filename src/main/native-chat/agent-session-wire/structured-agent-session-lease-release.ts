@@ -1,61 +1,29 @@
-// Handing the durable lease back after eviction stopped this host's child.
-//
-// Guarded on `hasProviderChild` for a reason that is not bookkeeping: a session restored only for
-// reading, or one a TUI owns, names an owner process this host never started and may still be
-// alive. Writing `exit-observed` against that record would release a lease out from under a running
-// process and let a second writer in.
+// Release only this host’s child with observed/proven exit; read-only or TUI ownership
+// proves no exit and must never admit a second writer.
 
 import {
   isSurfaceReleasableAgentSessionRecord,
   releaseStoredAgentSessionOwnerAfterSurfaceClose
-} from '../../runtime/agent-session-surface-release-transition'
+} from '../../runtime/agent-session/ownership/agent-session-surface-release-transition'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 
 export type StructuredAgentSessionLeaseStore = Pick<
   AgentSessionRecordStore,
   'getRecord' | 'transitionHandoff'
 >
 
-export async function releaseStoredStructuredAgentSessionOwner(input: {
-  store: StructuredAgentSessionLeaseStore
-  sessionId: string
-  hasProviderChild: boolean
-  expectedFence: number
-  now: number
-}): Promise<void> {
-  if (!input.hasProviderChild) {
-    return
-  }
-  const record = input.store.getRecord(input.sessionId)
-  if (
-    !record ||
-    record.lease.runtimeFence !== input.expectedFence ||
-    !isSurfaceReleasableAgentSessionRecord(record)
-  ) {
-    return
-  }
-  await releaseStoredAgentSessionOwnerAfterSurfaceClose(input.store, {
-    sessionId: input.sessionId,
-    expectedFence: input.expectedFence,
-    now: input.now
-  })
-}
-
-/** Releases only the exact provider child whose exit the adapter positively observed. */
-export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit(input: {
+/** Release the observed child; throw agent_session_checkpoint_stale if ownership changed. */
+export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
   store: StructuredAgentSessionLeaseStore
   sessionId: string
   expectedFence: number
-  expectedAcquisitionGeneration: string
-  acquisitionGeneration: string | null
   now: number
+  deathEvidenceKind?: 'kill-delivered'
   exitObservedAt?: number
   exitReason?: string
 }): Promise<AgentSessionRecord> {
-  if (input.acquisitionGeneration !== input.expectedAcquisitionGeneration) {
-    throw new Error('agent_session_checkpoint_stale')
-  }
   const record = input.store.getRecord(input.sessionId)
   if (
     !record ||
@@ -68,7 +36,44 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExi
     sessionId: input.sessionId,
     expectedFence: input.expectedFence,
     now: input.now,
-    exitObservedAt: input.exitObservedAt,
+    ...(input.deathEvidenceKind ? { deathEvidenceKind: input.deathEvidenceKind } : {}),
+    ...(input.exitObservedAt === undefined ? {} : { exitObservedAt: input.exitObservedAt }),
     ...(input.exitReason ? { exitReason: input.exitReason } : {})
   })
+}
+
+/** A late exit can refine only the same released writer's termination evidence. */
+export async function upgradeStoredStructuredAgentSessionOwnerExitEvidence(
+  store: StructuredAgentSessionLeaseStore,
+  event: StructuredAgentSessionEndedEvent,
+  now: number
+): Promise<void> {
+  const record = store.getRecord(event.sessionId)
+  if (
+    !event.deathEvidenceKind &&
+    record?.lease.claimStatus === 'released' &&
+    record.lease.deathEvidence?.kind === 'kill-delivered' &&
+    record.lease.deathEvidence.ownerFence === event.fence
+  ) {
+    await store.transitionHandoff(event.sessionId, (current) => {
+      if (
+        current.lease.claimStatus !== 'released' ||
+        current.lease.deathEvidence?.kind !== 'kill-delivered' ||
+        current.lease.deathEvidence.ownerFence !== event.fence
+      ) {
+        return current
+      }
+      return {
+        ...current,
+        lease: {
+          ...current.lease,
+          deathEvidence: {
+            ...current.lease.deathEvidence,
+            kind: 'exit-observed',
+            observedAt: event.observedAt ?? now
+          }
+        }
+      }
+    })
+  }
 }

@@ -11,8 +11,8 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
       'Remote Orca Servers'
     ),
     description: translate(
-      'auto.components.settings.runtime.environments.search.4575341c77',
-      'Add a saved remote Orca server, generate a pairing URL, or adjust the advanced default runtime.'
+      'auto.components.settings.runtime.environments.search.addShareDefault',
+      'Add a remote Orca server, share this computer, or choose where new projects open.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -59,7 +59,42 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
         'auto.components.settings.runtime.environments.search.c6e5a03aa0',
         'dev box'
       ),
-      // Why: Share this host mounts the machine name field, so its keywords open this pane.
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.defaultHostKeyword',
+        'default host'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.newProjectsKeyword',
+        'new projects'
+      ),
+      // Retain the former setting name for existing users’ searches.
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.activeServerKeyword',
+        'active server'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.managedServers.search.title',
+        'Orca on your SSH hosts'
+      ),
+      ...translateSearchKeyword('auto.components.settings.managedServers.search.keywordSsh', 'ssh'),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.shareComputerKeyword',
+        'share this computer'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.accessLinkKeyword',
+        'access link'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.installKeyword',
+        'install server'
+      ),
+      // Retain the former section name for existing users’ searches.
+      ...translateSearchKeyword(
+        'auto.components.settings.managedServers.search.keywordFormerName',
+        'managed servers'
+      ),
+      // Index machine-name fields mounted by Share this computer.
       ...getMachineNameSearchKeywords()
     ]
   })

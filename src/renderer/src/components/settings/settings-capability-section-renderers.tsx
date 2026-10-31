@@ -1,10 +1,14 @@
 import { AccountsPane } from './AccountsPane'
 import { AgentsPane } from './AgentsPane'
+import { AgentDefaultSurfaceSection } from './AgentDefaultSurfaceSection'
 import { ComputerUsePane } from './ComputerUsePane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { OrchestrationPane } from './OrchestrationPane'
 import { VoicePane } from './VoicePane'
 import { SettingsSection } from './SettingsSection'
+import { SettingsHostScopeUnavailableNotice } from './SettingsHostScopePicker'
+import { LOCAL_SETTINGS_HOST_SCOPE } from './settings-host-scope'
+import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
 
@@ -21,14 +25,20 @@ export function renderAgentsSettingsSection(context: SettingsRenderContext): Rea
       searchEntries={navigation.getSectionSearchEntries('agents')}
     >
       {view.isSectionMounted('agents') ? (
-        <AgentsPane
-          settings={model.settings}
-          updateSettings={model.updateSettings}
-          wslSupportedPlatform={terminal.localWslSupportedPlatform}
-          wslAvailable={terminal.localWindowsRuntimeCapabilities.wslAvailable}
-          wslDistros={terminal.localWindowsRuntimeCapabilities.wslDistros}
-          wslCapabilitiesLoading={terminal.localWindowsRuntimeCapabilities.isLoading}
-        />
+        <div className="space-y-8">
+          {model.settingsHostScope.target.kind === 'local' ? (
+            <AgentDefaultSurfaceSection settings={model.settings} />
+          ) : null}
+          <AgentsPane
+            settings={model.settings}
+            updateSettings={model.updateSettings}
+            hostScope={model.settingsHostScope}
+            wslSupportedPlatform={terminal.localWslSupportedPlatform}
+            wslAvailable={terminal.localWindowsRuntimeCapabilities.wslAvailable}
+            wslDistros={terminal.localWindowsRuntimeCapabilities.wslDistros}
+            wslCapabilitiesLoading={terminal.localWindowsRuntimeCapabilities.isLoading}
+          />
+        </div>
       ) : null}
     </SettingsSection>
   )
@@ -36,6 +46,10 @@ export function renderAgentsSettingsSection(context: SettingsRenderContext): Rea
 
 export function renderAccountsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, navigation, terminal, view } = context
+  const wslHostDistro = wslHostDistroForTarget(
+    model.settingsHostScope.target,
+    model.runtimeEnvironments
+  )
   return (
     <SettingsSection
       id="accounts"
@@ -47,17 +61,32 @@ export function renderAccountsSettingsSection(context: SettingsRenderContext): R
       badge={translate('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')}
       searchEntries={navigation.getSectionSearchEntries('accounts')}
     >
-      {view.isSectionMounted('accounts') ? (
+      {!view.isSectionMounted('accounts') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : wslHostDistro ? (
+        // A WSL host's orcad has no account services; this desktop owns its distro's accounts.
         <AccountsPane
           settings={model.settings}
           updateSettings={model.updateSettings}
+          hostScope={LOCAL_SETTINGS_HOST_SCOPE}
+          wslHostDistro={wslHostDistro}
+          wslSupportedPlatform={terminal.localWslSupportedPlatform}
+          wslAvailable={terminal.localWindowsRuntimeCapabilities.wslAvailable}
+          wslDistros={terminal.localWindowsRuntimeCapabilities.wslDistros}
+          wslCapabilitiesLoading={terminal.localWindowsRuntimeCapabilities.isLoading}
+        />
+      ) : (
+        <AccountsPane
+          settings={model.settings}
+          updateSettings={model.updateSettings}
+          hostScope={model.settingsHostScope}
           wslSupportedPlatform={terminal.runtimeWslSupportedPlatform}
           wslAvailable={terminal.windowsTerminalCapabilities.wslAvailable}
           wslDistros={terminal.windowsTerminalCapabilities.wslDistros}
           wslCapabilitiesLoading={terminal.windowsTerminalCapabilities.isLoading}
           accountOwnerPlatform={terminal.windowsTerminalCapabilities.hostPlatform}
         />
-      ) : null}
+      )}
     </SettingsSection>
   )
 }

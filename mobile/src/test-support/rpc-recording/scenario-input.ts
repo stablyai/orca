@@ -13,18 +13,28 @@ function decode(value: unknown): unknown {
   }
   return value
 }
-export function readScenarios(path: string): { baseline: string; scenarios: RecordingScenario[] } {
+/** Keys the format dropped. Refused rather than ignored, so a branch cut before the change says so. */
+const RETIRED_MANIFEST_KEYS = ['baseline']
+const RETIRED_SCENARIO_KEYS = ['version']
+
+export function readScenarios(path: string): { scenarios: RecordingScenario[] } {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the manifest shape is validated on the next lines.
   const input = decode(JSON.parse(readFileSync(path, 'utf8'))) as {
-    baseline: string
     scenarios: RecordingScenario[]
   }
-  if (
-    !/^[a-f0-9]{40}$/.test(input.baseline) ||
-    !Array.isArray(input.scenarios) ||
-    !input.scenarios.length
-  ) {
+  if (!Array.isArray(input.scenarios) || !input.scenarios.length) {
     throw new Error('Invalid recording manifest')
+  }
+  const retired = [
+    ...RETIRED_MANIFEST_KEYS.filter((key) => key in input),
+    ...input.scenarios.flatMap((scenario) =>
+      RETIRED_SCENARIO_KEYS.filter((key) => key in scenario).map((key) => `${scenario.id}.${key}`)
+    )
+  ]
+  if (retired.length) {
+    throw new Error(
+      `The recording manifest no longer carries a pin or scenario versions; remove: ${retired.join(', ')}`
+    )
   }
   const ids = input.scenarios.map((scenario) => scenario.id)
   if (new Set(ids).size !== ids.length) {

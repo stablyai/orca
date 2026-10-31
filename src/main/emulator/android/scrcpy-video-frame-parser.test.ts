@@ -132,8 +132,6 @@ describe('parseScrcpyVideoFrames', () => {
   })
 
   it('throws on a desynced frame size instead of buffering toward OOM', () => {
-    // A header declaring a frame far larger than any real one would otherwise
-    // never be satisfied, leaving the whole buffer pending forever.
     const header = Buffer.alloc(12)
     header.writeUInt32BE(64 * 1024 * 1024, 8)
     const pending = new RelayFrameBuffer()

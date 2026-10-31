@@ -1,23 +1,12 @@
 import type { RpcContext } from '../core'
-import {
-  isStructuredNativeChatEnabled,
-  supportsStructuredAgentSessions
-} from './structured-agent-session-policy'
+import { supportsStructuredAgentSessions } from './structured-agent-session-policy'
 
-/** Republishes structured tabs into the host's own snapshot map.
- *
- *  Mobile is gated on the host setting alone, NOT on the client's capability: an old build is
- *  shown a fallback prompt in place of each chat, and gating on capability left it with nothing to
- *  project after a desktop restart — no chat and no prompt. The setting still gates it, because
- *  with structured chat off there is nothing for any mobile client to reach. Restoring spawns no
- *  provider child for a cleanly closed session. */
-export function restoreStructuredTabsIfSupported(
+/** Prepare record-only tabs even for legacy mobile fallback rows; capability gating would leave neither chat nor prompt after restart.
+ * No journal is opened, and an empty saved inventory never builds the host. */
+export function prepareStructuredTabsIfSupported(
   context: Pick<RpcContext, 'runtime' | 'clientKind' | 'clientCapabilities'>
 ): Promise<void> | undefined {
-  const shouldRestore =
-    context.clientKind === 'mobile'
-      ? isStructuredNativeChatEnabled(context.runtime)
-      : supportsStructuredAgentSessions(context)
+  const shouldRestore = context.clientKind === 'mobile' || supportsStructuredAgentSessions(context)
   if (shouldRestore && typeof context.runtime.restoreStructuredAgentSessionTabs === 'function') {
     return context.runtime.restoreStructuredAgentSessionTabs()
   }
