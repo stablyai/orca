@@ -83,7 +83,7 @@ function handleMarkdownImageClick(
 export function createCompactCommentMarkdownComponents(
   onLinkClick?: CommentMarkdownLinkClickHandler,
   expandImages = false
-) {
+): Components {
   return {
     // Avoid paragraph margins in dense cards.
     p: ({ children }) => <span className="comment-md-p">{children}</span>,
@@ -336,7 +336,7 @@ export function createDocumentCommentMarkdownComponents(
   }
 }
 
-export const compactCommentMarkdownComponents = createCompactCommentMarkdownComponents()
+export const compactCommentMarkdownComponents: Components = createCompactCommentMarkdownComponents()
 export const documentCommentMarkdownComponents: Components =
   createDocumentCommentMarkdownComponents()
 

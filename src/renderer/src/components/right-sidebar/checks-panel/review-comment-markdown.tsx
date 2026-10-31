@@ -104,7 +104,7 @@ const components: Components = {
       ? (icons.get(name) ?? (severity ? severityIcons.get(severity) : undefined))
       : undefined
     if (!Icon) {
-      return <CompactImage src={src} alt={alt} />
+      return CompactImage ? <CompactImage src={src} alt={alt} /> : null
     }
 
     const color =
