@@ -113,6 +113,11 @@ export function routeViewOf(
   if (!servesWideLayout(entries, pathname, wide)) {
     return { pageRoutes: [], pageRouteGrants: [], routeGrants: [], ownsHostArea: false }
   }
+  // Host root holds every child grant, phone included, so a workspace tap stays in this document.
+  const atHostRoot =
+    root !== null &&
+    pathname === root &&
+    entries.some((route) => matchesRoutePattern(root, route.pathname))
   const canOwnHostArea =
     root !== null &&
     entries.some(
@@ -121,9 +126,9 @@ export function routeViewOf(
         matchesRoutePattern(root, route.pathname) &&
         (wide || route.canOwnHostAreaAcrossLayouts === true)
     )
-  // New pages keep ownership across rotation; legacy pages require the wide-only contract.
+  // New pages keep ownership across rotation; legacy pages keep the sidebar wide-only.
   const ownsHostArea = canOwnHostArea && pathname === root
-  // No pair for the host route in an owned detail session, so a hop there goes to the shell, which
+  // No pair for the host route in an owned detail session, wide or narrow, so a hop there goes to the shell, which
   // opens it owning the area rather than as a second host list in this pane.
   const paired =
     canOwnHostArea && !ownsHostArea && root !== null
@@ -135,7 +140,7 @@ export function routeViewOf(
       pathname: route.pathname,
       grants: effectiveRouteGrants(route)
     })),
-    routeGrants: ownsHostArea ? hostAreaGrants(entries) : grantsForRoute(routes, pathname),
+    routeGrants: atHostRoot ? hostAreaGrants(entries) : grantsForRoute(routes, pathname),
     ownsHostArea
   }
 }

@@ -10,7 +10,7 @@ import type {
   MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 
-// Wait for connecting so cache cannot flash before the host’s compatibility check; only settled unreachability opens it unchecked.
+// connecting waits; unreachable opens cache unchecked; connected opens a compatible cache and reads the manifest beside it.
 export type MobileWebShellReachability = 'connected' | 'connecting' | 'unreachable'
 
 export type MobileWebShellGates = {
@@ -158,7 +158,7 @@ export type MobileWebShellSession = {
   readonly routePathname: string
   // Unknown catch-all routes cannot prove the desktop is outdated.
   readonly appNamesRoute: boolean
-  // Wide serving requires canOwnHostArea; the owning host route combines served routes’ grants.
+  // Wide serving requires canOwnHostArea. The host route gets every served route's grants, including on a phone.
   readonly wide: boolean
   readonly routes: readonly MobileWebPageRoute[] | undefined
   readonly ownsHostArea: boolean
@@ -181,7 +181,9 @@ export type MobileWebShellSession = {
   // Clear on flow entry so the notice cannot outlive the fallback it explains.
   readonly updateNotice: MobileWebShellUpdateNotice | null
   readonly requestedBuildId: string | null
-  // Stamp effects/results with the incremented flow to reject superseded work.
+  // Routes of a download running behind a cached page, applied when that download activates.
+  readonly offeredRoutes: readonly MobileWebPageRoute[] | null
+  // Stamp effects and results with the incremented flow so superseded work is rejected.
   readonly flow: number
 }
 

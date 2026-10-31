@@ -215,3 +215,52 @@ it.each([8, 80])(
     expect(committed).toEqual([host.live.manifest.buildId])
   }
 )
+
+it('keeps a background update download alive when the cached WebView starts loading its document', async () => {
+  const host = bundleHost(8)
+  releaseDownload = host.release
+  boundary.client = host.client
+  const disk = createFakeGenerationFileSystem()
+  const store = createGenerationStore({ fileSystem: disk })
+  const hostKey = deriveHostCacheKey('host-1')
+  await store.commitGeneration(
+    await store.stageGeneration(hostKey, {
+      manifest: host.live.manifest,
+      assets: new Map([['index.html', host.live.bytes]]),
+      reused: [],
+      totalBytes: host.live.bytes.byteLength,
+      elapsedMs: 1
+    })
+  )
+  let session: ReturnType<typeof useMobileWebShellSession> | null = null
+  const runtime = {
+    createStore: () => store,
+    mintSessionId: () => 'flow-session',
+    now: () => 0,
+    setTimer: () => () => {}
+  }
+  function Probe() {
+    session = useMobileWebShellSession({
+      hostId: 'host-1',
+      routePathname: '/h/host-1',
+      wide: true,
+      runtime
+    })
+    return null
+  }
+  await act(async () => {
+    tree = create(createElement(Probe))
+  })
+  expect(session?.state).toMatchObject({ kind: 'ready', buildId: host.live.manifest.buildId })
+  expect(host.oldReads).toHaveLength(4)
+  await act(async () => {
+    session?.reportDocumentStarted()
+  })
+  expect(session?.updateNotice).toBeNull()
+  await act(async () => {
+    host.release()
+  })
+  expect(session?.updateNotice).toBeNull()
+  expect(session?.state).toMatchObject({ kind: 'ready', buildId: host.old.manifest.buildId })
+  expect(host.oldReads).toHaveLength(8)
+})
