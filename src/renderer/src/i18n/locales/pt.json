@@ -481,6 +481,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} já é um host.",
         "distroStopped": "{{distro}} parou após a leitura da lista. Escolha “Iniciar e adicionar” para iniciá-la.",
+        "distroUnverifiable": "O WSL não respondeu se {{distro}} está em execução. Atualize a lista ou adicione-a pela caixa de diálogo, que a inicia se necessário.",
         "wsl1": "{{distro}} usa WSL 1, que o Orca não suporta mais. Converta-a para WSL 2 em um terminal do Windows com: {{command}}",
         "notRegistered": "{{distro}} não é uma distribuição WSL instalada. Execute {{command}} em um terminal do Windows para ver as instaladas ou reinstale-a e tente novamente.",
         "sshManaged": "{{distro}} já executa o servidor Orca de “{{server}}”, que este computador acessa por SSH. Remova esse servidor primeiro; ainda não há suporte para movê-lo para um host WSL."
@@ -12596,12 +12597,14 @@
           "added": "Já é um host",
           "running": "Em execução",
           "stopped": "Parada",
+          "unverifiable": "Desconhecido",
           "title": "Adicionar distribuição WSL",
           "description": "O Orca executa seu servidor dentro da distribuição, para que git, arquivos e terminais funcionem nativamente no Linux. Os projetos desta distribuição que você abriu por \\\\wsl.localhost são movidos automaticamente para este host quando seus terminais ficam ociosos; projetos em uma unidade do Windows (/mnt/…) permanecem neste computador. Você pode trazer de volta um projeto movido pela barra lateral.",
           "distro": "Distribuição",
           "loading": "Procurando distribuições WSL…",
           "placeholder": "Escolha uma distribuição",
           "stoppedHint": "{{value0}} está parada. Adicioná-la irá iniciá-la.",
+          "unverifiableHint": "O WSL não informou se {{value0}} está em execução. Adicioná-la a inicia se necessário.",
           "addingHint": "Instalando e iniciando o servidor Orca na distribuição. Na primeira vez, pode levar um minuto.",
           "adding": "Configurando…",
           "startAndAdd": "Iniciar e adicionar",

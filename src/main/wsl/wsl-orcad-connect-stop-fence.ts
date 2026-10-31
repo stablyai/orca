@@ -10,9 +10,14 @@ import type { WslDistroHolder } from './wsl-distro-holder-types'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import type { WslOrcadDeployOptions } from './wsl-orcad-deploy'
 
+// A previous run's holder has no exit listener here; its process-table row is polled instead.
+export const ADOPTED_HOLDER_POLL_MS = 1_000
+
 export type WslConnectStopFence = {
   /** Throws once a stop of the distro was heard since the fence opened. */
   assertNotStopped(): void
+  /** Watches an adopted holder through the process table (no wsl.exe); its exit counts as a stop. */
+  watchAdoptedHolder(readState: () => Promise<'live' | 'exited' | 'unverifiable'>): void
   dispose(): void
 }
 
@@ -27,13 +32,34 @@ export function openWslConnectStopFence(
       stopped = true
     }
   })
+  let poll: ReturnType<typeof setInterval> | null = null
   return {
     assertNotStopped: () => {
       if (stopped) {
         throw new WslDistroNotRunningError(distro)
       }
     },
-    dispose: unsubscribe
+    watchAdoptedHolder: (readState) => {
+      if (poll) {
+        return
+      }
+      poll = setInterval(() => {
+        void readState().then(
+          (state) => {
+            // Unverifiable is not a stop; only a holder proved gone is.
+            stopped ||= state === 'exited'
+          },
+          () => {}
+        )
+      }, ADOPTED_HOLDER_POLL_MS)
+      poll.unref?.()
+    },
+    dispose: () => {
+      unsubscribe()
+      if (poll) {
+        clearInterval(poll)
+      }
+    }
   }
 }
 
@@ -68,13 +94,19 @@ export function fenceHolderOnStop(
 ): WslDistroHolder {
   return {
     ...holder,
-    ensureHeld: (distro, options) =>
-      holder.ensureHeld(distro, {
+    ensureHeld: async (distro, options) => {
+      const held = await holder.ensureHeld(distro, {
         requireRunning: async () => {
           fence.assertNotStopped()
           return options?.requireRunning ? options.requireRunning() : true
         }
       })
+      // A holder spawned here reports its own exit; an adopted one is only seen in the table.
+      if (held.outcome === 'adopted') {
+        fence.watchAdoptedHolder(() => holder.holderState(distro))
+      }
+      return held
+    }
   }
 }
 

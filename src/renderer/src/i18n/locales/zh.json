@@ -6511,12 +6511,14 @@
           "added": "已是主机",
           "running": "运行中",
           "stopped": "已停止",
+          "unverifiable": "未知",
           "title": "添加 WSL 发行版",
           "description": "Orca 在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。此发行版中通过 \\\\wsl.localhost 打开的项目会在其终端空闲时自动移到此主机；位于 Windows 驱动器 (/mnt/…) 上的项目会留在此电脑。你可以从侧边栏将已移动的项目移回。",
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",
           "stoppedHint": "{{value0}} 已停止。添加后会自动启动。",
+          "unverifiableHint": "WSL 没有报告 {{value0}} 是否正在运行。添加时会按需启动它。",
           "addingHint": "正在发行版中安装并启动 Orca 服务器。首次可能需要一分钟。",
           "adding": "正在设置…",
           "startAndAdd": "启动并添加",
@@ -20231,6 +20233,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} 已是主机。",
         "distroStopped": "读取列表后，{{distro}} 已停止。选择“启动并添加”以启动它。",
+        "distroUnverifiable": "WSL 没有回应 {{distro}} 是否正在运行。请刷新列表，或从对话框添加，系统会按需启动它。",
         "wsl1": "{{distro}} 使用 WSL 1，Orca 已不再支持。请在 Windows 终端中使用以下命令将其转换为 WSL 2：{{command}}",
         "notRegistered": "{{distro}} 不是已安装的 WSL 发行版。请在 Windows 终端中运行 {{command}} 查看已安装的发行版，或重新安装它后重试。",
         "sshManaged": "{{distro}} 已在为“{{server}}”运行 Orca 服务器，此电脑通过 SSH 访问该服务器。请先移除该服务器；暂不支持将其迁移为 WSL 主机。"

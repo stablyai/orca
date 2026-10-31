@@ -6993,12 +6993,14 @@
           "added": "Déjà un hôte",
           "running": "En cours",
           "stopped": "Arrêtée",
+          "unverifiable": "Inconnu",
           "title": "Ajouter une distro WSL",
           "description": "Orca exécute son serveur dans la distro, de sorte que git, les fichiers et les terminaux s'exécutent nativement sous Linux. Les projets de cette distro que vous avez ouverts via \\\\wsl.localhost sont déplacés automatiquement vers cet hôte dès que leurs terminaux sont inactifs ; les projets situés sur un lecteur Windows (/mnt/…) restent sur cet ordinateur. Vous pouvez ramener un projet déplacé depuis la barre latérale.",
           "distro": "Distro",
           "loading": "Recherche des distros WSL…",
           "placeholder": "Choisissez une distro",
           "stoppedHint": "{{value0}} est arrêtée. L'ajouter la démarre.",
+          "unverifiableHint": "WSL n’a pas indiqué si {{value0}} est en cours d’exécution. L’ajouter la démarre si nécessaire.",
           "addingHint": "Installation et démarrage du serveur Orca dans la distro. La première fois peut prendre une minute.",
           "adding": "Configuration…",
           "startAndAdd": "Démarrer et ajouter",
@@ -20915,6 +20917,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} est déjà un hôte.",
         "distroStopped": "{{distro}} s'est arrêtée depuis la lecture de la liste. Choisissez « Démarrer et ajouter » pour la démarrer.",
+        "distroUnverifiable": "WSL n’a pas répondu si {{distro}} est en cours d’exécution. Actualisez la liste, ou ajoutez-la depuis la boîte de dialogue, qui la démarre si nécessaire.",
         "wsl1": "{{distro}} utilise WSL 1, qu'Orca ne prend plus en charge. Convertissez-la en WSL 2 dans un terminal Windows avec : {{command}}",
         "notRegistered": "{{distro}} n'est pas une distro WSL installée. Exécutez {{command}} dans un terminal Windows pour voir celles qui sont installées, ou réinstallez-la et réessayez.",
         "sshManaged": "{{distro}} exécute déjà le serveur Orca de « {{server}} », auquel cet ordinateur accède via SSH. Supprimez d'abord ce serveur ; son déplacement vers un hôte WSL n'est pas encore pris en charge."

@@ -1,9 +1,3 @@
-import { runProcess } from '@orca/process-host'
-import {
-  lxssRegQuerySpec,
-  parseDefaultWslDistroId,
-  parseWslDistroRegistrations
-} from './wsl-distro-registry-id'
 import {
   assertWslUncPathRunning,
   blockedWslDistroForPath,
@@ -12,45 +6,23 @@ import {
   type BlockedWslDistro
 } from './wsl-unc-access-gate'
 import { isWslUserActFor, runAsWslUserAct as runScopedWslUserAct } from './wsl-user-act-scope'
+import {
+  resolveWslDefaultDistro,
+  runWithWslDefaultDistro,
+  UNRESOLVED_WSL_DEFAULT,
+  type WslDefaultDistro
+} from './wsl-default-distro'
 
 // A user act for a default distro Orca couldn't name; its gated runs pass, nothing else's do.
 const UNRESOLVED_DEFAULT_DISTRO = '\u0000unresolved-default'
 const DEFAULT_DISTRO_LABEL = 'the default distro'
-const UNRESOLVED = Symbol('unresolved default distro')
 
-/** `wsl.exe` with no `-d` runs Lxss's DefaultDistribution, read fresh so a `--set-default` counts. */
-async function readDefaultWslDistro(): Promise<{ distro: string | null } | 'unreadable'> {
-  try {
-    const result = await runProcess(lxssRegQuerySpec())
-    if (result.code !== 0) {
-      return 'unreadable'
-    }
-    const registrations = parseWslDistroRegistrations(result.stdout)
-    if (registrations.length === 0) {
-      // No distro registered: wsl.exe has nothing to start.
-      return { distro: null }
-    }
-    const defaultId = parseDefaultWslDistroId(result.stdout)
-    const match = registrations.find(({ id }) => id === defaultId)
-    return match ? { distro: match.distro } : 'unreadable'
-  } catch {
-    return 'unreadable'
-  }
-}
-
-/** The distro a run in `distro` (null: the default) lands in; UNRESOLVED when WSL can't say. */
-async function resolveWslExecDistro(
-  distro: string | null | undefined
-): Promise<string | null | typeof UNRESOLVED> {
+/** The distro a run in `distro` (null: the default) lands in. */
+async function resolveWslExecDistro(distro: string | null | undefined): Promise<WslDefaultDistro> {
   if (process.platform !== 'win32') {
     return null
   }
-  const named = distro?.trim()
-  if (named) {
-    return named
-  }
-  const resolved = await readDefaultWslDistro()
-  return resolved === 'unreadable' ? UNRESOLVED : resolved.distro
+  return distro?.trim() || resolveWslDefaultDistro()
 }
 
 /**
@@ -61,7 +33,7 @@ export async function blockedWslDistroForExec(
   distro: string | null | undefined
 ): Promise<BlockedWslDistro | null> {
   const target = await resolveWslExecDistro(distro)
-  if (target === UNRESOLVED) {
+  if (target === UNRESOLVED_WSL_DEFAULT) {
     // Fails closed: a no-`-d` run boots whatever the default is.
     return isWslUserActFor(UNRESOLVED_DEFAULT_DISTRO)
       ? null
@@ -75,7 +47,7 @@ export async function assertWslDistroRunningForExec(
   distro: string | null | undefined
 ): Promise<void> {
   const target = await resolveWslExecDistro(distro)
-  if (target === UNRESOLVED) {
+  if (target === UNRESOLVED_WSL_DEFAULT) {
     if (!isWslUserActFor(UNRESOLVED_DEFAULT_DISTRO)) {
       throw new WslDistroUnverifiableError(DEFAULT_DISTRO_LABEL)
     }
@@ -105,7 +77,10 @@ export async function runAsWslExecUserAct<T>(
   act: () => Promise<T>
 ): Promise<T> {
   const target = await resolveWslExecDistro(distro)
-  return target === UNRESOLVED
-    ? runScopedWslUserAct(UNRESOLVED_DEFAULT_DISTRO, act)
-    : runAsWslUserAct(target, act)
+  const run = (): Promise<T> =>
+    target === UNRESOLVED_WSL_DEFAULT
+      ? runScopedWslUserAct(UNRESOLVED_DEFAULT_DISTRO, act)
+      : runAsWslUserAct(target, act)
+  // An unnamed act pins its default, so gates and the hook relay inside it name the same distro.
+  return distro?.trim() ? run() : runWithWslDefaultDistro(target, run)
 }

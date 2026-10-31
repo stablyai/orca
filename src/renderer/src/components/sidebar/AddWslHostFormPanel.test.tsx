@@ -6,7 +6,8 @@ import {
   canAddWslDistro,
   hasWsl2Distro,
   wsl1DistroReason,
-  wslDistroStateLabel
+  wslDistroStateLabel,
+  wslHostAddRequest
 } from './AddWslHostFormPanel'
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -62,6 +63,14 @@ function render(props: Partial<Parameters<typeof AddWslHostFormPanel>[0]> = {}):
 }
 
 describe('AddWslHostFormPanel', () => {
+  it('Add starts a stopped or Unknown distro, and never asks to start a running one', () => {
+    const unknown: WslHostDistro = { ...debian, state: 'unverifiable' }
+    expect(canAddWslDistro(unknown)).toBe(true)
+    expect(wslHostAddRequest(unknown)).toEqual({ distro: 'Debian', startIfStopped: true })
+    expect(wslHostAddRequest(debian)).toEqual({ distro: 'Debian', startIfStopped: true })
+    expect(wslHostAddRequest(ubuntu)).toEqual({ distro: 'Ubuntu', startIfStopped: false })
+  })
+
   it('shows Unknown, not Stopped, for a distro WSL could not vouch for, and adding starts it if needed', () => {
     const unknown: WslHostDistro = { ...debian, state: 'unverifiable' }
     expect(wslDistroStateLabel(unknown)).toBe('Unknown')

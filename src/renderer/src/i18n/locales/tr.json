@@ -126,6 +126,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} zaten ana makine olarak ekli.",
         "distroStopped": "Liste okunduktan sonra {{distro}} durdu. Başlatmak için “Başlat ve ekle” seçeneğini seçin.",
+        "distroUnverifiable": "WSL, {{distro}} dağıtımının çalışıp çalışmadığını yanıtlamadı. Listeyi yenileyin veya iletişim kutusundan ekleyin; gerekirse başlatılır.",
         "wsl1": "{{distro}}, Orca'nın artık desteklemediği WSL 1'i kullanıyor. Windows terminalinde şu komutla WSL 2'ye dönüştürün: {{command}}",
         "notRegistered": "{{distro}} yüklü bir WSL dağıtımı değil. Yüklü dağıtımları görmek için Windows terminalinde {{command}} komutunu çalıştırın veya dağıtımı yeniden yükleyip tekrar deneyin.",
         "sshManaged": "{{distro}} içinde zaten “{{server}}” için Orca sunucusu çalışıyor ve bu bilgisayar ona SSH üzerinden bağlanıyor. Önce bu sunucuyu kaldırın; WSL ana makinesine taşıma henüz desteklenmiyor."
@@ -7122,12 +7123,14 @@
           "added": "Zaten ana makine olarak ekli",
           "running": "Çalışıyor",
           "stopped": "Durduruldu",
+          "unverifiable": "Bilinmiyor",
           "title": "WSL dağıtımı ekle",
           "description": "Orca sunucusunu dağıtım içinde çalıştırır; böylece git, dosyalar ve terminaller doğrudan Linux'ta çalışır. Bu dağıtımda \\\\wsl.localhost üzerinden açtığınız projeler, terminalleri boşta kaldığında otomatik olarak bu ana bilgisayara taşınır; Windows sürücüsündeki (/mnt/…) projeler bu bilgisayarda kalır. Taşınan bir projeyi kenar çubuğundan geri getirebilirsiniz.",
           "distro": "Dağıtım",
           "loading": "WSL dağıtımları aranıyor…",
           "placeholder": "Dağıtım seçin",
           "stoppedHint": "{{value0}} durdurulmuş. Eklemek onu başlatır.",
+          "unverifiableHint": "WSL, {{value0}} dağıtımının çalışıp çalışmadığını bildirmedi. Eklemek gerekirse onu başlatır.",
           "addingHint": "Orca sunucusu dağıtıma yüklenip başlatılıyor. İlk seferinde bir dakika sürebilir.",
           "adding": "Kuruluyor…",
           "startAndAdd": "Başlat ve ekle",

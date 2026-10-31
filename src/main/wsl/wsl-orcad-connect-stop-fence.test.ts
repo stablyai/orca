@@ -4,6 +4,7 @@ import { noteWslDistroMayHaveStopped, noteWslDistroWoken } from '../wsl-backgrou
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import type { WslDistroHolder } from './wsl-distro-holder-types'
 import {
+  ADOPTED_HOLDER_POLL_MS,
   fenceHolderOnStop,
   fenceTransportOnStop,
   openWslConnectStopFence
@@ -88,6 +89,39 @@ describe('openWslConnectStopFence', () => {
     expect(checks).toEqual([false])
     notes.emit({ kind: 'stopped', distro: 'Ubuntu' })
     await expect(fenced.ensureHeld('Ubuntu')).rejects.toBeInstanceOf(WslDistroNotRunningError)
+  })
+  it('an adopted holder found gone in the process table fences later spawns', async () => {
+    vi.useFakeTimers()
+    try {
+      const notes = noteSource()
+      const fence = openWslConnectStopFence('Ubuntu', notes.onNote)
+      let state: 'live' | 'exited' | 'unverifiable' = 'live'
+      const holderState = vi.fn(async () => state)
+      const holder: WslDistroHolder = {
+        ensureHeld: async () => ({
+          outcome: 'adopted',
+          record: { version: 1, distro: 'Ubuntu', pid: 7, creationTimeMs: null, startedAtMs: 0 }
+        }),
+        adoptHolders: async () => [],
+        release: async () => 'exited',
+        releaseAll: async () => [],
+        holderState
+      }
+      await fenceHolderOnStop(holder, fence).ensureHeld('Ubuntu')
+      state = 'unverifiable'
+      await vi.advanceTimersByTimeAsync(ADOPTED_HOLDER_POLL_MS)
+      expect(() => fence.assertNotStopped()).not.toThrow()
+      // `wsl --terminate` kills the previous run's holder; nothing here hears its exit.
+      state = 'exited'
+      await vi.advanceTimersByTimeAsync(ADOPTED_HOLDER_POLL_MS)
+      expect(() => fence.assertNotStopped()).toThrow(WslDistroNotRunningError)
+      fence.dispose()
+      const reads = holderState.mock.calls.length
+      await vi.advanceTimersByTimeAsync(ADOPTED_HOLDER_POLL_MS * 3)
+      expect(holderState).toHaveBeenCalledTimes(reads)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

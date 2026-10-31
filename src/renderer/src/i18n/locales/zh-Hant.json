@@ -126,6 +126,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} 已是主機。",
         "distroStopped": "讀取清單後，{{distro}} 已停止。選擇「啟動並新增」以啟動它。",
+        "distroUnverifiable": "WSL 沒有回應 {{distro}} 是否正在執行。請重新整理清單，或從對話框新增，系統會視需要啟動它。",
         "wsl1": "{{distro}} 使用 WSL 1，Orca 已不再支援。請在 Windows 終端機中使用以下命令將其轉換為 WSL 2：{{command}}",
         "notRegistered": "{{distro}} 不是已安裝的 WSL 發行版。請在 Windows 終端機中執行 {{command}} 查看已安裝的發行版，或重新安裝它後再試一次。",
         "sshManaged": "{{distro}} 已在為「{{server}}」執行 Orca 伺服器，此電腦透過 SSH 存取該伺服器。請先移除該伺服器；目前尚不支援將其移轉為 WSL 主機。"
@@ -6961,12 +6962,14 @@
           "added": "已是主機",
           "running": "執行中",
           "stopped": "已停止",
+          "unverifiable": "未知",
           "title": "新增 WSL 發行版",
           "description": "Orca 在發行版內執行其伺服器，因此 git、檔案和終端機都在 Linux 中原生執行。此發行版中透過 \\\\wsl.localhost 開啟的專案會在其終端機閒置時自動移到此主機；位於 Windows 磁碟機 (/mnt/…) 上的專案會留在此電腦。你可以從側邊欄將已移動的專案移回。",
           "distro": "發行版",
           "loading": "正在查詢 WSL 發行版…",
           "placeholder": "選擇發行版",
           "stoppedHint": "{{value0}} 已停止。新增後會自動啟動。",
+          "unverifiableHint": "WSL 沒有回報 {{value0}} 是否正在執行。新增時會視需要啟動它。",
           "addingHint": "正在發行版中安裝並啟動 Orca 伺服器。首次可能需要一分鐘。",
           "adding": "正在設定…",
           "startAndAdd": "啟動並新增",

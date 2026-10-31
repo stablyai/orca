@@ -126,6 +126,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} ist bereits ein Host.",
         "distroStopped": "{{distro}} wurde nach dem Einlesen der Liste gestoppt. Zum Starten „Starten und hinzufügen“ auswählen.",
+        "distroUnverifiable": "WSL hat nicht beantwortet, ob {{distro}} läuft. Aktualisiere die Liste oder füge sie über den Dialog hinzu; sie wird dann bei Bedarf gestartet.",
         "wsl1": "{{distro}} läuft unter WSL 1, das Orca nicht mehr unterstützt. In einem Terminal unter Windows mit folgendem Befehl auf WSL 2 umstellen: {{command}}",
         "notRegistered": "{{distro}} ist keine installierte WSL-Distribution. In einem Terminal unter Windows {{command}} ausführen, um die installierten Distributionen anzuzeigen, oder die Distribution neu installieren und erneut versuchen.",
         "sshManaged": "In {{distro}} läuft bereits der Orca-Server für „{{server}}“, den dieser Computer über SSH erreicht. Diesen Server zuerst entfernen; der Wechsel zu einem WSL-Host wird noch nicht unterstützt."
@@ -7136,12 +7137,14 @@
           "added": "Bereits als Host hinzugefügt",
           "running": "Läuft",
           "stopped": "Gestoppt",
+          "unverifiable": "Unbekannt",
           "title": "WSL-Distribution hinzufügen",
           "description": "Orca führt seinen Server innerhalb der Distribution aus, sodass git, Dateien und Terminals nativ unter Linux laufen. Projekte in dieser Distribution, die über \\\\wsl.localhost geöffnet wurden, werden automatisch auf diesen Host verschoben, sobald ihre Terminals inaktiv sind; Projekte auf einem Windows-Laufwerk (/mnt/…) bleiben auf diesem Computer. Ein verschobenes Projekt lässt sich über die Seitenleiste auf diesen Computer zurückholen.",
           "distro": "Distribution",
           "loading": "WSL-Distributionen werden gesucht…",
           "placeholder": "Distribution auswählen",
           "stoppedHint": "{{value0}} ist gestoppt. Das Hinzufügen startet die Distribution.",
+          "unverifiableHint": "WSL hat nicht gemeldet, ob {{value0}} läuft. Beim Hinzufügen wird sie bei Bedarf gestartet.",
           "addingHint": "Der Orca-Server wird in der Distribution installiert und gestartet. Beim ersten Mal kann dies eine Minute dauern.",
           "adding": "Wird eingerichtet…",
           "startAndAdd": "Starten und hinzufügen",
