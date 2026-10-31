@@ -11,6 +11,7 @@ import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update
 import type { PluginSystemSettings } from './plugins/plugin-system-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
+import type { TerminalColorOverrideGlobalSettings } from './terminal-color-overrides'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ProjectGroupingPreferences &
@@ -25,4 +26,5 @@ export type GlobalSettingsBase = ProjectGroupingPreferences &
   PluginAppearanceSettings &
   PluginFileTypeSuggestionSettings &
   PluginUpdatePolicySettings &
-  PluginSystemSettings
+  PluginSystemSettings &
+  TerminalColorOverrideGlobalSettings
