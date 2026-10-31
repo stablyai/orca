@@ -34,7 +34,11 @@ import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
-import { followThroughWorkerReport, settledDispatchId } from './settled-worker-follow-through'
+import {
+  continueUnreadWorkerMail,
+  followThroughWorkerReport,
+  settledDispatchId
+} from './settled-worker-follow-through'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
@@ -221,6 +225,10 @@ export const ORCHESTRATION_SEND_METHODS = [
               : plan
           // A dispatch: address carries no recipient warnings, so `next` stays last.
           if (followUp?.kind === 'started') {
+            // Mail an earlier automatic continuation could not deliver joins this follow-up.
+            if (plan?.kind === 'start') {
+              continueUnreadWorkerMail(runtime, db, plan.latest.id)
+            }
             return followUp.receipt
           }
           if (followUp) {

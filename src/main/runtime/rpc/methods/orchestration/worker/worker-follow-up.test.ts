@@ -48,6 +48,70 @@ describe('a follow-up to a finished terminal worker', () => {
     expect(h.runtime.createTerminal).toHaveBeenCalledTimes(1)
   })
 
+  it('starts no second worker for one whose handle is gone until its process is proven exited', async () => {
+    h.setup()
+    const { dispatchId } = await h.startSettledWorker()
+    // As before a restart restores terminals: no handle resolves, but the process may still run.
+    let gone = true
+    const show = vi.mocked(h.runtime.showTerminal).getMockImplementation()!
+    vi.mocked(h.runtime.showTerminal).mockImplementation(async (handle) => {
+      if (gone && handle === 'term_worker') {
+        throw new Error('terminal not found')
+      }
+      return show(handle)
+    })
+    vi.spyOn(h.runtime, 'resolveTerminalHandleByProcessIncarnation').mockReturnValue(null)
+
+    await expect(send(dispatchId, 'and the docs')).rejects.toMatchObject({
+      code: 'worker_unverifiable'
+    })
+    expect(getFollowUpDispatch(h.db, dispatchId)).toBeUndefined()
+    expect(h.runtime.createTerminal).toHaveBeenCalledTimes(1)
+
+    h.inspectProcessLiveness.mockResolvedValue('exited')
+    vi.mocked(h.runtime.createTerminal).mockImplementationOnce(async () => {
+      gone = false
+      return { handle: 'term_worker', worktreeId: 'repo::worktree', title: 'worker' }
+    })
+    await expect(send(dispatchId, 'and the docs')).resolves.toMatchObject({
+      delivery: 'started_fresh'
+    })
+  })
+
+  it('keeps unread mail it could not continue, tells the coordinator, and delivers it with the next send', async () => {
+    userDataDir = mkdtempSync(join(tmpdir(), 'orca-follow-up-refused-'))
+    h.setup({ userDataDir })
+    const { taskId, dispatchId } = await h.startWorker()
+    await send(dispatchId, 'DO NOT PUSH')
+    h.settle(taskId, dispatchId, 'succeeded')
+
+    h.restart()
+    const verdict = vi.spyOn(h.runtime, 'getTerminalLivenessVerdict').mockReturnValue({
+      status: 'unverifiable',
+      reason: 'relay_dropped'
+    })
+
+    await vi.waitFor(() =>
+      expect(h.db.getUnreadMessages(`run:${h.activeRunId}`)).toMatchObject([
+        { type: 'escalation', subject: 'Mail did not reach the finished worker' }
+      ])
+    )
+    expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).not.toBeNull()
+    expect(h.db.getUnreadMessages(`dispatch:${dispatchId}`)).toMatchObject([
+      { body: 'DO NOT PUSH' }
+    ])
+
+    verdict.mockRestore()
+    await send(dispatchId, 'and the docs')
+    const followUpId = getFollowUpDispatch(h.db, dispatchId)!.id
+    await vi.waitFor(() =>
+      expect(h.db.getUnreadMessages(`dispatch:${followUpId}`)).toMatchObject([
+        { body: 'DO NOT PUSH' }
+      ])
+    )
+    expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
+  })
+
   it('continues the worker with mail it never read before reporting, after a restart', async () => {
     userDataDir = mkdtempSync(join(tmpdir(), 'orca-follow-up-restart-'))
     h.setup({ userDataDir })

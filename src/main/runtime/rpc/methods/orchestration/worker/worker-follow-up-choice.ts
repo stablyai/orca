@@ -115,11 +115,20 @@ async function openWorkerTerminal(
 ): Promise<string | null> {
   const inspected = await inspectWorkerTerminal(runtime, db, resource.owner_dispatch_id)
   if (inspected.status === 'unverifiable') {
-    throw new OrchestrationError(
-      'worker_unverifiable',
-      `Orca cannot tell whether Dispatch ${resource.owner_dispatch_id}'s worker still runs (${inspected.reason ?? 'unknown'}), so it starts no second one. Send again once worker-show reads it. No effects were applied.`,
-      { effectsApplied: false }
-    )
+    throw unverifiable(resource.owner_dispatch_id, inspected.reason ?? 'unknown')
+  }
+  if (inspected.status === 'missing' || inspected.status === 'unattached') {
+    // Before a restart restores its terminals, a worker that still runs has no handle yet.
+    const process = resource.process_incarnation
+      ? await runtime.inspectTerminalProcessIncarnationLiveness(
+          resource.process_incarnation,
+          resource.host_scope
+        )
+      : 'unverifiable'
+    if (process !== 'exited') {
+      throw unverifiable(resource.owner_dispatch_id, `its process is ${process}`)
+    }
+    return null
   }
   const live = inspected.status === 'live' ? inspected.terminalHandle : null
   if (live && (await runtime.isTerminalRunningAgent(live))) {
@@ -184,6 +193,14 @@ async function userTabHoldingSession(
     }
   }
   return undefined
+}
+
+function unverifiable(dispatchId: string, reason: string): OrchestrationError {
+  return new OrchestrationError(
+    'worker_unverifiable',
+    `Orca cannot tell whether Dispatch ${dispatchId}'s worker still runs (${reason}), so it starts no second one. Send again once worker-show reads it. No effects were applied.`,
+    { effectsApplied: false }
+  )
 }
 
 function notRestartable(dispatchId: string): OrchestrationError {

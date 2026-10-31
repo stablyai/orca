@@ -9,7 +9,14 @@ import {
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveOrcaSessionParty } from '../../../../orchestration/orchestration-party'
 import { readStructuredAgentSessionRecord } from '../../../../structured-worker-authority'
-import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
+import { createHash } from 'node:crypto'
+import { escalateWorkerFailure } from '../../../../orchestration/worker-failure-escalation'
+import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
+import {
+  planWorkerFollowUp,
+  startWorkerFollowUp,
+  type WorkerFollowUpOutcome
+} from './worker-follow-up'
 import { captureReportedWorkerResumeSession } from '../worker/worker-resume-session-capture'
 
 /** After a report settles (or replays): save the worker's conversation, then continue mail it never read. */
@@ -44,39 +51,96 @@ async function continueUnreadMail(
 ): Promise<void> {
   const unread = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])
   const first = unread[0]
-  const plan = first && planWorkerFollowUp(db, dispatchId, first.type)
-  let steerTo = plan?.kind === 'steer' ? plan.dispatchId : undefined
-  if (first && plan?.kind === 'start') {
-    const outcome = await startWorkerFollowUp({
-      ctx: { runtime, orchestrationCaller: senderSession(db, first.from_handle) },
-      db,
-      plan,
-      from: first.from_handle,
-      message: {
-        subject:
-          unread.length === 1 ? first.subject : `${first.subject} (+${unread.length - 1} more)`,
-        body: unread.map((message) => message.body || message.subject).join('\n\n')
-      },
-      consumesMessageIds: unread.map((message) => message.id)
-    }).catch((error: unknown) => {
-      // A refused follow-up leaves the mail where it was, unread, as before this existed.
-      console.warn('[orchestration] unread mail did not become a follow-up', dispatchId, error)
-      return undefined
-    })
-    // Mail that arrived while it started still reaches a follow-up that started.
-    const started = outcome?.kind === 'started' && outcome.receipt.state === 'ready'
-    const startedId = started ? outcome.receipt.dispatchId : undefined
-    steerTo =
-      outcome?.kind === 'steer'
-        ? outcome.dispatchId
-        : typeof startedId === 'string'
-          ? startedId
-          : undefined
+  if (!first) {
+    clearFollowUpMail(db, dispatchId)
+    return
   }
-  if (first && steerTo) {
-    moveUnreadMail(runtime, db, first.run_id, dispatchId, steerTo)
+  let outcome: WorkerFollowUpOutcome | undefined
+  try {
+    const plan = planWorkerFollowUp(db, dispatchId, first.type)
+    outcome =
+      plan?.kind === 'start'
+        ? await startWorkerFollowUp({
+            ctx: { runtime, orchestrationCaller: senderSession(db, first.from_handle) },
+            db,
+            plan,
+            from: first.from_handle,
+            message: {
+              subject:
+                unread.length === 1
+                  ? first.subject
+                  : `${first.subject} (+${unread.length - 1} more)`,
+              body:
+                unread.length === 1
+                  ? first.body || first.subject
+                  : unread
+                      .map((message) => `${message.subject}\n${message.body}`.trim())
+                      .join('\n\n')
+            },
+            consumesMessageIds: unread.map((message) => message.id)
+          })
+        : plan
+  } catch (error) {
+    // The mail stays unread and marked, so the next start, report replay or send retries it.
+    noticeUnreadMailNotContinued(
+      runtime,
+      db,
+      dispatchId,
+      error instanceof Error ? error.message : String(error)
+    )
+    return
+  }
+  const receipt = outcome?.kind === 'started' ? outcome.receipt : undefined
+  if (receipt && receipt.state !== 'ready') {
+    noticeUnreadMailNotContinued(
+      runtime,
+      db,
+      dispatchId,
+      String(receipt.lastError ?? receipt.state)
+    )
+  }
+  // Mail that arrived while it started still reaches a follow-up that started.
+  const to =
+    outcome?.kind === 'steer'
+      ? outcome.dispatchId
+      : receipt?.state === 'ready' && typeof receipt.dispatchId === 'string'
+        ? receipt.dispatchId
+        : undefined
+  if (to) {
+    moveUnreadMail(runtime, db, first.run_id, dispatchId, to)
   }
   clearFollowUpMail(db, dispatchId)
+}
+
+/** Nothing is lost silently: the coordinator hears that its mail did not reach the worker, once per batch. */
+function noticeUnreadMailNotContinued(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatchId: string,
+  reason: string
+): void {
+  const dispatch = db.getDispatchContextById(dispatchId)
+  if (!dispatch) {
+    return
+  }
+  escalateWorkerFailure(
+    db,
+    dispatch,
+    {
+      id: `msg_followup_${createHash('sha256')
+        .update(JSON.stringify([dispatchId, dispatch.follow_up_mail_at]))
+        .digest('hex')
+        .slice(0, 24)}`,
+      from: `dispatch:${dispatchId}`,
+      mailbox: () => dispatchReportMailbox(db, dispatch),
+      describe: (task) => ({
+        subject: 'Mail did not reach the finished worker',
+        body: `Orca could not continue the worker of ${task} with the mail it had not read before reporting: ${reason}. The mail is kept; send to dispatch:${dispatchId} again to retry.`
+      }),
+      payload: { dispatchId, reason }
+    },
+    (handle, type) => runtime.notifyMessageArrived(handle, type)
+  )
 }
 
 /** Moved mail is delivered like any Dispatch mail: a wake for each type that arrived. */
