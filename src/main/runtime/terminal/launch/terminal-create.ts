@@ -15,7 +15,6 @@ import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch
 import { seedPtyLaunchTitle } from './pty-launch-title'
 import { migratedPaneRestoreHint } from '../../migrated-pane-restore-cwd'
 import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
-import { resolveLaunchCommandPaneAgent as agentOf } from '../../runtime-agent-launch-resolution'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   protected abstract paneStartStatusArgs: dependencies.PaneStartArgsOf
@@ -221,7 +220,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ;({ terminalHandle: preAllocatedHandle, tabId, leafId } = launch.surface)
           paneKey = dependencies.makePaneKey(tabId, leafId)
         }
-        this.assertCreatedPtyRegistrationAllowed(result.id, result.incarnationId)
+        this.assertCreatedPtyRegistrationAllowed(result)
         // Provider reattachment still needs this runtime's handle and workspace binding.
         if (!result.stablePaneOwner) {
           this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
@@ -243,9 +242,11 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)
             )
           }
-          recordTerminalLaunchMetadata(pty, result, launch)
+          this.watchLaunchComposer(
+            result.id,
+            recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
+          )
           if (!launch.adoptedStablePane) {
-            pty.launchCommandAgent = result.agentResumeRefused ? null : agentOf(launchOpts.command)
             this.rememberSavedTerminalLaunchResult(result.id, result)
           }
           const standing = spawnSurfaceClaimSequence(this.graphSequence)

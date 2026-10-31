@@ -4,7 +4,9 @@
       "updateRequired": "Esta versão do OpenCode não pode iniciar com segurança com o modelo escolhido. Atualize o OpenCode para uma versão compatível ou omita a escolha do modelo.",
       "invalidConfig": "O OpenCode não conseguiu aplicar este modelo à configuração de inicialização. Verifique a configuração de inicialização do OpenCode e tente novamente, ou omita a escolha do modelo.",
       "unsupportedLaunch": "O OpenCode não pode aplicar este modelo a esta inicialização. Abra um novo terminal local com argumentos de inicialização compatíveis ou omita a escolha do modelo."
-    }
+    },
+    "terminalPreparationFailed": "Não foi possível abrir um terminal para {{value0}}. Verifique a conexão do espaço de trabalho e as configurações do agente e tente novamente.",
+    "terminalPromptFailed": "O Orca abriu um terminal para {{value0}}, mas não conseguiu passar seu prompt. Envie o prompt nesse terminal."
   },
   "common": {
     "retry": "Tentar novamente",
@@ -338,7 +340,9 @@
       "scannerBusy": "Há verificações de sessões demais em andamento. Aguarde um momento e atualize.",
       "scannerMissing": "O verificador de sessões está ausente nesta instalação do Orca. Reinstalar o Orca o restaura.",
       "scannerStopped": "O verificador de sessões parou inesperadamente. Atualize para tentar novamente."
-    }
+    },
+    "sessionAccount": "Conta",
+    "sessionAccountUnknown": "Desconhecido"
   },
   "checksPanel": {
     "unlinked": {
@@ -582,6 +586,9 @@
         "needsAttention_other": "Todos os {{count}} agentes precisam de atenção",
         "needsAttention_many": "Todos os {{count}} agentes precisam de atenção"
       }
+    },
+    "cardProperties": {
+      "agentModel": "Modelo do agente"
     }
   },
   "tray": {
@@ -1545,7 +1552,8 @@
       "installCliForTerminal": "Instale a CLI do {{value0}} para abri-lo em um terminal.",
       "chatRuntime": "Runtime de chat",
       "chatChoiceTitle": "Abrir como chat ou CLI",
-      "chatChoiceDescription": "Escolha se cada agente abre como chat ou na sua CLI."
+      "chatChoiceDescription": "Escolha se cada agente abre como chat ou na sua CLI.",
+      "sameAsChoice": "Igual a {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "link simbólico",
@@ -1812,6 +1820,12 @@
       "forgeCredentialTarget": {
         "unknownHost": "Ainda não se sabe qual máquina contém este repositório. Reconecte-a e tente novamente.",
         "thisComputer": "este computador"
+      },
+      "runtimeGitSyncClient": {
+        "completeMergeNeedsNewerHost": "Para concluir uma mesclagem, é necessária uma versão mais recente do Orca neste host. Atualize o Orca nesse host."
+      },
+      "runtimeGitWorkingTreeClient": {
+        "resolveConflictNeedsNewerHost": "Para resolver conflitos, é necessária uma versão mais recente do Orca neste host. Atualize o Orca nesse host."
       }
     },
     "ssh": {
@@ -6800,7 +6814,8 @@
           "506f2acf7a": "Redefinindo acesso...",
           "statusGranted": "Concedido",
           "statusUnsupported": "Somente macOS",
-          "statusNotEnabled": "Não ativado"
+          "statusNotEnabled": "Não ativado",
+          "794807aa21": "Privacidade e Segurança do macOS na fila; uma solicitação mais recente ou redefinição pode substituí-la"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Escolha os apps disponíveis no menu Abrir em de um espaço de trabalho.",
@@ -7987,7 +8002,11 @@
           "191ac34567": "Orquestração de Agentes",
           "nestedWorkerDepthTitle": "Profundidade de worker aninhado",
           "nestedWorkerDepthDescription": "Quantas gerações de workers despachados podem gerar seus próprios workers. 1 mantém a árvore de agentes plana: um coordenador despacha workers, e esses workers não despacham.",
-          "7bc082f4de": "Copiar comando de instalação"
+          "7bc082f4de": "Copiar comando de instalação",
+          "workerAutoReleaseTitle": "Fechar automaticamente workers concluídos",
+          "workerAutoReleaseDescription": "Fecha o terminal ou chat de um worker 2 minutos após a conclusão, a menos que você escolha Manter aberto. Se ele voltar a trabalhar, os 2 minutos recomeçam quando terminar.",
+          "workerAutoReleaseKeywordClose": "fechar",
+          "workerAutoReleaseKeywordRelease": "liberar"
         },
         "RuntimeAccessGrantList": {
           "6f6d5188ed": "Revogar {{value0}}",
@@ -9272,7 +9291,10 @@
         },
         "PluginThemeUseNow": {
           "useForLight": "Usar no claro:",
-          "useForDark": "Usar no escuro:"
+          "useForDark": "Usar no escuro:",
+          "assignedLight": "{{value0}} definido como tema claro",
+          "assignedDark": "{{value0}} definido como tema escuro",
+          "saveFailed": "Não foi possível salvar o tema. Tente novamente."
         },
         "AppearanceInterfaceSection": {
           "lightTheme": "Tema claro",
@@ -9684,7 +9706,10 @@
             "clearNotesFromWorkspace_many": "Limpar {{count}} notas deste espaço de trabalho?",
             "clearNotesFromFile_one": "Limpar {{count}} nota de {{path}}?",
             "clearNotesFromFile_other": "Limpar {{count}} notas de {{path}}?",
-            "clearNotesFromFile_many": "Limpar {{count}} notas de {{path}}?"
+            "clearNotesFromFile_many": "Limpar {{count}} notas de {{path}}?",
+            "markResolved": "Marcar como resolvido",
+            "keepFile": "Manter arquivo",
+            "keepDeletion": "Manter exclusão"
           },
           "checks": {
             "panel": {
@@ -10164,7 +10189,8 @@
                     "edc2d82a2b": "Merge em andamento",
                     "5c3707aa44": "Rebase em andamento",
                     "ffe53a1da6": "Cherry-pick em andamento",
-                    "35eb76d323": "Operação em andamento"
+                    "35eb76d323": "Operação em andamento",
+                    "completeMerge": "Concluir mesclagem"
                   }
                 }
               },
@@ -10193,7 +10219,8 @@
                   "e7876a2bde": "Coloque pelo menos um arquivo em stage para gerar uma mensagem.",
                   "0904be2505": "Limpe a mensagem para gerar novamente.",
                   "1ea9ba37aa": "Escolha um agente em Configurações -> Git -> IA do Controle de Código-Fonte."
-                }
+                },
+                "completeMergeFailed": "Não foi possível concluir a mesclagem"
               }
             }
           },
@@ -13381,6 +13408,12 @@
           "siblingFileAlreadyOpen": "O arquivo relacionado já está aberto; feche uma aba antes de restaurá-lo.",
           "siblingFileOwnerChanged": "O proprietário do arquivo relacionado mudou enquanto a aba estava sendo restaurada.",
           "csvGrewTooLarge": "O CSV ficou grande demais para edição. Seu rascunho foi mantido; reabra o arquivo para pré-visualizá-lo."
+        },
+        "RichMarkdownEmojiMenu": {
+          "chooseEmoji": "Escolher um emoji"
+        },
+        "richMarkdownBlobImagePaste": {
+          "saveFailed": "Não foi possível salvar a imagem colada ao lado do documento. Ela pode não carregar após reiniciar o Orca."
         }
       },
       "skills": {
@@ -19690,6 +19723,13 @@
           "noMovableChat": "Não é possível executar “{{action}}” — nenhum chat que possa ser movido está ativo.",
           "clientUnsupported": "Não é possível executar “{{action}}” — este cliente e este runtime não oferecem suporte a essa ação."
         }
+      },
+      "plugins": {
+        "list": {
+          "PluginsSectionDescription": {
+            "openWith": "Abrir com (quando o foco não estiver em um campo editável)"
+          }
+        }
       }
     },
     "startup": {
@@ -20468,7 +20508,11 @@
       },
       "agentMessage": {
         "messageFrom": "Mensagem de",
-        "unnamedSender": "um agente"
+        "unnamedSender": "um agente",
+        "messageFromCoordinator": "Mensagem do coordenador",
+        "startedWorker": "Worker iniciado",
+        "taskFromCoordinator": "Tarefa do coordenador",
+        "updateFromWorker": "Atualização do worker"
       },
       "goal": {
         "placeholder": "Descreva seu objetivo e defina resultados mensuráveis para obter os melhores resultados",
@@ -20737,7 +20781,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "Alternar para visualização de terminal",
-          "switchToChatView": "Alternar para visualização de chat"
+          "switchToChatView": "Alternar para visualização de chat",
+          "allowAutoClose": "Permitir fechamento automático"
         },
         "BrowserTab": {
           "closeOthers": "Fechar Outras",
@@ -21248,6 +21293,20 @@
       "stepDownload": "Baixar",
       "stepUnpack": "Descompactar",
       "stepCheck": "Verificar"
+    },
+    "linearWorkspacePicker": {
+      "search": "Pesquisar espaços de trabalho do Linear",
+      "empty": "Nenhum espaço de trabalho encontrado.",
+      "label": "Espaço de trabalho do Linear",
+      "all": "Todos os espaços de trabalho do Linear",
+      "unavailable": "Espaço de trabalho do Linear indisponível"
+    },
+    "orchestration": {
+      "workerAutoClose": {
+        "running": "Worker temporário de orquestração · Fecha 2 minutos após terminar",
+        "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
+        "keepOpen": "Manter aberto"
+      }
     }
   },
   "csv": {
@@ -22302,7 +22361,8 @@
       "terminalSplitRight": "Dividir terminal para a direita",
       "terminalSplitDown": "Dividir terminal para baixo",
       "terminalSwitchInputSource": "Alternar fonte de entrada / idioma (nativo)",
-      "newAgentTab": "Nova aba do {{agent}}"
+      "newAgentTab": "Nova aba do {{agent}}",
+      "viewPlugins": "Abrir plugins"
     },
     "group": {
       "global": "Global",
@@ -22701,7 +22761,15 @@
     "arguments": "Argumentos",
     "argumentsHint": "Aplica-se apenas às inicializações pela CLI.",
     "launchChat": "Iniciar chat",
-    "launchTerminal": "Iniciar terminal"
+    "launchTerminal": "Iniciar terminal",
+    "setByArguments": "Definido pelos seus argumentos",
+    "searchModels": "Pesquisar modelos",
+    "noModels": "Nenhum modelo corresponde à pesquisa.",
+    "legacyModels": "Modelos antigos",
+    "toggleArguments": "Mostrar ou ocultar argumentos",
+    "argumentsTerminalHint": "Aplica-se apenas a inicializações no terminal (CLI)",
+    "searchAgentModels": "Pesquisar modelos de {{agent}}…",
+    "legacyModelCount": "{{total}} modelos"
   },
   "wslMove": {
     "entry": {

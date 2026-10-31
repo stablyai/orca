@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { delimiter, dirname, isAbsolute, join } from 'node:path'
+import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
 import { firstWindowsPathEnvKey, isNativeExecutable } from './cli-runtime-pairing-inputs'
 import { getFnmDefaultAliasDirectories } from './fnm-default-alias-dirs'
 import { getNvmVersionDirectories, nvmVersionDirectories } from './nvm-version-directories'
@@ -34,6 +34,14 @@ function splitPath(
     .split(pathDelimiter)
     .map((entry) => entry.trim())
     .filter(Boolean)
+}
+
+/** Like execvp, relative and empty PATH entries search from the launch cwd. */
+export function pathEnvRelativeTo(pathEnv: string | undefined, cwd: string): string | undefined {
+  return pathEnv
+    ?.split(delimiter)
+    .map((entry) => (isAbsolute(entry) ? entry : resolve(cwd, entry)))
+    .join(delimiter)
 }
 
 function* firstRunnable(

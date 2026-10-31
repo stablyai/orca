@@ -141,7 +141,8 @@ vi.mock('@/lib/file-type-icons', () => ({
   getFileTypeIcon: () =>
     function FileIcon() {
       return <span data-file-icon />
-    }
+    },
+  getPluginFileTypeIconIndex: () => null
 }))
 
 vi.mock('@/lib/rename-file', () => ({

@@ -49,8 +49,6 @@ import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../orca-runtime-postlude'
 import { screenClearsBlockedTail } from '../blocked-tail-screen-clear'
 
-type ProjectionRead = Partial<RuntimeAgentOrchestrationDependencies>
-
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
   protected readonly stopRequestedPtyIds = new Set<string>()
 
@@ -118,7 +116,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     showTerminal: (handle) => this.showTerminal(handle)
   })
 
-  protected agentOrchestrationDependencies(bound?: ProjectionRead) {
+  protected agentOrchestrationDependencies(bound?: Partial<RuntimeAgentOrchestrationDependencies>) {
     return {
       getDb: () => this.getOrchestrationDbIfAvailable(),
       getLeaves: () => this.leaves.values(),
@@ -341,6 +339,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   // Replay bounded startup bytes when draft paste subscribes after the ready marker.
   protected recentPtyOutputById = new Map<string, RecentPtyOutputBuffer>()
+
+  // A fresh launch's pending composer watch; submits await it, and it is dropped once settled.
+  protected launchComposerReadyByPtyId = new Map<string, Promise<boolean>>()
 
   protected setupCompletionTokenByPtyId = new Map<string, string>()
 }

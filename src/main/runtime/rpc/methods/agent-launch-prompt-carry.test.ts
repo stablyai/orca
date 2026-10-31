@@ -1,6 +1,7 @@
 /** The runtime's typed-line carry report decides whether to paste: never duplicate a carried prompt or drop an uncarried one. */
 
 import { describe, expect, it, vi } from 'vitest'
+import { formatTerminalStartFailure } from '../../../../shared/terminal-start-failure'
 import {
   CAPABLE_CLIENT,
   methodNamed,
@@ -106,4 +107,68 @@ describe('an argv agent’s launch prompt, by what the runtime reports about its
 
     expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
+})
+
+describe('actual startup creation across internal launch projections', () => {
+  it.each(
+    (['existing', 'create-worktree'] as const).flatMap((target) =>
+      (['fresh', 'reattach', 'adopted'] as const).map((context) => ({ target, context }))
+    )
+  )(
+    'keeps $context diagnostic authority through $target prompt delivery',
+    async ({ target, context }) => {
+      const { runtime, sendTerminalAgentPrompt } = withPromptWriter(
+        runtimeStub({ settings: {}, lineCarriesPrompt: false })
+      )
+      const handle = target === 'existing' ? 'term_1' : 'term_agent_first'
+      const creation = {
+        handle,
+        ptyId: 'pty-created',
+        incarnationId: 'inc-created',
+        worktreeId: 'wt-new',
+        title: null,
+        ...(context === 'reattach' ? { isReattach: true as const } : {}),
+        ...(context === 'adopted' ? { agentSessionDisposition: 'adopted' as const } : {})
+      }
+      runtime.createTerminal.mockResolvedValueOnce(creation)
+      const original = runtime.createManagedWorktree.getMockImplementation()!
+      runtime.createManagedWorktree.mockImplementation(async (args) => {
+        if (typeof args.onStartupTerminalCreated === 'function') {
+          args.onStartupTerminalCreated(creation)
+        }
+        return original(args)
+      })
+      const cause = {
+        kind: 'exited' as const,
+        exitCode: 256,
+        initialOutputDiagnostic: 'git-bash-console-capacity' as const
+      }
+      Object.assign(runtime, {
+        getPtyLivenessVerdict: () => ({ status: 'exited', incarnationId: 'inc-created', cause })
+      })
+      const exited = { satisfied: true, status: 'exited', exitCause: cause }
+      runtime.waitForTerminal.mockResolvedValue(exited)
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const receipt = await launch(
+          {
+            agent: 'claude',
+            target:
+              target === 'existing'
+                ? { kind: target, worktree: 'id:wt-7' }
+                : { kind: target, create: { repo: 'id:repo-1', name: 'task' } },
+            prompt: SUBMIT
+          },
+          runtime
+        )
+        const error = warn.mock.calls.flat().find((item) => item instanceof Error)
+        expect(formatTerminalStartFailure(error) !== undefined).toBe(context === 'fresh')
+        expect(sendTerminalAgentPrompt.mock.calls.length).toBe(context === 'fresh' ? 0 : 1)
+        expect(receipt).not.toHaveProperty('terminalCreation')
+        expect(receipt).not.toHaveProperty('startupTerminalCreation')
+      } finally {
+        warn.mockRestore()
+      }
+    }
+  )
 })
