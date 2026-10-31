@@ -657,7 +657,6 @@
       "tryDifferentFilter": "다른 리뷰 필터를 사용해 보세요."
     },
     "diffReviewDrawers": {
-      "actionsTitle": "리뷰 작업",
       "addNote": "메모 추가",
       "cancelNote": "메모 취소",
       "clearSentNotes": "전송한 메모 지우기",
@@ -764,11 +763,6 @@
       "moveUp": "위로 이동",
       "reorderHint": "드래그하지 않고 순서를 바꾸려면 '위로 이동'과 '아래로 이동' 동작을 사용하세요."
     },
-    "homeQuickActions": {
-      "newWorkspace": "새 워크스페이스",
-      "pairDesktop": "데스크탑 페어링",
-      "title": "빠른 작업"
-    },
     "hostCard": {
       "hostActions": "{{title}} 관련 작업",
       "openHost": "{{title}} 열기",
@@ -808,9 +802,6 @@
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "하단 패널 닫기"
-    },
-    "newWorkspaceFab": {
-      "newWorkspace": "새로운 워크스페이스"
     },
     "newWorkspaceSetupScriptField": {
       "hooks": "훅",
@@ -957,7 +948,13 @@
       "empty": "아직 설정된 맞춤 단축키가 없습니다.",
       "removeShortcut": "{{label}} 제거",
       "resetDefaults": "기본값 복원",
-      "resetDescription": "모든 기본 단축키를 원래 순서로 표시"
+      "resetDescription": "모든 기본 단축키를 원래 순서로 표시",
+      "moreKeys": "더 많은 키",
+      "moreKeysDescription": "이 키는 터미널 키 행의 ⋯ 아래에 있습니다. 키의 표시 여부를 전환하고 핸들을 길게 눌러 원하는 순서로 끌어 놓으세요. Esc나 화살표처럼 이미 행에 있는 키는 ⋯에 표시되지 않습니다.",
+      "directionPad": "방향 패드",
+      "showDirectionPad": "방향 패드 표시",
+      "showDirectionPadDescription": "화살표 패드를 사이드 레일에 고정합니다. 끄면 레일에 개별 화살표 키가 표시됩니다.",
+      "showShortcut": "{{label}} 단축키 표시"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "사용량 한도를 재설정하시겠습니까?",
@@ -1296,17 +1293,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "계정 사용량",
-      "sessionWindow": "5시간",
-      "systemDefault": "시스템 기본값",
-      "weeklyWindow": "7일"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} 업데이트 알림 닫기",
       "title": "Orca {{version}} 업데이트 가능",
-      "updateAccessibilityLabel": "Orca {{version}} 업데이트가 있습니다. 탭하여 업데이트하세요.",
-      "updateHint": "탭하여 업데이트하세요"
+      "updateAccessibilityLabel": "Orca {{version}} 업데이트가 있습니다. 탭하여 업데이트하세요."
     },
     "emptyState": {
       "connectedDescription": "데스크톱이 여기에 표시됩니다. 모든 데이터는 종단 간 암호화로 보호됩니다.",
@@ -1314,26 +1304,14 @@
       "description": "컴퓨터의 Orca와 페어링하여 에이전트 상태를 확인하고, 원하는 터미널에 접속하고, 휴대폰으로 작업을 진행하세요.",
       "openDesktopDescription": "설정 → 모바일에서 페어링 QR 코드를 생성하세요.",
       "openDesktopTitle": "Orca 데스크톱 앱 열기",
-      "pairDesktop": "데스크탑 페어링",
-      "scanCodeDescription": "위의 버튼을 탭해 스캐너를 여세요. 데스크톱 화면의 QR 코드에 카메라를 맞추세요.",
       "scanCodeTitle": "코드 스캔",
-      "stepsHeading": "사용 방법",
       "title": "데스크톱을 연결하세요"
     },
     "listFooter": {
-      "hostPickerTitle": "작업을 열 호스트",
-      "resumeHeading": "재개",
-      "tasksHeading": "작업"
+      "hostPickerTitle": "작업을 열 호스트"
     },
     "listHeader": {
-      "agentTime": "Agent 시간",
-      "agentsSpawned": "시작된 Agents",
-      "daysHours": "{{days}}일 {{hours}}시간",
-      "desktopsHeading": "데스크탑",
-      "hoursMinutes": "{{hours}}시간 {{minutes}}분",
-      "minutes": "{{minutes}}분",
-      "prsCreated": "생성된 PR",
-      "title": "다시 오신 것을 환영합니다"
+      "desktopsHeading": "데스크탑"
     },
     "screen": {
       "pairingCheckFailed": "페어링 확인 실패",
@@ -1341,11 +1319,6 @@
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "removeHostTitle": "호스트 제거",
       "tryAgain": "다시 시도하세요."
-    },
-    "tasksCard": {
-      "noSources": "연결된 작업 소스 없음",
-      "openProviderTasks": "{{provider}} 작업 열기",
-      "title": "작업"
     }
   },
   "hooks": {
@@ -1390,16 +1363,11 @@
     },
     "hostScreenHeader": {
       "accounts": "계정",
-      "activeFilters_one": "워크스페이스 옵션 (필터 {{count}}개 활성화됨)",
-      "activeFilters_other": "워크스페이스 옵션 (필터 {{count}}개 활성화됨)",
       "backToHosts": "호스트 목록으로 돌아가기",
-      "closeSearch": "검색 닫기",
       "floatingWorkspace": "플로팅 워크스페이스",
       "hideSidebar": "사이드바 숨기기",
       "reconnect": "다시 연결",
-      "searchWorkspaces": "워크스페이스 검색",
-      "tasks": "작업",
-      "workspaceOptions": "워크스페이스 옵션"
+      "tasks": "작업"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "\"{{name}}\" ({{branch}})을(를) 삭제하시겠습니까?",
@@ -1410,10 +1378,6 @@
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "sleep": "슬립",
       "unpin": "고정 해제"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "워크스페이스 검색…",
-      "searchWorkspaces": "워크스페이스 검색"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "체크: 실패",
@@ -1472,7 +1436,6 @@
       "backToOptions": "워크스페이스 옵션으로 돌아가기",
       "cardDisplay": "카드 표시",
       "cardLayout": "카드 레이아웃",
-      "clearFilters": "필터 지우기",
       "exceptDefaultBranch": "기본 브랜치는 제외",
       "filters": "필터",
       "groupBy": "그룹화 기준",
@@ -1827,7 +1790,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "키보드 닫기",
-      "sendKey": "{{label}} 보내기"
+      "sendKey": "{{label}} 보내기",
+      "modifierHint": "다음 키에 적용됩니다. 두 번 탭하면 계속 켜집니다.",
+      "typeCharacter": "{{character}} 입력",
+      "interrupt": "터미널 중단",
+      "keysModeLabel": "키 모드: 입력 내용이 터미널로 바로 전송됩니다. 메시지 모드로 전환",
+      "messageModeLabel": "메시지 모드: 작성한 뒤 전송합니다. 키 모드로 전환",
+      "keysMode": "키",
+      "messageMode": "메시지",
+      "moreKeys": "더 많은 키와 작업",
+      "showKeyboard": "키보드 표시"
     },
     "activeContent": {
       "createTab": "탭 만들기",
@@ -1939,7 +1911,10 @@
     "commandDock": {
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
       "liveInputLabel": "실시간 터미널 입력",
-      "sendCommand": "명령 보내기"
+      "sendCommand": "명령 보내기",
+      "messageAgentPlaceholder": "{{agent}}에게 메시지 보내기",
+      "writeCommandPlaceholder": "명령을 작성한 후 전송",
+      "theAgent": "에이전트"
     },
     "contentRow": {
       "dismissCreationWarning": "워크스페이스 생성 경고 닫기"
@@ -2113,13 +2088,18 @@
       "requestFailed": "요청 실패: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "워크스페이스의 전체 이름과 위치를 표시합니다",
       "backToWorktrees": "워크트리로 돌아가기",
       "moreActions": "세션 작업 더 보기",
-      "openFileExplorer": "파일 탐색기 열기",
       "openSourceControl": "소스 제어 열기",
       "reconnectToDesktop": "데스크톱에 다시 연결",
       "showSidebar": "사이드바 표시",
-      "terminalTitle": "터미널"
+      "terminalTitle": "터미널",
+      "terminalLayout": "터미널 레이아웃",
+      "fileExplorer": "파일 탐색기",
+      "sourceControl": "소스 제어",
+      "newTab": "새 탭",
+      "quickCommands": "빠른 명령어"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "에이전트 기록",
@@ -2277,9 +2257,6 @@
       "title": "빠른 명령어",
       "untitled": "제목 없음"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "빠른 명령어"
-    },
     "routeHelpers": {
       "connected": "연결됨",
       "connecting": "연결 중",
@@ -2319,7 +2296,8 @@
       "terminal": "터미널",
       "terminalName": "터미널 이름",
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
-      "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다."
+      "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다.",
+      "allowAutoClose": "자동 닫기 허용"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "이 워크스페이스 호스트에서는 활성화된 AI 에이전트가 감지되지 않았습니다.",
@@ -2598,6 +2576,56 @@
       "waitForStart": "에이전트가 시작을 마칠 때까지 기다리세요.",
       "waitForTurn": "에이전트가 응답을 마칠 때까지 기다리거나 에이전트를 중지하세요.",
       "waitMoment": "잠시 기다리세요."
+    },
+    "workerAutoClose": {
+      "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힙니다",
+      "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힙니다",
+      "keepOpen": "열어 두기"
+    },
+    "terminalLayoutSheet": {
+      "title": "터미널 레이아웃",
+      "oneTerminal": "터미널 하나",
+      "selected": "선택됨",
+      "auto": "자동",
+      "autoHint": "사용 가능한 공간에 맞게 분할",
+      "sideBySide": "나란히",
+      "sideBySideHint": "사이드바를 열어도 두 열로 표시",
+      "stacked": "위아래로",
+      "stackedHint": "화면 방향에 관계없이 두 행으로 표시",
+      "selectedHint": "선택됨 · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "레이아웃을 저장할 수 없습니다",
+      "saveFailedMessage": "현재는 이 레이아웃이 적용됩니다. 다시 선택하여 저장을 재시도하세요."
+    },
+    "terminalArrowPad": {
+      "label": "방향키",
+      "hint": "한쪽을 탭하면 방향키를 한 번 누르고, 길게 눌러 드래그하면 반복합니다",
+      "up": "위",
+      "down": "아래",
+      "left": "왼쪽",
+      "right": "오른쪽"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "{{label}} 보내기",
+      "paste": "붙여넣기",
+      "sending": "보내는 중…",
+      "photo": "사진",
+      "file": "파일",
+      "desktopWidth": "데스크톱 너비",
+      "phoneWidth": "휴대폰 너비",
+      "keys": "키",
+      "combos": "조합",
+      "yourKeys": "내 키",
+      "deleteKeyHint": "길게 눌러 이 키 삭제",
+      "addCustomKey": "사용자 지정 키 추가",
+      "addKey": "키 추가"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, 포커스됨",
+      "terminal": "터미널",
+      "tapToFocusPane": "{{title}}, 탭하여 포커스",
+      "inputPane": "{{title}} · 입력"
     }
   },
   "settings": {
@@ -2789,7 +2817,9 @@
       "cherryPickState": "체리픽",
       "mergeState": "병합",
       "rebaseState": "리베이스",
-      "stagedCount": "{{count}}개 스테이징됨"
+      "stagedCount": "{{count}}개 스테이징됨",
+      "completingMerge": "완료 중…",
+      "completeMerge": "병합 완료"
     },
     "branchCompare": {
       "commits_one": "커밋 {{count}}개",
@@ -2953,7 +2983,8 @@
       "openNumberedPrWeb": "웹에서 PR #{{number}} 열기",
       "openPrWeb": "웹에서 PR 열기",
       "refresh": "소스 제어 새로고침",
-      "title": "소스 제어"
+      "title": "소스 제어",
+      "moreActions": "소스 제어 작업 더 보기"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3228,6 +3259,13 @@
       "branchUnavailable": "브랜치 상태를 확인할 수 없습니다.",
       "commitFailed": "커밋 실패",
       "waitingForDesktop": "데스크톱 연결 대기 중…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "휴대전화에서 병합 충돌을 해결하려면 이 워크스페이스를 실행 중인 컴퓨터의 Orca를 업데이트하세요.",
+      "markResolved": "해결됨으로 표시",
+      "keepFile": "파일 유지",
+      "keepDeletion": "삭제 유지",
+      "completeMergeFailed": "병합을 완료하지 못했습니다"
     }
   },
   "tasks": {
@@ -3302,17 +3340,13 @@
       "recent": "최근",
       "retryHint": "탭하여 다시 시도하세요.",
       "searchProjects": "프로젝트 검색",
-      "sort": "프로젝트 정렬",
       "subtitle": "작업 페이지에 표시할 프로젝트 보기를 선택하세요.",
       "title": "GitHub 프로젝트",
       "unsupportedLayout": "Orca는 아직 이 GitHub 프로젝트 레이아웃을 지원하지 않습니다.",
       "view": "프로젝트 보기"
     },
     "githubViewControls": {
-      "fields": "필드: {{fields}}",
-      "openView": "GitHub에서 보기 열기",
-      "sort": "정렬: {{sort}}",
-      "source": "출처: {{source}}"
+      "openView": "GitHub에서 보기 열기"
     },
     "itemActions": {
       "changeStatus": "상태 변경",
@@ -3402,17 +3436,8 @@
     "linearList": {
       "changeStatusFrom": "상태 변경(현재: {{status}})"
     },
-    "linearViewControls": {
-      "displayButton": "표시",
-      "groupLabel": "그룹화: {{group}}",
-      "orderLabel": "정렬: {{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "표시 속성",
-      "linearGroupTitle": "Linear 이슈 그룹화",
-      "linearOrderTitle": "Linear 이슈 정렬",
-      "linearViewTitle": "Linear 보기",
-      "sortTasksTitle": "작업 정렬"
+      "displayPropertiesTitle": "표시 속성"
     },
     "listSurface": {
       "connectLinearButton": "Linear 연결",
@@ -3481,8 +3506,6 @@
       "allSites": "모든 사이트",
       "currentlyAscending": "현재 오름차순 · 탭하면 내림차순",
       "currentlyDescending": "현재 내림차순 · 탭하면 오름차순",
-      "fieldAscending": "{{field}} 오름차순",
-      "fieldDescending": "{{field}} 내림차순",
       "fields": "필드",
       "repos_one": "저장소 {{count}}개",
       "repos_other": "저장소 {{count}}개",
@@ -3591,8 +3614,7 @@
     },
     "providerControls": {
       "myTodos": "내 할 일",
-      "projectMergeRequests": "프로젝트 MR",
-      "sort": "정렬: {{sortLabel}}"
+      "projectMergeRequests": "프로젝트 MR"
     },
     "providerItemList": {
       "intoBranch": "{{base}}(으)로",
@@ -3620,7 +3642,6 @@
       "queryingSource": "조회 대상: {{source}}",
       "repoDescription": "조회할 리포지토리를 선택하세요.",
       "repos": "리포지토리",
-      "taskSource": "작업 소스",
       "upstream": "업스트림"
     },
     "providerViewProjection": {
@@ -3632,10 +3653,7 @@
       "default": "기본",
       "defaultSubtitle": "{{subtitle}} · 기본",
       "issues": "이슈",
-      "list": "목록",
-      "noGrouping": "그룹화 없음",
       "openState": "열림",
-      "priority": "우선순위",
       "projects": "프로젝트",
       "pullRequests": "PR",
       "teams_one": "팀 {{count}}개",
@@ -3647,7 +3665,6 @@
       "unassigned": "할당되지 않음"
     },
     "screenChrome": {
-      "connectLinear": "Linear 연결",
       "newGitHubIssue": "새 GitHub 이슈",
       "newLinearIssue": "새 Linear 이슈",
       "refreshGitHub": "GitHub 작업 새로 고침",
@@ -3894,6 +3911,15 @@
       "inProgress": "진행중",
       "inReview": "리뷰 중",
       "pinned": "고정됨"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "방향 패드 위",
+      "left": "방향 패드 왼쪽",
+      "right": "방향 패드 오른쪽",
+      "down": "방향 패드 아래",
+      "hint": "방향키를 보냅니다. 길게 눌러 반복합니다."
     }
   }
 }

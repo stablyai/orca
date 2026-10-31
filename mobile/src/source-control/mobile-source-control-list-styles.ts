@@ -103,7 +103,7 @@ export const listStyles = themedStyleSheet(() => ({
   iconButton: {
     width: 32,
     height: 32,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -116,7 +116,7 @@ export const listStyles = themedStyleSheet(() => ({
   conflictActionButton: {
     minHeight: 30,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -146,7 +146,7 @@ export const listStyles = themedStyleSheet(() => ({
   // A capsule beside the composer's round controls; the action's name matters more than an arrow.
   commitButton: {
     height: COMPOSER_CONTROL_SIZE,
-    borderRadius: COMPOSER_CONTROL_SIZE / 2,
+    borderRadius: radii.pill,
     backgroundColor: colors.surfaceBright,
     alignItems: 'center',
     justifyContent: 'center',
@@ -174,7 +174,7 @@ export const listStyles = themedStyleSheet(() => ({
   commitFailurePanel: {
     marginTop: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusRed,
@@ -203,7 +203,7 @@ export const listStyles = themedStyleSheet(() => ({
   commitFailureFixButton: {
     minHeight: 36,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary,
     flexDirection: 'row',
     alignItems: 'center',

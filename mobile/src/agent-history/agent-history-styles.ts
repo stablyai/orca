@@ -9,68 +9,10 @@ export const styles = themedStyleSheet(() => ({
   header: {
     backgroundColor: colors.bgBase
   },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  backButton: {
-    padding: spacing.xs,
-    borderRadius: radii.button
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    marginHorizontal: spacing.sm
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  refreshButton: {
-    padding: spacing.xs,
-    borderRadius: radii.button
-  },
-  refreshButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
   scopeTabs: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    gap: spacing.xs
-  },
-  scopeTab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
     backgroundColor: colors.bgPanel
-  },
-  scopeTabActive: {
-    backgroundColor: colors.bgRaised
-  },
-  scopeTabText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  scopeTabTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  searchRow: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm
   },
   list: {
     paddingHorizontal: spacing.md,
@@ -95,7 +37,7 @@ export const styles = themedStyleSheet(() => ({
   },
   card: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     padding: spacing.md,
     marginBottom: spacing.sm
   },
@@ -135,7 +77,7 @@ export const styles = themedStyleSheet(() => ({
   },
   currentBadge: {
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2
   },
@@ -152,7 +94,7 @@ export const styles = themedStyleSheet(() => ({
     marginLeft: 'auto',
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   resumeButtonPressed: {
     opacity: 0.78
@@ -184,7 +126,7 @@ export const styles = themedStyleSheet(() => ({
     marginHorizontal: spacing.md,
     marginTop: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel
   },
   noticeText: {
@@ -195,7 +137,7 @@ export const styles = themedStyleSheet(() => ({
     marginHorizontal: spacing.md,
     marginTop: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel
   },
   resumeBannerText: {
@@ -223,7 +165,7 @@ export const styles = themedStyleSheet(() => ({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: {

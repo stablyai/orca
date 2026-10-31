@@ -71,7 +71,7 @@ function launchScenarioSettings(): GlobalSettings {
     agentDefaultArgs: {},
     agentDefaultEnv: {},
     activeRuntimeEnvironmentId: null,
-    experimentalNativeChat: true,
+    agentDefaultSurface: 'chat',
     nativeChatProviders: {},
     nativeChatSessionOptions: undefined,
     agentPermissionDefault: undefined,

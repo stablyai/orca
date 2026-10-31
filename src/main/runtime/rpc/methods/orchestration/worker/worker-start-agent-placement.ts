@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
  * Structured create refusals fail start through the worker error contract instead of silently downgrading. */
@@ -31,6 +32,7 @@ export type WorkerAgentPlacement = {
   mode: WorkerStartModeReceipt
   worktree: PlacedWorktree
   terminalHandle: string
+  terminalCreation?: RuntimeTerminalCreate
   structuredSession: WorkerStructuredSession | null
   setupReceipt: WorkerSetupReceipt
   warning?: string
@@ -95,6 +97,7 @@ async function launchWorkerAgent(
   const agent = requireAgent(args.agent)
   let created: Awaited<ReturnType<typeof createWorkerWorktree>> | undefined
   let structuredSession: WorkerStructuredSession | null = null
+  let terminalCreation: RuntimeTerminalCreate | undefined
   let launched: Awaited<ReturnType<typeof executeAgentLaunch>>
   try {
     launched = await executeAgentLaunch({
@@ -142,13 +145,21 @@ async function launchWorkerAgent(
           })
           return {
             worktreeId: created.worktree.id,
-            startupTerminalHandle: created.terminalHandle
+            startupTerminalHandle: created.terminalHandle,
+            startupTerminalCreation: created.terminalCreation
           }
         }
       },
-      surfaces: workerSurfaceFactory(args, agent, (session) => {
-        structuredSession = session
-      })
+      surfaces: workerSurfaceFactory(
+        args,
+        agent,
+        (terminal) => {
+          terminalCreation = terminal
+        },
+        (session) => {
+          structuredSession = session
+        }
+      )
     })
   } catch (error) {
     // The caller only sees a returned placement, so a session made before this throw is ours.
@@ -163,6 +174,7 @@ async function launchWorkerAgent(
     mode: launched.receipt,
     worktree: existing ?? requirePlacement(created?.worktree),
     terminalHandle: launched.outcome.handle,
+    terminalCreation: created?.terminalCreation ?? terminalCreation,
     structuredSession,
     setupReceipt: created?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
     ...(launched.warning ? { warning: launched.warning } : {})
@@ -173,6 +185,7 @@ async function launchWorkerAgent(
 function workerSurfaceFactory(
   args: WorkerAgentPlacementArgs,
   agent: TuiAgent,
+  onTerminalCreation: (terminal: RuntimeTerminalCreate) => void,
   onStructuredSession: (session: WorkerStructuredSession) => void
 ): AgentLaunchSurfaceFactory {
   const recordSurfaceStage = (worktreeId: string): void => {
@@ -211,7 +224,12 @@ function workerSurfaceFactory(
         taskId: args.taskId,
         effects: args.effects
       })
-      return { handle: terminal.handle, ...(terminal.warning ? { warning: terminal.warning } : {}) }
+      onTerminalCreation(terminal)
+      return {
+        handle: terminal.handle,
+        terminalCreation: terminal,
+        ...(terminal.warning ? { warning: terminal.warning } : {})
+      }
     }
   }
 }

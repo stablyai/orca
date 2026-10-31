@@ -138,7 +138,7 @@ export function tokenizeStartupCommand(
 }
 
 export function resolveStartupShell(
-  platform: NodeJS.Platform,
+  platform: NodeJS.Platform | null | undefined,
   shell?: AgentStartupShell
 ): AgentStartupShell {
   return shell ?? (platform === 'win32' ? 'powershell' : 'posix')

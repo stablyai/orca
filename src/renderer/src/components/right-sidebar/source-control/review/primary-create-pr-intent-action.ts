@@ -11,7 +11,10 @@ import type {
 } from '../../../../../../shared/hosted-review'
 import type { PrimaryAction, PrimaryActionInputs } from '../../source-control-primary-action-types'
 import { resolveCreatePrIntentEligibility } from './create-pr-intent-state'
-import { canClickBlockedCreateReviewReason } from '../../source-control-create-review-blocked-action'
+import {
+  canClickBlockedCreateReviewReason,
+  resolveBlockedCreateReviewNoticeMessage
+} from '../../source-control-create-review-blocked-action'
 
 export function resolveProvisionalHostedReviewProvider(input: {
   hostedReview?: Pick<HostedReviewInfo, 'provider'> | null
@@ -175,11 +178,14 @@ export function resolveDisabledCreatePrHeaderAction(
       case 'unsupported_provider':
       case 'base_not_on_remote':
       case null:
-        title = translate(
-          'auto.components.right.sidebar.source.control.primary.action.f0c6e2a581',
-          'This branch is not ready for a {{value0}} yet.',
-          { value0: copy.reviewLabel }
-        )
+        // A failed review lookup is not a branch problem, so name it instead.
+        title =
+          resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation) ??
+          translate(
+            'auto.components.right.sidebar.source.control.primary.action.f0c6e2a581',
+            'This branch is not ready for a {{value0}} yet.',
+            { value0: copy.reviewLabel }
+          )
     }
   }
 

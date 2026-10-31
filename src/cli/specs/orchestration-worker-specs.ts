@@ -39,7 +39,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       "Reusing a settled worker's terminal with --terminal before its autoReleaseAt cancels that automatic release; after it, the start is refused while the release runs.",
       'A terminal the user kept open is refused for --terminal (terminal_kept_open); start the worker in another terminal.',
       '--agent takes an Orca agent id enabled on the worker server, such as claude, codex, cursor, antigravity, muse, zcode, opencode, or opencode2.',
-      '--model supports Claude, Codex, Cursor, Antigravity, and Muse opaque provider model ids; --effort requires --model. OMP accepts --model only; --effort is unsupported. Neither can combine with --terminal. OpenCode model selection requires an existing worktree, a verified execution-host CLI, and an available model; effort is unsupported. Other agents, including zcode, launch with the model from their own config.',
+      '--model supports Claude, Codex, Cursor, Antigravity, Grok, and Muse opaque provider model ids; --effort requires --model. OMP accepts --model only; --effort is unsupported. Neither can combine with --terminal. OpenCode model selection requires an existing worktree, a verified execution-host CLI, and an available model; effort is unsupported. Other agents, including zcode, launch with the model from their own config.',
       'New worktrees use agent-first creation and default --setup to run. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
       'New worktrees without --name get the name Orca gives an unnamed workspace; the receipt names it. Servers older than this change still require --name.',
       'Creation flags (--name, --repo, --base-branch, --display-name, --comment, --setup) are rejected for current/existing worktrees. Use exact --repo on the selected server; project/host convenience routing remains on worktree create.',
@@ -136,7 +136,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.',
       'A reclaimable worker with resource.autoReleaseAt is released automatically at that time unless it is reused with worker-start --terminal, retained, or kept open by the user.',
       'Context-only Dispatches created by orchestration dispatch are included as unsupervised with terminal state retained.',
-      'Returns at most 100 local rows, newest first, by default; --include-remote adds connected-server observations when the host supports fleet listing. Continue with the opaque page.nextCursor value unchanged.',
+      'Returns at most 100 local rows, newest first, by default; --include-remote adds connected-server observations when the host supports fleet listing. Continue with the opaque nextCursor value unchanged.',
       'Without --run the list is scoped to the Run bound to the calling terminal, and to every Run when there is no binding; the receipt reports which in scope.source (flag, bound, or all).'
     ]
   }

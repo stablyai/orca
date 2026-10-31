@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const host = vi.hoisted(() => ({
-  launchAgentThroughHost: vi.fn(),
-  windowMakesHostLaunchTab: vi.fn(() => true)
+  launchAgentThroughHost: vi.fn()
 }))
 vi.mock('@/lib/agent-launch-through-host', () => host)
 const pasteAgentLaunchPromptOnceReady = vi.hoisted(() =>
@@ -37,7 +36,6 @@ function launch() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  host.windowMakesHostLaunchTab.mockReturnValue(true)
 })
 
 describe('an AI button launched in its own pane', () => {
@@ -89,7 +87,7 @@ describe('which new agent tabs start through the host', () => {
     ).toBe(true)
   })
 
-  it('never a typed prompt, nor a launch the host could turn into a chat', () => {
+  it('leaves typed prompts and SSH on their existing routes', () => {
     expect(
       newTabPromptLaunchesThroughHost({
         promptDelivery: 'auto-submit',
@@ -110,14 +108,6 @@ describe('which new agent tabs start through the host', () => {
         promptDelivery: 'submit-after-ready',
         pastesPrompt: true,
         isRemote: true
-      })
-    ).toBe(false)
-    host.windowMakesHostLaunchTab.mockReturnValue(false)
-    expect(
-      newTabPromptLaunchesThroughHost({
-        promptDelivery: 'submit-after-ready',
-        pastesPrompt: true,
-        isRemote: false
       })
     ).toBe(false)
   })

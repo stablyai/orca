@@ -1,5 +1,6 @@
-import { QrCode } from 'lucide-react-native'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Fragment } from 'react'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { OrcaLogo } from '../components/OrcaLogo'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../theme/mobile-theme'
@@ -20,8 +21,8 @@ function onboardingSteps(t: Translate) {
       id: 'scan-code',
       title: t('home.emptyState.scanCodeTitle', 'Scan the code'),
       desc: t(
-        'home.emptyState.scanCodeDescription',
-        'Tap the button above to open the scanner. Point at the QR code on your screen.'
+        'home.emptyState.scanCodeBelowDescription',
+        'Tap Pair desktop below, then point your camera at the QR code on your screen.'
       )
     },
     {
@@ -35,20 +36,14 @@ function onboardingSteps(t: Translate) {
   ]
 }
 
-export function MobileHomeEmptyState(props: {
-  bottomInset: number
-  contentMaxWidth: number
-  isWideLayout: boolean
-  onPairDesktop: () => void
-}) {
+export function MobileHomeEmptyState(props: { contentMaxWidth: number; isWideLayout: boolean }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   // Scrolls because a phone in landscape is shorter than the hero and the steps together.
   return (
     <ScrollView
       contentContainerStyle={[
-        styles.emptyContainer,
-        { paddingBottom: props.bottomInset },
+        styles.container,
         props.isWideLayout && {
           maxWidth: props.contentMaxWidth,
           width: '100%',
@@ -56,109 +51,75 @@ export function MobileHomeEmptyState(props: {
         }
       ]}
     >
-      <View style={styles.emptyHero}>
-        <Text style={styles.emptyTitle}>{t('home.emptyState.title', 'Connect your desktop')}</Text>
-        <Text style={styles.emptyBody}>
+      <View style={styles.hero}>
+        <OrcaLogo size={44} />
+        <Text style={styles.title} accessibilityRole="header">
+          {t('home.emptyState.title', 'Connect your desktop')}
+        </Text>
+        <Text style={styles.body}>
           {t(
             'home.emptyState.description',
             'Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.'
           )}
         </Text>
-        <Pressable style={styles.primaryButton} onPress={props.onPairDesktop}>
-          <QrCode size={17} color={colors.bgBase} />
-          <Text style={styles.primaryButtonText}>
-            {t('home.emptyState.pairDesktop', 'Pair Desktop')}
-          </Text>
-        </Pressable>
       </View>
-      <View style={styles.stepsSection}>
-        <Text style={styles.sectionHeading}>
-          {t('home.emptyState.stepsHeading', 'How it works')}
-        </Text>
+      <View style={styles.steps}>
         {onboardingSteps(t).map((step, index) => (
-          <View key={step.id} style={[styles.stepRow, index > 0 && styles.stepRowBorder]}>
-            <View style={styles.stepNum}>
-              <Text style={styles.stepNumText}>{index + 1}</Text>
+          <Fragment key={step.id}>
+            {index > 0 ? <View style={styles.separator} /> : null}
+            <View style={styles.step}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>{index + 1}</Text>
+              </View>
+              <View style={styles.stepText}>
+                <Text style={styles.stepTitle}>{step.title}</Text>
+                <Text style={styles.stepDescription}>{step.desc}</Text>
+              </View>
             </View>
-            <View style={styles.stepText}>
-              <Text style={styles.stepTitle}>{step.title}</Text>
-              <Text style={styles.stepDesc}>{step.desc}</Text>
-            </View>
-          </View>
+          </Fragment>
         ))}
       </View>
     </ScrollView>
   )
 }
 
+const STEP_NUMBER_SIZE = 26
+
 const styles = themedStyleSheet(() => ({
-  emptyContainer: { flexGrow: 1 },
-  emptyHero: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingBottom: 40
-  },
-  emptyTitle: {
-    fontSize: 22,
+  container: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
+  hero: { alignItems: 'center', paddingHorizontal: spacing.sm, marginBottom: 34 },
+  title: {
+    fontSize: 28,
     fontWeight: '700',
+    letterSpacing: -0.4,
     color: colors.textPrimary,
     textAlign: 'center',
+    marginTop: 26,
     marginBottom: 10
   },
-  emptyBody: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32
+  body: { fontSize: 17, lineHeight: 24, color: colors.textSecondary, textAlign: 'center' },
+  steps: { backgroundColor: colors.bgPanel, borderRadius: radii.surface, overflow: 'hidden' },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderSubtle,
+    marginLeft: spacing.lg + STEP_NUMBER_SIZE + 14
   },
-  primaryButton: {
-    flexDirection: 'row',
+  step: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, padding: spacing.lg },
+  stepNumber: {
+    width: STEP_NUMBER_SIZE,
+    height: STEP_NUMBER_SIZE,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgRaised,
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: radii.card
+    justifyContent: 'center'
   },
-  primaryButtonText: { color: colors.bgBase, fontSize: 15, fontWeight: '700' },
-  stepsSection: { paddingHorizontal: spacing.xl },
-  sectionHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    paddingVertical: spacing.lg
-  },
-  stepRowBorder: { borderTopWidth: 1, borderTopColor: colors.borderSubtle },
-  stepNum: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1
-  },
-  stepNumText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
-  stepText: { flex: 1 },
-  stepTitle: {
+  stepNumberText: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.textPrimary,
-    marginBottom: 3
+    fontVariant: ['tabular-nums']
   },
-  stepDesc: { fontSize: 12, color: colors.textMuted, lineHeight: 17 }
+  stepText: { flex: 1, minWidth: 0 },
+  stepTitle: { fontSize: 17, lineHeight: 22, color: colors.textPrimary },
+  stepDescription: { fontSize: 15, lineHeight: 20, color: colors.textSecondary, marginTop: 2 }
 }))
