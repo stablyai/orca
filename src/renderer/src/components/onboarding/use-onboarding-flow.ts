@@ -156,8 +156,11 @@ export function useOnboardingFlow(
 
   // Unmount-only restoration needs the latest painted theme without rerunning on settings changes;
   // painted, because Match Terminal can paint the mode the setting doesn't ask for.
-  const paintedThemeRef = useRef<GlobalSettings['theme']>('dark')
-  paintedThemeRef.current = resolvePaintedTheme(settings, settings?.theme ?? 'dark')
+  const paintedTheme = resolvePaintedTheme(settings, settings?.theme ?? 'dark')
+  const paintedThemeRef = useRef<GlobalSettings['theme']>(paintedTheme)
+  useEffect(() => {
+    paintedThemeRef.current = paintedTheme
+  }, [paintedTheme])
   const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
   const themeStepEntryCapturedRef = useRef(false)
   useEffect(() => {
