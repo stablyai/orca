@@ -185,6 +185,19 @@ describe('rich Markdown live viewport', () => {
     expect(handleRichMarkdownViewportReveal(f.editor.view, 'focus')).toBe(false)
   })
 
+  it('samples a body-origin Tab before reset without waiting for a scroll event', () => {
+    const f = fixture()
+    f.input.focus()
+    f.input.remove()
+    f.container.scrollTop = 1985
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    f.navigate(0)
+    f.container.scrollTop = 1551
+    f.editor.view.dom.dispatchEvent(new FocusEvent('focus', { relatedTarget: null }))
+    expect(f.container.scrollTop).toBe(0)
+    expect(f.editor.state.doc.textContent).toBe('betabeta')
+  })
+
   it('resumes the actual smooth anchor writer from current layout and lets newer Find supersede it', () => {
     const f = fixture()
     const heading = document.createElement('h2')

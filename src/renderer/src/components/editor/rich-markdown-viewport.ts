@@ -49,6 +49,9 @@ export function scrollRichMarkdownElementIntoView(
     const top = scrollContainer.scrollTop + rect.top - bounds.top - scrollContainer.clientTop
     const target =
       options.block === 'center' ? top + (rect.height - scrollContainer.clientHeight) / 2 : top
+    if (!viewport.current() || !scrollContainer.contains(element)) {
+      return
+    }
     element.scrollIntoView(options)
     return { top: target }
   }, options.behavior === 'smooth')
@@ -151,8 +154,9 @@ class RichMarkdownViewport {
     if (!this.current()) {
       return
     }
-    this.navigation = smooth ? navigation : null
+    this.navigation = smooth && navigation.destination ? navigation : null
     this.observeWrite()
+    this.scrollend()
   }
 
   private observeWrite = (): void => {
@@ -200,6 +204,7 @@ class RichMarkdownViewport {
     if (navigation && this.navigation === navigation && this.current()) {
       navigation.destination = navigation.scroll()
       this.observeWrite()
+      this.scrollend()
     }
   }
 
