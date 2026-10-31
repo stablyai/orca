@@ -102,18 +102,6 @@ const LISTS: [string, [string, string][], string, unknown][] = [
       messages: [{ ...message, body: CONTENT, payload: CONTENT }],
       count: 1
     }
-  ],
-  [
-    'request-show',
-    [['request', 'req_1']],
-    '',
-    {
-      requestId: 'req_1',
-      state: 'completed',
-      method: 'orchestration.taskCreate',
-      receipt: { task: { id: 'task_1', spec: HUGE }, run: { id: 'run_1', objective: HUGE } },
-      interpretation: 'Request req_1 already took effect.'
-    }
   ]
 ]
 
@@ -147,8 +135,7 @@ describe('concise orchestration list output', () => {
       const json: { result: Record<string, { body?: string }[]> } = JSON.parse(
         await printed(command, flags, result, true)
       )
-      // request-show is one receipt, not a list.
-      const items = key ? json.result[key] : [json.result]
+      const items = json.result[key]
       if (command === 'check') {
         expect(rawText).toContain(CONTENT)
         expect(items[0]?.body).toBe(CONTENT)

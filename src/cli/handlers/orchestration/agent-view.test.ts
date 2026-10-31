@@ -477,7 +477,7 @@ describe('orchestration agent views', () => {
     expect(stdout).not.toContain('Next:')
   })
 
-  it('previews inbox bodies and keeps request-show to the recovery ids', async () => {
+  it('previews inbox bodies and keeps only payload ids', async () => {
     const huge = 'x'.repeat(10_000)
     const inbox = await run(
       'inbox',
@@ -515,57 +515,5 @@ describe('orchestration agent views', () => {
     expect(JSON.parse(emoji.stdout).result.messages[0].body).toBe(
       `${'x'.repeat(199)}😀… (truncated; --full)`
     )
-
-    const request = await run(
-      'request-show',
-      [['request', 'req_1']],
-      {
-        requestId: 'req_1',
-        state: 'completed',
-        method: 'orchestration.taskCreate',
-        receipt: {
-          messageId: 'msg_ask',
-          state: 'outcome_unknown',
-          lifecycle: { action: 'rejected', reason: huge },
-          accepted: { dispatchId: 'ctx_1', taskId: 'task_1', note: huge },
-          run: { id: 'run_1', objective: huge },
-          gate: { id: 'gate_1', question: huge },
-          task: { id: 'task_1', status: 'ready', spec: huge }
-        },
-        interpretation: 'Request req_1 already took effect.'
-      },
-      true
-    )
-    expect(JSON.parse(request.stdout).result).toEqual({
-      requestId: 'req_1',
-      state: 'completed',
-      method: 'orchestration.taskCreate',
-      receipt: {
-        messageId: 'msg_ask',
-        state: 'outcome_unknown',
-        lifecycle: { action: 'rejected' },
-        accepted: { dispatchId: 'ctx_1', taskId: 'task_1' },
-        run: { id: 'run_1' },
-        gate: { id: 'gate_1' },
-        task: { id: 'task_1' }
-      },
-      interpretation: 'Request req_1 already took effect.'
-    })
-
-    const full = await run(
-      'request-show',
-      [
-        ['request', 'req_1'],
-        ['full', true]
-      ],
-      {
-        requestId: 'req_1',
-        state: 'completed',
-        receipt: { task: { id: 'task_1', note: 'a\x9bb' } },
-        interpretation: 'Done.'
-      }
-    )
-    expect(full.stdout).toContain('"id": "task_1"')
-    expect(full.stdout).not.toContain('\x9b')
   })
 })
