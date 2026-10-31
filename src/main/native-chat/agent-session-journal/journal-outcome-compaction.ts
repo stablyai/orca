@@ -145,6 +145,8 @@ export class JournalOutcomeCompaction {
         continue
       }
       const key = [active.generation, row.field, row.entry_key]
+      // Format 1's per-key last-write-wins makes superseded middle values redundant; changing that
+      // replacement meaning requires a format bump.
       if (row.seq !== first.get(...key)?.seq && row.seq !== latest.get(...key)?.seq) {
         remove.run(active.generation, row.seq, row.field, row.entry_key, row.format)
       }
