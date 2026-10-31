@@ -100,7 +100,7 @@ export class PluginInstallStatsService {
 
   private async performRefresh(): Promise<void> {
     const fetched = await this.fetcher()
-    if (this.current && Date.parse(fetched.generatedAt) < Date.parse(this.current.generatedAt)) {
+    if (this.current && isOlderSnapshot(fetched, this.current)) {
       return
     }
     this.current = fetched
@@ -138,6 +138,17 @@ export class PluginInstallStatsService {
       `${JSON.stringify({ schemaVersion: 1, generatedAt: stats.generatedAt, plugins })}\n`
     )
   }
+}
+
+// Why: a file with no build date (the site's empty placeholder) must not wipe known counts.
+function isOlderSnapshot(fetched: PluginInstallStats, current: PluginInstallStats): boolean {
+  if (fetched.generatedAt === null) {
+    return current.generatedAt !== null
+  }
+  return (
+    current.generatedAt !== null &&
+    Date.parse(fetched.generatedAt) < Date.parse(current.generatedAt)
+  )
 }
 
 export async function fetchPluginInstallStats(

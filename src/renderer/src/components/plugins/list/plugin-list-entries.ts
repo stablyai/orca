@@ -285,10 +285,11 @@ export function buildPluginListEntries(
         autoUpdates
       })
       const own = ownCatalog && plugin.source?.marketplace ? listing : null
+      // Why bundled too: it ships the official catalog's release, never local bytes.
       entry.installCountEligible =
-        plugin.source?.kind === 'marketplace' &&
         !plugin.isDev &&
-        isPublicCatalogListing(own, catalogById)
+        ((plugin.source?.kind === 'marketplace' && isPublicCatalogListing(own, catalogById)) ||
+          (plugin.bundled && isPublicCatalogListing(listing, catalogById)))
       entry.alsoListedBy = (listingsByKey.get(plugin.pluginKey) ?? [])
         .filter((candidate) => candidate !== own)
         .map((candidate) => candidate.marketplaceName)

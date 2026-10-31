@@ -10,7 +10,8 @@ const pluginInstallStatsEntrySchema = z.object({ installs: installCountSchema })
 
 export const pluginInstallStatsSchema = z.object({
   schemaVersion: z.literal(1),
-  generatedAt: z.string().datetime({ offset: true }),
+  // Why nullable: the site publishes `null` with no plugins before its first stats build.
+  generatedAt: z.string().datetime({ offset: true }).nullable(),
   plugins: z
     .record(z.string(), pluginInstallStatsEntrySchema.optional().catch(undefined))
     .refine(
@@ -30,7 +31,7 @@ export const pluginInstallStatsSchema = z.object({
 
 /** Parsed stats: total installs keyed by qualified plugin key. */
 export type PluginInstallStats = {
-  generatedAt: string
+  generatedAt: string | null
   installs: Record<string, number>
 }
 

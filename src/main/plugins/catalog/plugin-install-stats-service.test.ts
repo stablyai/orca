@@ -130,6 +130,27 @@ describe('PluginInstallStatsService', () => {
     warning.mockRestore()
   })
 
+  it('keeps known counts when the site serves its empty placeholder', async () => {
+    let now = NOW
+    const fetcher = vi
+      .fn<() => Promise<{ generatedAt: string | null; installs: Record<string, number> }>>()
+      .mockResolvedValueOnce(stats(20))
+      .mockResolvedValueOnce({ generatedAt: null, installs: {} })
+    const service = new PluginInstallStatsService({
+      pluginsDataDir: await tempRoot(),
+      isFetchAllowed: () => true,
+      fetcher,
+      now: () => now
+    })
+    await service.getInstallCounts()
+    await service.settled()
+    now += PLUGIN_INSTALL_STATS_REFRESH_MS
+    await service.getInstallCounts()
+    await service.settled()
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(await service.getInstallCounts()).toEqual({ 'stablyai.orca-nord-theme': 20 })
+  })
+
   it('ignores a corrupt cache and an older snapshot', async () => {
     const root = await tempRoot()
     await writeFile(join(root, 'plugin-install-stats.json'), '{not json')
@@ -174,6 +195,12 @@ describe('parsePluginInstallStats', () => {
       generatedAt: '2026-10-31T02:15:08.771Z',
       installs: { 'stablyai.orca-nord-theme': 37 }
     })
+  })
+
+  it('accepts the empty placeholder the site publishes before its first build', () => {
+    expect(
+      parsePluginInstallStats({ schemaVersion: 1, generatedAt: null, note: 'x', plugins: {} })
+    ).toEqual({ generatedAt: null, installs: {} })
   })
 
   it('rejects another schema version', () => {

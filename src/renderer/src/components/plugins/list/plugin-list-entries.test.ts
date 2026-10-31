@@ -307,7 +307,8 @@ describe('plugin list entries', () => {
       listing('acme.secret', { marketplaceSourceId: 'private', official: false }),
       listing('acme.dev', { marketplaceSourceId: 'community', official: false }),
       listing('acme.git', { marketplaceSourceId: 'community', official: false }),
-      listing('acme.mirror', { marketplaceSourceId: 'community', official: false })
+      listing('acme.mirror', { marketplaceSourceId: 'community', official: false }),
+      listing('stablyai.orca-midnight-theme')
     ]
     const marketplaceInstall = fromCatalog(
       { ...installed('acme.notes', 'Notes'), official: false },
@@ -327,8 +328,9 @@ describe('plugin list entries', () => {
       installed('acme.mirror', 'Mirror'),
       'https://gitlab.com/acme/catalog.git'
     )
+    const bundled = { ...installed('stablyai.orca-midnight-theme', 'Midnight'), bundled: true }
     const entries = buildPluginListEntries(
-      [marketplaceInstall, devInstall, gitInstall, fromPrivate],
+      [marketplaceInstall, devInstall, gitInstall, fromPrivate, bundled],
       listings,
       { sources }
     )
@@ -341,5 +343,6 @@ describe('plugin list entries', () => {
     expect(eligible('acme.dev')).toBe(false)
     expect(eligible('acme.git')).toBe(false)
     expect(eligible('acme.mirror')).toBe(false)
+    expect(eligible('stablyai.orca-midnight-theme')).toBe(true)
   })
 })
