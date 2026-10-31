@@ -19,6 +19,7 @@ import type {
   NewTabAgentMenuModel
 } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import type { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
+import type { AgentPickerEntry } from '../../../shared/agent-launch-picker'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 
 /** The workspace a Source Control agent picker lists rows for, and the host whose agents it reads. */
@@ -63,11 +64,14 @@ export function sourceControlRepoAgentRows(
 export function savedSurfaceForPick(
   model: NewTabAgentMenuModel,
   agent: TuiAgent,
-  surface: AgentLaunchSurface | undefined
+  surface: AgentLaunchSurface | undefined,
+  entry?: AgentPickerEntry
 ): AgentLaunchSurface | undefined {
   const hadChoice =
-    model.state === 'settled' &&
-    model.rows.some((row) => row.agent === agent && row.kind === 'chat')
+    entry?.agent === agent
+      ? entry.surfaces.includes('chat') && entry.surfaces.includes('terminal')
+      : model.state === 'settled' &&
+        model.rows.some((row) => row.agent === agent && row.kind === 'chat')
   return hadChoice ? surface : undefined
 }
 

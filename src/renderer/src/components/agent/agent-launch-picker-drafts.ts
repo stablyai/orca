@@ -41,13 +41,16 @@ function sameSource(before?: AgentPickerDraft, after?: AgentPickerDraft) {
   if (before === after) {
     return true
   }
-  if (!before || !after || before.surface !== after.surface || before.agent !== after.agent) {
+  if (!before || !after || before.agent !== after.agent) {
     return false
   }
   const a = before.recipeEdits?.selection
   const b = after.recipeEdits?.selection
   if (a && b) {
-    return sameSourceControlSetupSelection(a, b)
+    return sameSourceControlSetupSelection(
+      { ...a, current: { ...a.current, surface: b.current.surface } },
+      b
+    )
   }
   return (
     !a &&
@@ -109,6 +112,8 @@ export function retireAgentPickerDrafts(
 export function useAgentPickerSetup({
   entry,
   initial,
+  seed = initial,
+  surface,
   draftScope = appSession,
   draftId = 'agent',
   preset,
@@ -116,11 +121,14 @@ export function useAgentPickerSetup({
 }: {
   entry: AgentPickerEntry
   initial?: AgentPickerDraft
+  seed?: AgentPickerDraft
+  surface?: AgentPickerDraft['surface']
   draftScope?: AgentPickerDraftOwner
   draftId?: string
   preset?: AgentPickerSetupIdentity
   open: boolean
 }) {
+  const currentSurface = surface ?? initial?.surface
   const [, publish] = useReducer((version: number) => version + 1, 0)
   const key = JSON.stringify([entry.draftTarget?.key, entry.agent, draftId])
   const read = useCallback(() => sessionDrafts.get(draftScope)?.get(key), [draftScope, key])
@@ -130,8 +138,8 @@ export function useAgentPickerSetup({
     [entry.ownerKey, initial]
   )
   const lifetime = useMemo(
-    () => ({ draftScope, key, authority: entry.ownerKey }),
-    [draftScope, key, entry.ownerKey]
+    () => ({ draftScope, key, authority: entry.ownerKey, surface: currentSurface }),
+    [draftScope, key, entry.ownerKey, currentSurface]
   )
   const live = useRef<typeof lifetime | undefined>(undefined)
   const collection = sessionDrafts.get(draftScope)
@@ -150,13 +158,13 @@ export function useAgentPickerSetup({
         preset,
         authority: entry.ownerKey,
         source: initial,
-        draft: initial ?? agentPickerDraft(entry),
+        draft: seed ?? agentPickerDraft(entry),
         active: open
       }
       drafts.set(key, record)
     }
     return record
-  }, [draftScope, key, matches, entry, preset, initial, open])
+  }, [draftScope, key, matches, entry, preset, initial, seed, open])
   useLayoutEffect(() => {
     live.current = lifetime
     return () => {
@@ -177,9 +185,13 @@ export function useAgentPickerSetup({
     }
   }, [open, read, acquire, retained])
   const record = retained && matches(retained) ? retained : undefined
+  const currentDraft = (draft: AgentPickerDraft) =>
+    currentSurface && currentSurface !== draft.surface
+      ? { ...draft, surface: currentSurface }
+      : draft
   const getDraft = () =>
     live.current === lifetime && record && read() === record && matches(record)
-      ? record.draft
+      ? currentDraft(record.draft)
       : undefined
   const change = (draft: AgentPickerDraft) => {
     if (getDraft()) {
@@ -189,7 +201,7 @@ export function useAgentPickerSetup({
   }
   return {
     ready: !!record,
-    draft: record?.draft ?? initial ?? agentPickerDraft(entry),
+    draft: currentDraft(record?.draft ?? seed ?? agentPickerDraft(entry)),
     getDraft,
     change,
     activate: () => {

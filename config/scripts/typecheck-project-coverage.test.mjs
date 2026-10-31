@@ -37,11 +37,11 @@ describe('typecheck project coverage', () => {
     expect(tests.filter((file) => !project.files.has(resolve(root, file)))).toEqual([])
   })
 
-  it('assigns the combined pane launch integration to its typed cross-process project', () => {
-    const suite = resolve(
-      root,
-      'src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts'
-    )
+  it.each([
+    'src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts',
+    'src/renderer/src/components/right-sidebar/SourceControlAgentActionDialog.picker.test.tsx'
+  ])('assigns %s to its typed cross-process project', (file) => {
+    const suite = resolve(root, file)
     expect(
       projects.filter((project) => project.files.has(suite)).map((project) => project.config)
     ).toEqual(['config/tsconfig.test.pane-launch.json'])

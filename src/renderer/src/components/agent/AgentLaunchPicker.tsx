@@ -126,7 +126,7 @@ export const AgentLaunchPicker = memo(
                     row.agent,
                     draft,
                     entry,
-                    draft?.surface ?? (row.kind === 'chat' ? 'chat' : 'terminal')
+                    !draft && row.kind === 'chat' ? 'chat' : undefined
                   )
                 }
               />

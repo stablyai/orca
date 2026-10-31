@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type { ComponentProps } from 'react'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
@@ -15,6 +16,7 @@ import * as selection from '../../../../shared/source-control-launch-agent-selec
 import * as lifts from '../../../../shared/source-control-action-permission-lift'
 import * as shell from '../../../../shared/tui-agent-startup-shell'
 import { TooltipProvider } from '../ui/tooltip'
+import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   getDefaultSourceControlAiSettings,
@@ -511,3 +513,128 @@ it('renders current native text-agent facts for a normalized legacy model recipe
   )
   expect(unused).not.toHaveBeenCalled()
 })
+
+it.each([
+  { agent: 'claude', scope: 'global' },
+  { agent: 'codex', scope: 'global' },
+  { agent: 'claude', scope: 'repo' },
+  { agent: 'codex', scope: 'repo' }
+] as const)(
+  'persists only deliberate $agent route events from the actual CLI-default $scope row',
+  async ({ agent, scope }) => {
+    setLocalRuntimeCapabilitiesForTests(RUNTIME_CAPABILITIES)
+    const settings = useAppStore.getState().settings!
+    const recipe = {
+      agentId: agent,
+      agentArgs: '--add-dir "two words"',
+      commandInputTemplate: 'current {basePrompt}',
+      launchPreferences: {
+        agentId: agent,
+        modelSelection: {
+          base: 'default' as const,
+          model: { agentId: agent, value: agent === 'claude' ? 'sonnet' : 'gpt-5.5' },
+          options: { effort: { agentId: agent, value: 'high' } }
+        },
+        permissionMode: 'own' as const
+      }
+    }
+    const { TEST_REPO } = await import('@/store/slices/worktrees-slice-test-fixtures')
+    const { RepositorySourceControlAiSection } =
+      await import('./repository/source-control/RepositorySourceControlAiSection')
+    useAppStore.setState({
+      repos: [{ ...TEST_REPO, sourceControlAi: { actionOverrides: { fixChecks: recipe } } }],
+      localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
+      settings: {
+        ...settings,
+        nativeChatProviders: {},
+        sourceControlAi: normalizeSourceControlAiSettings({
+          ...getDefaultSourceControlAiSettings(),
+          enabled: true,
+          actions: { fixChecks: recipe }
+        })
+      }
+    })
+    const model = settingsModel()
+    const updateRepo = vi.fn(async (repoId, patch) => {
+      useAppStore.setState((state) => ({
+        repos: state.repos.map((repo) => (repo.id === repoId ? { ...repo, ...patch } : repo))
+      }))
+      return true
+    }) satisfies ComponentProps<typeof RepositorySourceControlAiSection>['updateRepo']
+    function ActualOwner() {
+      const repo = useAppStore((state) => state.repos[0])
+      return scope === 'repo' ? (
+        <RepositorySourceControlAiSection repo={repo} updateRepo={updateRepo} />
+      ) : (
+        <GitPersistenceHarness model={model} />
+      )
+    }
+    const mount = () =>
+      render(
+        <TooltipProvider>
+          <ActualOwner />
+        </TooltipProvider>
+      )
+    let view = mount()
+    const container = () => screen.getByText('Broken checks fixes').closest('.rounded-md')!
+    const row = () => {
+      const element = container()
+      if (!(element instanceof HTMLElement)) {
+        throw new Error('Missing row')
+      }
+      return within(element)
+    }
+    const read = () =>
+      scope === 'repo'
+        ? useAppStore.getState().repos[0].sourceControlAi?.actionOverrides?.fixChecks
+        : useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks
+    const before = structuredClone(read())
+    const open = async () => {
+      await waitFor(() =>
+        expect(row().getByRole('button', { name: 'Select agent' })).toHaveProperty(
+          'disabled',
+          false
+        )
+      )
+      fireEvent.pointerDown(row().getByRole('button', { name: 'Select agent' }), {
+        button: 0,
+        ctrlKey: false
+      })
+    }
+    await open()
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: new RegExp(agent === 'claude' ? '^Claude' : '^Codex') })
+    )
+    await act(async () => {})
+    expect(read()).toEqual(before)
+    await open()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: agent === 'claude' ? 'Configure Claude' : 'Configure Codex'
+      })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    await act(async () => {})
+    expect(read()).toEqual(before)
+    fireEvent.click(row().getByRole('radio', { name: 'Chat', exact: true }))
+    await waitFor(() => expect(read()).toEqual({ ...before, surface: 'chat' }))
+    expect(
+      row().getByRole('radio', { name: 'Chat', exact: true }).getAttribute('aria-checked')
+    ).toBe('true')
+    await open()
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: new RegExp(agent === 'claude' ? '^Claude' : '^Codex') })
+    )
+    await act(async () => {})
+    expect(read()).toEqual({ ...before, surface: 'chat' })
+    fireEvent.click(row().getByRole('radio', { name: 'Terminal', exact: true }))
+    await waitFor(() => expect(read()).toEqual({ ...before, surface: 'terminal' }))
+    view.unmount()
+    view = mount()
+    expect(read()).toEqual({ ...before, surface: 'terminal' })
+    expect(
+      row().getByRole('radio', { name: 'Terminal', exact: true }).getAttribute('aria-checked')
+    ).toBe('true')
+    view.unmount()
+  }
+)

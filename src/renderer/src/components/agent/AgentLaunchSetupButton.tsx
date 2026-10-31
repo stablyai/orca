@@ -44,6 +44,8 @@ export function AgentLaunchSetupButton({
   draftId = 'agent',
   preset,
   initial,
+  seed,
+  surface,
   mode,
   renderAnchor,
   disabled,
@@ -57,6 +59,8 @@ export function AgentLaunchSetupButton({
   draftId?: string
   preset?: AgentPickerSetupIdentity
   initial?: AgentPickerDraft
+  seed?: AgentPickerDraft
+  surface?: AgentPickerDraft['surface']
   mode?: 'launch' | 'select'
   renderAnchor?: (trigger: ReactElement) => ReactElement
   disabled?: boolean
@@ -67,7 +71,16 @@ export function AgentLaunchSetupButton({
 }) {
   const [localOpen, setOpen] = useState(false)
   const open = controlledOpen ?? localOpen
-  const setup = useAgentPickerSetup({ entry, initial, draftScope, draftId, preset, open })
+  const setup = useAgentPickerSetup({
+    entry,
+    initial,
+    seed,
+    surface,
+    draftScope,
+    draftId,
+    preset,
+    open
+  })
   const closeFocus = useRef({ open, restore: true })
   useLayoutEffect(() => {
     if (closeFocus.current.open && !open) {

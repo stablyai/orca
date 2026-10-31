@@ -63,7 +63,11 @@ export function mountSourceDialog(
   onStart = vi
     .fn<NonNullable<RunSourceControlAgentActionStartArgs['onStart']>>()
     .mockResolvedValue(true),
-  scope: 'global' | 'repo' = 'repo'
+  scope: 'global' | 'repo' = 'repo',
+  execution?: Pick<
+    SourceControlAgentActionDialogProps,
+    'worktreeId' | 'promptDelivery' | 'launchPlatform'
+  >
 ): MountedSourceDialog {
   const settings = {
     ...getDefaultSettings('/tmp/fc1-action'),
@@ -107,7 +111,7 @@ export function mountSourceDialog(
         })
       })
   )
-  const props = {
+  const props: SourceControlAgentActionDialogProps = {
     open: true,
     onOpenChange: vi.fn(),
     actionId: 'resolveConflicts' as const,
@@ -117,7 +121,7 @@ export function mountSourceDialog(
     launchSource: 'source_control_recovery' as const,
     repoId: scope === 'repo' ? repo.id : undefined,
     connectionId: null,
-    onStart,
+    ...(execution ?? { onStart }),
     onSaveAgentDefault: persist
   }
   let controller: ReturnType<typeof useSourceControlAgentActionDialog> | undefined

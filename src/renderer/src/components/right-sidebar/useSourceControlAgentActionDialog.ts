@@ -177,8 +177,11 @@ export function useSourceControlAgentActionDialog({
     draft?: AgentPickerDraft,
     entry?: AgentPickerEntry
   ): void => {
-    const saved = savedSurfaceForPick(choice.observation.model, agent, surface)
-    setLivePick(surface)
+    const saved =
+      surface === undefined && selectedAgent === agent
+        ? currentSelection.current.surface
+        : savedSurfaceForPick(choice.observation.model, agent, surface, entry)
+    setLivePick((current) => (selectedAgent === agent && surface === undefined ? current : surface))
     setCurrentSelection((previous) => {
       const picked = pickSourceControlActionAgent(
         argumentsEdited && selectedAgent !== agent

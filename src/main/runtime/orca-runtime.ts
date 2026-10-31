@@ -1,3 +1,4 @@
+import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
@@ -218,10 +219,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Plan a pane spawn through the host launch planner, including runtime attribution. */
   async planAgentPaneLaunch(
     worktreeId: string,
-    opts: TerminalCreateOptions
+    opts: TerminalCreateOptions,
+    sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   ): Promise<TerminalCreateOptions> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-    return this.resolveAgentTerminalCreateOptions(workspace, opts)
+    return this.resolveAgentTerminalCreateOptions(workspace, opts, sessionOptions)
   }
 
   private readonly workspaceLayoutStream = new WorkspaceLayoutStream({

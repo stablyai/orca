@@ -164,45 +164,54 @@ export function AgentLaunchPickerMenu({
           />
         </div>
       ) : null}
-      {setups.map((setup) => (
-        <AgentPickerMenuRow
-          key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-          draftScope={draftScope}
-          draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-          preset={{ model: setup.model.id, effort: setup.choices.options?.effort }}
-          entry={setup.entry}
-          mode={mode}
-          setupDisabled={setupDisabled}
-          openSetup={openSetup}
-          onSetupOpenChange={setActiveSetup}
-          label={setup.label}
-          initial={applyAgentPickerEdit(
-            setup.entry,
-            (value?.agent === setup.entry.agent ? value : draftForEntry?.(setup.entry)) ??
-              agentPickerDraft(setup.entry),
-            { kind: 'choice', patch: setup.choices }
-          )}
-          onSelectAgent={onSelectAgent}
-          disabled={disabled}
-          runLaunch={runLaunch}
-        />
-      ))}
-      {visible.map((entry) => (
-        <AgentPickerMenuRow
-          key={entry.agent}
-          draftScope={draftScope}
-          entry={entry}
-          mode={mode}
-          selected={value?.agent === entry.agent ? value : draftForEntry?.(entry)}
-          setupDisabled={setupDisabled}
-          openSetup={openSetup}
-          onSetupOpenChange={setActiveSetup}
-          disabled={disabled}
-          runLaunch={runLaunch}
-          onSelectAgent={onSelectAgent}
-          shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
-        />
-      ))}
+      {setups.map((setup) => {
+        const source = draftForEntry?.(setup.entry)
+        return (
+          <AgentPickerMenuRow
+            key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+            draftScope={draftScope}
+            draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+            preset={{ model: setup.model.id, effort: setup.choices.options?.effort }}
+            entry={setup.entry}
+            mode={mode}
+            setupDisabled={setupDisabled}
+            openSetup={openSetup}
+            onSetupOpenChange={setActiveSetup}
+            label={setup.label}
+            source={source}
+            selected={value?.agent === setup.entry.agent ? value : undefined}
+            initial={applyAgentPickerEdit(
+              setup.entry,
+              (value?.agent === setup.entry.agent ? value : source) ??
+                agentPickerDraft(setup.entry),
+              { kind: 'choice', patch: setup.choices }
+            )}
+            onSelectAgent={onSelectAgent}
+            disabled={disabled}
+            runLaunch={runLaunch}
+          />
+        )
+      })}
+      {visible.map((entry) => {
+        const source = draftForEntry?.(entry)
+        return (
+          <AgentPickerMenuRow
+            key={entry.agent}
+            draftScope={draftScope}
+            entry={entry}
+            mode={mode}
+            source={source}
+            selected={value?.agent === entry.agent ? value : undefined}
+            setupDisabled={setupDisabled}
+            openSetup={openSetup}
+            onSetupOpenChange={setActiveSetup}
+            disabled={disabled}
+            runLaunch={runLaunch}
+            onSelectAgent={onSelectAgent}
+            shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
+          />
+        )
+      })}
       {!visible.length && !setups.length ? (
         <DropdownMenuItem disabled>
           {translate(
@@ -224,6 +233,7 @@ function AgentPickerMenuRow({
   onSetupOpenChange,
   label = entry.label,
   initial,
+  source,
   selected,
   mode,
   setupDisabled,
@@ -247,6 +257,7 @@ function AgentPickerMenuRow({
   ) => void
   label?: string
   initial?: AgentPickerDraft
+  source?: AgentPickerDraft
   selected?: AgentPickerDraft
   mode?: 'launch' | 'select'
   setupDisabled?: boolean
@@ -265,7 +276,9 @@ function AgentPickerMenuRow({
       draftId={draftId}
       preset={preset}
       entry={entry}
-      initial={initial ?? selected}
+      initial={source}
+      seed={initial ?? selected ?? source}
+      surface={selected?.surface}
       mode={mode}
       open={openSetup === setupId}
       replacedByAnotherSetup={openSetup !== null && openSetup !== setupId}

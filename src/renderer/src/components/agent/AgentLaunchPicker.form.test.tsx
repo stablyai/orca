@@ -8,6 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { verifyOmniboxPresetIdentity } from './agent-launch-picker-omnibox.test-fixture'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   sourceControlPickerDraft,
@@ -32,6 +33,9 @@ import type {
   AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
 
+vi.mock('../quick-open-file-list', () => ({
+  useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
+}))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: async (_target: unknown, method: string) =>
     method === 'agentSession.modelCatalog' ? entry.catalog : { seedOptions: {} }
@@ -724,4 +728,8 @@ it('uses definitive inactive model/effort evidence only and fences retired owner
     expect(disposed.accept(accepted)).toBe(false)
   })
   expect(disposed.getDraft()).toBeUndefined()
+})
+
+it('keeps + ordinary and actual omnibox original presets independent after editing their models', async () => {
+  await verifyOmniboxPresetIdentity(root, launch)
 })

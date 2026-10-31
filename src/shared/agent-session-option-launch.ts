@@ -89,6 +89,33 @@ function launchOptionsFor(
   }
 }
 
+/** Independent CLI options cannot ride the legacy model/effort/mode preferences. */
+export function hasIndependentAgentLaunchOptions(
+  agent: AgentType,
+  values: Readonly<Record<string, unknown>>
+): boolean {
+  const catalog = getAgentSessionOptionLaunchCatalog(agent)
+  return (
+    !!catalog &&
+    launchOptionsFor(
+      catalog,
+      typeof values.model === 'string' ? values.model : null,
+      values
+    ).options.some((option) => {
+      const value = values[option.id]
+      return (
+        option.id !== 'effort' &&
+        !option.apply.composedIntoModel &&
+        !!option.apply.launchArgs &&
+        decodeCatalogOptionValue(
+          option.kind,
+          typeof value === 'string' || typeof value === 'boolean' ? value : undefined
+        ) !== undefined
+      )
+    })
+  )
+}
+
 export function resolveAgentSessionOptionLaunch(
   agent: AgentType,
   values: Record<string, SessionOptionValue> | null | undefined,

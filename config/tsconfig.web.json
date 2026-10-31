@@ -10,7 +10,10 @@
     "../src/main/pi/rpc-model-options.ts",
     "../src/shared/**/*"
   ],
-  "exclude": ["../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts"],
+  "exclude": [
+    "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
+    "../src/renderer/src/components/right-sidebar/SourceControlAgentActionDialog.picker.test.tsx"
+  ],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
