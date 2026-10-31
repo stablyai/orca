@@ -4,6 +4,7 @@ import { isFullGitObjectId } from './git/commit-object-ref'
 import { hasLocalWorktreeBaseRef } from './git/worktree-base-ref-probe'
 import { getBaseRefDefault } from './git/repo'
 import { resolveWorktreeCreateBase } from './worktree-create-base'
+import { resolveWorktreeBroadFetchRemoteName } from '../shared/worktree-broad-fetch-remote'
 
 type WorktreeCreateBaseGitOptions = {
   wslDistro?: string
@@ -114,7 +115,12 @@ async function prefetchLocalWorktreeCreateBase(
   }
 
   // Share create's fallback fetch key so it can reuse this work.
-  await runtime.fetchRemoteWithCache(repo.path, 'origin', ...optionArgs)
+  // Prefer the repo's canonical remote (often `upstream` on forks), not a hardcoded origin.
+  await runtime.fetchRemoteWithCache(
+    repo.path,
+    resolveWorktreeBroadFetchRemoteName(repo),
+    ...optionArgs
+  )
   return resolvedBaseBranch
 }
 

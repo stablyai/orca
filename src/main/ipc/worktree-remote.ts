@@ -38,6 +38,7 @@ import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktre
 import { resolveLocalGitUsername } from '../git/git-username'
 import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { resolveWorktreeBroadFetchRemoteName } from '../../shared/worktree-broad-fetch-remote'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -1074,16 +1075,18 @@ async function performLocalWorktreeCreate(
         }
       }
     } else if (!(await hasLocalWorktreeBaseRef(repo.path, baseBranch, localGitExecOptions))) {
-      // Local bases retain best-effort origin refresh; verified review SHAs already have their objects.
+      // Local bases retain a best-effort canonical-remote refresh; verified review SHAs already have their objects.
+      const broadFetchRemote = resolveWorktreeBroadFetchRemoteName(repo)
       legacyFetchPromise = runtime
-        .fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
+        .fetchRemoteWithCache(repo.path, broadFetchRemote, ...localWorktreeGitOptionArgs)
         .then(() => undefined)
         .catch(() => undefined)
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
     if (!(await hasLocalWorktreeBaseRef(repo.path, baseBranch, localGitExecOptions))) {
-      legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], {
+      const broadFetchRemote = resolveWorktreeBroadFetchRemoteName(repo)
+      legacyFetchPromise = gitExecFileAsync(['fetch', broadFetchRemote], {
         ...localGitExecOptions,
         timeout: CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS
       })
