@@ -602,7 +602,17 @@ it('keeps the genuine settled worker Dispatch preferred and sends its published 
       head: 'fixture',
       branch: 'fixture',
       isBare: false,
-      isMainWorktree: true
+      isMainWorktree: true,
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      git: {
+        path: '/tmp',
+        head: 'fixture',
+        branch: 'fixture',
+        isBare: false,
+        isMainWorktree: true
+      }
     })
     vi.spyOn(f.runtime, 'showTerminal').mockImplementation(async (handle) => ({
       handle,
