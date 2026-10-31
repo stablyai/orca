@@ -1,4 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
+import type { CodeEditorThemeChoice } from './plugin-appearance-settings-types'
 import type { TerminalPluginPalette } from './terminal-color-overrides'
 import {
   hasUsableTerminalThemeColors,
@@ -10,6 +11,8 @@ type PluginThemeSettings = Pick<
   | 'pluginAppTheme'
   | 'pluginAppThemeLight'
   | 'pluginAppThemeDark'
+  | 'editorThemeLight'
+  | 'editorThemeDark'
   | 'pluginIconTheme'
   | 'themeBeforePlugin'
   | 'terminalPluginPalettes'
@@ -23,6 +26,14 @@ export function pluginAppThemeSlotUpdate(
   return base === 'dark' ? { pluginAppThemeDark: id } : { pluginAppThemeLight: id }
 }
 
+/** The setting that holds the code editor theme for one light/dark mode. */
+export function editorThemeSlotUpdate(
+  base: 'light' | 'dark',
+  choice: CodeEditorThemeChoice | null
+): Pick<GlobalSettings, 'editorThemeLight'> | Pick<GlobalSettings, 'editorThemeDark'> {
+  return base === 'dark' ? { editorThemeDark: choice } : { editorThemeLight: choice }
+}
+
 // Two terminal slots (dark, light) can each hold one plugin palette.
 const MAX_TERMINAL_PLUGIN_PALETTES = 2
 const PLUGIN_CONTENT_ID =
@@ -32,6 +43,10 @@ function contentId(value: unknown): `plugin:${string}` | null {
   return typeof value === 'string' && PLUGIN_CONTENT_ID.test(value)
     ? `plugin:${value.slice('plugin:'.length)}`
     : null
+}
+
+function editorThemeChoice(value: unknown): CodeEditorThemeChoice | null {
+  return value === 'light' || value === 'dark' ? value : contentId(value)
 }
 
 function palettes(value: unknown): TerminalPluginPalette[] {
@@ -69,6 +84,12 @@ export function normalizePluginThemeSettings(
   if ('pluginAppThemeDark' in input) {
     result.pluginAppThemeDark = contentId(input.pluginAppThemeDark)
   }
+  if ('editorThemeLight' in input) {
+    result.editorThemeLight = editorThemeChoice(input.editorThemeLight)
+  }
+  if ('editorThemeDark' in input) {
+    result.editorThemeDark = editorThemeChoice(input.editorThemeDark)
+  }
   if ('pluginIconTheme' in input) {
     result.pluginIconTheme = contentId(input.pluginIconTheme)
   }
@@ -97,6 +118,8 @@ export function pluginThemeSettingsAfterRemoval(
     | 'pluginAppTheme'
     | 'pluginAppThemeLight'
     | 'pluginAppThemeDark'
+    | 'editorThemeLight'
+    | 'editorThemeDark'
     | 'pluginIconTheme'
     | 'themeBeforePlugin'
     | 'terminalPluginPalettes'
@@ -114,6 +137,12 @@ export function pluginThemeSettingsAfterRemoval(
   }
   if (ownedBy(settings.pluginAppThemeDark, pluginKey)) {
     update.pluginAppThemeDark = null
+  }
+  if (ownedBy(settings.editorThemeLight, pluginKey)) {
+    update.editorThemeLight = null
+  }
+  if (ownedBy(settings.editorThemeDark, pluginKey)) {
+    update.editorThemeDark = null
   }
   if (ownedBy(settings.pluginIconTheme, pluginKey)) {
     update.pluginIconTheme = null

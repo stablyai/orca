@@ -2392,6 +2392,24 @@ html.native-shell .app-layout {
   height: 100% !important;
 }
 
+/* Why: a separate editor theme recolors code Orca paints itself; app chrome keeps the app theme. */
+:root[data-code-editor-theme] .code-editor-colors {
+  --editor-surface: var(--code-editor-background);
+  --foreground: var(--code-editor-foreground);
+  --muted-foreground: var(--code-editor-muted-foreground);
+  --border: var(--code-editor-border);
+  background-color: var(--editor-surface);
+  color: var(--foreground);
+}
+
+:root[data-code-editor-theme='light'] .code-editor-colors {
+  color-scheme: light;
+}
+
+:root[data-code-editor-theme='dark'] .code-editor-colors {
+  color-scheme: dark;
+}
+
 /* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */
 .ipynb-code-surface .monaco-editor,
 .ipynb-code-surface .monaco-editor-background,
