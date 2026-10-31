@@ -79,7 +79,6 @@ export abstract class DaemonPtyRuntimeState {
   protected exitListeners: ((payload: DaemonPtyRouterExitEvent) => void)[] = []
   protected backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   protected writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
-  protected readonly disconnectedListenerCleanups: (() => void)[] = []
   protected removeEventListener: (() => void) | null = null
   protected initialCwds = new Map<string, string>()
   protected wslDistrosBySessionId = new Map<string, string>()
@@ -220,22 +219,20 @@ export abstract class DaemonPtyRuntimeState {
     this.supportsAuthoritativeBufferSnapshots =
       this.protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION
     this.supportsStartupIngress = supportsPtyStartupIngress(this.protocolVersion)
-    this.disconnectedListenerCleanups.push(
-      this.client.onDisconnected(() => {
-        this.ptyInventory.reset()
-        if (!this.respawnAdoptionClosed) {
-          this.writeRecoveryAttempted = false
-          for (const id of this.activeSessionIds) {
-            this.sessionsAwaitingDaemonRecovery.add(id)
-          }
+    this.client.onDisconnected(() => {
+      this.ptyInventory.reset()
+      if (!this.respawnAdoptionClosed) {
+        this.writeRecoveryAttempted = false
+        for (const id of this.activeSessionIds) {
+          this.sessionsAwaitingDaemonRecovery.add(id)
         }
-        for (const id of this.pausedProducerSessionIds) {
-          this.producerResumesOwedOnReconnect.add(id)
-        }
-        this.pausedProducerSessionIds.clear()
-        this.observeAuditFailure('transport_closed')
-      })
-    )
+      }
+      for (const id of this.pausedProducerSessionIds) {
+        this.producerResumesOwedOnReconnect.add(id)
+      }
+      this.pausedProducerSessionIds.clear()
+      this.observeAuditFailure('transport_closed')
+    })
   }
 
   supportsGitCredentialGuardHost(): boolean {

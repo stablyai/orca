@@ -472,12 +472,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     function createProbeAdapter(
       protocolVersion: number,
-      request: (...args: Parameters<DaemonClient['request']>) => Promise<unknown>
+      request: ReturnType<typeof vi.fn>
     ): DaemonPtyAdapter {
       const probeAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stub external RPC answers while keeping the actual client's transport lifetime.
-      const client = (probeAdapter as unknown as { client: DaemonClient }).client
-      vi.spyOn(client, 'request').mockImplementation(request)
+      ;(
+        probeAdapter as unknown as {
+          client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
+        }
+      ).client = { request, disconnect: vi.fn() }
       return probeAdapter
     }
 
@@ -679,18 +681,23 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('inspectProcess on pre-inspection daemon protocols', () => {
+    type ClientInternals = {
+      client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
+    }
+
     function createInspectionAdapter(
       protocolVersion: number,
-      request: (...args: Parameters<DaemonClient['request']>) => Promise<unknown>
+      request: ReturnType<typeof vi.fn>
     ): DaemonPtyAdapter {
       const inspectionAdapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
         protocolVersion
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stub external RPC answers while keeping the actual client's transport lifetime.
-      const client = (inspectionAdapter as unknown as { client: DaemonClient }).client
-      vi.spyOn(client, 'request').mockImplementation(request)
+      ;(inspectionAdapter as unknown as ClientInternals).client = {
+        request,
+        disconnect: vi.fn()
+      }
       return inspectionAdapter
     }
 

@@ -1,5 +1,4 @@
 import { registerDaemonCreationFailureTests } from './daemon-server-creation-failure.test-fixture'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
 import './mock-descendant-sweep'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,14 +8,6 @@ import { DaemonClient } from './client'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
-const nativePty = vi.hoisted(() => ({ spawn: vi.fn() }))
-vi.mock('node-pty', () => nativePty)
-
-vi.mock('../providers/local-pty-utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof LocalPtyUtils>()),
-  ensureNodePtySpawnHelperExecutable: () => {},
-  getNodePtySpawnHelperCandidates: () => [process.execPath]
-}))
 type DaemonServerInternals = {
   preparations: {
     pending: Map<string, Set<{ canceled: boolean }>>
@@ -25,14 +16,13 @@ type DaemonServerInternals = {
 }
 
 describe('daemon async spawn cancellation', () => {
+  let spawned = 0
   let directory: string
   let server: DaemonServer
   let client: DaemonClient
   let releaseSpawn: () => void
   let spawnStarted: Promise<void>
   let subprocess: ReturnType<typeof createMockSubprocess>
-  let preparation: Promise<void>
-  let spawned: number
 
   beforeEach(async () => {
     spawned = 0
@@ -44,14 +34,11 @@ describe('daemon async spawn cancellation', () => {
     const spawnGate = new Promise<void>((resolve) => {
       releaseSpawn = resolve
     })
-    preparation = Promise.resolve()
-    spawned = 0
     server = new DaemonServer({
       socketPath: getDaemonSocketPath(directory),
       tokenPath: join(directory, 'daemon.token'),
-      preparePtySpawn: () => preparation,
       spawnSubprocess: async () => {
-        spawned += 1
+        spawned++
         subprocess = createMockSubprocess()
         markSpawnStarted()
         await spawnGate
@@ -72,6 +59,25 @@ describe('daemon async spawn cancellation', () => {
     await server?.shutdown()
     vi.restoreAllMocks()
     rmSync(directory, { recursive: true, force: true })
+  })
+
+  registerDaemonCreationFailureTests({
+    get server() {
+      return server
+    },
+    get client() {
+      return client
+    },
+    get subprocess() {
+      return subprocess
+    },
+    get spawnStarted() {
+      return spawnStarted
+    },
+    get spawned() {
+      return spawned
+    },
+    releaseSpawn: () => releaseSpawn()
   })
 
   it.each(['cancelCreateOrAttach', 'kill'] as const)(
@@ -152,6 +158,59 @@ describe('daemon async spawn cancellation', () => {
     await expect(client.request('listSessions', undefined)).resolves.toEqual({ sessions: [] })
   })
 
+  it('matches a cancel for an attach-only request queued behind a hung create', async () => {
+    const create = client.request('createOrAttach', {
+      sessionId: 'shared-session',
+      cols: 80,
+      rows: 24
+    })
+    await spawnStarted
+    const abort = new AbortController()
+    const attach = client.request(
+      'createOrAttach',
+      { sessionId: 'shared-session', cols: 80, rows: 24, attachOnly: true },
+      30_000,
+      abort.signal
+    )
+    const daemon = server as unknown as DaemonServerInternals
+    // Attach-only preparations must remain registered so cancellation can find them.
+    await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
+
+    abort.abort()
+    await expect(attach).rejects.toThrow('client_disconnected')
+
+    releaseSpawn()
+    await expect(create).resolves.toMatchObject({ isNew: true })
+  })
+
+  it('does not cancel a sibling request for the same session id', async () => {
+    const first = client.request('createOrAttach', {
+      sessionId: 'shared-session',
+      cols: 80,
+      rows: 24
+    })
+    const abort = new AbortController()
+    const second = client.request(
+      'createOrAttach',
+      { sessionId: 'shared-session', cols: 80, rows: 24 },
+      30_000,
+      abort.signal
+    )
+    await spawnStarted
+    const daemon = server as unknown as DaemonServerInternals
+    await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
+
+    abort.abort()
+    await expect(second).rejects.toThrow('client_disconnected')
+    releaseSpawn()
+
+    await expect(first).resolves.toMatchObject({ isNew: true })
+    expect(subprocess.forceKill).not.toHaveBeenCalled()
+    await expect(client.request('listSessions', undefined)).resolves.toMatchObject({
+      sessions: [expect.objectContaining({ sessionId: 'shared-session' })]
+    })
+  })
+
   it('reaps an async spawn before daemon shutdown completes', async () => {
     const create = client
       .request('createOrAttach', {
@@ -169,32 +228,5 @@ describe('daemon async spawn cancellation', () => {
 
     expect(subprocess.forceKill).toHaveBeenCalledOnce()
     expect(subprocess.dispose).toHaveBeenCalledOnce()
-  })
-  registerDaemonCreationFailureTests({
-    nativePty,
-    get directory() {
-      return directory
-    },
-    get server() {
-      return server
-    },
-    set server(value) {
-      server = value
-    },
-    get client() {
-      return client
-    },
-    get subprocess() {
-      return subprocess
-    },
-    get releaseSpawn() {
-      return releaseSpawn
-    },
-    get spawnStarted() {
-      return spawnStarted
-    },
-    get spawned() {
-      return spawned
-    }
   })
 })

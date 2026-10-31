@@ -146,13 +146,7 @@ export async function spawnAndPublishSession(
     throw error
   }
 
-  let revoked = false
-  try {
-    deps.assertCreateAllowed()
-  } catch {
-    revoked = true
-  }
-  if (revoked) {
+  if (opts.isCanceled?.()) {
     // Retain cleanup ownership if the native child refuses to exit.
     deps.sessions.set(opts.sessionId, session)
     // Retain the live-cap charge until physical exit.

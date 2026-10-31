@@ -185,7 +185,6 @@ async function runRestartDaemon(
 
   // Dispose only old subscriptions after adoption; full disposal would kill shared legacy adapters.
   disposeProviderSubscriptionsOnly(currentAdapter)
-  currentOnly.dispose()
 
   replaceDaemonProvider(newProvider)
 

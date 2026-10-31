@@ -79,9 +79,6 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
         .dispose()
         .catch((err) => console.warn('[history] dispose failed:', err))
     }
-    for (const cleanup of this.disconnectedListenerCleanups.splice(0)) {
-      cleanup()
-    }
     this.client.disconnect()
   }
 
@@ -253,9 +250,6 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       } catch {
         // Closing auth sockets still permits the daemon to retire itself once empty.
       }
-    }
-    for (const cleanup of this.disconnectedListenerCleanups.splice(0)) {
-      cleanup()
     }
     this.client.disconnect()
   }

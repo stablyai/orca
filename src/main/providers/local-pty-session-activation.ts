@@ -116,9 +116,7 @@ export function activateLocalPtySession(args: {
   const startupIngress = new PtyStartupIngress({
     ...(spawn.startupIngress ? { intent: spawn.startupIngress } : {}),
     ownerBackend,
-    write: (data) => {
-      proc.write(data)
-    },
+    write: (data) => proc.write(data),
     onEmission: emitIngressData
   })
   startupIngressByPty.set(id, startupIngress)
@@ -222,8 +220,7 @@ export function activateLocalPtySession(args: {
         readiness.setStartupCommandCleanup(cleanup)
       },
       {
-        bracketedPasteSafe,
-        beforeWrite: () => ptyProcesses.get(id) === proc
+        bracketedPasteSafe
       }
     )
   }

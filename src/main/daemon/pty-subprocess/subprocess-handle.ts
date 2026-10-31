@@ -11,12 +11,7 @@ import type { SubprocessHandle } from '../session-subprocess-handle'
 import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
 import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
-import {
-  inspectSpawnFileWindowsChildProcesses,
-  inspectSpawnFileChildProcessesFromRows
-} from './spawn-file-child-processes'
-import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-table-snapshot-reader'
-import { getSpawnedShellName } from '../../providers/local-pty-launch-helpers'
+import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
 import type { ConptyStartupEvents } from './conpty-startup-input-reader'
 
 export { createDaemonPtyPhysicalOwner } from './daemon-pty-physical-owner'
@@ -137,20 +132,12 @@ export function createDaemonPtySubprocessHandle(args: {
     processNameIsSpawnFile: ptyProcessNameIsSpawnFile(proc),
     // Only the login(1) wrapper hides the shell's exit status, and it forks the shell as its child.
     shellIsRootChild: !reportsChildExitStatus,
-    inspectChildProcesses: async (fresh?: boolean, ignoreDetached?: boolean) => {
-      if (dead || masterRetired) {
-        return 'unverifiable'
-      }
-      const verdict =
-        process.platform === 'win32'
-          ? await inspectSpawnFileWindowsChildProcesses(proc, shellPath, fresh, ignoreDetached)
-          : inspectSpawnFileChildProcessesFromRows(
-              (await getStrictProcessTableSnapshotWithAge()).rows,
-              proc.pid,
-              getSpawnedShellName(shellPath)
-            )
-      return dead || masterRetired ? 'unverifiable' : verdict
-    },
+    ...(process.platform === 'win32'
+      ? {
+          inspectChildProcesses: (fresh?: boolean, ignoreDetached?: boolean) =>
+            inspectSpawnFileWindowsChildProcesses(proc, shellPath, fresh, ignoreDetached)
+        }
+      : {}),
     shellPath: args.shellPath,
     shellCwd: args.spawnCwd,
     shellPathEnv: args.env.PATH,

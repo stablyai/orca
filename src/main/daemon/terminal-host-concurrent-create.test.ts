@@ -178,7 +178,6 @@ describe('concurrent createOrAttach across the async spawn', () => {
     })
 
     const creation = host.createOrAttach(createOptions('shutdown-race'))
-    const canceled = expect(creation).rejects.toThrow('Attach canceled')
     const disposal = host.dispose()
     let disposed = false
     void disposal.then(() => {
@@ -189,7 +188,7 @@ describe('concurrent createOrAttach across the async spawn', () => {
     expect(disposed).toBe(false)
 
     releaseSpawn()
-    await canceled
+    await creation
     await disposal
 
     expect(subprocess.forceKill).toHaveBeenCalledOnce()

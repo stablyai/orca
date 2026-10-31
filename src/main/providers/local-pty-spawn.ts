@@ -110,7 +110,6 @@ export async function spawnLocalPty(
         return concurrentWinner
       }
       const pendingSpawn = spawn({
-        assertCreateAllowed: checkCanceled,
         shellPath: plan.shellPath,
         shellArgs: plan.shellArgs,
         cols: args.cols,

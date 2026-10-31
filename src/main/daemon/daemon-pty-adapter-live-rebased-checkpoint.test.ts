@@ -200,7 +200,7 @@ describe('DaemonPtyAdapter checkpoints rebased on live', () => {
       expect(await manager.checkpoint(sessionId, disk.getSnapshot())).toBe('committed')
       expect(live.writeSync(base + drained)).toBe(true)
       const liveSnapshot = { ...live.getSnapshot(), outputSequence: 99 }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stub only external RPC answers, keeping actual client and history lifetime.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a teardown checkpoint only calls client.request and the history manager/reader, all real or faked here.
       const internals = historyAdapter as unknown as {
         client: { request: ReturnType<typeof vi.fn>; disconnect: () => void }
         checkpointSessions(
@@ -208,13 +208,16 @@ describe('DaemonPtyAdapter checkpoints rebased on live', () => {
           opts?: { final?: boolean; teardown?: boolean }
         ): Promise<Set<string>>
       }
-      internals.client.request = vi.fn(async () => ({
-        records: [{ kind: 'output', data: marker }],
-        drainedRecords: [{ kind: 'output', data: drained }],
-        seq: 2,
-        overflowed: false,
-        snapshot: liveSnapshot
-      }))
+      internals.client = {
+        request: vi.fn(async () => ({
+          records: [{ kind: 'output', data: marker }],
+          drainedRecords: [{ kind: 'output', data: drained }],
+          seq: 2,
+          overflowed: false,
+          snapshot: liveSnapshot
+        })),
+        disconnect: () => {}
+      }
 
       const append = vi.spyOn(manager, 'appendIncrements')
 

@@ -183,9 +183,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const checkpoint = vi.fn(async () => 'committed' as const)
       const appendIncrements = vi.fn(async () => 'ok' as const)
       const dispose = vi.fn(async () => {})
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace only the owned history fixture dependencies with their typed stubs.
+      const disconnect = vi.fn()
       const internals = historyAdapter as unknown as {
-        client: { request: typeof request; disconnect: () => void }
+        client: { request: typeof request; disconnect: typeof disconnect }
         historyManager: {
           checkpoint: typeof checkpoint
           appendIncrements: typeof appendIncrements
@@ -193,7 +193,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
       }
-      internals.client.request = request
+      internals.client = { request, disconnect }
       internals.historyManager = { checkpoint, appendIncrements, dispose }
 
       const checkpointing = internals.checkpointSessions(['a', 'b', 'c', 'd', 'e', 'f'])
@@ -248,7 +248,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         nonFinalCheckpointAdmissionSessionIds: Set<string>
         tryAdmitNonFinalCheckpoint(sessionId: string): boolean
       }
-      internals.client.request = request
+      internals.client = { request, disconnect: vi.fn() }
       internals.historyManager = {
         checkpoint: vi.fn(async () => 'committed' as const),
         appendIncrements,
@@ -334,7 +334,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
       }
-      internals.client.request = request
+      internals.client = { request, disconnect: vi.fn() }
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       try {
@@ -367,7 +367,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
       }
-      internals.client.request = request
+      internals.client = { request, disconnect: vi.fn() }
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       try {
@@ -431,7 +431,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           }
         })
         const internals = historyAdapter as unknown as CooldownInternals
-        internals.client.request = request
+        internals.client = { request, disconnect: vi.fn() }
         internals.historyManager = {
           checkpoint: vi.fn(async () => takeResult.checkpointResult ?? 'committed'),
           appendIncrements: vi.fn(async () => takeResult.appendResult ?? 'ok'),

@@ -1,24 +1,17 @@
-import { registerDaemonNativeFailureTests } from './daemon-server-native-failure.test-fixture'
 import './mock-descendant-sweep'
 import { expect, it, vi } from 'vitest'
 import type { DaemonClient } from './client'
 import type { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import type { DaemonServer } from './daemon-server'
-type DaemonServerInternals = {
-  preparations: { pending: Map<string, Set<{ canceled: boolean }>> }
-}
 export type DaemonCreationFailureFixture = {
-  directory: string
   server: DaemonServer
   client: DaemonClient
   subprocess: ReturnType<typeof createMockSubprocess>
   releaseSpawn: () => void
   spawnStarted: Promise<void>
   spawned: number
-  nativePty: { spawn: ReturnType<typeof vi.fn> }
 }
 export function registerDaemonCreationFailureTests(fixture: DaemonCreationFailureFixture) {
-  registerDaemonNativeFailureTests(fixture)
   it.each([
     ['observer', 'retry'],
     ['constructor', 'retry'],
@@ -96,60 +89,4 @@ export function registerDaemonCreationFailureTests(fixture: DaemonCreationFailur
       expect(fixture.server.automaticWork.gate.snapshot().terminals).toBe(0)
     }
   )
-
-  it('matches a cancel for an attach-only request queued behind a hung create', async () => {
-    const create = fixture.client.request('createOrAttach', {
-      sessionId: 'shared-session',
-      cols: 80,
-      rows: 24
-    })
-    await fixture.spawnStarted
-    const abort = new AbortController()
-    const attach = fixture.client.request(
-      'createOrAttach',
-      { sessionId: 'shared-session', cols: 80, rows: 24, attachOnly: true },
-      30_000,
-      abort.signal
-    )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inspect only the fixture receiver pending cancellation registrations.
-    const daemon = fixture.server as unknown as {
-      preparations: { pending: Map<string, Set<{ canceled: boolean }>> }
-    }
-    // Attach-only preparations must remain registered so cancellation can find them.
-    await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
-
-    abort.abort()
-    await expect(attach).rejects.toThrow('client_disconnected')
-
-    fixture.releaseSpawn()
-    await expect(create).resolves.toMatchObject({ isNew: true })
-  })
-  it('does not cancel a sibling request for the same session id', async () => {
-    const first = fixture.client.request('createOrAttach', {
-      sessionId: 'shared-session',
-      cols: 80,
-      rows: 24
-    })
-    const abort = new AbortController()
-    const second = fixture.client.request(
-      'createOrAttach',
-      { sessionId: 'shared-session', cols: 80, rows: 24 },
-      30_000,
-      abort.signal
-    )
-    await fixture.spawnStarted
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inspect only the fixture receiver pending map after its real spawn admission.
-    const daemon = fixture.server as unknown as DaemonServerInternals
-    await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
-
-    abort.abort()
-    await expect(second).rejects.toThrow('client_disconnected')
-    fixture.releaseSpawn()
-
-    await expect(first).resolves.toMatchObject({ isNew: true })
-    expect(fixture.subprocess.forceKill).not.toHaveBeenCalled()
-    await expect(fixture.client.request('listSessions', undefined)).resolves.toMatchObject({
-      sessions: [expect.objectContaining({ sessionId: 'shared-session' })]
-    })
-  })
 }
