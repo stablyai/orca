@@ -56,12 +56,17 @@ export function composeActiveTerminalTheme(
     return null
   }
   // Why transparent ruler border: scrollbar.width enables xterm's overview ruler, whose border would paint a bright line.
-  // Why raised slider alpha: xterm's default (~0.2) is nearly invisible on dark bg. Before the spread so explicit theme wins.
+  // Why foreground-tinted thumb: a fixed grey vanished on light themes (#12635); xterm derives non-hex ones. Theme wins.
+  const foreground = baseTheme.foreground
   let theme: ITheme = {
     overviewRulerBorder: 'transparent',
-    scrollbarSliderBackground: 'rgba(180, 180, 185, 0.4)',
-    scrollbarSliderHoverBackground: 'rgba(180, 180, 185, 0.6)',
-    scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
+    ...(foreground && isHexColor(foreground)
+      ? {
+          scrollbarSliderBackground: hexToRgba(foreground, 0.4),
+          scrollbarSliderHoverBackground: hexToRgba(foreground, 0.6),
+          scrollbarSliderActiveBackground: hexToRgba(foreground, 0.8)
+        }
+      : {}),
     ...baseTheme
   }
   // Why: convert the hex background to rgba so xterm honors the opacity when allowTransparency is set.

@@ -11,14 +11,15 @@ describe('composeActiveTerminalTheme', () => {
     } as GlobalSettings
   }
 
-  it('layers terminal scrollbar defaults under the base theme', () => {
-    const base = { background: '#101010', foreground: '#fafafa', cursor: '#fafafa' }
+  it('layers foreground-tinted scrollbar defaults under the base theme', () => {
+    // A light terminal's dark foreground keeps the thumb visible where a fixed light grey vanished (#12635).
+    const base = { background: '#ffffff', foreground: '#2e3434', cursor: '#2e3434' }
     const result = composeActiveTerminalTheme(base, settingsWith({}))
     expect(result).toEqual({
       overviewRulerBorder: 'transparent',
-      scrollbarSliderBackground: 'rgba(180, 180, 185, 0.4)',
-      scrollbarSliderHoverBackground: 'rgba(180, 180, 185, 0.6)',
-      scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
+      scrollbarSliderBackground: 'rgba(46, 52, 52, 0.4)',
+      scrollbarSliderHoverBackground: 'rgba(46, 52, 52, 0.6)',
+      scrollbarSliderActiveBackground: 'rgba(46, 52, 52, 0.8)',
       ...base
     })
   })
