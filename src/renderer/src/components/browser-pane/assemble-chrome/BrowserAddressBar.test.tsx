@@ -112,12 +112,14 @@ function AddressBarHarness({
   initialValue,
   committedValue = initialValue,
   onNavigate,
-  onSubmit
+  onSubmit,
+  disabled = false
 }: {
   initialValue: string
   committedValue?: string
   onNavigate: (url: string) => void
   onSubmit: () => void
+  disabled?: boolean
 }): React.ReactElement {
   const [value, setValue] = useState(initialValue)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -126,6 +128,7 @@ function AddressBarHarness({
     <TooltipProvider>
       <BrowserAddressBar
         pageId="page-1"
+        disabled={disabled}
         value={value}
         committedValue={committedValue}
         onChange={setValue}
@@ -170,6 +173,33 @@ describe('BrowserAddressBar autocomplete preview', () => {
     document.body.replaceChildren()
     vi.useRealTimers()
     vi.clearAllMocks()
+  })
+
+  it('locks the page address while mobile owns it and unlocks after desktop takeover', async () => {
+    const onNavigate = vi.fn()
+    const onSubmit = vi.fn()
+    await act(async () => {
+      root.render(
+        <AddressBarHarness
+          initialValue="about:blank"
+          onNavigate={onNavigate}
+          onSubmit={onSubmit}
+          disabled
+        />
+      )
+    })
+    expect(
+      container.querySelector<HTMLInputElement>('[data-orca-browser-address-bar]')?.disabled
+    ).toBe(true)
+
+    await act(async () => {
+      root.render(
+        <AddressBarHarness initialValue="about:blank" onNavigate={onNavigate} onSubmit={onSubmit} />
+      )
+    })
+    expect(
+      container.querySelector<HTMLInputElement>('[data-orca-browser-address-bar]')?.disabled
+    ).toBe(false)
   })
 
   it('restores the typed query when a previewed suggestion is dismissed by blur', async () => {
