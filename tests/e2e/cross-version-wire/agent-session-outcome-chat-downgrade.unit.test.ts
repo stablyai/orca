@@ -222,6 +222,7 @@ describe('a chat this build wrote, opened by a shipped build', () => {
   )
 })
 
+// Checks out and loads the newest release's own journal code, which takes well past the default.
 it(
   'leaves an existing chat whose first write from this build failed as it was, so the newest release opens and writes it',
   async () => {
