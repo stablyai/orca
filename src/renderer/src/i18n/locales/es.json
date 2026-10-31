@@ -19040,6 +19040,8 @@
       "composer": {
         "imageUnavailable": "Vista previa no disponible",
         "send": "Enviar",
+        "alternateSteerHint": "{{shortcut}} para enviar ahora",
+        "alternateQueueHint": "{{shortcut}} para poner en cola",
         "noPty": "No hay terminal activa: vuelva a alternar para volver a conectarse.",
         "locked": "La entrada está retenida por otro dispositivo.",
         "placeholder": "Pregunta lo que quieras, @ para referenciar archivos, / para comandos",

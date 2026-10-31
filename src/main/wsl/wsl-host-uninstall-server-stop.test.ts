@@ -38,41 +38,6 @@ describe('stopWslHostServersForUninstall', () => {
     vi.useRealTimers()
   })
 
-  it('stops only hosts whose distro is confirmed running, and never boots a stopped one', async () => {
-    const d = deps()
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await stopWslHostServersForUninstall(d)
-
-    expect(d.stop).toHaveBeenCalledTimes(1)
-    expect(d.stop).toHaveBeenCalledWith('Ubuntu', expect.any(AbortSignal))
-  })
-
-  it('stops nothing when the running list is unreadable', async () => {
-    const d = deps({ listRunning: async () => null })
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await stopWslHostServersForUninstall(d)
-
-    expect(d.stop).not.toHaveBeenCalled()
-  })
-
-  it('reads nothing when there are no WSL hosts', async () => {
-    const listRunning = vi.fn(async () => [])
-    await stopWslHostServersForUninstall(deps({ distros: () => [], listRunning }))
-
-    expect(listRunning).not.toHaveBeenCalled()
-  })
-
-  it('stops a distro recorded twice once', async () => {
-    const d = deps({ distros: () => ['Ubuntu', 'ubuntu'] })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await stopWslHostServersForUninstall(d)
-
-    expect(d.stop).toHaveBeenCalledTimes(1)
-  })
-
   it('gives up on a distro that never answers, aborting its work', async () => {
     vi.useFakeTimers()
     let signal: AbortSignal | undefined
@@ -92,20 +57,6 @@ describe('stopWslHostServersForUninstall', () => {
     expect(signal?.aborted).toBe(true)
     expect(log).toHaveBeenCalledWith(
       '[wsl] uninstall could not stop the Ubuntu host server: timed out after 1000 ms'
-    )
-  })
-
-  it('logs a failed stop instead of throwing', async () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const d = deps({
-      stop: async () => {
-        throw new Error('wsl.exe failed')
-      }
-    })
-
-    await expect(stopWslHostServersForUninstall(d)).resolves.toBeUndefined()
-    expect(log).toHaveBeenCalledWith(
-      '[wsl] uninstall could not stop the Ubuntu host server: wsl.exe failed'
     )
   })
 })

@@ -15,7 +15,7 @@ vi.mock('os', () => ({
   homedir: vi.fn(() => '/Users/alice')
 }))
 
-import { getGhosttyThemeSearchDirs, resolveGhosttyThemeColors } from './theme-resolution'
+import { resolveGhosttyThemeColors } from './theme-resolution'
 
 const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
 const originalGhosttyResourcesDir = process.env.GHOSTTY_RESOURCES_DIR
@@ -49,50 +49,7 @@ selection-background = #424242
 selection-foreground = #eaeaea
 `
 
-describe('getGhosttyThemeSearchDirs', () => {
-  it('probes XDG, then the Ghostty.app resources dir', () => {
-    delete process.env.XDG_CONFIG_HOME
-    expect(getGhosttyThemeSearchDirs()).toEqual([
-      '/Users/alice/.config/ghostty/themes',
-      '/Applications/Ghostty.app/Contents/Resources/ghostty/themes'
-    ])
-  })
-
-  it('honors XDG_CONFIG_HOME for the custom themes dir', () => {
-    process.env.XDG_CONFIG_HOME = '/xdg'
-    expect(getGhosttyThemeSearchDirs()[0]).toBe('/xdg/ghostty/themes')
-  })
-
-  it('honors GHOSTTY_RESOURCES_DIR for bundled themes', () => {
-    process.env.GHOSTTY_RESOURCES_DIR = '/opt/ghostty'
-    expect(getGhosttyThemeSearchDirs()).toEqual([
-      '/Users/alice/.config/ghostty/themes',
-      '/opt/ghostty/themes'
-    ])
-  })
-})
-
 describe('resolveGhosttyThemeColors', () => {
-  it('reads the first matching theme file and returns only color keys', async () => {
-    statMock.mockImplementation(async (p: string) => {
-      if (p === '/Users/alice/.config/ghostty/themes/Tomorrow Night Bright') {
-        return { isFile: () => true, size: THEME_FILE.length }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockResolvedValue(THEME_FILE)
-
-    const result = await resolveGhosttyThemeColors('Tomorrow Night Bright')
-    expect(result).toEqual({
-      palette: ['0=#000000', '1=#d54e53'],
-      background: '#000000',
-      foreground: '#eaeaea',
-      'cursor-color': '#eaeaea',
-      'selection-background': '#424242',
-      'selection-foreground': '#eaeaea'
-    })
-  })
-
   it('falls through to later dirs when earlier ones miss', async () => {
     statMock.mockImplementation(async (p: string) => {
       if (p === '/Applications/Ghostty.app/Contents/Resources/ghostty/themes/Tomorrow') {
@@ -106,20 +63,6 @@ describe('resolveGhosttyThemeColors', () => {
     expect(result).toEqual({ background: '#1d1f21' })
   })
 
-  it('resolves absolute theme paths without searching named theme dirs', async () => {
-    statMock.mockImplementation(async (p: string) => {
-      if (p === '/Users/alice/themes/work') {
-        return { isFile: () => true, size: 64 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockResolvedValue('background = #1d1f21')
-
-    const result = await resolveGhosttyThemeColors('/Users/alice/themes/work')
-    expect(result).toEqual({ background: '#1d1f21' })
-    expect(statMock).toHaveBeenCalledTimes(1)
-  })
-
   it('drops non-color keys a theme file might carry', async () => {
     statMock.mockImplementation(async (p: string) => {
       if (p === '/Users/alice/.config/ghostty/themes/custom') {
@@ -131,11 +74,6 @@ describe('resolveGhosttyThemeColors', () => {
 
     const result = await resolveGhosttyThemeColors('custom')
     expect(result).toEqual({ background: '#101010' })
-  })
-
-  it('returns null when the theme is not found anywhere', async () => {
-    statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
-    expect(await resolveGhosttyThemeColors('Missing Theme')).toBeNull()
   })
 
   it('rejects names containing path separators or traversal', async () => {

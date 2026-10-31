@@ -1,5 +1,5 @@
 import type { createFixture } from './journal-unsent-send-hold-contract-test-fixture'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 
@@ -51,32 +51,28 @@ export function registerJournalUnsentSendHoldQueueTests(
         await fixture.accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
         await fixture.accept(earlier, 'B', { origin: 'client', source: USER_MESSAGE_SOURCE })
       })
-      // Simulate a crash after keeping A at a stale position but before settling B.
-      await interrupted.resolveDispatch(
-        {
-          clientMessageId: 'A',
-          state: 'rejected',
-          ...fixture.HOST_RESTARTED,
-          fence: 0,
-          recovered: true,
+      const resolve = interrupted.resolveDispatch.bind(interrupted)
+      const fault = vi
+        .spyOn(interrupted, 'resolveDispatch')
+        .mockImplementation((...args) =>
+          args[0].clientMessageId === 'B'
+            ? Promise.reject(new Error('keep and fallback unavailable'))
+            : resolve(...args)
+        )
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        await expect(fixture.hold(interrupted)).rejects.toThrow('settling unsent sends failed')
+        expect(interrupted.submission('A')).toMatchObject({
+          dispatchState: 'rejected',
           keptAsQueuedMessageId: 'A'
-        },
-        () =>
-          interrupted.queuedMessages.plan([
-            {
-              messageId: 'A',
-              change: {
-                op: 'queued',
-                body: fixture.message('text of A'),
-                queuedAt: {
-                  epoch: 'epoch-1',
-                  sequence: interrupted.submission('A')!.acceptedSequence!
-                },
-                position: 5
-              }
-            }
-          ])
-      )
+        })
+        expect(interrupted.submission('B')?.dispatchState).toBe('pending')
+        expect(interrupted.queuedMessages.get('A')?.position).toBe(0)
+        expect(interrupted.queuedMessages.get('C')?.position).toBe(2)
+      } finally {
+        fault.mockRestore()
+        warn.mockRestore()
+      }
       await interrupted.close()
       const journal = await fixture.open()
       await fixture.hold(journal)

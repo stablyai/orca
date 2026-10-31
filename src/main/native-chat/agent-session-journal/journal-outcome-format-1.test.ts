@@ -72,7 +72,9 @@ afterEach(async () => {
 })
 
 function plain(state: JournalReducerState): unknown {
-  const fields: Record<string, unknown> = { ...state }
+  const fields: Record<string, unknown> = Object.fromEntries(
+    Object.entries(state).filter(([key]) => key !== 'inputEntries' && key !== 'inputCards')
+  )
   return JSON.parse(
     JSON.stringify({
       ...Object.fromEntries(
@@ -163,7 +165,7 @@ it('refuses a field format 1 does not define as written by a newer Orca', () => 
 })
 
 it('refuses a record of a newer format even when the epoch summary was not raised', () => {
-  insertOutcome('receipts', '"client-9"', '["client-9",{}]', 2)
+  insertOutcome('receipts', '"client-9"', '["client-9",{}]', 3)
   expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
 })
 
@@ -198,4 +200,33 @@ it('admits and decodes every declared shape as stored, and refuses one key more 
   expect(admitOutcomeFormat1({ field: 'items', key: key ?? '', json: newer, deleted: false })).toBe(
     'unknown'
   )
+})
+
+it('distinguishes new canonical damage from newer keys, without changing frozen format-1 admission', () => {
+  const own = {
+    context: { source: { epoch, sequence: 1 }, basis: 'observed', cut: 1 },
+    witnessCardId: 'C'
+  }
+  const write = (value: unknown) => {
+    database.db.prepare("DELETE FROM journal_outcomes WHERE field='inputEntries'").run()
+    insertOutcome('inputEntries', '"client-1"', JSON.stringify(['client-1', value]), 2)
+  }
+  write(own)
+  expect(restoreJournal(database.db, sessionId)).toMatchObject({ newer: null, damage: null })
+  for (const context of [
+    { ...own.context, cut: -1 },
+    { ...own.context, cut: Number.MAX_SAFE_INTEGER + 1 },
+    { ...own.context, source: { epoch: '', sequence: 1 } }
+  ]) {
+    write({ ...own, context })
+    expect(restoreJournal(database.db, sessionId)).toMatchObject({
+      newer: null,
+      damage: { cause: 'unparseable-row' }
+    })
+  }
+  write({ ...own, futureNativeKey: true })
+  expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
+  // A new native family is never accepted as an additive format-1 record.
+  database.db.prepare("UPDATE journal_outcomes SET format=1 WHERE field='inputEntries'").run()
+  expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
 })

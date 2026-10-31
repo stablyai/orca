@@ -18562,6 +18562,8 @@
       },
       "composer": {
         "send": "发送",
+        "alternateSteerHint": "{{shortcut}} 立即发送",
+        "alternateQueueHint": "{{shortcut}} 加入队列",
         "noPty": "没有实时终端，请切回终端以重新连接。",
         "locked": "输入正被另一台设备占用。",
         "placeholder": "随心输入，@ 引用文件，/ 使用命令",

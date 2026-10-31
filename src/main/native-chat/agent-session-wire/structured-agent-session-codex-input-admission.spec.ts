@@ -1,3 +1,5 @@
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import * as autoSandbox from '../../codex/codex-structured-auto-sandbox'
 import { expect, it, vi } from 'vitest'
 import { codexInputFinalizationFixture } from './structured-agent-session-codex-input-host.test'
@@ -8,7 +10,8 @@ import {
 import {
   CODEX_INPUT_FINALIZATION_ADMISSION_CASES,
   HOST_TEST_SESSION as SESSION,
-  hostTestMessage
+  hostTestMessage,
+  hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -235,12 +238,12 @@ it.each(CODEX_INPUT_FINALIZATION_ADMISSION_CASES)(
   }
 )
 
-it.each(['stop', 'exit', 'exit-after-close-record'] as const)(
+it.each(['stop', 'stop-save-refusal', 'exit', 'exit-after-close-record'] as const)(
   'unwinds actual Auto preparation on %s without a late write',
   async (ending) => {
     const { host, adapter, codex, config, pick, permissionSend, stop, starts } =
       codexInputFinalizationFixture()
-    const exiting = ending !== 'stop'
+    const exiting = ending.startsWith('exit')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     await pick('auto')
     const paused = Promise.withResolvers<unknown>()
@@ -320,7 +323,33 @@ it.each(['stop', 'exit', 'exit-after-close-record'] as const)(
         expect(child.close).toMatchObject({ cause: 'evict' })
         expect(signal?.aborted).toBe(false)
       }
-      if (ending === 'stop') {
+      if (ending === 'stop-save-refusal') {
+        const db = codexInputFinalizationFixture().database()
+        const receipt = journal.receiptFor(id)
+        db.exec(`CREATE TRIGGER fail_stop_receipt BEFORE INSERT ON agent_session_command_receipts
+          BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
+        try {
+          expect(await stop()).toMatchObject({
+            ok: false,
+            refusal: { details: { reason: 'stopFailed', agent: 'codex' } }
+          })
+        } finally {
+          db.exec('DROP TRIGGER fail_stop_receipt')
+        }
+        expect(journal.receiptFor(id)).toEqual(receipt)
+        expect(journal.queuedMessages.pauses()).toEqual([])
+        expect(
+          journal
+            .snapshot()
+            .items.some(
+              (item) =>
+                item.body.kind === 'message' &&
+                item.body.blocks.some(
+                  (block) => block.type === 'text' && block.text === 'Stopped manually'
+                )
+            )
+        ).toBe(false)
+      } else if (ending === 'stop') {
         await stop()
       } else {
         codex.connections[0]?.handlers.onExit?.(
@@ -348,6 +377,23 @@ it.each(['stop', 'exit', 'exit-after-close-record'] as const)(
       expect(starts()).toHaveLength(0)
       const writes = await Promise.allSettled(written.mock.results.map((result) => result.value))
       expect(writes.filter((result) => result.status === 'rejected')).toEqual([])
+      if (ending === 'stop-save-refusal') {
+        const next = await permissionSend('next after refused Stop')
+        await vi.waitFor(() => expect(starts()).toHaveLength(1))
+        expect(starts()[0]?.params).toMatchObject({
+          clientUserMessageId: next,
+          input: [{ type: 'text', text: 'next after refused Stop' }]
+        })
+        const fixture = codexInputFinalizationFixture()
+        fixture.turns.start()
+        fixture.turns.echo(next)
+        expect(
+          fixture.submission((await host.waitForSendSettlement(SESSION, next))?.value)
+        ).toMatchObject({ clientMessageId: next, dispatchState: 'accepted' })
+        await fixture.waitForInputFinalization(journal, next)
+        expect(journal.queuedMessages.list()).toEqual([])
+        expect(starts()).toHaveLength(1)
+      }
     } finally {
       paused.resolve(config)
       await Promise.allSettled(lateReads)
@@ -355,3 +401,147 @@ it.each(['stop', 'exit', 'exit-after-close-record'] as const)(
     }
   }
 )
+
+it('keeps rewind outside a committed preparation until the input settles', async () => {
+  const { host, adapter, permissionSend, turns, starts, rewindTo } = codexInputFinalizationFixture()
+  const { sessions, serialize, conversationDelivery } = host.collaboratorsForTests()
+  const journal = sessions.get(SESSION)!.journal
+  const prepared = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const dispatch = adapter.dispatch.bind(adapter)
+  vi.spyOn(adapter, 'dispatch').mockImplementation(async (input) => {
+    prepared.resolve()
+    await release.promise
+    return dispatch(input)
+  })
+  const providerRewind = vi.spyOn(adapter, 'rewind')
+  let rewinding: ReturnType<typeof rewindTo> | undefined
+  try {
+    const id = await permissionSend('committed preparation')
+    await prepared.promise
+    expect(journal.submission(id)?.handedOverAt).toBeDefined()
+    const epoch = journal.epoch
+    const reserved = Promise.withResolvers<void>()
+    const order = conversationDelivery.loop['deps'].deliveryOrder
+    const reserve = order.reserve.bind(order)
+    vi.spyOn(order, 'reserve').mockImplementation((sessionId) => {
+      reserved.resolve()
+      return reserve(sessionId)
+    })
+    rewinding = rewindTo(agentJournalSubmissionKey(id), epoch)
+    await reserved.promise
+    await serialize(SESSION, async () => {})
+    expect(providerRewind).not.toHaveBeenCalled()
+    expect(journal.epoch).toBe(epoch)
+    expect(starts()).toHaveLength(0)
+    release.resolve()
+    await vi.waitFor(() => expect(starts()).toHaveLength(1))
+    turns.start()
+    turns.echo(id)
+    await codexInputFinalizationFixture().waitForInputFinalization(journal, id)
+    expect(await rewinding).toMatchObject({
+      ok: false,
+      refusal: { details: { rewindReason: 'busy' } }
+    })
+    expect(providerRewind).not.toHaveBeenCalled()
+    expect(journal.epoch).toBe(epoch)
+  } finally {
+    release.resolve()
+    await rewinding
+  }
+})
+
+it('keeps earlier B before historically forced proven-unrun A through close and Resume delivery', async () => {
+  const {
+    host,
+    adapter,
+    codex,
+    config,
+    permissionSend,
+    began,
+    turns,
+    starts,
+    pick,
+    waitForInputFinalization
+  } = codexInputFinalizationFixture()
+  const { sessions, serialize } = host.collaboratorsForTests()
+  const journal = sessions.get(SESSION)!.journal
+  const w = await permissionSend('working W')
+  await began(w)
+  await serialize(SESSION, () =>
+    journal.queuedMessages.insert({
+      messageId: 'force-C',
+      body: { ...hostTestMessage('/compact'), command: { name: 'compact' } }
+    })
+  )
+  const a = await permissionSend('forced A', { personality: 'friendly' })
+  expect(journal.inputOrder.forced(a)).toBe(true)
+  await serialize(SESSION, () => journal.queuedMessages.withdraw(['force-C']))
+  await pick('auto')
+  const preparation = Promise.withResolvers<unknown>()
+  const read = vi.fn(() => preparation.promise)
+  codex.routes['config/read'] = read
+  try {
+    turns.end('completed')
+    await vi.waitFor(() => expect(read).toHaveBeenCalledOnce())
+    expect(journal.submission(a)).toMatchObject({
+      dispatchState: 'pending',
+      handedOverAt: expect.any(Number)
+    })
+    const b = await permissionSend('ordinary B', { personality: 'serious' })
+    expect(journal.inputOrder.forced(b)).toBe(false)
+    await host.close(SESSION, 'user-close')
+    await waitForInputFinalization(journal, a)
+    expect(starts()).toHaveLength(1)
+    const kept = journal.queuedMessages.list().filter((c) => c.state === 'waiting')
+    expect.soft(kept.map((c) => c.messageId)).toEqual([b, a])
+    for (const [id, personality] of [
+      [a, 'friendly'],
+      [b, 'serious']
+    ] as const) {
+      expect(kept.find((c) => c.messageId === id)?.options).toEqual(journal.submission(id)?.options)
+      expect(kept.find((c) => c.messageId === id)?.options).toMatchObject({ personality })
+      expect(journal.submission(id)).toMatchObject({
+        dispatchState: 'rejected',
+        keptAsQueuedMessageId: id
+      })
+    }
+    preparation.resolve(config)
+    codex.routes['config/read'] = () => config
+    const caller = { callerKey: 'client-1' }
+    await host.revealSession(SESSION)
+    const method = 'agentSession.queuedMessagesResume'
+    expect(
+      await host.queuedMessagesResume(caller, {
+        envelope: {
+          sessionId: SESSION,
+          clientOperationId: hostTestOperationId(),
+          expectedRuntimeFence: null,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method,
+            sessionId: SESSION,
+            fields: {}
+          })
+        }
+      })
+    ).toMatchObject({ ok: true })
+    const reopened = sessions.get(SESSION)!.journal
+    const delivered: string[] = []
+    for (const { messageId: id } of kept) {
+      await vi.waitFor(() => expect(reopened.queuedMessages.get(id)?.consumedAs).toBeTruthy())
+      const h = reopened.queuedMessages.get(id)!.consumedAs!
+      await began(h)
+      expect(reopened.submission(h)?.dispatchState).toBe('accepted')
+      delivered.push(reopened.submission(h)!.queuedMessageId!)
+      turns.end('completed')
+      await host.flushStreamedEvents(SESSION)
+    }
+    expect.soft(delivered).toEqual([b, a])
+    expect(starts()).toHaveLength(3)
+    expect(reopened.queuedMessages.list().filter((c) => c.state === 'waiting')).toEqual([])
+    expect(reopened.queuedMessages.displayState().inputEntries.size).toBe(0)
+  } finally {
+    preparation.resolve(config)
+    await adapter.closeAll()
+  }
+})

@@ -19293,6 +19293,8 @@
       },
       "composer": {
         "send": "Gönder",
+        "alternateSteerHint": "Yönlendirmek için {{shortcut}}",
+        "alternateQueueHint": "Sıraya almak için {{shortcut}}",
         "noPty": "Canlı terminal yok, yeniden bağlanmak için geri geçin.",
         "locked": "Giriş başka bir cihaz tarafından tutuluyor.",
         "placeholder": "Bir şey sorun; dosyalara başvurmak için @, komutlar için / kullanın",

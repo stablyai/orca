@@ -20026,6 +20026,8 @@
       },
       "composer": {
         "send": "Enviar",
+        "alternateSteerHint": "{{shortcut}} para orientar",
+        "alternateQueueHint": "{{shortcut}} para colocar na fila",
         "noPty": "Nenhum terminal ativo — alterne de volta para reconectar.",
         "locked": "A entrada está retida por outro dispositivo.",
         "placeholder": "Enviar uma mensagem…",

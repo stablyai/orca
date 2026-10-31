@@ -1,3 +1,5 @@
+import { readJournalLegacyCards } from './journal-queue-import'
+import { journalInputOrder } from './journal-input-order'
 // Replay live epochs without rewriting history; damage/newer rows fail load and remain on disk.
 
 import { journalOutcomeSource } from './journal-outcome-format'
@@ -6,6 +8,7 @@ import { JournalOutcomeDecodeError } from './journal-outcome-codec'
 import { readJournalOutcomeGroups, type JournalReadRow } from './journal-read-row'
 import { AgentSessionJournalError } from './journal-write-guards'
 import type Database from '../../sqlite/sync-database'
+import { journalInputAcceptance } from './journal-input-provenance'
 import {
   applyJournalRow,
   createJournalReducerState,
@@ -38,7 +41,10 @@ export function replayJournal(db: Database.Database, sessionId: string): Journal
   if (epoch === null) {
     return null
   }
-  return foldJournalFromState(db, createJournalReducerState(sessionId, epoch))
+  return foldJournalFromState(
+    db,
+    createJournalReducerState(sessionId, epoch, (id) => journalInputAcceptance(db, sessionId, id))
+  )
 }
 
 /** The read is synchronous, like main's replay: it blocks once for one chat's saved records (its
@@ -49,7 +55,9 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
   if (epoch === null) {
     return null
   }
-  const empty = createJournalReducerState(sessionId, epoch)
+  const empty = createJournalReducerState(sessionId, epoch, (id) =>
+    journalInputAcceptance(db, sessionId, id)
+  )
   try {
     const source = journalOutcomeSource(db, sessionId, epoch)
     if (!source) {
@@ -57,7 +65,7 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
     }
     let baseline: JournalReducerState | undefined
     if (source.prefix > 0) {
-      const prefix = foldJournalFromState(db, empty, source.prefix)
+      const prefix = foldJournalFromState(db, empty, source.prefix, true)
       if (prefix.newer || prefix.damage || prefix.state.lastSequence !== source.prefix) {
         const gap = { sequence: prefix.state.lastSequence + 1, cause: 'sequence-gap' as const }
         return { ...prefix, damage: prefix.newer ? null : (prefix.damage ?? gap) }
@@ -82,10 +90,11 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
 function foldJournalFromState(
   db: Database.Database,
   state: JournalReducerState,
-  through = Number.POSITIVE_INFINITY
+  through = Number.POSITIVE_INFINITY,
+  deferNativeCleanup = false
 ): JournalLoad {
   const { sessionId, epoch, lastSequence } = state
-  const fold = startJournalRowFold({ sessionId, epoch }, state)
+  const fold = startJournalRowFold({ sessionId, epoch, deferNativeCleanup }, state)
   for (const entry of iterateJournalEpochRows(
     db,
     sessionId,
@@ -96,17 +105,27 @@ function foldJournalFromState(
       break
     }
   }
+  if (!deferNativeCleanup) {
+    journalInputOrder(state).overlay(state, readJournalLegacyCards(db, state))
+  }
   return fold.finish()
 }
 
 /** untilDamage stops at the first damage, for callers that only ask whether a fold publishes. */
 export function startJournalRowFold(
-  input: { sessionId: string; epoch: string; untilDamage?: boolean },
-  state = createJournalReducerState(input.sessionId, input.epoch)
+  input: {
+    sessionId: string
+    epoch: string
+    untilDamage?: boolean
+    deferNativeCleanup?: boolean
+    originalAcceptance?: Parameters<typeof createJournalReducerState>[2]
+  },
+  state = createJournalReducerState(input.sessionId, input.epoch, input.originalAcceptance)
 ): {
   add: (entry: { seq: number; rowJson: string; ts?: number }) => boolean
   finish: () => JournalLoad
 } {
+  journalInputOrder(state).beginReconstruction()
   let expectedSequence = state.lastSequence + 1
   let damage: JournalDamage | null = null
   let anchored = state.lastSequence > 0
@@ -149,6 +168,13 @@ export function startJournalRowFold(
     return true
   }
   const finish = (): JournalLoad => {
+    if (!input.deferNativeCleanup) {
+      journalInputOrder(state).finishReconstruction(state)
+      journalInputOrder(state).lineage.restoreFrontier(
+        state.lastSequence,
+        state.inputEntries.values()
+      )
+    }
     state.oldestSequence = FIRST_JOURNAL_SEQUENCE
     // Empty epochs contain no recoverable history; founding a fresh epoch loses nothing.
     const found =

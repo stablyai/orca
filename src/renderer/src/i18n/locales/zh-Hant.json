@@ -19047,6 +19047,8 @@
       },
       "composer": {
         "send": "傳送",
+        "alternateSteerHint": "{{shortcut}} 引導",
+        "alternateQueueHint": "{{shortcut}} 加入佇列",
         "noPty": "沒有作用中的終端機，請切回終端機以重新連線。",
         "locked": "輸入正被另一台裝置佔用。",
         "placeholder": "隨心輸入，@ 引用檔案，/ 使用命令",
