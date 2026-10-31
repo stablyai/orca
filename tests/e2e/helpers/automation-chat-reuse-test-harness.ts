@@ -1,3 +1,4 @@
+import { RuntimeMobileNotificationController } from '../../../src/main/runtime/runtime-mobile-notification-controller'
 import {
   ChatOpenTestRuntime,
   exerciseRecordedChatOpen,
@@ -105,7 +106,9 @@ export async function exerciseBusyChatReuse(
       }
       return answer
     })
+    const notifications = new RuntimeMobileNotificationController()
     const runtimeFacade = {
+      createAutomationAttentionOwner: notifications.createAutomationAttentionOwner,
       ensureStructuredAgentSessionHost: async () => {},
       openAgentSessionRecordStore: async () => rig.store,
       openedAgentSessionRecordStore: () => rig.store,

@@ -1,10 +1,9 @@
 import { AutomationAttentionCorrelations } from './automation-attention-correlations'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { MobileNotificationDispatchEvent } from '../../shared/mobile-notification-events'
 import {
   agentSessionAttentionSubjectPrefix,
   attentionOriginWasRead,
-  type StructuredAttentionOrigin,
   type StructuredAttentionRead,
   type StructuredAttentionState
 } from '../../shared/agent-session-attention'
@@ -20,29 +19,7 @@ import { MobileNotificationDismissalStore } from './mobile-notification-dismissa
 import { DesktopClientPresenceTracker } from './desktop-client-presence-tracker'
 import type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
 
-export type MobileNotificationDispatchEvent = {
-  type: 'notification'
-  legacySocketAllowed?: boolean
-  desktopAllowed?: boolean
-  desktopAway?: boolean
-  emittedAt?: number
-  source: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin'
-  title: string
-  body: string
-  worktreeId?: string
-  /** The pane the phone opens on tap; old phones ignore it and open the workspace's default tab. */
-  paneKey?: string
-  /** See `NotificationDispatchRequest.executionHost`; old phones ignore it and open the desktop's. */
-  executionHost?: `runtime:${string}`
-  notificationId?: string
-  notificationSeq?: number
-  notificationEpoch?: string
-  // Additive state distinguishes input-needed from finished in push; old clients ignore it.
-  agentState?: AgentStatusState
-  /** See `NotificationDispatchRequest.attentionKey`: cooldowns key on it instead of the workspace. */
-  attentionKey?: string
-  structuredOrigin?: StructuredAttentionOrigin
-}
+export type { MobileNotificationDispatchEvent } from '../../shared/mobile-notification-events'
 
 export type MobileNotificationDismissEvent = {
   type: 'dismiss'

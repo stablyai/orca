@@ -32,7 +32,12 @@ const mocks = vi.hoisted(() => {
     hostAvailable: true,
     readChat: vi.fn<typeof callStructuredAgentSession>().mockResolvedValue({}),
     launch: vi.fn(),
-    host: { journalSnapshot: vi.fn(), currentWork: vi.fn(), send: vi.fn() }
+    host: {
+      journalSnapshot: vi.fn(),
+      currentWork: vi.fn(),
+      send: vi.fn(),
+      registerAutomationChatRun: vi.fn<StructuredAgentSessionHost['registerAutomationChatRun']>()
+    }
   }
 })
 vi.mock('../../src/main/runtime/rpc/methods/agent-launch', () => ({
@@ -148,11 +153,24 @@ function fixture() {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.actualHost = null
+  mocks.host.registerAutomationChatRun.mockReset()
   mocks.hostAvailable = true
   mocks.launch.mockResolvedValue(terminal)
   mocks.host.currentWork.mockReturnValue({ working: () => false })
   mocks.host.send.mockResolvedValue({ ok: true })
 })
+function expectReuseRegistration(): void {
+  expect(mocks.host.registerAutomationChatRun).toHaveBeenCalledExactlyOnceWith(
+    run.id,
+    'claude_prev',
+    automationRunOperationId(run, 'reuse-send')
+  )
+  expect(mocks.host.send).toHaveBeenCalledOnce()
+  expect(mocks.host.registerAutomationChatRun.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.host.send.mock.invocationCallOrder[0]
+  )
+}
+
 describe('automations through agent.launch', () => {
   it.each(['claude', 'codex'] as const)(
     'launches explicit Chat for %s through the common entry and keeps its actual fallback',
@@ -286,6 +304,7 @@ describe('automations through agent.launch', () => {
       ]
     })
     expect(result).toMatchObject({ chatSessionId: 'claude_prev', workspaceId: 'wt-1' })
+    expectReuseRegistration()
     expect(records.getConversation).toHaveBeenCalledExactlyOnceWith('claude_prev')
     expect(mocks.host.send).toHaveBeenCalledExactlyOnceWith(
       expect.anything(),
@@ -329,6 +348,7 @@ describe('automations through agent.launch', () => {
       runs
     }
     expect((await launchAutomationChatAgent(runtime, request)).chatSessionId).toBe('claude_prev')
+    expectReuseRegistration()
     expect(mocks.launch).not.toHaveBeenCalled()
     mocks.host.send.mockClear()
     mocks.launch.mockResolvedValue(chat)
@@ -575,6 +595,7 @@ it.each(['unknown', 'refused', 'conflict', 'failed-row'] as const)(
       })
     ).rejects.toMatchObject({ target: { sessionKind: 'chat', chatSessionId: 'claude_prev' } })
     expect(mocks.host.send).toHaveBeenCalledOnce()
+    expectReuseRegistration()
     expect(mocks.launch).not.toHaveBeenCalled()
   }
 )

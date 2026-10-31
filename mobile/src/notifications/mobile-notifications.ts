@@ -17,7 +17,7 @@ import {
   mobilePushAlertContent
 } from '../../../src/shared/mobile-push-alert'
 import { reserveNotificationCooldown } from '../../../src/shared/notification-burst-cooldown'
-import type { MobileNotificationDispatchEvent } from '../../../src/main/runtime/runtime-mobile-notification-controller'
+import type { MobileNotificationDispatchEvent } from '../../../src/shared/mobile-notification-events'
 
 export {
   ensureNotificationPermissions,

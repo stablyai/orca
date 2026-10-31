@@ -489,12 +489,12 @@ it.each([
     const gate = parked.authority.pause()
     try {
       setStructuredAgentSessionHost(live.rig.host)
-      const admissions = []
+      const admissions: Awaited<ReturnType<typeof live.start>>[] = []
       for (let i = 0; i < a; i++) {
         admissions.push(await live.start())
       }
       setStructuredAgentSessionHost(parked.rig.host)
-      const debt = []
+      const debt: Awaited<ReturnType<typeof parked.start>>[] = []
       for (let i = 0; i < p; i++) {
         const run = await parked.start()
         const observation = await parked.finish(run)
@@ -506,7 +506,10 @@ it.each([
       await gate.started.promise
       expect(debt.every((run) => parked.owner.get(run.run.id))).toBe(true)
       setStructuredAgentSessionHost(matched.rig.host)
-      const results = []
+      const results: {
+        run: Awaited<ReturnType<typeof matched.start>>
+        observation: Awaited<ReturnType<typeof matched.finish>>
+      }[] = []
       for (let i = 0; i < c; i++) {
         const run = await matched.start()
         results.push({ run, observation: await matched.finish(run) })

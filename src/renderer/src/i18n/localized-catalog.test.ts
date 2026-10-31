@@ -135,8 +135,7 @@ it('reuses translated coded automation reasons while preserving legacy details f
   expect(
     automationRunErrorText({
       error: 'stored fallback',
-      errorCode: 'future code',
-      errorParams: null
+      errorCode: 'future code'
     })
   ).toBe('stored fallback')
 })

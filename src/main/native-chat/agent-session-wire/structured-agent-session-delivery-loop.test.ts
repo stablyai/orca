@@ -254,15 +254,34 @@ describe('delivery iteration settlement and ownership', () => {
   it('reclaims N and 10N parked runs with linear boundary fact reads', async () => {
     const sessions = rig.host.collaboratorsForTests().sessions
     const cursor = vi.spyOn(journal(), 'cursor')
+    let reads = { publication: 0, delivery: 0, removal: 0 }
+    const publish = sessions.publish.bind(sessions)
+    vi.spyOn(sessions, 'publish').mockImplementation((...args) => {
+      const before = cursor.mock.calls.length
+      publish(...args)
+      reads.publication += cursor.mock.calls.length - before
+    })
     for (const n of [10, 100]) {
       cursor.mockClear()
+      reads = { publication: 0, delivery: 0, removal: 0 }
       for (let i = 0; i < n; i++) {
         const id = `scale-${i}`
+        let before = cursor.mock.calls.length
+        const publicationsBefore = reads.publication
         sessions.set(id, { ...sessions.get(SESSION)! })
+        // Attachment also seeds the existing request-failure delivery baseline.
+        reads.delivery +=
+          cursor.mock.calls.length - before - (reads.publication - publicationsBefore)
+        before = cursor.mock.calls.length
         await loop().wake(id)
+        reads.delivery += cursor.mock.calls.length - before
+        before = cursor.mock.calls.length
         sessions.delete(id)
+        reads.removal += cursor.mock.calls.length - before
       }
-      expect(cursor).toHaveBeenCalledTimes(2 * n)
+      expect(reads).toEqual({ publication: n, delivery: 2 * n, removal: 0 })
+      expect(cursor).toHaveBeenCalledTimes(3 * n)
+      process.stdout.write(`${JSON.stringify({ n, ...reads, total: cursor.mock.calls.length })}\n`)
       expect(loop()['running'].size).toBe(0)
       expect(loop()['runs'].size).toBe(0)
     }
