@@ -11978,8 +11978,7 @@
         "PluginInstallDialog": {
           "localRequired": "Enter the plugin folder path.",
           "gitUrlRequired": "Enter a repository URL.",
-          "gitUrlInvalid": "Use an HTTPS or SSH Git URL.",
-          "gitRefRequired": "Add a #tag or #commit, like #v0.1.0.",
+          "gitUrlInvalid": "Use a repository link like https://github.com/owner/repo, owner/repo, or an SSH URL.",
           "title": "Install plugin",
           "description": "Nothing runs until you enable it.",
           "source": "Install source",
@@ -11989,12 +11988,23 @@
           "localPlaceholder": "Path to a plugin folder",
           "localHelp": "The folder with orca-plugin.json",
           "gitLabel": "Repository URL",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "End with #tag or #commit to pin a version",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "Paste a repository, release, or tag link. Without #tag or #commit, Orca uses the latest version tag.",
           "cancel": "Cancel",
           "installing": "Installing…",
           "install": "Install",
-          "installFailed": "Plugin installation failed. Check the source and try again."
+          "installFailed": "Plugin installation failed. Check the source and try again.",
+          "checking": "Checking…",
+          "continue": "Continue",
+          "gitUrlCredentials": "Remove the username or token from the URL. Orca uses your Git sign-in.",
+          "gitRefInvalid": "The version after # isn't a valid tag, branch, or commit name.",
+          "gitRefNotFound": "This repository has no tag or branch named {{value0}}.",
+          "gitUnreachable": "Couldn't read this repository. Check the URL and that your Git account can access it.",
+          "resolvedLatestTag": "Installs {{value0}}, the latest version, at commit {{value1}}.",
+          "resolvedTag": "Installs {{value0}} at commit {{value1}}.",
+          "resolvedBranch": "Installs branch {{value0}} as it is now, at commit {{value1}}.",
+          "resolvedCommit": "Installs commit {{value0}}.",
+          "resolvedDefaultBranch": "No version tag found, so this installs the latest commit, {{value0}}."
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "Only in a workspace"
@@ -12107,7 +12117,8 @@
           "invalidManifest": "orca-plugin.json is invalid. Fix it, then refresh plugins.",
           "installedManifestUnloadable": "This version can't load in this Orca. Update or reinstall it.",
           "invalidArtifact": "A worker or panel file is missing or unsafe. Fix it, then refresh.",
-          "consentChanged": "This plugin changed while you were reviewing it. Review it again."
+          "consentChanged": "This plugin changed while you were reviewing it. Review it again.",
+          "installGitMoved": "The repository changed after Orca checked it. Try again."
         },
         "plugins": {
           "search": {

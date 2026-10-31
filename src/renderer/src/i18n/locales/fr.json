@@ -11783,8 +11783,7 @@
         "PluginInstallDialog": {
           "localRequired": "Saisissez le chemin du dossier du plugin.",
           "gitUrlRequired": "Saisissez une URL de dépôt.",
-          "gitUrlInvalid": "Utilisez une URL Git HTTPS ou SSH.",
-          "gitRefRequired": "Ajoutez un #tag ou #commit, par exemple #v0.1.0.",
+          "gitUrlInvalid": "Utilisez un lien de dépôt comme https://github.com/owner/repo, owner/repo ou une URL SSH.",
           "title": "Installer le plugin",
           "description": "Rien ne s'exécute avant que vous l'activiez.",
           "source": "Source d'installation",
@@ -11794,12 +11793,23 @@
           "localPlaceholder": "Chemin d'un dossier de plugin",
           "localHelp": "Le dossier contenant orca-plugin.json",
           "gitLabel": "URL du dépôt",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "Terminez par #tag ou #commit pour figer une version",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "Collez un lien de dépôt, de version ou de tag. Sans #tag ni #commit, Orca utilise le tag de version le plus récent.",
           "cancel": "Annuler",
           "installing": "Installation…",
           "install": "Installer",
-          "installFailed": "Échec de l'installation du plugin. Vérifiez la source et réessayez."
+          "installFailed": "Échec de l'installation du plugin. Vérifiez la source et réessayez.",
+          "checking": "Vérification…",
+          "continue": "Continuer",
+          "gitUrlCredentials": "Retirez le nom d'utilisateur ou le jeton de l'URL. Orca utilise votre connexion Git.",
+          "gitRefInvalid": "La version après # n'est pas un nom de tag, de branche ou de commit valide.",
+          "gitRefNotFound": "Ce dépôt n'a aucun tag ni aucune branche nommé {{value0}}.",
+          "gitUnreachable": "Impossible de lire ce dépôt. Vérifiez l'URL et que votre compte Git y a accès.",
+          "resolvedLatestTag": "Installe {{value0}}, la version la plus récente, au commit {{value1}}.",
+          "resolvedTag": "Installe {{value0}} au commit {{value1}}.",
+          "resolvedBranch": "Installe la branche {{value0}} dans son état actuel, au commit {{value1}}.",
+          "resolvedCommit": "Installe le commit {{value0}}.",
+          "resolvedDefaultBranch": "Aucun tag de version trouvé : le commit le plus récent, {{value0}}, sera installé."
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "Uniquement dans un espace de travail"
@@ -11969,7 +11979,8 @@
           "invalidManifest": "orca-plugin.json est non valide. Corrigez-le, puis actualisez les plugins.",
           "installedManifestUnloadable": "Cette version ne peut pas se charger dans cet Orca. Mettez-la à jour ou réinstallez-la.",
           "invalidArtifact": "Un fichier de worker ou de panneau est manquant ou dangereux. Corrigez-le, puis actualisez.",
-          "consentChanged": "Ce plugin a changé pendant votre examen. Examinez-le à nouveau."
+          "consentChanged": "Ce plugin a changé pendant votre examen. Examinez-le à nouveau.",
+          "installGitMoved": "Le dépôt a changé après la vérification d'Orca. Réessayez."
         },
         "plugins": {
           "search": {

@@ -11283,8 +11283,7 @@
         "PluginInstallDialog": {
           "localRequired": "プラグインフォルダーのパスを入力してください。",
           "gitUrlRequired": "リポジトリ URL を入力してください。",
-          "gitUrlInvalid": "HTTPS または SSH の Git URL を使用してください。",
-          "gitRefRequired": "#tag または #commit を追加してください (例: #v0.1.0)。",
+          "gitUrlInvalid": "https://github.com/owner/repo、owner/repo、または SSH URL のようなリポジトリリンクを使用してください。",
           "title": "プラグインをインストール",
           "description": "有効にするまで何も実行されません。",
           "source": "インストール元",
@@ -11294,12 +11293,23 @@
           "localPlaceholder": "プラグインフォルダーのパス",
           "localHelp": "orca-plugin.json があるフォルダー",
           "gitLabel": "リポジトリ URL",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "#tag または #commit で終えるとバージョンを固定できます",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "リポジトリ、リリース、またはタグのリンクを貼り付けてください。#tag や #commit がない場合は最新のバージョンタグを使用します。",
           "cancel": "キャンセル",
           "installing": "インストール中…",
           "install": "インストール",
-          "installFailed": "プラグインのインストールに失敗しました。ソースを確認して再試行してください。"
+          "installFailed": "プラグインのインストールに失敗しました。ソースを確認して再試行してください。",
+          "checking": "確認中…",
+          "continue": "続行",
+          "gitUrlCredentials": "URL からユーザー名またはトークンを削除してください。Orca はお使いの Git の認証情報を使用します。",
+          "gitRefInvalid": "# の後のバージョンは有効なタグ、ブランチ、またはコミット名ではありません。",
+          "gitRefNotFound": "このリポジトリには {{value0}} という名前のタグまたはブランチがありません。",
+          "gitUnreachable": "このリポジトリを読み取れませんでした。URL と、Git アカウントがアクセスできるかを確認してください。",
+          "resolvedLatestTag": "最新バージョンの {{value0}} (コミット {{value1}}) をインストールします。",
+          "resolvedTag": "{{value0}} (コミット {{value1}}) をインストールします。",
+          "resolvedBranch": "ブランチ {{value0}} の現在の状態 (コミット {{value1}}) をインストールします。",
+          "resolvedCommit": "コミット {{value0}} をインストールします。",
+          "resolvedDefaultBranch": "バージョンタグが見つからないため、最新のコミット {{value0}} をインストールします。"
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "ワークスペース内のみ"
@@ -11469,7 +11479,8 @@
           "invalidManifest": "orca-plugin.jsonが無効です。修正してからプラグインを更新してください。",
           "installedManifestUnloadable": "このバージョンはこの Orca では読み込めません。更新するか再インストールしてください。",
           "invalidArtifact": "ワーカーまたはパネルのファイルが見つからないか安全ではありません。修正してから更新してください。",
-          "consentChanged": "確認中にこのプラグインが変更されました。もう一度確認してください。"
+          "consentChanged": "確認中にこのプラグインが変更されました。もう一度確認してください。",
+          "installGitMoved": "Orca が確認した後にリポジトリが変更されました。もう一度お試しください。"
         },
         "plugins": {
           "search": {

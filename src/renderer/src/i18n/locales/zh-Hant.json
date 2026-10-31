@@ -11719,8 +11719,7 @@
         "PluginInstallDialog": {
           "localRequired": "請輸入外掛資料夾路徑。",
           "gitUrlRequired": "請輸入存放庫 URL。",
-          "gitUrlInvalid": "請使用 HTTPS 或 SSH Git URL。不允許使用可執行的 Git 輔助通訊協定。",
-          "gitRefRequired": "請新增明確的 #ref（標籤或提交）以固定安裝版本，例如 #v0.1.0。",
+          "gitUrlInvalid": "請使用存放庫連結，例如 https://github.com/owner/repo、owner/repo 或 SSH URL。",
           "title": "安裝外掛",
           "description": "安裝會將外掛複製到 Orca，並顯示其權限供您審查。啟用外掛之前，不會執行任何外掛程式碼。",
           "source": "安裝來源",
@@ -11730,12 +11729,23 @@
           "localPlaceholder": "/Users/you/plugins/my-plugin 或 C:\\Users\\you\\plugins\\my-plugin",
           "localHelp": "此電腦上包含 orca-plugin.json 的資料夾完整路徑。系統會完全按輸入內容使用該路徑。",
           "gitLabel": "帶 #ref 的存放庫 URL",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "附加明確的 #ref（標籤或提交）以固定安裝版本。適用於 GitHub、GitLab 和任何 Git 主機。",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "貼上存放庫、發行版本或標籤連結。未指定 #tag 或 #commit 時，Orca 會使用最新的版本標籤。",
           "cancel": "取消",
           "installing": "正在安裝…",
           "install": "安裝",
-          "installFailed": "外掛安裝失敗。請檢查來源後重試。"
+          "installFailed": "外掛安裝失敗。請檢查來源後重試。",
+          "checking": "正在檢查…",
+          "continue": "繼續",
+          "gitUrlCredentials": "請從 URL 中移除使用者名稱或權杖。Orca 會使用你的 Git 登入憑證。",
+          "gitRefInvalid": "# 後面的版本不是有效的標籤、分支或提交名稱。",
+          "gitRefNotFound": "此存放庫中沒有名為 {{value0}} 的標籤或分支。",
+          "gitUnreachable": "無法讀取此存放庫。請檢查 URL，以及你的 Git 帳戶是否有存取權限。",
+          "resolvedLatestTag": "將安裝最新版本 {{value0}}（提交 {{value1}}）。",
+          "resolvedTag": "將安裝 {{value0}}（提交 {{value1}}）。",
+          "resolvedBranch": "將安裝分支 {{value0}} 的目前狀態（提交 {{value1}}）。",
+          "resolvedCommit": "將安裝提交 {{value0}}。",
+          "resolvedDefaultBranch": "找不到版本標籤，因此將安裝最新提交 {{value0}}。"
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "僅在工作區為作用中時執行。"
@@ -11839,7 +11849,8 @@
           "invalidManifest": "orca-plugin.json 無效。請修復它，然後重新整理外掛。",
           "installedManifestUnloadable": "此版本無法在這個 Orca 中載入。請更新或重新安裝。",
           "invalidArtifact": "宣告的工作行程或面板檔案缺失或不安全。請修復外掛檔案，然後重新整理。",
-          "consentChanged": "您在審查時外掛發生了變更。請關閉此對話方塊並審查更新後的權限。"
+          "consentChanged": "您在審查時外掛發生了變更。請關閉此對話方塊並審查更新後的權限。",
+          "installGitMoved": "Orca 檢查後存放庫已變更。請再試一次。"
         },
         "plugins": {
           "search": {
