@@ -12866,7 +12866,9 @@
           "light": "Claro",
           "languageIncomplete": "{{value0}} % traducido, demasiado incompleto para usarlo como idioma de Orca",
           "languageCoverage": "Idioma de la interfaz · {{value0}} % traducido",
-          "newFileMenu": "Se añade al menú +"
+          "newFileMenu": "Se añade al menú +",
+          "editorReplacesViewer": "Abre {{value0}} en lugar del visor de Orca",
+          "editorMayReplaceViewer": "Puede abrir {{value0}} en lugar del visor de Orca"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "Ningún otro acceso",
@@ -15881,16 +15883,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Acercar",
-          "6c89c73d9f": "Restablecer zoom",
           "be27304574": "Alejar",
-          "77bfc9b35a": "Abrir imagen en ventana emergente",
           "3ef9551ba2": "Cargando vista previa...",
-          "d9d2944855": "No se pudo cargar la vista previa del archivo"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Presione Esc para cerrar",
-          "535f4e2b56": "Cerrar",
-          "9e27b2ecaf": "Vista previa de imagen a tamaño completo"
+          "d9d2944855": "No se pudo cargar la vista previa del archivo",
+          "fitToView": "Ajustar a la vista",
+          "actualSize": "Tamaño real",
+          "expand": "Ampliar imagen"
         },
         "IpynbViewer": {
           "859bf9fc21": "Ejecutar celda",
@@ -16013,7 +16011,10 @@
           "zoomOut": "Alejar",
           "zoomIn": "Acercar",
           "fit": "Ajustar a la pantalla",
-          "close": "Cerrar"
+          "close": "Cerrar",
+          "copyPng": "Copiar como PNG",
+          "copiedPng": "Copiado como PNG",
+          "copyPngFailed": "No se pudo copiar la imagen"
         },
         "MermaidBlock": {
           "dcc132e691": "Error de diagrama:",

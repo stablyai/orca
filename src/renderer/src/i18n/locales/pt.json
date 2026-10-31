@@ -9596,7 +9596,9 @@
           "light": "Claro",
           "languageIncomplete": "{{value0}}% traduzido, incompleto demais para usar como idioma do Orca",
           "languageCoverage": "Idioma da interface · {{value0}}% traduzido",
-          "newFileMenu": "Adiciona ao menu +"
+          "newFileMenu": "Adiciona ao menu +",
+          "editorReplacesViewer": "Abre {{value0}} em vez do visualizador do Orca",
+          "editorMayReplaceViewer": "Pode abrir {{value0}} em vez do visualizador do Orca"
         },
         "PluginPageHero": {
           "screenshots": "Capturas de tela",
@@ -13207,11 +13209,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Aumentar zoom",
-          "6c89c73d9f": "Redefinir zoom",
           "be27304574": "Diminuir zoom",
-          "77bfc9b35a": "Abrir imagem em popup",
           "3ef9551ba2": "Carregando pré-visualização...",
-          "d9d2944855": "Falha ao carregar a pré-visualização do arquivo"
+          "d9d2944855": "Falha ao carregar a pré-visualização do arquivo",
+          "fitToView": "Ajustar à visualização",
+          "actualSize": "Tamanho real",
+          "expand": "Expandir imagem"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "sem-titulo.md",
@@ -13360,11 +13363,6 @@
           "57aac3979a": "Original",
           "fb0ae4f3c0": "Sem pré-visualização"
         },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Pressione Esc para fechar",
-          "535f4e2b56": "Fechar",
-          "9e27b2ecaf": "Pré-visualização de imagem em tamanho completo"
-        },
         "MonacoEditor": {
           "68cb83f4a7": "Adicionar nota no texto selecionado",
           "fd68ae03b3": "Buscar nos Arquivos",
@@ -13510,7 +13508,10 @@
           "zoomOut": "Diminuir zoom",
           "zoomIn": "Aumentar zoom",
           "fit": "Ajustar à tela",
-          "close": "Fechar"
+          "close": "Fechar",
+          "copyPng": "Copiar como PNG",
+          "copiedPng": "Copiado como PNG",
+          "copyPngFailed": "Não foi possível copiar a imagem"
         },
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "A inserção da imagem foi cancelada porque o destino mudou. O arquivo importado foi mantido.",
