@@ -340,7 +340,7 @@ it('keeps independently exited page-N rows through real partial/quiet admission,
       pagesRef.current = next
       return next
     })
-  const model: Parameters<typeof runTaskPageGitHubQuietRefresh>[0] = {
+  const model = {
     ...store.getState(),
     selectedRepos: [repo, remote],
     taskSource: 'github',
@@ -363,7 +363,7 @@ it('keeps independently exited page-N rows through real partial/quiet admission,
     quietRevalidateMountedRef: mounted,
     quietRevalidateOwnerRef: { current: {} },
     quietRevalidateScopeRef: { current: { queryKey: `${queryKey}registered`, generation: 1 } }
-  }
+  } satisfies Parameters<typeof runTaskPageGitHubQuietRefresh>[0]
   const sources = { issues: { owner: 'o', repo: 'r' }, prs: null }
   const closed = { ...local, state: 'closed' as const, assignees: [user('alice')] }
   list.mockImplementation(async (args: { repoPath: string }) => {

@@ -1,13 +1,19 @@
 import type { TaskPageGitHubLandingRefreshModel } from './use-task-page-github-landing-refresh'
+import type { TaskPageGitHubQuietRefreshInput } from './task-page-github-delivery-inputs'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useRef } from 'react'
 import type { QuietRevalidateRunOwner } from '@/components/task-page/github/task-page-github-work-item-quiet-state'
 import { advanceTaskPageQuietRevalidateScope } from '@/components/task-page/github/task-page-github-work-item-quiet-revalidate'
 import { useTaskPageGitHubQuietRefreshEffect } from './use-task-page-github-quiet-refresh-effect'
 export type TaskPageGitHubQuietRefreshPreludeModel = ReturnType<
-  typeof useTaskPageGitHubQuietRefreshPrelude
+  typeof useTaskPageGitHubQuietRefreshPrelude<TaskPageGitHubLandingRefreshModel>
 >
-export function useTaskPageGitHubQuietRefreshPrelude(model: TaskPageGitHubLandingRefreshModel) {
+export function useTaskPageGitHubQuietRefreshPrelude<
+  T extends Pick<
+    TaskPageGitHubLandingRefreshModel,
+    'githubWorkItemMutationQueryKey' | 'selectedReposKey'
+  >
+>(model: T) {
   const { githubWorkItemMutationQueryKey, selectedReposKey } = model
   // Nonce rerenders must preserve shared in-flight/trailing bookkeeping; track true unmount only.
   const quietRevalidateMountedRef = useMountedRef()
@@ -36,8 +42,15 @@ export function useTaskPageGitHubQuietRefreshPrelude(model: TaskPageGitHubLandin
   nextModel.quietRevalidateScopeRef = quietRevalidateScopeRef
   return nextModel
 }
-export function useTaskPageGitHubQuietRefresh(model: TaskPageGitHubLandingRefreshModel) {
+export function useTaskPageGitHubQuietRefresh<
+  T extends Omit<
+    TaskPageGitHubQuietRefreshInput,
+    'quietRevalidateMountedRef' | 'quietRevalidateOwnerRef' | 'quietRevalidateScopeRef'
+  >
+>(model: T) {
   const preludeModel = useTaskPageGitHubQuietRefreshPrelude(model)
   return useTaskPageGitHubQuietRefreshEffect(preludeModel)
 }
-export type TaskPageGitHubQuietRefreshModel = ReturnType<typeof useTaskPageGitHubQuietRefresh>
+export type TaskPageGitHubQuietRefreshModel = ReturnType<
+  typeof useTaskPageGitHubQuietRefresh<TaskPageGitHubLandingRefreshModel>
+>

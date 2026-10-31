@@ -1,7 +1,10 @@
 import type { TaskPageGitHubQuietRefreshPreludeModel } from './use-task-page-github-quiet-refresh'
+import type { TaskPageGitHubQuietRefreshInput } from './task-page-github-delivery-inputs'
 import { useEffect } from 'react'
 import { runTaskPageGitHubQuietRefresh } from './task-page-github-quiet-refresh-run'
-export function useTaskPageGitHubQuietRefreshEffect(model: TaskPageGitHubQuietRefreshPreludeModel) {
+export function useTaskPageGitHubQuietRefreshEffect<T extends TaskPageGitHubQuietRefreshInput>(
+  model: T
+) {
   const { quietRefreshNonce, githubWorkItemMutationQueryKey, selectedReposKey } = model
   // Single-flight quiet refresh retains pages and confirmed authority, with backoff/trailing work instead of filter skeletons.
   useEffect(() => {
@@ -11,5 +14,5 @@ export function useTaskPageGitHubQuietRefreshEffect(model: TaskPageGitHubQuietRe
   return model
 }
 export type TaskPageGitHubQuietRefreshEffectModel = ReturnType<
-  typeof useTaskPageGitHubQuietRefreshEffect
+  typeof useTaskPageGitHubQuietRefreshEffect<TaskPageGitHubQuietRefreshPreludeModel>
 >

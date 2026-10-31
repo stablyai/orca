@@ -56,7 +56,10 @@ export type ListQueryTransition = {
   publish: (plans: readonly ListComposition[]) => void
 }
 export function listInput(
-  item: ObservedGitHubWorkItem,
+  item: Pick<
+    ObservedGitHubWorkItem,
+    'assignees' | 'reviewRequests' | 'githubValueOrigins' | 'githubObservation'
+  >,
   family: TaskPageGitHubListFamily,
   observation?: GitHubTaskObservation
 ): ListInput {

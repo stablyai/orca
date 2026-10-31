@@ -97,7 +97,7 @@ it('bounds cloned-user login work for confirmed Addressed composition and comple
       const lifetime = registry.getListEntry(address)!.lifetime
       const composition = logins
       logins = 0
-      let retired: (typeof composed)[] = [composed]
+      let retired: readonly (typeof composed)[] = [composed]
       transitionTaskPageGitHubMutationQuery('next', store.getState(), [retired], (update) => {
         retired = update([retired])[0]!
       })
@@ -230,7 +230,7 @@ it('composes distinct confirmed positives once and lets genuine current Full emp
       expect(composition).toBeLessThanOrEqual(2 * f + 10)
       store.setState({ workItemsCache: { [key]: { data: [fullEmpty], fetchedAt: 0 } } })
       logins = 0
-      let pages = [composed]
+      let pages: readonly (typeof composed)[] = [composed]
       transitionTaskPageGitHubMutationQuery('next', store.getState(), [pages], (update) => {
         pages = update([pages])[0]!
       })

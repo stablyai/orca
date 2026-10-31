@@ -29,7 +29,6 @@ export function createTaskRefreshStore(n = 1) {
     },
     githubTaskDrawerWorkItem: seed,
     recordFeatureInteraction: vi.fn(),
-    recordFeatureInteractionOnce: vi.fn(),
     workItemsCache: {
       [key]: { data: [{ ...seed, id: 'issue:5' }, twin, ...others], fetchedAt: 10 }
     },

@@ -57,7 +57,10 @@ export function captureTaskPageGitHubRefreshMasks(
       )
     }
   })
-  return (accepted: Pick<GitHubWorkItem, 'state' | 'assignees'>, full?: GitHubWorkItem): boolean =>
+  return (
+    accepted: Pick<GitHubWorkItem, 'state' | 'assignees'>,
+    full?: Parameters<typeof listInput>[0]
+  ): boolean =>
     batchTaskPageGitHubMutationRegistry(() => {
       const currentIndex = createTaskPageGitHubScalarAuthorityIndex()
       const entries = captured.map((capture) => ({

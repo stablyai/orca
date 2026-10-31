@@ -160,7 +160,7 @@ export function qualifyGitHubTaskLists<T extends Omit<ObservedGitHubWorkItem, 'r
 }
 
 export function gitHubTaskFamilyOrigin(
-  item: ObservedGitHubWorkItem,
+  item: Pick<ObservedGitHubWorkItem, 'githubValueOrigins' | 'githubObservation'>,
   family: GitHubTaskFamily
 ): GitHubTaskValueOrigin | undefined {
   return (
