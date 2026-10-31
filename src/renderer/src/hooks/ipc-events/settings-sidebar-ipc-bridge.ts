@@ -17,6 +17,76 @@ function getShortcutPlatform(): NodeJS.Platform {
   return 'linux'
 }
 
+let latestWorktreeDeepLinkSeq = 0
+let cancelPendingWorktreeDeepLinkWait: (() => void) | null = null
+
+function dispatchWorktreeDeepLinkWhenReposReady(
+  link: Parameters<ReturnType<typeof useAppStore.getState>['openWorktreeDeepLink']>[0],
+  unsubs: (() => void)[]
+): void {
+  const seq = ++latestWorktreeDeepLinkSeq
+  cancelPendingWorktreeDeepLinkWait?.()
+  cancelPendingWorktreeDeepLinkWait = null
+
+  const initialState = useAppStore.getState()
+  const currentRepos = initialState.repos ?? []
+  if (!link.repo?.trim() || currentRepos.length > 0 || !initialState.awaitLocalRepoCatalogSettlement) {
+    initialState.openWorktreeDeepLink(link)
+    return
+  }
+
+  let cancelled = false
+  let unsubscribeStore: (() => void) | null = null
+  const cancelWait = () => {
+    cancelled = true
+    if (unsubscribeStore) {
+      const unsub = unsubscribeStore
+      unsubscribeStore = null
+      unsub()
+    }
+  }
+  cancelPendingWorktreeDeepLinkWait = cancelWait
+  unsubs.push(cancelWait)
+
+  const waitAndDispatch = () => {
+    const settlePromise = useAppStore.getState().awaitLocalRepoCatalogSettlement?.()
+    const dispatch = () => {
+      if (!cancelled && seq === latestWorktreeDeepLinkSeq) {
+        useAppStore.getState().openWorktreeDeepLink(link)
+      }
+    }
+    if (settlePromise && typeof settlePromise.then === 'function') {
+      void settlePromise.then(dispatch, dispatch)
+    } else {
+      dispatch()
+    }
+  }
+
+  if ((initialState.reposFetchGeneration ?? 0) > 0) {
+    waitAndDispatch()
+    return
+  }
+
+  let started = false
+  unsubscribeStore = useAppStore.subscribe((state) => {
+    if (
+      started ||
+      cancelled ||
+      seq !== latestWorktreeDeepLinkSeq ||
+      ((state.reposFetchGeneration ?? 0) === 0 && (state.repos ?? []).length === 0)
+    ) {
+      return
+    }
+    started = true
+    if (unsubscribeStore) {
+      const unsub = unsubscribeStore
+      unsubscribeStore = null
+      unsub()
+    }
+    waitAndDispatch()
+  })
+}
+
 export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onOpenSettings(() => {
@@ -29,6 +99,13 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
   })
   if (unsubscribeOpenSkillShare) {
     unsubs.push(unsubscribeOpenSkillShare)
+  }
+
+  const unsubscribeOpenWorktreeDeepLink = window.api.ui.onOpenWorktreeDeepLink?.((link) => {
+    dispatchWorktreeDeepLinkWhenReposReady(link, unsubs)
+  })
+  if (unsubscribeOpenWorktreeDeepLink) {
+    unsubs.push(unsubscribeOpenWorktreeDeepLink)
   }
 
   // Why: a tray "Settings…" click can fire before this attaches; consume any queued intent (?. guards stale preload).
@@ -59,6 +136,17 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       .then((link) => {
         if (link) {
           openPluginInstallLink(link)
+        }
+      })
+      .catch(() => {})
+  }
+
+  const pendingWorktree = window.api.ui.consumePendingWorktreeDeepLink?.()
+  if (pendingWorktree && typeof pendingWorktree.then === 'function') {
+    void pendingWorktree
+      .then((link) => {
+        if (link) {
+          dispatchWorktreeDeepLinkWhenReposReady(link, unsubs)
         }
       })
       .catch(() => {})

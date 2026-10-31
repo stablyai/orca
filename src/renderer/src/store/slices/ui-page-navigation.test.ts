@@ -753,4 +753,46 @@ describe('createUISlice space navigation', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'artifacts' }), 'startup')
     expect(store.getState().activeView).toBe('artifacts')
   })
+
+  it('opens new workspace composer with prefilled parameters when handling worktree-create deep link', () => {
+    const store = createUIStore()
+
+    store.getState().openWorktreeDeepLink({
+      type: 'worktree-create',
+      repo: 'my-project',
+      name: 'feat/siri-shortcuts',
+      branch: 'main'
+    })
+
+    expect(store.getState().activeModal).toBe('new-workspace-composer')
+    expect(store.getState().modalData).toEqual({
+      prefilledName: 'feat/siri-shortcuts',
+      initialRepoId: 'my-project',
+      initialBaseBranch: 'main',
+      telemetrySource: 'unknown'
+    })
+  })
+
+  it('resolves worktree-create deep link repo by displayName or path basename', () => {
+    const store = createUIStore()
+    store.setState({
+      repos: [
+        { id: 'repo-uuid-1', displayName: 'Orca App', path: '/Users/dev/orca' }
+      ]
+    } as unknown as Partial<ReturnType<typeof store.getState>>)
+
+    store.getState().openWorktreeDeepLink({
+      type: 'worktree-create',
+      repo: 'orca',
+      name: 'feat/deep-link',
+      branch: 'main'
+    })
+
+    expect(store.getState().modalData).toEqual({
+      prefilledName: 'feat/deep-link',
+      initialRepoId: 'repo-uuid-1',
+      initialBaseBranch: 'main',
+      telemetrySource: 'unknown'
+    })
+  })
 })

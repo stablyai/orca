@@ -11,6 +11,7 @@ import { normalizeFeatureInteractions } from '../../../../shared/feature-interac
 import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
+import { parseWorktreeDeepLink } from '../../../../shared/worktree-deep-link'
 import {
   clipboardHasImage,
   readClipboardImagePngBase64,
@@ -29,6 +30,10 @@ import { readLocalWebUIState } from './web-preferences-store'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
+
+let initialBrowserWorktreeDeepLink =
+  typeof window !== 'undefined' ? parseWorktreeDeepLink(window.location.href) : null
+let initialBrowserWorktreeDeepLinkConsumed = false
 
 /** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
@@ -212,6 +217,30 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     consumePendingSkillShare: () => Promise.resolve(null),
     onOpenPluginInstallLink: () => noopUnsubscribe,
     consumePendingPluginInstallLink: () => Promise.resolve(null),
+    onOpenWorktreeDeepLink: (callback) => {
+      if (typeof window === 'undefined') {
+        return noopUnsubscribe
+      }
+      const handlePopState = () => {
+        const link = parseWorktreeDeepLink(window.location.href)
+        if (link) {
+          callback(link)
+        }
+      }
+      window.addEventListener('popstate', handlePopState)
+      return () => window.removeEventListener('popstate', handlePopState)
+    },
+    consumePendingWorktreeDeepLink: () => {
+      if (initialBrowserWorktreeDeepLinkConsumed) {
+        return Promise.resolve(null)
+      }
+      initialBrowserWorktreeDeepLinkConsumed = true
+      const pending =
+        initialBrowserWorktreeDeepLink ??
+        (typeof window !== 'undefined' ? parseWorktreeDeepLink(window.location.href) : null)
+      initialBrowserWorktreeDeepLink = null
+      return Promise.resolve(pending)
+    },
     // Why: the web client has no OS shell handing it files, so there is never a queued open.
     onOpenMarkdownFiles: () => noopUnsubscribe,
     consumePendingMarkdownFileOpens: () => Promise.resolve([]),

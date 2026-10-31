@@ -2,6 +2,7 @@ import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { BrowserTabCreateRequest } from '../../shared/browser-tab-create-request'
 import { ipcRenderer } from 'electron'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { WorktreeDeepLink } from '../../shared/worktree-deep-link'
 import type { KeybindingActionId } from '../../shared/keybindings'
 import type { PreloadApi } from '../api-types'
 import type {
@@ -53,6 +54,14 @@ export const uiStateAndMenuCommandsApi = {
   },
   consumePendingPluginInstallLink: (): Promise<string | null> =>
     ipcRenderer.invoke('ui:consumePendingPluginInstallLink'),
+  onOpenWorktreeDeepLink: (callback: (link: WorktreeDeepLink) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, link: WorktreeDeepLink): void =>
+      callback(link)
+    ipcRenderer.on('ui:openWorktreeDeepLink', listener)
+    return () => ipcRenderer.removeListener('ui:openWorktreeDeepLink', listener)
+  },
+  consumePendingWorktreeDeepLink: (): Promise<WorktreeDeepLink | null> =>
+    ipcRenderer.invoke('ui:consumePendingWorktreeDeepLink'),
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, documents: MarkdownDocument[]): void =>
       callback(documents)
