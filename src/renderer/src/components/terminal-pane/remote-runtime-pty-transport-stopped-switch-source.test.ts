@@ -6,6 +6,13 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 import type { StoppedSwitchSourceFact } from '../../../../shared/stopped-switch-source'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import {
+  TerminalStreamOpcode,
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamJson
+} from '../../../../shared/terminal-stream-protocol'
+import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../../shared/terminal-multiplex-flow-control'
+import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 // A paired client's pane whose process a switch stopped and kept: main's fact on the host row ends
 // recovery for that exact process instead of reattaching to it.
@@ -28,6 +35,7 @@ const {
   latestSubscribePayload,
   emitSnapshot,
   subscribeFrameCount,
+  subscriptionSendBinary,
   resetRemoteRuntimeTransport
 } = createRemoteRuntimeTransportMocks({
   getCallbacks: () => subscriptionCallbacks,
@@ -223,3 +231,57 @@ describe.each(['claude', 'codex'] as const)(
     })
   }
 )
+
+it('parks a pane whose reattach keeps failing at the deadline: frames neither renew nor cost it work', async () => {
+  resetRemoteRuntimeTransport()
+  vi.useFakeTimers()
+  try {
+    const handleEvents = await import('@/runtime/web-session-terminal-handle-events')
+    const { transport, endStream } = await attachedMirror()
+    // Every reattach is refused recoverably, as by a host at its stream limit.
+    subscriptionSendBinary.mockImplementation((bytes: Uint8Array<ArrayBufferLike>) => {
+      const frame = decodeTerminalStreamFrame(bytes)
+      const subscribe =
+        frame?.opcode === TerminalStreamOpcode.Subscribe
+          ? decodeTerminalStreamJson<{ streamId: number }>(frame.payload)
+          : null
+      if (subscribe) {
+        queueMicrotask(() => {
+          const { streamId } = subscribe
+          subscriptionCallbacks?.onResponse({
+            ok: true,
+            result: { type: 'error', streamId, message: TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR }
+          })
+          subscriptionCallbacks?.onResponse({ ok: true, result: { type: 'end', streamId } })
+        })
+      }
+    })
+    endStream('exited')
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
+    const parked = transport.getRecoveryState?.()
+    expect(parked?.phase).toBe('disconnected')
+    expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+    const subscribes = subscribeFrameCount()
+
+    for (let version = 3; version < 8; version += 1) {
+      handleEvents.queueAcceptedWebSessionTerminalSnapshot(
+        { ...hostFrame(), snapshotVersion: version },
+        'env-1'
+      )
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(subscribeFrameCount()).toBe(subscribes)
+    expect(transport.getRecoveryState?.()).toMatchObject({
+      phase: 'disconnected',
+      epoch: parked?.epoch
+    })
+
+    // Reconnect still revives it.
+    expect(transport.retryRecovery?.()).toBe(true)
+    await vi.advanceTimersByTimeAsync(10)
+    expect(subscribeFrameCount()).toBeGreaterThan(subscribes)
+    transport.destroy?.()
+  } finally {
+    vi.useRealTimers()
+  }
+})

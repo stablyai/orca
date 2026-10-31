@@ -420,6 +420,12 @@ export function createRemoteRuntimePtyTransport(
       // Why: only the wall-clock deadline is evidence the window was spent; a UI latch from a fatal
       // resubscribe must not license reattaching a fenced same handle (#12683).
       autoRecoveryWindowSpent ||= recovery.autoRecoveryDeadlineExpired
+      // Why: the stopped-fact watch ends with the window (a switch settles well inside it); only a
+      // wait that owns its epoch stays to renew a spent window, so a parked pane costs no frame work.
+      if (publishedHandleWaitEpoch === null) {
+        stopWaitingForPublishedHandle?.()
+        stopWaitingForPublishedHandle = null
+      }
       // Why: cached pixels may remain, but no stream from the exhausted epoch may keep delivering or accepting terminal traffic.
       subscriptionGeneration += 1
       closeMultiplexedStream()
@@ -2559,6 +2565,10 @@ export function createRemoteRuntimePtyTransport(
             return
           }
           // After deadline, renewed surface publication permits one fenced-handle reattach per spent window, not one per snapshot.
+          if (publishedHandleWaitEpoch === null) {
+            // Only a listing wait that owns its epoch is licensed to renew; the fact watch is not.
+            return
+          }
           autoRecoveryWindowSpent = false
           const reattachEpoch = recovery.begin()
           releasePublishedHandleWaitEpoch()
