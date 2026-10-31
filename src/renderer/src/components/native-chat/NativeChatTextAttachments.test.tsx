@@ -630,6 +630,10 @@ it('commits page drafts once without requesting uncached digit prefixes and sync
     const before = offsets.slice()
     held = true
     await act(async () => {
+      edit('')
+    })
+    expect(offsets).toEqual(before)
+    await act(async () => {
       edit('1')
     })
     expect(offsets).toEqual(before)
@@ -667,6 +671,10 @@ it('commits page drafts once without requesting uncached digit prefixes and sync
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     await ready()
     expect(screen.getByText(/Section 2\//)).toBeTruthy()
+    commit()
+    expect(screen.getByText(/Section 2\//)).toBeTruthy()
+    edit('')
+    edit('12')
     commit()
     await ready()
     expect(screen.getByText(/Section 1\//)).toBeTruthy()

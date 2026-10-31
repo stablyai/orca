@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,23 +41,97 @@ export function NativeChatTextAttachmentPreview({
     path,
     read
   )
-  const [pageInput, setPageInput] = useState({ source, display, value: '1' })
+  type Navigation = 'first' | 'prev' | 'next' | 'last'
+  type FieldCommit = ReturnType<typeof Promise.withResolvers<NonNullable<typeof display> | null>>
+  const pendingCommit = useRef<FieldCommit | null>(null)
+  const [pressedNavigation, setPressedNavigation] = useState<Navigation | null>(null)
+  const [settledCommit, setSettledCommit] = useState<FieldCommit | null>(null)
+  useEffect(() => {
+    if (settledCommit && pendingCommit.current === settledCommit) {
+      pendingCommit.current = null
+      settledCommit.resolve(display)
+      setSettledCommit(null)
+    }
+  }, [settledCommit, display])
+  useEffect(() => {
+    setPressedNavigation(null)
+    return () => {
+      pendingCommit.current?.resolve(null)
+      pendingCommit.current = null
+    }
+  }, [source])
+  const [pageInput, setPageInput] = useState<{
+    source: typeof source
+    display: typeof display
+    draft?: string
+  }>({ source, display })
   if (pageInput.source !== source || pageInput.display !== display) {
-    setPageInput({ source, display, value: String((display?.page ?? 0) + 1) })
+    setPageInput({ source, display })
   }
-  const commitPage = (value: string) => {
-    setPageInput({ source, display, value: String((display?.page ?? 0) + 1) })
+  const commitPage = () => {
+    const value = pageInput.draft
+    setPageInput({ source, display })
     const page = Number(value)
     if (
+      value !== undefined &&
       !busy &&
+      !pendingCommit.current &&
       Number.isInteger(page) &&
       page >= 1 &&
       page <= source.pageCount &&
       !(display?.page === page - 1 && display.subpage === 0)
     ) {
-      void load(page - 1)
+      const commit = Promise.withResolvers<NonNullable<typeof display> | null>()
+      pendingCommit.current = commit
+      void load(page - 1).then(() => {
+        if (pendingCommit.current === commit) {
+          if (source.disposed) {
+            pendingCommit.current = null
+            commit.resolve(null)
+          } else {
+            setSettledCommit(commit)
+          }
+        }
+      })
     }
   }
+  const navigate = async (action: Navigation) => {
+    const current = pendingCommit.current ? await pendingCommit.current.promise : display
+    if (!current || source.disposed) {
+      return
+    }
+    if (action === 'first' || action === 'last') {
+      return load(
+        action === 'first' ? 0 : source.pageCount - 1,
+        action === 'first' ? 0 : Number.MAX_SAFE_INTEGER
+      )
+    }
+    const subpage = current.subpage + (action === 'prev' ? -1 : 1)
+    const withinPage = subpage >= 0 && subpage < current.subpages
+    const page = withinPage ? current.page : current.page + (subpage < 0 ? -1 : 1)
+    if (page < 0 || page >= source.pageCount) {
+      return
+    }
+    return load(page, subpage < 0 ? Number.MAX_SAFE_INTEGER : withinPage ? subpage : 0)
+  }
+  const clearPressedNavigation = () => setPressedNavigation(null)
+  const atStart = !display || (display.page === 0 && display.subpage === 0)
+  const atEnd =
+    !display || (display.page + 1 === source.pageCount && display.subpage + 1 === display.subpages)
+  const navigationProps = (action: Navigation, disabled: boolean) => ({
+    disabled: pressedNavigation === action ? false : disabled,
+    onPointerDown: () => {
+      if (!disabled) {
+        setPressedNavigation(action)
+      }
+    },
+    onPointerCancel: clearPressedNavigation,
+    onBlur: clearPressedNavigation,
+    onClick: () => {
+      setPressedNavigation(null)
+      void navigate(action)
+    }
+  })
   const name =
     text === undefined
       ? chatTextAttachmentName(
@@ -221,26 +295,10 @@ export function NativeChatTextAttachmentPreview({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2 px-4 pb-4 text-sm">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy || !display || (display.page === 0 && display.subpage === 0)}
-            onClick={() => void load(0)}
-          >
+          <Button variant="ghost" size="sm" {...navigationProps('first', busy || atStart)}>
             {translate('components.native-chat.textAttachmentPreview.first', 'First')}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy || !display || (display.page === 0 && display.subpage === 0)}
-            onClick={() =>
-              display &&
-              void load(
-                display.subpage ? display.page : display.page - 1,
-                display.subpage ? display.subpage - 1 : Number.MAX_SAFE_INTEGER
-              )
-            }
-          >
+          <Button variant="ghost" size="sm" {...navigationProps('prev', busy || atStart)}>
             {translate('auto.components.TaskPage.297a805b64', 'Previous')}
           </Button>
           <label>
@@ -255,9 +313,9 @@ export function NativeChatTextAttachmentPreview({
               min={1}
               max={source.pageCount}
               disabled={busy}
-              value={pageInput.value}
-              onChange={(event) => setPageInput({ source, display, value: event.target.value })}
-              onBlur={(event) => commitPage(event.currentTarget.value)}
+              value={pageInput.draft ?? String((display?.page ?? 0) + 1)}
+              onChange={(event) => setPageInput({ source, display, draft: event.target.value })}
+              onBlur={commitPage}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !isImeOwnedKeyboardEvent(event)) {
                   event.preventDefault()
@@ -276,30 +334,10 @@ export function NativeChatTextAttachmentPreview({
                 )
               : ''}
           </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={
-              busy ||
-              !display ||
-              (display.page + 1 === source.pageCount && display.subpage + 1 === display.subpages)
-            }
-            onClick={() =>
-              display &&
-              void load(
-                display.subpage + 1 < display.subpages ? display.page : display.page + 1,
-                display.subpage + 1 < display.subpages ? display.subpage + 1 : 0
-              )
-            }
-          >
+          <Button variant="ghost" size="sm" {...navigationProps('next', busy || atEnd)}>
             {translate('auto.components.TaskPage.b73717af92', 'Next')}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy || !display}
-            onClick={() => void load(source.pageCount - 1, Number.MAX_SAFE_INTEGER)}
-          >
+          <Button variant="ghost" size="sm" {...navigationProps('last', busy || !display)}>
             {translate('components.native-chat.textAttachmentPreview.last', 'Last')}
           </Button>
         </div>

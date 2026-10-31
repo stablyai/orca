@@ -652,9 +652,9 @@ it('commits mobile page drafts and resets only committed scroll presentation whi
   const input = () => tree!.root.find((node) => String(node.type) === 'TextInput')
   const scroll = () => tree!.root.find((node) => String(node.type) === 'ScrollView')
   const edit = (value: string) => act(() => input().props.onChangeText(value))
-  const commit = async (value = input().props.value) => {
+  const commit = async () => {
     await act(async () => {
-      input().props.onEndEditing({ nativeEvent: { text: value } })
+      input().props.onBlur()
     })
   }
   try {
@@ -693,7 +693,7 @@ it('commits mobile page drafts and resets only committed scroll presentation whi
     expect(scroll()).toBe(scrollNode)
     expect(textIn(scroll())).toBe('a'.repeat(256))
     const pendingCalls = pageCalls.mock.calls.length
-    await commit('12')
+    await commit()
     expect(pageCalls).toHaveBeenCalledTimes(pendingCalls)
     await act(async () => {
       held = false
@@ -714,6 +714,10 @@ it('commits mobile page drafts and resets only committed scroll presentation whi
     expect(scrollTo).toHaveBeenCalledTimes(4)
     await act(async () => button('Next').props.onPress())
     expect(scrollTo).toHaveBeenCalledTimes(5)
+    await commit()
+    expect(scrollTo).toHaveBeenCalledTimes(5)
+    edit('')
+    edit('12')
     await commit()
     expect(scrollTo).toHaveBeenCalledTimes(6)
     expect(pageCalls).toHaveBeenCalledTimes(committedCalls + 2)

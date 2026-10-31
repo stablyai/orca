@@ -40,22 +40,78 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
     path,
     read
   )
-  const [pageInput, setPageInput] = useState({ source, display, value: '1' })
+  type Navigation = 'first' | 'prev' | 'next' | 'last'
+  type FieldCommit = ReturnType<typeof Promise.withResolvers<NonNullable<typeof display> | null>>
+  const pendingCommit = useRef<FieldCommit | null>(null)
+  const [pressedNavigation, setPressedNavigation] = useState<Navigation | null>(null)
+  const [settledCommit, setSettledCommit] = useState<FieldCommit | null>(null)
+  useEffect(() => {
+    if (settledCommit && pendingCommit.current === settledCommit) {
+      pendingCommit.current = null
+      settledCommit.resolve(display)
+      setSettledCommit(null)
+    }
+  }, [settledCommit, display])
+  useEffect(() => {
+    setPressedNavigation(null)
+    return () => {
+      pendingCommit.current?.resolve(null)
+      pendingCommit.current = null
+    }
+  }, [source])
+  const [pageInput, setPageInput] = useState<{
+    source: typeof source
+    display: typeof display
+    draft?: string
+  }>({ source, display })
   if (pageInput.source !== source || pageInput.display !== display) {
-    setPageInput({ source, display, value: String((display?.page ?? 0) + 1) })
+    setPageInput({ source, display })
   }
-  const commitPage = (value: string) => {
-    setPageInput({ source, display, value: String((display?.page ?? 0) + 1) })
+  const commitPage = () => {
+    const value = pageInput.draft
+    setPageInput({ source, display })
     const page = Number(value)
     if (
+      value !== undefined &&
       !busy &&
+      !pendingCommit.current &&
       Number.isInteger(page) &&
       page >= 1 &&
       page <= source.pageCount &&
       !(display?.page === page - 1 && display.subpage === 0)
     ) {
-      void load(page - 1)
+      const commit = Promise.withResolvers<NonNullable<typeof display> | null>()
+      pendingCommit.current = commit
+      void load(page - 1).then(() => {
+        if (pendingCommit.current === commit) {
+          if (source.disposed) {
+            pendingCommit.current = null
+            commit.resolve(null)
+          } else {
+            setSettledCommit(commit)
+          }
+        }
+      })
     }
+  }
+  const navigate = async (action: Navigation) => {
+    const current = pendingCommit.current ? await pendingCommit.current.promise : display
+    if (!current || source.disposed) {
+      return
+    }
+    if (action === 'first' || action === 'last') {
+      return load(
+        action === 'first' ? 0 : source.pageCount - 1,
+        action === 'first' ? 0 : Number.MAX_SAFE_INTEGER
+      )
+    }
+    const subpage = current.subpage + (action === 'prev' ? -1 : 1)
+    const withinPage = subpage >= 0 && subpage < current.subpages
+    const page = withinPage ? current.page : current.page + (subpage < 0 ? -1 : 1)
+    if (page < 0 || page >= source.pageCount) {
+      return
+    }
+    return load(page, subpage < 0 ? Number.MAX_SAFE_INTEGER : withinPage ? subpage : 0)
   }
   const scrollRef = useRef<ScrollView>(null)
   const displayedPage = display?.page
@@ -101,6 +157,34 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
       <Text style={styles.meta}>{label}</Text>
     </Pressable>
   )
+  const navigation = (label: string, name: Navigation, disabled: boolean) => {
+    const unavailable = pressedNavigation === name ? false : disabled
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: unavailable }}
+        disabled={unavailable}
+        onPressIn={() => {
+          if (!disabled) {
+            setPressedNavigation(name)
+          }
+        }}
+        onTouchCancel={() => {
+          setPressedNavigation(null)
+        }}
+        onBlur={() => {
+          setPressedNavigation(null)
+        }}
+        onPress={() => {
+          setPressedNavigation(null)
+          void navigate(name)
+        }}
+        style={[styles.backButton, unavailable && styles.saveButtonDisabled]}
+      >
+        <Text style={styles.meta}>{label}</Text>
+      </Pressable>
+    )
+  }
   let segmentOffset = 0
   const segments = display?.segments.map((segment) => {
     const key = `${path}:${display.page}:${display.subpage}:${segmentOffset}`
@@ -158,51 +242,33 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
         {segments}
       </ScrollView>
       <View style={[styles.topBar, { flexWrap: 'wrap', paddingBottom: insets.bottom }]}>
-        {action(
-          t('chat.textAttachmentPreview.first', 'First'),
-          busy || !display,
-          () => void load(0)
-        )}
-        {action(
+        {navigation(t('chat.textAttachmentPreview.first', 'First'), 'first', busy || !display)}
+        {navigation(
           t('chat.textAttachmentPreview.prev', 'Prev'),
-          busy || !display || (display.page === 0 && display.subpage === 0),
-          () =>
-            display &&
-            void load(
-              display.subpage ? display.page : display.page - 1,
-              display.subpage ? display.subpage - 1 : Number.MAX_SAFE_INTEGER
-            )
+          'prev',
+          busy || !display || (display.page === 0 && display.subpage === 0)
         )}
         <TextInput
           accessibilityLabel={t('chat.textAttachmentPreview.attachmentPage', 'Attachment page')}
           style={[styles.meta, { fontSize: TEXT_INPUT_FONT_SIZE }]}
           keyboardType="number-pad"
-          value={pageInput.value}
+          value={pageInput.draft ?? String((display?.page ?? 0) + 1)}
           editable={!busy}
-          onChangeText={(value) => setPageInput({ source, display, value })}
-          onEndEditing={(event) => commitPage(event.nativeEvent.text)}
+          onChangeText={(value) => setPageInput({ source, display, draft: value })}
+          onBlur={commitPage}
         />
         <Text style={styles.meta}>
           / {source.pageCount}
           {display ? ` (${display.subpage + 1}/${display.subpages})` : ''}
         </Text>
-        {action(
+        {navigation(
           t('chat.textAttachmentPreview.next', 'Next'),
+          'next',
           busy ||
             !display ||
-            (display.page + 1 === source.pageCount && display.subpage + 1 === display.subpages),
-          () =>
-            display &&
-            void load(
-              display.subpage + 1 < display.subpages ? display.page : display.page + 1,
-              display.subpage + 1 < display.subpages ? display.subpage + 1 : 0
-            )
+            (display.page + 1 === source.pageCount && display.subpage + 1 === display.subpages)
         )}
-        {action(
-          t('chat.textAttachmentPreview.last', 'Last'),
-          busy || !display,
-          () => void load(source.pageCount - 1, Number.MAX_SAFE_INTEGER)
-        )}
+        {navigation(t('chat.textAttachmentPreview.last', 'Last'), 'last', busy || !display)}
       </View>
     </View>
   )
