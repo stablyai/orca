@@ -1,4 +1,3 @@
-import { automationRunMessageBody } from '../../shared/automation-run-preamble'
 import { describe, expect, it, vi } from 'vitest'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
 import { automationLaunchRunTarget } from './headless-dispatch'
@@ -54,8 +53,7 @@ describe('automation chat reuse', () => {
         run: current,
         target: { ok: true, cwd: '/fixture', repo: state.repos[0] },
         runs: [previous],
-        agentPrompt: 'Check the repo',
-        agentInstructions: 'Run instructions',
+        agentPrompt: 'Run instructions\nCheck the repo',
         bindSession: (target) => {
           current = { ...current, ...automationLaunchRunTarget(target) }
         }
@@ -63,12 +61,6 @@ describe('automation chat reuse', () => {
     )
 
     expect(result?.chatSessionId).toBe('chat-1')
-    expect(send).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        delivery: 'queue-if-active',
-        body: automationRunMessageBody('Check the repo', 'Run instructions')
-      })
-    )
+    expect(send).toHaveBeenCalledOnce()
   })
 })

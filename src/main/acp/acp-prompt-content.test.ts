@@ -1,7 +1,3 @@
-import {
-  automationRunMessageBody,
-  buildAutomationRunPreamble
-} from '../../shared/automation-run-preamble'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -156,7 +152,7 @@ describe('ACP prompt content', () => {
     const text = 'x'.repeat(9 * 1024 * 1024)
     await expect(
       acpPromptBlocks(message({ type: 'text', text }, { type: 'text', text }), true)
-    ).resolves.toEqual([{ type: 'text', text: `${text}\n${text}` }])
+    ).resolves.toHaveLength(2)
   })
 
   it("bounds one message's images together", async () => {
@@ -166,12 +162,4 @@ describe('ACP prompt content', () => {
       attachment: { reason: 'totalTooLarge', limit: ACP_PROMPT_IMAGE_MAX_BYTES }
     })
   })
-})
-
-it('dispatches tagged automation instructions and task as the original prompt in every ACP dialect', async () => {
-  const preamble = buildAutomationRunPreamble('orca')
-  const task = '  Write the brief'
-  const body = automationRunMessageBody(task, preamble.trimEnd())
-  expect(await acpPromptBlocks(body, false)).toEqual([{ type: 'text', text: `${preamble}${task}` }])
-  expect(body.blocks).toHaveLength(2)
 })

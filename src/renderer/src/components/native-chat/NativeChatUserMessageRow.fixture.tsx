@@ -1,8 +1,5 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import {
-  automationRunMessageBody,
-  buildAutomationRunPreamble
-} from '../../../../shared/automation-run-preamble'
+import { buildAutomationRunPreamble } from '../../../../shared/automation-run-preamble'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 
@@ -13,7 +10,7 @@ const message: NativeChatMessage = {
   id: 'automation',
   role: 'user',
   source: 'transcript',
-  blocks: automationRunMessageBody(task, buildAutomationRunPreamble('orca').trimEnd()).blocks,
+  blocks: [{ type: 'text', text: markdown }],
   timestamp: 1_800_000_000_000
 }
 const render = () => (

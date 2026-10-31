@@ -1,7 +1,4 @@
-import {
-  automationRunMessageBody,
-  buildAutomationRunPreamble
-} from '../../../../../src/shared/automation-run-preamble'
+import { buildAutomationRunPreamble } from '../../../../../src/shared/automation-run-preamble'
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -139,17 +136,10 @@ describe('MobileNativeChatMessage', () => {
   const textIn = (node: ReactTestInstance): string[] =>
     findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
 
-  it('renders legacy combined automation messages without an instruction toggle', () => {
-    const text = `${buildAutomationRunPreamble('orca')}Write the brief`
-    const tree = render(userMessage([{ type: 'text', text }]))
-    expect(markdownIn(tree.root)).toEqual([text])
-    expect(textIn(tree.root)).not.toContain('Automation instructions')
-  })
-
   it('keeps automation instructions open across row recycling, independently of the task fold', () => {
     const preamble = buildAutomationRunPreamble('orca-ide')
     const task = Array.from({ length: 12 }, (_, index) => `Write section ${index + 1}`).join('\n')
-    const message = userMessage(automationRunMessageBody(task, preamble.trimEnd()).blocks)
+    const message = userMessage([{ type: 'text', text: `${preamble}${task}` }])
     const messages = [message]
     function Transcript({ visible, scopeKey }: { visible: boolean; scopeKey: string }): ReactNode {
       const disclosure = useMobileNativeChatTurnDisclosure({
@@ -187,7 +177,10 @@ describe('MobileNativeChatMessage', () => {
     show(true)
     expect(markdownIn(renderer!.root)).toEqual([task])
     act(() => instructionToggle().props.onPress())
-    expect(markdownIn(renderer!.root)).toEqual([preamble.trimEnd(), task])
+    expect(markdownIn(renderer!.root)).toEqual([
+      preamble.slice(0, -'=== TASK ===\n'.length).trimEnd(),
+      task
+    ])
     expect(clips()).toHaveLength(1)
     const copy = renderer!.root.findByType(MobileSourceCopyButton)
     expect(copy.props.text).toBe(task)
