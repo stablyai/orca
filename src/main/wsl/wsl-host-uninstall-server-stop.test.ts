@@ -11,8 +11,14 @@ const { execCommand, decommission, dispose } = vi.hoisted(() => ({
   dispose: vi.fn()
 }))
 vi.mock('../ssh/remote-exec/remote-exec-command', () => ({ execCommand }))
+const { transportOptions } = vi.hoisted((): { transportOptions: unknown[] } => ({
+  transportOptions: []
+}))
 vi.mock('./wsl-orcad-host-transport', () => ({
-  createWslOrcadHostTransport: () => ({ dispose })
+  createWslOrcadHostTransport: (options: unknown) => {
+    transportOptions.push(options)
+    return { dispose }
+  }
 }))
 vi.mock('./wsl-host-server-stop', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -44,6 +50,30 @@ describe('stopWslHostServersForUninstall', () => {
     vi.useRealTimers()
   })
 
+  it('waits for an aborted stop to unwind before returning, so the holder outlives it', async () => {
+    vi.useFakeTimers()
+    const events: string[] = []
+    const d = deps({
+      timeoutMs: 1_000,
+      stop: (_distro, signal) =>
+        new Promise((resolve) => {
+          signal.addEventListener('abort', () => {
+            setTimeout(() => {
+              events.push('stop-unwound')
+              resolve({ stopped: false, reason: 'aborted', verdict: 'unverifiable' })
+            }, 500)
+          })
+        })
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const done = stopWslHostServersForUninstall(d).then(() => events.push('returned'))
+    await vi.advanceTimersByTimeAsync(1_500)
+    await done
+
+    expect(events).toEqual(['stop-unwound', 'returned'])
+  })
+
   it('gives up on a distro that never answers, aborting its work', async () => {
     vi.useFakeTimers()
     let signal: AbortSignal | undefined
@@ -57,7 +87,8 @@ describe('stopWslHostServersForUninstall', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const done = stopWslHostServersForUninstall(d)
-    await vi.advanceTimersByTimeAsync(1_000)
+    // The budget, then the bounded wait for the aborted stop to unwind.
+    await vi.advanceTimersByTimeAsync(3_000)
     await done
 
     expect(signal?.aborted).toBe(true)
@@ -119,6 +150,8 @@ describe('stopWslHostServerFromGuest', () => {
 
     expect(result).toEqual({ stopped: true })
     expect(execCommand).toHaveBeenCalledTimes(4)
+    // The budget's signal also bounds decommission's own wsl.exe calls.
+    expect(transportOptions.at(-1)).toMatchObject({ signal: expect.any(AbortSignal) })
     const close = execCommand.mock.calls
       .map(([, c]) => c)
       .find((c) => c.includes('UNINSTALL_CLOSE'))

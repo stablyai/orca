@@ -42,9 +42,12 @@ function parseCliJson(stdout: string): unknown {
 }
 
 // Each guest CLI call is bounded so one that hangs can't spend the whole budget.
-const GUEST_PRELUDE = `cli=${GUEST_CLI}; t=; command -v timeout >/dev/null 2>&1 && t='timeout 8';`
-// About 2 s per poll on a slow host: bounded near 8 s, well inside the budget.
-const CENSUS_POLLS = 4
+function guestPrelude(callSeconds: number): string {
+  return `cli=${GUEST_CLI}; t=; command -v timeout >/dev/null 2>&1 && t='timeout ${callSeconds}';`
+}
+// The census waits at most this long overall, plus one bounded call: about 12 s of the 30.
+const CENSUS_DEADLINE_SECONDS = 8
+const CENSUS_CALL_SECONDS = 4
 
 type GuestTerminal = { handle: string; worktreeId: string }
 
@@ -54,15 +57,17 @@ export function buildCloseTerminalsCommand(worktreeIds: readonly string[]): stri
     (id, index) =>
       `( $t "$cli" terminal close --worktree ${quotePosixShell(`id:${id}`)} --all --json >/dev/null 2>&1; echo "UNINSTALL_CLOSE ${index} $?" ) &`
   )
-  return `${GUEST_PRELUDE} ${closes.join(' ')} wait`
+  return `${guestPrelude(8)} ${closes.join(' ')} wait`
 }
 
-/** One wsl.exe call that waits in the guest for the terminal list to empty; a failed list is unknown. */
-export function buildCensusCommand(polls = CENSUS_POLLS): string {
+/** One wsl.exe call that waits in the guest, up to an overall deadline, for the terminal list to
+ * empty; a list the CLI couldn't produce is unknown, never zero. */
+export function buildCensusCommand(deadlineSeconds = CENSUS_DEADLINE_SECONDS): string {
   return (
-    `${GUEST_PRELUDE} i=0; while :; do out=$($t "$cli" terminal list --limit 1000 --json) || { echo UNINSTALL_CENSUS unknown; exit 0; }; ` +
+    `${guestPrelude(CENSUS_CALL_SECONDS)} end=$(($(date +%s) + ${deadlineSeconds})); ` +
+    `while :; do out=$($t "$cli" terminal list --limit 1000 --json) || { echo UNINSTALL_CENSUS unknown; exit 0; }; ` +
     `n=$(($(printf '%s' "$out" | grep -o '"handle"' | wc -l))); ` +
-    `{ [ "$n" -eq 0 ] || [ "$i" -ge ${polls} ]; } && break; i=$((i + 1)); sleep 0.5; done; echo "UNINSTALL_CENSUS $n"`
+    `{ [ "$n" -eq 0 ] || [ "$(date +%s)" -ge "$end" ]; } && break; sleep 0.5; done; echo "UNINSTALL_CENSUS $n"`
   )
 }
 
@@ -101,7 +106,8 @@ export async function stopWslHostServerFromGuest(
     distro,
     label: distro
   }
-  const transport = createWslOrcadHostTransport({ target, commandLoops: false })
+  // The signal also ends decommission's own wsl.exe calls once the budget runs out.
+  const transport = createWslOrcadHostTransport({ target, commandLoops: false, signal })
   const run = (command: string): Promise<string> => execCommand(transport, command, { signal })
   const cli = async (args: string): Promise<unknown> =>
     parseCliJson(await run(`${GUEST_CLI} ${args} --json`))
@@ -152,35 +158,35 @@ export function wslHostUninstallStopDependencies(
   }
 }
 
+// After the abort, late steps get this long to unwind before the holder release.
+const ABORT_SETTLE_MS = 2_000
+
 async function stopWithin(
   distro: string,
   deps: WslHostUninstallStopDependencies
 ): Promise<WslHostServerStop> {
   const controller = new AbortController()
   const timeoutMs = deps.timeoutMs ?? WSL_HOST_UNINSTALL_STOP_TIMEOUT_MS
+  const stopping = deps
+    .stop(distro, controller.signal)
+    .catch((error: unknown): WslHostServerStop => ({
+      stopped: false,
+      verdict: 'unverifiable',
+      reason: errorMessage(error)
+    }))
   let timer: NodeJS.Timeout | undefined
-  const timedOut = new Promise<WslHostServerStop>((resolve) => {
-    timer = setTimeout(() => {
-      controller.abort()
-      resolve({
-        stopped: false,
-        verdict: 'unverifiable',
-        reason: `timed out after ${timeoutMs} ms`
-      })
-    }, timeoutMs)
+  const deadline = new Promise<'timeout'>((resolve) => {
+    timer = setTimeout(() => resolve('timeout'), timeoutMs)
   })
-  try {
-    return await Promise.race([
-      deps.stop(distro, controller.signal).catch((error: unknown): WslHostServerStop => ({
-        stopped: false,
-        verdict: 'unverifiable',
-        reason: errorMessage(error)
-      })),
-      timedOut
-    ])
-  } finally {
-    clearTimeout(timer)
+  const first = await Promise.race([stopping, deadline])
+  clearTimeout(timer)
+  if (first !== 'timeout') {
+    return first
   }
+  // Aborting refuses new wsl.exe calls and ends running ones; wait for them before the holder goes.
+  controller.abort()
+  await Promise.race([stopping, new Promise((resolve) => setTimeout(resolve, ABORT_SETTLE_MS))])
+  return { stopped: false, verdict: 'unverifiable', reason: `timed out after ${timeoutMs} ms` }
 }
 
 /** Best effort and bounded: a stopped or unconfirmed distro is skipped, never booted. */
