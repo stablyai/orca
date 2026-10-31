@@ -43,6 +43,9 @@ export class TerminalRunFactsRegister {
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
   private readonly lastDrivingInputAtByPtyId = new Map<string, number>()
+  // Why a counter: input in the same millisecond as a snapshot must still read as newer.
+  private drivingInputRevision = 0
+  private readonly drivingInputRevisionByPtyId = new Map<string, number>()
   private readonly pendingByPtyId = new Map<
     string,
     { incarnationId: string | null; firstInputAt: number | null }
@@ -117,6 +120,7 @@ export class TerminalRunFactsRegister {
     if (isDrivingInputKind(inputKind)) {
       if (inputKind === 'driving') {
         this.lastDrivingInputAtByPtyId.set(ptyId, now)
+        this.drivingInputRevisionByPtyId.set(ptyId, ++this.drivingInputRevision)
       }
       for (const listener of this.inputListeners) {
         listener(ptyId, now)
@@ -142,6 +146,11 @@ export class TerminalRunFactsRegister {
   /** Like readLastInputAt, but only `driving` input, so Orca's own launch and orchestration writes don't count. */
   readLastDrivingInputAt(ptyId: string): number | null {
     return this.lastDrivingInputAtByPtyId.get(ptyId) ?? null
+  }
+
+  /** Changes on every `driving` input to the PTY; null if none has arrived. */
+  readDrivingInputRevision(ptyId: string): number | null {
+    return this.drivingInputRevisionByPtyId.get(ptyId) ?? null
   }
 
   /** A run main never saw committed reads as not fresh, which keeps today's close-on-exit. */
@@ -171,6 +180,7 @@ export class TerminalRunFactsRegister {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
     this.lastDrivingInputAtByPtyId.delete(ptyId)
+    this.drivingInputRevisionByPtyId.delete(ptyId)
     this.pendingByPtyId.delete(ptyId)
   }
 }

@@ -21,7 +21,7 @@ type PointerSubmitDependencies = {
   resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
-  readLastDrivingInputAt: (ptyId: string) => number | null
+  readDrivingInputRevision: (ptyId: string) => number | null
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
@@ -90,9 +90,14 @@ export function submitOrchestrationMailboxPointer(
       } else if (
         !queueSafe ||
         // The user may have submitted or replaced the typed line; an Enter could send their draft.
-        deps.readLastDrivingInputAt(input.ptyId) !== input.flight.userInputAtStage
+        deps.readDrivingInputRevision(input.ptyId) !== input.flight.userInputRevisionAtStage
       ) {
-        releaseWithoutRedrive = true
+        // Without an Enter here, rebound mail still goes on to its new owner.
+        if (sameMailbox) {
+          releaseWithoutRedrive = true
+        } else {
+          clearAndRedrive = true
+        }
       } else {
         preserveAmbiguousDelivery = true
         const db = deps.getDb()

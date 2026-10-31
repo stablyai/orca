@@ -7,8 +7,15 @@ import {
   createRuntime,
   driveToLiveIdle,
   insertDirectRunMessage,
+  isMailboxPointer,
   pointerCount,
   PTY_ID,
+  registerSecondPane,
+  SECOND_LAUNCH_TOKEN,
+  SECOND_LEAF_ID,
+  SECOND_PANE_KEY,
+  SECOND_PTY_ID,
+  SECOND_TERMINAL_HANDLE,
   temporaryDirectories,
   TERMINAL_HANDLE
 } from './orchestration-mailbox-notification-test-harness'
@@ -61,23 +68,70 @@ describe('orchestration typed pointer submission', () => {
     db.close()
   })
 
-  it('leaves the line to the user when they type after the pointer was staged', async () => {
+  it.each([
+    ['after', false],
+    ['in the same millisecond as', true]
+  ])('leaves the line to the user when they type %s staging', async (_name, typedBeforeStage) => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'User-input Run')
     const message = insertDirectRunMessage(db, run.id, 'Typed over before Enter')
+    const inputAt = Date.now()
+    if (typedBeforeStage) {
+      harness.runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'earlier', inputAt)
+    }
 
     await driveToLiveIdle(harness.runtime)
     expect(pointerCount(harness.write)).toBe(1)
     const checked = await checkBoundMailbox(harness.runtime)
     await checkBoundMailbox(harness.runtime, { ack: checked.deliveryId! })
-    harness.runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'my own draft')
+    harness.runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'my own draft', inputAt)
 
     await vi.advanceTimersByTimeAsync(500)
     // An Enter now could submit the user's draft, or the wake line a second time.
     expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
     expect(db.getMessageById(message.id)?.pointer_enter_pending).toBe(0)
+    db.close()
+  })
+
+  it('hands rebound mail to its new owner when the user types over the old line', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    const harness = createRuntime(db)
+    const runA = createBoundRun(db, 'Run A')
+    const message = insertDirectRunMessage(db, runA.id, 'Run A completion')
+    await driveToLiveIdle(harness.runtime)
+    expect(pointerCount(harness.write)).toBe(1)
+
+    createBoundRun(db, 'Run B')
+    registerSecondPane(harness.runtime, SECOND_LEAF_ID, false)
+    db.bindRun({
+      runId: runA.id,
+      coordinatorHandle: SECOND_TERMINAL_HANDLE,
+      coordinatorPaneKey: SECOND_PANE_KEY
+    })
+    harness.runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'my own draft')
+    harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex working\x07', 1)
+    harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex done\x07', 2)
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(
+      harness.write.mock.calls.filter(([ptyId, payload]) => ptyId === PTY_ID && payload === '\r')
+    ).toHaveLength(0)
+    expect(
+      harness.write.mock.calls.filter(
+        ([ptyId, payload]) => ptyId === SECOND_PTY_ID && isMailboxPointer(payload)
+      )
+    ).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(500)
+    const checked = await checkBoundMailbox(harness.runtime, {
+      terminal: SECOND_TERMINAL_HANDLE,
+      paneKey: SECOND_PANE_KEY,
+      launchToken: SECOND_LAUNCH_TOKEN
+    })
+    expect(checked).toMatchObject({ runId: runA.id, count: 1 })
+    expect(checked.messages).toEqual([expect.objectContaining({ id: message.id })])
     db.close()
   })
 })

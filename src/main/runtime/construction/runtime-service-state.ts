@@ -269,7 +269,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
     isAgentSettledForDelivery: (ptyId) => this.checkDeliverySettledAndArmRecheck(ptyId),
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
-    readLastDrivingInputAt: (ptyId) => this.terminalRunFacts.readLastDrivingInputAt(ptyId),
+    readDrivingInputRevision: (ptyId) => this.terminalRunFacts.readDrivingInputRevision(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
     resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),

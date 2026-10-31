@@ -53,7 +53,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => expectedTarget,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readLastDrivingInputAt: () => null,
+        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive: vi.fn()
@@ -155,7 +155,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => target,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readLastDrivingInputAt: () => null,
+        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive: vi.fn()
@@ -212,7 +212,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => target,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput,
-        readLastDrivingInputAt: () => null,
+        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive: vi.fn()
@@ -291,7 +291,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => currentTarget,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readLastDrivingInputAt: () => null,
+        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive
@@ -416,7 +416,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => ({ ...expectedTarget, processIncarnation: 'inc-replaced' }),
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readLastDrivingInputAt: () => null,
+        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive: vi.fn()
@@ -474,7 +474,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => null,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readLastDrivingInputAt: () => null,
+        readDrivingInputRevision: () => null,
         writePty: vi.fn(settledWriteStub()),
         settle,
         redrive
@@ -582,7 +582,7 @@ describe('orchestration mailbox pointer submit', () => {
             options.replaced ? { terminal, processIncarnation: 'inc-replaced' } : expectedTarget,
           isLeafPtyProvenAbsent: async () => options.absent ?? false,
           isPtyAwaitingUserInput: () => options.dialogOpen ?? false,
-          readLastDrivingInputAt: () => (options.userTypedAfterStage ? 1_000 : null),
+          readDrivingInputRevision: () => (options.userTypedAfterStage ? 1_000 : null),
           writePty,
           settle,
           redrive: vi.fn()
@@ -669,7 +669,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => expectedTarget,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readLastDrivingInputAt: () => null,
+        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive: vi.fn()
