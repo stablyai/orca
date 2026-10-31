@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NativeChatExpandable } from './NativeChatExpandable'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
-import { Check } from 'lucide-react'
+import { Check, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
@@ -186,7 +186,7 @@ export function NativeChatToolRun({
           <button
             type="button"
             onClick={() => setOpen(!open)}
-            className="group/tool-run flex min-h-6 min-w-0 flex-1 items-start gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="group/tool-run flex min-h-6 min-w-0 flex-1 items-start gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             aria-expanded={open}
             aria-live="polite"
             data-native-chat-tool-run-state={live ? 'live' : 'settled'}
@@ -202,9 +202,9 @@ export function NativeChatToolRun({
             {/* Keep the collapsed header bounded; the tool detail carries the full command. */}
             <span
               className={cn(
-                'min-w-0 line-clamp-2 whitespace-normal break-words text-sm leading-relaxed transition-colors',
+                'min-w-0 truncate text-sm leading-relaxed transition-colors',
                 live
-                  ? 'max-w-[72%] shrink-0 animate-pulse text-chat-foreground motion-reduce:animate-none'
+                  ? 'max-w-[72%] animate-pulse text-chat-foreground motion-reduce:animate-none'
                   : 'min-w-0 text-chat-foreground-faint group-hover/tool-run:text-chat-foreground'
               )}
             >
@@ -227,6 +227,15 @@ export function NativeChatToolRun({
                 </span>
               </span>
             ) : null}
+            <span className="ml-auto flex h-[1lh] shrink-0 items-center">
+              <ChevronRight
+                aria-hidden="true"
+                className={cn(
+                  'size-3.5 text-chat-foreground-faint transition-transform motion-reduce:transition-none',
+                  open && 'rotate-90'
+                )}
+              />
+            </span>
           </button>
           <NativeChatBrowserRunPageButton calls={headerBlocks.filter(isToolCallBlock)} />
         </div>

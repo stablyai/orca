@@ -85,7 +85,7 @@ function PulsingText({
     return () => animation.stop()
   }, [opacity, pulsing])
   return (
-    <Animated.Text style={[style, { opacity }]} numberOfLines={2}>
+    <Animated.Text style={[style, { opacity }]} numberOfLines={1}>
       {children}
     </Animated.Text>
   )
