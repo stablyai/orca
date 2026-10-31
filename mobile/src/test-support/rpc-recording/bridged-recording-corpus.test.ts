@@ -628,6 +628,7 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
             )
           }
         },
+        // Replay every real native/page-original/page-reply-meta partition within the family's allowance.
         golden.timeoutMs
       )
     }

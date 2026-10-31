@@ -599,7 +599,10 @@ describe('actual invocation ownership and fatal output boundaries', () => {
               const result = await reads.fetchGithubRepoSlug(client, 'repo-9::/w')
               if (origin === 'effect') {
                 try {
-                  effect('actual-repo-result', { result, unsupported: new Date() })
+                  effect('actual-repo-result', {
+                    result,
+                    unsupported: new Date('2026-01-01T00:00:00Z')
+                  })
                 } catch {}
               }
               return result

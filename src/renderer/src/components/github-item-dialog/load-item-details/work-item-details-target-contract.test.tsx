@@ -167,6 +167,7 @@ function Metadata({ enabled }: { enabled: boolean }) {
 }
 let view: ReturnType<typeof useGitHubWorkItemDetails>
 let root: ReturnType<typeof createRoot>
+const NOW = Date.UTC(2026, 9, 31, 12)
 function Probe({
   opened,
   sourceContext,
@@ -190,6 +191,7 @@ function Probe({
 }
 
 beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(NOW)
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   _resetOriginGitHubApiRepositoryCache()
   workItemDetailsCache.clear()
@@ -432,6 +434,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   act(() => root.unmount())
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   expect(io.unexpected).toEqual([])
 })
@@ -451,7 +454,7 @@ it.each(['github.com', 'github.corp'])(
       number: 93,
       ownerRepo: opened.prRepo
     })
-    touchWorkItemDetailsCache(key, { details: upstream, fetchedAt: Date.now() })
+    touchWorkItemDetailsCache(key, { details: upstream, fetchedAt: NOW })
     io.gh.mockClear()
     // A reused, wrongly keyed entry must be rejected before the first paint.
     let firstDetails: typeof upstream | undefined

@@ -183,6 +183,7 @@ async function account(user: string) {
 }
 const originItem = item()
 const otherItem = item('upstream')
+const NOW = Date.UTC(2026, 9, 31, 12)
 const viewerKinds = ['page', 'dialog'] as const
 type ViewerKind = (typeof viewerKinds)[number]
 let root: ReturnType<typeof createRoot>
@@ -294,6 +295,7 @@ async function submit() {
   await act(async () => button.click())
 }
 beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(NOW)
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     callback(0)
@@ -336,6 +338,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   act(() => root.unmount())
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -354,7 +357,7 @@ it.each(['page', 'dialog'] as const)(
     await act(async () => root.render(null))
     touchWorkItemDetailsCache(originKey, {
       ...workItemDetailsCache.get(originKey)!,
-      fetchedAt: Date.now() - WORK_ITEM_DETAILS_FRESH_MS - 1
+      fetchedAt: NOW - WORK_ITEM_DETAILS_FRESH_MS - 1
     })
     const refresh = deferred<GitHubWorkItemDetails | null>()
     io.details.mockReturnValueOnce(refresh.promise)
@@ -466,7 +469,7 @@ function evictOrigin(key: string) {
     }
     touchWorkItemDetailsCache(`${prefix}${number}`, {
       details: full(opened),
-      fetchedAt: Date.now()
+      fetchedAt: NOW
     })
   }
 }
@@ -607,7 +610,7 @@ for (const viewer of viewerKinds) {
       await act(async () => root.render(<FileObservers viewer={viewer} showOrigin={false} />))
       touchWorkItemDetailsCache(key, {
         ...workItemDetailsCache.get(key)!,
-        fetchedAt: Date.now() - WORK_ITEM_DETAILS_FRESH_MS - 1
+        fetchedAt: NOW - WORK_ITEM_DETAILS_FRESH_MS - 1
       })
       const refresh = deferred<GitHubWorkItemDetails | null>()
       io.details.mockReturnValueOnce(refresh.promise)

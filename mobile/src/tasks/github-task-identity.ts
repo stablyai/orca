@@ -1,13 +1,12 @@
 import { useCallback, useLayoutEffect, useRef, useState, type SetStateAction } from 'react'
 import type { ActionableTaskItem } from './mobile-tasks-project-workspace-types'
-import type { DetailPayload } from './mobile-tasks-provider-detail-types'
+import type { DetailPayload, GitHubWorkItem } from './mobile-tasks-provider-detail-types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   githubWorkItemTargetKey,
   resolveGitHubWorkItemTarget,
   matchesGitHubWorkItemTarget
 } from '../../../src/shared/github/work-item-target'
-import type { GitHubWorkItem } from './mobile-tasks-provider-detail-types'
 import type { TaskItem } from './mobile-tasks-legacy-foundation'
 
 export function githubTaskKey(source: GitHubWorkItem): string {
