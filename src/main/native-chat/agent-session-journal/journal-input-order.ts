@@ -44,15 +44,15 @@ export class JournalInputOrder {
       return
     }
     const marks = state.queuePauseMarks
-    const cached = this.admissionContext
+    let context = this.admissionContext
     if (
-      !cached ||
-      cached.revision !== state.queue.revision ||
-      cached.accepted !== state.latestAcceptedTurnSequence ||
-      cached.stop !== marks.latestStop ||
-      cached.resumed !== marks.resumedSequence ||
-      cached.reopened !== marks.reopenedSequence ||
-      cached.cleared !== marks.cleared
+      !context ||
+      context.revision !== state.queue.revision ||
+      context.accepted !== state.latestAcceptedTurnSequence ||
+      context.stop !== marks.latestStop ||
+      context.resumed !== marks.resumedSequence ||
+      context.reopened !== marks.reopenedSequence ||
+      context.cleared !== marks.cleared
     ) {
       const cards = [...state.queue.cards.values()].sort((a, b) => a.position - b.position)
       const pauses = deriveQueuePauses({
@@ -66,7 +66,8 @@ export class JournalInputOrder {
         (card) =>
           card.state === 'waiting' && card.holdReason === null && !queuePauseHolding(pauses, card)
       )
-      this.admissionContext = {
+      const cached = context
+      context = {
         revision: state.queue.revision,
         accepted: state.latestAcceptedTurnSequence,
         stop: marks.latestStop,
@@ -83,8 +84,8 @@ export class JournalInputOrder {
           : null,
         command: eligible.some((card) => card.body.command !== undefined)
       }
+      this.admissionContext = context
     }
-    const context = this.admissionContext
     const prefix = context.cards
     const original =
       context.comparableThrough === null

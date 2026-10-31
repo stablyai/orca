@@ -69,6 +69,7 @@ it.each([10, 100])(
             m.queueVisits++
             yield card
           }
+          return undefined
         })
         try {
           return before.call(this, state, row)
@@ -89,6 +90,7 @@ it.each([10, 100])(
           m.submissionVisits++
           yield entry
         }
+        return undefined
       })
       const get = state.submissions.get.bind(state.submissions)
       const targets = vi.spyOn(state.submissions, 'get').mockImplementation((id) => {
@@ -102,6 +104,7 @@ it.each([10, 100])(
           m.pruneVisits++
           yield id
         }
+        return undefined
       })
       try {
         return after.call(this, state, row)
@@ -249,6 +252,7 @@ it.each([10, 100])(
               selectorCounts.pendingIteratorVisits++
               yield entry
             }
+            return undefined
           })
         )
         const find = filtered.find.bind(filtered)

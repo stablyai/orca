@@ -757,6 +757,7 @@ it('retires unknown execution debt with the submission tombstone', () => {
     {
       kind: 'submission',
       clientMessageId: 'retired',
+      providerHandle: { kind: 'codex', threadId: 'thread-1' },
       payloadFingerprint: 'retired',
       body: userText('retired'),
       handoverRecorded: true,
