@@ -13297,7 +13297,9 @@
           "light": "Hell",
           "languageIncomplete": "{{value0}} % übersetzt, zu unvollständig, um als Orca-Sprache verwendet zu werden",
           "languageCoverage": "Oberflächensprache · {{value0}} % übersetzt",
-          "newFileMenu": "Ergänzt das +-Menü"
+          "newFileMenu": "Ergänzt das +-Menü",
+          "editorReplacesViewer": "Öffnet {{value0}} anstelle des Orca-Viewers",
+          "editorMayReplaceViewer": "Öffnet möglicherweise {{value0}} anstelle des Orca-Viewers"
         },
         "PluginPageAction": {
           "failedTitle": "{{value0}} konnte nicht installiert werden",
@@ -16157,7 +16159,10 @@
           "be27304574": "Verkleinern",
           "77bfc9b35a": "Bild in separatem Fenster öffnen",
           "3ef9551ba2": "Vorschau wird geladen…",
-          "d9d2944855": "Dateivorschau konnte nicht geladen werden"
+          "d9d2944855": "Dateivorschau konnte nicht geladen werden",
+          "fitToView": "An Ansicht anpassen",
+          "actualSize": "Originalgröße",
+          "expand": "Bild vergrößert anzeigen"
         },
         "ImageViewerPopup": {
           "0ef78475e7": "Zum Schließen Esc drücken",
