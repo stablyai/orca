@@ -16,6 +16,7 @@ const openUrl = vi.fn()
 const createBrowserTab = vi.fn()
 const setActiveWorktree = vi.fn()
 const openRuntimeBrowserTab = vi.fn((): Promise<string | null> => Promise.resolve(null))
+let settings: { openLinksInApp: boolean; openLinksInAppModifierInverts?: boolean }
 
 function plainEvent(): MouseEvent {
   return {
@@ -49,8 +50,9 @@ function actionContext(request = vi.fn()): TerminalLinkActionContext {
 beforeEach(() => {
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   vi.stubGlobal('window', { api: { shell: { openUrl } } })
+  settings = { openLinksInApp: false, openLinksInAppModifierInverts: false }
   registerHttpLinkStoreAccessor(() => ({
-    settings: { openLinksInApp: false },
+    settings,
     setActiveWorktree,
     createBrowserTab
   }))
@@ -311,7 +313,20 @@ describe('terminal link action routing', () => {
     expect(openUrl).not.toHaveBeenCalled()
   })
 
-  it('uses Shift+modifier for the alternate local destination', () => {
+  it('keeps Shift+modifier on the system browser when inversion is disabled (#24019)', () => {
+    const event = { ...plainEvent(), metaKey: true, shiftKey: true }
+
+    handleTerminalHttpLink('https://example.com/path', event, {
+      worktreeId: 'wt-1',
+      actionDestinations: { primary: 'system', alternate: 'orca' }
+    })
+
+    expect(openUrl).toHaveBeenCalledWith('https://example.com/path')
+    expect(openRuntimeBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('uses Shift+modifier for the alternate local destination when inversion is enabled', () => {
+    settings = { openLinksInApp: false, openLinksInAppModifierInverts: true }
     const event = { ...plainEvent(), metaKey: true, shiftKey: true }
 
     handleTerminalHttpLink('https://example.com/path', event, {
@@ -340,6 +355,27 @@ describe('terminal link action routing', () => {
     expect(openUrl).toHaveBeenCalledWith('https://example.com/path')
     expect(openRuntimeBrowserTab).not.toHaveBeenCalled()
   })
+
+  it.each([
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true]
+  ])(
+    'keeps Shift on the only primary destination with openLinksInApp=%s and inversion=%s',
+    (openLinksInApp, openLinksInAppModifierInverts) => {
+      settings = { openLinksInApp, openLinksInAppModifierInverts }
+      const event = { ...plainEvent(), metaKey: true, shiftKey: true }
+
+      handleTerminalHttpLink('https://example.com/path', event, {
+        worktreeId: 'wt-1',
+        actionDestinations: { primary: 'system' }
+      })
+
+      expect(openUrl).toHaveBeenCalledWith('https://example.com/path')
+      expect(openRuntimeBrowserTab).not.toHaveBeenCalled()
+    }
+  )
 
   it('exposes the actual hidden OSC 8 destination', () => {
     const request = vi.fn()
