@@ -13,6 +13,12 @@ export type AgentSessionRecordReader = {
   listRecords: () => AgentSessionConversationView[]
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
+  /** Chats with an open tab, from the tab table or, before one is recorded, the saved workspace tabs. */
+  listVisibleSessionIds?: () => string[]
+  /** Moves when a commit changes which chats exist, where, their /clear successor or open tabs. */
+  senderIdentityRevision?: () => number
+  /** The sessions a committed /clear continued into this one, from the store's in-memory index. */
+  listClearedFrom?: (sessionId: string) => readonly string[]
 }
 
 /** Null until the agent-session host is installed; callers that must see records ensure it first. */
@@ -25,11 +31,19 @@ export function conversationRecordReader(store: {
   getConversation: AgentSessionRecordReader['getRecord']
   listConversations: AgentSessionRecordReader['listRecords']
   getVisibleSessionTabIndex: NonNullable<AgentSessionRecordReader['getVisibleSessionTabIndex']>
+  senderIdentityRevision?: () => number
+  listVisibleSessionIds?: () => string[]
+  listClearedFrom?: (sessionId: string) => readonly string[]
 }): AgentSessionRecordReader {
   return {
     getRecord: store.getConversation,
     listRecords: store.listConversations,
-    getVisibleSessionTabIndex: store.getVisibleSessionTabIndex
+    getVisibleSessionTabIndex: store.getVisibleSessionTabIndex,
+    ...(store.listVisibleSessionIds ? { listVisibleSessionIds: store.listVisibleSessionIds } : {}),
+    ...(store.senderIdentityRevision
+      ? { senderIdentityRevision: store.senderIdentityRevision }
+      : {}),
+    ...(store.listClearedFrom ? { listClearedFrom: store.listClearedFrom } : {})
   }
 }
 
@@ -117,6 +131,17 @@ export function lineageLiveSession(
 export function createCanonicalSessionPaneResolver(
   store: AgentSessionRecordReader | null
 ): (sessionId: string) => string {
+  const resolve = createCanonicalSessionResolver(store)
+  return (sessionId) => {
+    const id = resolve(sessionId)
+    return structuredAgentSessionPaneKey(structuredAgentSessionTabId(id), id)
+  }
+}
+
+/** The session running a lineage now; the session itself when its chain can't be proved. */
+export function createCanonicalSessionResolver(
+  store: AgentSessionRecordReader | null
+): (sessionId: string) => string {
   const resolved = new Map<string, string | null>()
   return (sessionId) => {
     let current = sessionId
@@ -150,7 +175,6 @@ export function createCanonicalSessionPaneResolver(
     for (const member of path) {
       resolved.set(member, destination)
     }
-    const id = destination ?? sessionId
-    return structuredAgentSessionPaneKey(structuredAgentSessionTabId(id), id)
+    return destination ?? sessionId
   }
 }

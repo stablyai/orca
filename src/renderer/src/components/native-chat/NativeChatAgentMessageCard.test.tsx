@@ -171,6 +171,41 @@ it('renders unreadable worker metadata with the existing unnamed fallback and no
   expect(screen.queryByRole('button', { name: 'an agent' })).toBeNull()
 })
 
+it.each([
+  { agent: 'codex', unknown: false },
+  { agent: undefined, unknown: true }
+])('draws a worker no live row names by its saved agent=$agent', ({ agent, unknown }) => {
+  const raw: unknown = {
+    itemId: 'start:gone',
+    revision: 1,
+    sequence: 1,
+    observedAt: 1,
+    body: {
+      kind: 'agent-start',
+      dispatchId: 'gone',
+      task: 'Port the parser',
+      worker: {
+        party: { address: 'term_gone', terminalHandle: 'term_gone', orcaSessionId: null },
+        name: 'Parser port',
+        ...(agent ? { agent } : {})
+      }
+    }
+  }
+  if (!isAdmissibleAgentJournalRenderItem(raw)) {
+    throw new Error('start item was refused')
+  }
+  render(
+    <MessageRow
+      message={projectStructuredAgentStartItem(raw)!}
+      expandSignal={false}
+      onScrollMessageToTop={() => {}}
+      runtimeContext={context}
+    />
+  )
+  expect(screen.getByText('Parser port')).toBeInTheDocument()
+  expect(screen.queryByText('?') !== null).toBe(unknown)
+})
+
 it.each([false, true])(
   'isolates canonical and desktop policy caches, desktop first=%s',
   (desktopFirst) => {
@@ -594,6 +629,13 @@ it.each([10, 100])(
       return projection.messages(counted).filter(({ agentStart }) => agentStart)
     }
     let messages = readRows()
+    for (const item of items) {
+      if (item.body.kind === 'agent-start') {
+        expect(messages.find((message) => message.id === item.itemId)?.agentStartDispatchId).toBe(
+          item.body.dispatchId
+        )
+      }
+    }
     expect(conversions).toBe(items.length)
     expect(taskReads).toBe(count)
     // One existing question pass visits the source array once; the second pass visits its composed rows.

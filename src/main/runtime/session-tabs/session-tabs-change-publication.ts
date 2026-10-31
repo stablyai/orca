@@ -4,7 +4,8 @@ import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionTabGroup,
-  RuntimeMobileSessionTabsResult
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
 } from '../../../shared/runtime-types'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
@@ -44,7 +45,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       return
     }
     // Browser events are workspace-scoped; navigation/churn must not broadcast every workspace.
-    const result = this.toMobileSessionTabsResult(snapshot)
+    const result = this.toMobileSessionTabsFrame(snapshot)
     for (const subscription of this.mobileSessionTabListeners) {
       subscription.listener(
         this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
@@ -57,8 +58,9 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
-    for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
-      const result = this.toMobileSessionTabsResult(snapshot)
+    for (const result of this.toMobileSessionTabsFrames(
+      this.mobileSessionTabsByWorktree.values()
+    )) {
       const changeSequence = ++this.mobileSessionTabsChangeSequence
       for (const subscription of this.mobileSessionTabListeners) {
         subscription.listener(
@@ -67,6 +69,27 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         )
       }
     }
+  }
+
+  /** A client frame: the public tabs plus sender identity, which internal tab lookups never pay for. */
+  protected toMobileSessionTabsFrame(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsResult {
+    return {
+      ...this.toMobileSessionTabsResult(snapshot),
+      agentSenderAssociations: this.agentProjections.senders.buildForFrame(snapshot.worktree)
+    }
+  }
+
+  /** Frames for many worktrees in one pass, from one sender refresh rather than one per frame. */
+  protected toMobileSessionTabsFrames(
+    snapshots: Iterable<RuntimeMobileSessionTabsSnapshot>
+  ): RuntimeMobileSessionTabsResult[] {
+    const senderScope = this.agentProjections.senders.buildForFramePass()
+    return [...snapshots].map((snapshot) => ({
+      ...this.toMobileSessionTabsResult(snapshot),
+      agentSenderAssociations: senderScope(snapshot.worktree)
+    }))
   }
 
   protected getMobileSessionTabsForWorktree(
@@ -90,7 +113,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       return launch ? { ...result, initialSurfaceLaunch: launch } : result
     }
     const result = this.projectMobileSessionTabsForClient(
-      this.toMobileSessionTabsResult(snapshot),
+      this.toMobileSessionTabsFrame(snapshot),
       clientNavigationId
     )
     const launch = options?.includeInitialSurfaceLaunch
@@ -106,6 +129,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   ): RuntimeMobileSessionTabsResult {
     return {
       worktree: worktreeId,
+      agentSenderAssociations: this.agentProjections.senders.buildForFrame(worktreeId),
       publicationEpoch:
         publishedEpoch === null
           ? UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH

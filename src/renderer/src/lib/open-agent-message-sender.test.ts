@@ -15,11 +15,12 @@ const mocks = vi.hoisted(() => ({
   hostCannotOpen: vi.fn(),
   unavailable: vi.fn(),
   toastError: vi.fn(),
+  toastInfo: vi.fn(),
   tabs: new Map<string, TabsByWorktree>([['current', {}]]),
   missingOwner: false
 }))
 
-vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError, info: mocks.toastInfo } }))
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   callRuntimeRpc: mocks.callRuntimeRpc
@@ -45,7 +46,13 @@ vi.mock('./worktree-runtime-owner', async (original) => ({
   getExecutionHostIdForWorktree: () => 'runtime:env-host'
 }))
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({ unifiedTabsByWorktree: mocks.tabs.get('current') }) }
+  useAppStore: {
+    getState: () => ({
+      unifiedTabsByWorktree: mocks.tabs.get('current'),
+      agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    })
+  }
 }))
 
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'

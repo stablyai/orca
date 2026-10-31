@@ -26,7 +26,7 @@ import type { OrchestrationEnvironmentTransport } from '../runtime/orchestration
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
-import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environment-transport'
+import { pairedOrchestrationPeers } from '../runtime/orchestration/environment-transport'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
@@ -71,7 +71,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       return {
         environmentId: environment.id,
         name: environment.name,
-        peerFingerprint: fingerprintOrchestrationPeer(connection.hostPublicKeyB64),
+        ...pairedOrchestrationPeers(connection.hostPublicKeyB64, connection.credential.deviceToken),
         pairingRevision: environment.pairingRevision ?? environment.createdAt
       }
     },

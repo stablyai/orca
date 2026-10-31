@@ -147,6 +147,21 @@ describe('frame-drawn server workspaces', () => {
     resetFrameDrawnServerWorkspacesForTests()
   })
 
+  it('keeps a repeated sender publication and unchanged frame status as a no-op', () => {
+    const snapshot = {
+      ...shell('a', 2),
+      agentSenderAssociations: {
+        associations: [],
+        principals: [],
+        attachments: [],
+        revision: { epoch: 'host', revision: 1 }
+      }
+    }
+    const previous = frameDrawnStore()
+    const store = merge(previous, applyWebSessionTabsSnapshot(previous, snapshot, ENV, NOW))
+    expect(applyWebSessionTabsSnapshot(store, snapshot, ENV, NOW)).toBe(store)
+  })
+
   it('applies agent status but writes no layout slice for a frame-drawn workspace', () => {
     const store = frameDrawnStore()
     const patch = applyWebSessionTabsSnapshot(store, shell('b', 2, true), ENV, NOW)

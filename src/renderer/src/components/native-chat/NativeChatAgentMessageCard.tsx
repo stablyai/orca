@@ -90,6 +90,7 @@ export function NativeChatAgentMessageCard({
     <div className="group flex w-full gap-3 rounded-xl border border-border bg-card p-3 text-sm text-card-foreground">
       <AgentMessageAvatar
         sender={agentMessagePrimarySender(from)}
+        dispatchId={message.agentStartDispatchId}
         worktreeId={worktreeId}
         target={target}
       />
@@ -110,7 +111,12 @@ export function NativeChatAgentMessageCard({
             />
           </div>
         </div>
-        <NativeChatAgentMessageSenders from={from} chatWorktreeId={worktreeId} target={target} />
+        <NativeChatAgentMessageSenders
+          dispatchId={message.agentStartDispatchId}
+          from={from}
+          chatWorktreeId={worktreeId}
+          target={target}
+        />
         <NativeChatImageAttachments
           blocks={message.blocks}
           runtimeContext={runtimeContext}
@@ -165,15 +171,17 @@ export function NativeChatAgentMessageCard({
 }
 
 function AgentMessageAvatar({
+  dispatchId,
   sender,
   worktreeId,
   target
 }: {
+  dispatchId?: string
   sender: AgentMessageSource['senders'][number] | undefined
   worktreeId: string | null
   target?: RuntimeClientTarget
 }): React.JSX.Element {
-  const view = useAgentMessageSenderView(sender, worktreeId, target)
+  const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
   return (
     <div className="relative mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
       <AgentTypeIcon agentType={view.agentType} size={16} />

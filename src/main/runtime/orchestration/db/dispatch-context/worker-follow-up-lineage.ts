@@ -22,7 +22,7 @@ export type WorkerResumeSession = {
 }
 
 export function getFollowUpDispatch(
-  db: OrchestrationDb,
+  db: Pick<OrchestrationDb, 'db'>,
   dispatchId: string
 ): DispatchContextRow | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
@@ -31,11 +31,31 @@ export function getFollowUpDispatch(
     .get(dispatchId) as DispatchContextRow | undefined
 }
 
+export type WorkerLineage = {
+  latest: DispatchContextRow
+  resource: WorkerTerminalResourceRow | undefined
+}
+
+/** The reads a lineage walk needs; the database itself, or a reader that memoizes them. */
+export type WorkerLineageReader = Pick<OrchestrationDb, 'db'> & {
+  getDispatchContextById(dispatchId: string): DispatchContextRow | undefined
+  getWorkerTerminalResourceByOwner(dispatchId: string): WorkerTerminalResourceRow | undefined
+  getWorkerTerminalResourceFormerlyOwnedBy(
+    dispatchId: string
+  ): WorkerTerminalResourceRow | undefined
+}
+
 /** A worker's newest Dispatch and resource, from any Dispatch it ran; follow-ups and `worker-start --terminal` both continue it. */
 export function resolveWorkerLineage(
-  db: OrchestrationDb,
-  dispatchId: string
-): { latest: DispatchContextRow; resource: WorkerTerminalResourceRow | undefined } | undefined {
+  db: WorkerLineageReader,
+  dispatchId: string,
+  followUp: (id: string) => DispatchContextRow | undefined = (id) => getFollowUpDispatch(db, id),
+  cache?: Map<string, WorkerLineage>
+): WorkerLineage | undefined {
+  const cached = cache?.get(dispatchId)
+  if (cached) {
+    return cached
+  }
   const addressed = db.getDispatchContextById(dispatchId)
   if (!addressed) {
     return undefined
@@ -44,6 +64,12 @@ export function resolveWorkerLineage(
   const resourceOf = (id: string) =>
     db.getWorkerTerminalResourceByOwner(id) ?? db.getWorkerTerminalResourceFormerlyOwnedBy(id)
   const seen = new Set([latest.id])
+  const remember = (value: WorkerLineage): WorkerLineage => {
+    for (const id of seen) {
+      cache?.set(id, value)
+    }
+    return value
+  }
   // A follow-up that never got a worker continues the nearest one before it that did.
   let resource = resourceOf(latest.id)
   for (let back = addressed; !resource && back.follow_up_of_dispatch_id;) {
@@ -56,12 +82,16 @@ export function resolveWorkerLineage(
     resource = resourceOf(prior.id)
   }
   for (;;) {
+    const suffix = cache?.get(latest.id)
+    if (suffix) {
+      return remember({ latest: suffix.latest, resource: suffix.resource ?? resource })
+    }
     const transferred = resource && resource.owner_dispatch_id !== latest.id ? resource : undefined
     const next =
-      getFollowUpDispatch(db, latest.id) ??
+      followUp(latest.id) ??
       (transferred ? db.getDispatchContextById(transferred.owner_dispatch_id) : undefined)
     if (!next || seen.has(next.id)) {
-      return { latest, resource }
+      return remember({ latest, resource })
     }
     seen.add(next.id)
     latest = next

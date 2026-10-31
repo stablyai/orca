@@ -74,7 +74,7 @@ describe('nested receiving work follows its current consumer', () => {
         getMessageWaiters: () => undefined,
         resolveStructuredTarget: (handle) => f.runtime.mailTarget(handle),
         getCliCommand: () => 'orca-dev',
-        senderName: () => null,
+        senderSnapshot: () => ({ name: null, agent: null }),
         host: createStructuredMailboxPointerHost(),
         onRetain: retained
       })

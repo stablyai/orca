@@ -22,7 +22,7 @@ import type { BrowserBackend } from '../../browser/browser-backend'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 import { RuntimeResolvedWorktreeCache } from '../runtime-resolved-worktree-cache'
 import { RuntimeWorktreeLineageController } from '../runtime-worktree-lineage-controller'
-import { RuntimeAgentOrchestrationProjection } from '../runtime-agent-orchestration-projection'
+import { createRuntimeAgentProjections } from './runtime-agent-projections'
 import { RuntimeTerminalList } from '../runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from '../runtime-managed-worktree-queries'
 import { RuntimePtyForegroundAgent } from '../runtime-pty-foreground-agent'
@@ -116,13 +116,12 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     showTerminal: (handle) => this.showTerminal(handle)
   })
 
-  protected readonly agentOrchestrationProjection = new RuntimeAgentOrchestrationProjection({
+  protected readonly agentProjections = createRuntimeAgentProjections(this, {
     getDb: () => this.getOrchestrationDbIfAvailable(),
     getLeaves: () => this.leaves.values(),
     getPtys: () => this.ptysById.values(),
     paneOf: (pty) => this.paneOfPty(pty),
-    issueLeafHandle: (leaf) => this.issueHandle(leaf),
-    issuePtyHandle: (pty) => this.issuePtyHandle(pty),
+    ...this.terminalHandleAccess(),
     makePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),
     getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle),
     getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
@@ -135,6 +134,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       return store ? conversationRecordReader(store) : null
     }
   })
+
+  protected readonly agentOrchestrationProjection = this.agentProjections.orchestration
 
   protected readonly terminalList = new RuntimeTerminalList({
     getGraphEpoch: () => (this.graphStatus === 'ready' ? this.rendererGraphEpoch : null),
@@ -285,8 +286,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       resolveStructuredTarget: (mailboxHandle) =>
         this.resolveStructuredMailboxTarget(mailboxHandle),
       getCliCommand: localOrchestrationCliCommand,
-      senderName: (party, reportedDispatchId) =>
-        this.orchestrationSenderNames.nameOf(party, reportedDispatchId),
+      senderSnapshot: (party, reportedDispatchId) =>
+        this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId),
       host: createStructuredMailboxPointerHost()
     })
 

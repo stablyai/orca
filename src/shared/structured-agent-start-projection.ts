@@ -21,6 +21,7 @@ export function projectStructuredAgentStartItem(
     role: 'system',
     blocks: [{ type: 'text', text: item.body.task }],
     agentStart: true,
+    agentStartDispatchId: item.body.dispatchId,
     from: readAgentMessageSource({
       kind: 'agent',
       senders: [item.body.worker],

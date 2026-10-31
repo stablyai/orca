@@ -1,3 +1,7 @@
+import {
+  hasAgentSenderPublication,
+  selectAgentSenderAssociation
+} from '@/runtime/agent-sender-associations'
 import { agentMessageSenderLabel } from '../../../../shared/agent-session/agent-message-presentation'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -6,7 +10,7 @@ import {
   structuredChatTabBySessionId,
   structuredChatWorkspacesBySessionId
 } from '@/lib/structured-chat-tab-index'
-import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
+import { useStructuredConversationName } from '@/runtime/structured-conversation-name'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionOwnerInputs,
@@ -97,19 +101,28 @@ export function agentMessageSenderOwner(
 export function useAgentMessageSenderLabel(
   sender: AgentMessageSender,
   chatWorktreeId: string | null,
-  target?: RuntimeClientTarget
+  target?: RuntimeClientTarget,
+  dispatchId?: string
 ): string {
   const { address, orcaSessionId } = sender.party
   const local = !address.startsWith('dispatch:')
   const owner = useAppStore((state) => agentMessageSenderOwner(state, chatWorktreeId, target))
-  const chatTab = useAppStore((state) =>
-    local && owner && orcaSessionId
+  const association = useAppStore((state) =>
+    owner ? selectAgentSenderAssociation(state, owner, sender, dispatchId) : undefined
+  )
+  const authoritative = useAppStore((state) =>
+    owner ? hasAgentSenderPublication(state, owner) : false
+  )
+  const legacyTab = useAppStore((state) =>
+    !authoritative && local && owner && orcaSessionId
       ? findAgentMessageSenderChatTab(state, orcaSessionId, owner)
       : undefined
   )
-  const conversationName = useStructuredChatTabConversationName(chatTab)
+  const chatTab = association?.tab ?? legacyTab
+  const sessionId = association?.sessionId ?? legacyTab?.entityId
+  const conversationName = useStructuredConversationName(association?.host ?? owner, sessionId)
   return agentMessageSenderLabel({
-    localChat: Boolean(local && chatTab),
+    localChat: Boolean(sessionId),
     customLabel: chatTab?.customLabel,
     conversationName,
     snapshotName: sender.name,
