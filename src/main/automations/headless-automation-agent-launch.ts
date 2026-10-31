@@ -1,15 +1,15 @@
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.
 
-import type {
-  AgentLaunchPublishedSurface,
-  AgentLaunchSurfaceExecution
-} from '../agent-launch/agent-launch-execution'
+import type { AgentLaunchSurfaceExecution } from '../agent-launch/agent-launch-execution'
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch-terminal-prompt'
-import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
+import {
+  AutomationRunLaunchError,
+  type HeadlessAutomationDispatchLaunch
+} from './headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 
@@ -33,11 +33,14 @@ export async function launchHeadlessAutomationAgent(
     run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'trigger'>
     target: Extract<AutomationRunTargetResult, { ok: true }>
     runs: readonly AutomationRun[]
+    agentPrompt: string
+    bindSession: (target: HeadlessAutomationDispatchLaunch) => void
   }
 ): Promise<HeadlessAutomationAgentLaunch> {
   const { automation, run, target } = request
   const agent = automation.agentId
-  const text = automation.prompt?.trim()
+  // An empty saved prompt still launches the agent without a turn.
+  const text = request.agentPrompt.trim() || undefined
   if (automation.reuseSession && automation.workspaceMode === 'existing' && text) {
     const reused = await sendToReusableSession(runtime, { ...request, text })
     if (reused) {
@@ -46,6 +49,19 @@ export async function launchHeadlessAutomationAgent(
   }
   let workspace: { id: string; displayName: string | null } | undefined
   let terminal: LaunchedTerminal | undefined
+  const launchedTarget = (): HeadlessAutomationAgentLaunch => {
+    if (!workspace || !terminal) {
+      throw new Error('Automation agent launch did not report its terminal.')
+    }
+    return {
+      workspaceId: workspace.id,
+      workspaceDisplayName: workspace.displayName,
+      terminalHandle: terminal.handle,
+      terminalSessionId: terminal.tabId ?? null,
+      terminalPaneKey: terminal.paneKey ?? null,
+      terminalPtyId: terminal.ptyId ?? null
+    }
+  }
   const execution: AgentLaunchSurfaceExecution = {
     runtime,
     intent: {
@@ -58,6 +74,7 @@ export async function launchHeadlessAutomationAgent(
       ...(text ? { prompt: { text, delivery: 'submit' as const } } : {})
     },
     terminalOnly: true,
+    onSurfacePublished: () => request.bindSession(launchedTarget()),
     workspaces: {
       createWorktree: async ({ startupAgent, startupPrompt }) => {
         if (startupAgent === undefined) {
@@ -120,17 +137,20 @@ export async function launchHeadlessAutomationAgent(
         runtime.deliverStartupFollowup(handle, { agent, prompt: prompt.text })
     }
   }
-  await launchUntilPublished(execution)
-  if (!workspace || !terminal) {
-    throw new Error('Automation agent launch did not report its terminal.')
-  }
-  return {
-    workspaceId: workspace.id,
-    workspaceDisplayName: workspace.displayName,
-    terminalHandle: terminal.handle,
-    terminalSessionId: terminal.tabId ?? null,
-    terminalPaneKey: terminal.paneKey ?? null,
-    terminalPtyId: terminal.ptyId ?? null
+  try {
+    const result = await executeAgentLaunch(execution)
+    if (text && result.prompt?.outcome !== 'handed-to-terminal') {
+      throw new Error('The automation agent did not accept its prompt.')
+    }
+    return launchedTarget()
+  } catch (error) {
+    if (workspace && terminal) {
+      throw new AutomationRunLaunchError(
+        error instanceof Error ? error.message : String(error),
+        launchedTarget()
+      )
+    }
+    throw error
   }
 }
 
@@ -141,6 +161,7 @@ async function sendToReusableSession(
     run: Pick<AutomationRun, 'id'>
     runs: readonly AutomationRun[]
     text: string
+    bindSession: (target: HeadlessAutomationDispatchLaunch) => void
   }
 ): Promise<HeadlessAutomationAgentLaunch | null> {
   const { automation, text } = request
@@ -161,8 +182,20 @@ async function sendToReusableSession(
       return handle ? { handle, previous } : null
     }
   })
+  if (!session) {
+    return null
+  }
+  const shown = await runtime.showManagedWorktree(`id:${worktreeId}`)
+  const target = {
+    workspaceId: worktreeId,
+    workspaceDisplayName: shown.displayName ?? null,
+    terminalHandle: session.handle,
+    terminalSessionId: session.previous.terminalSessionId,
+    terminalPaneKey: session.previous.terminalPaneKey,
+    terminalPtyId: session.previous.terminalPtyId
+  }
+  request.bindSession(target)
   if (
-    !session ||
     !(await deliverTerminalAgentLaunchPrompt({
       runtime,
       handle: session.handle,
@@ -175,15 +208,7 @@ async function sendToReusableSession(
   ) {
     return null
   }
-  const shown = await runtime.showManagedWorktree(`id:${worktreeId}`)
-  return {
-    workspaceId: worktreeId,
-    workspaceDisplayName: shown.displayName ?? null,
-    terminalHandle: session.handle,
-    terminalSessionId: session.previous.terminalSessionId,
-    terminalPaneKey: session.previous.terminalPaneKey,
-    terminalPtyId: session.previous.terminalPtyId
-  }
+  return target
 }
 
 /** Reject reused pane handles whose PTY no longer belongs to this run. */
@@ -199,28 +224,6 @@ export function runOwnHandle(
     runtime.getTerminalPtyIdForHandle(handle) === run.terminalPtyId
     ? handle
     : null
-}
-
-/** Return on terminal publication; post-start prompt delivery may still be pending. */
-function launchUntilPublished(
-  execution: AgentLaunchSurfaceExecution
-): Promise<AgentLaunchPublishedSurface> {
-  return new Promise((resolve, reject) => {
-    let published = false
-    executeAgentLaunch({
-      ...execution,
-      onSurfacePublished: (surface) => {
-        published = true
-        resolve(surface)
-      }
-    }).catch((error: unknown) => {
-      if (!published) {
-        reject(error)
-        return
-      }
-      console.warn('[automations] the agent launch failed after its terminal was published', error)
-    })
-  })
 }
 
 function requireWorkspaceId(automation: Automation): string {

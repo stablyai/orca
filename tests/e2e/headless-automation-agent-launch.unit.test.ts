@@ -19,7 +19,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { AgentLaunchResult } from '../../src/shared/agent-launch-intent'
 import { buildProfileStateCutoverFixture } from '../../src/main/persistence/profile-state-cutover-fixture'
-import { launchAutomationChatAgent } from '../../src/main/automations/automation-chat-agent-launch'
+import {
+  launchAutomationChatAgent,
+  type AutomationChatLaunchRequest
+} from '../../src/main/automations/automation-chat-agent-launch'
 
 const mocks = vi.hoisted(() => {
   const hostState: {
@@ -152,12 +155,23 @@ beforeEach(() => {
   mocks.host.currentWork.mockReturnValue({ working: () => false })
   mocks.host.send.mockResolvedValue({ ok: true })
 })
+function launchChat(
+  runtime: OrcaRuntimeService,
+  request: Omit<AutomationChatLaunchRequest, 'agentPrompt' | 'bindSession'>
+): ReturnType<typeof launchAutomationChatAgent> {
+  return launchAutomationChatAgent(runtime, {
+    agentPrompt: request.automation.prompt,
+    bindSession: () => {},
+    ...request
+  })
+}
+
 describe('automations through agent.launch', () => {
   it.each(['claude', 'codex'] as const)(
     'launches explicit Chat for %s through the common entry and keeps its actual fallback',
     async (agentId) => {
       const { runtime } = fixture()
-      const result = await launchAutomationChatAgent(runtime, {
+      const result = await launchChat(runtime, {
         automation: { ...automation, agentId },
         run,
         target,
@@ -188,7 +202,7 @@ describe('automations through agent.launch', () => {
   it('does not apply stored Terminal extras to Chat', async () => {
     const { runtime } = fixture()
     mocks.launch.mockResolvedValue(chat)
-    await launchAutomationChatAgent(runtime, {
+    await launchChat(runtime, {
       automation: { ...automation, extraAgentArgs: '--model opus' },
       run,
       target,
@@ -199,9 +213,7 @@ describe('automations through agent.launch', () => {
   it('refuses an expired admission without minting another launch identity', async () => {
     const { runtime } = fixture()
     mocks.launch.mockRejectedValue(new Error('agent_session_operation_expired'))
-    await expect(
-      launchAutomationChatAgent(runtime, { automation, run, target, runs: [] })
-    ).rejects.toThrow(
+    await expect(launchChat(runtime, { automation, run, target, runs: [] })).rejects.toThrow(
       'Claude could not start because this run waited too long. Run the automation again.'
     )
     expect(mocks.launch).toHaveBeenCalledTimes(1)
@@ -209,7 +221,7 @@ describe('automations through agent.launch', () => {
   it('records the actual chat identity and delegates new workspace setup and provenance', async () => {
     const { runtime } = fixture()
     mocks.launch.mockResolvedValue(chat)
-    const result = await launchAutomationChatAgent(runtime, {
+    const result = await launchChat(runtime, {
       automation: {
         ...automation,
         surface: 'chat',
@@ -260,7 +272,7 @@ describe('automations through agent.launch', () => {
       sessionKind: 'chat' as const,
       chatSessionId: 'claude_prev'
     }
-    const result = await launchAutomationChatAgent(runtime, {
+    const result = await launchChat(runtime, {
       automation: { ...automation, surface: 'chat', reuseSession: true },
       run,
       target,
@@ -327,11 +339,11 @@ describe('automations through agent.launch', () => {
       target,
       runs
     }
-    expect((await launchAutomationChatAgent(runtime, request)).chatSessionId).toBe('claude_prev')
+    expect((await launchChat(runtime, request)).chatSessionId).toBe('claude_prev')
     expect(mocks.launch).not.toHaveBeenCalled()
     mocks.host.send.mockClear()
     mocks.launch.mockResolvedValue(chat)
-    await launchAutomationChatAgent(runtime, { ...request, runs: runs.slice(0, 2) })
+    await launchChat(runtime, { ...request, runs: runs.slice(0, 2) })
     expect(mocks.host.send).not.toHaveBeenCalled()
     expect(mocks.launch).toHaveBeenCalledOnce()
     expect(mocks.launch.mock.calls[0][0].operationId).toBe(
@@ -365,7 +377,7 @@ it.each(['terminal', 'chat'] as const)(
         }
         return { ...published, prompt: { delivery: 'submit', outcome } }
       })
-      const result = await launchAutomationChatAgent(runtime, {
+      const result = await launchChat(runtime, {
         automation: {
           ...automation,
           surface: 'chat'
@@ -440,7 +452,7 @@ it('retains a known identity when record/host preparation cannot prove availabil
       )
     }
     await expect(
-      launchAutomationChatAgent(runtime, {
+      launchChat(runtime, {
         automation: { ...automation, surface: 'chat', reuseSession: true },
         run,
         target,
@@ -492,7 +504,7 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
         return reply
       })
       mocks.launch.mockResolvedValue(chat)
-      const attempt = launchAutomationChatAgent(runtime, {
+      const attempt = launchChat(runtime, {
         automation: {
           ...automation,
           agentId: 'codex',
@@ -557,7 +569,7 @@ it.each(['unknown', 'refused', 'conflict', 'failed-row'] as const)(
       acceptance === 'failed-row' ? { outcome: { status: 'failed' } } : undefined
     )
     await expect(
-      launchAutomationChatAgent(runtime, {
+      launchChat(runtime, {
         automation: { ...automation, surface: 'chat', reuseSession: true },
         run,
         target,

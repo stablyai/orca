@@ -629,6 +629,10 @@ describe('useAutomationDispatchEvents setup launch', () => {
       ptyId: 'agent-pty'
     })
     mockObserveExistingAutomationSession.mockResolvedValue(() => {})
+    mockSubmitPromptToAgentPty.mockImplementationOnce(async () => {
+      expect(mockMarkDispatchResult.mock.calls.at(-1)?.[0].status).toBe('dispatching')
+      return true
+    })
 
     await registerAndDispatch(makeAutomation({ reuseSession: true }))
     const transitionStartedAt = Date.now() + 1

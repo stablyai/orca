@@ -41,6 +41,20 @@ describe('resolveCallerAutomationRun', () => {
     expect(resolveCallerAutomationRun(runs, session, 11).id).toBe('current')
   })
 
+  it('selects a bound run queued before its predecessor dispatched', () => {
+    const runs = [
+      terminalRun('older', { status: 'completed', dispatchedAt: 5, finishedAt: 9 }),
+      terminalRun('queued', {
+        status: 'dispatching',
+        createdAt: 2,
+        startedAt: 10,
+        dispatchedAt: null
+      })
+    ]
+
+    expect(resolveCallerAutomationRun(runs, session, 11).id).toBe('queued')
+  })
+
   it('accepts a finished run only inside the grace window', () => {
     const runs = [terminalRun('done', { status: 'completed', finishedAt: 100 })]
 

@@ -18,6 +18,7 @@ const CHAT_DEFAULT_ON = { experimentalNativeChat: true }
 
 function harness(options: { startupTerminal?: Record<string, unknown> | null } = {}) {
   const runtime = {
+    bindSession: vi.fn(),
     requireStore: () => ({ getSettings: () => CHAT_DEFAULT_ON }),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
     createManagedWorktree: vi.fn(async (_args: Record<string, unknown>) => ({
@@ -117,7 +118,9 @@ function launch(
       run,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the repo is read.
       target: TARGET as never,
-      runs
+      runs,
+      agentPrompt: '  fix the flaky test  ',
+      bindSession: runtime.bindSession
     }
   )
 }
@@ -137,16 +140,22 @@ describe('headless automation agent launch', () => {
     )
   })
 
-  it('starts a post-start agent bare and delivers its prompt once, after the terminal is recorded', async () => {
+  it('binds a post-start agent before delivery and waits for prompt handoff', async () => {
     const runtime = harness()
     let finishDelivery: (delivered: boolean) => void = () => {}
     runtime.deliverStartupFollowup.mockImplementation(
       () => new Promise<boolean>((resolve) => (finishDelivery = resolve))
     )
 
-    const launched = await launch(runtime, { agentId: 'aider' })
+    const pending = launch(runtime, { agentId: 'aider' })
+    await vi.waitFor(() => expect(runtime.deliverStartupFollowup).toHaveBeenCalledOnce())
+    expect(runtime.bindSession).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalPaneKey: 'tab-1:leaf-1' })
+    )
+    expect(runtime.bindSession.mock.invocationCallOrder[0]).toBeLessThan(
+      runtime.deliverStartupFollowup.mock.invocationCallOrder[0]
+    )
 
-    expect(launched.terminalPaneKey).toBe('tab-1:leaf-1')
     expect(runtime.launchAgentTerminal).toHaveBeenCalledWith(
       'id:wt-1',
       expect.objectContaining({ agent: 'aider', prompt: '' })
@@ -157,6 +166,7 @@ describe('headless automation agent launch', () => {
       prompt: 'fix the flaky test'
     })
     finishDelivery(true)
+    expect((await pending).terminalPaneKey).toBe('tab-1:leaf-1')
   })
 
   it('fails the run with the create warning when no agent terminal started, without a second one', async () => {
@@ -168,21 +178,14 @@ describe('headless automation agent launch', () => {
     expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
   })
 
-  it('logs a failure after the terminal was recorded instead of dropping it', async () => {
+  it('fails a rejected prompt handoff and retains the published terminal', async () => {
     const runtime = harness()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     runtime.deliverStartupFollowup.mockRejectedValue(new Error('writer broke'))
 
-    const launched = await launch(runtime, { agentId: 'aider' })
-    await vi.waitFor(() =>
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('after its terminal was published'),
-        expect.objectContaining({ message: 'writer broke' })
-      )
-    )
-
-    expect(launched.terminalHandle).toBe('term_existing')
-    warn.mockRestore()
+    await expect(launch(runtime, { agentId: 'aider' })).rejects.toMatchObject({
+      message: 'writer broke',
+      target: expect.objectContaining({ terminalPaneKey: 'tab-1:leaf-1' })
+    })
   })
 
   it('refuses an existing-workspace run whose workspace is gone', async () => {
@@ -198,6 +201,9 @@ describe('headless automation agent launch', () => {
     const runtime = harness()
 
     const launched = await launch(runtime, { reuseSession: true }, [previousRun()])
+    expect(runtime.bindSession.mock.invocationCallOrder[0]).toBeLessThan(
+      deliverTerminalAgentLaunchPrompt.mock.invocationCallOrder[0]
+    )
 
     expect(deliverTerminalAgentLaunchPrompt).toHaveBeenCalledWith({
       runtime,

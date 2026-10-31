@@ -239,6 +239,7 @@ export function updateAutomationRun(
       ? normalizeAutomationPrecheckResult(result.precheckResult)
       : normalizeAutomationPrecheckResult(current.precheckResult),
     usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
+    ...(result.resultReporting ? { resultReporting: result.resultReporting } : {}),
     error: result.error ?? null,
     ...resultErrorCodeFields(result, previous),
     startedAt: current.startedAt ?? now,

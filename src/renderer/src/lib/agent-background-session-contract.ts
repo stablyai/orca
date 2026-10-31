@@ -15,6 +15,7 @@ export type LaunchAgentBackgroundSessionArgs = {
   onData?: (chunk: string) => void
   onExit?: (ptyId: string, code: number) => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
+  onSurfacePublished?: (session: { tabId: string; paneKey: string; ptyId: string }) => Promise<void>
 }
 
 export type LaunchAgentBackgroundSessionResult = {
