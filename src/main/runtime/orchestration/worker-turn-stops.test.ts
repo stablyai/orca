@@ -298,7 +298,7 @@ describe('chat worker turn stops', () => {
 
   it('reports a finished turn and leaves failures to the chat error escalation', () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => run())
+    const report = chatWorkerTurnStopReporter(ctx.deps)
     const status = () => ({ status: 'idle' as const, lastAssistantMessage: 'Read the files.' })
     report(completion('failure'), status)
     expect(ctx.mail()).toHaveLength(0)
@@ -308,25 +308,38 @@ describe('chat worker turn stops', () => {
     expect(ctx.mail()[0].body).toContain('Read the files.')
   })
 
-  it('does not blame its follow-up for the turn that reported, but does for a stop of its own', () => {
-    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    const timers: (() => void)[] = []
-    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => timers.push(run))
-    // The turn that reported ends with the follow-up's task queued; the host starts it right after.
-    let status: 'idle' | 'working' = 'idle'
-    const read = () => ({ status, lastAssistantMessage: 'I sent worker_done.' })
-    report(completion('success', 'turn-reported'), read)
-    status = 'working'
-    timers.shift()!()
+  it('does not blame a follow-up still starting for the turn that reported, but does once it holds its task', () => {
+    const ctx = setup()
+    const address = formatOrcaSessionAddress(CHAT_SESSION)
+    // The report claimed a follow-up on the same chat; its task is not handed over yet.
+    const followUp = ctx.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 9,
+      taskSpec: 'New messages',
+      taskRunId: ctx.run.id,
+      startOptions: { agent: 'claude' },
+      followUpOf: ctx.dispatch.id
+    }).dispatch.id
+    ctx.db.prepareStartingWorkerAuthority({
+      dispatchId: followUp,
+      handle: address,
+      paneKey: null,
+      processIncarnation: null,
+      worktreeId: 'repo::/tmp/wt',
+      effects: [],
+      setupState: 'not_applicable'
+    })
+    const report = chatWorkerTurnStopReporter(ctx.deps)
+    const status = () => ({ status: 'idle' as const, lastAssistantMessage: 'I sent worker_done.' })
+
+    report(completion('success', 'turn-reported'), status)
     expect(ctx.mail()).toHaveLength(0)
 
-    status = 'idle'
-    report(completion('success', 'turn-follow-up'), () => ({
-      status,
-      lastAssistantMessage: 'Nothing to do.'
-    }))
-    timers.shift()!()
-    expect(ctx.mail()).toMatchObject([{ subject: 'Worker stopped without reporting' }])
+    ctx.db.markWorkerDispatchReady(followUp)
+    report(completion('success', 'turn-follow-up'), status)
+    expect(ctx.mail()).toMatchObject([
+      { subject: 'Worker stopped without reporting', payload: expect.stringContaining(followUp) }
+    ])
   })
 })
 
