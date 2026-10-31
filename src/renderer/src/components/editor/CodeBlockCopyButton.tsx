@@ -65,7 +65,9 @@ export default function CodeBlockCopyButton({
   }, [children, clearCopiedResetTimer])
 
   return (
-    <div className="code-block-wrapper">
+    <div
+      className={wrapInPre ? 'code-block-wrapper' : 'code-block-wrapper code-block-wrapper-diagram'}
+    >
       {wrapInPre ? <pre {...props}>{children}</pre> : children}
       <button
         ref={setCopyButtonRef}

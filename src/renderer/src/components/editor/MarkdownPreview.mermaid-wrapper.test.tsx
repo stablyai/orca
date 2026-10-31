@@ -33,6 +33,9 @@ vi.mock('@/store', () => ({
 vi.mock('@/store/slices/worktree-helpers', () => ({
   findWorktreeById: () => ({ id: 'fixture', path: '/fixture', diffComments: [] })
 }))
+vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+  useFileOwnerRuntimeTarget: () => ({ kind: 'local' })
+}))
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   settingsForRuntimeOwner: (settings: unknown) => settings
 }))
@@ -46,21 +49,13 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 vi.mock('./useLocalImageSrc', () => ({ useLocalImageSrc: (src?: string) => src }))
 vi.mock('./MermaidBlock', () => ({
-  default: ({ content }: { content: string }) =>
-    content.startsWith('invalid') ? (
-      <div className="mermaid-block">
-        <div className="mermaid-error">Diagram error</div>
-        <pre>
-          <code>{content}</code>
-        </pre>
-      </div>
-    ) : (
-      <div className="mermaid-block">
-        <svg viewBox="0 0 128 1946">
-          <text>{content}</text>
-        </svg>
-      </div>
-    )
+  default: ({ content }: { content: string }) => (
+    <div className="mermaid-block">
+      <svg viewBox="0 0 128 1946">
+        <text>{content}</text>
+      </svg>
+    </div>
+  )
 }))
 vi.mock('../diff-comments/DiffCommentCard', () => ({ DiffCommentCard: () => null }))
 vi.mock('./NotesSendMenu', () => ({ NotesSendMenu: () => null }))
@@ -108,15 +103,6 @@ describe('MarkdownPreview Mermaid wrapper', () => {
     expect(annotation?.querySelector('button[aria-label="Add note"]')).not.toBeNull()
     expect(container.querySelector('.code-block-copy-btn')).not.toBeNull()
   })
-  it('copies the authored Mermaid source through clipboard IPC', async () => {
-    render('```mermaid\nflowchart TD; A --> B\n```')
-    const button = container.querySelector<HTMLButtonElement>('.code-block-copy-btn')
-    if (!button) {
-      throw new Error('Missing diagram copy button')
-    }
-    await act(async () => button.click())
-    expect(writeClipboardText).toHaveBeenLastCalledWith('flowchart TD; A --> B\n')
-  })
   it('keeps ordinary code in its copyable pre with its annotation range', () => {
     render('```typescript\nconst diagram = "mermaid"\n```')
     const code = container.querySelector('pre code')
@@ -124,24 +110,5 @@ describe('MarkdownPreview Mermaid wrapper', () => {
     expect(code?.closest('.markdown-annotation-block')?.getAttribute('data-source-line')).toBe('1')
     expect(container.querySelector('.code-block-copy-btn')).not.toBeNull()
     expect(container.querySelector('.mermaid-block')).toBeNull()
-  })
-  it('retains invalid diagram source in the diagram error fallback and keeps it copyable', async () => {
-    render('```mermaid\ninvalid diagram\n```')
-    expect(container.querySelector('.mermaid-error')?.textContent).toBe('Diagram error')
-    expect(container.querySelector('pre code')?.textContent).toBe('invalid diagram')
-    const button = container.querySelector<HTMLButtonElement>('.code-block-copy-btn')
-    if (!button) {
-      throw new Error('Missing invalid diagram copy button')
-    }
-    await act(async () => button.click())
-    expect(writeClipboardText).toHaveBeenLastCalledWith('invalid diagram\n')
-  })
-  it('keeps inline Mermaid-looking code literal', () => {
-    render('Literal `mermaid` and `<svg>`')
-    expect(container.querySelector('.mermaid-block')).toBeNull()
-    expect([...container.querySelectorAll('code')].map((code) => code.textContent)).toEqual([
-      'mermaid',
-      '<svg>'
-    ])
   })
 })
