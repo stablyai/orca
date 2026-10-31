@@ -19,14 +19,34 @@ type CycleContext = {
 }
 
 /** Resolve active workspace/nav for either cycle action; null means nothing to cycle. */
-function resolveCycleContext(): CycleContext | null {
+function resolveCycleContext(
+  options: { recoverDegenerateGroupProjection?: boolean } = {}
+): CycleContext | null {
   const store = useAppStore.getState()
   const worktreeId = store.activeWorktreeId
   if (!worktreeId) {
     return null
   }
   // Cycle the visible group’s order so keyboard navigation follows dragged tabs.
-  const allTabIds = getActiveTabNavOrder(store, worktreeId)
+  let allTabIds = getActiveTabNavOrder(store, worktreeId)
+  if (options.recoverDegenerateGroupProjection && allTabIds.length <= 1) {
+    // Why: a hydration gap can strand the active group’s projection on one visible row while the
+    // worktree holds more terminals, silently deadening same-type/all-types cycling (#36313).
+    // Reuse the terminal scope’s gates so intentional one-tab split groups stay local.
+    const worktreeTerminalTabs = getWorktreeTerminalTabOrder(store, worktreeId)
+    if (
+      worktreeTerminalTabs.length > 1 &&
+      shouldUseWorktreeTerminalFallback(
+        store,
+        worktreeId,
+        allTabIds,
+        allTabIds.filter((entry) => entry.type === 'terminal'),
+        worktreeTerminalTabs
+      )
+    ) {
+      allTabIds = worktreeTerminalTabs
+    }
+  }
   if (allTabIds.length <= 1) {
     return null
   }
@@ -82,7 +102,7 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
 
 /** Cycle the current type. Fresh installs use Cmd/Ctrl+Alt+[ / ]; migrated bindings may retain the inverse and remain rebindable. */
 export function handleSwitchTab(direction: number): boolean {
-  const ctx = resolveCycleContext()
+  const ctx = resolveCycleContext({ recoverDegenerateGroupProjection: true })
   if (!ctx) {
     return false
   }
@@ -105,7 +125,7 @@ export function handleSwitchTab(direction: number): boolean {
 
 /** Cycle all visible types. Fresh installs use Cmd/Ctrl+Shift+[ / ]; migrated bindings may retain the inverse and remain rebindable. */
 export function handleSwitchTabAcrossAllTypes(direction: number): boolean {
-  const ctx = resolveCycleContext()
+  const ctx = resolveCycleContext({ recoverDegenerateGroupProjection: true })
   if (!ctx) {
     return false
   }

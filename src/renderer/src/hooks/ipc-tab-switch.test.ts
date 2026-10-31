@@ -432,6 +432,84 @@ describe('handleSwitchTabAcrossAllTypes', () => {
   })
 })
 
+describe('degenerate active-group projection recovery (#36313)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // Hydration-gap state from #36313: the runtime holds two terminals while the active group's
+  // projection lost the left tab's row, so the visible nav order carries only the right tab.
+  function makeDegenerateStore(): MockStore {
+    const store = makeStore('terminal')
+    store.activeTabId = 'term-2'
+    store.tabsByWorktree = {
+      'wt-1': [{ id: 'term-1' }, { id: 'term-2' }]
+    }
+    store.groupsByWorktree = {
+      'wt-1': [{ id: 'group-1', activeTabId: 'tab-2', tabOrder: ['tab-2'] }]
+    }
+    store.unifiedTabsByWorktree = {
+      'wt-1': [{ id: 'tab-2', entityId: 'term-2', groupId: 'group-1', contentType: 'terminal' }]
+    }
+    return store
+  }
+
+  it('recovers same-type previous cycling when a hydration gap hides a worktree terminal', () => {
+    const store = makeDegenerateStore()
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([{ type: 'terminal', id: 'term-2', tabId: 'tab-2' }])
+
+    expect(handleSwitchTab(-1)).toBe(true)
+    expect(store.setActiveTab).toHaveBeenCalledWith('term-1')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
+  })
+
+  it('recovers all-types previous cycling through the same gap', () => {
+    const store = makeDegenerateStore()
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([{ type: 'terminal', id: 'term-2', tabId: 'tab-2' }])
+
+    expect(handleSwitchTabAcrossAllTypes(-1)).toBe(true)
+    expect(store.setActiveTab).toHaveBeenCalledWith('term-1')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
+  })
+
+  it('keeps the recent-tab MRU group-scoped in the same state', () => {
+    const store = makeDegenerateStore()
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([{ type: 'terminal', id: 'term-2', tabId: 'tab-2' }])
+
+    expect(handleSwitchRecentTab()).toBe(false)
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+  })
+
+  it('keeps genuine one-terminal split groups a no-op for same-type cycling', () => {
+    const store = makeStore('terminal')
+    store.activeTabId = 'term-1'
+    store.tabsByWorktree = {
+      'wt-1': [{ id: 'term-1' }, { id: 'term-2' }]
+    }
+    store.groupsByWorktree = {
+      'wt-1': [
+        { id: 'group-1', activeTabId: 'tab-1', tabOrder: ['tab-1'] },
+        { id: 'group-2', activeTabId: 'tab-2', tabOrder: ['tab-2'] }
+      ]
+    }
+    store.unifiedTabsByWorktree = {
+      'wt-1': [
+        { id: 'tab-1', entityId: 'term-1', groupId: 'group-1', contentType: 'terminal' },
+        { id: 'tab-2', entityId: 'term-2', groupId: 'group-2', contentType: 'terminal' }
+      ]
+    }
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([{ type: 'terminal', id: 'term-1', tabId: 'tab-1' }])
+
+    expect(handleSwitchTab(-1)).toBe(false)
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+    expect(store.setActiveTabType).not.toHaveBeenCalled()
+  })
+})
+
 describe('handleSwitchRecentTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
