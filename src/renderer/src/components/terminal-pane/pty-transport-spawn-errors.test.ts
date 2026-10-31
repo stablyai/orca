@@ -222,6 +222,48 @@ describe('createIpcPtyTransport', () => {
     expect(result).toEqual({ id: 'ssh:ssh-1@@pty-3', sessionExpired: true })
   })
 
+  it('calls a local daemon session-absence answer expired so a restored pane respawns silently', async () => {
+    // 'Session not found' is the daemon's absence verdict for a reattach id — the expected answer
+    // at project open for panes whose sessions died with a daemon restart or the project-close
+    // sweep. The pane retires the binding and respawns either way; the dead-session toast over the
+    // recovered pane read as a broken tab on every project open.
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnMock = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          `Error invoking remote method 'pty:spawn': SessionNotFoundError: Session not found: repo-1::C:/proj/wt@@deadbeef`
+        )
+      )
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const transport = createIpcPtyTransport()
+    const onError = vi.fn()
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'repo-1::C:/proj/wt@@deadbeef',
+      callbacks: { onError }
+    })
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(result).toEqual({ id: 'repo-1::C:/proj/wt@@deadbeef', sessionExpired: true })
+  })
+
   it('surfaces terminal session state save failures without the Electron IPC wrapper', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const wrappedMessage = `Error invoking remote method 'pty:spawn': Error: ${createTerminalSessionStateSaveFailureMessage()}`

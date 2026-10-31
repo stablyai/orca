@@ -13,6 +13,17 @@ export function isSshSessionGoneError(error: unknown): boolean {
     !message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR)
   )
 }
+
+/**
+ * The terminal daemon's absence answer for a reattach id (`SessionNotFoundError` in
+ * daemon-errors.ts, possibly class-prefixed or IPC-wrapped on the way back). Expected at project
+ * open for any pane whose session died with a daemon restart or the project-close sweep, so it
+ * licenses the same silent retire-and-respawn the SSH expiry verdict gets.
+ */
+export function isDaemonSessionNotFoundError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /(?:SessionNotFoundError: )?Session not found: \S+/.test(message)
+}
 export const PTY_CONNECT_DIAG_LIMIT = 200
 export const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096
 export const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
