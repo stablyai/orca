@@ -44,4 +44,19 @@ describe('WorkspaceEmojiPickerPanel', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0)
     expect(screen.getByText('No emoji found')).toBeTruthy()
   })
+
+  it.each([{ isComposing: true }, { keyCode: 229 }])(
+    'leaves IME-owned Enter to the search input (%o)',
+    (imeEvent) => {
+      const onPick = vi.fn()
+      render(<WorkspaceEmojiPickerPanel onPick={onPick} />)
+
+      fireEvent.change(searchBox(), { target: { value: 'tada' } })
+      fireEvent.keyDown(searchBox(), { key: 'Enter', ...imeEvent })
+      expect(onPick).not.toHaveBeenCalled()
+
+      fireEvent.keyDown(searchBox(), { key: 'Enter' })
+      expect(onPick).toHaveBeenCalledWith('🎉')
+    }
+  )
 })

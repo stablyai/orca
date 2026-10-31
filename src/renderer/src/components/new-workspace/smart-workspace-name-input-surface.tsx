@@ -54,7 +54,8 @@ export function renderSmartWorkspaceNameInput(
     jiraStatusId,
     linearStatusId,
     unresolvedLinearUrlIntent,
-    blockingTaskUrlResolution
+    blockingTaskUrlResolution,
+    handleEmojiPickerOpenChange
   } = controller
   // Emoji only make sense where the user types a name, not a search query.
   const showEmojiPickerButton = mode === 'smart' || mode === 'text'
@@ -311,15 +312,8 @@ export function renderSmartWorkspaceNameInput(
           className="absolute top-1/2 right-1.5 -translate-y-1/2"
           disabled={disabled}
           inputRef={localInputRef}
-          onOpenChange={(pickerOpen) => {
-            if (pickerOpen) {
-              // Why: the source results list would otherwise sit under the picker.
-              setOpen(false)
-              setEmojiCursor(null)
-            }
-          }}
+          onOpenChange={handleEmojiPickerOpenChange}
           onValueChange={onValueChange}
-          value={value}
         />
       ) : null}
     </>

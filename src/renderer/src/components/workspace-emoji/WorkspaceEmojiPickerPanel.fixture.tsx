@@ -20,7 +20,6 @@ function FieldWithButton(): React.JSX.Element {
         className="absolute top-1/2 right-1.5 -translate-y-1/2"
         inputRef={inputRef}
         onValueChange={setValue}
-        value={value}
       />
     </div>
   )

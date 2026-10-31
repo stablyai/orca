@@ -4,7 +4,8 @@ import {
   getActiveWorkspaceEmojiShortcode,
   getWorkspaceEmojiPickerDefaults,
   insertWorkspaceEmojiAtSelection,
-  replaceCompletedWorkspaceEmojiShortcode
+  replaceCompletedWorkspaceEmojiShortcode,
+  searchWorkspaceEmojiShortcodes
 } from './workspace-emoji-shortcodes'
 
 describe('workspace emoji shortcodes', () => {
@@ -72,9 +73,12 @@ describe('insertWorkspaceEmojiAtSelection', () => {
 })
 
 describe('getWorkspaceEmojiPickerDefaults', () => {
-  it('resolves every curated shortcode to a distinct emoji', () => {
+  it('matches the shortcode catalog exactly and lists distinct emoji', () => {
     const defaults = getWorkspaceEmojiPickerDefaults()
     expect(defaults).toHaveLength(48)
     expect(new Set(defaults.map((entry) => entry.emoji)).size).toBe(48)
+    for (const entry of defaults) {
+      expect(searchWorkspaceEmojiShortcodes(entry.shortcode, 1)[0]).toEqual(entry)
+    }
   })
 })

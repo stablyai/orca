@@ -64,7 +64,6 @@ export function WorktreeDisplayNameField({
           disabled={disabled}
           inputRef={inputRef}
           onValueChange={onValueChange}
-          value={value}
         />
       </div>
       <WorkspaceEmojiSuggestionPopover

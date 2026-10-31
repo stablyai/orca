@@ -163,65 +163,60 @@ export function insertWorkspaceEmojiAtSelection(
   }
 }
 
-// Shown before the user searches: emoji that read well as workspace markers, eight per picker row.
+// Shown before the user searches: emoji that read well as workspace markers.
 // Only emoji-presentation code points: text-default ones (gear, warning, sun) render as monochrome glyphs.
-const WORKSPACE_EMOJI_PICKER_DEFAULT_SHORTCODES = [
-  'rocket',
-  'bug',
-  'sparkles',
-  'fire',
-  'zap',
-  'test_tube',
-  'package',
-  'wrench',
-  'hammer',
-  'nut_and_bolt',
-  'construction',
-  'rotating_light',
-  'lock',
-  'key',
-  'shield',
-  'broom',
-  'memo',
-  'books',
-  'bookmark',
-  'pushpin',
-  'paperclip',
-  'link',
-  'clipboard',
-  'calendar',
-  'bulb',
-  'mag',
-  'eyes',
-  'speech_balloon',
-  'bell',
-  'lifebuoy',
-  'robot',
-  'microscope',
-  'white_check_mark',
-  'no_entry',
-  'hourglass',
-  'trophy',
-  'star',
-  'tada',
-  'dart',
-  'puzzle_piece',
-  'seedling',
-  'cherry_blossom',
-  'rainbow',
-  'sunflower',
-  'crescent_moon',
-  'purple_heart',
-  'coffee',
-  'ghost'
-] as const
-
-let pickerDefaults: readonly WorkspaceEmojiSuggestion[] | null = null
+// Literal pairs so opening the picker never builds the full shortcode catalog; a test keeps them in sync.
+const WORKSPACE_EMOJI_PICKER_DEFAULTS: readonly WorkspaceEmojiSuggestion[] = [
+  { emoji: '🚀', shortcode: 'rocket' },
+  { emoji: '🐛', shortcode: 'bug' },
+  { emoji: '✨', shortcode: 'sparkles' },
+  { emoji: '🔥', shortcode: 'fire' },
+  { emoji: '⚡', shortcode: 'zap' },
+  { emoji: '🧪', shortcode: 'test_tube' },
+  { emoji: '📦', shortcode: 'package' },
+  { emoji: '🔧', shortcode: 'wrench' },
+  { emoji: '🔨', shortcode: 'hammer' },
+  { emoji: '🔩', shortcode: 'nut_and_bolt' },
+  { emoji: '🚧', shortcode: 'construction' },
+  { emoji: '🚨', shortcode: 'rotating_light' },
+  { emoji: '🔒', shortcode: 'lock' },
+  { emoji: '🔑', shortcode: 'key' },
+  { emoji: '🛡', shortcode: 'shield' },
+  { emoji: '🧹', shortcode: 'broom' },
+  { emoji: '📝', shortcode: 'memo' },
+  { emoji: '📚', shortcode: 'books' },
+  { emoji: '🔖', shortcode: 'bookmark' },
+  { emoji: '📌', shortcode: 'pushpin' },
+  { emoji: '📎', shortcode: 'paperclip' },
+  { emoji: '🔗', shortcode: 'link' },
+  { emoji: '📋', shortcode: 'clipboard' },
+  { emoji: '📆', shortcode: 'calendar' },
+  { emoji: '💡', shortcode: 'bulb' },
+  { emoji: '🔍', shortcode: 'mag' },
+  { emoji: '👀', shortcode: 'eyes' },
+  { emoji: '💬', shortcode: 'speech_balloon' },
+  { emoji: '🔔', shortcode: 'bell' },
+  { emoji: '🛟', shortcode: 'lifebuoy' },
+  { emoji: '🤖', shortcode: 'robot' },
+  { emoji: '🔬', shortcode: 'microscope' },
+  { emoji: '✅', shortcode: 'white_check_mark' },
+  { emoji: '⛔', shortcode: 'no_entry' },
+  { emoji: '⌛', shortcode: 'hourglass' },
+  { emoji: '🏆', shortcode: 'trophy' },
+  { emoji: '⭐', shortcode: 'star' },
+  { emoji: '🎉', shortcode: 'tada' },
+  { emoji: '🎯', shortcode: 'dart' },
+  { emoji: '🧩', shortcode: 'puzzle_piece' },
+  { emoji: '🌱', shortcode: 'seedling' },
+  { emoji: '🌸', shortcode: 'cherry_blossom' },
+  { emoji: '🌈', shortcode: 'rainbow' },
+  { emoji: '🌻', shortcode: 'sunflower' },
+  { emoji: '🌙', shortcode: 'crescent_moon' },
+  { emoji: '💜', shortcode: 'purple_heart' },
+  { emoji: '☕', shortcode: 'coffee' },
+  { emoji: '👻', shortcode: 'ghost' }
+]
 
 export function getWorkspaceEmojiPickerDefaults(): readonly WorkspaceEmojiSuggestion[] {
-  pickerDefaults ??= WORKSPACE_EMOJI_PICKER_DEFAULT_SHORTCODES.flatMap((shortcode) => {
-    const entry = exactShortcodeIndex().get(shortcode)
-    return entry ? [entry] : []
-  })
-  return pickerDefaults
+  return WORKSPACE_EMOJI_PICKER_DEFAULTS
 }
