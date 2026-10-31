@@ -227,14 +227,13 @@ export function useTabBarCreateMenuController({
     onFocusChat: (tabId) =>
       queueFocusAfterNewTabMenuClose(() => requestNativeChatComposerFocus(tabId), true)
   })
-  const launchAgentFromNewTabEntry = (option: TabAgentLaunchOption): void => {
+  const launchAgentFromNewTabEntry = (option: TabAgentLaunchOption): boolean => {
     if (option.row) {
-      if (option.setup) {
-        launchAgentRow(option.row, option.setup, option.pickerEntry)
-      } else {
-        launchAgentRow(option.row)
-      }
+      return option.setup
+        ? launchAgentRow(option.row, option.setup, option.pickerEntry)
+        : launchAgentRow(option.row)
     }
+    return false
   }
   const runPendingNewTabMenuFocusAfterClose = (): void => {
     const pendingFocus = pendingNewTabMenuFocusRef.current

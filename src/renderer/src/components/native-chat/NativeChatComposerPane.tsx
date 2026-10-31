@@ -158,8 +158,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setDraft,
       setNotice
     })
-    const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
-      attachments
+    const { imageAttachments, attachResolvedPaths, clearImageAttachments } = attachments
     const imageBlock = nativeChatImageSendBlock(imageAttachments)
     const sendBlockedReason = imageBlock.reason ?? structuredTransport?.sendBlockedReason ?? null
     const sendHeld =
@@ -301,6 +300,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       disabled,
       sendPty,
       sendStructured,
+      submitEmpty: launchPrompt?.onEmptySubmit,
       consumeOrcaCommand: pending || launchPrompt ? undefined : resume.consume,
       setDraft,
       setCaret
@@ -400,7 +400,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           goalMode={goalMode}
           onRetrySkills={picker.retrySkills}
           onChooseMentionFile={completeMention}
-          onRemoveImageAttachment={(id) => removeImageAttachment(id)}
+          onRemoveImageAttachment={attachments.removeImageAttachment}
           onAttach={pickAttachments}
           onDictationToggle={dictation.toggleDictation}
           onDictationHoldStart={dictation.startHoldDictation}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Tab } from '../../../../shared/tab-types'
 import {
   isNativeChatSkillDiscoveryAwaitingDirectory,
@@ -162,3 +163,49 @@ describe('floating workspace skill discovery', () => {
     ).toBeNull()
   })
 })
+
+it.each(['local', 'ssh:box'] as const)(
+  'qualifies a no-tab folder launch by its selected host %s',
+  (executionHostId) => {
+    const folder = (host: ExecutionHostId, folderPath: string) => ({
+      id: 'fw-twin',
+      projectGroupId: 'pg-1',
+      name: 'folder',
+      folderPath,
+      connectionId: host === 'local' ? null : 'box',
+      executionHostId: host,
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
+    })
+    const inputs: NativeChatSkillStateInputs = {
+      activeRepoId: null,
+      activeWorktreeId: 'folder:fw-twin',
+      activeWorkspaceExecutionHostId: executionHostId,
+      detectedWorktreesByRepo: {},
+      floatingWorkspacePath: null,
+      folderWorkspaces: [folder('local', '/local/repo'), folder('ssh:box', '/remote/repo')],
+      projectGroups: [{ id: 'pg-1', name: 'group', parentPath: null, parentGroupId: null }],
+      projects: [],
+      repos: [],
+      restoredRuntimeHostIdByWorkspaceSessionKey: {},
+      settings: getDefaultSettings('/home/me'),
+      structuredSessionLaunchDirectoryByTabId: {},
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      worktreesByRepo: {}
+    }
+    expect(
+      resolveNativeChatSkillDiscoveryContext(inputs, 'no-tab', 'folder:fw-twin')
+    ).toMatchObject({
+      cwd: executionHostId === 'local' ? '/local/repo' : '/remote/repo',
+      executionHostKind: executionHostId === 'local' ? 'local' : 'ssh'
+    })
+  }
+)

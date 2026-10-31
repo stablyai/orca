@@ -226,8 +226,12 @@ export function isNativeChatEditDraft(scopeKey: string): boolean {
 const LAUNCH_PROMPT_SCOPE_PREFIX = 'agent-launch:'
 
 /** The first prompt typed in an agent's launch panel, before any chat or terminal exists. */
-export function nativeChatLaunchPromptDraftScopeKey(worktreeId: string, agent: string): string {
-  return `${LAUNCH_PROMPT_SCOPE_PREFIX}${worktreeId}:${agent}`
+export function nativeChatLaunchPromptDraftScopeKey(
+  worktreeId: string,
+  agent: string,
+  executionHostId = 'local'
+): string {
+  return `${LAUNCH_PROMPT_SCOPE_PREFIX}${JSON.stringify([executionHostId, worktreeId, agent])}`
 }
 
 /** Edit and launch-prompt scopes share the input machinery but never enter draft persistence. */

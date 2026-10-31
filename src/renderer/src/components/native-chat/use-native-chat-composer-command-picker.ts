@@ -6,7 +6,6 @@ import {
   type NativeChatPickerState
 } from './use-native-chat-picker-state'
 import {
-  NATIVE_CHAT_RESUME_COMMAND,
   useNativeChatResumeCommand,
   type NativeChatResumeCommand
 } from './use-native-chat-resume-command'
@@ -42,10 +41,7 @@ export function useNativeChatComposerCommandPicker(
     [agent, reported, hostSetsGoals]
   )
   const commandAvailable = useCallback(
-    (name: string) =>
-      mode === 'launch'
-        ? name !== NATIVE_CHAT_RESUME_COMMAND
-        : mode !== 'edit' || acceptsText(`/${name}`),
+    (name: string) => mode === undefined || acceptsText(`/${name}`),
     [mode, acceptsText]
   )
   const picker = useNativeChatPickerState({

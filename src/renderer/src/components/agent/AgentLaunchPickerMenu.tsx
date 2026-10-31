@@ -24,7 +24,11 @@ export function pickerLaunchRow(
   }
 }
 
-type Launch = (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, entry?: AgentPickerEntry) => void
+type Launch = (
+  row: NewTabAgentMenuRow,
+  draft?: AgentPickerDraft,
+  entry?: AgentPickerEntry
+) => boolean | void
 
 function keepSetupFocus(event: PointerEvent<HTMLDivElement>) {
   // Radix row hover must not steal focus from the row's portaled setup or its nested controls.
@@ -150,6 +154,7 @@ function AgentPickerMenuRow({
   const setupId = useId()
   const item = useRef<HTMLDivElement>(null)
   const configured = useRef<AgentPickerDraft | undefined>(undefined)
+  const accepted = useRef(false)
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
   return (
     <AgentLaunchSetupButton
@@ -166,14 +171,16 @@ function AgentPickerMenuRow({
       }}
       onUse={(draft) => {
         configured.current = draft
+        accepted.current = false
         item.current?.click()
+        return accepted.current
       }}
       renderAnchor={(trigger) => (
         <DropdownMenuItem
           ref={item}
           variant="launch"
           disabled={disabled || !entry.surfaces.length}
-          onSelect={() => {
+          onSelect={(event) => {
             const draft = configured.current ?? initial
             configured.current = undefined
             const surface = draft?.surface ?? entry.defaultSurface
@@ -184,10 +191,10 @@ function AgentPickerMenuRow({
                     ? row.kind === 'chat'
                     : row.kind === 'terminal' || row.kind === 'cli'
                 ) ?? pickerLaunchRow(entry, surface))
-            if (draft) {
-              runLaunch(row, draft, entry)
-            } else {
-              runLaunch(row, undefined)
+            accepted.current =
+              (draft ? runLaunch(row, draft, entry) : runLaunch(row, undefined)) !== false
+            if (!accepted.current) {
+              event.preventDefault()
             }
           }}
           onKeyDown={(event) => {

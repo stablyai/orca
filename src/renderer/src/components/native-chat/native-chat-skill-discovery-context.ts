@@ -112,14 +112,14 @@ export function resolveNativeChatSkillDiscoveryContext(
   if (!worktreeId) {
     return null
   }
+  const hostId = getExecutionHostIdForWorktree(state, worktreeId)
   const cwd = launchWorktreeId
-    ? resolveWorkspaceDirectory(state, launchWorktreeId)
+    ? resolveWorkspaceDirectory(state, launchWorktreeId, hostId)
     : resolveNativeChatSkillDiscoveryCwd(state, terminalTabId)
   if (!cwd) {
     return null
   }
 
-  const hostId = getExecutionHostIdForWorktree(state, worktreeId)
   const parsedHost = parseExecutionHostId(hostId)
   if (parsedHost?.kind === 'ssh') {
     return {

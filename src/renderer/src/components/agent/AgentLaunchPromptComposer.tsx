@@ -1,5 +1,6 @@
 import { useMemo, type Ref } from 'react'
 import { useAppStore } from '@/store'
+import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { translate } from '@/i18n/i18n'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import {
@@ -9,7 +10,11 @@ import {
 import type { NativeChatStructuredComposerTransport } from '../native-chat/native-chat-composer-types'
 import type { NativeChatComposerNotice } from '../native-chat/native-chat-composer-notice'
 import { useNativeChatComposerError } from '../native-chat/use-native-chat-composer-notice'
-import { nativeChatLaunchPromptDraftScopeKey } from '../native-chat/native-chat-composer-draft-store'
+import {
+  nativeChatLaunchPromptDraftScopeKey,
+  readNativeChatComposerDraft,
+  clearNativeChatComposerDraftIfUnchanged
+} from '../native-chat/native-chat-composer-draft-store'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
@@ -28,9 +33,13 @@ const NO_COMMAND_CAUSES = {
   retry: false
 } as const
 
-/** One prompt per agent and workspace, kept while the panel closes and reopens. */
+/** One prompt per agent and workspace owner, kept while the panel closes and reopens. */
 export function agentLaunchPromptScopeKey(entry: AgentPickerEntry): string {
-  return nativeChatLaunchPromptDraftScopeKey(entry.worktreeId ?? '', entry.agent)
+  return nativeChatLaunchPromptDraftScopeKey(
+    entry.worktreeId ?? '',
+    entry.agent,
+    entry.rows[0]?.executionHostId ?? 'local'
+  )
 }
 
 /** The chat composer as a launch's first prompt: sending it is the launch, so nothing reaches a session. */
@@ -43,7 +52,7 @@ export function AgentLaunchPromptComposer({
   entry: AgentPickerEntry
   composerRef: Ref<NativeChatComposerHandle>
   disabled?: boolean
-  onLaunch: (prompt: string) => void
+  onLaunch: (prompt: string) => boolean | void
 }): React.JSX.Element {
   const scopeKey = agentLaunchPromptScopeKey(entry)
   const { worktreeId } = entry
@@ -56,9 +65,15 @@ export function AgentLaunchPromptComposer({
       capturePresentation: () => () => true,
       // Commands go to the agent in its first prompt, as typed.
       dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
-      send: (text) => {
-        onLaunch(text)
-        return true
+      send: (text, _attachments, request) => {
+        // Launches carry text only; name the exact selected files instead of losing skill identity.
+        const skills = request?.skills ?? []
+        const prompt = skills.length
+          ? `${text}\n\nUse these selected skill files:\n${skills
+              .map(({ name, path }) => `${name}: ${formatNativeChatFileReference(path)}`)
+              .join('\n')}`
+          : text
+        return onLaunch(prompt) !== false
       },
       optionsSurface: NO_OPTIONS_SURFACE,
       optionSnapshot: [],
@@ -81,6 +96,12 @@ export function AgentLaunchPromptComposer({
   )
   const launchPrompt = useMemo(
     () => ({
+      onEmptySubmit: () => {
+        const submitted = readNativeChatComposerDraft(scopeKey)
+        if (onLaunch('') !== false) {
+          clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)
+        }
+      },
       placeholder: getNativeChatAgentProfile(entry.agent)
         ? translate(
             'agentPicker.promptPlaceholder',
@@ -91,7 +112,7 @@ export function AgentLaunchPromptComposer({
             'Add a prompt (optional): @ for files'
           )
     }),
-    [entry.agent]
+    [entry.agent, onLaunch, scopeKey]
   )
   return (
     <NativeChatComposer

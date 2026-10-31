@@ -1,39 +1,38 @@
-import { useRef } from 'react'
+import { useImperativeHandle, useRef, type Ref } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatComposerHandle } from '../native-chat/NativeChatComposer'
-import { readNativeChatComposerDraft } from '../native-chat/native-chat-composer-draft-store'
-import { AgentLaunchPromptComposer, agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
+import { AgentLaunchPromptComposer } from './AgentLaunchPromptComposer'
 import {
   agentPickerButtonOrder,
   type AgentPickerEntry,
   type AgentPickerSurface
 } from '../../../../shared/agent-launch-picker'
 
+export type AgentLaunchSetupFooterHandle = { launch: (surface: AgentPickerSurface) => void }
+
 /** The optional first prompt and the Launch buttons, which send whatever it holds. */
 export function AgentLaunchSetupFooter({
   entry,
+  ref,
   disabled,
   onLaunch
 }: {
   entry: AgentPickerEntry
+  ref?: Ref<AgentLaunchSetupFooterHandle>
   disabled?: boolean
-  onLaunch: (surface: AgentPickerSurface, prompt?: string) => void
+  onLaunch: (surface: AgentPickerSurface, prompt?: string) => boolean | void
 }): React.JSX.Element {
   const composer = useRef<NativeChatComposerHandle>(null)
   // Enter launches the default way; a Launch button names its own before it submits the prompt.
   const surface = useRef(entry.defaultSurface)
   const launch = (next: AgentPickerSurface): void => {
-    const typed = readNativeChatComposerDraft(agentLaunchPromptScopeKey(entry))
-    if (typed.text.trim() === '' && typed.images.length === 0) {
-      onLaunch(next)
-      return
-    }
     // The composer resolves pastes and pending files, then hands the text to onLaunch.
     surface.current = next
     composer.current?.submit?.()
   }
+  useImperativeHandle(ref, () => ({ launch }))
   return (
     <>
       <div

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-catalog'
 import {
@@ -15,7 +15,7 @@ import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOpt
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { AgentPermissionMenu } from '../settings/AgentPermissionChoiceControls'
-import { AgentLaunchSetupFooter } from './AgentLaunchSetupFooter'
+import { AgentLaunchSetupFooter, type AgentLaunchSetupFooterHandle } from './AgentLaunchSetupFooter'
 import {
   agentPickerPanelArguments,
   agentPickerSpeedValue,
@@ -48,8 +48,9 @@ export function AgentLaunchSetupPanel({
   initial?: AgentPickerDraft
   disabled?: boolean
   onDraftChange?: (draft: AgentPickerDraft) => void
-  onUse: (draft: AgentPickerDraft) => void
+  onUse: (draft: AgentPickerDraft) => boolean | void
 }) {
+  const footer = useRef<AgentLaunchSetupFooterHandle>(null)
   const [draft, updateDraft] = useState(() => initial ?? agentPickerDraft(entry))
   const setDraft = (next: AgentPickerDraft) => {
     updateDraft(next)
@@ -160,7 +161,7 @@ export function AgentLaunchSetupPanel({
       onAction={() => {}}
     />
   )
-  const use = (surface: AgentPickerSurface) => onUse({ ...draft, surface })
+  const use = (surface: AgentPickerSurface) => footer.current?.launch(surface)
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
   return (
     <div
@@ -360,6 +361,7 @@ export function AgentLaunchSetupPanel({
         ) : null}
       </div>
       <AgentLaunchSetupFooter
+        ref={footer}
         entry={entry}
         disabled={disabled}
         onLaunch={(surface, prompt) => onUse({ ...draft, surface, ...(prompt ? { prompt } : {}) })}

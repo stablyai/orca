@@ -39,6 +39,7 @@ function harness(options: {
   threadGoal?: NativeChatStructuredComposerTransport['threadGoal']
   imageAttachments?: NativeChatComposerImageAttachment[]
   lane?: 'pty'
+  submitEmpty?: () => void
   capturePresentation?: NativeChatStructuredComposerTransport['capturePresentation']
 }) {
   const onError = vi.fn()
@@ -66,6 +67,7 @@ function harness(options: {
         caret: props.caret,
         imageAttachments: options.imageAttachments ?? [],
         disabled: false,
+        submitEmpty: options.submitEmpty,
         ...calls
       }),
     { initialProps: { draft: options.draft, caret: options.caret ?? options.draft.length } }
@@ -298,4 +300,24 @@ describe('composer goal mode', () => {
     expect(calls.setDraft).toHaveBeenCalledExactlyOnceWith(GOAL_ITEM)
     expect(hook.result.current.goalMode.active).toBe(false)
   })
+})
+
+it('admits optional empty launch only after the shared pending-attachment boundary', () => {
+  const submitEmpty = vi.fn()
+  const ordinary = harness({ draft: '' })
+  act(() => ordinary.hook.result.current.send())
+  expect(ordinary.calls.sendStructured).not.toHaveBeenCalled()
+  ordinary.hook.unmount()
+  const held = harness({
+    draft: '',
+    submitEmpty,
+    imageAttachments: [{ id: 'pending', path: '', pending: true }]
+  })
+  act(() => held.hook.result.current.send())
+  expect(submitEmpty).not.toHaveBeenCalled()
+  held.hook.unmount()
+  const launch = harness({ draft: '   ', submitEmpty })
+  act(() => launch.hook.result.current.send())
+  expect(submitEmpty).toHaveBeenCalledOnce()
+  expect(launch.calls.sendStructured).not.toHaveBeenCalled()
 })

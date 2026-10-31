@@ -136,7 +136,7 @@ export type NativeChatComposerProps = {
   workspacePending?: true
   /** The first prompt in an agent's launch panel: one line that grows, Attach as its only control,
    *  no /resume, the launch workspace's skills, and a draft kept in memory until the launch. */
-  launchPrompt?: { placeholder: string }
+  launchPrompt?: { placeholder: string; onEmptySubmit: () => void }
   /** Cmd/Ctrl+Shift+Enter steers the head queued card; false when it can't. */
   steerHead?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */

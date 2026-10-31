@@ -79,7 +79,7 @@ export function useTabAgentMenuLaunch({
   const runLaunch = useCallback(
     (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, pickerEntry?: AgentPickerEntry) => {
       if (disabled || row.kind === 'chat-unavailable') {
-        return
+        return false
       }
       const { agent } = row
       const entry = getCatalogEntry(agent)
@@ -113,7 +113,7 @@ export function useTabAgentMenuLaunch({
             { value0: label }
           )
         )
-        return
+        return false
       }
       if (onPromptHandedOff && result.promptDeliveryResult) {
         const outcome = newAgentPromptOutcome({ delivery: result.promptDeliveryResult })
@@ -137,13 +137,14 @@ export function useTabAgentMenuLaunch({
       }
       if (result.surface.kind === 'local-chat') {
         onFocusChat?.(result.surface.tabId)
-        return
+        return true
       }
       if (result.surface.kind !== 'local-terminal') {
         onFocusHostTerminal?.()
-        return
+        return true
       }
       onFocusTerminal(result.surface.tabId)
+      return true
     },
     [
       worktreeId,
@@ -181,7 +182,7 @@ export function ProjectedAgentMenuItems({
 }: {
   disabled?: boolean
   model: NewTabAgentMenuModel
-  runLaunch: (row: NewTabAgentMenuRow, draft?: AgentPickerDraft) => void
+  runLaunch: React.ComponentProps<typeof AgentLaunchPickerMenu>['runLaunch']
   pickerEntries?: AgentPickerEntry[]
   onSelectPickerAgent?: (agent: AgentPickerEntry['agent']) => void
   hidePickerSearch?: boolean
