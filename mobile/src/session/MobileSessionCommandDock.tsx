@@ -44,7 +44,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const t = useMobileTranslation()
   const rail = useSessionTerminalKeyRail(controller)
   const {
-    insets,
     bufferedTerminalDraftState,
     autocompleteEnabled,
     liveInputCapture,
@@ -74,7 +73,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     handleSend,
     isAttaching,
     attachImage,
-    keyboardLift
+    keyboardLift,
+    dockBottomInset
   } = controller
   if (!sessionCommandDockShown(controller)) {
     return null
@@ -108,7 +108,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     <View
       style={[
         dockStyles.dock,
-        { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
+        { paddingBottom: dockBottomInset, transform: [{ translateY: -keyboardLift }] }
       ]}
     >
       <View>

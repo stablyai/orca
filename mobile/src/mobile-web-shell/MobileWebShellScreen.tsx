@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Linking, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
+import { useFocusEffect, useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import {
   OrcaMobileWebShellView,
   parseMobileWebShellLoadState
@@ -21,6 +21,9 @@ import { playPageHaptic } from './page-haptics'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
+import { useSideRailStrip } from '../layout/side-rail'
+import { useClaimSideRelease } from '../layout/released-side-inset'
+import { BRIDGE_TERMINAL_KEY_RAIL_GRANT } from './bridge/bridge-terminal-key'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useNativePdfViewer } from '../platform/native-pdf-view'
 import { useShellPageBack } from './use-shell-page-back'
@@ -122,6 +125,21 @@ export function MobileWebShellScreen({
   })
   const readySessionId = state.kind === 'ready' ? state.sessionId : null
   const keyRail = useShellKeyRail({ sessionId: readySessionId, overlay, routeGrants })
+  // The session page lays its chat across the status column, so this screen gives up its padding while focused.
+  const [shellFocused, setShellFocused] = useState(false)
+  useFocusEffect(
+    useCallback(() => {
+      setShellFocused(true)
+      return () => setShellFocused(false)
+    }, [])
+  )
+  const strip = useSideRailStrip()
+  useClaimSideRelease(
+    shellFocused &&
+      strip !== null &&
+      !overlay &&
+      routeGrants.includes(BRIDGE_TERMINAL_KEY_RAIL_GRANT)
+  )
   const {
     snapshot,
     unreadable,
