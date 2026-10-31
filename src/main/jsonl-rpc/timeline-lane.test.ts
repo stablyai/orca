@@ -7,11 +7,11 @@ import {
   closeCheckpointTestJournals
 } from '../claude/claude-checkpoint-test-support'
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
-import { messageText } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,
+  messageText,
   refusingSink,
   SESSION,
   GENERATION,
