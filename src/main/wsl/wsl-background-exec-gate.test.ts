@@ -158,6 +158,28 @@ describe('blockedWslDistroForExec', () => {
     expect(inside).toEqual({ named: 'Debian', relayGate: null })
   })
 
+  it('work an unnamed act left behind reads the default fresh once the act settles', async () => {
+    const both: [string, string][] = [
+      [UBUNTU_ID, 'Ubuntu'],
+      [DEBIAN_ID, 'Debian']
+    ]
+    runProcess.mockResolvedValue({ code: 0, stdout: lxss(DEBIAN_ID, both) })
+    let release: () => void = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    let later: Promise<unknown> = Promise.resolve()
+    const seenInside = await runAsWslExecUserAct(null, async () => {
+      // A continuation queued inside keeps the act's async context, pin included.
+      later = held.then(() => resolveWslDefaultDistro())
+      return resolveWslDefaultDistro()
+    })
+    expect(seenInside).toBe('Debian')
+    // `wsl --set-default Ubuntu` after the act settled.
+    runProcess.mockResolvedValue({ code: 0, stdout: lxss(UBUNTU_ID, both) })
+    resetWslDefaultDistroForTests()
+    release()
+    await expect(later).resolves.toBe('Ubuntu')
+  })
+
   it('shares one registry read across a burst of unnamed checks within its TTL', async () => {
     runProcess.mockResolvedValue({ code: 0, stdout: lxss(UBUNTU_ID, [[UBUNTU_ID, 'Ubuntu']]) })
     await Promise.all([1, 2, 3].map(() => blockedWslDistroForExec(null)))
