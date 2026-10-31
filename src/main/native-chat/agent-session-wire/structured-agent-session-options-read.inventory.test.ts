@@ -13,6 +13,7 @@ import type { AgentSessionModelCatalogResult } from '../../../shared/agent-sessi
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import {
+  hostTestCatalogReadOperation,
   hostTestOptionsReadStore,
   hostTestRestingOptionsJournal,
   hostTestRestingOptionsRecord
@@ -35,7 +36,7 @@ it('marks unknown resting inventory but preserves completed empty live and resti
       adapter: { readOptions: async () => live },
       agents: NO_STRUCTURED_AGENTS,
       store: hostTestOptionsReadStore(() => record),
-      modelCatalog: { read: async () => inventory }
+      modelCatalog: { captureRead: hostTestCatalogReadOperation, read: async () => inventory }
     },
     serialize: (_id: string, task: () => Promise<unknown>) => task(),
     openConversation: async () => session(),
