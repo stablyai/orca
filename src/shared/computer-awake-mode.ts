@@ -34,3 +34,9 @@ export function computerAwakeSettingsForMode(mode: ComputerAwakeMode): {
     keepComputerAwakeWhileAgentsRun: mode !== 'off'
   }
 }
+
+export type SystemSleepHold = {
+  // 'unknown' covers every failure and every non-macOS host.
+  sleepDisabled: 'yes' | 'no' | 'unknown'
+  observedAt: number
+}

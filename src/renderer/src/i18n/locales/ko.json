@@ -3993,7 +3993,15 @@
             "ariaLabel": "{{title}}, {{status}}",
             "onDescription": "이 컴퓨터가 절전 모드로 전환되지 않도록 항상 유지",
             "autoDescription": "에이전트가 작업하는 동안 절전 모드로 전환되지 않도록 유지",
-            "offDescription": "시스템의 기본 절전 동작 허용"
+            "offDescription": "시스템의 기본 절전 동작 허용",
+            "awakeLabel": "절전 안 함",
+            "holdSystem": "시스템 설정에 의해 절전 모드로 전환되지 않습니다",
+            "holdLidClosed": "Orca가 실행되는 이 Mac은 덮개를 닫아도 절전 모드로 전환되지 않습니다.",
+            "orcaOwnStatus": "Orca 절전 방지: {{status}}.",
+            "holdUnchecked": "이 Mac의 절전 설정을 확인할 수 없습니다",
+            "holdSentenceJoin": "{{first}}. {{second}}",
+            "holdSentenceAppend": "{{first}} {{second}}",
+            "holdSentenceEnd": "{{sentence}}."
           },
           "StatusBar": {
             "9659e38343": "포트",

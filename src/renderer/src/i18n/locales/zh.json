@@ -3993,7 +3993,15 @@
             "ariaLabel": "{{title}}，{{status}}",
             "onDescription": "始终防止此电脑进入睡眠状态",
             "autoDescription": "智能体工作时防止电脑进入睡眠状态",
-            "offDescription": "允许系统正常进入睡眠状态"
+            "offDescription": "允许系统正常进入睡眠状态",
+            "awakeLabel": "不休眠",
+            "holdSystem": "系统设置使此 Mac 不会休眠",
+            "holdLidClosed": "运行 Orca 的这台 Mac 在合盖后也不会休眠。",
+            "orcaOwnStatus": "Orca 防休眠：{{status}}。",
+            "holdUnchecked": "无法检查此 Mac 的休眠设置",
+            "holdSentenceJoin": "{{first}}。{{second}}",
+            "holdSentenceAppend": "{{first}}{{second}}",
+            "holdSentenceEnd": "{{sentence}}。"
           },
           "StatusBar": {
             "9659e38343": "端口",

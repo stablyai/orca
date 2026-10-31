@@ -4074,7 +4074,15 @@
             "ariaLabel": "{{title}}, {{status}}",
             "onDescription": "Mantener esta computadora activa en todo momento",
             "autoDescription": "Mantener la computadora activa mientras un agente está trabajando",
-            "offDescription": "Permitir que el sistema entre en suspensión normalmente"
+            "offDescription": "Permitir que el sistema entre en suspensión normalmente",
+            "awakeLabel": "Sin suspensión",
+            "holdSystem": "Mantenido activo por un ajuste del sistema",
+            "holdLidClosed": "Este Mac (donde se ejecuta Orca) permanece activo con la tapa cerrada.",
+            "orcaOwnStatus": "Mantener activo de Orca: {{status}}.",
+            "holdUnchecked": "No se pudo comprobar el ajuste de suspensión de este Mac",
+            "holdSentenceJoin": "{{first}}. {{second}}",
+            "holdSentenceAppend": "{{first}} {{second}}",
+            "holdSentenceEnd": "{{sentence}}."
           },
           "StatusBar": {
             "9659e38343": "Puertos",

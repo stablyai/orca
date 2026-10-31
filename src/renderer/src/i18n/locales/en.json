@@ -4943,7 +4943,15 @@
             "ariaLabel": "{{title}}, {{status}}",
             "onDescription": "Keep this computer awake continuously",
             "autoDescription": "Stay awake while an agent is working",
-            "offDescription": "Allow normal system sleep behavior"
+            "offDescription": "Allow normal system sleep behavior",
+            "awakeLabel": "Awake",
+            "holdSystem": "Kept awake by a system setting",
+            "holdLidClosed": "This Mac (where Orca runs) stays awake with the lid closed.",
+            "orcaOwnStatus": "Orca keep-awake: {{status}}.",
+            "holdUnchecked": "Couldn't check this Mac's sleep setting",
+            "holdSentenceJoin": "{{first}}. {{second}}",
+            "holdSentenceAppend": "{{first}} {{second}}",
+            "holdSentenceEnd": "{{sentence}}."
           },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "The previous connection closed",
