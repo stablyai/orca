@@ -105,6 +105,7 @@ function createHarness(
   const repo = {
     id: REPO_ID,
     path: '/workspace',
+    upstream: null,
     displayName: 'repo',
     badgeColor: 'blue',
     addedAt: 1,

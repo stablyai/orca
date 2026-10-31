@@ -52,6 +52,7 @@ import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-h
 import { createStructuredSessionLaunchDirectorySlice } from './structured-session-launch-directories'
 import { createStructuredChatSleptAtSlice } from './structured-chat-slept-at'
 import { createWorkspaceAttentionSlice } from './workspace-attention/workspace-attention-slice'
+import { afterEach, vi } from 'vitest'
 import '@/i18n/i18n'
 import { withEditorBufferRecords } from '../editor-buffer-record-lifecycle'
 import { withAgentConversationRetention } from '../agent-conversation-retention'
@@ -171,3 +172,5 @@ export function runtimeOwnedRepoState(
     ...extra
   }
 }
+
+afterEach(() => vi.dynamicImportSettled())

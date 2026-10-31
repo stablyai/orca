@@ -1,9 +1,11 @@
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import * as processHost from '@orca/process-host'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import {
+  PREFLIGHT_COMMAND_TIMEOUT_MS,
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand,
   isCommandAvailable,
@@ -18,11 +20,19 @@ let root = ''
 async function cliInDirectory(label: string, body = 'echo gh-version-fixture\n'): Promise<string> {
   const dir = path.join(root, label)
   await mkdir(dir, { recursive: true })
+  await writeFile(path.join(dir, 'argv.txt'), '')
   await writeFile(
     path.join(dir, COMMAND),
-    `#!/bin/sh\nprintf '%s\\n' "$@" >> ${quotePosixShell(path.join(dir, 'argv.txt'))}\n${body}`,
+    `#!/bin/sh\nif [ "$1" = "--orca-fixture-ready" ]; then exit 0; fi\nprintf '%s\\n' "$@" >> ${quotePosixShell(path.join(dir, 'argv.txt'))}\n${body}`,
     { mode: 0o755 }
   )
+  const ready = await processHost.runProcess({
+    program: path.join(dir, COMMAND),
+    args: ['--orca-fixture-ready'],
+    timeoutMs: PREFLIGHT_COMMAND_TIMEOUT_MS,
+    terminationBarrier: true
+  })
+  expect(ready.code, ready.stderr).toBe(0)
   return dir
 }
 
@@ -196,13 +206,31 @@ describe.skipIf(process.platform === 'win32')(
       const good = await cliInDirectory('good')
       vi.stubEnv('PATH', [hung, good].join(path.delimiter))
 
-      await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
-        status: 'available',
-        binary: path.join(good, COMMAND)
-      })
-      expect(await probedArgs(hung)).toEqual(['--version'])
-      expect(await probedArgs(good)).toEqual(['--version'])
-      expect(await readFile(marker, 'utf8')).toBe('terminated')
+      const runs = vi.spyOn(processHost, 'runProcess')
+      let timedOutProbe: Awaited<ReturnType<typeof processHost.runProcess>> | undefined
+      try {
+        await expect(findRunnableLocalCommand(COMMAND)).resolves.toEqual({
+          status: 'available',
+          binary: path.join(good, COMMAND)
+        })
+        const call =
+          runs.mock.results[
+            runs.mock.calls.findIndex(([spec]) => spec.program === path.join(hung, COMMAND))
+          ]
+        if (call?.type !== 'return') {
+          throw new Error('The real hung CLI probe did not return its process result')
+        }
+        timedOutProbe = await call.value
+        expect(timedOutProbe, JSON.stringify(timedOutProbe)).toMatchObject({ timedOut: true })
+        expect(await probedArgs(hung)).toEqual(['--version'])
+        expect(await probedArgs(good)).toEqual(['--version'])
+        expect(await readFile(marker, 'utf8')).toBe('terminated')
+      } catch (error) {
+        console.error('Real hung CLI probe result', timedOutProbe)
+        throw error
+      } finally {
+        runs.mockRestore()
+      }
     }, 15_000)
 
     it('uses the known Nix install directory after PATH copies fail', async () => {

@@ -24,6 +24,8 @@ const SQLITE_HARNESSES = new Set([
   // Opens the index read-only after the indexer closes; Bun's macOS SQLite refuses a WAL file then.
   'session-search-indexer-test-fixture'
 ])
+SQLITE_HARNESSES.add('session-search-indexer-test-fixture')
+SQLITE_HARNESSES.add('session-search-engine-test-fixture')
 export const SQLITE_MODULES = [
   'src/main/sqlite/sync-database',
   'src/main/persistence/profile-state/profile-state-sqlite-authority',
@@ -33,6 +35,9 @@ export const SQLITE_MODULES = [
   'src/main/runtime/structured-agent-session-runtime',
   'src/main/runtime/agent-session-record-store-slot'
 ]
+if (!SQLITE_MODULES.includes('src/main/persistence/profile-state/profile-state-database')) {
+  SQLITE_MODULES.push('src/main/persistence/profile-state/profile-state-database')
+}
 const SQLITE_MODULE_PATHS = new Set(SQLITE_MODULES.map((module) => resolve(root, module)))
 // A cheap superset of the parse below; a bare 'db' would match nearly every file.
 const SQLITE_MODULE_NAMES = [

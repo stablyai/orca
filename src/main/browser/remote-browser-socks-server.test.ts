@@ -10,9 +10,12 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()))
 })
 
-async function connectClient(server: RemoteBrowserSocksServer): Promise<Socket> {
+async function connectClient(
+  server: RemoteBrowserSocksServer,
+  allowHalfOpen = false
+): Promise<Socket> {
   const address = await server.listen()
-  const socket = connect(address.port, address.host)
+  const socket = connect({ port: address.port, host: address.host, allowHalfOpen })
   await once(socket, 'connect')
   return socket
 }
@@ -160,41 +163,72 @@ describe('RemoteBrowserSocksServer', () => {
       open: async () => new PassThrough()
     })
     servers.push(peerServer)
-    const peerAddress = await peerServer.listen()
-    const peer = connect({ ...peerAddress, allowHalfOpen: true })
-    await once(peer, 'connect')
-    await greet(peer)
-    peer.write(domainConnectRequest('localhost', 80, 2))
-    await readExact(peer, 10)
-    await expect(
-      Promise.race([
-        peerServer.close().then(() => 'closed'),
-        new Promise<string>((resolve) => setTimeout(() => resolve('timed-out'), 1_000))
-      ])
-    ).resolves.toBe('closed')
-    peer.destroy()
+    const peer = await connectClient(peerServer, true)
+    try {
+      await greet(peer)
+      const peerEnded = once(peer, 'end').then(
+        () => true,
+        () => false
+      )
+      peer.write(domainConnectRequest('localhost', 80, 2))
+      expect(Array.from(await readExact(peer, 10))).toEqual([5, 7, 0, 1, 0, 0, 0, 0, 0, 0])
+      expect(await peerEnded).toBe(true)
+      expect(peer.writable).toBe(true)
+      await expect(
+        Promise.race([
+          peerServer.close().then(() => 'closed'),
+          new Promise<string>((resolve) => setTimeout(() => resolve('timed-out'), 1_000))
+        ])
+      ).resolves.toBe('closed')
+    } finally {
+      peer.destroy()
+    }
   })
 
-  it('cannot resolve a pending route after pipelined input exceeds its bound', async () => {
-    let resolveOpen: ((stream: PassThrough) => void) | undefined
-    const open = vi.fn(
-      () =>
-        new Promise<PassThrough>((resolve) => {
-          resolveOpen = resolve
-        })
-    )
-    const server = new RemoteBrowserSocksServer({ open })
-    servers.push(server)
-    const socket = await connectClient(server)
-    await greet(socket)
-    socket.write(domainConnectRequest('localhost', 443))
-    await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(1))
+  it.each([0, 4 * 1024 * 1024])(
+    'cannot resolve a rejected pending route with %i additional client bytes',
+    async (additionalBytes) => {
+      let resolveOpen: ((stream: PassThrough) => void) | undefined
+      const open = vi.fn(
+        () =>
+          new Promise<PassThrough>((resolve) => {
+            resolveOpen = resolve
+          })
+      )
+      const server = new RemoteBrowserSocksServer({ open })
+      servers.push(server)
+      const socket = await connectClient(server, additionalBytes > 0)
+      const errors: NodeJS.ErrnoException[] = []
+      const onError = (error: NodeJS.ErrnoException): void => {
+        errors.push(error)
+      }
+      socket.on('error', onError)
+      const closed = new Promise<void>((resolve) => socket.once('close', () => resolve()))
+      try {
+        await greet(socket)
+        socket.write(domainConnectRequest('localhost', 443))
+        await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(1))
 
-    socket.write(Buffer.alloc(300 * 1024, 7))
-    expect(Array.from(await readExact(socket, 10))).toEqual([5, 1, 0, 1, 0, 0, 0, 0, 0, 0])
-    const upstream = new PassThrough()
-    resolveOpen?.(upstream)
-    await vi.waitFor(() => expect(upstream.destroyed).toBe(true))
-    expect(upstream.readableLength).toBe(0)
-  })
+        socket.write(Buffer.alloc(300 * 1024, 7))
+        expect(Array.from(await readExact(socket, 10))).toEqual([5, 1, 0, 1, 0, 0, 0, 0, 0, 0])
+        if (additionalBytes > 0) {
+          expect(socket.writable).toBe(true)
+          socket.write(Buffer.alloc(additionalBytes, 7))
+        }
+        const upstream = new PassThrough()
+        resolveOpen?.(upstream)
+        await vi.waitFor(() => expect(upstream.destroyed).toBe(true))
+        expect(upstream.readableLength).toBe(0)
+        await closed
+        expect(socket.destroyed).toBe(true)
+        for (const error of errors) {
+          expect(['ECONNRESET', 'EPIPE']).toContain(error.code)
+        }
+      } finally {
+        socket.destroy()
+        await closed
+        socket.off('error', onError)
+      }
+    }
+  )
 })

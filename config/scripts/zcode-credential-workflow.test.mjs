@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   writeFileSync
@@ -11,7 +12,7 @@ import {
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { runInNewContext } from 'node:vm'
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const workflow = parse(readFileSync('.github/workflows/zcode-credential-contract.yml', 'utf8'))
@@ -24,6 +25,13 @@ const account = job.steps.find(
 const credentials = job.steps.find(
   (step) => step.name === 'Verify rollback and native Windows permissions'
 )
+let fixtureHome
+beforeEach(() => {
+  fixtureHome = mkdtempSync(join(tmpdir(), 'orca-zcode-home-'))
+  writeFileSync(join(fixtureHome, '.gitconfig'), '')
+})
+afterEach(() => rmSync(fixtureHome, { recursive: true, force: true }))
+
 const accountFiles = [
   'src/main/zcode/zcode-v2-plan-credentials.test.ts',
   'src/main/zcode/zcode-v2-personal-overlay-raw-json.test.ts',
@@ -102,7 +110,7 @@ function executeScope(directory, overrides = {}) {
   writeFileSync(output, '')
   execFileSync('bash', ['-e', '-o', 'pipefail', '-c', scope.run], {
     cwd: directory,
-    env: {
+    env: fixtureEnvironment({
       ...process.env,
       ORCA_BACKGROUND_LAUNCH: '1',
       EVENT_NAME: 'pull_request',
@@ -110,7 +118,7 @@ function executeScope(directory, overrides = {}) {
       MANUAL_CREDENTIALS: 'true',
       GITHUB_OUTPUT: output,
       ...overrides
-    }
+    })
   })
   return Object.fromEntries(
     readFileSync(output, 'utf8')
@@ -120,28 +128,159 @@ function executeScope(directory, overrides = {}) {
   )
 }
 
+function fixtureEnvironment(inheritedEnv) {
+  return {
+    ...Object.fromEntries(
+      Object.entries(inheritedEnv).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
+    ),
+    HOME: fixtureHome,
+    USERPROFILE: fixtureHome,
+    XDG_CONFIG_HOME: fixtureHome,
+    GIT_CONFIG_GLOBAL: join(fixtureHome, '.gitconfig'),
+    GIT_CONFIG_SYSTEM: join(fixtureHome, '.gitconfig'),
+    GIT_CONFIG_NOSYSTEM: '1'
+  }
+}
+
+function createScopeFixture(directory, inheritedEnv = process.env) {
+  const git = (args) =>
+    execFileSync('git', args, {
+      cwd: directory,
+      stdio: 'pipe',
+      env: {
+        ...fixtureEnvironment(inheritedEnv),
+        GIT_AUTHOR_NAME: 'Fixture',
+        GIT_AUTHOR_EMAIL: 'fixture@example.test',
+        GIT_COMMITTER_NAME: 'Fixture',
+        GIT_COMMITTER_EMAIL: 'fixture@example.test'
+      }
+    })
+  let parent
+  const commit = () => {
+    git(['add', '-A'])
+    const tree = git(['write-tree']).toString().trim()
+    parent = git(['commit-tree', tree, ...(parent ? ['-p', parent] : []), '-m', 'fixture'])
+      .toString()
+      .trim()
+    expect(realpathSync.native(git(['rev-parse', '--absolute-git-dir']).toString().trim())).toBe(
+      realpathSync.native(join(directory, '.git'))
+    )
+    git(['update-ref', 'HEAD', parent])
+  }
+  git(['init', '-q'])
+  expect(realpathSync.native(git(['rev-parse', '--absolute-git-dir']).toString().trim())).toBe(
+    realpathSync.native(join(directory, '.git'))
+  )
+  return { git, commit }
+}
+
+it('keeps fixture commits independent of host-required content filters', () => {
+  const home = mkdtempSync(join(tmpdir(), 'orca-zcode-filter-home-'))
+  const directory = mkdtempSync(join(tmpdir(), 'orca-zcode-filter-repo-'))
+  try {
+    const attributes = join(home, 'attributes')
+    writeFileSync(attributes, '* filter=unavailable\n')
+    const contents = `[core]\n\tattributesFile = ${JSON.stringify(attributes)}\n[filter "unavailable"]\n\tclean = orca-fixture-missing-clean-filter\n\trequired = true\n`
+    const config = join(home, '.gitconfig')
+    writeFileSync(config, contents)
+    const emptyConfig = join(home, 'empty-config')
+    writeFileSync(emptyConfig, '')
+    const fixture = createScopeFixture(directory, {
+      ...process.env,
+      HOME: home,
+      USERPROFILE: home,
+      XDG_CONFIG_HOME: home,
+      GIT_CONFIG_GLOBAL: config,
+      GIT_CONFIG_SYSTEM: config
+    })
+    writeFileSync(join(directory, 'README.md'), 'fixture content')
+    fixture.commit()
+
+    expect(fixture.git(['rev-list', '--count', 'HEAD']).toString().trim()).toBe('1')
+    expect(readFileSync(config, 'utf8')).toBe(contents)
+    expect(readFileSync(emptyConfig, 'utf8')).toBe('')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+it.skipIf(process.platform === 'win32').each(['repository pointers', 'config overrides'])(
+  'keeps an external repository unchanged with inherited Git %s',
+  (contamination) => {
+    const caller = mkdtempSync(join(tmpdir(), 'orca-zcode-caller-'))
+    const directory = mkdtempSync(join(tmpdir(), 'orca-zcode-isolated-'))
+    const cleanEnv = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
+    )
+    try {
+      const external = createScopeFixture(caller, cleanEnv)
+      writeFileSync(join(caller, 'README.md'), 'caller content')
+      external.commit()
+      const paths = ['HEAD', 'config', 'index'].map((name) => join(caller, '.git', name))
+      const before = paths.map((path) => readFileSync(path))
+      const refsBefore = external.git(['show-ref']).toString()
+      const inheritedGitEnv =
+        contamination === 'repository pointers'
+          ? {
+              GIT_DIR: join(caller, '.git'),
+              GIT_WORK_TREE: caller,
+              GIT_COMMON_DIR: join(caller, '.git'),
+              GIT_INDEX_FILE: join(caller, '.git', 'index'),
+              GIT_OBJECT_DIRECTORY: join(caller, '.git', 'objects'),
+              GIT_ALTERNATE_OBJECT_DIRECTORIES: join(caller, '.git', 'objects')
+            }
+          : {
+              GIT_CONFIG: join(caller, '.git', 'config'),
+              GIT_CONFIG_PARAMETERS: "'user.name=Injected Author'",
+              GIT_CONFIG_COUNT: '1',
+              GIT_CONFIG_KEY_0: 'core.bare',
+              GIT_CONFIG_VALUE_0: 'true'
+            }
+      const fixture = createScopeFixture(directory, { ...cleanEnv, ...inheritedGitEnv })
+      writeFileSync(join(directory, 'README.md'), 'fixture content')
+      fixture.commit()
+      mkdirSync(join(directory, 'src', 'main', 'zcode'), { recursive: true })
+      writeFileSync(join(directory, 'src', 'main', 'zcode', 'credentials.ts'), 'fixture')
+      fixture.commit()
+
+      expect(realpathSync(fixture.git(['rev-parse', '--absolute-git-dir']).toString().trim())).toBe(
+        realpathSync(join(directory, '.git'))
+      )
+      expect(executeScope(directory, inheritedGitEnv)).toEqual({
+        account: 'true',
+        credentials: 'true'
+      })
+      expect(fixture.git(['rev-list', '--count', 'HEAD']).toString().trim()).toBe('2')
+      expect(paths.map((path) => readFileSync(path))).toEqual(before)
+      expect(external.git(['show-ref']).toString()).toBe(refsBefore)
+      expect(readFileSync(join(caller, 'README.md'), 'utf8')).toBe('caller content')
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+      rmSync(caller, { recursive: true, force: true })
+    }
+  }
+)
+
 // The workflow owns Bash execution on Windows; this contract executes the same source on Unix.
-it.skipIf(process.platform === 'win32')(
-  'selects the original path groups, including deletions and renames',
-  () => {
+it.skipIf(process.platform === 'win32').each([
+  ['default caller', {}],
+  [
+    'caller identity',
+    {
+      GIT_AUTHOR_NAME: 'Caller',
+      GIT_AUTHOR_EMAIL: 'caller@example.test',
+      GIT_COMMITTER_NAME: 'Caller',
+      GIT_COMMITTER_EMAIL: 'caller@example.test'
+    }
+  ]
+])(
+  'selects the original path groups, including deletions and renames (%s)',
+  (_label, inheritedIdentity) => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-zcode-workflow-'))
-    const git = (args) => execFileSync('git', args, { cwd: directory, stdio: 'pipe' })
     const write = (file, value) => {
       mkdirSync(dirname(join(directory, file)), { recursive: true })
       writeFileSync(join(directory, file), value)
-    }
-    const commit = () => {
-      git(['add', '-A'])
-      git([
-        '-c',
-        'user.name=Fixture',
-        '-c',
-        'user.email=fixture@example.test',
-        'commit',
-        '--allow-empty',
-        '-qm',
-        'fixture'
-      ])
     }
     const cases = [
       ['src/main/zcode/credentials.ts', true, true],
@@ -157,9 +296,18 @@ it.skipIf(process.platform === 'win32')(
       ['docs/unrelated.md', false, false]
     ]
     try {
-      git(['init', '-q'])
+      const { git, commit } = createScopeFixture(directory, {
+        ...process.env,
+        ...inheritedIdentity
+      })
       write('README.md', 'fixture')
       commit()
+      expect(git(['reflog', 'show', '--format=%gn <%ge>', '-1', 'HEAD']).toString().trim()).toBe(
+        'Fixture <fixture@example.test>'
+      )
+      expect(git(['show', '-s', '--format=%an <%ae>', 'HEAD']).toString().trim()).toBe(
+        'Fixture <fixture@example.test>'
+      )
       expect(executeScope(directory)).toEqual({ account: 'true', credentials: 'true' })
       for (const [file, runsAccount, runsCredentials] of cases) {
         write(file, 'first')

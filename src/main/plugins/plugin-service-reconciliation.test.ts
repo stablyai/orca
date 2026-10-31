@@ -1,7 +1,10 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import type * as FileSystem from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as ParcelWatcher from '@parcel/watcher'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
 import { devFolderConsentIdentity } from './plugin-discovery'
@@ -13,6 +16,58 @@ import type { PluginWorkerHandle } from './workers/plugin-host-process'
 import { PluginService } from './plugin-service'
 import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
 import { hashPluginTree } from './plugin-content-hash'
+
+type WatcherFixtureLifetime = {
+  subscriptions: Promise<ParcelWatcher.AsyncSubscription>[]
+  releasing: Set<string>
+  blockUnsubscribe: Promise<void> | undefined
+  verifyDeletion: boolean
+}
+
+const watcherLifetime = vi.hoisted((): WatcherFixtureLifetime => ({
+  subscriptions: [],
+  releasing: new Set(),
+  blockUnsubscribe: undefined,
+  verifyDeletion: false
+}))
+
+vi.mock('@parcel/watcher', async (original) => {
+  const actual = await original<typeof ParcelWatcher>()
+  return {
+    ...actual,
+    subscribe: (...args: Parameters<typeof actual.subscribe>) => {
+      const pending = actual.subscribe(...args).then((subscription) => {
+        let closing: Promise<void> | undefined
+        return {
+          unsubscribe: () => {
+            closing ??= (async () => {
+              watcherLifetime.releasing.add(args[0])
+              await watcherLifetime.blockUnsubscribe
+              await subscription.unsubscribe()
+              watcherLifetime.releasing.delete(args[0])
+            })()
+            return closing
+          }
+        }
+      })
+      watcherLifetime.subscriptions.push(pending)
+      return pending
+    }
+  }
+})
+
+vi.mock('node:fs/promises', async (original) => {
+  const actual = await original<typeof FileSystem>()
+  return {
+    ...actual,
+    rm: (...args: Parameters<typeof actual.rm>) => {
+      if (watcherLifetime.verifyDeletion && watcherLifetime.releasing.size > 0) {
+        return Promise.reject(new Error('Fixture root deleted before native watcher release'))
+      }
+      return actual.rm(...args)
+    }
+  }
+})
 
 const roots: string[] = []
 const services: PluginService[] = []
@@ -110,13 +165,166 @@ async function activate(service: PluginService): Promise<void> {
   await service.invokeCommand(pluginKey, 'run')
 }
 
-afterEach(async () => {
+async function releaseWatcherSubscriptions(
+  subscriptions: ParcelWatcher.AsyncSubscription[]
+): Promise<void> {
+  const results = await Promise.allSettled(
+    subscriptions.map(async (subscription) => {
+      await subscription.unsubscribe()
+    })
+  )
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure?.status === 'rejected') {
+    throw failure.reason
+  }
+}
+
+async function releaseFixtureWatchers(): Promise<void> {
+  const settled = await Promise.allSettled(watcherLifetime.subscriptions.splice(0))
+  await releaseWatcherSubscriptions(
+    settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []))
+  )
+}
+
+async function cleanupFixtures(): Promise<void> {
   vi.useRealTimers()
   await Promise.all(services.splice(0).map((service) => service.dispose()))
+  await releaseFixtureWatchers()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
-})
+}
+
+afterEach(cleanupFixtures)
 
 describe('PluginService worker reconciliation', () => {
+  it.each([false, true])(
+    'waits for native watcher release when verification fails=%s',
+    async (verificationFails) => {
+      const root = await pluginRoot()
+      const harness = createHarness(root)
+      await activate(harness.service)
+      await vi.waitFor(() => expect(watcherLifetime.subscriptions.length).toBeGreaterThan(0))
+      const subscriptions = await Promise.all(watcherLifetime.subscriptions)
+      const watcher = await import('@parcel/watcher')
+      await expect(
+        watcher.subscribe(join(root, 'missing-watcher-setup'), vi.fn())
+      ).rejects.toThrow()
+      const gate = Promise.withResolvers<void>()
+      const disposed = Promise.withResolvers<void>()
+      const dispose = harness.service.dispose.bind(harness.service)
+      const spy = vi.spyOn(harness.service, 'dispose').mockImplementation(async () => {
+        await dispose()
+        disposed.resolve()
+      })
+      watcherLifetime.blockUnsubscribe = gate.promise.then(
+        () => new Promise<void>((resolve) => setImmediate(resolve))
+      )
+      watcherLifetime.verifyDeletion = true
+      const cleanup = cleanupFixtures().then(
+        () => null,
+        (error: unknown) => error
+      )
+      const assertionFailure = new Error('controlled verification failure')
+      let failure: unknown
+      try {
+        await disposed.promise
+        await vi.waitFor(() => expect(watcherLifetime.releasing.size).toBeGreaterThan(0))
+        expect(existsSync(root)).toBe(true)
+        if (verificationFails) {
+          throw assertionFailure
+        }
+        setImmediate(() => gate.resolve())
+        expect(await cleanup).toBeNull()
+        expect(existsSync(root)).toBe(false)
+      } catch (error) {
+        failure = error
+      } finally {
+        gate.resolve()
+        try {
+          await releaseWatcherSubscriptions(subscriptions)
+          await cleanup
+          watcherLifetime.blockUnsubscribe = undefined
+          await expect(
+            watcher.subscribe(join(root, 'missing-watcher-finally'), vi.fn())
+          ).rejects.toThrow()
+          await releaseFixtureWatchers()
+          await rm(root, { recursive: true, force: true })
+        } finally {
+          watcherLifetime.verifyDeletion = false
+          spy.mockRestore()
+        }
+      }
+      expect(failure).toBe(verificationFails ? assertionFailure : undefined)
+      expect(await cleanup).toBeNull()
+      expect(existsSync(root)).toBe(false)
+    }
+  )
+
+  it.each(['tracked', 'captured'])(
+    'settles every native watcher release before reporting an error through %s cleanup',
+    async (mode) => {
+      const fixtureRoots = await Promise.all([pluginRoot(), pluginRoot(), pluginRoot()])
+      const watcher = await import('@parcel/watcher')
+      const subscriptions = await Promise.all(
+        fixtureRoots.map((root) => watcher.subscribe(root, vi.fn()))
+      )
+      const nativeReleases = subscriptions.map((subscription) =>
+        subscription.unsubscribe.bind(subscription)
+      )
+      const gate = Promise.withResolvers<void>()
+      const firstFailure = new Error('controlled first release failure')
+      const thirdFailure = new Error('controlled later release failure')
+      const released = [false, false, false]
+      const first = vi.spyOn(subscriptions[0], 'unsubscribe').mockImplementation(async () => {
+        await nativeReleases[0]()
+        released[0] = true
+        throw firstFailure
+      })
+      const second = vi.spyOn(subscriptions[1], 'unsubscribe').mockImplementation(async () => {
+        await gate.promise
+        await nativeReleases[1]()
+        released[1] = true
+      })
+      const third = vi.spyOn(subscriptions[2], 'unsubscribe').mockImplementation(async () => {
+        await nativeReleases[2]()
+        released[2] = true
+        throw thirdFailure
+      })
+      let reported = false
+      const cleanup = (
+        mode === 'tracked' ? releaseFixtureWatchers() : releaseWatcherSubscriptions(subscriptions)
+      )
+        .then(
+          () => undefined,
+          (error: unknown) => error
+        )
+        .finally(() => {
+          reported = true
+        })
+      try {
+        await vi.waitFor(() => expect(released[0] && released[2]).toBe(true))
+        expect(released[1]).toBe(false)
+        expect(reported).toBe(false)
+        expect(fixtureRoots.every((root) => existsSync(root))).toBe(true)
+        gate.resolve()
+        expect(await cleanup).toBe(firstFailure)
+        expect(released).toEqual([true, true, true])
+        expect(watcherLifetime.releasing.size).toBe(0)
+      } finally {
+        gate.resolve()
+        await cleanup
+        first.mockRestore()
+        second.mockRestore()
+        third.mockRestore()
+        const safety = await Promise.allSettled(
+          subscriptions.map(async (subscription) => {
+            await subscription.unsubscribe()
+          })
+        )
+        expect(safety.every((result) => result.status === 'fulfilled')).toBe(true)
+      }
+    }
+  )
+
   it('blocks every runtime surface until a saved override resolves a content conflict', async () => {
     const conflictingManifest = (id: string): PluginManifest =>
       pluginManifestSchema.parse({

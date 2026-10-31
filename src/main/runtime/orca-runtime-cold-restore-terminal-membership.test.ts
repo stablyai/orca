@@ -33,6 +33,7 @@ type RestoreHost = {
     displayName: string
     badgeColor: string
     addedAt: number
+    upstream: null
     connectionId?: string
     executionHostId?: ExecutionHostId
   }
@@ -44,7 +45,14 @@ type RestoreHost = {
 }
 
 const LOCAL_HOST: RestoreHost = {
-  repo: { id: REPO_ID, path: '/worktree', displayName: 'repo', badgeColor: 'blue', addedAt: 1 },
+  repo: {
+    id: REPO_ID,
+    path: '/worktree',
+    displayName: 'repo',
+    badgeColor: 'blue',
+    addedAt: 1,
+    upstream: null
+  },
   hostId: LOCAL_EXECUTION_HOST_ID,
   connectionId: null,
   ptyIds: { left: 'pty-left', right: 'pty-right' },

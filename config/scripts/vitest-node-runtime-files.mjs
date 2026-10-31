@@ -7,12 +7,24 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/linear/linear-issue-detail-deadline.test.ts',
   'tests/e2e/linear-cli-recovery.unit.test.ts',
   'src/main/runtime/structured-agent-cli-writers.test.ts',
+  // Native PTY callbacks and host filesystem/event-loop budgets use Node's implementation.
+  'src/main/shell-startup-feature-channel.test.ts',
+  'src/main/codex/codex-session-index-heal-state.test.ts',
+  'src/main/runtime/terminal/recovery/replaced-pane-handle-recovery.test.ts',
+  // The complete renderer sender census keeps Node's synchronous filesystem budget.
+  'src/renderer/src/runtime/layout-apply-paired-server-guard.test.ts',
+  // Preserve exact Node filesystem inode, mode, and timestamp observations.
+  'src/main/hermes/hermes-config-preservation.test.ts',
   'config/scripts/vitest-sqlite-runtime-boundary.test.ts',
+  // Historical releases retain the application's Node filesystem and native-module semantics.
+  'tests/e2e/cross-version-wire/**/*.unit.test.ts',
   'config/scripts/cloud-security-history-workflow.test.mjs',
   'config/scripts/skill-recipe-shell.test.mjs',
   'src/main/ssh/legacy-relay/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
+  // CLI probes assert the same Node process-group termination barrier.
+  'src/main/ipc/preflight-runnable-local-cli.test.ts',
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
   'src/main/ai-vault-search/session-search-index-writer.test.ts',
@@ -56,6 +68,9 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/worker-terminal-wrap-provenance.test.ts',
   'tests/e2e/cross-version-wire/agent-session-clear-old-client.unit.test.ts',
   'tests/e2e/cross-version-wire/agent-session-clear-old-tab-mirror.unit.test.ts',
+  // Released host modules import native dependencies outside this checkout's static scan.
+  'tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts',
+  'tests/e2e/cross-version-wire/agent-session-resume-marker-downgrade.unit.test.ts',
   'tests/e2e/cross-version-wire/host-model-catalog-released-phone.unit.test.ts',
   'src/main/acp/acp-structured-host-live-listing.test.ts',
   'src/main/acp/acp-structured-host-configured-default.test.ts',
@@ -104,6 +119,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/automations/automation-worker-durability.test.ts',
   'src/**/*.node-pty.test.ts',
   'src/**/node-pty-*.test.ts',
+  // The shell-readiness repro reaches native PTY callbacks through createPtySubprocess.
+  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*.live-shell.test.ts',
   // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
   'src/main/shell-startup-feature-channel.test.ts',

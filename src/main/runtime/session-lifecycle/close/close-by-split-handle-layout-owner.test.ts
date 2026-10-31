@@ -140,7 +140,8 @@ function setup(listing: WindowListing, pinned = false) {
     path: '/workspace',
     displayName: 'repo',
     badgeColor: 'blue',
-    addedAt: 1
+    addedAt: 1,
+    upstream: null
   }
   const store = withDurableRuntimeStore(
     withRuntimePaneAdmission({
