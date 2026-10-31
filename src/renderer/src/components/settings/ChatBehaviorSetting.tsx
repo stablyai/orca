@@ -10,6 +10,7 @@ import { Card, CardContent } from '../ui/card'
 import { ChatPermissionSetting } from './ChatPermissionSetting'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { SearchableSetting } from './SearchableSetting'
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { getChatBehaviorEntriesByKey, getChatBehaviorTitle } from './chat-behavior-search'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
@@ -31,7 +32,7 @@ export function ChatBehaviorSetting({
 }: ChatBehaviorSettingProps): React.JSX.Element | null {
   const typedPermissions = useChatSettingsOwnPermissions()
   const query = useAppStore((state) => state.settingsSearchQuery)
-  // A host without the capability ignores the preference; the switch would do nothing.
+  // A host without the capability ignores the preference; the choice would do nothing.
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages(STRUCTURED_CHAT_HOST)
   const entries = getChatBehaviorEntriesByKey()
   const rows = [
@@ -47,7 +48,7 @@ export function ChatBehaviorSetting({
     return null
   }
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
-  const queueFollowUpsEnabled = settings.nativeChatQueueFollowUps !== false
+  const queueFollowUps = nativeChatQueueFollowUps(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   return (
     <section id="chat-behavior" className="space-y-3">
@@ -89,14 +90,9 @@ export function ChatBehaviorSetting({
                 <SettingsSwitchRow
                   label={entries.queueFollowUps.title}
                   description={entries.queueFollowUps.description}
-                  checked={queueFollowUpsEnabled}
-                  ariaLabel={translate(
-                    'components.settings.nativeChat.queueFollowUpsToggleLabel',
-                    'Toggle queue follow-ups'
-                  )}
-                  onChange={() =>
-                    updateSettings({ nativeChatQueueFollowUps: !queueFollowUpsEnabled })
-                  }
+                  checked={queueFollowUps}
+                  ariaLabel={entries.queueFollowUps.title}
+                  onChange={() => updateSettings({ nativeChatQueueFollowUps: !queueFollowUps })}
                 />
               </SearchableSetting>
             ) : null}

@@ -1,6 +1,6 @@
 import React from 'react'
-import MermaidBlock, { type RenderedMermaidDiagram } from '@/components/editor/MermaidBlock'
-import { useAppStore } from '@/store'
+import MermaidBlock from '@/components/editor/MermaidBlock'
+import { useMermaidDiagramExpand } from '@/components/editor/use-mermaid-diagram-expand'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { cn } from '@/lib/utils'
 
@@ -17,8 +17,7 @@ export default function CommentMermaidBlock({
   renderEnabled?: boolean
 }): React.JSX.Element {
   const isDark = useDocumentDarkTheme()
-  const openModal = useAppStore((s) => s.openModal)
-  const expand = (diagram: RenderedMermaidDiagram): void => openModal('diagram-viewer', diagram)
+  const expand = useMermaidDiagramExpand()
 
   if (pendingContent === undefined) {
     return (
