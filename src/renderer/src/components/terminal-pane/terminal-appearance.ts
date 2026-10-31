@@ -31,6 +31,7 @@ import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-he
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
+import { activeWindowMaterial } from '@/lib/window-material-runtime'
 
 export function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.replace('#', '')
@@ -148,6 +149,12 @@ export function applyTerminalAppearance(
   const theme = composeActiveTerminalTheme(baseTheme, settings)
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
+  // Why: over a window material the split root is the one translucent paint; xterm's viewport,
+  // scrollable element and canvas each repainting it compounded 0.82 to ~0.99 (#36196).
+  const windowMaterialActive = activeWindowMaterial() !== 'off'
+  const xtermTheme = windowMaterialActive
+    ? composeActiveTerminalTheme(baseTheme, { ...settings, terminalBackgroundOpacity: 0 })
+    : theme
 
   const terminalFontWeights = resolveTerminalFontWeights(
     settings.terminalFontWeight,
@@ -160,8 +167,8 @@ export function applyTerminalAppearance(
 
   for (const pane of manager.getPanes()) {
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
-    if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
-      pane.terminal.options.theme = theme
+    if (xtermTheme && !composedTerminalThemesEqual(pane.terminal.options.theme, xtermTheme)) {
+      pane.terminal.options.theme = xtermTheme
     }
     // Use configured background: preserving live OSC-11 mutations above means a TUI background change does not re-gate contrast.
     const minimumContrastRatio = resolveTerminalMinimumContrastRatio(
@@ -174,7 +181,8 @@ export function applyTerminalAppearance(
     }
     // Why clear explicitly: allowTransparency has rendering cost and a stale `true` could bleed in from a prior opacity.
     pane.terminal.options.allowTransparency =
-      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+      windowMaterialActive ||
+      (settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1)
     const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
@@ -229,7 +237,6 @@ export function applyTerminalAppearance(
 
   manager.setPaneStyleOptions({
     splitBackground: paneBackground,
-    paneBackground,
     inactivePaneOpacity: paneStyles.inactivePaneOpacity,
     activePaneOpacity: paneStyles.activePaneOpacity,
     opacityTransitionMs: paneStyles.opacityTransitionMs,

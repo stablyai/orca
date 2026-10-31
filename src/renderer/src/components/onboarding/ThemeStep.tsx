@@ -280,7 +280,7 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
     },
     {
       label: translate('auto.components.onboarding.ThemeStep.b3a99a2d29', 'Window'),
-      keys: ['terminalBackgroundOpacity', 'windowBackgroundBlur', 'terminalInactivePaneOpacity']
+      keys: ['terminalBackgroundOpacity', 'windowMaterial', 'terminalInactivePaneOpacity']
     },
     {
       label: translate('auto.components.onboarding.ThemeStep.8ca01945f2', 'Dividers'),

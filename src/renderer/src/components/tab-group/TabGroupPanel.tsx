@@ -21,6 +21,7 @@ import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hos
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 import { cn } from '@/lib/utils'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
+import { activeWindowMaterial } from '@/lib/window-material-runtime'
 import { EditorRevealFlash } from './EditorRevealFlash'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
@@ -261,7 +262,12 @@ export default function TabGroupPanel({
             }`
           : ''
       }`}
-      style={hasSplitGroups && !isFocused ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY } : undefined}
+      // Why not over a window material: group opacity would let the desktop bleed through opaque chrome.
+      style={
+        hasSplitGroups && !isFocused && activeWindowMaterial() === 'off'
+          ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }
+          : undefined
+      }
       onPointerDown={commands.focusGroup}
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}
@@ -321,6 +327,8 @@ export default function TabGroupPanel({
       <div
         ref={setBodyRef}
         data-tab-group-body-id={groupId}
+        // Why: the pane overlay paints terminals above this body; only they show the window material.
+        data-translucent-tab-body={activeTab?.contentType === 'terminal' ? '' : undefined}
         data-worktree-id={worktreeId}
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}

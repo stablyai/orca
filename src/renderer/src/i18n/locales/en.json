@@ -666,6 +666,17 @@
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
         "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+      },
+      "reduceVisualEffects": {
+        "title": "Reduce Visual Effects",
+        "description": "Turn off blur behind dialogs and menus, and window translucency after a restart. Helps remote desktops and machines without a GPU.",
+        "keywords": {
+          "blur": "blur",
+          "transparency": "transparency",
+          "performance": "performance",
+          "remote": "remote",
+          "gpu": "gpu"
+        }
       }
     },
     "browser": {
@@ -1007,6 +1018,22 @@
         "notPng": "Repo icons must be PNG files.",
         "tooLarge": "Repo icon image must be 256KB or smaller."
       }
+    },
+    "windowMaterial": {
+      "title": "Window Material",
+      "description": "What shows behind translucent terminals. Requires restart.",
+      "off": "Opaque",
+      "translucent": "Translucent",
+      "acrylic": "Acrylic blur",
+      "blur": "Blurred",
+      "reducedEffects": "Off while Reduce Visual Effects or the system Reduce Transparency setting is on.",
+      "needsOpacity": "Lower Background Opacity below 1 to see the desktop through terminals.",
+      "linuxCompositor": "Your compositor decides whether to blur it. Requires restart.",
+      "restartDescription": "Restart Orca to apply the window material change.",
+      "keywords": {
+        "acrylic": "acrylic"
+      },
+      "windowsUnsupported": "Requires Windows 11 version 22H2 or later."
     }
   },
   "menu": {
@@ -9395,10 +9422,7 @@
           "1afcc1d973": "Vertical Padding",
           "25e2f8e8e1": "Horizontal padding around the terminal grid in pixels.",
           "36b8402015": "Horizontal Padding",
-          "53ce336e15": "Restart Orca to apply the window blur change.",
           "c65bb9ce63": "Restart required",
-          "97950bb087": "Apply background blur to the terminal window. Requires restart.",
-          "2b82242f43": "Window Blur",
           "809f37738d": "Controls the transparency of the terminal background. 1 is fully opaque, 0 is fully transparent.",
           "ea7b1a158e": "Background Opacity",
           "03acb60aa0": "Controls the transparency of the terminal background.",
@@ -11052,8 +11076,6 @@
             "f6dd9ff606": "background",
             "71eb45e293": "blur",
             "0838b3717b": "window",
-            "bc2054657a": "Apply background blur to the terminal window. Requires restart.",
-            "72d0482137": "Window Blur",
             "7db59c4738": "alpha",
             "46d99ef4bb": "opacity",
             "4c643695aa": "Controls the transparency of the terminal background.",
