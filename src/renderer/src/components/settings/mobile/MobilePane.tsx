@@ -27,7 +27,9 @@ import type { MobileRelayMintFailure } from '../../../../../shared/remote-runtim
 import { useMobilePairingConnectionMode } from '../../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../../mobile/use-mobile-pairing-address-preference'
 import { usePairingOfferExpiry } from '../../mobile/use-pairing-offer-expiry'
+import { useMobilePairingRelayLocalPath } from '../../mobile/use-mobile-pairing-relay-local-path'
 import { MOBILE_SETTING_ANCHORS, shouldOpenMobilePairingAddress } from './mobile-pane-search'
+import { useMobilePairingPolicySync } from './use-mobile-pairing-policy-sync'
 
 export function MobilePane(): React.JSX.Element {
   const t = useTranslate()
@@ -49,13 +51,12 @@ export function MobilePane(): React.JSX.Element {
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
   const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
+  const relayLocalPath = useMobilePairingRelayLocalPath()
   const [rotateNextQr, setRotateNextQr] = useState(false)
   const codeCopiedResetTimerRef = useRef<number | null>(null)
   const wasSignedInRef = useRef(signedIn)
   // Invalidate late pairing responses after sign-out, mode or address changes.
   const pairingRequestIdRef = useRef(0)
-  // Distinguish cross-window mode sync from this window’s own changes.
-  const handledModeRef = useRef(connectionMode)
   // Keep invalidatePairing stable so QR/loading changes cannot refetch network interfaces.
   const qrDisplayedRef = useRef(false)
   const loadingRef = useRef(false)
@@ -177,6 +178,7 @@ export function MobilePane(): React.JSX.Element {
         const result = await window.api.mobile.getPairingQR({
           ...(selectedAddress ? { address: selectedAddress } : {}),
           connectionMode: preferredMode,
+          ...(relayLocalPath ? {} : { localPath: false }),
           ...(opts.rotate || rotateNextQr ? { rotate: true } : {})
         })
         // Ignore superseded responses whose policy/address selection is no longer current.
@@ -242,11 +244,21 @@ export function MobilePane(): React.JSX.Element {
       connectionMode,
       loadDevices,
       mountedRef,
+      relayLocalPath,
       rotateNextQr,
       selectedAddress,
       signedIn
     ]
   )
+
+  const handledModeRef = useMobilePairingPolicySync({
+    connectionMode,
+    relayLocalPath,
+    qrDisplayedRef,
+    loadingRef,
+    invalidatePairing,
+    generateQR
+  })
 
   const changeConnectionMode = useCallback(
     (nextMode: MobilePairingConnectionMode) => {
@@ -270,6 +282,7 @@ export function MobilePane(): React.JSX.Element {
     [
       connectionMode,
       generateQR,
+      handledModeRef,
       invalidatePairing,
       relayMintFailure,
       signedIn,
@@ -312,15 +325,6 @@ export function MobilePane(): React.JSX.Element {
       }
     }
   }, [connectionMode, mountedRef, relayMintFailure, selectedAddress])
-
-  // Invalidate cross-window mode changes without writing settings back and creating a sync loop.
-  useEffect(() => {
-    if (connectionMode === handledModeRef.current) {
-      return
-    }
-    handledModeRef.current = connectionMode
-    invalidatePairing({ armRotate: false })
-  }, [connectionMode, invalidatePairing])
 
   useEffect(() => {
     void loadNetworkInterfaces()
@@ -410,7 +414,7 @@ export function MobilePane(): React.JSX.Element {
         />
 
         <WindowsFirewallNotice
-          pairingReady={pairingUrl != null}
+          pairingReady={pairingUrl != null && endpoint != null}
           address={selectedAddress}
           usingRelay={connectionMode === 'automatic'}
         />
