@@ -268,7 +268,7 @@ it('fences a retired status source and reads a fresh old-host omission as not he
   act(() => retired?.({ type: 'end' }))
   expect(editor.getAttribute('contenteditable')).toBe('false')
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    await vi.waitFor(() => expect(frames).toHaveLength(2))
   })
   expect(frames).toHaveLength(2)
   project(undefined)

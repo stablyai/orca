@@ -38,6 +38,9 @@ vi.mock('../../src/main/runtime/rpc/methods/agent-launch-terminal-prompt', () =>
   deliverTerminalAgentLaunchPrompt: terminalPrompt
 }))
 const { AGENT_LAUNCH_METHODS } = await import('../../src/main/runtime/rpc/methods/agent-launch')
+const actual = await vi.importActual<typeof StructuredAgentSessionCreate>(
+  '../../src/main/runtime/rpc/methods/structured-agent-session-create'
+)
 
 let directory: string
 let foundingRig: RestTestRig | undefined
@@ -106,9 +109,6 @@ async function useRealFounding(runtime: ReturnType<typeof runtimeStub>): Promise
     }),
     publishStructuredAgentSessionTab: publisher.publishStructuredAgentSessionTab.bind(publisher)
   })
-  const actual = await vi.importActual<typeof StructuredAgentSessionCreate>(
-    '../../src/main/runtime/rpc/methods/structured-agent-session-create'
-  )
   chatCreate.mockImplementation(actual.createStructuredAgentSessionForWorktree)
   return rig
 }
