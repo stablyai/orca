@@ -59,8 +59,7 @@ function openSession() {
   })
 }
 
-async function confirmResume() {
-  const session = openSession()
+async function confirmResume(session = openSession()) {
   fakes.linkOptions!.onHello({
     type: 'relay-hello',
     ok: true,
@@ -107,8 +106,11 @@ async function confirmResume() {
   return { session, confirmationRequest: request, capabilityRequest }
 }
 
-async function authenticateSession(capabilitySupported = true) {
-  const { session, confirmationRequest, capabilityRequest } = await confirmResume()
+async function authenticateSession(
+  capabilitySupported = true,
+  pendingSession?: ReturnType<typeof openSession>
+) {
+  const { session, confirmationRequest, capabilityRequest } = await confirmResume(pendingSession)
   expect(session.getState()).toBe('handshaking')
   fakes.linkOptions!.onText(
     JSON.stringify(
@@ -128,7 +130,9 @@ async function authenticateSession(capabilitySupported = true) {
     )
   )
   await vi.waitFor(() => expect(session.getState()).toBe('connected'))
-  fakes.sendText.mockClear()
+  if (!pendingSession) {
+    fakes.sendText.mockClear()
+  }
   return { session, confirmationRequest, capabilityRequest }
 }
 
@@ -315,6 +319,51 @@ describe('mobile relay RPC session', () => {
     )
   })
 
+  it('keeps the configured connect default for omitted options and honors explicit timeouts', async () => {
+    vi.useFakeTimers()
+    const session = openSession()
+    const settled = vi.fn()
+    const pending = session.sendRequest('status.get').then(
+      (result) => {
+        settled(result)
+        return result
+      },
+      (error: unknown) => {
+        settled(error)
+        throw error
+      }
+    )
+    const short = session
+      .sendRequest('status.get', undefined, { timeoutMs: 5 })
+      .catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(20)
+    expect(await short).toEqual(new Error('relay session connection timed out'))
+    expect(settled).not.toHaveBeenCalled()
+    expect(fakes.sendText).not.toHaveBeenCalled()
+
+    await authenticateSession(true, session)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fakes.sendText).toHaveBeenCalledTimes(3)
+    const request: { id: string; method: string } = JSON.parse(fakes.sendText.mock.calls[2]![0])
+    expect(request.method).toBe('status.get')
+    fakes.linkOptions!.onText(JSON.stringify({ id: request.id, ok: true, result: { ready: true } }))
+    await expect(pending).resolves.toEqual({ id: request.id, ok: true, result: { ready: true } })
+    expect(settled).toHaveBeenCalledOnce()
+    session.close()
+
+    fakes.sendText.mockClear()
+    const unconnected = openSession()
+    const expired = vi.fn()
+    const defaultWait = unconnected.sendRequest('status.get').catch(expired)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(expired).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    await defaultWait
+    expect(expired).toHaveBeenCalledExactlyOnceWith(new Error('relay session connection timed out'))
+    expect(fakes.sendText).not.toHaveBeenCalled()
+    unconnected.close()
+  })
+
   it('rejects pending RPC work when the physical link fails', async () => {
     const { session } = await authenticateSession()
     const pending = session.sendRequest('status.get')
@@ -467,4 +516,68 @@ describe('mobile relay RPC session', () => {
       expect(frame.id).not.toBe('x')
     }
   })
+})
+
+it('settles source-owned relay waits, never serializes local options and completes a fresh same-reader Copy', async () => {
+  const { AttachmentTextSource } = await import('../../../src/shared/attachment-text-source')
+  const { createMobileChatAttachmentReader } = await import('../files/mobile-chat-attachment-read')
+  const { createStableLogicalRpcClient } = await import('./stable-logical-rpc-client')
+  const { session } = await authenticateSession()
+  const logical = createStableLogicalRpcClient(session, 'relay')
+  const client = scopeRpcClientToExecutionHost(logical, 'runtime:server35636')
+  let source: InstanceType<typeof AttachmentTextSource>
+  let hold = true
+  fakes.sendText.mockImplementation((raw) => {
+    const frame = JSON.parse(raw)
+    expect(frame).not.toHaveProperty('signal')
+    expect(frame).not.toHaveProperty('beforeSend')
+    expect(frame.executionHost).toBe('runtime:server35636')
+    if (frame.method === 'status.get') {
+      queueMicrotask(() =>
+        fakes.linkOptions!.onText(
+          JSON.stringify({
+            id: frame.id,
+            ok: true,
+            result: { capabilities: ['native-chat.text-attachment-read.v1'] },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        )
+      )
+    } else if (hold) {
+      queueMicrotask(() => source.dispose())
+    } else {
+      queueMicrotask(() =>
+        fakes.linkOptions!.onText(
+          JSON.stringify({
+            id: frame.id,
+            ok: true,
+            result: {
+              snapshot: 'a'.repeat(64),
+              size: 1,
+              bytesRead: 1,
+              contentBase64: 'eA==',
+              eof: true
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        )
+      )
+    }
+    return true
+  })
+  const read = createMobileChatAttachmentReader(client)
+  source = new AttachmentTextSource('/file35636', read)
+  await expect(source.copyText()).rejects.toMatchObject({ name: 'AbortError' })
+  hold = false
+  const retry = new AttachmentTextSource('/file35636', read)
+  expect(await retry.copyText()).toBe('x')
+  const controller = new AbortController()
+  const count = fakes.sendText.mock.calls.length
+  const unemitted = client.sendRequest('status.get', undefined, { signal: controller.signal })
+  const rejection = expect(unemitted).rejects.toMatchObject({ name: 'AbortError' })
+  controller.abort()
+  await rejection
+  expect(fakes.sendText).toHaveBeenCalledTimes(count)
+  retry.dispose()
+  logical.close()
 })

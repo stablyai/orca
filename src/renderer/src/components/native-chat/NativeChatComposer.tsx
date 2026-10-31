@@ -1,3 +1,4 @@
+import { NativeChatTextAttachmentScope } from './NativeChatTextAttachments'
 import { forwardRef } from 'react'
 import { NativeChatComposerPane } from './NativeChatComposerPane'
 import type {
@@ -11,6 +12,13 @@ export type {
 
 export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeChatComposerProps>(
   function NativeChatComposer(props, ref): React.JSX.Element {
-    return <NativeChatComposerPane key={props.paneKey} {...props} ref={ref} />
+    return (
+      <NativeChatTextAttachmentScope
+        key={props.paneKey}
+        enabled={Boolean(props.structuredTransport)}
+      >
+        <NativeChatComposerPane {...props} ref={ref} />
+      </NativeChatTextAttachmentScope>
+    )
   }
 )

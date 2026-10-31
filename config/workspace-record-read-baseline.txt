@@ -47,7 +47,6 @@
 2 src/renderer/src/lib/workspace-terminal-host-authority.ts # P5b-2 must clear: optional state fields
 1 src/renderer/src/lib/worktree-activation-pty-inventory.ts # P5b-2 must clear: loosely typed state param
 1 src/renderer/src/lib/worktree-initial-terminal-seeding.ts # P5b-2 must clear: treats an undefined field as a narrow adapter
-2 src/renderer/src/lib/worktree-operation-catalog-route.ts # P5b-2 must clear: loosely typed state param
 6 src/renderer/src/lib/worktree-operation-route.ts # P5b-2 must clear: optional state fields default to empty
 2 src/renderer/src/lib/worktree-runtime-owner.ts # P5b-2 must clear: loosely typed state param
 3 src/renderer/src/runtime/local-structured-session-tab-retirement.ts # P5b-2 must clear: optional state fields default to empty

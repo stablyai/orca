@@ -52,6 +52,10 @@ describe('an unknown method reaching a mobile-scoped device', () => {
     expect(errorCode(reply)).toBe('method_not_found')
   })
 
+  it('allowlists bounded chat attachment reads from a phone', () => {
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('agentSessionAttachment.readTextChunk')).toBe(true)
+  })
+
   // Current hosts allowlist supported pairing probes; forbidden identifies a host predating them for skew fallback.
   it('allowlists both pairing probes, so forbidden on one can only mean an older desktop', () => {
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('pairing.getEndpoints')).toBe(true)

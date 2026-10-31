@@ -447,6 +447,13 @@ it.each(
     })
     rows('compact', child('restored'))
     await act(async () => {})
+    const cold = { ...visits }
+    const passBound = fallback ? 8 : 6
+    expect(cold.worktrees).toBeGreaterThanOrEqual(population)
+    expect(cold.worktrees).toBeLessThanOrEqual(passBound * population)
+    expect(cold.repos).toBeGreaterThan(0)
+    expect(cold.repos).toBeLessThanOrEqual(passBound)
+    const ownerCalls = mocks.owner.mock.calls.length
     visits.worktrees = 0
     visits.repos = 0
     await click(2)
@@ -461,12 +468,20 @@ it.each(
         takeAndSettle()
       })
     }
-    // Count real catalog reads before observation-driven renders; R stays fixed at one.
-    const passBound = fallback ? 8 : 6
-    expect(visits.worktrees).toBeGreaterThanOrEqual(population)
-    expect(visits.worktrees).toBeLessThanOrEqual(passBound * population)
-    expect(visits.repos).toBeGreaterThan(0)
-    expect(visits.repos).toBeLessThanOrEqual(passBound)
+    // Immutable catalogs were indexed at mount; warm owner revalidation must reuse that work.
+    const warm = { ...visits }
+    expect(warm.worktrees).toBe(0)
+    expect(warm.repos).toBeLessThanOrEqual(passBound)
+    expect(mocks.owner.mock.calls.length).toBeGreaterThan(ownerCalls)
+    expect(mocks.owner).toHaveLastReturnedWith({
+      kind: 'resolved',
+      owner: { endpoint: { kind: 'self' }, at: 'ssh:test' }
+    })
+    expect(requests[0]).toMatchObject({
+      terminal: 'T',
+      sessionId: 'P',
+      client: { id: 'orca-desktop', type: 'desktop' }
+    })
     expect(requests).toHaveLength(fallback ? 2 : 1)
     expect(bridge.receive({ ...identity(), action: 'take' })).toEqual({})
     expect(mocks.info).not.toHaveBeenCalled()

@@ -34,6 +34,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     worktreeId,
     worktreeName: routeWorktreeName,
     nativeChatSessionId: resolveMobileNativeChatSessionId(activeSessionTab),
+    structuredAttachments: activeSessionTab?.type === 'agent-session',
     activeHandleRef,
     terminalCwdRef,
     openBrowser: (url) => void handleCreateBrowserRef.current?.(url),

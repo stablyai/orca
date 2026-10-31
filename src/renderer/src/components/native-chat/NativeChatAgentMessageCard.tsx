@@ -23,6 +23,7 @@ import { useAgentMessageSenderView } from './native-chat-agent-message-sender-vi
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
@@ -55,6 +56,7 @@ export function NativeChatAgentMessageCard({
   runtimeContext,
   onLinkClick,
   allowFileUriLinks,
+  textAttachmentContent,
   onRefolded
 }: {
   message: NativeChatMessage
@@ -62,6 +64,7 @@ export function NativeChatAgentMessageCard({
   runtimeContext?: RuntimeFileOperationArgs | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks: boolean
+  textAttachmentContent?: string
   onRefolded: () => void
 }): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
@@ -130,14 +133,21 @@ export function NativeChatAgentMessageCard({
             }
           }}
         >
-          <NativeChatMarkdown
-            rowKey={message.id}
-            content={text}
-            variant="document"
-            className="text-sm"
-            renderCodeBlock={NativeChatCodeBlock}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={allowFileUriLinks}
+          <NativeChatTextAttachments
+            content={textAttachmentContent ?? text}
+            structured={textAttachmentContent !== undefined}
+            runtimeContext={runtimeContext}
+            renderText={() => (
+              <NativeChatMarkdown
+                rowKey={message.id}
+                content={text}
+                variant="document"
+                className="text-sm"
+                renderCodeBlock={NativeChatCodeBlock}
+                onLinkClick={onLinkClick}
+                allowFileUriLinks={allowFileUriLinks}
+              />
+            )}
           />
         </div>
         {overflows ? (

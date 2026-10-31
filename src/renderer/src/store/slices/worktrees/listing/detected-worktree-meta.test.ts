@@ -62,6 +62,24 @@ describe('inherited folder consumer identity', () => {
       ).toBe(projected)
       expect(resolveWorkspaceDirectory(state, 'folder:same', 'ssh:box')).toBe('/remote')
       expect(findKnownWorktreeById(state, 'folder:same')).toBeUndefined()
+      expect(resolveWorkspaceDirectory(state, 'folder:same')).toBeNull()
+      expect(findKnownWorktreeById(state, 'folder:same', 'local')?.path).toBe('/local')
+      expect(resolveWorkspaceDirectory(state, 'folder:same', 'local')).toBe('/local')
+      expect(
+        selectWorkspaceByHostTarget(
+          state,
+          hostWorktreeTarget({ id: 'folder:same', hostId: 'local' })
+        )?.path
+      ).toBe('/local')
+      expect(findKnownWorktreeById(state, 'folder:same', 'ssh:missing')).toBeUndefined()
+      expect(resolveWorkspaceDirectory(state, 'folder:same', 'ssh:missing')).toBeNull()
+      expect(
+        selectWorkspaceByHostTarget(
+          state,
+          hostWorktreeTarget({ id: 'folder:same', hostId: 'ssh:missing' })
+        )
+      ).toBeUndefined()
+
       expect(findIndexedFolderWorkspaceOwner(folderWorkspaces, 'same', 'ssh:box')).toBe(raw)
       expect(folderWorkspaceToWorktree(inherited)).toEqual(converted)
       expect(

@@ -46,6 +46,7 @@ describe('main', () => {
   it('fails when a file gains an error, as a missing helper import does', () => {
     withBaseline('1 tests/e2e/a.spec.ts\n1 tests/e2e/helpers/b.ts\n')
     expect(main(root, undefined, OUTPUT)).toBe(1)
+    expect(console.error).toHaveBeenCalledWith(OUTPUT)
   })
 
   it('passes at the baseline and fails until a fixed file is pruned', () => {

@@ -1,3 +1,4 @@
+import { findFirstIndexedWorktree } from '@/lib/worktree-runtime-owner-index'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type {
@@ -306,12 +307,5 @@ export function findWorktreeById(
   worktreesByRepo: Record<string, Worktree[]>,
   worktreeId: string
 ): Worktree | undefined {
-  for (const worktrees of Object.values(worktreesByRepo)) {
-    const match = worktrees.find((worktree) => worktree.id === worktreeId)
-    if (match) {
-      return match
-    }
-  }
-
-  return undefined
+  return findFirstIndexedWorktree(worktreesByRepo, worktreeId)
 }

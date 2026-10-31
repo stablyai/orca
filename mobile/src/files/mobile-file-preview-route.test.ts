@@ -164,3 +164,18 @@ describe('mobile-file-preview-route', () => {
     expect(displayNameFromPreviewPath('src\\app.ts')).toBe('app.ts')
   })
 })
+
+it('round trips a structured attachment on the existing preview screen without a workspace path or edit grant', () => {
+  const params = {
+    hostId: 'h',
+    worktreeId: 'folder:w',
+    source: 'chatAttachment' as const,
+    absolutePath: 'C:\\Orca\\agent-session-attachments\\id\\text.txt'
+  }
+  const route = normalizeMobileFilePreviewRouteParams(params)
+  expect(route).toEqual({ ok: true, params })
+  expect(mobileFilePreviewShellParams(params)).toEqual({
+    source: 'chatAttachment',
+    absolutePath: params.absolutePath
+  })
+})

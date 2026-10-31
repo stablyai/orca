@@ -60,6 +60,17 @@ function press(tree: ReactTestRenderer, label: string): void {
 describe('MobileMarkdown rendering', () => {
   it.each([
     [
+      'attachment-shaped literal code and formatting stay in one document',
+      '```text\n@/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/report.txt\nKEEP CODE\n```\n\nOUTSIDE\n\n**Read @/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/report.txt then stop**',
+      [
+        'text',
+        '1\n2',
+        '@/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/report.txt\nKEEP CODE',
+        'OUTSIDE',
+        'Read @/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/report.txt then stop'
+      ]
+    ],
+    [
       'C1: nested lists keep their own markers and numbers',
       '1. **Frontend**\n   - React\n   - Vite\n2. Backend',
       ['1.', 'Frontend', '•', 'React', '•', 'Vite', '2.', 'Backend']

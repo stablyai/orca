@@ -1,5 +1,10 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
+import { createRef } from 'react'
+import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
+import { NativeChatTextAttachmentOpener } from './NativeChatTextAttachments'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import * as references from '../../../../shared/native-chat-text-attachment-references'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { render } from './native-chat-tooltip-test-harness'
@@ -697,3 +702,49 @@ it.each([10, 100])(
     ).toEqual([])
   }
 )
+
+it('retains raw structured actions through the incoming agent card while terminal body and controls match main', () => {
+  const path = '/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/a&copy;.txt'
+  const raw = `You are working inside Orca, a multi-agent IDE.\n=== TASK ===\nRead **this** @${path} `
+  const message: NativeChatMessage = {
+    id: 'merge35636',
+    role: 'user',
+    source: 'transcript',
+    timestamp: 1,
+    from: { ...from, orchestration: { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' } },
+    blocks: [{ type: 'text', text: raw }]
+  }
+  const recognize = vi.spyOn(references, 'nativeChatTextAttachmentPaths')
+  const opened = vi.fn()
+  const content = deriveNativeChatRowContent(message.blocks)
+  const row = (structuredAttachments: boolean) => (
+    <NativeChatTextAttachmentOpener.Provider value={opened}>
+      <NativeChatUserMessageRow
+        message={message}
+        {...content}
+        rowRef={createRef<HTMLDivElement>()}
+        onRefolded={() => {}}
+        allowFileUriLinks={false}
+        runtimeContext={context}
+        structuredAttachments={structuredAttachments}
+      />
+    </NativeChatTextAttachmentOpener.Provider>
+  )
+  const main = render(card(message))
+  const expected = main.container.textContent
+  main.unmount()
+  recognize.mockClear()
+  const terminal = render(row(false))
+  expect(terminal.container.textContent).toBe(expected)
+  expect(recognize).not.toHaveBeenCalled()
+  expect(navigation.rpc).not.toHaveBeenCalled()
+  terminal.unmount()
+  const structured = render(row(true))
+  expect(screen.queryByText(/You are working inside Orca/)).toBeNull()
+  expect(screen.getByText('this', { selector: 'strong' })).toBeInTheDocument()
+  expect(recognize).toHaveBeenCalledWith(raw)
+  expect(navigation.rpc).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'a&copy;.txt' }))
+  expect(opened).toHaveBeenCalledExactlyOnceWith(path)
+  structured.unmount()
+})

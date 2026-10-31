@@ -37,6 +37,7 @@ describe('useMobileFileTapHandlers', () => {
       worktreeId: 'wt-1',
       worktreeName: 'Orca',
       nativeChatSessionId: 'session-1',
+      structuredAttachments: false,
       activeHandleRef: { current: 'terminal-1' as string | null },
       terminalCwdRef: { current: new Map([['terminal-1', '/repo/sub']]) },
       openBrowser: vi.fn(),
@@ -54,6 +55,30 @@ describe('useMobileFileTapHandlers', () => {
     handlers = useMobileFileTapHandlers(options)
     return null
   }
+
+  it('routes committed text attachments directly only when the caller identifies a structured chat', () => {
+    const sendRequest = vi.fn(async () => ok({ exists: false, isDirectory: false }))
+    const path = '/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/text.txt'
+    const options = { ...createOptions(sendRequest), structuredAttachments: true }
+    act(() => {
+      renderer = create(createElement(Harness, { options }))
+    })
+    handlers!.handleNativeChatFileTap(path)
+    expect(push).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ source: 'chatAttachment', absolutePath: path })
+      })
+    )
+    expect(sendRequest).not.toHaveBeenCalled()
+    push.mockClear()
+    act(() => {
+      renderer!.update(
+        createElement(Harness, { options: { ...options, structuredAttachments: false } })
+      )
+    })
+    handlers!.handleNativeChatFileTap(path)
+    expect(push).not.toHaveBeenCalled()
+  })
 
   it('keeps handler identities stable across rerenders', () => {
     const options = createOptions(vi.fn())

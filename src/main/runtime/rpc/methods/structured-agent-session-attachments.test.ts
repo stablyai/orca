@@ -1,5 +1,15 @@
+import {
+  AttachmentTextSource,
+  type AttachmentTextChunk
+} from '../../../../shared/attachment-text-source'
+import {
+  remoteRpcContentBudget,
+  REMOTE_RPC_MAX_CONTENT_BYTES
+} from '../../../../shared/remote-rpc-content-budget'
+import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session-runtime-capabilities'
+import { RUNTIME_CAPABILITIES as runtimeCapabilities } from '../../../../shared/protocol-version'
 import '../unused-default-rpc-methods.test-fixture'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile, symlink, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -173,4 +183,74 @@ describe('agentSessionAttachment.*', () => {
       error: { message: expect.stringContaining('file_too_large') }
     })
   })
+})
+
+it('reads a committed text attachment through the registered mobile RPC and validates its complete snapshot', async () => {
+  const bytes = Buffer.from(['\ufeffstart\r\n', '🙂\\\"\n'.repeat(60_000), 'end'].join(''))
+  const path = await uploadBytes('picked source.log', bytes)
+  const source = new AttachmentTextSource(path, async (request) => {
+    const reply = await call('agentSessionAttachment.readTextChunk', request, {
+      ...CLIENT_A,
+      clientKind: 'mobile'
+    })
+    expect(isMobileE2EETextPayloadWithinLimit(JSON.stringify(reply))).toBe(true)
+    return result(reply)
+  })
+  expect((await source.page(0)).segments.join('')).toMatch(/^\ufeffstart\r\n/)
+  expect(await source.copyText()).toBe(bytes.toString('utf8'))
+  const saved: Uint8Array[] = []
+  for await (const chunk of source.bytes()) {
+    saved.push(chunk)
+  }
+  expect(Buffer.concat(saved)).toEqual(bytes)
+  const snapshot = source.snapshot
+  await writeFile(path, Buffer.alloc(bytes.length, 97))
+  expect(
+    await call(
+      'agentSessionAttachment.readTextChunk',
+      { path, offset: 0, length: 10, expectedSnapshot: snapshot },
+      CLIENT_A
+    )
+  ).toMatchObject({ ok: false })
+})
+
+it('keeps the store boundary, regular-file checks, range limit and request-id budget on the actual reader', async () => {
+  const path = await uploadBytes('attached.txt', Buffer.alloc(300_000, 97))
+  expect(runtimeCapabilities).toContain(AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY)
+  const read = (filePath: string) => store.readTextChunk({ path: filePath, offset: 0, length: 10 })
+  await expect(read(join(root, 'outside.txt'))).rejects.toThrow()
+  await expect(
+    read(join(store.rootDir, '12345678-1234-1234-1234-123456789abc', '.upload.part'))
+  ).rejects.toThrow()
+  await expect(store.readTextChunk({ path, offset: 0, length: 256 * 1024 + 1 })).rejects.toThrow()
+  await expect(
+    store.readTextChunk(
+      { path, offset: 0, length: 256 * 1024 },
+      remoteRpcContentBudget('x'.repeat(REMOTE_RPC_MAX_CONTENT_BYTES - 100))
+    )
+  ).rejects.toThrow('reply is too large')
+  const alias = join(path, '..', 'alias.txt')
+  const outside = join(root, 'outside.txt')
+  await writeFile(outside, 'private')
+  await symlink(outside, alias)
+  await expect(read(alias)).rejects.toThrow()
+  const directory = join(path, '..', 'directory')
+  await mkdir(directory)
+  await expect(read(directory)).rejects.toThrow()
+  const raw = result<AttachmentTextChunk>(
+    await call(
+      'agentSessionAttachment.readTextChunk',
+      { path, offset: 0, length: 256 * 1024 },
+      { ...CLIENT_A, clientKind: 'mobile' }
+    )
+  )
+  expect(raw.bytesRead).toBe(256 * 1024)
+  expect(raw.eof).toBe(false)
+  expect(
+    await call(
+      'agentSessionAttachment.readTextChunk',
+      { path, offset: 0, length: 10 },
+      { clientKind: 'runtime', clientCapabilities: [] }
+    )
+  ).toMatchObject({ ok: false })
 })

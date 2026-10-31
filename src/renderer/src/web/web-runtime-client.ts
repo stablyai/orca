@@ -6,11 +6,13 @@ import type {
   RuntimeHostStatusSnapshot,
   RuntimeHostStatusResponse
 } from '../../../shared/runtime-host-status'
+import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from './web-runtime-request-registry'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { WebRuntimeConnectionTransport } from './web-runtime-connection-transport'
 import type { WebRuntimeCredentialSource } from './web-runtime-credential-source'
 import { subscribeWebRuntimeFileWatch } from './web-runtime-file-watch-subscription'
 import type { WebRuntimeConnectionState } from './web-runtime-connection-frame-router'
+import { pinWebRuntimeSubscription } from './web-runtime-subscription-contract'
 import type {
   WebRuntimeSubscribeOptions,
   WebRuntimeSubscriptionCallbacks,
@@ -105,7 +107,7 @@ export class WebRuntimeClient {
   call(
     method: string,
     params?: unknown,
-    options?: { timeoutMs?: number; expectedConnectionEpoch?: number }
+    options?: { timeoutMs?: number; signal?: AbortSignal; expectedConnectionEpoch?: number }
   ): Promise<RuntimeRpcResponse<unknown>> {
     return method === 'status.get' && this.statusOwner
       ? this.statusOwner.refresh(options)
@@ -189,8 +191,16 @@ export class WebRuntimeClient {
     callbacks: WebRuntimeSubscriptionCallbacks,
     options?: SubscribeOptions
   ): Promise<WebRuntimeTransportSubscriptionHandle> {
+    const expectedConnectionEpoch =
+      options?.expectedEnvironmentRuntimeId === undefined
+        ? undefined
+        : await pinWebRuntimeSubscription(this, options, this.waitForConnected(options.timeoutMs))
     await waitForPromiseWithSignal(this.waitForConnected(options?.timeoutMs), options?.signal)
     throwIfSignalAborted(options?.signal)
+    if (expectedConnectionEpoch !== undefined && expectedConnectionEpoch !== this.connectionEpoch) {
+      throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+    }
+    options?.beforeSend?.()
     const id = this.nextId()
     const subscription = { id, method, params, callbacks, needsReplay: false }
     this.subscriptions.set(id, subscription)

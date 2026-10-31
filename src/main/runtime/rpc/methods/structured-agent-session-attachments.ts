@@ -8,6 +8,7 @@ import {
 } from './structured-agent-session-gate'
 import {
   AttachmentReadParams,
+  AttachmentTextReadParams,
   AttachmentUploadAppendParams,
   AttachmentUploadIdParams,
   AttachmentUploadStartParams
@@ -28,6 +29,15 @@ async function requireStore(
 }
 
 export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
+  defineMethod({
+    name: 'agentSessionAttachment.readTextChunk',
+    permission: 'workspace',
+    params: AttachmentTextReadParams,
+    handler: async (params, ctx) => {
+      const { store } = await requireStore(ctx)
+      return store.readTextChunk(params, remoteFileContentBudget(ctx.clientKind, ctx.requestId))
+    }
+  }),
   defineMethod({
     name: 'agentSessionAttachment.uploadStart',
     permission: 'workspace',

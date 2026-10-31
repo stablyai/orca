@@ -38,6 +38,11 @@ export function addRoute(
   routes.set(JSON.stringify(route), route)
 }
 
+const sshRepoRouteIndexes = new WeakMap<
+  NonNullable<WorktreeOperationRouteState['repos']>,
+  ReadonlyMap<string, WorktreeOperationRouteResolution>
+>()
+
 function resolveRepoRouteForSshOwner(
   repos: WorktreeOperationRouteState['repos'],
   owner: WorktreeOperationOwnerRecord
@@ -45,22 +50,34 @@ function resolveRepoRouteForSshOwner(
   if (!repos || !owner.hostId) {
     return { kind: 'missing' }
   }
-  const routes = new Map<string, WorktreeOperationRoute>()
-  for (const repo of repos) {
-    if (repo.id !== owner.repoId) {
-      continue
+  let index = sshRepoRouteIndexes.get(repos)
+  if (!index) {
+    const routesByHost = new Map<string, Map<string, WorktreeOperationRoute>>()
+    for (const repo of repos) {
+      const hostId = getRepoExecutionHostId(repo)
+      const connectionHostId = repo.connectionId ? toSshExecutionHostId(repo.connectionId) : null
+      for (const host of new Set([hostId, connectionHostId])) {
+        if (!host) {
+          continue
+        }
+        const key = `${repo.id}\0${host}`
+        const routes = routesByHost.get(key) ?? new Map()
+        addRoute(routes, routeForOwner({ hostId }))
+        routesByHost.set(key, routes)
+      }
     }
-    const connectionHostId = repo.connectionId ? toSshExecutionHostId(repo.connectionId) : null
-    if (getRepoExecutionHostId(repo) !== owner.hostId && connectionHostId !== owner.hostId) {
-      continue
+    const next = new Map<string, WorktreeOperationRouteResolution>()
+    for (const [key, routes] of routesByHost) {
+      const route = routes.values().next().value
+      next.set(
+        key,
+        routes.size === 1 && route ? { kind: 'resolved', route } : { kind: 'ambiguous' }
+      )
     }
-    addRoute(routes, routeForOwner({ hostId: getRepoExecutionHostId(repo) }))
+    index = next
+    sshRepoRouteIndexes.set(repos, index)
   }
-  const route = routes.values().next().value
-  if (routes.size === 1 && route) {
-    return { kind: 'resolved', route }
-  }
-  return routes.size > 1 ? { kind: 'ambiguous' } : { kind: 'missing' }
+  return index.get(`${owner.repoId}\0${owner.hostId}`) ?? { kind: 'missing' }
 }
 
 export function resolveExactWorktreeRoute(

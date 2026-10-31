@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
@@ -90,5 +91,54 @@ export const filePreviewStyles = themedStyleSheet(() => ({
     fontSize: 13,
     lineHeight: 19,
     padding: 0
+  }
+}))
+
+export const chatAttachmentPreviewStyles = themedStyleSheet(() => ({
+  ...filePreviewStyles,
+  header: {
+    backgroundColor: colors.bgPanel,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
+  },
+  topBar: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    borderCurve: 'circular'
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  title: {
+    color: colors.textPrimary,
+    fontSize: typography.titleSize,
+    fontWeight: '600'
+  },
+  meta: {
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  saveButtonDisabled: {
+    opacity: 0.42
+  },
+  scroll: {
+    flex: 1,
+    backgroundColor: colors.editorSurface
+  },
+  textContent: {
+    padding: spacing.md,
+    paddingBottom: spacing.xl
   }
 }))

@@ -121,7 +121,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('cancels connecting search setup only for its owner and closes a late handle', async () => {
+  it('cancels pending attachment setup only for its owner and closes a late handle', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this suite supplies the complete mocked handler store.
     registerRuntimeEnvironmentHandlers(store as never)
     const add = handler<{ name: string; pairingCode: string }, unknown>(
@@ -157,7 +157,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     }
     const pending = subscribe(
       { sender },
-      { selector: 'desk', method: 'files.search', subscriptionId: 'pending-search' }
+      {
+        selector: 'desk',
+        method: 'agentSessionAttachment.readTextChunk',
+        subscriptionId: 'pending-search'
+      }
     )
     await vi.waitFor(() => expect(setupSignal).toBeDefined())
     expect(await unsubscribe({ sender: { id: 2 } }, { subscriptionId: 'pending-search' })).toEqual({

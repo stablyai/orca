@@ -28,6 +28,13 @@ async function fixture(name, markup, style) {
   const root = join(fixtureDir, name)
   await mkdir(join(root, 'src/platform'), { recursive: true })
   await mkdir(join(root, 'src/doc'), { recursive: true })
+  await mkdir(join(root, 'src/theme'), { recursive: true })
+  await writeFile(join(root, 'src/theme/mobile-theme.ts'), 'export const TEXT_INPUT_FONT_SIZE = 16')
+  await writeFile(join(root, 'src/doc/mobile-theme.ts'), 'export const TEXT_INPUT_FONT_SIZE = 16')
+  await writeFile(
+    join(root, 'src/platform/text-input-font-size.ts'),
+    'export const TEXT_INPUT_FONT_SIZE = 16'
+  )
   await writeFile(join(root, 'src/platform/text-input-font-size.web.ts'), SEAM_SOURCE, 'utf8')
   await writeFile(join(root, 'src/doc/markup.ts'), markup, 'utf8')
   await writeFile(join(root, 'src/doc/style.ts'), style, 'utf8')
@@ -89,8 +96,8 @@ describe('the editable-host font-size rule', () => {
     const bound = await fixture(
       'bound',
       'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
-      "import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'\n" +
-        'export function style() {\n  return `    #editor {\n      font-size: ${TEXT_INPUT_FONT_SIZE}px;\n    }`\n}\n'
+      "import { TEXT_INPUT_FONT_SIZE as INPUT_SIZE } from '../theme/mobile-theme'\n" +
+        'export function style() {\n  return `    #editor {\n      font-size: ${INPUT_SIZE}px;\n    }`\n}\n'
     )
     expect(editableHostFontSizeOffenders(bound.root, bound.closure)).toEqual([])
   })
@@ -105,6 +112,19 @@ describe('the editable-host font-size rule', () => {
     )
     expect(editableHostFontSizeOffenders(root, closure)).toEqual(['src/doc/style.ts:3'])
   })
+
+  it.each(['./mobile-theme', '../platform/text-input-font-size'])(
+    'refuses an identically named token from %s',
+    async (module) => {
+      const { root, closure } = await fixture(
+        `foreign-${module.replaceAll('/', '-')}`,
+        'export const MARKUP = \'<main id="editor" contenteditable="true"></main>\'\n',
+        `import { TEXT_INPUT_FONT_SIZE } from '${module}'\n` +
+          'export const style = `#editor { font-size: ${TEXT_INPUT_FONT_SIZE}px; }`'
+      )
+      expect(editableHostFontSizeOffenders(root, closure)).toEqual(['src/doc/style.ts:2'])
+    }
+  )
 
   it('counts a no-id editable beside a named one, rather than only the named one', async () => {
     // Require anonymous host reported even beside compliant named host; id-first matching silently missed it.

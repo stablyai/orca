@@ -1,26 +1,41 @@
 import type { Tab } from '../../../shared/tab-types'
+import { isStructuredTab } from '../../../shared/structured-agent-session-tab'
 
-type StructuredTabIndex = {
-  byId: ReadonlyMap<string, Tab>
-  bySessionId: ReadonlyMap<string, Tab>
+type DirectoryTab = {
+  id: string
+  entityId?: string
+  contentType?: string
+  agentSessionAgent?: unknown
 }
-const indexes = new WeakMap<readonly Tab[], StructuredTabIndex>()
+type StructuredTabIndex = {
+  byId: ReadonlyMap<string, DirectoryTab>
+  bySessionId: ReadonlyMap<string, DirectoryTab>
+  firstRegisteredById: ReadonlyMap<string, DirectoryTab>
+}
+const indexes = new WeakMap<readonly DirectoryTab[], StructuredTabIndex>()
 
-function indexTabs(tabs: readonly Tab[] | undefined): StructuredTabIndex | undefined {
+function indexTabs(tabs: readonly DirectoryTab[] | undefined): StructuredTabIndex | undefined {
   if (!tabs) {
     return undefined
   }
   let index = indexes.get(tabs)
   if (!index) {
-    const byId = new Map<string, Tab>()
-    const bySessionId = new Map<string, Tab>()
-    for (const tab of tabs) {
+    const byId = new Map<string, DirectoryTab>()
+    const bySessionId = new Map<string, DirectoryTab>()
+    const firstRegisteredById = new Map<string, DirectoryTab>()
+    tabs.forEach((tab) => {
       if (tab.contentType === 'agent-session') {
-        byId.set(tab.id, tab)
-        bySessionId.set(tab.entityId, tab)
+        const id = tab.id
+        byId.set(id, tab)
+        if (tab.entityId !== undefined) {
+          bySessionId.set(tab.entityId, tab)
+        }
+        if (isStructuredTab(tab) && !firstRegisteredById.has(id)) {
+          firstRegisteredById.set(id, tab)
+        }
       }
-    }
-    index = { byId, bySessionId }
+    })
+    index = { byId, bySessionId, firstRegisteredById }
     indexes.set(tabs, index)
   }
   return index
@@ -43,7 +58,8 @@ export function structuredChatTabById(
   workspaceId: string,
   id: string
 ): Tab | undefined {
-  return indexTabs(workspaceTabs(tabsByWorkspace, workspaceId))?.byId.get(id)
+  const tabs = workspaceTabs(tabsByWorkspace, workspaceId)
+  return indexedTab(tabs, 'byId', id)
 }
 
 export function structuredChatTabBySessionId(
@@ -51,7 +67,8 @@ export function structuredChatTabBySessionId(
   workspaceId: string,
   sessionId: string
 ): Tab | undefined {
-  return indexTabs(workspaceTabs(tabsByWorkspace, workspaceId))?.bySessionId.get(sessionId)
+  const tabs = workspaceTabs(tabsByWorkspace, workspaceId)
+  return indexedTab(tabs, 'bySessionId', sessionId)
 }
 
 type WorkspaceTab = Pick<Tab, 'id'> & Partial<Pick<Tab, 'contentType' | 'entityId'>>
@@ -105,4 +122,21 @@ export function structuredChatWorkspacesBySessionId(
 
 export function chatWorkspaceByTabId(tabsByWorkspace: WorkspaceTabMap | undefined, tabId: string) {
   return indexWorkspaces(tabsByWorkspace)?.byTabId.get(tabId) ?? null
+}
+
+/** Directory pins use the status bridge predicate and the first matching registered tab. */
+export function firstRegisteredStructuredChatTab<T extends DirectoryTab>(
+  tabs: readonly T[] | undefined,
+  id: string
+): T | undefined {
+  return indexedTab(tabs, 'firstRegisteredById', id)
+}
+
+function indexedTab<T extends DirectoryTab>(
+  tabs: readonly T[] | undefined,
+  kind: keyof StructuredTabIndex,
+  key: string
+): T | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this weak index contains only rows of this exact immutable T array.
+  return indexTabs(tabs)?.[kind].get(key) as T | undefined
 }

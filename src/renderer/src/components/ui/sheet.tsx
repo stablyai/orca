@@ -65,6 +65,7 @@ function SheetContent({
   children,
   side = 'right',
   showCloseButton = true,
+  closeButtonProps,
   overlayClassName,
   overlayStyle,
   style,
@@ -72,6 +73,10 @@ function SheetContent({
 }: React.ComponentProps<typeof SheetPrimitive.Content> &
   VariantProps<typeof sheetContentVariants> & {
     showCloseButton?: boolean
+    closeButtonProps?: Pick<
+      React.ComponentProps<typeof SheetPrimitive.Close>,
+      'disabled' | 'onPointerDown' | 'onMouseDown' | 'onClick'
+    >
     overlayClassName?: string
     overlayStyle?: React.CSSProperties
   }) {
@@ -89,6 +94,7 @@ function SheetContent({
         {children}
         {showCloseButton && (
           <SheetPrimitive.Close
+            {...closeButtonProps}
             data-slot="sheet-close"
             className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >

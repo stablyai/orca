@@ -31,6 +31,10 @@ vi.mock('../transport/host-client-hooks', () => ({
 
 import { RpcClientProvider } from '../transport/client-context.web'
 import { useRouteHandoff } from './route-handoff.web'
+import { WorkspaceExecutionHostContext } from './workspace-execution-host'
+import { useMobileFileTapHandlers } from '../session/use-mobile-file-tap-handlers'
+vi.mock('./route-handoff', async () => import('./route-handoff.web'))
+vi.mock('../platform/haptics', () => ({ triggerSelection: vi.fn() }))
 
 const ROUTES: MobileWebPageRoute[] = [
   {
@@ -60,17 +64,44 @@ const ROUTES: MobileWebPageRoute[] = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    optionalGrants: ['externalNavigation']
+    optionalGrants: ['externalNavigation', 'native.media.name', 'native.pdf.view']
   }
 ]
+
+// Preview/session declarations are unchanged from merged main 54fa31658c6.
+ROUTES.push({
+  pathname: '/h/[hostId]/files/preview/[worktreeId]',
+  grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
+  optionalGrants: ['native.pdf.view']
+})
 
 const trees: ReactTestRenderer[] = []
 const clients: BridgeRpcClient[] = []
 
-const held: { handoff: RouteHandoff | null } = { handoff: null }
+const held: { handoff: RouteHandoff | null; tap: ((path: string) => void) | null } = {
+  handoff: null,
+  tap: null
+}
 
 function Screen(): null {
   held.handoff = useRouteHandoff()
+  held.tap = useMobileFileTapHandlers({
+    client: null,
+    hostId: 'host-1',
+    worktreeId: 'wt-1',
+    structuredAttachments: true,
+    nativeChatSessionId: 'session-1',
+    activeHandleRef: { current: null },
+    terminalCwdRef: { current: new Map() },
+    openBrowser: vi.fn(),
+    fetchSessionTabs: async () => {},
+    getSessionTabs: () => [],
+    getActiveSessionTabId: () => 'chat-1',
+    getActiveSessionTabType: () => 'agent-session',
+    switchSessionTab: vi.fn(),
+    scheduleDelayedAction: vi.fn(),
+    reportChatTapFailure: vi.fn()
+  }).handleNativeChatFileTap
   return null
 }
 
@@ -113,7 +144,9 @@ function mountPage(
     trees.push(
       create(
         <RpcClientProvider client={client}>
-          <Screen />
+          <WorkspaceExecutionHostContext.Provider value="ssh:remote35636">
+            <Screen />
+          </WorkspaceExecutionHostContext.Provider>
         </RpcClientProvider>
       )
     )
@@ -191,3 +224,27 @@ describe('a session page opened on its own, leaving for the host route', () => {
     ])
   })
 })
+
+it.each([false, true])(
+  'keeps a structured source tap local under frozen-main shell grants (wide=%s)',
+  (wide) => {
+    const page = mountPage(wide ? '/h/host-1' : '/h/host-1/session/wt-1', wide)
+    const path =
+      '/remote/agent-session-attachments/12345678-1234-1234-1234-123456789abc/a&copy;.txt'
+    act(() => held.tap!(path))
+    expect(router.push).toHaveBeenCalledExactlyOnceWith(
+      {
+        pathname: '/h/[hostId]/files/preview/[worktreeId]',
+        params: {
+          hostId: 'host-1',
+          worktreeId: 'wt-1',
+          source: 'chatAttachment',
+          absolutePath: path,
+          executionHost: 'ssh:remote35636'
+        }
+      },
+      undefined
+    )
+    expect(page.navigations()).toEqual([])
+  }
+)

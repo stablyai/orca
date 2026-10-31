@@ -2,9 +2,10 @@
 // Any editable under floor focus-zooms iOS page and disables keyboard-occlusion at non-1 scale; scan whole closure for future hosts.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { textInputFontSizeFloor } from './mobile-web-app-text-input-font-size-seam.mjs'
-
-const SEAM_EXPORT = 'TEXT_INPUT_FONT_SIZE'
+import {
+  isTextInputFontSizeBinding,
+  textInputFontSizeFloor
+} from './mobile-web-app-text-input-font-size-seam.mjs'
 
 // Match editable tag before optional ID; id-first scan missed anonymous host beside named one.
 const EDITABLE_TAG = /<[A-Za-z][^>]*\bcontenteditable="true"[^>]*>/g
@@ -116,7 +117,7 @@ function winningFontSize(declarations) {
 }
 
 // Missing CSS size is unresolved: inherited value lies outside modeled rules. TextInput’s absent-prop inheritance policy does not prove CSS host safe.
-function readFontSize(mobileDir, source, declarations) {
+function readFontSize(mobileDir, file, source, declarations) {
   const winning = winningFontSize(declarations)
   if (winning === null) {
     return null
@@ -131,10 +132,7 @@ function readFontSize(mobileDir, source, declarations) {
   if (substituted === null) {
     return { text, onSeam: false }
   }
-  const imported = new RegExp(
-    `import\\s*\\{[^}]*\\b${SEAM_EXPORT}\\b[^}]*\\}\\s*from\\s*'[^']*text-input-font-size'`
-  )
-  return { text, onSeam: substituted[1] === SEAM_EXPORT && imported.test(source) }
+  return { text, onSeam: isTextInputFontSizeBinding(mobileDir, file, source, substituted[1]) }
 }
 
 // Read all exact-selector rules in source order; first-safe rule can be overridden by later unsafe size.
@@ -189,7 +187,7 @@ function editableHostSizes(mobileDir, closure) {
         size:
           unrankable.length > 0
             ? null
-            : readFontSize(mobileDir, source, exact.map((one) => one.declarations).join(';'))
+            : readFontSize(mobileDir, file, source, exact.map((one) => one.declarations).join(';'))
       }
       break
     }

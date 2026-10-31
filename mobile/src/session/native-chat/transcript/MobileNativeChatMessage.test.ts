@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
+import type * as MarkdownModule from '../../../components/MobileMarkdown'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../../../src/shared/agent-session-host-status-rows'
 import { structuredQuestionTranscript } from '../../../../../src/shared/structured-agent-question-projection'
@@ -67,10 +68,26 @@ vi.mock('lucide-react-native', () => ({
   SquareTerminal: 'SquareTerminal',
   Wrench: 'Wrench'
 }))
-vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+const markdownImplementation = vi.hoisted(
+  (): { current?: typeof MarkdownModule.MobileMarkdown } => ({})
+)
+vi.mock('../../../components/MobileMarkdown', async () => {
+  const { createElement } = await import('react')
+  return {
+    MobileMarkdown: (props: React.ComponentProps<typeof MarkdownModule.MobileMarkdown>) =>
+      createElement(markdownImplementation.current ?? 'MobileMarkdown', props)
+  }
+})
+vi.mock('../../../components/pr-sidebar/MermaidDiagram', () => ({
+  MermaidDiagram: 'MermaidDiagram'
+}))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
+
+const actualMarkdown = await vi.importActual<typeof MarkdownModule>(
+  '../../../components/MobileMarkdown'
+)
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import {
@@ -656,4 +673,156 @@ describe('MobileNativeChatMessage', () => {
       expect(textIn(tree.root)).toEqual([])
     })
   })
+})
+
+it('bounds phone row recognition at N and 10N during unchanged and one-row updates', async () => {
+  const references =
+    await import('../../../../../src/shared/native-chat-text-attachment-references')
+  const recognize = vi.spyOn(references, 'nativeChatTextAttachmentPaths')
+  const path = '/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/report.txt'
+  for (const count of [10, 100]) {
+    let rows = Array.from({ length: count }, (_, index) => ({
+      ...userMessage([
+        { type: 'text', text: `row ${index} **Read @${path} then stop** ${'prose '.repeat(100)}` }
+      ]),
+      id: `row-${index}`
+    }))
+    const ui = () =>
+      createElement(
+        'Rows',
+        null,
+        rows.map((message) =>
+          createElement(MobileNativeChatMessage, {
+            key: message.id,
+            message,
+            structuredActivityUi: true
+          })
+        )
+      )
+    recognize.mockClear()
+    let tree: ReactTestRenderer
+    act(() => {
+      tree = create(ui())
+    })
+    expect(recognize).toHaveBeenCalledTimes(count)
+    recognize.mockClear()
+    for (let update = 0; update < 3; update++) {
+      act(() => tree!.update(ui()))
+    }
+    expect(recognize).not.toHaveBeenCalled()
+    rows = rows.map((message, index) =>
+      index === 0 ? { ...message, blocks: [{ type: 'text', text: `changed @${path}` }] } : message
+    )
+    act(() => tree!.update(ui()))
+    expect(recognize).toHaveBeenCalledTimes(1)
+    act(() => tree!.unmount())
+  }
+  recognize.mockRestore()
+})
+
+it('renders each original phone message through the shipping Markdown renderer with separate lexical actions', async () => {
+  const adapter = await import('../../../components/MobileMarkdown')
+  const references =
+    await import('../../../../../src/shared/native-chat-text-attachment-references')
+  const recognize = vi.spyOn(references, 'nativeChatTextAttachmentPaths')
+  const { formatNativeChatFileReference } =
+    await import('../../../../../src/shared/agent-image-paste')
+  const path = '/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/report.txt'
+  const names = [
+    '_notes_.txt',
+    'a&copy;.txt',
+    'a©.txt',
+    'a`b.txt',
+    'c`d.txt',
+    '[a](b).txt',
+    "space @ apostrophe'.txt",
+    '日本語.txt'
+  ]
+  const exact = names.map((name) => path.replace('report.txt', name))
+  const cases: [string, string[]][] = [
+    [`see${exact.map(formatNativeChatFileReference).join(' ')}`, exact],
+    [`\`\`\`text\n@${path}\nKEEP\n\`\`\`\n\nOUTSIDE`, [path]],
+    [`\` @${path} \``, [path]],
+    [`    @${path}\n`, [path]],
+    [`> - \` @${path} \``, [path]],
+    [`**Read @${path} then stop**`, [path]],
+    [
+      `\\*escaped* see@${path.replace('report.txt', 'a&copy;.txt')} `,
+      [path.replace('report.txt', 'a&copy;.txt')]
+    ],
+    [
+      `@${path.replace('report.txt', 'a`b.txt')} @${path.replace('report.txt', 'c`d.txt')} `,
+      [path.replace('report.txt', 'a`b.txt'), path.replace('report.txt', 'c`d.txt')]
+    ],
+    [`\` @${path}\``, [`${path}\``]]
+  ]
+  // Compare rendered values; themed style getters and React wrappers have separate function identities.
+  const hostContent = (root: ReactTestInstance) =>
+    JSON.stringify(
+      root
+        .findAll((node) => typeof node.type === 'string')
+        .map((node) => [
+          node.type,
+          node.props.style,
+          node.children.filter((child) => typeof child === 'string')
+        ])
+    )
+  markdownImplementation.current = actualMarkdown.MobileMarkdown
+  try {
+    for (const [content, paths] of cases) {
+      const onOpenFile = vi.fn()
+      let row: ReactTestRenderer
+      let direct: ReactTestRenderer | undefined
+      act(() => {
+        row = create(
+          createElement(MobileNativeChatMessage, {
+            message: userMessage([{ type: 'text', text: content }]),
+            structuredActivityUi: true,
+            onOpenFile
+          })
+        )
+      })
+      try {
+        const body = row!.root.findAllByType(adapter.MobileMarkdown)
+        expect(body).toHaveLength(1)
+        expect(body[0]!.props.content).toBe(content)
+        act(() => {
+          direct = create(createElement(actualMarkdown.MobileMarkdown, body[0]!.props))
+        })
+        expect(hostContent(body[0]!)).toEqual(hostContent(direct!.root))
+        const actions = row!.root.findAll(
+          (node) => String(node.type) === 'Text' && node.props.accessibilityRole === 'button'
+        )
+        act(() => actions.forEach((action) => action.props.onPress()))
+        expect(onOpenFile.mock.calls.map(([path]) => path)).toEqual(paths)
+        recognize.mockClear()
+        act(() =>
+          row!.update(
+            createElement(MobileNativeChatMessage, {
+              message: userMessage([{ type: 'text', text: content }]),
+              structuredActivityUi: false,
+              onOpenFile
+            })
+          )
+        )
+        expect(hostContent(row!.root.findAllByType(adapter.MobileMarkdown)[0]!)).toEqual(
+          hostContent(direct!.root)
+        )
+        expect(
+          row!.root.findAll(
+            (node) => String(node.type) === 'Text' && node.props.accessibilityRole === 'button'
+          )
+        ).toHaveLength(0)
+        expect(recognize).not.toHaveBeenCalled()
+      } finally {
+        act(() => {
+          row!.unmount()
+          direct?.unmount()
+        })
+      }
+    }
+  } finally {
+    markdownImplementation.current = undefined
+    recognize.mockRestore()
+  }
 })

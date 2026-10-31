@@ -6,6 +6,9 @@ import {
 } from './native-chat-composer-pasted-text-references'
 
 const Scope = createContext('')
+export function useNativeChatPastedTextScope(): string {
+  return useContext(Scope)
+}
 export const NativeChatPastedTextScopeProvider = Scope.Provider
 
 export function useNativeChatPastedTextState(token: string): string | null {

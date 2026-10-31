@@ -1,3 +1,5 @@
+import { saveErrorMessageFromPreviewResult } from './mobile-file-preview-response'
+import { MobileChatAttachmentPreview } from './MobileChatAttachmentPreview'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View } from 'react-native'
 import { SafeAreaView, useSafeAreaFrame } from 'react-native-safe-area-context'
@@ -16,7 +18,6 @@ import {
   loadMobileFilePreview,
   previewError,
   saveMobileTerminalArtifactPreview,
-  type MobileFilePreviewSource,
   type MobileFilePreviewResult
 } from './mobile-file-preview-request'
 import { ConfirmModal } from '../components/ConfirmModal'
@@ -46,7 +47,14 @@ type Props = {
   route: MobileFilePreviewRouteState
 }
 
-export function MobileFilePreviewScreen({ route }: Props) {
+export const MobileFilePreviewScreen = ({ route }: Props) =>
+  route.ok && route.params.source === 'chatAttachment' ? (
+    <MobileChatAttachmentPreview key={JSON.stringify(route.params)} params={route.params} />
+  ) : (
+    <WorkspaceFilePreviewScreen route={route} />
+  )
+
+function WorkspaceFilePreviewScreen({ route }: Props) {
   const executionHost = useWorkspaceExecutionHost()
   const documentKey = route.ok
     ? [
@@ -91,9 +99,7 @@ function MobileFilePreviewDocument({ route }: Props) {
     () => (previewParams ? previewSourceFromRoute(previewParams) : null),
     [previewParams]
   )
-  const [previewSource, setPreviewSource] = useState<MobileFilePreviewSource | null>(
-    routePreviewSource
-  )
+  const [previewSource, setPreviewSource] = useState(routePreviewSource)
   const previewSourceKey = useMemo(() => sourceKeyForPreview(previewSource), [previewSource])
   const routePreviewSourceKey = useMemo(
     () => sourceKeyForPreview(routePreviewSource),
@@ -411,10 +417,4 @@ function MobileFilePreviewDocument({ route }: Props) {
       />
     </View>
   )
-}
-
-function saveErrorMessageFromPreviewResult(result: MobileFilePreviewResult): string {
-  return result.status === 'error' || result.status === 'waiting'
-    ? result.message
-    : translate('files.filePreviewScreen.saveFailed', 'Unable to save file')
 }

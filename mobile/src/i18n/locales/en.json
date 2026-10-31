@@ -2902,6 +2902,29 @@
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
       "tokens": "{{value0}} tokens"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "Unreadable attachment reply. Try again.",
+      "incompleteReply": "Attachment changed or its reply was incomplete. Close it and try again.",
+      "notText": "This file cannot be previewed as text. Save it to open it in another app.",
+      "openFailed": "Unable to open attachment. Try again.",
+      "hostUpdate": "This host cannot open text attachments yet. Update Orca on that host, then retry.",
+      "copyTooLarge": "This file is too large to copy. Save it instead.",
+      "connectionChanged": "Connection changed. Retry to reopen the attachment.",
+      "hostChanged": "The attachment host changed. Close it and reopen it.",
+      "readFailed": "Unable to read this attachment. Reconnect and try again. The file may have been removed or changed.",
+      "copyFrame": "Full Copy for this attachment needs the upcoming phone update.",
+      "copyFailed": "Unable to copy attachment. Try again.",
+      "pastedText": "Pasted text",
+      "first": "First",
+      "prev": "Prev",
+      "next": "Next",
+      "last": "Last",
+      "textAttachment": "Text attachment",
+      "byteSize": "{{size}} bytes",
+      "saveUpdate": "Save will be available in a phone update.",
+      "fullCopySaveUpdate": "Full Copy and Save for this attachment will be available in a phone update.",
+      "attachmentPage": "Attachment page"
     }
   },
   "sourceControl": {

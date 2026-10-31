@@ -1,8 +1,15 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
+import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import * as attachmentReferences from '../../../../shared/native-chat-text-attachment-references'
+import { NativeChatMarkdownImageOwnerProvider } from './native-chat-markdown-image-owner'
+import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
+import { agentSessionTabFixture, worktreeFixture } from './native-chat-workspace-test-fixtures'
 import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
@@ -11,6 +18,12 @@ import type {
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
 )
+const attachmentMocks = vi.hoisted(() => ({ rpc: vi.fn(), write: vi.fn() }))
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcClient>()),
+  callRuntimeRpc: attachmentMocks.rpc,
+  runtimeEnvironmentSupportsCapability: async () => true
+}))
 
 vi.mock('@/lib/structured-agent-session-launch', () =>
   moduleFactories.structuredAgentSessionLaunch()
@@ -58,7 +71,10 @@ function goal(status: AgentJournalThreadGoal['status']): AgentJournalThreadGoal 
   }
 }
 
-function sessionView(agent: 'codex' | 'claude' = 'codex'): React.JSX.Element {
+function sessionView(
+  agent: 'codex' | 'claude' = 'codex',
+  target: RuntimeClientTarget = { kind: 'local' }
+): React.JSX.Element {
   return (
     <TooltipProvider>
       <NativeChatStructuredSession
@@ -66,7 +82,7 @@ function sessionView(agent: 'codex' | 'claude' = 'codex'): React.JSX.Element {
         isFocusedGroup
         tabId="structured-tab-goal"
         sessionId="session-goal"
-        target={{ kind: 'local' }}
+        target={target}
         agent={agent}
       />
     </TooltipProvider>
@@ -78,6 +94,146 @@ function showStripAndGoal(status: AgentJournalThreadGoal['status'] = 'active'): 
   mocks.backgroundTasks = [{ id: 'task-agent', kind: 'agent' }]
   mocks.threadGoal = { goal: goal(status), pending: false, hostChanges: true, change: vi.fn() }
 }
+
+describe('structured goal attachment consumer', () => {
+  const initial = useAppStore.getInitialState()
+  const root = '/owner/agent-session-attachments/12345678-1234-1234-1234-123456789abc'
+  const paths = [`${root}/a&copy;.txt`, `${root}/a©.txt`]
+  const objective = `**Keep this objective** \` @${paths[0]} \` and @${paths[1]}`
+
+  afterEach(() => {
+    cleanup()
+    useAppStore.setState(initial, true)
+    resetStructuredSessionMocks()
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+  })
+
+  it.each([true, false])(
+    'opens exact goal sources through the structured caller and owning host (capable=%s)',
+    async (capable) => {
+      useAppStore.setState({
+        worktreesByRepo: {
+          repo: [worktreeFixture('wt-1', '/owner/repo', { hostId: 'runtime:goal-owner' })]
+        },
+        unifiedTabsByWorktree: {
+          'wt-1': [agentSessionTabFixture('structured-tab-goal', 'wt-1')]
+        },
+        activeWorktreeId: 'wt-1',
+        activeWorkspaceExecutionHostId: 'runtime:goal-owner'
+      })
+      const change = vi.fn(async () => true)
+      mocks.threadGoal = {
+        goal: { ...goal('active'), objective },
+        pending: false,
+        hostChanges: true,
+        change
+      }
+      const contents = [
+        `\ufeffexact &copy; source\r\n${'🙂'.repeat(10_000)}`,
+        'opposite © sentinel'
+      ]
+      attachmentMocks.rpc.mockImplementation(async (target, method, request) => {
+        expect(target).toEqual({ kind: 'environment', environmentId: 'goal-owner' })
+        if (method === 'status.get') {
+          return { capabilities: capable ? ['native-chat.text-attachment-read.v1'] : [] }
+        }
+        expect(method).toBe('agentSessionAttachment.readTextChunk')
+        const index = paths.indexOf(request.path)
+        expect(index).toBeGreaterThanOrEqual(0)
+        const bytes = Buffer.from(contents[index]!)
+        const chunk = bytes.subarray(request.offset, request.offset + request.length)
+        return {
+          snapshot: 'a'.repeat(64),
+          size: bytes.length,
+          bytesRead: chunk.length,
+          contentBase64: chunk.toString('base64'),
+          eof: request.offset + chunk.length === bytes.length
+        }
+      })
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { ui: { writeClipboardText: attachmentMocks.write } }
+      })
+      const view = render(
+        <NativeChatMarkdownImageOwnerProvider
+          tabId="structured-tab-goal"
+          sessionId="session-goal"
+          isVisible
+        >
+          {sessionView('codex', { kind: 'environment', environmentId: 'goal-owner' })}
+        </NativeChatMarkdownImageOwnerProvider>
+      )
+      const body = screen.getByText(objective)
+      expect(body.firstChild?.textContent).toBe(objective)
+      expect(attachmentMocks.rpc).not.toHaveBeenCalled()
+      fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
+        target: { value: 'Unsent draft' }
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Show full goal' }))
+      for (const [index, path] of paths.entries()) {
+        fireEvent.click(screen.getByRole('button', { name: path.slice(root.length + 1) }))
+        if (capable) {
+          await waitFor(() =>
+            expect(screen.getByRole('button', { name: 'Copy contents' })).toHaveProperty(
+              'disabled',
+              false
+            )
+          )
+          fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
+          await waitFor(() =>
+            expect(attachmentMocks.write).toHaveBeenLastCalledWith(contents[index])
+          )
+        } else {
+          await screen.findByText(
+            'This host cannot open text attachments yet. Update Orca on that host, then retry.'
+          )
+          expect(
+            attachmentMocks.rpc.mock.calls.every(([, method]) => method === 'status.get')
+          ).toBe(true)
+          expect(attachmentMocks.write).not.toHaveBeenCalled()
+        }
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'Pause goal' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Clear goal' }))
+      expect(change.mock.calls).toEqual([
+        [{ kind: 'status', status: 'paused' }],
+        [{ kind: 'clear' }]
+      ])
+      expect(mocks.threadGoal.goal?.objective).toBe(objective)
+      expect(screen.getByRole('textbox', { name: 'Message' })).toHaveProperty(
+        'value',
+        'Unsent draft'
+      )
+      view.unmount()
+    }
+  )
+
+  it('keeps the default banner objective literal without recognition or source I/O', () => {
+    const scan = vi.spyOn(attachmentReferences, 'nativeChatTextAttachmentPaths')
+    render(
+      <TooltipProvider>
+        <NativeChatThreadGoalBanner
+          goal={{ ...goal('active'), objective }}
+          pending={false}
+          hostChanges={false}
+          sendUnavailable={false}
+          isVisible
+          runningTurn={null}
+          onChange={() => {}}
+        />
+      </TooltipProvider>
+    )
+    const body = screen.getByText(objective)
+    expect(body.textContent).toBe(objective)
+    fireEvent.click(screen.getByRole('button', { name: 'Show full goal' }))
+    expect(body.textContent).toBe(objective)
+    expect(scan).not.toHaveBeenCalled()
+    expect(attachmentMocks.rpc).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'a&copy;.txt' })).toBeNull()
+  })
+})
 
 describe('NativeChatStructuredSession task strip on the goal tab', () => {
   afterEach(() => {

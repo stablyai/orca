@@ -314,7 +314,7 @@ export function NativeChatStructuredSession(
                   awaitingInput={prompt === null ? null : 'shown'}
                   turnActivity={controller.turnActivity}
                   stopping={stopControls.stopping}
-                  {...fileLinkProps}
+                  {...{ ...fileLinkProps, structuredAttachments: true }}
                   runtimeContext={imageRuntimeContext}
                   deliveryNotices={deliveryNotices}
                 />
@@ -345,6 +345,7 @@ export function NativeChatStructuredSession(
           {prompt ? null : (
             <NativeChatStructuredComposerTabStrips
               tabId={props.tabId}
+              runtimeContext={imageRuntimeContext}
               threadGoal={controller.threadGoal}
               transport={transport}
               isWorking={controller.isWorking}

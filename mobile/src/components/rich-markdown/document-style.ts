@@ -1,5 +1,4 @@
-import { colors, getMobileColorScheme } from '../../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE, colors, getMobileColorScheme } from '../../theme/mobile-theme'
 
 // Read theme at build time; native embeds sheet, page scopes it to editor host.
 // #editor scrolls itself: iOS WebKit stops drawing selection ~2 screens into an editable scrolled by a separate box (#34472).

@@ -47,7 +47,7 @@ async function listenSilentUpgradeServer(): Promise<string> {
 }
 
 describe('remote runtime subscription connect bound', () => {
-  it('closes an unanswered real upgrade immediately when setup is cancelled', async () => {
+  it('closes an unanswered real attachment upgrade immediately when setup is cancelled', async () => {
     const endpoint = await listenSilentUpgradeServer()
     const keyPair = generateKeyPair()
     const controller = new AbortController()
@@ -58,7 +58,7 @@ describe('remote runtime subscription connect bound', () => {
         deviceToken: 'device-token',
         publicKeyB64: publicKeyToBase64(keyPair.publicKey)
       }),
-      'files.search',
+      'agentSessionAttachment.readTextChunk',
       { worktree: 'id:fixture', query: 'needle' },
       15_000,
       { onResponse: vi.fn(), onError: vi.fn(), onClose: vi.fn() },
@@ -74,7 +74,7 @@ describe('remote runtime subscription connect bound', () => {
     await vi.waitFor(() => expect(sockets.size).toBe(0))
   })
 
-  it('creates no socket for a pre-aborted request', async () => {
+  it('creates no socket for a pre-aborted attachment request', async () => {
     const endpoint = await listenSilentUpgradeServer()
     const keyPair = generateKeyPair()
     const controller = new AbortController()
@@ -87,7 +87,7 @@ describe('remote runtime subscription connect bound', () => {
           deviceToken: 'device-token',
           publicKeyB64: publicKeyToBase64(keyPair.publicKey)
         }),
-        'files.search',
+        'agentSessionAttachment.readTextChunk',
         {},
         15_000,
         { onResponse: vi.fn(), onError: vi.fn() },

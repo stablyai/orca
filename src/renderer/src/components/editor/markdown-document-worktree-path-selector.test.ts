@@ -87,7 +87,7 @@ describe('Markdown document worktree path selector', () => {
 
     expect(wholeMapInvalidations).toBe(40_000)
     expect(scopedInvalidations).toBe(0)
-    expect(wholeMapFixture.readCount()).toBe(4_000_000)
+    expect(wholeMapFixture.readCount()).toBe(UPDATE_COUNT * WORKTREE_COUNT)
     expect(scopedFixture.readCount()).toBe(20_000)
   })
 
