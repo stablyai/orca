@@ -626,7 +626,7 @@
         "optionClean": "精簡",
         "optionCleanTooltip": "移除 Orca 與 Electron 標記，以符合匯入的 Chrome 工作階段。",
         "optionNative": "原生",
-        "optionNativeTooltip": "針對拒絕精簡識別設定的網站，保留 Electron 內建的識別設定。原生模式無法使用 Google 登入。",
+        "optionNativeTooltip": "針對拒絕精簡識別設定的網站，保留 Electron 內建的識別設定。",
         "restartRequired": "需要重新啟動",
         "unavailable": "無法使用瀏覽器識別設定。"
       },

@@ -128,7 +128,7 @@ export function BrowserUserAgentSetting({
               label: translate('settings.browser.userAgent.optionNative', 'Native'),
               tooltip: translate(
                 'settings.browser.userAgent.optionNativeTooltip',
-                "Keeps Electron's built-in identity for sites that reject the cleaned identity. Google sign-in is unavailable in Native mode."
+                "Keeps Electron's built-in identity for sites that reject the cleaned identity."
               )
             }
           ]}

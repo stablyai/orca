@@ -230,7 +230,7 @@
         "optionClean": "Limpio",
         "optionCleanTooltip": "Elimina los tokens Orca y Electron para que coincidan con las sesiones de Chrome importadas.",
         "optionNative": "Nativo",
-        "optionNativeTooltip": "Mantiene la identidad incorporada de Electron para los sitios que rechazan la identidad limpiada. El inicio de sesión de Google no está disponible en modo nativo.",
+        "optionNativeTooltip": "Mantiene la identidad incorporada de Electron para los sitios que rechazan la identidad limpiada.",
         "restartRequired": "Se requiere un reinicio",
         "unavailable": "La identidad del navegador no está disponible."
       },

@@ -25,7 +25,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       request.webContentsId === undefined
         ? undefined
         : this.pendingNavigationByGuestId.get(request.webContentsId)
-    // Keep Firefox auth overrides in clean mode to avoid mixing them with native worker identity.
+    // Native mode already presents the Electron identity everywhere.
     const googleAuthEnabled = processIdentity.mode === 'clean'
     if (
       googleAuthEnabled &&

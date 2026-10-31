@@ -9,8 +9,7 @@ import {
   currentUserAgent,
   googleAuthUserAgent,
   setUserAgentHeader,
-  shouldUseGoogleAuthIdentity,
-  stripClientHints
+  shouldUseGoogleAuthIdentity
 } from './browser-google-auth-ua'
 
 export type BrowserSessionRequestUserAgentResolver = (args: {
@@ -66,7 +65,7 @@ export function installBrowserSessionUserAgentPolicy(
   sess: Session,
   resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
 ): () => void {
-  const firefoxUa = googleAuthUserAgent()
+  const googleAuthUa = googleAuthUserAgent()
   const applyUserAgentPolicy = (details: Electron.OnBeforeSendHeadersListenerDetails): void => {
     const headers = details.requestHeaders
     const requestUserAgent = currentUserAgent(headers)
@@ -81,8 +80,7 @@ export function installBrowserSessionUserAgentPolicy(
       getBrowserProcessUserAgentIdentity().mode === 'clean' &&
       shouldUseGoogleAuthIdentity(details.url, details.referrer ?? '', details.resourceType ?? '')
     ) {
-      setUserAgentHeader(headers, firefoxUa)
-      stripClientHints(headers)
+      setUserAgentHeader(headers, googleAuthUa)
       return
     }
     const identity = resolveRequestUserAgent?.({
@@ -98,9 +96,7 @@ export function installBrowserSessionUserAgentPolicy(
       return
     }
     setUserAgentHeader(headers, identity.userAgent)
-    if (identity.kind === 'google-auth') {
-      stripClientHints(headers)
-    } else if (identity.kind === 'mobile') {
+    if (identity.kind === 'mobile') {
       applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
     }
   }

@@ -230,7 +230,7 @@
         "optionClean": "已清理",
         "optionCleanTooltip": "删除 Orca 和 Electron 令牌以匹配导入的 Chrome 会话。",
         "optionNative": "原生",
-        "optionNativeTooltip": "对于拒绝清理身份的站点，保留 Electron 的内置身份。 Google 登录在本机模式下不可用。",
+        "optionNativeTooltip": "对于拒绝清理身份的站点，保留 Electron 的内置身份。",
         "restartRequired": "需要重新启动",
         "unavailable": "浏览器身份不可用。"
       },

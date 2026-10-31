@@ -230,7 +230,7 @@
         "optionClean": "クリーン",
         "optionCleanTooltip": "インポートされた Chrome セッションと一致するように Orca トークンと Electron トークンを削除します。",
         "optionNative": "ネイティブ",
-        "optionNativeTooltip": "クリーンアップされた ID を拒否するサイトのために Electron の組み込み ID を保持します。 Google サインインはネイティブモードでは利用できません。",
+        "optionNativeTooltip": "クリーンアップされた ID を拒否するサイトのために Electron の組み込み ID を保持します。",
         "restartRequired": "再起動が必要です",
         "unavailable": "ブラウザ ID が利用できません。"
       },

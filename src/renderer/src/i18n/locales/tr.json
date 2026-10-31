@@ -653,7 +653,7 @@
         "optionClean": "Temizlenmiş",
         "optionCleanTooltip": "İçe aktarılan Chrome oturumlarıyla eşleşmesi için Orca ve Electron token'larını kaldırır.",
         "optionNative": "Yerel",
-        "optionNativeTooltip": "Temizlenmiş kimliği reddeden siteler için Electron'un yerleşik kimliğini korur. Yerel modda Google ile oturum açma kullanılamaz.",
+        "optionNativeTooltip": "Temizlenmiş kimliği reddeden siteler için Electron'un yerleşik kimliğini korur.",
         "restartRequired": "Yeniden başlatma gerekli",
         "unavailable": "Tarayıcı kimliği kullanılamıyor."
       },

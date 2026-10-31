@@ -230,7 +230,7 @@
         "optionClean": "정리됨",
         "optionCleanTooltip": "가져온 Chrome 세션과 일치하도록 Orca 및 Electron 토큰을 제거합니다.",
         "optionNative": "네이티브",
-        "optionNativeTooltip": "정리된 ID를 거부하는 사이트에 대해 Electron의 내장 ID를 유지합니다. 기본 모드에서는 Google 로그인을 사용할 수 없습니다.",
+        "optionNativeTooltip": "정리된 ID를 거부하는 사이트에 대해 Electron의 내장 ID를 유지합니다.",
         "restartRequired": "다시 시작해야 함",
         "unavailable": "브라우저 ID를 사용할 수 없습니다."
       },

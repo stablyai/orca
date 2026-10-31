@@ -38,7 +38,8 @@ vi.mock('./extensions/browser-extension-session-loader', () => ({
 vi.mock('./browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({
     mode: processUserAgentMode.value,
-    userAgent: 'Mozilla/5.0 Chrome/150.0.0.0 Safari/537.36'
+    userAgent: 'Mozilla/5.0 Chrome/150.0.0.0 Safari/537.36',
+    electronUserAgent: 'Mozilla/5.0 Orca/1.0.0 Chrome/150.0.0.0 Electron/43.0.0 Safari/537.36'
   })
 }))
 
@@ -641,28 +642,24 @@ describe('BrowserSessionRegistry', () => {
       })
     })
 
-    it('presents a Firefox UA and strips client hints on Google auth hosts', () => {
+    it("presents Electron's own UA on Google auth hosts and keeps its client hints", () => {
       const callback = vi.fn()
       install()(
         {
           url: 'https://accounts.google.com/v3/signin/identifier',
           requestHeaders: {
-            'User-Agent': 'Chrome/147',
-            'sec-ch-ua': 'old',
-            'SEC-CH-UA-Full-Version-List': 'old',
-            'sec-ch-ua-platform': '"macOS"',
+            'User-Agent': 'Mozilla/5.0 Chrome/150.0.0.0 Safari/537.36',
+            'sec-ch-ua': 'browser-owned',
             Accept: 'text/html'
           }
         },
         callback
       )
-      const modified = callback.mock.calls[0][0].requestHeaders
-      expect(modified['User-Agent']).toMatch(/Firefox\/\d/)
-      expect(modified['User-Agent']).not.toContain('Chrome')
-      expect(Object.keys(modified).some((key) => key.toLowerCase().startsWith('sec-ch-ua'))).toBe(
-        false
-      )
-      expect(modified.Accept).toBe('text/html')
+      expect(callback.mock.calls[0][0].requestHeaders).toEqual({
+        'User-Agent': googleAuthUserAgent(),
+        'sec-ch-ua': 'browser-owned',
+        Accept: 'text/html'
+      })
     })
 
     it('keeps native requests untouched on Google auth hosts', () => {
@@ -682,29 +679,6 @@ describe('BrowserSessionRegistry', () => {
         'User-Agent': 'NativeElectron/43.0',
         'sec-ch-ua': 'browser-owned'
       })
-    })
-
-    it('strips client hints on a cross-host request that carries the Firefox auth UA', () => {
-      const callback = vi.fn()
-      install()(
-        {
-          url: 'https://play.google.com/log',
-          requestHeaders: {
-            'User-Agent': googleAuthUserAgent(),
-            'sec-ch-ua': 'old',
-            'sec-ch-ua-full-version-list': 'old',
-            'sec-ch-ua-platform': '"macOS"',
-            'sec-ch-ua-mobile': '?0'
-          }
-        },
-        callback
-      )
-      const modified = callback.mock.calls[0][0].requestHeaders
-      expect(modified['User-Agent']).toBe(googleAuthUserAgent())
-      expect(modified['sec-ch-ua']).toBeUndefined()
-      expect(modified['sec-ch-ua-full-version-list']).toBeUndefined()
-      expect(modified['sec-ch-ua-platform']).toBeUndefined()
-      expect(modified['sec-ch-ua-mobile']).toBeUndefined()
     })
 
     it('keeps the session identity on Google app subdomains', () => {

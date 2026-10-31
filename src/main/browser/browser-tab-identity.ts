@@ -19,7 +19,7 @@ export type UserAgentMetadata = {
 export type BrowserTabIdentity =
   /** Desktop client hints remain browser-owned. */
   | { kind: 'process'; userAgent: string }
-  /** Firefox auth identity omits client hints. */
+  /** Electron's own UA on Google sign-in hosts; client hints remain browser-owned. */
   | { kind: 'google-auth'; userAgent: string }
   | { kind: 'mobile'; userAgent: string; userAgentMetadata: UserAgentMetadata }
 

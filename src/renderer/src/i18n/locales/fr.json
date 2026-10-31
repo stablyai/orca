@@ -450,7 +450,7 @@
         "optionClean": "Nettoyé",
         "optionCleanTooltip": "Supprime les jetons Orca et Electron pour correspondre aux sessions Chrome importées.",
         "optionNative": "Indigène",
-        "optionNativeTooltip": "Conserve l'identité intégrée d'Electron pour les sites qui rejettent l'identité nettoyée. La connexion Google n'est pas disponible en mode natif.",
+        "optionNativeTooltip": "Conserve l'identité intégrée d'Electron pour les sites qui rejettent l'identité nettoyée.",
         "restartRequired": "Redémarrage requis",
         "unavailable": "L'identité du navigateur n'est pas disponible."
       },
