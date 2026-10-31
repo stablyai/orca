@@ -801,13 +801,26 @@ describe('orchestration worker-start CLI contract', () => {
 
   it.each([
     [
-      'receipt',
-      { result: { dispatchId: 'ctx_1', state: 'already_released', processAction: 'none' } }
+      'released',
+      { result: { dispatchId: 'ctx_1', state: 'already_released', processAction: 'none' } },
+      'worker-read'
     ],
-    ['error', new RuntimeClientError('runtime_unavailable', 'gone')]
+    [
+      'no owned terminal',
+      {
+        result: {
+          dispatchId: 'ctx_1',
+          state: 'retained',
+          reason: 'no_owned_resource',
+          processAction: 'none'
+        }
+      },
+      'worker-show'
+    ],
+    ['error', new RuntimeClientError('runtime_unavailable', 'gone'), 'worker-keep-open']
   ])(
     'prints the start receipt then fails a --keep-open that was not kept (%s)',
-    async (_, retain) => {
+    async (_, retain, verb) => {
       vi.spyOn(console, 'error').mockImplementation(() => {})
       callMock.mockImplementation(async (method: string) => {
         if (method === 'orchestration.workerStart') {
@@ -831,11 +844,7 @@ describe('orchestration worker-start CLI contract', () => {
       expect(text).not.toContain('keptOpen')
       const error = String(vi.mocked(console.error).mock.calls[0]?.[0])
       expect(error).toContain('not_kept_open')
-      expect(error).toContain(
-        retain instanceof Error
-          ? 'worker-keep-open --dispatch ctx_1'
-          : 'worker-read --dispatch ctx_1'
-      )
+      expect(error).toContain(`${verb} --dispatch ctx_1`)
       expect(process.exitCode).toBe(1)
     }
   )

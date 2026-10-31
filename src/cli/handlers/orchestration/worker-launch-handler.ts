@@ -105,7 +105,12 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       }
     }
     if (flags.has('full')) {
-      printResult(renderedResult, json, (value) => withReceiptNext(formatWorkerStart(value), value))
+      printResult(renderedResult, json, (value) =>
+        withReceiptNext(
+          `${formatWorkerStart(value)}${value.keptOpen ? '\nKept open after it finishes' : ''}`,
+          value
+        )
+      )
     } else {
       printOrchestrationResult(renderedResult, json, WORKER_START_VIEW)
     }
@@ -115,7 +120,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       const verb =
         keepOpenState === 'already_released'
           ? 'worker-read'
-          : keepOpenState.startsWith('release_')
+          : keepOpenState.startsWith('release_') || keepOpenState === 'no_owned_resource'
             ? 'worker-show'
             : 'worker-keep-open'
       reportOrchestrationFailure({
@@ -129,8 +134,11 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
 // Every host version serves workerRetain, so older servers keep the worker open too.
 async function keepWorkerOpen(client: RuntimeClient, dispatch: string): Promise<string> {
   try {
-    return (await client.call<WorkerReleaseReceipt>('orchestration.workerRetain', { dispatch }))
-      .result.state
+    const { result } = await client.call<WorkerReleaseReceipt>('orchestration.workerRetain', {
+      dispatch
+    })
+    // A retained receipt without an owned terminal kept nothing open.
+    return result.reason === 'no_owned_resource' ? result.reason : result.state
   } catch (error) {
     return error instanceof RuntimeClientError ? error.code : 'keep_open_failed'
   }

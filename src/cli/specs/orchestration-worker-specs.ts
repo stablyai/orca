@@ -53,7 +53,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       '--retry-of needs --task naming the failed Task (--spec creates a new one) and does not inherit placement; repeat the intended --on/worktree and --agent/terminal choices.',
       '--spec-file reads the spec from a file (relative to the current directory) or stdin (-) on this machine, so quotes and backticks need no shell escaping.',
       '--keep-open keeps the worker open after it finishes, as worker-keep-open does right after start.',
-      'The call exits 0 only for ready. Failed or outcome_unknown exits 1 and JSON includes stage/failedStage, setup, effects, residualResources, and recovery commands when needed.'
+      'The call exits 0 for ready, and in the concise view for a start whose turn was not yet observed (--full exits 1 for anything but ready). Failed or outcome_unknown exits 1 and JSON includes stage/failedStage, setup, effects, residualResources, and recovery commands when needed.'
     ]
   },
   {
