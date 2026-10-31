@@ -12,7 +12,10 @@ import {
   isTerminalPanePasteTargetCurrent
 } from './terminal-paste-target-state'
 import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
-import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import {
+  formatTerminalPasteExecutionError,
+  formatTerminalTextPasteError
+} from './terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
@@ -148,8 +151,7 @@ export function createTerminalPanePasteExecution(
       protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
         executePanePasteText(pane, source, activeElementAtDispatch, text, options),
-      onTextPasteError: () =>
-        setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
+      onTextPasteError: (error) => setTerminalError(formatTerminalTextPasteError(error)),
       onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
     }).catch(() => {
       setTerminalError('Paste failed.')
