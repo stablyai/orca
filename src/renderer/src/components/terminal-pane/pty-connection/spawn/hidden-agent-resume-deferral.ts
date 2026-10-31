@@ -1,4 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { useAppStore } from '@/store'
 import { takeSleepingAgentWakeRequest } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import {
   holdPaneResumeUntilShown,
@@ -8,6 +9,13 @@ import { startDeferredSessionReattach } from '../reattach/deferred-session-reatt
 import { pendingSpawnByPaneKey } from './pending-pane-spawn'
 import type { ColdRestoreAgentResumeStartup } from '../startup/fresh-spawn-types'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+
+// Mirrors waitsForMainPaneStart's gate: these statuses span main's start of the pane through its
+// asynchronous attach-back, a window with no renderer connect or spawn in flight.
+const mainPaneStartInFlight = (paneKey: string): boolean => {
+  const status = useAppStore.getState().terminalPaneStartsByPaneKey[paneKey]?.status
+  return status === 'starting' || status === 'resuming' || status === 'failed'
+}
 
 /** Defer hidden restores through the hibernation wake until reveal; visible panes and explicit background wakes run immediately (#7145). */
 export function deferHiddenAgentResume(
@@ -38,7 +46,8 @@ export function deferHiddenAgentResume(
             !session.disposed &&
             session.transport.getPtyId() === null &&
             (session.transportConnectInFlightSince !== null ||
-              pendingSpawnByPaneKey.has(session.pendingSpawnKey))
+              pendingSpawnByPaneKey.has(session.pendingSpawnKey) ||
+              mainPaneStartInFlight(paneKey))
           if (!inFlight) {
             releasePaneResumeHold(paneKey, visibleHold)
           }
