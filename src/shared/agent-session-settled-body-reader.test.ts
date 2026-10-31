@@ -2,7 +2,8 @@ import * as admission from './remote-runtime/requests/remote-runtime-prepared-re
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   createAgentSessionSettledBodyReader,
-  getAgentSessionSettledBodyDemandEvidence
+  getAgentSessionSettledBodyDemandEvidence,
+  getAgentSessionSettledBodySchedulingEvidence
 } from './agent-session-settled-body-reader'
 import { agentSessionJsonPiece } from './agent-session-json-pieces'
 import { agentJournalItemKey } from './agent-session-journal-item-key'
@@ -100,7 +101,8 @@ it('keeps changed-source semantic errors terminal until a new source is selected
   })
 })
 
-it('bounds production source work at N/10N across sessions while admission drains without rescanning retained leases', async () => {
+it('bounds real 20/200-owner settlement work while retaining every exact READY body', async () => {
+  vi.useFakeTimers()
   const iterate = Set.prototype[Symbol.iterator]
   let leaseVisits = 0,
     sourceVisits = 0
@@ -109,22 +111,13 @@ it('bounds production source work at N/10N across sessions while admission drain
     return {
       next() {
         const result = underlying.next()
-        if (
-          !result.done &&
-          typeof result.value === 'object' &&
-          result.value !== null &&
-          'retainedBytes' in result.value
-        ) {
-          leaseVisits++
-        }
-        if (
-          !result.done &&
-          typeof result.value === 'object' &&
-          result.value !== null &&
-          'source' in result.value &&
-          'running' in result.value
-        ) {
-          sourceVisits++
+        if (!result.done && typeof result.value === 'object' && result.value !== null) {
+          if ('retainedBytes' in result.value) {
+            leaseVisits++
+          }
+          if ('source' in result.value && 'running' in result.value) {
+            sourceVisits++
+          }
         }
         return result
       },
@@ -133,67 +126,125 @@ it('bounds production source work at N/10N across sessions while admission drain
       }
     }
   })
+  const exact = {
+    ...body,
+    title: 'Saved',
+    resolution: { ...body.resolution, formContent: { value: 'exact' } }
+  }
+  const single = JSON.stringify(exact)
+  expect(single.length).toBe(268)
   try {
-    for (const count of [2, 20]) {
+    for (const count of [20, 200]) {
       let calls = 0,
+        publications = 0,
         running = 0,
         peak = 0,
-        publications = 0
+        peakBytes = 0,
+        peakAdmissions = 0
       const visitsBefore = sourceVisits
+      const before = getAgentSessionSettledBodySchedulingEvidence()
       const reservations = vi.spyOn(admission, 'reserveRemoteRuntimeRetainedBytes')
       const releases = vi.fn()
       const stopRelease = admission.subscribeRemoteRuntimeAdmissionRelease(releases)
+      let complete!: () => void
+      const completion = new Promise<void>((resolve) => {
+        complete = resolve
+      })
       const owned = Array.from({ length: count }, (_, index) => {
-        const selected = { ...source, sessionId: `session-${index}` }
+        const selected = {
+          ...source,
+          sessionId: `session-${String(index).padStart(3, '0')}`,
+          itemId: agentJournalItemKey({
+            provider: 'orca',
+            clientMessageId: `codex-prompt:thread-a:mcp-elicitation:00000000-0000-4000-8000-000000000000:${String(index).padStart(3, '0')}`
+          })
+        }
         const reader = createAgentSessionSettledBodyReader(async (request) => {
           calls++
           running++
           peak = Math.max(peak, running)
+          const live = getRemoteRuntimeRequestAdmissionEvidence()
+          peakBytes = Math.max(peakBytes, live.retainedBytes)
+          peakAdmissions = Math.max(peakAdmissions, live.pendingRequestCount)
           await Promise.resolve()
           running--
-          return { source: selected, ...agentSessionJsonPiece(json, request.cursor) }
+          return { source: selected, ...agentSessionJsonPiece(single, request.cursor) }
         })
         readers.push(reader)
         const stop = reader.subscribe(selected, () => {
-          publications++
+          if (reader.getSnapshot(selected).status === 'ready' && ++publications === count) {
+            complete()
+          }
         })
         return { reader, selected, stop }
       })
-      await vi.waitFor(() =>
-        expect(
-          owned.every(({ reader, selected }) => reader.getSnapshot(selected).status === 'ready')
-        ).toBe(true)
-      )
-      const interest = getAgentSessionSettledBodyDemandEvidence()
-      expect(interest).toMatchObject({
-        selected: count,
-        listeners: count,
-        pending: 0,
-        queuedDescriptors: 0,
-        active: 0
-      })
-      expect(interest.metadataBytes).toBeLessThan(count * 2048)
-      const admissionCalls = reservations.mock.calls.length
-      const releaseSignals = releases.mock.calls.length
-      expect(admissionCalls).toBeGreaterThanOrEqual(count)
-      expect(admissionCalls).toBeLessThanOrEqual(count * 2)
-      expect(releaseSignals).toBeGreaterThan(0)
-      expect(releases.mock.calls.length).toBeLessThanOrEqual(count * 2)
-      stopRelease()
-      reservations.mockRestore()
-      expect(calls).toBe(count * Math.ceil(json.length / 24576))
-      expect(peak).toBeLessThanOrEqual(2)
-      expect(publications).toBe(count)
-      owned.forEach(({ stop }) => stop())
-      // Count actual scheduler scans separately from publications and physical piece calls.
-      expect(sourceVisits - visitsBefore).toBeLessThanOrEqual(count * 12 + calls)
-      process.stdout.write(
-        `${JSON.stringify({ ownerPerf: true, count, calls, admissionCalls, releaseSignals, publications, peak, metadataBytes: interest.metadataBytes, sourceVisits: sourceVisits - visitsBefore, leaseVisits })}\n`
-      )
+      const queued = getAgentSessionSettledBodySchedulingEvidence()
+      expect(queued).toMatchObject({ indexed: count, groups: count, pending: count })
+      try {
+        await vi.advanceTimersByTimeAsync(0)
+        await completion
+        const after = getAgentSessionSettledBodySchedulingEvidence()
+        const examinations =
+          sourceVisits - visitsBefore + after.candidateExaminations - before.candidateExaminations
+        const indexSteps = after.indexSteps - before.indexSteps
+        const ownerGroups = after.ownerGroups - before.ownerGroups
+        const headUpdates = after.headUpdates - before.headUpdates
+        const queueOperations = after.queueOperations - before.queueOperations
+        const drainRequests = after.drainRequests - before.drainRequests
+        const drainRuns = after.drainRuns - before.drainRuns
+        const releaseWakes = after.releaseWakes - before.releaseWakes
+        expect(drainRequests).toBeLessThanOrEqual(3 * count)
+        expect(drainRuns).toBeLessThanOrEqual(count)
+        expect(releaseWakes).toBe(releases.mock.calls.length)
+        expect(examinations).toBeLessThanOrEqual(count * 12 + calls)
+        expect(indexSteps + ownerGroups + headUpdates + queueOperations).toBeLessThanOrEqual(
+          32 * count * Math.ceil(Math.log2(count + 1))
+        )
+        expect(calls).toBe(count)
+        expect(publications).toBe(count)
+        expect(reservations.mock.calls.length).toBe(count)
+        expect(peak).toBeLessThanOrEqual(2)
+        expect(peakBytes).toBeLessThanOrEqual(64 * 1024 * 1024)
+        expect(peakAdmissions).toBeLessThanOrEqual(512)
+        expect(releases.mock.calls.length).toBeGreaterThan(0)
+        expect(releases.mock.calls.length).toBeLessThanOrEqual(count)
+        expect(after).toMatchObject({ indexed: 0, groups: 0, pending: 0, metadataBytes: 0 })
+        const interest = getAgentSessionSettledBodyDemandEvidence()
+        expect(interest).toMatchObject({ selected: count, listeners: count, pending: 0, active: 0 })
+        expect(interest.metadataBytes).toBeLessThan(count * 2048)
+        owned.forEach(({ reader, selected }) =>
+          expect(reader.getSnapshot(selected)).toEqual({ status: 'ready', body: exact })
+        )
+        process.stdout.write(
+          `${JSON.stringify({ ownerPerf: true, count, calls, admissionCalls: reservations.mock.calls.length, releases: releases.mock.calls.length, examinations, indexSteps, ownerGroups, headUpdates, queueOperations, drainRequests, drainRuns, releaseWakes, peakIndexMetadataBytes: queued.metadataBytes, peak, peakBytes, peakAdmissions, metadataBytes: interest.metadataBytes })}\n`
+        )
+      } finally {
+        stopRelease()
+        reservations.mockRestore()
+        owned.forEach(({ stop, reader }) => {
+          stop()
+          reader.dispose()
+        })
+        await vi.advanceTimersByTimeAsync(0)
+      }
       expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
         pendingRequestCount: 0,
         retainedBytes: 0
       })
+      expect(getAgentSessionSettledBodyDemandEvidence()).toMatchObject({
+        selected: 0,
+        listeners: 0,
+        metadataBytes: 0,
+        pending: 0,
+        active: 0
+      })
+      expect(getAgentSessionSettledBodySchedulingEvidence()).toMatchObject({
+        indexed: 0,
+        groups: 0,
+        pending: 0,
+        metadataBytes: 0
+      })
+      expect(vi.getTimerCount()).toBe(0)
     }
     expect(leaseVisits).toBe(0)
   } finally {
@@ -344,12 +395,22 @@ it('progresses the oldest eligible owner past a larger refused source, then wake
   const calls: string[] = []
   const owned = selections.map((selected) => {
     const reader = createAgentSessionSettledBodyReader(async (request) => {
-      calls.push(selected.itemId)
-      return { source: selected, ...agentSessionJsonPiece(json, request.cursor) }
+      const { cursor, ...actual } = request
+      calls.push(actual.itemId)
+      return { source: actual, ...agentSessionJsonPiece(json, cursor) }
     })
     readers.push(reader)
     return { reader, stop: reader.subscribe(selected, () => {}) }
   })
+  const sameOwner = {
+    ...source,
+    itemId: agentJournalItemKey({
+      provider: 'orca',
+      clientMessageId:
+        'codex-prompt:thread-extra:mcp-elicitation:00000000-0000-4000-8000-000000000000:1'
+    })
+  }
+  const stopSameOwner = owned[0].reader.subscribe(sameOwner, () => {})
   try {
     await vi.advanceTimersByTimeAsync(30000)
     owned.forEach(({ reader }) => reader.retry())
@@ -373,10 +434,13 @@ it('progresses the oldest eligible owner past a larger refused source, then wake
     expect(pressure.resize(pool - charge(selections[0]) - 1024 * 1024)).toBe(true)
     await vi.advanceTimersByTimeAsync(0)
     expect(owned[0].reader.getSnapshot(selections[0])).toEqual({ status: 'ready', body })
-    expect(calls.slice(Math.ceil(json.length / 24576))).toEqual(
-      Array(Math.ceil(json.length / 24576)).fill(selections[0].itemId)
-    )
+    expect(owned[0].reader.getSnapshot(sameOwner)).toEqual({ status: 'ready', body })
+    expect(calls.slice(Math.ceil(json.length / 24576))).toEqual([
+      ...Array(Math.ceil(json.length / 24576)).fill(selections[0].itemId),
+      ...Array(Math.ceil(json.length / 24576)).fill(sameOwner.itemId)
+    ])
   } finally {
+    stopSameOwner()
     owned.forEach(({ stop }) => stop())
     pressure.release()
   }

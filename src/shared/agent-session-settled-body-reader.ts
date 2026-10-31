@@ -1,3 +1,5 @@
+import { SettledBodyDemand } from './agent-session-settled-body-demand'
+import { REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES } from './remote-runtime/remote-runtime-memory-limits'
 import { createAgentSessionJsonAssembly } from './agent-session-json-pieces'
 import {
   AgentSessionSettledBodyPieceSchema,
@@ -9,6 +11,7 @@ import {
 } from './agent-session-settled-body'
 import type { AgentJournalApprovalItem } from './agent-session-journal-types'
 import {
+  getRemoteRuntimeRequestAdmissionEvidence,
   reserveRemoteRuntimeRetainedBytes,
   subscribeRemoteRuntimeAdmissionRelease
 } from './remote-runtime/requests/remote-runtime-prepared-request-admission'
@@ -36,38 +39,32 @@ type Entry = {
   retry: () => void
 }
 const entries = new Set<Entry>()
-// Eligibility derives from live selection; no serialized queue/overflow descriptor is retained.
-const pending = new Set<Entry>()
+const pending = new SettledBodyDemand<Entry>()
 let active = 0
-let draining = false
+const scheduling = { releaseWakes: 0 }
 const WORKING_BYTES = 6 * AGENT_SESSION_SETTLED_BODY_MAX_UNITS + 256 * 1024
 function drain(): void {
-  if (draining) {
-    return
-  }
-  draining = true
-  queueMicrotask(() => {
-    draining = false
-    let refusedBytes = Infinity
-    for (const entry of pending) {
-      if (active >= 8) {
+  pending.schedule(() => {
+    while (active < 8) {
+      const bytes =
+        REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES -
+        getRemoteRuntimeRequestAdmissionEvidence().retainedBytes
+      const entry = pending.firstFitting(bytes)
+      if (!entry || entry.start() !== 'started') {
         break
       }
-      const bytes = entry.metadataBytes + WORKING_BYTES
-      if (bytes >= refusedBytes) {
-        continue
-      }
-      const result = entry.start()
-      if (result === 'pressure') {
-        refusedBytes = bytes
-      }
-      if (result === 'started') {
-        pending.delete(entry)
-      }
+      pending.delete(entry)
     }
   })
 }
-subscribeRemoteRuntimeAdmissionRelease(drain)
+subscribeRemoteRuntimeAdmissionRelease(() => {
+  scheduling.releaseWakes++
+  drain()
+})
+export const getAgentSessionSettledBodySchedulingEvidence = () => ({
+  ...pending.evidence(),
+  ...scheduling
+})
 
 export function getAgentSessionSettledBodyDemandEvidence() {
   let selected = 0,
@@ -80,6 +77,7 @@ export function getAgentSessionSettledBodyDemandEvidence() {
       metadataBytes += entry.metadataBytes + entry.listeners.size * 64
     }
   }
+  metadataBytes += selected * 128 + pending.evidence().metadataBytes
   return { selected, listeners, metadataBytes, queuedDescriptors: 0, pending: pending.size, active }
 }
 
@@ -89,7 +87,7 @@ export function createAgentSessionSettledBodyReader(
 ) {
   const owned = new Map<string, Set<Entry>>()
   let disposed = false
-  let ownerRunning = false
+  const lane = pending.createLane()
   function find(source: AgentSessionSettledBodySource): Entry | undefined {
     for (const entry of owned.get(source.itemId) ?? []) {
       if (sameAgentSessionSettledSource(entry.source, source)) {
@@ -166,11 +164,11 @@ export function createAgentSessionSettledBodyReader(
       if (entry.running || entry.retired || !entry.transient) {
         return
       }
-      pending.add(entry)
+      pending.add(entry, lane, metadataBytes + WORKING_BYTES)
       drain()
     }
     entry.start = () => {
-      if (entry.running || entry.retired || ownerRunning) {
+      if (entry.running || entry.retired || lane.running) {
         return 'occupied'
       }
       const lease = reserveRemoteRuntimeRetainedBytes(metadataBytes + WORKING_BYTES)
@@ -179,7 +177,7 @@ export function createAgentSessionSettledBodyReader(
       }
       entry.lease = lease
       entry.running = true
-      ownerRunning = true
+      pending.setRunning(lane, true)
       active++
       void (async () => {
         const assembly = createAgentSessionJsonAssembly(AGENT_SESSION_SETTLED_BODY_MAX_UNITS, true)
@@ -226,7 +224,7 @@ export function createAgentSessionSettledBodyReader(
           endDeadline()
           active--
           entry.running = false
-          ownerRunning = false
+          pending.setRunning(lane, false)
           if (entry.retired || disposed) {
             remove(entry)
           } else if (entry.state.status !== 'ready') {
@@ -242,7 +240,7 @@ export function createAgentSessionSettledBodyReader(
     const selected = owned.get(source.itemId) ?? new Set<Entry>()
     selected.add(entry)
     owned.set(source.itemId, selected)
-    pending.add(entry)
+    pending.add(entry, lane, metadataBytes + WORKING_BYTES)
     beginDeadline()
     return entry
   }
