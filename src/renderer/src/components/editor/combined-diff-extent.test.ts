@@ -193,6 +193,28 @@ it('uses real virtualizer staged measurements with a lagging DOM range and no in
   }
   virtualizer.resizeItem(0, 60200)
   expect(top).toBe(60200)
+  const prefix = document.createElement('div')
+  prefix.dataset.combinedDiffPrefix = ''
+  prefix.getBoundingClientRect = () => new DOMRect(0, 0, 800, 20)
+  viewport.prepend(prefix)
+  publishCombinedDiffMeasurements(virtualizer)
+  expect(top).toBe(60220)
+  let reads = 0
+  const first = virtualizer.measurementsCache[0]
+  if (!first) {
+    throw new Error('Expected the retained first measurement')
+  }
+  const firstKey = first.key
+  Object.defineProperty(first, 'key', {
+    get: () => {
+      reads += 1
+      return firstKey
+    }
+  })
+  for (let index = 0; index < 10; index += 1) {
+    publishCombinedDiffMeasurements(virtualizer)
+  }
+  expect(reads).toBe(0)
   unmount()
   disconnect()
 })
@@ -219,13 +241,18 @@ it('does not rescan retained file extents on ordinary scroll at N and 10N files'
         return item.key
       }
     }))
-    const f = fixture([])
-    f.owner.publish(layout)
-    reads = 0
-    for (let index = 0; index < 10; index += 1) {
-      f.input(index * 100)
-      f.owner.publish(layout)
+    for (const prefix of [0, 20]) {
+      const f = fixture([])
+      f.owner.publish(layout, undefined, prefix)
+      expect(f.owner.item(0)?.start).toBe(prefix)
+      reads = 0
+      for (let index = 0; index < 10; index += 1) {
+        f.input(index * 100 + prefix)
+        f.owner.publish(layout, undefined, prefix)
+      }
+      expect(reads).toBe(0)
+      f.owner.publish(layout, undefined, prefix + 20)
+      expect(f.position()).toBe(920 + prefix)
     }
-    expect(reads).toBe(0)
   }
 })

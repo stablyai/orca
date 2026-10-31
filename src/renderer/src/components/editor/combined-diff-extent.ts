@@ -9,6 +9,7 @@ export type CombinedDiffItemAnchor = {
 export class CombinedDiffExtent {
   private items: readonly VirtualItem[] = []
   private source: readonly VirtualItem[] | null = null
+  private sourcePrefix = 0
   private anchor: CombinedDiffItemAnchor | null = null
   private depth = 0
   private target = 0
@@ -51,12 +52,13 @@ export class CombinedDiffExtent {
       : null
   }
 
-  publish(items: readonly VirtualItem[], priority?: VirtualItem['key']): void {
-    if (items === this.source) {
+  publish(items: readonly VirtualItem[], priority?: VirtualItem['key'], prefix = 0): void {
+    if (items === this.source && prefix === this.sourcePrefix) {
       this.project(this.view.position())
       return
     }
     this.source = items
+    this.sourcePrefix = prefix
     const changed =
       items.length !== this.items.length ||
       items.some((item, index) => {
@@ -65,7 +67,7 @@ export class CombinedDiffExtent {
           !previous ||
           item.key !== previous.key ||
           item.size !== previous.size ||
-          item.start !== previous.start
+          item.start + prefix !== previous.start
         )
       })
     if (!changed) {
@@ -73,7 +75,11 @@ export class CombinedDiffExtent {
       return
     }
     const anchor = this.anchor ?? this.topAnchor(priority)
-    this.items = items.map((item) => ({ ...item }))
+    this.items = items.map((item) => ({
+      ...item,
+      start: item.start + prefix,
+      end: item.end + prefix
+    }))
     this.revision += 1
     this.anchor = anchor && items.some((item) => item.key === anchor.key) ? anchor : null
     if (!this.depth) {

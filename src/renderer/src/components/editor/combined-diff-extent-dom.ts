@@ -61,11 +61,8 @@ export function publishCombinedDiffMeasurements(
   const prefix = prefixHeight(viewport)
   instance.getTotalSize()
   const measured = instance.measurementsCache
-  const items = prefix
-    ? measured.map((item) => ({ ...item, start: item.start + prefix, end: item.end + prefix }))
-    : measured
-  const focused = row && viewport.contains(row) ? items[Number(row.dataset.index)] : undefined
-  getCombinedDiffExtent(viewport).publish(items, focused?.key)
+  const focused = row && viewport.contains(row) ? measured[Number(row.dataset.index)] : undefined
+  getCombinedDiffExtent(viewport).publish(measured, focused?.key, prefix)
 }
 
 export function scrollCombinedDiffTo(viewport: HTMLElement, target: number): boolean {
