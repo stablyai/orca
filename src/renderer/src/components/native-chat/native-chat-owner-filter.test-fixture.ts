@@ -9,7 +9,6 @@ import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selector
 
 export const incomingFilterWork = { repoVisits: 0, nestedVisits: 0, nestedFilters: 0 }
 export const isIncomingRepoFilterRead = () => incomingSelectorDepth > 0 && repoFilterDepth > 0
-export const isIncomingNestedFilterRead = (row: object) => nestedCandidate === row
 
 // STA-12852/STA-13152 own only incoming filter callbacks; preceding owner/directory/index work counts.
 let incomingHookDepth = 0,
@@ -184,7 +183,7 @@ export class IncomingOwnerReadMeter {
         } else if (
           category === 'nested' &&
           key === 'runtimeOwnerEnvironmentId' &&
-          isIncomingNestedFilterRead(row)
+          nestedCandidate === row
         ) {
           this.nestedFilterExcluded++
         } else {
@@ -277,7 +276,7 @@ export function assertIncomingOwnerFilterBoundaries(
   const receiver = {}
   reads.reset()
   expect(
-    actual.filter(function (this: object, row, index, array) {
+    actual.filter(function (this: typeof receiver, row, index, array) {
       expect(this).toBe(receiver)
       expect(array).toBe(actual)
       expect(row).toBe(rivals[index])
