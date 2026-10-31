@@ -1,4 +1,5 @@
 import { SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS } from '../ipc/pty/delivery/visibility-state'
+import { publishPtyPresentationRelease } from './terminal/pty-presentation-release-signal'
 
 /**
  * Why main stopped a PTY on purpose. These kinds keep the pane's binding through the exit:
@@ -57,10 +58,14 @@ export class TerminalIntentionalStops {
       settled = true
       owners.stopped ||= stopped
       owners.inFlight -= 1
-      if (owners.inFlight === 0 && !owners.stopped) {
+      const released = owners.inFlight === 0 && !owners.stopped
+      if (released) {
         owned.ownersByKind.delete(kind)
       }
       this.settleIfIdle(ptyId, owned)
+      if (released && kind === 'closing') {
+        publishPtyPresentationRelease(ptyId)
+      }
     }
   }
 

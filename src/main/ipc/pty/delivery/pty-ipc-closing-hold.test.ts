@@ -47,6 +47,7 @@ vi.mock('../../../codex/codex-state-db-backfill-recovery', () =>
 )
 import { TerminalIntentionalStops } from '../../../runtime/terminal-intentional-stops'
 import { restorePtyIncarnation } from '../provider/ownership-state'
+import { clearProviderPtyState } from '../provider/state-cleanup'
 
 // A whole-tab close (a terminal→chat switch) holds its process's teardown output from the pane it
 // removes: never queued or charged, the stream's sequence kept, and restored if the stop isn't proven.
@@ -91,6 +92,8 @@ describe('output of a process a whole-tab close is stopping', () => {
   }
 
   afterEach(() => {
+    // The process's exit clears its held output; these fakes never exit.
+    clearProviderPtyState(PTY_ID)
     vi.useRealTimers()
   })
 
@@ -119,6 +122,18 @@ describe('output of a process a whole-tab close is stopping', () => {
     ])
     const order = mainWindow.webContents.send.mock.calls.map(([name]) => name)
     expect(order.indexOf('pty:modelRestoreNeeded')).toBeLessThan(order.indexOf('pty:data'))
+  })
+
+  it('restores the pane when the unproven stop settles, though the process stays quiet', async () => {
+    const pane = await closing()
+    pane.emit('held while stopping')
+    const heldThrough = pane.seq()
+    pane.settle(false)
+    expect(pane.sent('pty:modelRestoreNeeded')).toEqual([
+      { id: PTY_ID, reason: 'pending-cap', markerSeq: heldThrough }
+    ])
+    pane.emit('still running')
+    expect(pane.sent('pty:modelRestoreNeeded')).toHaveLength(1)
   })
 
   it('never holds a later process that reuses the id', async () => {

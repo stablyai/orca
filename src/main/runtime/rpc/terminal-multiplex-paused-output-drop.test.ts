@@ -14,6 +14,7 @@ import {
 } from '../../../shared/terminal-multiplex-flow-control'
 import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harness'
 import { RuntimeTerminalViewSubscribers } from '../runtime-terminal-view-subscribers'
+import { publishPtyPresentationRelease } from '../terminal/pty-presentation-release-signal'
 
 async function subscribePausable(
   capabilities: Record<string, 1>,
@@ -219,6 +220,18 @@ describe('terminal multiplex paused-output drop notice', () => {
     expect(host.dropNotices()).toBe(1)
     await vi.waitFor(() => expect(host.outputText()).toBe('before the stop still running and more'))
     await host.close()
+  })
+
+  it('has the client restore when an unproven stop settles, though the process stays quiet', async () => {
+    const host = await subscribePausable({ ackOutput: 1, outputPause: 1, outputPauseDropNotice: 1 })
+    host.emitOutput('zsh: terminated  codex resume', true)
+    publishPtyPresentationRelease('pty-1')
+    expect(host.dropNotices()).toBe(1)
+    host.emitOutput('still running')
+    expect(host.dropNotices()).toBe(1)
+    await host.close()
+    publishPtyPresentationRelease('pty-1')
+    expect(host.dropNotices()).toBe(1)
   })
 
   it('keeps showing teardown output to a client that could not restore after a gap', async () => {

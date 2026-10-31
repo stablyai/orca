@@ -17,6 +17,7 @@ import {
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import { subscribeToPtyEndpointLoss } from '../../../terminal/pty-endpoint-loss-signal'
+import { subscribeToPtyPresentationRelease } from '../../../terminal/pty-presentation-release-signal'
 
 export async function initializeMultiplexStream(
   state: TerminalMultiplexConnection,
@@ -90,6 +91,14 @@ export async function initializeMultiplexStream(
   )
   onInstalled(stream)
 
+  const releasePresentation = (): void => {
+    if (!stream.presentationHeld) {
+      return
+    }
+    stream.presentationHeld = false
+    stream.outputBatcher.flush()
+    state.sendFrame(stream.streamId, TerminalStreamOpcode.PausedOutputDropped)
+  }
   const unsubscribeStreamData = runtime.subscribeToTerminalData(ptyId, (data, meta) => {
     if (!isMultiplexStreamAttached(state, stream)) {
       return
@@ -100,11 +109,7 @@ export async function initializeMultiplexStream(
       stream.presentationHeld = true
       return
     }
-    if (stream.presentationHeld) {
-      stream.presentationHeld = false
-      stream.outputBatcher.flush()
-      state.sendFrame(stream.streamId, TerminalStreamOpcode.PausedOutputDropped)
-    }
+    releasePresentation()
     if (stream.outputPaused) {
       notePausedOutputDropped(state, stream)
       return
@@ -130,10 +135,19 @@ export async function initializeMultiplexStream(
         }
       })
     : () => {}
+  // An unproven stop releases the hold when it settles; a quiet process would otherwise keep the old screen.
+  const unsubscribePresentationRelease = stream.supportsOutputPauseDropNotice
+    ? subscribeToPtyPresentationRelease(ptyId, () => {
+        if (isMultiplexStreamAttached(state, stream)) {
+          releasePresentation()
+        }
+      })
+    : () => {}
   stream.unsubscribeData = () => {
     releaseViewSubscriber()
     unsubscribeStreamData()
     unsubscribeEndpointLoss()
+    unsubscribePresentationRelease()
   }
 
   if (isMobile && request.client?.id) {

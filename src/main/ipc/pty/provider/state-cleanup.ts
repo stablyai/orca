@@ -58,6 +58,7 @@ export function clearProviderPtyState(
   }
   clearBackgroundedDeliverySyncForPty(id)
   providerSnapshotRequiredPtys.delete(id)
+  presentationHeldPtys.get(id)?.()
   presentationHeldPtys.delete(id)
   // Reused IDs must not inherit ConPTY startup-query state.
   clearNativeWindowsConptyPty(id)
