@@ -476,4 +476,50 @@ describe('orchestration agent views', () => {
     expect(stdout).not.toContain('read-only')
     expect(stdout).not.toContain('Next:')
   })
+
+  it('previews inbox bodies and keeps request-show to the recovery ids', async () => {
+    const huge = 'x'.repeat(10_000)
+    const inbox = await run(
+      'inbox',
+      [],
+      {
+        messages: [
+          {
+            id: 'msg_1',
+            from_handle: 'dispatch:ctx_1',
+            to_handle: 'run:run_1',
+            subject: 'Done',
+            body: huge,
+            type: 'worker_done',
+            payload: JSON.stringify({ taskId: 'task_1', notes: huge })
+          }
+        ],
+        count: 1
+      },
+      true
+    )
+    const [row] = JSON.parse(inbox.stdout).result.messages
+    expect(row.body).toBe(`${'x'.repeat(200)}… (truncated; --full)`)
+    expect(row.payload).toEqual({ taskId: 'task_1' })
+
+    const request = await run(
+      'request-show',
+      [['request', 'req_1']],
+      {
+        requestId: 'req_1',
+        state: 'completed',
+        method: 'orchestration.taskCreate',
+        receipt: { task: { id: 'task_1', status: 'ready', spec: huge } },
+        interpretation: 'Request req_1 already took effect.'
+      },
+      true
+    )
+    expect(JSON.parse(request.stdout).result).toEqual({
+      requestId: 'req_1',
+      state: 'completed',
+      method: 'orchestration.taskCreate',
+      taskId: 'task_1',
+      interpretation: 'Request req_1 already took effect.'
+    })
+  })
 })

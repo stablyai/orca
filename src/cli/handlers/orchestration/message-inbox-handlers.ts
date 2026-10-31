@@ -54,7 +54,9 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
     if (!full) {
       printOrchestrationResult(result, json, {
         fields: (value): { messages: MessageView[] } => ({
-          messages: value.messages.map((message) => toMessageView(message, { recipient: true }))
+          messages: value.messages.map((message) =>
+            inboxRowView(toMessageView(message, { recipient: true }))
+          )
         }),
         text: (fields) =>
           fields.messages.length === 0
@@ -84,5 +86,28 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
         })
         .join(full ? '\n\n' : '\n')
     })
+  }
+}
+
+const INBOX_BODY_PREVIEW_CHARS = 200
+
+// inbox is history, not delivery: rows preview the body and keep only payload ids; check and --full print it whole.
+function inboxRowView(view: MessageView): MessageView {
+  const { body, payload, ...rest } = view
+  const ids =
+    payload && typeof payload === 'object'
+      ? Object.entries(payload).filter(([key, value]) => /Ids?$/.test(key) && value !== undefined)
+      : []
+  return {
+    ...rest,
+    ...(body
+      ? {
+          body:
+            body.length > INBOX_BODY_PREVIEW_CHARS
+              ? `${body.slice(0, INBOX_BODY_PREVIEW_CHARS)}… (truncated; --full)`
+              : body
+        }
+      : {}),
+    ...(ids.length ? { payload: Object.fromEntries(ids) } : {})
   }
 }

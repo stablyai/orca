@@ -134,7 +134,10 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Show messages across (or for) recipients',
     usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full'],
-    identityFlagRoles: { terminal: 'target' }
+    identityFlagRoles: { terminal: 'target' },
+    notes: [
+      'Rows preview each body in 200 characters and keep only payload ids; --full prints them whole.'
+    ]
   },
   {
     path: ['orchestration', 'task-create'],
@@ -205,7 +208,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Read-only: it never starts, retries, or settles anything, so it is safe to run after any lost response.',
       'completed means the mutation landed and --retry-request replays the recorded outcome instead of starting a second one. pending means the original mutation is still running or Orca restarted before recording its outcome; wait for a live original command, otherwise replay with --retry-request.',
-      'absent means this runtime holds no receipt for that request under your caller identity: it never arrived, it failed before recording anything, or the receipt was pruned. Absent is not proof that nothing happened.'
+      'absent means this runtime holds no receipt for that request under your caller identity: it never arrived, it failed before recording anything, or the receipt was pruned. Absent is not proof that nothing happened.',
+      'Prints the request state and the ids it produced; --full adds the whole recorded receipt.'
     ]
   },
   {
