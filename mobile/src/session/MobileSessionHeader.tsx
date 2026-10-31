@@ -76,6 +76,7 @@ export function MobileSessionHeader({
     <MobileSessionTabStrip
       controller={controller}
       inTopBar={tabsInTopBar}
+      details={details.tabDetails}
       actionsCollapsed={actionsCollapsed}
     />
   ) : null

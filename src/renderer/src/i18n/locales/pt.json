@@ -629,18 +629,6 @@
       "description": "Inicie o ditado por voz em qualquer painel em foco e use o atalho novamente para parar.",
       "cta": "Configurar ditado por voz"
     },
-    "nativeChatUpgrade": {
-      "eyebrow": "Novo",
-      "title": "O chat nativo foi aprimorado",
-      "leaveOff": "Manter desativado",
-      "enableNow": "Ativar agora",
-      "enableError": "Não foi possível ativar o modo de chat.",
-      "intro": "Novos chats com agentes compatíveis agora abrem na visualização de chat aprimorada. Para alternar entre chat e CLI, abra {{panel}} na barra lateral direita:",
-      "resumeInNativeChat": "{{action}} abre uma conversa de CLI compatível no chat nativo.",
-      "resumeInCli": "{{action}} copia um chat do Claude ou Codex para uma nova sessão de CLI. O chat original permanece como está.",
-      "gotIt": "Entendi",
-      "manageInSettings": "Gerencie a Interface de Chat em <link>Configurações → Experimental</link>."
-    },
     "sessionSearch": {
       "enableFailed": "Não foi possível ativar a busca de sessões. Tente novamente.",
       "progressStarting": "Localizando suas sessões…",
@@ -700,7 +688,26 @@
       "title": "Vá para um worktree com <shortcut>",
       "description": "Busque worktrees, troque de aba, ajuste configurações ou crie um worktree, tudo sem sair do teclado."
     },
-    "gotIt": "Entendi"
+    "gotIt": "Entendi",
+    "chatUiHere": {
+      "title": "Chegou a interface de chat",
+      "offIntro": "Os agentes agora podem abrir como um chat, com mensagens formatadas, recursos visuais e imagens.",
+      "offTerminal": "Prefere o terminal? Ele continua com suporte completo. Seus agentes continuam abrindo nele até você escolher Chat.",
+      "onIntro": "A interface de chat deixou de ser experimental e agora faz parte do Orca. Seus agentes continuam abrindo como chats, com mensagens formatadas, recursos visuais e imagens.",
+      "onTerminal": "O terminal também continua com suporte completo. Volte qualquer agente para ele quando quiser.",
+      "changeInSettings": "Altere quando quiser em <link>Configurações → Agentes</link>.",
+      "stayInTerminal": "Continuar no terminal",
+      "cta": "Usar a interface de chat",
+      "saveFailed": "Não foi possível ativar a interface de chat. Escolha Chat em Configurações → Agentes.",
+      "demoTabTitle": "Explicar o login",
+      "demoPrompt": "Mostre como o login funciona",
+      "demoReply": "O login começa em {{file}}: o navegador envia para /login, o servidor verifica a senha e cria uma sessão, depois redireciona você para o app. Este é o fluxo:",
+      "demoBrowser": "Navegador",
+      "demoSession": "Sessão",
+      "demoApp": "App",
+      "demoPassword": "senha",
+      "demoCookie": "cookie"
+    }
   },
   "rendererRecovery": {
     "reload": "Recarregar",
@@ -1317,7 +1324,7 @@
       },
       "userAgent": {
         "title": "Identidade do navegador",
-        "description": "Escolha o user agent para cada perfil e página do navegador. O modo nativo desativa o login do Google. As alterações têm efeito após reiniciar.",
+        "description": "Escolha o user agent para cada perfil e página do navegador. As alterações têm efeito após reiniciar.",
         "remoteUnsupported": "Gerencie a identidade do navegador no host remoto com a CLI do Orca.",
         "loading": "Carregando…",
         "resetRequired": "Os dados de identidade precisam ser redefinidos explicitamente antes de poderem ser alterados.",
@@ -1325,7 +1332,7 @@
         "optionClean": "Limpo",
         "optionCleanTooltip": "Remove os tokens do Orca e do Electron para corresponder às sessões importadas do Chrome.",
         "optionNative": "Nativo",
-        "optionNativeTooltip": "Mantém a identidade nativa do Electron para sites que rejeitam a identidade limpa. O login do Google não está disponível no modo Nativo.",
+        "optionNativeTooltip": "Mantém a identidade nativa do Electron para sites que rejeitam a identidade limpa.",
         "restartRequired": "Reinicialização necessária",
         "unavailable": "A identidade do navegador não está disponível."
       },
@@ -1553,6 +1560,22 @@
       "chatRuntime": "Runtime de chat",
       "chatChoiceTitle": "Abrir como chat ou CLI",
       "chatChoiceDescription": "Escolha se cada agente abre como chat ou na sua CLI.",
+      "defaultSurfaceTitle": "Abrir agentes como",
+      "defaultSurfaceDescription": "O padrão para os agentes neste computador.",
+      "defaultSurfaceChatDescription": "Mensagens formatadas, recursos visuais e imagens.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "A CLI própria de cada agente.",
+      "defaultSurfacePerAgent": "Escolher por agente",
+      "defaultSurfaceNowChat": "Os agentes agora abrem como chats",
+      "defaultSurfaceNowTerminal": "Os agentes agora abrem no terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} continua no terminal, como você definiu.",
+      "defaultSurfaceKeptTerminal_many": "{{agents}} continuam no terminal, como você definiu.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} continuam no terminal, como você definiu.",
+      "defaultSurfaceKeptChat_one": "{{agents}} continua como chat, como você definiu.",
+      "defaultSurfaceKeptChat_many": "{{agents}} continuam como chats, como você definiu.",
+      "defaultSurfaceKeptChat_other": "{{agents}} continuam como chats, como você definiu.",
+      "defaultSurfaceSetAllChat": "Definir todos como Chat",
+      "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
       "sameAsChoice": "Igual a {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -5114,19 +5137,6 @@
             "051203d37c": "bichinho",
             "6b5a56ac35": "Bichinho animado flutuante no canto inferior direito.",
             "87d99e634b": "Bichinho",
-            "nativeChat": {
-              "title": "Interface de Chat",
-              "description": "Abra os novos agentes compatíveis na interface de Chat.",
-              "grok": "grok",
-              "native": "nativo",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "terminal",
-              "agent": "agente"
-            },
             "agentDashboard": {
               "title": "Painel de Agentes",
               "description": "Quadro kanban para monitorar agentes entre worktrees, na própria janela ou em uma janela separada.",
@@ -5612,10 +5622,6 @@
           "dd6f0a1d45": "Bichinho",
           "0e89a574ae": "Bichinho animado flutuante no canto inferior direito.",
           "nativeChat": {
-            "title": "Interface de Chat",
-            "description": "Pré-visualize a interface de chat do desktop para sessões de terminal de agente suportadas.",
-            "copy": "Ativa a Interface de Chat experimental para novas sessões locais suportadas recém-criadas. As sessões de terminal existentes mantêm o caminho de chat do terminal enquanto ajustamos a fidelidade da transcrição, a transmissão e a paridade.",
-            "toggleLabel": "Alternar Interface de Chat",
             "resumeTitle": "Reconectar chats em andamento automaticamente após reiniciar",
             "resumeCopy": "Quando o Orca é encerrado ou instala uma atualização, os chats que estavam no meio de um turno são oferecidos novamente na próxima abertura. Ativado, eles são reconectados sem perguntar e o Orca avisa depois — o mesmo que marcar \"Não perguntar novamente\" naquele aviso. Desativado, você escolhe na lista a cada vez. Reconectar restaura um chat de onde ele parou; não continua a resposta interrompida.",
             "resumeToggleLabel": "Alternar reconexão automática após reiniciar",
@@ -7175,8 +7181,7 @@
         "PluginInstallDialog": {
           "localRequired": "Digite o caminho da pasta do plugin.",
           "gitUrlRequired": "Digite uma URL de repositório.",
-          "gitUrlInvalid": "Use uma URL Git HTTPS ou SSH.",
-          "gitRefRequired": "Adicione um #tag ou #commit, como #v0.1.0.",
+          "gitUrlInvalid": "Use um link de repositório como https://github.com/owner/repo, owner/repo ou uma URL SSH.",
           "title": "Instalar plugin",
           "description": "Nada é executado até você ativar.",
           "source": "Origem da instalação",
@@ -7186,12 +7191,23 @@
           "localPlaceholder": "Caminho para uma pasta de plugin",
           "localHelp": "A pasta com orca-plugin.json",
           "gitLabel": "URL do repositório",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "Termine com #tag ou #commit para fixar uma versão",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "Cole um link de repositório, release ou tag. Sem #tag ou #commit, o Orca usa a tag de versão mais recente.",
           "cancel": "Cancelar",
           "installing": "Instalando…",
           "install": "Instalar",
-          "installFailed": "Falha na instalação do plugin. Verifique a origem e tente novamente."
+          "installFailed": "Falha na instalação do plugin. Verifique a origem e tente novamente.",
+          "checking": "Verificando…",
+          "continue": "Continuar",
+          "gitUrlCredentials": "Remova o nome de usuário ou o token da URL. O Orca usa seu login do Git.",
+          "gitRefInvalid": "A versão após # não é um nome válido de tag, branch ou commit.",
+          "gitRefNotFound": "Este repositório não tem nenhuma tag ou branch chamada {{value0}}.",
+          "gitUnreachable": "Não foi possível ler este repositório. Verifique a URL e se sua conta do Git tem acesso.",
+          "resolvedLatestTag": "Instala {{value0}}, a versão mais recente, no commit {{value1}}.",
+          "resolvedTag": "Instala {{value0}} no commit {{value1}}.",
+          "resolvedBranch": "Instala a branch {{value0}} como está agora, no commit {{value1}}.",
+          "resolvedCommit": "Instala o commit {{value0}}.",
+          "resolvedDefaultBranch": "Nenhuma tag de versão encontrada, então será instalado o commit mais recente, {{value0}}."
         },
         "PluginMarketplaceBrowser": {
           "loadFailed": "Não foi possível carregar os plugins do catálogo.",
@@ -8056,7 +8072,8 @@
           "invalidManifest": "orca-plugin.json é inválido. Corrija-o e depois atualize os plugins.",
           "installedManifestUnloadable": "Esta versão não pode ser carregada neste Orca. Atualize-a ou reinstale-a.",
           "invalidArtifact": "Um arquivo de worker ou painel declarado está ausente ou é inseguro. Corrija os arquivos do plugin e depois atualize.",
-          "consentChanged": "O plugin mudou enquanto você o revisava. Feche esta caixa de diálogo e revise as permissões atualizadas."
+          "consentChanged": "O plugin mudou enquanto você o revisava. Feche esta caixa de diálogo e revise as permissões atualizadas.",
+          "installGitMoved": "O repositório mudou depois que o Orca o verificou. Tente novamente."
         },
         "TaskSourceProviderCard": {
           "statusChecking": "Verificando…",

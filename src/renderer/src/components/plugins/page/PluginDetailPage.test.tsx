@@ -194,6 +194,13 @@ describe('PluginDetailPage', () => {
     )
     await act(async () => repository?.click())
     expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://github.com/acme/icons')
+    const readme = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Read the README on GitHub'
+    )
+    await act(async () => readme?.click())
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith(
+      `https://github.com/acme/icons/tree/${'d'.repeat(40)}#readme`
+    )
   })
 
   it('never claims no access when the plugin could not be read, and retries', async () => {

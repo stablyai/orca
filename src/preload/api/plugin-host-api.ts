@@ -25,6 +25,7 @@ import type {
   PluginMarketplaceGitSource
 } from '../../shared/plugins/catalog/plugin-marketplace'
 import type { PluginCatalogRelease } from '../../shared/plugins/catalog/plugin-catalog-release'
+import type { PluginGitSourceResolution } from '../../shared/plugins/installation/plugin-git-resolution'
 
 export type {
   PluginHostCustomEditor,
@@ -43,7 +44,7 @@ export type PluginHostLogLine = {
 
 export type PluginHostInstallSource =
   | { kind: 'local-path'; path: string }
-  | { kind: 'git'; url: string; ref: string }
+  | { kind: 'git'; url: string; ref: string; expectedCommit?: string }
 
 export type PluginHostInstallResult =
   | {
@@ -165,6 +166,8 @@ export type PluginsApi = {
     action: string
     params?: unknown
   }) => Promise<PluginHostCallOutcome>
+  /** Pins a Git install input to an exact commit without downloading it. */
+  resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
   listMarketplaces: () => Promise<PluginMarketplaceHostSourceState[]>
   addMarketplace: (source: PluginMarketplaceGitSource) => Promise<PluginMarketplaceHostSourceState>

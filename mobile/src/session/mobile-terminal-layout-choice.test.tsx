@@ -45,7 +45,12 @@ vi.mock('expo-router', async () => {
   const { useEffect } = await import('react')
   return { useFocusEffect: (effect: () => () => void) => useEffect(effect, [effect]) }
 })
-vi.mock('../platform/keyboard-persisting-taps', () => ({ useKeyboardPersistingTaps: () => null }))
+vi.mock('../platform/keyboard-persisting-taps', () => ({
+  useKeyboardPersistingTaps: () => () => {}
+}))
+vi.mock('../layout/side-safe-area', () => ({
+  useWindowSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 })
+}))
 vi.mock('../navigation/workspace-execution-host', () => ({ useWorkspaceExecutionHost: () => ({}) }))
 vi.mock('../browser/MobileBrowserPane', () => ({ MobileBrowserPane: () => null }))
 vi.mock('./MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
@@ -77,6 +82,16 @@ it('lets the split menu override sidebar width and rotation without remounting p
   let setKeyboard!: (height: number) => void
   function Harness() {
     const preference = useTerminalSplitLayout()
+    const details: Parameters<typeof MobileSessionTabStrip>[0]['details'] = {
+      barRef: useRef(null),
+      boundaryRefs: useRef([]),
+      dismiss: () => {},
+      refreshSource: () => {},
+      registerSource: () => () => {},
+      toggleSource: () => {},
+      activeKey: undefined,
+      requestedKey: null
+    }
     const [split, setSplit] = useState(true)
     const [showTerminalLayout, setShowTerminalLayout] = useState(false)
     const [active, setActive] = useState('b')
@@ -120,7 +135,7 @@ it('lets the split menu override sidebar width and rotation without remounting p
     return createElement(
       'Screen',
       null,
-      createElement(MobileSessionTabStrip, { controller, inTopBar: false }),
+      createElement(MobileSessionTabStrip, { controller, inTopBar: false, details }),
       createElement(MobileSessionTerminalLayoutSheet, {
         controller,
         visible: showTerminalLayout,
