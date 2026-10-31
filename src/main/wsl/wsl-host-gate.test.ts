@@ -3,7 +3,10 @@ import {
   assertWslHostReachable,
   configureWslHostsGate,
   isGatedOffWslHost,
+  noteWslHostsLivePolicyBlock,
+  onWslHostsNewWorkChanged,
   resetWslHostsGateForTests,
+  wslHostsAcceptNewWork,
   wslHostsGateOpen,
   wslHostsAppliedMovedProjects,
   wslHostsAppliedPolicyState,
@@ -277,6 +280,40 @@ describe('WSL hosts gate', () => {
       resetWslHostsGateForTests()
 
       expect(wslHostsBringBackMovedProjects()).toBe(false)
+    })
+  })
+
+  describe('a block learned mid-run', () => {
+    // New work stops at once, but what is served must not change until the next launch.
+    it('stops new work without closing the gate or stranding saved work', () => {
+      vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
+      configureWslHostsGate(facts(true, true))
+      const changed = vi.fn()
+      onWslHostsNewWorkChanged(changed)
+
+      noteWslHostsLivePolicyBlock()
+      noteWslHostsLivePolicyBlock()
+
+      expect(wslHostsAcceptNewWork()).toBe(false)
+      expect(changed).toHaveBeenCalledOnce()
+      expect(wslHostsGateOpen()).toBe(true)
+      expect(wslHostsGateState()).toBe('open')
+      expect(wslHostsServing()).toBe(true)
+      expect(isGatedOffWslHost(wslHost)).toBe(false)
+      expect(wslHostsWindowArguments()).toEqual([])
+    })
+
+    // Behind a gate that is already closed there is nothing new to stop, so nobody is told.
+    it('is a no-op behind a closed gate', () => {
+      vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+      configureWslHostsGate(facts(true, false))
+      const changed = vi.fn()
+      onWslHostsNewWorkChanged(changed)
+
+      noteWslHostsLivePolicyBlock()
+
+      expect(changed).not.toHaveBeenCalled()
+      expect(wslHostsGateState()).toBe('serve-only')
     })
   })
 })

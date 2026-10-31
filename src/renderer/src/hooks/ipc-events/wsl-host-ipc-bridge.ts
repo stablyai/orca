@@ -1,4 +1,4 @@
-import type { WslHostStatus } from '../../../../shared/wsl-host-types'
+import type { WslHostCapability, WslHostStatus } from '../../../../shared/wsl-host-types'
 import { isWslHostRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { workspaceOwnerHostId } from '../../lib/workspace-row-owner-host'
@@ -50,16 +50,21 @@ export function registerWslHostIpcBridge(unsubs: (() => void)[]): void {
     return
   }
   const apply = (status: WslHostStatus): void => useAppStore.getState().applyWslHostStatus(status)
+  const applyCapability = ({ serverFiles, acceptsNewWork }: WslHostCapability): void => {
+    const state = useAppStore.getState()
+    state.setWslHostServerFiles(serverFiles)
+    state.setWslHostsAcceptNewWork(acceptsNewWork !== false)
+  }
   // A preload from before the capability call leaves it unknown, which the UI treats as present.
   if (typeof api.getCapability === 'function') {
     void api
       .getCapability()
-      .then(({ serverFiles, acceptsNewWork }) => {
-        const state = useAppStore.getState()
-        state.setWslHostServerFiles(serverFiles)
-        state.setWslHostsAcceptNewWork(acceptsNewWork !== false)
-      })
+      .then(applyCapability)
       .catch((error) => console.error('Failed to read WSL host capability:', error))
+  }
+  // A block learned mid-run hides the offer and the add/move entry points without a relaunch.
+  if (typeof api.onCapabilityChanged === 'function') {
+    unsubs.push(api.onCapabilityChanged(applyCapability))
   }
   let stopped = false
   unsubs.push(api.onStatusChanged(apply), () => {

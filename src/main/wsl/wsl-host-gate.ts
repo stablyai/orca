@@ -89,6 +89,8 @@ export function resetWslHostsGateForTests(): void {
   noteWslHostsServeOnly(false)
   notePolicy(null, undefined)
   publishWslHostsGateState(process.env, null)
+  liveBlockNoted = false
+  newWorkListeners.clear()
 }
 
 export function wslHostsGateState(): WslHostsGateState {
@@ -120,6 +122,32 @@ export function wslHostsOptedIn(
 
 export function wslHostsGateOpen(): boolean {
   return isWslHostsInternalGateOpen(process.env) && !policyBlocked
+}
+
+// A block the live policy fetch cached during this run. It stops new work at once; the gate
+// itself (and so what is served) changes only at the next launch, so nothing is stranded.
+let liveBlockNoted = false
+const newWorkListeners = new Set<() => void>()
+
+/** The live policy fetch cached a block this run; one-way until the next launch re-reads the cache. */
+export function noteWslHostsLivePolicyBlock(): void {
+  if (liveBlockNoted || !wslHostsGateOpen()) {
+    return
+  }
+  liveBlockNoted = true
+  for (const listener of newWorkListeners) {
+    listener()
+  }
+}
+
+export function onWslHostsNewWorkChanged(listener: () => void): () => void {
+  newWorkListeners.add(listener)
+  return () => newWorkListeners.delete(listener)
+}
+
+/** Adding hosts and starting moves: the gate open at launch, less a block learned since. */
+export function wslHostsAcceptNewWork(): boolean {
+  return wslHostsGateOpen() && !liveBlockNoted
 }
 
 /** The launch environment opened the gate, but the cached remote policy closed it for this run. */

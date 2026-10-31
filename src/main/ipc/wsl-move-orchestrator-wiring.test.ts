@@ -266,6 +266,37 @@ describe('WSL move orchestrator wiring', () => {
     expect(driver.previewWslMove).not.toHaveBeenCalled()
   })
 
+  // A block published while Orca runs stops every new move at once: automatic, opened or Retry.
+  it('starts nothing after a live policy block, from readiness, a project open or Retry', async () => {
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
+    host.statuses = [
+      { distro: 'Ubuntu', state: 'connecting', environmentId: 'wsl:Ubuntu', detail: null }
+    ]
+    await register()
+    const { noteWslHostsLivePolicyBlock } = await import('../wsl/wsl-host-gate')
+    noteWslHostsLivePolicyBlock()
+    host.statuses = [
+      { distro: 'Ubuntu', state: 'ready', environmentId: 'wsl:Ubuntu', detail: null }
+    ]
+    for (const listener of host.listeners) {
+      listener()
+    }
+    await handlers.get('wslMoveOrchestrator:projectOpened')?.(
+      { sender: { id: MAIN_WINDOW_ID } },
+      'Ubuntu'
+    )
+    expect(
+      await handlers.get('wslMoveOrchestrator:userAction')?.(
+        { sender: { id: MAIN_WINDOW_ID } },
+        { distro: 'Ubuntu', action: 'retry' }
+      )
+    ).toBeNull()
+    await answerWindow()
+    expect(driver.previewWslMove).not.toHaveBeenCalled()
+    expect(driver.moveProjectsToWslHost).not.toHaveBeenCalled()
+    expect(host.added).toEqual([])
+  })
+
   it('ignores a slept-pane answer from another window', async () => {
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
     host.statuses = [
