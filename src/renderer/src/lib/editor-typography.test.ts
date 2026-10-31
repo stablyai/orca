@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveEditorTypography } from './editor-typography'
+import { resolveEditorTypography, type EditorTypographyInputs } from './editor-typography'
 
 const terminal = { terminalFontFamily: 'JetBrains Mono', terminalFontSize: 14 }
 
@@ -43,19 +43,18 @@ describe('resolveEditorTypography', () => {
     expect(typography.lineHeight).toBe(31)
   })
 
-  it('ignores hand-edited values that are not usable numbers', () => {
-    const typography = resolveEditorTypography(
-      {
+  it('ignores hand-edited values that are not usable', () => {
+    // Settings files are untyped JSON on disk, so corrupt values arrive through JSON.parse.
+    const handEdited: EditorTypographyInputs = JSON.parse(
+      JSON.stringify({
         ...terminal,
-        // SAFETY: simulates a corrupted settings file that bypassed typed writers.
-        editorFontSize: 'big' as unknown as number,
-        editorFontWeight: Number.NaN,
+        editorFontSize: 'big',
+        editorFontWeight: null,
         editorLineHeight: -1,
-        // SAFETY: an unknown mode must not enable ligatures for a known ligature font.
-        editorLigatures: 'yes' as unknown as 'on'
-      },
-      0
+        editorLigatures: 'yes'
+      })
     )
+    const typography = resolveEditorTypography(handEdited, 0)
     expect(typography).toMatchObject({
       fontSize: 14,
       fontWeight: 'normal',
