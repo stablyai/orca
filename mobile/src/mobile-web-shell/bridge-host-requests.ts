@@ -1,7 +1,7 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
-import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
+import { BRIDGE_MAX_PENDING_REQUESTS, BRIDGE_MAX_FORWARDED_REQUESTS } from './bridge/bridge-caps'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeHostDisposedError } from './bridge-host-errors'
 import { isBridgeNativeMethod } from './bridge/bridge-native-verbs'
@@ -26,6 +26,7 @@ export type BridgeHostRequestDeps = {
 export class BridgeHostRequests {
   private readonly pending = new Map<string, PendingRequest>()
   private inFlight = 0
+  private forwardedInFlight = 0
 
   constructor(private readonly deps: BridgeHostRequestDeps) {}
 
@@ -84,6 +85,14 @@ export class BridgeHostRequests {
       this.deps.sendError(id, this.deps.capExceeded(`over ${BRIDGE_MAX_PENDING_REQUESTS} requests`))
       return
     }
+    const forwarded = !isBridgeNativeMethod(message.method)
+    if (forwarded && this.forwardedInFlight >= BRIDGE_MAX_FORWARDED_REQUESTS) {
+      this.deps.sendError(
+        id,
+        this.deps.capExceeded(`over ${BRIDGE_MAX_FORWARDED_REQUESTS} forwarded requests`)
+      )
+      return
+    }
     const record: PendingRequest = { live: true }
     this.pending.set(id, record)
     let answer: Promise<RpcResponse>
@@ -95,15 +104,24 @@ export class BridgeHostRequests {
       return
     }
     this.inFlight += 1
+    if (forwarded) {
+      this.forwardedInFlight += 1
+    }
     void answer.then(
       (payload) => {
         this.inFlight -= 1
+        if (forwarded) {
+          this.forwardedInFlight -= 1
+        }
         if (this.settle(id, record)) {
           this.deps.sendReply(id, payload)
         }
       },
       (error: unknown) => {
         this.inFlight -= 1
+        if (forwarded) {
+          this.forwardedInFlight -= 1
+        }
         if (this.settle(id, record)) {
           this.deps.sendError(id, error)
         }

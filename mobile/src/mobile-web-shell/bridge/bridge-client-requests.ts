@@ -1,10 +1,16 @@
 import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../../transport/types'
-import { BridgeClientClosedError, BridgeReplyRefusedError } from './bridge-client-errors'
+import {
+  BridgeClientCapExceededError,
+  BridgeClientClosedError,
+  BridgeReplyRefusedError
+} from './bridge-client-errors'
+import { BRIDGE_MAX_PENDING_REQUESTS, BRIDGE_MAX_FORWARDED_REQUESTS } from './bridge-caps'
 import type { BridgeReplyMessage } from './bridge-envelope'
 import { BridgeReplyAssembler } from './bridge-reply-chunking'
 
 export type PendingRequest = {
+  native?: boolean
   resolve: (response: RpcResponse) => void
   reject: (error: unknown) => void
 }
@@ -16,6 +22,28 @@ export class BridgeClientRequests {
 
   get size(): number {
     return this.pending.size
+  }
+
+  capacityError(native: boolean): BridgeClientCapExceededError | null {
+    if (this.size >= BRIDGE_MAX_PENDING_REQUESTS) {
+      return new BridgeClientCapExceededError(
+        `over ${BRIDGE_MAX_PENDING_REQUESTS} requests in flight`
+      )
+    }
+    if (!native) {
+      let forwarded = 0
+      for (const request of this.pending.values()) {
+        if (request.native !== true) {
+          forwarded += 1
+        }
+      }
+      if (forwarded >= BRIDGE_MAX_FORWARDED_REQUESTS) {
+        return new BridgeClientCapExceededError(
+          `over ${BRIDGE_MAX_FORWARDED_REQUESTS} forwarded requests`
+        )
+      }
+    }
+    return null
   }
 
   has(id: string): boolean {

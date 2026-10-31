@@ -4,6 +4,7 @@ import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
   BRIDGE_MAX_PENDING_REQUESTS,
+  BRIDGE_MAX_FORWARDED_REQUESTS,
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge-caps'
 import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
@@ -463,12 +464,12 @@ describe('bridge client caps', () => {
     const page = createPageClient()
     page.start()
     const answers: Promise<unknown>[] = []
-    for (let index = 0; index < BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+    for (let index = 0; index < BRIDGE_MAX_FORWARDED_REQUESTS; index += 1) {
       answers.push(page.client.sendRequest('worktree.ps'))
     }
     const refused = page.client.sendRequest('worktree.ps')
     await expect(refused).rejects.toThrow(BridgeClientCapExceededError)
-    expect(page.sent).toHaveLength(1 + BRIDGE_MAX_PENDING_REQUESTS)
+    expect(page.sent).toHaveLength(1 + BRIDGE_MAX_FORWARDED_REQUESTS)
     page.client.close()
     await Promise.allSettled(answers)
   })

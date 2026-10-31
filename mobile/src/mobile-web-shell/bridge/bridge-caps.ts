@@ -68,6 +68,8 @@ export const BRIDGE_MAX_HOST_FIELD_CHARS = 1024
 
 // The native host enforces in-flight caps; page-side copies fail early to avoid a wasted round trip.
 export const BRIDGE_MAX_PENDING_REQUESTS = 64
+// Keep device-local operations available while desktop calls await replies.
+export const BRIDGE_MAX_FORWARDED_REQUESTS = BRIDGE_MAX_PENDING_REQUESTS - 4
 export const BRIDGE_MAX_SUBSCRIPTIONS = 32
 
 // Viewport updates change cached terminal subscription params, including native streams; enforce desktop ranges at the frame so a bad page cannot poison resubscription.
